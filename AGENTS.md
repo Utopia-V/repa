@@ -17,6 +17,7 @@ Do not reduce the product to an AI tutor, note generator, Anki skin, todo applic
 - The main interaction is a natural-language terminal agent.
 - The implementation language/runtime is TypeScript/Bun.
 - The harness is owned by this project; full agent frameworks are not the architectural center.
+- Plan, study, review, and similar modes are policy profiles over one agent loop, not separate runtimes or duplicated executors.
 - OpenCode is a pinned, read-only engineering reference, not a dependency or upstream fork.
 - The old Rep HarmonyOS project contributes product history only. Its code and data model are not migration targets.
 - Learning semantics must shape context construction, default actions, durable session meaning, review surfaces, and task selection. Low-level provider and rendering code should remain domain-independent.
