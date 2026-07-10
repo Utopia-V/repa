@@ -37,9 +37,11 @@ Trace how OpenCode prevents overlapping session loops and reconstructs continuat
 
 Result: [Session serialization and recovery findings](../research/session-serialization-and-recovery.md)
 
-### Permission flow
+### Permission flow (completed)
 
 Trace rule evaluation, request publication, user reply, cancellation, and tool resumption. Distinguish authorization from UI confirmation.
+
+Result: [Permission flow contract findings](../research/permission-flow-contracts.md)
 
 ### Learning-semantic anchor
 
