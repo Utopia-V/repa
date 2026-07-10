@@ -19,7 +19,7 @@ learning-semantic path instead of completing a generic harness in isolation.
 
 ## Remaining source slices
 
-### Message and run events
+### Message and model events
 
 Trace message/part schemas and the `LLMEvent` normalization contract. Produce a proposed Repa event vocabulary and test it against recorded model/tool sequences.
 
@@ -50,7 +50,8 @@ inference and must use the same Session/tool lifecycle being designed above.
 The phase ends when the repository contains a reviewed proposal for:
 
 - `Message` and `MessagePart`;
-- provider-neutral `RunEvent`;
+- provider-neutral `ModelEvent` for one provider attempt, distinct from the
+  complete Session run lifecycle;
 - `ToolDefinition`, `ToolCall`, and legal state transitions;
 - `PermissionRequest` and `PermissionDecision`;
 - serialized `AgentRun`/session execution;

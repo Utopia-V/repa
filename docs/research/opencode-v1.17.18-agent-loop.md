@@ -124,12 +124,12 @@ The TUI is not the source of truth. It submits commands and displays projections
 
 ## Consequences for the first design
 
-The first Repa runtime should be single-process and should not expose an HTTP/SDK boundary until a second real frontend requires one. It should still define a provider-neutral run-event stream so that model adapters, session persistence, and the TUI do not share provider-specific event shapes.
+The first Repa runtime should be single-process and should not expose an HTTP/SDK boundary until a second real frontend requires one. It should still define a provider-neutral model-event stream so that model adapters, session persistence, and the TUI do not share provider-specific event shapes. This stream describes one provider attempt, not the complete agent run.
 
 The first production contracts to investigate next are:
 
 1. Message and part identity/ordering.
-2. Provider-neutral run events.
+2. Provider-neutral model events.
 3. Tool-call state transitions and interruption.
 4. Session persistence/replay and serialized execution.
 5. Permission request/reply semantics.
