@@ -21,7 +21,8 @@ This is neither a one-prompt generation workflow nor a permanent prototype. Expe
 
 ## Human-owned decisions
 
-The maintainer must be able to explain and approve:
+The maintainer owns product goals, values, and acceptable trade-offs and must be
+able to explain and approve:
 
 - module boundaries and dependency direction;
 - the agent run state machine;
@@ -30,6 +31,11 @@ The maintainer must be able to explain and approve:
 - permission and confirmation boundaries;
 - learning evidence and state semantics;
 - transaction, recovery, and migration behavior.
+
+Human ownership does not make every technical instruction correct. Source
+behavior, failure properties, and empirical claims remain subject to evidence.
+AI should challenge a technically unsound means with concrete reasoning while
+preserving the maintainer's intended outcome.
 
 ## Appropriate AI work
 
@@ -44,6 +50,56 @@ AI is useful for:
 - performing mechanical edits after the semantic change is understood.
 
 AI must not invent a new subsystem while implementing an unrelated feature. When a missing architectural decision is discovered, implementation stops at that boundary and records the decision explicitly.
+
+## Meaning preservation
+
+Conversation is useful for discovering intent but is not a durable
+specification. Natural-language summaries can preserve the vocabulary while
+losing the operational meaning.
+
+Before a critical implementation slice, record a small semantic checksum:
+
+```text
+product-loop purpose
+owned durable fact or invariant
+one representative behavior
+one counterexample or prohibited behavior
+failure and correction behavior
+```
+
+Use more than one scenario when a single repeated example may bias the design.
+An emergency exam-planning scenario, for example, cannot by itself define the
+steady-state behavior of a long-running Tutor.
+
+Accepted product intent, accepted ADRs, working hypotheses, research findings,
+and illustrative examples have different authority. Promotion between them is
+explicit. A research term such as `LearnerClaim` or `TaskFamily` does not become
+a class, table, or package merely because it helped explain a problem.
+
+Tests and recorded oracles should encode observable consequences rather than
+internal wording. A refactor may change the prompt or representation while
+preserving the meaning; an unchanged prompt may still violate the meaning if
+its surrounding context or tools change.
+
+## Disagreement protocol
+
+Neither the maintainer nor an AI reviewer is treated as infallible.
+
+When a requested means conflicts with evidence or an accepted invariant:
+
+1. identify the intended product outcome separately from the proposed means;
+2. cite the source, test, trace, or failure case that creates the conflict;
+3. state whether the conflict is factual, architectural, or a value trade-off;
+4. propose the smallest reversible way to preserve the outcome;
+5. request a maintainer decision only when the remaining choice materially
+   changes product behavior or an expensive-to-reverse boundary.
+
+Do not use deference to conceal a known engineering problem. Do not use
+technical confidence to replace a product value chosen by the maintainer.
+
+For consequential boundaries, an independent model or human review can expose
+blind spots. Agreement between reviewers is supporting evidence, not proof;
+the repository's sources, invariants, and executable behavior remain decisive.
 
 ## Production and lab separation
 
@@ -67,3 +123,7 @@ A production change is acceptable only when:
 ## Avoiding local-gradient traps
 
 At each phase boundary, review the repository from the product loop outward rather than from the latest file inward. A locally elegant implementation is rejected when it increases generic-agent scope, obscures learning semantics, creates a second source of truth, or makes future state correction harder.
+
+The phase review also checks whether conversation shorthand, one vivid example,
+or a temporary experiment has silently become architecture. If so, recover the
+underlying invariant and delete the accidental structure.

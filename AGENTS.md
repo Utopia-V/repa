@@ -42,6 +42,15 @@ Do not reduce the product to an AI tutor, note generator, Anki skin, todo applic
 - Every production change must be small enough that a maintainer can explain why each changed file exists and how data crosses its boundary.
 - Prefer deleting a wrong abstraction over preserving it behind a compatibility shim.
 
+## Semantic alignment and disagreement
+
+- Distinguish accepted product intent, accepted architecture decisions, working hypotheses, research observations, and illustrative examples. Do not silently promote an example or research vocabulary into a production requirement.
+- Product goals, values, and acceptable trade-offs belong to the maintainer. Technical claims, source behavior, and failure properties are settled by inspectable evidence rather than by either human or model authority alone.
+- If a requested implementation conflicts with an accepted invariant or concrete engineering evidence, do not comply silently and do not override the intent silently. State the conflict, show the evidence, and identify the smallest reconciliation.
+- Ask for maintainer input only when an unresolved choice materially changes product behavior or an expensive-to-reverse boundary. Otherwise use a reversible, documented assumption and continue.
+- Preserve meaning with behavioral examples, counterexamples, tests, recorded oracles, and decision provenance. Conversation memory and a model's confident paraphrase are not durable specifications.
+- At phase boundaries, re-read the product origin and accepted ADRs, then audit the repository for semantic drift before extending the latest local design.
+
 ## Global coherence check
 
 Before optimizing a local module, confirm:
