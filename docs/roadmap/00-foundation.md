@@ -17,15 +17,19 @@ learning-semantic path instead of completing a generic harness in isolation.
 - Separate reusable agent mechanisms from OpenCode product-scale architecture.
 - Establish a strict TypeScript/Bun repository baseline.
 
-## Remaining source slices
+## Source slices
 
-### Message and model events
+### Message and model events (completed)
 
 Trace message/part schemas and the `LLMEvent` normalization contract. Produce a proposed Repa event vocabulary and test it against recorded model/tool sequences.
 
-### Tool lifecycle
+Result: [Message and model-event contract findings](../research/message-and-model-event-contracts.md)
+
+### Tool lifecycle (completed)
 
 Trace pending, running, completed, failed, denied, and interrupted tool behavior. Identify which state is provider output, which is runtime state, and which must be durable.
+
+Result: [Tool lifecycle contract findings](../research/tool-lifecycle-contracts.md)
 
 ### Session serialization and recovery
 
