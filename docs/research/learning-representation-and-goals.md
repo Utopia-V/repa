@@ -419,3 +419,8 @@ decisions:
 
 These are research questions for the system. They are not prerequisites that
 must be pushed back to the user before engineering can begin.
+
+The follow-up investigation of how such structures can be bootstrapped from
+public curricula, open educational resources, model priors, and local course
+materials is documented in
+[`open-world-domain-modeling.md`](./open-world-domain-modeling.md).
