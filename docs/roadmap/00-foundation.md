@@ -2,7 +2,10 @@
 
 ## Goal
 
-Reach the point where the maintainer can design the first production agent-runtime contracts from evidence rather than from a blank page or a whole-repository AI generation.
+Reach the point where the maintainer can design the first production
+agent-runtime contracts from evidence rather than from a blank page or a
+whole-repository AI generation, while exercising those contracts against a thin
+learning-semantic path instead of completing a generic harness in isolation.
 
 ## Completed in the initial slice
 
@@ -32,6 +35,16 @@ Trace how OpenCode prevents overlapping session loops and reconstructs continuat
 
 Trace rule evaluation, request publication, user reply, cancellation, and tool resumption. Distinguish authorization from UI confirmation.
 
+### Learning-semantic anchor
+
+Define the minimum contract required to carry one committed learning occurrence
+through learner-state projection, context assembly, Tutor action, and a changed
+next action. This is a contract fixture, not a complete curriculum model or
+learner ontology.
+
+The fixture must distinguish a durable occurrence from a rebuildable model
+inference and must use the same Session/tool lifecycle being designed above.
+
 ## Foundation exit gate
 
 The phase ends when the repository contains a reviewed proposal for:
@@ -41,6 +54,12 @@ The phase ends when the repository contains a reviewed proposal for:
 - `ToolDefinition`, `ToolCall`, and legal state transitions;
 - `PermissionRequest` and `PermissionDecision`;
 - serialized `AgentRun`/session execution;
-- persistence and interruption invariants.
+- persistence and interruption invariants;
+- the transaction boundary between durable Session facts, durable learning
+  occurrences, and rebuildable learner projections;
+- one trace demonstrating that different committed learning evidence changes
+  assembled context and the Tutor's next action.
 
-No full TUI or learning database is started before this gate. A focused lab may be used to validate an uncertain mechanism, but production code cannot depend on it.
+No full TUI or broad learning schema is started before this gate. A focused lab
+may use SQLite and a minimal learning trace to validate an uncertain mechanism,
+but production code cannot depend on accidental lab structure.

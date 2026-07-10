@@ -18,5 +18,8 @@ Documents have different authority. Do not treat a research observation as an ac
 
 - [`research/opencode-v1.17.18-agent-loop.md`](research/opencode-v1.17.18-agent-loop.md)
 - [`research/opencode-v1.17.18-runtime-contracts.md`](research/opencode-v1.17.18-runtime-contracts.md)
+- [`research/validation-and-state-storage.md`](research/validation-and-state-storage.md)
 - [`research/claude-code-v2.1.88-provenance.md`](research/claude-code-v2.1.88-provenance.md)
 - [`research/agent-harness-paradigms.md`](research/agent-harness-paradigms.md)
+- [`research/learning-representation-and-goals.md`](research/learning-representation-and-goals.md)
+- [`research/open-world-domain-modeling.md`](research/open-world-domain-modeling.md)
