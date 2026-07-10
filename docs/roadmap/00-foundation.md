@@ -43,7 +43,7 @@ Trace rule evaluation, request publication, user reply, cancellation, and tool r
 
 Result: [Permission flow contract findings](../research/permission-flow-contracts.md)
 
-### Learning-semantic anchor
+### Learning-semantic anchor (completed)
 
 Define the minimum contract required to carry one committed learning occurrence
 through learner-state projection, context assembly, Tutor action, and a changed
@@ -52,6 +52,8 @@ learner ontology.
 
 The fixture must distinguish a durable occurrence from a rebuildable model
 inference and must use the same Session/tool lifecycle being designed above.
+
+Result: [Learning-semantic anchor findings](../research/learning-semantic-anchor.md)
 
 ## Foundation exit gate
 

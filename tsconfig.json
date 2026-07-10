@@ -10,5 +10,5 @@
     "verbatimModuleSyntax": true,
     "types": ["bun"]
   },
-  "include": ["scripts/**/*.ts", "test/**/*.ts"]
+  "include": ["scripts/**/*.ts", "test/**/*.ts", "labs/**/*.ts"]
 }

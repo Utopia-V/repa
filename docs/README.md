@@ -18,6 +18,11 @@ Documents have different authority. Do not treat a research observation as an ac
 
 - [`research/opencode-v1.17.18-agent-loop.md`](research/opencode-v1.17.18-agent-loop.md)
 - [`research/opencode-v1.17.18-runtime-contracts.md`](research/opencode-v1.17.18-runtime-contracts.md)
+- [`research/message-and-model-event-contracts.md`](research/message-and-model-event-contracts.md)
+- [`research/tool-lifecycle-contracts.md`](research/tool-lifecycle-contracts.md)
+- [`research/session-serialization-and-recovery.md`](research/session-serialization-and-recovery.md)
+- [`research/permission-flow-contracts.md`](research/permission-flow-contracts.md)
+- [`research/learning-semantic-anchor.md`](research/learning-semantic-anchor.md)
 - [`research/validation-and-state-storage.md`](research/validation-and-state-storage.md)
 - [`research/claude-code-v2.1.88-provenance.md`](research/claude-code-v2.1.88-provenance.md)
 - [`research/agent-harness-paradigms.md`](research/agent-harness-paradigms.md)
