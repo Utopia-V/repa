@@ -31,9 +31,11 @@ Trace pending, running, completed, failed, denied, and interrupted tool behavior
 
 Result: [Tool lifecycle contract findings](../research/tool-lifecycle-contracts.md)
 
-### Session serialization and recovery
+### Session serialization and recovery (completed)
 
 Trace how OpenCode prevents overlapping session loops and reconstructs continuation from stored messages. Investigate crash boundaries before choosing a Repa persistence schema.
+
+Result: [Session serialization and recovery findings](../research/session-serialization-and-recovery.md)
 
 ### Permission flow
 
