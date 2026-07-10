@@ -1,0 +1,10 @@
+{
+  "opencode": {
+    "repository": "https://github.com/anomalyco/opencode.git",
+    "tag": "v1.17.18",
+    "commit": "b1fc8113948b518835c2a39ece49553cffe9b30c",
+    "license": "MIT",
+    "checkout": ".reference/opencode",
+    "role": "read-only engineering reference; never a runtime dependency"
+  }
+}

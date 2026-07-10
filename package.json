@@ -1,0 +1,16 @@
+{
+  "name": "agentic-learning-system",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "scripts": {
+    "check:reference": "bun run scripts/check-reference.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun run check:reference && bun run typecheck && bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "^7.0.2"
+  }
+}
