@@ -57,6 +57,10 @@ Result: [Learning-semantic anchor findings](../research/learning-semantic-anchor
 
 ## Foundation exit gate
 
+Draft synthesis:
+[Foundation runtime contracts](../proposals/0001-foundation-runtime-contracts.md).
+The proposal remains subject to maintainer review and is not yet an ADR.
+
 The phase ends when the repository contains a reviewed proposal for:
 
 - `Message` and `MessagePart`;

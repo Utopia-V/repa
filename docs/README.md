@@ -9,6 +9,13 @@ Documents have different authority. Do not treat a research observation as an ac
 3. [`decisions/`](decisions/) — accepted architecture decisions and their consequences.
 4. [`foundation/01-engineering-method.md`](foundation/01-engineering-method.md) — how mechanisms are studied and implemented.
 
+## Proposals
+
+[`proposals/`](proposals/) contains reviewable designs synthesized from
+research. Proposals are not accepted decisions until promoted into ADRs.
+
+- [`proposals/0001-foundation-runtime-contracts.md`](proposals/0001-foundation-runtime-contracts.md)
+
 ## Informative material
 
 - [`research/`](research/) records evidence from pinned references. It explains what exists upstream; it does not automatically prescribe Repa's design.
