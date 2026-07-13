@@ -18,6 +18,7 @@ type OpenApiResponse = {
   readonly content?: Record<string, { readonly schema?: OpenApiSchema }>
 }
 type OpenApiOperation = {
+  readonly operationId?: string
   readonly parameters?: ReadonlyArray<{
     readonly name: string
     readonly in: string
@@ -68,6 +69,50 @@ function componentNames(response: OpenApiResponse | undefined) {
 function isBuiltInEndpointError(name: string) {
   return name.startsWith("EffectHttpApiError") || name.startsWith("effect_HttpApiError_")
 }
+
+describe("PublicApi Gate 5B3 route cutover", () => {
+  test("keeps local project-copy routes", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+
+    for (const [method, path, operationID] of [
+      ["post", "/experimental/project/{projectID}/copy/generate-name", "experimental.projectCopy.generateName"],
+      ["post", "/experimental/project/{projectID}/copy", "v2.projectCopy.create"],
+      ["delete", "/experimental/project/{projectID}/copy", "v2.projectCopy.remove"],
+      ["post", "/experimental/project/{projectID}/copy/refresh", "v2.projectCopy.refresh"],
+    ] as const) {
+      expect(spec.paths[path]?.[method]?.operationId, `${method.toUpperCase()} ${path}`).toBe(operationID)
+    }
+  })
+
+  test("omits hibernated sharing, Console, control-plane, sync, and workspace routes", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+    const excluded = [
+      ["post", "/session/{sessionID}/share", "session.share"],
+      ["delete", "/session/{sessionID}/share", "session.unshare"],
+      ["get", "/experimental/console", "experimental.console.get"],
+      ["get", "/experimental/console/orgs", "experimental.console.listOrgs"],
+      ["post", "/experimental/console/switch", "experimental.console.switchOrg"],
+      ["post", "/experimental/control-plane/move-session", "experimental.controlPlane.moveSession"],
+      ["post", "/sync/start", "sync.start"],
+      ["post", "/sync/replay", "sync.replay"],
+      ["post", "/sync/steal", "sync.steal"],
+      ["post", "/sync/history", "sync.history.list"],
+      ["get", "/experimental/workspace/adapter", "experimental.workspace.adapter.list"],
+      ["get", "/experimental/workspace", "experimental.workspace.list"],
+      ["post", "/experimental/workspace", "experimental.workspace.create"],
+      ["post", "/experimental/workspace/sync-list", "experimental.workspace.syncList"],
+      ["get", "/experimental/workspace/status", "experimental.workspace.status"],
+      ["delete", "/experimental/workspace/{id}", "experimental.workspace.remove"],
+      ["post", "/experimental/workspace/warp", "experimental.workspace.warp"],
+    ] as const
+
+    expect(
+      excluded
+        .filter(([method, path]) => spec.paths[path]?.[method] !== undefined)
+        .map(([method, path, operationID]) => `${method.toUpperCase()} ${path} (${operationID})`),
+    ).toEqual([])
+  })
+})
 
 describe("PublicApi OpenAPI v2 errors", () => {
   test("includes plugin-facing core schemas", () => {

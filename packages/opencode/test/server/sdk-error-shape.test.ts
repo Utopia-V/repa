@@ -60,7 +60,7 @@ describe("v2 SDK error shape", () => {
 
     let caught: unknown
     try {
-      await sdk.sync.history.list({ body: { aggregate: -1 } as any }, { throwOnError: true })
+      await sdk.pty.create({ command: 1 } as never, { throwOnError: true })
     } catch (e) {
       caught = e
     }

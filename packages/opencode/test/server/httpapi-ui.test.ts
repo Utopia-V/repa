@@ -183,6 +183,48 @@ function responseText(response: Response) {
   return Effect.promise(() => response.text())
 }
 
+describe("Gate 5B3 hibernated routes", () => {
+  it.live("does not register the retired sharing, Console, control-plane, sync, or workspace routes", () =>
+    Effect.gen(function* () {
+      const routes = [
+        ["sharing", "POST", "/session/ses_hibernated/share"],
+        ["sharing", "DELETE", "/session/ses_hibernated/share"],
+        ["Console", "GET", "/experimental/console"],
+        ["Console", "GET", "/experimental/console/orgs"],
+        ["Console", "POST", "/experimental/console/switch"],
+        ["control-plane", "POST", "/experimental/control-plane/move-session"],
+        ["sync", "POST", "/sync/start"],
+        ["sync", "POST", "/sync/replay"],
+        ["sync", "POST", "/sync/steal"],
+        ["sync", "POST", "/sync/history"],
+        ["workspace", "GET", "/experimental/workspace/adapter"],
+        ["workspace", "GET", "/experimental/workspace"],
+        ["workspace", "POST", "/experimental/workspace"],
+        ["workspace", "POST", "/experimental/workspace/sync-list"],
+        ["workspace", "GET", "/experimental/workspace/status"],
+        ["workspace", "DELETE", "/experimental/workspace/wrk_hibernated"],
+        ["workspace", "POST", "/experimental/workspace/warp"],
+      ] as const
+      const server = app()
+      const results = yield* Effect.all(
+        routes.map(([surface, method, path]) =>
+          server.request(path, { method }).pipe(
+            Effect.map((response) => ({
+              surface,
+              method,
+              path,
+              status: response.status,
+            })),
+          ),
+        ),
+        { concurrency: "unbounded" },
+      )
+
+      expect(results).toEqual(routes.map(([surface, method, path]) => ({ surface, method, path, status: 404 })))
+    }),
+  )
+})
+
 describe("HttpApi UI fallback", () => {
   it.live("does not register a hosted Web fallback in the production route tree", () =>
     Effect.gen(function* () {

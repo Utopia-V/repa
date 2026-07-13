@@ -7,7 +7,7 @@ import { Database } from "@opencode-ai/core/database/database"
 
 import { Session } from "@/session/session"
 import { SessionPaths } from "../../src/server/routes/instance/httpapi/groups/session"
-import { SyncPaths } from "../../src/server/routes/instance/httpapi/groups/sync"
+import { PtyPaths } from "../../src/server/routes/instance/httpapi/groups/pty"
 import { MessageID, PartID } from "../../src/session/schema"
 import { PartTable } from "@opencode-ai/core/session/sql"
 import { resetDatabase } from "../fixture/db"
@@ -72,10 +72,10 @@ describe("schema-rejection wire shape", () => {
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
-        const res = yield* requestInDirectory(SyncPaths.history, test.directory, {
+        const res = yield* requestInDirectory(PtyPaths.create, test.directory, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ aggregate: -1 }),
+          body: JSON.stringify({ command: 1 }),
         })
         const body = yield* text(res)
         expect(res.status).toBe(400)
@@ -130,10 +130,10 @@ describe("schema-rejection wire shape", () => {
       Effect.gen(function* () {
         const test = yield* TestInstance
         const huge = "X".repeat(50_000)
-        const res = yield* requestInDirectory(SyncPaths.history, test.directory, {
+        const res = yield* requestInDirectory(PtyPaths.create, test.directory, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ aggregate: huge }),
+          body: JSON.stringify({ command: { value: huge } }),
         })
         const body = yield* text(res)
         expect(res.status).toBe(400)
