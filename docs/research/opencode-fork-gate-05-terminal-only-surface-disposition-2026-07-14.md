@@ -274,10 +274,9 @@ The dependency order is two reversible slices:
    creation has no automatic-share branch, and instance bootstrap initializes
    only retained local services. Instance bootstrap, the unused bootstrap-only
    runtime, and HTTP composition no longer register `ShareNext`. The aggregate
-   CLI runtime keeps `ShareNext` and `SessionShare` only until Gate 5F deletes
-   the already-unregistered GitHub/share implementation branch whose Effect
-   types still name them; constructing those services does not subscribe or
-   contact the network.
+   CLI runtime kept `ShareNext` and `SessionShare` only until the dependency-
+   closed Gate 5F slice below deleted the already-unregistered GitHub/share
+   implementation branch whose Effect types named them.
 
 Evidence for 5C1 must make an active-account double fail if config asks it for
 identity, token, or organization config, while retained local config and an
@@ -290,8 +289,8 @@ affected package typechecks, and `git diff --check` are causal.
 
 Revert either slice to restore only that registration/config behavior. No
 data migration or compatibility reader is added: the baseline has no user-data
-contract, and passive historical Session/share columns remain a Gate 5F
-dependency-closure question.
+contract, and passive historical Session/share columns remain explicitly
+deferred to a later native-database/schema closure.
 
 ## Gate 5D locked prerequisite boundary: released terminal consumers
 
@@ -606,6 +605,29 @@ four local project-copy operations remain. The legacy
 hand-edited. Seventy-one focused tests, all seven affected package typechecks,
 exact residue and generation-ownership scans, `git diff --check`, and an
 independent fresh-context review passed with no remaining Gate 5B3 finding.
+
+Gate 5C2 and the first Gate 5F dependency-closure slice passed at
+`5edbd86389ddbed59d0fe936a82052da7f09f473`. `ShareNext`, `SessionShare`, their
+direct tests, and the already-unregistered hosted GitHub Action/PR command
+branch were deleted rather than retained behind no-op services. The aggregate
+runtime no longer names either share service. Released-v1 and current config
+schemas no longer own `share`, `autoshare`, or the top-level sharing
+`enterprise` field; migration and `REPA_AUTO_SHARE` no longer manufacture the
+behavior, and current OpenAPI/SDK output was regenerated from the schema
+owner. `autoupdate` remains for Gate 5E, explicit GitHub Copilot enterprise
+provider authentication remains provider-local, and the frozen legacy SDK
+tree has zero diff.
+
+The causal suite passed 187 tests: both config suites, runtime flags, current
+OpenAPI, the retained startup composition, local Session lifecycle, ordinary
+provider configuration, CLI command disposition, and the native-database
+local import/export round trip plus HTTP(S)-import rejection. Core, OpenCode,
+current SDK, and current client typechecks passed; exact scans found no share
+service owner, hosted GitHub/PR implementation, or current config/client
+selector, and `git diff --check` passed. Passive historical Session/share
+columns remain inert for the later native-database/schema closure. Gate 5 is
+still active because provider/updater semantics and the remaining broad 5F
+package/workflow deletions are separate slices.
 
 ## Rollback
 
