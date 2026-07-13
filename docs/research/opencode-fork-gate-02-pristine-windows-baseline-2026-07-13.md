@@ -1,6 +1,6 @@
 # OpenCode fork Gate 2: pristine Windows baseline
 
-Status: In progress
+Status: In progress — red after install attempt 1
 
 Date: 2026-07-13
 
@@ -106,5 +106,45 @@ fork worktree. Never remove or rewrite the tag, fork history, oracle worktree,
 or an unclassified path.
 
 ## Result
+
+### Attempt 1: frozen install failed
+
+Before installation, an ignored-artifact audit found the pre-fork Repa root
+`node_modules/` and `tmp/` still present even though ordinary Git status was
+clean. Both were moved without overwriting into the oracle worktree. The fork
+then had no normal or ignored residue before the command began.
+
+Command:
+
+```powershell
+bun install --frozen-lockfile
+```
+
+Outcome: exit 1 after 218.6 seconds. Bun reported 4,666 packages installed
+and two failed packages:
+
+```text
+error: Fail extracting tarball for "sst-win32-x64"
+error: failed to download sst-win32-x64@4.13.1: Fail
+error: moving "fast-json-stringify" to cache dir failed
+EPERM: Operation not permitted (NtSetInformationFile())
+error: failed to download fast-json-stringify@6.4.0: InstallFailed
+```
+
+The install had reached native `tree-sitter-powershell` compilation through
+`node-gyp`. It also ran the repository `fix-node-pty` and Husky postinstall
+commands before returning the failure. After exit:
+
+- no install or child build process remained;
+- the tracked working tree and lockfile were unchanged;
+- the partial dependency tree was present only through ignored
+  `node_modules/` paths;
+- neither failed package existed in root `node_modules/`; and
+- both exact registry tarball URLs returned HTTP 200 immediately afterward.
+
+The observed boundary is therefore package download/extraction or Bun cache
+publication on Windows, not yet an attributed source or lockfile defect. No
+source patch, cache deletion, retry, typecheck, build, or test had been
+performed when this failure record was written.
 
 Pending execution.
