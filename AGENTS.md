@@ -1,14 +1,299 @@
+# Repository guidance
+
+## Product origin
+
+This repository implements a terminal-native agentic learning system. The agent works in a local learning workspace and continuously connects learning goals, course material, teaching, examples, learner questions, practice, review, prerequisite gaps, assignments, deadlines, and time budgets.
+
+Good explanation and demonstration are core Tutor behaviors. The product must also decide when and how to teach, connect teaching to the learner's history and goals, notice gaps, revisit material, and handle the surrounding work. Its full loop is:
+
+```text
+learning situation -> selected teaching or learning move -> learner interaction
+-> durable facts when useful -> revised context and plan -> next move
+```
+
+A learning activity does not have to produce a quiz result or a detailed state
+update. Do not let the measurability of practice make practice the center of the
+product.
+
+The Tutor is the product-level behavior of the whole Learning System, not a
+persona assigned to one LLM call. Program-owned state, rules, and feedback keep
+the long-running learning loop coherent. Models contribute open-ended semantic
+work such as interpreting materials, proposing structure, explaining,
+generating examples or tasks, and selecting, comparing, or adapting moves where
+fixed policy would be false precision. This is an ownership boundary, not a
+fixed control-flow split or a requirement to script every teaching step in
+code; the learner can steer and genuinely ambiguous local judgment may remain
+model-assisted.
+
+Models may also initiate and semantically author real durable writes through
+capability-scoped learning commands. Program-owned authority means the runtime
+binds trusted identity, source, revision, time, permission, transaction, and
+correction semantics; it does not mean that only deterministic code may decide
+or write. A successful write preserves its epistemic basis and does not make an
+unsupported model assertion true.
+
+Do not reduce the product to a one-shot chat teacher, note generator, Anki skin,
+todo application, rigid command-line planner, or generic agent with a few
+learning tools.
+
+## Settled constraints
+
+- The main interaction is a natural-language terminal agent.
+- The implementation language/runtime is TypeScript/Bun.
+- Repa is an independent product created from a one-time full-history fork of
+  OpenCode `v1.17.18`. The project owns the resulting harness composition,
+  product semantics, database, migrations, and release direction; OpenCode is
+  not a runtime dependency, overlay host, or compatibility target.
+- The complete local Agent harness is part of the product destination. Reuse
+  the fork's mature Session, typed-item, provider, tool, permission, MCP,
+  subagent, compaction, cancellation, recovery, and terminal mechanics rather
+  than selectively rebuilding them. Cloud, account, sharing, marketplace, and
+  other group-product surfaces are not part of the baseline.
+- Learning behavior is first-class: it shapes default Agent behavior, context,
+  durable Session meaning, database authorities, tools, terminal surfaces, and
+  task selection. Generic harness mechanics remain domain-independent and do
+  not become the architectural center merely because they were inherited.
+- Before creating new Repa machinery, try to reduce the required learning
+  behavior to an inherited or mature mechanism in the computational sense.
+  Reuse is valid only when ownership, identity, lifecycle, correction, and
+  failure behavior are preserved; it does not imply that an OpenCode coding
+  concept and a Repa learning concept are the same thing.
+- Plan, study, review, and similar modes are policy profiles over one agent loop, not separate runtimes or duplicated executors.
+- Trust learner intent while separating reports, observations, evidence, and inference; routine state updates are non-blocking, inspectable, correctable, and reversible.
+- When locally materialized, the pinned OpenCode source-audit checkout lives
+  beside the pre-fork oracle worktree, not inside either Git tree. Its pin is
+  recorded by the oracle provenance ledger and `references.lock.json`. It
+  remains read-only evidence; never import from it or recreate it as a
+  production dependency. This fork already carries the accepted full upstream
+  history, MIT license, and exact provenance.
+- The first fork baseline uses OpenCode's released v1 execution path. Preview
+  v2 may supply individually reviewed design ideas, but Repa must not ship or
+  maintain v1 and v2 as two production runtimes.
+- When locally materialized, the pinned Codex comparison checkout likewise
+  lives beside the oracle and is identified by its recorded pin. It is
+  read-only secondary evidence, does not change the TypeScript/Bun choice, and
+  does not create a second product lineage.
+- The old Rep HarmonyOS project contributes product history only. Its code and data model are not migration targets.
+- Learning semantics must shape context construction, default actions, durable session meaning, review surfaces, and task selection. Low-level provider and rendering code should remain domain-independent.
+- ADR-0014 settles the fork and native-database direction. Gates 0 and 1 passed;
+  Gate 2 recorded the inherited Windows test failure, Gate 2A corrected that
+  test contract, and Gate 3 passed at `0ffed9f62`. Gate 4 is next. Later
+  transaction, migration, and cutover claims still require their executable
+  gates; do not promote source resemblance into a working invariant.
+- Treat explanation, demonstration, guided work, independent work, review, and
+  planning as peer Tutor actions. No one action is the mandatory center or
+  continuation of every learning interaction.
+- One local LearnerHome spans the learner's courses, LearningSpaces, and
+  Sessions. Session history is not the long-term learning-state boundary. A new
+  Session receives a bounded relevant view and retrieves detail lazily rather
+  than importing every old transcript or state record.
+- Within one Session, preserve the conversation as model context while it fits.
+  Do not routinely truncate it merely because durable learning state exists.
+  Near the model context limit, compact older history while retaining a recent
+  verbatim tail and the original durable transcript; a compaction summary is
+  continuation context, not learning truth. The exact threshold and projection
+  remain a generic harness design decision.
+- The baseline has no background daemon. Due, overdue, and expired meaning is
+  derived from durable times and the trusted clock when the application wakes.
+- Treat ordinary substantial assignments as cross-day planning and feedback
+  problems. Last-minute rescue is outside Repa's product scope: do not design,
+  schedule, prioritize, or qualify Learning-System behavior around a task that
+  has already collapsed to a minute-scale deadline window. The program owns
+  accepted workload/capacity/deadline arithmetic, allocation, and recomputation; models
+  may help identify, estimate, semantically decompose, research, explain, and
+  adapt the work. This settles the responsibility boundary, not the final
+  schema or scheduling algorithm.
+- A pre-authored course is optional. The same Agent loop may research and
+  create a coarse provisional Course View, use it immediately, and later
+  correct or supersede it without promoting unsupported relations into hard
+  truth.
+- ADR-0012 centers a single-process modular monolith on separate learning
+  authorities. Interaction, source/artifact, Course View, Material Map,
+  learner record, Agenda, and Tutor policy must not collapse into the Agent
+  runner, one universal graph/fact table, or prompt memory.
+
+## Decision-record continuity
+
+- The one-time fork does not discard Repa's product and engineering history.
+  Product foundation documents, accepted ADRs, the active roadmap, gate
+  contracts, and passing evidence remain required engineering context and must
+  be carried into or made durably reachable from the production fork.
+- The active normative map is `docs/README.md`; provenance and passed Gate
+  evidence are indexed by `docs/fork-ledger.md`. Full pre-fork evidence remains
+  reachable through immutable tag `repa-prefork-oracle`, not through the
+  location or current branch of a sibling worktree.
+- Old Repa production code, databases, and labs are not migration targets.
+  Retain them only as historical evidence, behavioral oracles, or individually
+  reviewed carry candidates; never bulk-import them to preserve familiarity.
+
+## Reference boundary
+
+- `.reference/` is an ignored local materialization beside the oracle worktree,
+  not content stored by the oracle commit and not part of this tree. If
+  consulted there, it is read-only research material excluded from Git.
+- Never edit oracle `.reference/` files or import them into production code.
+- The production fork has already been obtained from full upstream history at
+  the accepted tag/commit. Preserve that history and required MIT notices.
+- When adapting a design, record the source file, pinned commit, preserved invariant, and deliberate differences.
+- Inherited source may be transformed inside this real fork. Prefer public
+  libraries or behavior-level reuse over copying isolated reference files.
+
+## AI engineering rules
+
+- Do not generate the whole repository or scaffold speculative subsystems.
+- Do not create an abstraction unless it names a current invariant or has more than one real consumer.
+- Do not introduce `manager`, `service`, `repository`, `controller`, or compatibility layers without a concrete boundary they protect.
+- Critical contracts require an explanation of ownership, legal state transitions, persistence, recovery, and failure behavior before implementation.
+- Prompts are not a substitute for domain rules, authorization, or state transitions.
+- Legacy labs remain in the pre-fork oracle and are not copied here. A current
+  gate may authorize a new isolated experiment only with an explicit question
+  and deletion condition; production code must not import it. Promote
+  conclusions, not accidental experiment structure.
+- Every production change must be small enough that a maintainer can explain why each changed file exists and how data crosses its boundary.
+- Prefer deleting a wrong abstraction over preserving it behind a compatibility shim.
+- For consequential or uncertain multi-step work, decompose by parent decision
+  and evidence boundary, not by file or layer count. Each subtask must name the
+  larger uncertainty it resolves and the evidence that ends it. Afterward,
+  return to the parent problem and choose again instead of automatically
+  extending the latest local design.
+- Keep simple problems simple. Do not turn a reversible choice into a general
+  framework, ontology, state machine, or benchmark merely to make the work look
+  rigorous. A bounded, reversible task with a clear boundary can be implemented
+  and verified directly.
+- Scope verification to the change and the claim, not to a habitual command
+  bundle. Run the smallest check that could falsify the claim and whose outcome
+  the changed files can actually affect. Pure documentation or research-record
+  changes normally need diff, link, formatting, and worktree checks—not
+  typecheck, build, or product tests—unless they alter executable configuration
+  or a generated contract. A focused code or test change runs its owning check
+  and directly affected suite; broaden only when dependency reach or risk makes
+  another result causally relevant. Reserve full applicable suites for actual
+  phase boundaries, releases, cross-cutting changes, or evidence invalidated by
+  environment/source drift. Do not run unrelated checks merely to perform a
+  verification ritual.
+- Before inventing consequential reusable machinery for runtime scheduling,
+  mode composition, queues, concurrency, caching, recovery, or performance,
+  look for a relevant established CS model and inspect mature implementations.
+  Use a standard facility directly when it already owns the boundary. Adapt the
+  demonstrated invariant, not the reference's package topology or product
+  scope.
+
+## Semantic alignment and disagreement
+
+- Distinguish accepted product intent, accepted architecture decisions, working hypotheses, research observations, and illustrative examples. Do not silently promote an example or research vocabulary into a production requirement.
+- Product goals, values, and acceptable trade-offs belong to the maintainer. Technical claims, source behavior, and failure properties are settled by inspectable evidence rather than by either human or model authority alone.
+- If a requested implementation conflicts with an accepted invariant or concrete engineering evidence, do not comply silently and do not override the intent silently. State the conflict, show the evidence, and identify the smallest reconciliation.
+- Ask for maintainer input only when an unresolved choice materially changes product behavior or an expensive-to-reverse boundary. Otherwise use a reversible, documented assumption and continue.
+- Preserve meaning with behavioral examples, counterexamples, tests, recorded oracles, and decision provenance. Conversation memory and a model's confident paraphrase are not durable specifications.
+- At phase boundaries, re-read the product origin and accepted ADRs, then audit the repository for semantic drift before extending the latest local design.
+
+## Agent collaboration and context economy
+
+- The maintainer gives standing permission to use subagents or delegation in
+  this repository when the available harness supports them. Permission is not a
+  requirement to delegate. Use a fresh worker context when a bounded,
+  preferably read-only investigation will produce much more raw material than
+  the conclusion needed by the main agent, or when genuinely independent work
+  benefits from parallelism. Keep tightly coupled reasoning in one context.
+- At the start of each consequential evidence gate, explicitly classify the
+  coherent parent decision the main agent owns, any bounded high-entropy
+  investigation suited to a fresh worker, and whether one independent review
+  question could still change gate acceptance. Delegate the investigation by
+  default when its raw context will greatly exceed its useful conclusion and
+  non-overlapping main work exists; if an obvious candidate stays local, record
+  why. Do not spawn workers performatively when the phase is one coupled model.
+- Independent review is not a confidence ritual. Use one fresh, preferably
+  read-only context at the boundary only when a concrete requirement, design,
+  security, data-integrity, or cross-cutting semantic question can still change
+  the result. The main agent owns evaluation of the returned evidence,
+  integration, and causal verification; same-context self-checking is not a
+  substitute for an independent review when independence is the point.
+- Give a worker its parent question, motivation, scope, exclusions, and a
+  bounded evidence contract. It returns conclusions, decisive evidence,
+  confidence, and remaining unknowns rather than raw logs or a second project
+  narrative.
+- After delegating exploration, the main agent does not repeat it. If there is
+  no genuinely non-overlapping work, use one task-sized event wait instead of
+  short polling, heartbeat narration, premature wrap-up requests, or invented
+  "lightweight" duplicate exploration. Spot-check only evidence that can
+  change the decision after the worker returns.
+- Treat maintainer corrections as control input, not invitations to restate
+  the newly accepted concept. Identify the invalid prior claim, audit which
+  decisions, documents, code, tests, or plans depended on it, and make or
+  propose the smallest repair. If nothing durable was affected, say that
+  briefly. Do not fill the response with a tutorial the maintainer just gave.
+- Before asking a factual question, research it and form a recommendation.
+  Ask the maintainer only about unresolved choices that can change product
+  behavior, acceptable trade-offs, or expensive-to-reverse boundaries. State
+  the live decision, the recommended answer, and the material consequence of
+  alternatives so the question never has to be decoded.
+- Use an explicit `grill-me` interaction only for a consequential cluster of
+  dependent product or architecture choices. Resolve one live dependency at a
+  time, stop when remaining uncertainty is cheap or no plausible answer changes
+  the plan, and promote accepted durable decisions to the owning document.
+  Situational answers do not become timeless user preferences.
+- Before asking the maintainer or extending a consequential proposal, run a
+  bounded `grill-yourself` pass when it can still change the design. Challenge
+  the strongest hidden assumption with a counterexample, check the relevant
+  failure/recovery boundary, and compare the latest wording against product
+  origin and accepted decisions. Research and repair evidence-owned mistakes
+  directly; bring only the remaining maintainer-owned trade-off to `grill-me`.
+  Do not turn this into recurring ceremony for cheap, reversible work.
+- Treat `grill-me` as high-variance decision extraction, not exhaustive
+  interviewing. A question is admissible only when repository/reference
+  research cannot settle it, the maintainer can actually control the answer,
+  at least two plausible answers lead to materially different product behavior
+  or an expensive boundary, and deciding now is cheaper than discovering the
+  mismatch during implementation. Ask the highest upstream admitted question
+  first, include a reasoned recommendation, and derive downstream questions
+  from its answer. Do not ask for facts, confirmation of already accepted
+  intent, generic preferences without a concrete consequence, implementation
+  trivia the agent should own, or hypothetical branches whose answers would
+  not change the next plan.
+
+## Global coherence check
+
+Before optimizing a local module, confirm:
+
+1. Which product loop step it serves.
+2. Which durable fact or invariant it owns.
+3. Whether the same concept already exists elsewhere.
+4. Whether the change makes the learning system more native or merely expands generic agent infrastructure.
+5. Whether the design is adapted from a reference because the same problem
+   exists here, or only because the reference happens to contain it.
+
+## Verification commands
+
+The fork intentionally rejects root-level test execution. Run focused tests and
+package typechecks from the affected package, for example:
+
+```powershell
+cd packages/opencode
+bun test <relevant-test-files>
+bun run typecheck
+```
+
+Run package builds or broader suites at real phase/release boundaries, not as a
+habitual sequence. The pre-fork `check:reference` and `check` command names are
+not assumed to exist in the fork.
+
+## Inherited OpenCode engineering conventions
+
+The following conventions describe retained fork implementation details. They
+remain useful where the inherited code still owns the mechanism, but the Repa
+product, architecture, evidence, and collaboration rules above take precedence.
+Upstream repository topology or release-process facts are not automatically
+Repa requirements.
+
 - To regenerate the legacy JavaScript SDK, run `./packages/sdk/js/script/build.ts`.
 - After changing the public Protocol or Server `HttpApi`, run `bun run generate` from `packages/client`. Do not edit `src/generated` or `src/generated-effect` directly.
 - Keep runtime dependencies directed from Schema to Core and Protocol, then from Core and Protocol to Server. Client runtime code may depend on Schema and Protocol but never Core or Server; `sdk-next` composes Client, Core, and Server.
-- The default branch in this repo is `dev`.
-- Local `main` ref may not exist; use `dev` or `origin/dev` for diffs.
 
-## Branch Names
+## Branch names
 
-Use a short branch name of at most three words, separated by hyphens. Do not use slashes or type prefixes such as `feat/` or `fix/`.
-
-Examples: `session-recovery`, `fix-scroll-state`, `regenerate-sdk`.
+Use a short descriptive branch tail and the namespace required by the active
+harness; Codex-managed branches use the `codex/` prefix. Do not assume the
+upstream OpenCode `dev` branch is Repa's integration base.
 
 ## Commits and PR Titles
 
@@ -148,7 +433,12 @@ const table = sqliteTable("session", {
 
 - Always run `bun typecheck` from package directories (e.g., `packages/opencode`), never `tsc` directly.
 
-## V2 Session Core
+## Inherited preview-v2 notes
+
+These rules constrain maintenance of inherited preview-v2 files only. They do
+not authorize enabling v2 as Repa's production runtime or maintaining v1 and v2
+as parallel product paths; the settled Repa baseline remains the released-v1
+execution path until a later accepted gate changes it.
 
 - Keep durable prompt admission separate from model execution. `SessionV2.prompt(...)` admits one durable `session_input` row before scheduling advisory `SessionExecution.wake(sessionID)` unless `resume: false` requests admit-only behavior. The serialized runner promotes admitted inputs into visible user messages at safe boundaries.
 - Reusing a Session ID adopts the existing Session. Reusing a prompt message ID reconciles an exact retry only when Session, prompt, and delivery mode match; conflicting reuse fails. Historical projected prompts lazily synthesize promoted inbox records during exact retry.
