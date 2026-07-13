@@ -5,8 +5,6 @@ import { GenerateCommand } from "./cli/cmd/generate"
 import { ConsoleCommand } from "./cli/cmd/account"
 import { ProvidersCommand } from "./cli/cmd/providers"
 import { AgentCommand } from "./cli/cmd/agent"
-import { UpgradeCommand } from "./cli/cmd/upgrade"
-import { UninstallCommand } from "./cli/cmd/uninstall"
 import { ModelsCommand } from "./cli/cmd/models"
 import { UI } from "./cli/ui"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
@@ -34,7 +32,7 @@ const args = hideBin(process.argv)
 
 function show(out: string) {
   const text = out.trimStart()
-  if (!text.startsWith("opencode ")) {
+  if (!text.startsWith("repa ")) {
     process.stderr.write(UI.logo() + EOL + EOL)
     process.stderr.write(text + EOL)
     return
@@ -44,7 +42,7 @@ function show(out: string) {
 
 const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
-  .scriptName("opencode")
+  .scriptName("repa")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
@@ -64,17 +62,17 @@ const cli = yargs(args)
     type: "boolean",
   })
   .middleware(async (opts) => {
-    if (opts.printLogs) process.env.OPENCODE_PRINT_LOGS = "1"
-    if (opts.logLevel) process.env.OPENCODE_LOG_LEVEL = opts.logLevel
+    if (opts.printLogs) process.env.REPA_PRINT_LOGS = "1"
+    if (opts.logLevel) process.env.REPA_LOG_LEVEL = opts.logLevel
     if (opts.pure) {
-      process.env.OPENCODE_PURE = "1"
+      process.env.REPA_PURE = "1"
     }
 
     Heap.start()
 
     process.env.AGENT = "1"
-    process.env.OPENCODE = "1"
-    process.env.OPENCODE_PID = String(process.pid)
+    process.env.REPA = "1"
+    process.env.REPA_PID = String(process.pid)
   })
   .usage("")
   .completion("completion", "generate shell completion script")
@@ -88,8 +86,6 @@ const cli = yargs(args)
   .command(ConsoleCommand)
   .command(ProvidersCommand)
   .command(AgentCommand)
-  .command(UpgradeCommand)
-  .command(UninstallCommand)
   .command(ServeCommand)
   .command(WebCommand)
   .command(ModelsCommand)

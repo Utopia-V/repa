@@ -28,7 +28,7 @@ const WebSearchProviderSchema = Schema.Literals(["exa", "parallel"])
 export type WebSearchProvider = Schema.Schema.Type<typeof WebSearchProviderSchema>
 
 export function selectWebSearchProvider(sessionID: string, flags = { exa: false, parallel: false }): WebSearchProvider {
-  const override = process.env.OPENCODE_WEBSEARCH_PROVIDER
+  const override = process.env.REPA_WEBSEARCH_PROVIDER
   if (override === "exa" || override === "parallel") return override
   if (flags.parallel) return "parallel"
   if (flags.exa) return "exa"
@@ -52,7 +52,7 @@ export function webSearchModelName(extra: Tool.Context["extra"]) {
 }
 
 function parallelAuthHeaders() {
-  const headers = { "User-Agent": `opencode/${InstallationVersion}` }
+  const headers = { "User-Agent": `repa/${InstallationVersion}` }
   if (!process.env.PARALLEL_API_KEY) return headers
   return { ...headers, Authorization: `Bearer ${process.env.PARALLEL_API_KEY}` }
 }

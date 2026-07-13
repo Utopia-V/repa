@@ -112,7 +112,7 @@ function withCreatedWorktree(
 
       expect(created.status).toBe(200)
       const info = yield* json<Worktree.Info>(created)
-      expect(info).toMatchObject({ name, branch: "opencode/api-test" })
+      expect(info).toMatchObject({ name, branch: "repa/api-test" })
       yield* Fiber.join(ready)
       return info
     }),

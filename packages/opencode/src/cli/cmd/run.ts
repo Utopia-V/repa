@@ -125,7 +125,7 @@ async function toolError(part: ToolPart) {
 
 export const RunCommand = effectCmd({
   command: "run [message..]",
-  describe: "run opencode with a message",
+  describe: "run Repa with a message",
   // --attach connects to a remote server (no local instance needed); the
   // default path runs an in-process server and needs the project instance.
   instance: (args) => !args.attach,
@@ -189,17 +189,17 @@ export const RunCommand = effectCmd({
       })
       .option("attach", {
         type: "string",
-        describe: "attach to a running opencode server (e.g., http://localhost:4096)",
+        describe: "attach to a running Repa server (e.g., http://localhost:4096)",
       })
       .option("password", {
         alias: ["p"],
         type: "string",
-        describe: "basic auth password (defaults to OPENCODE_SERVER_PASSWORD)",
+        describe: "basic auth password (defaults to REPA_SERVER_PASSWORD)",
       })
       .option("username", {
         alias: ["u"],
         type: "string",
-        describe: "basic auth username (defaults to OPENCODE_SERVER_USERNAME or 'opencode')",
+        describe: "basic auth username (defaults to REPA_SERVER_USERNAME or 'repa')",
       })
       .option("dir", {
         type: "string",
@@ -949,7 +949,7 @@ export const RunCommand = effectCmd({
         return Server.Default().app.fetch(new Request(request, { headers }))
       }) as typeof globalThis.fetch
       const sdk = createOpencodeClient({
-        baseUrl: "http://opencode.internal",
+        baseUrl: "http://repa.internal",
         fetch: fetchFn,
         directory,
       })
@@ -977,7 +977,7 @@ type MiniCommandInput = {
 export async function runMini(input: MiniCommandInput) {
   if (!RunCommand.handler) throw new Error("Mini command handler is unavailable")
   await RunCommand.handler({
-    $0: "opencode",
+    $0: "repa",
     _: ["mini"],
     message: input.prompt ? [input.prompt] : [],
     command: undefined,

@@ -39,8 +39,8 @@ const appLayer = AppNodeBuilder.build(
 const it = testEffect(Layer.mergeAll(appLayer, httpApiLayer))
 
 const original = {
-  OPENCODE_SERVER_PASSWORD: Flag.OPENCODE_SERVER_PASSWORD,
-  OPENCODE_SERVER_USERNAME: Flag.OPENCODE_SERVER_USERNAME,
+  REPA_SERVER_PASSWORD: Flag.REPA_SERVER_PASSWORD,
+  REPA_SERVER_USERNAME: Flag.REPA_SERVER_USERNAME,
 }
 
 type ServerPath = "default" | "raw"
@@ -88,8 +88,8 @@ function serverFetch(
   return HttpServer.HttpServer.use((server) =>
     Effect.sync(() => {
       void serverPath
-      Flag.OPENCODE_SERVER_PASSWORD = input?.password
-      Flag.OPENCODE_SERVER_USERNAME = input?.username
+      Flag.REPA_SERVER_PASSWORD = input?.password
+      Flag.REPA_SERVER_USERNAME = input?.username
       const baseUrl = HttpServer.formatAddress(server.address)
       return Object.assign(
         async (request: RequestInfo | URL, init?: RequestInit) => {
@@ -285,7 +285,7 @@ function writeStandardFiles(dir: string) {
 function writeProjectSkill(dir: string) {
   return FSUtil.Service.use((fs) =>
     fs.writeWithDirs(
-      path.join(dir, ".opencode", "skills", "project-rest-skill", "SKILL.md"),
+      path.join(dir, ".repa", "skills", "project-rest-skill", "SKILL.md"),
       `---
 name: project-rest-skill
 description: A project skill visible to REST API prompts.
@@ -328,8 +328,8 @@ function seedMessage(directory: string, sessionID: string) {
 }
 
 afterEach(async () => {
-  Flag.OPENCODE_SERVER_PASSWORD = original.OPENCODE_SERVER_PASSWORD
-  Flag.OPENCODE_SERVER_USERNAME = original.OPENCODE_SERVER_USERNAME
+  Flag.REPA_SERVER_PASSWORD = original.REPA_SERVER_PASSWORD
+  Flag.REPA_SERVER_USERNAME = original.REPA_SERVER_USERNAME
   await disposeAllInstances()
   await resetDatabase()
 })

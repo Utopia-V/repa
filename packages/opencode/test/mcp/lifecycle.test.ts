@@ -38,6 +38,7 @@ interface LifecycleServerState {
   listToolsError?: string
   requestDelay?: number
   roots?: Array<{ uri: string; name?: string }>
+  client?: { name: string; version: string }
   requests: string[]
   aborted: number
 }
@@ -101,6 +102,7 @@ function lifecycleServer(input?: { capabilities?: ServerCapabilities; instructio
         }
 
         protocol.oninitialized = () => {
+          state.client = protocol.getClientVersion()
           if (!input?.requestRoots) return
           if (!protocol.getClientCapabilities()?.roots) return
           void Bun.sleep(25)
@@ -188,6 +190,8 @@ it.instance("advertises and lists the instance directory as its root", () =>
     const mcp = yield* MCP.Service
     const test = yield* TestInstance
     yield* mcp.add("roots", remote(server.url))
+
+    expect(server.state.client?.name).toBe("repa")
 
     const roots = yield* pollWithTimeout(
       Effect.sync(() => server.state.roots),

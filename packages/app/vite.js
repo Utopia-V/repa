@@ -6,9 +6,9 @@ import { fileURLToPath } from "url"
 const theme = fileURLToPath(new URL("./public/oc-theme-preload.js", import.meta.url))
 
 const channel = (() => {
-  const raw = process.env.OPENCODE_CHANNEL
+  const raw = process.env.REPA_CHANNEL
   if (raw === "dev" || raw === "beta" || raw === "prod") return raw
-  if (process.env.OPENCODE_CHANNEL === "latest") return "prod"
+  if (process.env.REPA_CHANNEL === "latest") return "prod"
   return "dev"
 })()
 

@@ -1,5 +1,5 @@
 import { OptimizedBuffer, RGBA, TextAttributes } from "@opentui/core"
-import { go } from "../logo"
+import { repaMark } from "../logo"
 
 const PERIOD = 4600
 const RINGS = 3
@@ -13,8 +13,8 @@ const BREATH_SPEED = 0.0008
 const PHASE_OFFSET = 0.29
 const LOGO_GAP = 1
 const LOGO_TOP_BIAS = -1
-const LOGO_LEFT_WIDTH = go.left[0]?.length ?? 0
-const LOGO_LINES = go.left.map((line, index) => line + " ".repeat(LOGO_GAP) + go.right[index])
+const LOGO_LEFT_WIDTH = repaMark.left[0]?.length ?? 0
+const LOGO_LINES = repaMark.left.map((line, index) => line + " ".repeat(LOGO_GAP) + repaMark.right[index])
 const LOGO_WIDTH = LOGO_LINES[0]?.length ?? 0
 const LOGO_HEIGHT = LOGO_LINES.length
 const SPACE = " ".codePointAt(0)!

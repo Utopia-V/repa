@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import { cliIt } from "../../lib/cli-process"
 import { createAcpClient, expectErrorCode, initialize } from "./helpers"
 
-describe("opencode acp initialize/auth subprocess", () => {
+describe("Repa ACP initialize/auth subprocess", () => {
   cliIt.live(
     "initialize responds with capabilities",
     ({ opencode }) =>
@@ -21,7 +21,7 @@ describe("opencode acp initialize/auth subprocess", () => {
         expect(initialized.agentCapabilities?.sessionCapabilities?.fork).toEqual({})
         expect(initialized.agentCapabilities?.sessionCapabilities?.list).toEqual({})
         expect(initialized.agentCapabilities?.sessionCapabilities?.resume).toEqual({})
-        expect(initialized.agentInfo?.name).toBe("OpenCode")
+        expect(initialized.agentInfo?.name).toBe("Repa")
       }),
     60_000,
   )
@@ -33,15 +33,19 @@ describe("opencode acp initialize/auth subprocess", () => {
         const acp = yield* createAcpClient({ opencode })
         const initialized = yield* initialize(acp)
 
-        expect(initialized.authMethods?.[0]?.id).toBe("opencode-login")
-        expect(initialized.authMethods?.[0]?._meta?.["terminal-auth"]).toBeDefined()
-        expect(yield* acp.request<AuthenticateResponse>("authenticate", { methodId: "opencode-login" })).toMatchObject({
+        expect(initialized.authMethods?.[0]?.id).toBe("repa-login")
+        expect(initialized.authMethods?.[0]?._meta?.["terminal-auth"]).toEqual({
+          command: "repa",
+          args: ["auth", "login"],
+          label: "Repa Login",
+        })
+        expect(yield* acp.request<AuthenticateResponse>("authenticate", { methodId: "repa-login" })).toMatchObject({
           result: {},
         })
 
         const rejected = yield* acp.request<AuthenticateResponse>("authenticate", { methodId: "missing-auth-method" })
         expectErrorCode(rejected.error, -32602)
-        expect(JSON.stringify(rejected.error)).not.toContain(process.env.OPENCODE_AUTH_CONTENT ?? "not-present")
+        expect(JSON.stringify(rejected.error)).not.toContain(process.env.REPA_AUTH_CONTENT ?? "not-present")
       }),
     60_000,
   )
@@ -53,7 +57,7 @@ describe("opencode acp initialize/auth subprocess", () => {
         const acp = yield* createAcpClient({ opencode })
         const initialized = yield* acp.request<InitializeResponse>("initialize", { protocolVersion: 1 })
 
-        expect(initialized.result?.authMethods?.[0]?.id).toBe("opencode-login")
+        expect(initialized.result?.authMethods?.[0]?.id).toBe("repa-login")
         expect(initialized.result?.authMethods?.[0]?._meta?.["terminal-auth"]).toBeUndefined()
       }),
     60_000,

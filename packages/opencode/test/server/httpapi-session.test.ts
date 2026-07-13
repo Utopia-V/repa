@@ -38,7 +38,7 @@ import { TestLLMServer } from "../lib/llm-server"
 import { testProviderConfig } from "../lib/test-provider"
 import { pollWithTimeout, testEffect } from "../lib/effect"
 
-const originalWorkspaces = Flag.OPENCODE_EXPERIMENTAL_WORKSPACES
+const originalWorkspaces = Flag.REPA_EXPERIMENTAL_WORKSPACES
 const noopBootstrapLayer = Layer.succeed(
   InstanceBootstrapService.Service,
   InstanceBootstrapService.Service.of({ run: Effect.void }),
@@ -229,7 +229,7 @@ function requestJson<T>(path: string, init?: RequestInit) {
 }
 
 afterEach(async () => {
-  Flag.OPENCODE_EXPERIMENTAL_WORKSPACES = originalWorkspaces
+  Flag.REPA_EXPERIMENTAL_WORKSPACES = originalWorkspaces
   await disposeAllInstances()
   await resetDatabase()
 })
@@ -797,7 +797,7 @@ describe("session HttpApi", () => {
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
-        Flag.OPENCODE_EXPERIMENTAL_WORKSPACES = true
+        Flag.REPA_EXPERIMENTAL_WORKSPACES = true
         const project = yield* Project.use.fromDirectory(test.directory)
         const workspace = yield* createLocalWorkspace({
           projectID: project.project.id,

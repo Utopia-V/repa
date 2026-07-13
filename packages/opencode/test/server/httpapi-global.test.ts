@@ -5,7 +5,6 @@ import { HttpBody, HttpClient, HttpClientRequest, HttpRouter } from "effect/unst
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Auth } from "../../src/auth"
 import { Config } from "../../src/config/config"
-import { Installation } from "../../src/installation"
 import { MoveSession } from "@opencode-ai/core/control-plane/move-session"
 import { ServerAuth } from "../../src/server/auth"
 import { RootHttpApi } from "../../src/server/routes/instance/httpapi/api"
@@ -31,24 +30,20 @@ const apiLayer = HttpRouter.serve(
   Layer.provide(Layer.mock(Auth.Service)({})),
   Layer.provide(Layer.mock(Config.Service)({})),
   Layer.provide(Layer.mock(MoveSession.Service)({})),
-  Layer.provide(
-    Layer.mock(Installation.Service)({
-      method: () => Effect.succeed("npm"),
-      latest: () => Effect.succeed("9.9.9"),
-      upgrade: () => Effect.void,
-    }),
-  ),
   Layer.provide(ServerAuth.Config.configLayer({ password: Option.none(), username: "opencode" })),
 )
 const it = testEffect(apiLayer)
 
 describe("global HttpApi", () => {
-  it.live("upgrades to latest when the request body is omitted", () =>
+  it.live("rejects self-update while the Repa release channel is undefined", () =>
     Effect.gen(function* () {
       const response = yield* HttpClient.post(GlobalPaths.upgrade)
 
-      expect(response.status).toBe(200)
-      expect(yield* response.json).toEqual({ success: true, version: "9.9.9" })
+      expect(response.status).toBe(400)
+      expect(yield* response.json).toEqual({
+        success: false,
+        error: "Repa self-update is unavailable until its release channel is defined.",
+      })
     }),
   )
 

@@ -35,6 +35,12 @@ describe("McpOAuthProvider.redirectUrl", () => {
 })
 
 describe("McpOAuthProvider.clientMetadata", () => {
+  test("identifies Repa without claiming an OpenCode product URI", () => {
+    const metadata = makeProvider({}).clientMetadata
+    expect(metadata.client_name).toBe("Repa")
+    expect(metadata.client_uri).toBeUndefined()
+  })
+
   test("includes redirect_uris from redirectUrl", () => {
     const provider = makeProvider({ callbackPort: 6620 })
     expect(provider.clientMetadata.redirect_uris).toEqual([`http://127.0.0.1:6620${OAUTH_CALLBACK_PATH}`])

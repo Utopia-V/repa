@@ -277,7 +277,7 @@ describe("OpencodePlugin", () => {
     ),
   )
 
-  it.effect("uses OPENCODE_API_KEY as credentials", () =>
+  it.effect("uses OPENCODE_API_KEY as OpenCode provider credentials", () =>
     withEnv({ OPENCODE_API_KEY: "secret" }, () =>
       Effect.gen(function* () {
         const catalog = yield* Catalog.Service
@@ -304,14 +304,14 @@ describe("OpencodePlugin", () => {
   )
 
   it.effect("uses configured provider env vars as credentials", () =>
-    withEnv({ OPENCODE_API_KEY: undefined, CUSTOM_OPENCODE_API_KEY: "secret" }, () =>
+    withEnv({ OPENCODE_API_KEY: undefined, CUSTOM_REPA_API_KEY: "secret" }, () =>
       Effect.gen(function* () {
         const catalog = yield* Catalog.Service
         const integrations = yield* Integration.Service
         yield* integrations.transform((editor) => {
           editor.method.update({
             integrationID: Integration.ID.make("opencode"),
-            method: { type: "env", names: ["CUSTOM_OPENCODE_API_KEY"] },
+            method: { type: "env", names: ["CUSTOM_REPA_API_KEY"] },
           })
         })
         yield* catalog.transform((catalog) => {

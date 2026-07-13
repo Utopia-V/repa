@@ -2,11 +2,9 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import path from "path"
-import { pathToFileURL } from "url"
 import os from "os"
 import { mergeDeep } from "remeda"
 import { Global } from "@opencode-ai/core/global"
-import fsNode from "fs/promises"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { Auth } from "../auth"
 import { Env } from "../env"
@@ -137,9 +135,7 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Co
 export const use = serviceUse(Service)
 
 function globalConfigFile() {
-  const candidates = ["opencode.jsonc", "opencode.json", "config.json"].map((file) =>
-    path.join(Global.Path.config, file),
-  )
+  const candidates = ["repa.jsonc", "repa.json"].map((file) => path.join(Global.Path.config, file))
   for (const file of candidates) {
     if (existsSync(file)) return file
   }
@@ -247,7 +243,7 @@ const layer = Layer.effect(
       let result: Info = {}
       // Seed the default global config with the schema for editor completion, but avoid writing when the user
       // explicitly routes config through env-provided paths or content.
-      if (!Flag.OPENCODE_CONFIG && !Flag.OPENCODE_CONFIG_DIR && !Flag.OPENCODE_CONFIG_CONTENT) {
+      if (!Flag.REPA_CONFIG && !Flag.REPA_CONFIG_DIR && !Flag.REPA_CONFIG_CONTENT) {
         const file = globalConfigFile()
         if (!existsSync(file)) {
           yield* fs
@@ -255,25 +251,8 @@ const layer = Layer.effect(
             .pipe(Effect.catch(() => Effect.void))
         }
       }
-      result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "config.json"), env))
-      result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "opencode.json"), env))
-      result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "opencode.jsonc"), env))
-
-      const legacy = path.join(Global.Path.config, "config")
-      if (existsSync(legacy)) {
-        yield* Effect.promise(() =>
-          import(pathToFileURL(legacy).href, { with: { type: "toml" } })
-            .then(async (mod) => {
-              const { provider, model, ...rest } = mod.default
-              if (provider && model) result.model = `${provider}/${model}`
-              result["$schema"] = "https://opencode.ai/config.json"
-              result = mergeConfig(result, rest)
-              await fsNode.writeFile(path.join(Global.Path.config, "config.json"), JSON.stringify(result, null, 2))
-              await fsNode.unlink(legacy)
-            })
-            .catch(() => {}),
-        )
-      }
+      result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "repa.json"), env))
+      result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "repa.jsonc"), env))
 
       return result
     })
@@ -322,7 +301,7 @@ const layer = Layer.effect(
 
         const pluginScopeForSource = Effect.fnUntraced(function* (source: string) {
           if (source.startsWith("http://") || source.startsWith("https://")) return "global"
-          if (source === "OPENCODE_CONFIG_CONTENT") return "local"
+          if (source === "REPA_CONFIG_CONTENT") return "local"
           if (containsPath(source, ctx)) return "local"
           return "global"
         })
@@ -398,13 +377,13 @@ const layer = Layer.effect(
         const global = Object.keys(authEnv).length ? yield* loadGlobal(authEnv) : yield* getGlobal()
         yield* merge(Global.Path.config, global, "global")
 
-        if (Flag.OPENCODE_CONFIG) {
-          yield* merge(Flag.OPENCODE_CONFIG, yield* loadFile(Flag.OPENCODE_CONFIG, authEnv))
-          yield* Effect.logDebug("loaded custom config", { path: Flag.OPENCODE_CONFIG })
+        if (Flag.REPA_CONFIG) {
+          yield* merge(Flag.REPA_CONFIG, yield* loadFile(Flag.REPA_CONFIG, authEnv))
+          yield* Effect.logDebug("loaded custom config", { path: Flag.REPA_CONFIG })
         }
 
-        if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
-          for (const file of yield* ConfigPaths.files("opencode", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
+        if (!Flag.REPA_DISABLE_PROJECT_CONFIG) {
+          for (const file of yield* ConfigPaths.files("repa", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
             yield* merge(file, yield* loadFile(file, authEnv), "local")
           }
         }
@@ -415,15 +394,15 @@ const layer = Layer.effect(
 
         const directories = yield* ConfigPaths.directories(ctx.directory, ctx.worktree)
 
-        if (Flag.OPENCODE_CONFIG_DIR) {
-          yield* Effect.logDebug("loading config from OPENCODE_CONFIG_DIR", { path: Flag.OPENCODE_CONFIG_DIR })
+        if (Flag.REPA_CONFIG_DIR) {
+          yield* Effect.logDebug("loading config from REPA_CONFIG_DIR", { path: Flag.REPA_CONFIG_DIR })
         }
 
         const deps: Fiber.Fiber<void>[] = []
 
         for (const dir of directories) {
-          if (dir.endsWith(".opencode") || dir === Flag.OPENCODE_CONFIG_DIR) {
-            for (const file of ["opencode.json", "opencode.jsonc"]) {
+          if (dir.endsWith(".repa") || dir === Flag.REPA_CONFIG_DIR) {
+            for (const file of ["repa.json", "repa.jsonc"]) {
               const source = path.join(dir, file)
               yield* Effect.logDebug(`loading config from ${source}`)
               yield* merge(source, yield* loadFile(source, authEnv))
@@ -459,20 +438,20 @@ const layer = Layer.effect(
           result.command = mergeDeep(result.command ?? {}, yield* Effect.promise(() => ConfigCommand.load(dir)))
           result.agent = mergeDeep(result.agent ?? {}, yield* Effect.promise(() => ConfigAgent.load(dir)))
           result.agent = mergeDeep(result.agent ?? {}, yield* Effect.promise(() => ConfigAgent.loadMode(dir)))
-          // Auto-discovered plugins under `.opencode/plugin(s)` are already local files, so ConfigPlugin.load
+          // Auto-discovered plugins under `.repa/plugin(s)` are already local files, so ConfigPlugin.load
           // returns normalized Specs and we only need to attach origin metadata here.
           const list = yield* Effect.promise(() => ConfigPlugin.load(dir))
           yield* mergePluginOrigins(dir, list)
         }
 
-        if (process.env.OPENCODE_CONFIG_CONTENT) {
-          const source = "OPENCODE_CONFIG_CONTENT"
-          const next = yield* loadConfig(process.env.OPENCODE_CONFIG_CONTENT, {
+        if (process.env.REPA_CONFIG_CONTENT) {
+          const source = "REPA_CONFIG_CONTENT"
+          const next = yield* loadConfig(process.env.REPA_CONFIG_CONTENT, {
             dir: ctx.directory,
             source,
           })
           yield* merge(source, next, "local")
-          yield* Effect.logDebug("loaded custom config from OPENCODE_CONFIG_CONTENT")
+          yield* Effect.logDebug("loaded custom config from REPA_CONFIG_CONTENT")
         }
 
         const activeAccount = Option.getOrUndefined(
@@ -515,7 +494,7 @@ const layer = Layer.effect(
 
         const managedDir = ConfigManaged.managedConfigDir()
         if (existsSync(managedDir)) {
-          for (const file of ["opencode.json", "opencode.jsonc"]) {
+          for (const file of ["repa.json", "repa.jsonc"]) {
             const source = path.join(managedDir, file)
             yield* merge(source, yield* loadFile(source), "global")
           }
@@ -542,11 +521,11 @@ const layer = Layer.effect(
           })
         }
 
-        if (Flag.OPENCODE_PERMISSION) {
+        if (Flag.REPA_PERMISSION) {
           try {
-            result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.OPENCODE_PERMISSION))
+            result.permission = mergeDeep(result.permission ?? {}, JSON.parse(Flag.REPA_PERMISSION))
           } catch (err) {
-            yield* Effect.logWarning("OPENCODE_PERMISSION contains invalid JSON, skipping", { err })
+            yield* Effect.logWarning("REPA_PERMISSION contains invalid JSON, skipping", { err })
           }
         }
 
@@ -576,10 +555,10 @@ const layer = Layer.effect(
           result.share = "auto"
         }
 
-        if (Flag.OPENCODE_DISABLE_AUTOCOMPACT) {
+        if (Flag.REPA_DISABLE_AUTOCOMPACT) {
           result.compaction = { ...result.compaction, auto: false }
         }
-        if (Flag.OPENCODE_DISABLE_PRUNE) {
+        if (Flag.REPA_DISABLE_PRUNE) {
           result.compaction = { ...result.compaction, prune: false }
         }
 
@@ -623,7 +602,7 @@ const layer = Layer.effect(
 
     const update = Effect.fn("Config.update")(function* (config: Info) {
       const dir = yield* InstanceState.directory
-      const file = path.join(dir, "config.json")
+      const file = path.join(dir, "repa.json")
       const existing = yield* loadFile(file)
       yield* fs
         .writeFileString(file, JSON.stringify(mergeDeep(writable(existing), writable(config)), null, 2))

@@ -6,11 +6,11 @@
 // the original /event race or #27371's invalid-model hang).
 //
 // Configuration flows through opencode's built-in test affordances:
-//   - OPENCODE_CONFIG_CONTENT      : provider config inline, no files to find
-//   - OPENCODE_TEST_HOME           : pins os.homedir() → tmpdir
-//   - OPENCODE_DISABLE_PROJECT_CONFIG : skip walking up for opencode.json
-//   - OPENCODE_PURE                : skip external plugin discovery + install
-//   - OPENCODE_DISABLE_AUTOUPDATE / AUTOCOMPACT / MODELS_FETCH : no background work
+//   - REPA_CONFIG_CONTENT      : provider config inline, no files to find
+//   - REPA_TEST_HOME           : pins os.homedir() → tmpdir
+//   - REPA_DISABLE_PROJECT_CONFIG : skip walking up for repa.json
+//   - REPA_PURE                : skip external plugin discovery + install
+//   - REPA_DISABLE_AUTOUPDATE / AUTOCOMPACT / MODELS_FETCH : no background work
 // Plus HOME / XDG_* pointing at the tmpdir for belt-and-suspenders isolation.
 //
 // Today only `opencode.run` is fully wired. The shape supports adding more
@@ -61,19 +61,19 @@ function forkStderrDrain(stream: ReadableStream<Uint8Array>, into: string[]) {
 
 function isolatedEnv(home: string, configJson: string): Record<string, string> {
   return {
-    OPENCODE_TEST_HOME: home,
+    REPA_TEST_HOME: home,
     HOME: home,
     XDG_CONFIG_HOME: path.join(home, ".config"),
     XDG_DATA_HOME: path.join(home, ".local/share"),
     XDG_STATE_HOME: path.join(home, ".local/state"),
     XDG_CACHE_HOME: path.join(home, ".cache"),
-    OPENCODE_CONFIG_CONTENT: configJson,
-    OPENCODE_DISABLE_PROJECT_CONFIG: "1",
-    OPENCODE_PURE: "1",
-    OPENCODE_DISABLE_AUTOUPDATE: "1",
-    OPENCODE_DISABLE_AUTOCOMPACT: "1",
-    OPENCODE_DISABLE_MODELS_FETCH: "1",
-    OPENCODE_AUTH_CONTENT: "{}",
+    REPA_CONFIG_CONTENT: configJson,
+    REPA_DISABLE_PROJECT_CONFIG: "1",
+    REPA_PURE: "1",
+    REPA_DISABLE_AUTOUPDATE: "1",
+    REPA_DISABLE_AUTOCOMPACT: "1",
+    REPA_DISABLE_MODELS_FETCH: "1",
+    REPA_AUTH_CONTENT: "{}",
   }
 }
 
@@ -266,7 +266,7 @@ export function withCliFixture<A, E>(
         ...opts,
         env: {
           ...opts.env,
-          OPENCODE_CONFIG_CONTENT: JSON.stringify({
+          REPA_CONFIG_CONTENT: JSON.stringify({
             ...testProviderConfig(llm.url),
             permission: opts.permission,
           }),

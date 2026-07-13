@@ -5,74 +5,74 @@ export function truthy(key: string) {
   return value === "true" || value === "1"
 }
 
-const copy = process.env["OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
-const fff = process.env["OPENCODE_DISABLE_FFF"]
+const copy = process.env["REPA_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
+const fff = process.env["REPA_DISABLE_FFF"]
 
 function enabledByExperimental(key: string) {
-  return process.env[key] === undefined ? truthy("OPENCODE_EXPERIMENTAL") : truthy(key)
+  return process.env[key] === undefined ? truthy("REPA_EXPERIMENTAL") : truthy(key)
 }
 
 export const Flag = {
   OTEL_EXPORTER_OTLP_ENDPOINT: process.env["OTEL_EXPORTER_OTLP_ENDPOINT"],
   OTEL_EXPORTER_OTLP_HEADERS: process.env["OTEL_EXPORTER_OTLP_HEADERS"],
 
-  OPENCODE_AUTO_HEAP_SNAPSHOT: truthy("OPENCODE_AUTO_HEAP_SNAPSHOT"),
-  OPENCODE_GIT_BASH_PATH: process.env["OPENCODE_GIT_BASH_PATH"],
-  OPENCODE_CONFIG: process.env["OPENCODE_CONFIG"],
-  OPENCODE_CONFIG_CONTENT: process.env["OPENCODE_CONFIG_CONTENT"],
-  OPENCODE_DISABLE_AUTOUPDATE: truthy("OPENCODE_DISABLE_AUTOUPDATE"),
-  OPENCODE_ALWAYS_NOTIFY_UPDATE: truthy("OPENCODE_ALWAYS_NOTIFY_UPDATE"),
-  OPENCODE_DISABLE_PRUNE: truthy("OPENCODE_DISABLE_PRUNE"),
-  OPENCODE_DISABLE_TERMINAL_TITLE: truthy("OPENCODE_DISABLE_TERMINAL_TITLE"),
-  OPENCODE_SHOW_TTFD: truthy("OPENCODE_SHOW_TTFD"),
-  OPENCODE_DISABLE_AUTOCOMPACT: truthy("OPENCODE_DISABLE_AUTOCOMPACT"),
-  OPENCODE_DISABLE_MODELS_FETCH: truthy("OPENCODE_DISABLE_MODELS_FETCH"),
-  OPENCODE_DISABLE_MOUSE: truthy("OPENCODE_DISABLE_MOUSE"),
-  OPENCODE_FAKE_VCS: process.env["OPENCODE_FAKE_VCS"],
-  OPENCODE_SERVER_PASSWORD: process.env["OPENCODE_SERVER_PASSWORD"],
-  OPENCODE_SERVER_USERNAME: process.env["OPENCODE_SERVER_USERNAME"],
-  OPENCODE_DISABLE_FFF: fff === undefined ? process.platform === "win32" : truthy("OPENCODE_DISABLE_FFF"),
+  REPA_AUTO_HEAP_SNAPSHOT: truthy("REPA_AUTO_HEAP_SNAPSHOT"),
+  REPA_GIT_BASH_PATH: process.env["REPA_GIT_BASH_PATH"],
+  REPA_CONFIG: process.env["REPA_CONFIG"],
+  REPA_CONFIG_CONTENT: process.env["REPA_CONFIG_CONTENT"],
+  REPA_DISABLE_AUTOUPDATE: truthy("REPA_DISABLE_AUTOUPDATE"),
+  REPA_ALWAYS_NOTIFY_UPDATE: truthy("REPA_ALWAYS_NOTIFY_UPDATE"),
+  REPA_DISABLE_PRUNE: truthy("REPA_DISABLE_PRUNE"),
+  REPA_DISABLE_TERMINAL_TITLE: truthy("REPA_DISABLE_TERMINAL_TITLE"),
+  REPA_SHOW_TTFD: truthy("REPA_SHOW_TTFD"),
+  REPA_DISABLE_AUTOCOMPACT: truthy("REPA_DISABLE_AUTOCOMPACT"),
+  REPA_DISABLE_MODELS_FETCH: truthy("REPA_DISABLE_MODELS_FETCH"),
+  REPA_DISABLE_MOUSE: truthy("REPA_DISABLE_MOUSE"),
+  REPA_FAKE_VCS: process.env["REPA_FAKE_VCS"],
+  REPA_SERVER_PASSWORD: process.env["REPA_SERVER_PASSWORD"],
+  REPA_SERVER_USERNAME: process.env["REPA_SERVER_USERNAME"],
+  REPA_DISABLE_FFF: fff === undefined ? process.platform === "win32" : truthy("REPA_DISABLE_FFF"),
 
   // Experimental
-  OPENCODE_EXPERIMENTAL_FILEWATCHER: Config.boolean("OPENCODE_EXPERIMENTAL_FILEWATCHER").pipe(
+  REPA_EXPERIMENTAL_FILEWATCHER: Config.boolean("REPA_EXPERIMENTAL_FILEWATCHER").pipe(
     Config.withDefault(false),
   ),
-  OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: Config.boolean("OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER").pipe(
+  REPA_EXPERIMENTAL_DISABLE_FILEWATCHER: Config.boolean("REPA_EXPERIMENTAL_DISABLE_FILEWATCHER").pipe(
     Config.withDefault(false),
   ),
-  OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT:
-    copy === undefined ? process.platform === "win32" : truthy("OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"),
-  OPENCODE_MODELS_URL: process.env["OPENCODE_MODELS_URL"],
-  OPENCODE_MODELS_PATH: process.env["OPENCODE_MODELS_PATH"],
-  OPENCODE_DB: process.env["OPENCODE_DB"],
+  REPA_EXPERIMENTAL_DISABLE_COPY_ON_SELECT:
+    copy === undefined ? process.platform === "win32" : truthy("REPA_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"),
+  REPA_MODELS_URL: process.env["REPA_MODELS_URL"],
+  REPA_MODELS_PATH: process.env["REPA_MODELS_PATH"],
+  REPA_DB: process.env["REPA_DB"],
 
-  OPENCODE_WORKSPACE_ID: process.env["OPENCODE_WORKSPACE_ID"],
-  OPENCODE_EXPERIMENTAL_WORKSPACES: enabledByExperimental("OPENCODE_EXPERIMENTAL_WORKSPACES"),
+  REPA_WORKSPACE_ID: process.env["REPA_WORKSPACE_ID"],
+  REPA_EXPERIMENTAL_WORKSPACES: enabledByExperimental("REPA_EXPERIMENTAL_WORKSPACES"),
 
   // Evaluated at access time (not module load) because tests, the CLI, and
   // external tooling set these env vars at runtime.
-  get OPENCODE_DISABLE_PROJECT_CONFIG() {
-    return truthy("OPENCODE_DISABLE_PROJECT_CONFIG")
+  get REPA_DISABLE_PROJECT_CONFIG() {
+    return truthy("REPA_DISABLE_PROJECT_CONFIG")
   },
-  get OPENCODE_EXPERIMENTAL_REFERENCES() {
-    return enabledByExperimental("OPENCODE_EXPERIMENTAL_REFERENCES")
+  get REPA_EXPERIMENTAL_REFERENCES() {
+    return enabledByExperimental("REPA_EXPERIMENTAL_REFERENCES")
   },
-  get OPENCODE_TUI_CONFIG() {
-    return process.env["OPENCODE_TUI_CONFIG"]
+  get REPA_TUI_CONFIG() {
+    return process.env["REPA_TUI_CONFIG"]
   },
-  get OPENCODE_CONFIG_DIR() {
-    return process.env["OPENCODE_CONFIG_DIR"]
+  get REPA_CONFIG_DIR() {
+    return process.env["REPA_CONFIG_DIR"]
   },
-  get OPENCODE_PURE() {
-    return truthy("OPENCODE_PURE")
+  get REPA_PURE() {
+    return truthy("REPA_PURE")
   },
-  get OPENCODE_PERMISSION() {
-    return process.env["OPENCODE_PERMISSION"]
+  get REPA_PERMISSION() {
+    return process.env["REPA_PERMISSION"]
   },
-  get OPENCODE_PLUGIN_META_FILE() {
-    return process.env["OPENCODE_PLUGIN_META_FILE"]
+  get REPA_PLUGIN_META_FILE() {
+    return process.env["REPA_PLUGIN_META_FILE"]
   },
-  get OPENCODE_CLIENT() {
-    return process.env["OPENCODE_CLIENT"] ?? "cli"
+  get REPA_CLIENT() {
+    return process.env["REPA_CLIENT"] ?? "cli"
   },
 }
