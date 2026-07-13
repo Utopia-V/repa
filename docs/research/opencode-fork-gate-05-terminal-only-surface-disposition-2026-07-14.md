@@ -177,6 +177,70 @@ Gate 5A success claim. Gate 5A therefore does not claim that Gate 5 has passed.
 Revert the Gate 5A implementation commit to restore its registrations and
 callbacks; no schema or user data changes.
 
+## Gate 5B locked execution boundary: HTTP and routing
+
+Gate 5B is not one route-deletion patch. Typed Console, share, workspace,
+sync, and control-plane endpoints still have released TUI consumers; deleting
+their schemas and regenerating the SDK first would either break the terminal
+product or force a compatibility shell. Gate 5B therefore begins with two
+schema-neutral slices, then pauses for the owning Gate 5D consumer cutover
+before typed route removal and SDK regeneration.
+
+### Gate 5B1 — remove the hosted Web catch-all
+
+`packages/opencode/src/server/routes/instance/httpapi/server.ts` removes the
+raw `uiRoute`, its `serveUIEffect` import, and its merge into the production
+route tree. The helper implementation remains dormant until Gate 5F; this
+slice changes public reachability, not the typed API.
+
+Evidence requires:
+
+- `/`, `/site.webmanifest`, and an arbitrary unknown path return direct 404
+  responses from the production route tree and make no hosted Web request;
+- `/doc` and `/global/health` remain reachable; and
+- no SDK or generated artifact changes, because the catch-all was never in
+  the typed API.
+
+This slice must land before typed route deletion so a removed API path cannot
+fall through to a hosted UI proxy. Reverting its implementation commit is its
+complete rollback; it changes no schema or user data.
+
+### Gate 5B2 — make HTTP Session creation locally complete
+
+The Session HTTP handler creates a Session through `Session.Service` directly
+rather than `SessionShare.create`. With legacy `share: "auto"` or the runtime
+auto-share flag enabled, an HTTP create still succeeds but makes no share
+upstream request and persists no share as a side effect.
+
+The explicit typed share/unshare endpoints and `SessionShare` service remain
+temporarily because the TUI still consumes them. Their public removal belongs
+to the later typed-route slice after Gate 5D removes those consumers. Instance
+bootstrap still initializes `ShareNext`; Gate 5C owns that startup/background
+path. Thus Gate 5B2 closes only the HTTP-create trigger and does not claim the
+gate-wide no-share invariant.
+
+Evidence requires a production HTTP Session-create request under automatic
+share configuration, a successfully readable created Session, and a bounded
+fake upstream proving zero requests. The focused Session route test and
+OpenCode package typecheck are causal. Reverting the implementation commit
+restores the trigger; no schema or user data migration is involved.
+
+### Remaining Gate 5B route cutover
+
+After the relevant Gate 5D TUI consumers are removed, a separately locked
+Gate 5B3 contract will remove the Console endpoints inside `ExperimentalApi`,
+the Session share/unshare endpoints, and the complete `ControlPlaneApi`,
+`SyncApi`, and `WorkspaceApi`. It will also reduce workspace routing to local
+directory and persisted-Session-directory selection, prove the removed paths
+and remote selectors unreachable, and regenerate current SDK artifacts from
+the typed API owner.
+
+The frozen legacy `packages/sdk/js/src/gen/` tree is not hand-edited to mimic
+generation. Its retirement or recovered source-of-truth is a Gate 5F
+dependency-closure decision. Local provider integration routes are not a
+marketplace surface and remain unless separate evidence shows an excluded
+control-plane dependency.
+
 ## Gate-wide positive evidence
 
 - Local TUI, `run`, `attach`, `serve`, ACP, MCP, Sessions, tools, agents,
@@ -241,7 +305,7 @@ Gate 5 remains active. Gate 5A passed at
 The HTTP Session-create automatic-share path and instance-bootstrap
 ShareNext synchronization remain reachable. They are recorded Gate 5B/5C
 blockers, so this result neither claims the gate-wide no-network invariant nor
-closes Gate 5. Gate 5B is next.
+closes Gate 5. Gate 5B1 and Gate 5B2 are now locked; Gate 5B1 is next.
 
 ## Rollback
 
