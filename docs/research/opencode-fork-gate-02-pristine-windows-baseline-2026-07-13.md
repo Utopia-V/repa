@@ -1,6 +1,6 @@
 # OpenCode fork Gate 2: pristine Windows baseline
 
-Status: In progress — red after focused Windows test attempt 2
+Status: Failed — blocked before Gate 3
 
 Date: 2026-07-13
 
@@ -262,4 +262,58 @@ This proves that the missing `WINDIR` was one harness-environment defect but
 does not explain the residual streaming cadence failure. The gate remains red
 and no source change has been made.
 
-Pending execution.
+### Focused test attempt 3: residual failure reproduced
+
+The single remaining test was selected by name and rerun with the standard
+process-level `WINDIR` restored:
+
+```powershell
+$env:WINDIR = $env:SystemRoot
+bun test --timeout 30000 --only-failures -t "streams metadata updates progressively" test/tool/shell.test.ts
+```
+
+It failed again with `updates.length === 1`: zero passed, one failed, and 64
+were filtered out. The selected test took 1916 ms and the command exited 1
+after 4.62 seconds.
+
+The implementation calls `ctx.metadata` once for each decoded child-process
+output chunk. The test emits `first`, waits a fixed 100 ms, emits `second`,
+and assumes the operating-system pipe exposes two chunks. The final result
+contained both outputs, but Windows combined them into one observed chunk in
+both runs. This is a reproducible failure of the exact inherited test/behavior
+boundary, not evidence that can be waived as a one-off run.
+
+The 14 skipped tests in the original nine-file run were also accounted for:
+13 are explicitly Unix-only Session prompt tests and one is an explicitly
+skipped no-LLM-server test. No unexplained skip remains.
+
+The fetched current `opencode-upstream/dev` versions of the relevant shell
+test and implementation are byte-identical to the pinned tree, and the pinned
+workflow set uses Windows for release signing but does not run the test suite
+on Windows.
+
+### Final Gate 2 result
+
+Gate 2 did not pass.
+
+Verified positive evidence:
+
+- exact tag tree and lockfile remained unchanged;
+- a clean isolated-cache frozen install completed;
+- both planned package typechecks passed;
+- the Windows x64 binary built and passed its built-in smoke test;
+- the six-file core suite passed 93/93; and
+- the selected opencode scope completed all non-shell-failure behavior, with
+  the original 14 skips fully attributed.
+
+Blocking evidence:
+
+- the focused opencode command exits 1 on Windows;
+- after restoring the standard machine `WINDIR` into the sanitized process,
+  one progressive shell metadata test still fails reproducibly; and
+- making the gate green now requires either an explicit recorded baseline
+  exception or a separate change to the inherited test/behavior boundary.
+
+No Gate 3 rename, identity, path, database, prompt, or product change was
+performed. The fork remains at the exact pinned commit with only ignored
+dependency and build artifacts present.
