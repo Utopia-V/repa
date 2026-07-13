@@ -3,7 +3,6 @@ import { HttpApiBuilder, OpenApi } from "effect/unstable/httpapi"
 import { HttpMiddleware, HttpRouter, HttpServer, HttpServerResponse } from "effect/unstable/http"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import * as Observability from "@opencode-ai/core/observability"
-import { Account } from "@/account/account"
 import { Agent } from "@/agent/agent"
 import { Auth } from "@/auth"
 import { BackgroundJob } from "@/background/job"
@@ -190,7 +189,6 @@ const app = LayerNode.group([
   FSUtil.node,
   Database.node,
   Auth.node,
-  Account.node,
   Config.node,
   Env.node,
   Git.node,

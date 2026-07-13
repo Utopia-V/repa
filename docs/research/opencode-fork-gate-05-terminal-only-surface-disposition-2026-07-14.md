@@ -263,8 +263,10 @@ The dependency order is two reversible slices:
    fetching `/api/config`, injecting a Console token, or publishing derived
    Console state. Local/global/project/managed config, explicit well-known
    provider config, plugin provenance, and environment/file substitution
-   remain. Active runtime and HTTP layer composition no longer registers the
-   now-unconsumed Account node.
+   remain. HTTP layer composition no longer registers the now-unconsumed
+   Account node. The aggregate CLI runtime keeps the inert node until Gate 5F
+   deletes already-unregistered account command implementations whose Effect
+   types still name it; constructing that service performs no network work.
 2. **5C2 — remove sharing configuration and startup synchronization.** The
    released and current config schemas reject or ignore `share`, `autoshare`,
    and the top-level sharing `enterprise` field rather than migrating them
