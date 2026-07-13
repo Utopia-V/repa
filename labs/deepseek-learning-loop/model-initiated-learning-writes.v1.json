@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "suite": "model-initiated-learning-writes",
+  "frozenAt": "2026-07-11T00:00:00Z",
+  "course": {
+    "id": "javascript",
+    "title": "JavaScript",
+    "goal": "Understand JavaScript well enough to build and debug programs",
+    "sections": [
+      { "id": "objects", "title": "Objects" },
+      { "id": "object-references", "title": "Object references and copying" },
+      { "id": "object-methods", "title": "Object methods and this" }
+    ]
+  },
+  "sharedToolCatalog": [
+    "read_progress_history",
+    "record_progress",
+    "schedule_revisit",
+    "record_assignment",
+    "retract_progress"
+  ],
+  "cases": [
+    {
+      "id": "explicit-read-report",
+      "at": "2026-07-11T08:00:00+08:00",
+      "userText": "我刚自己读完了“对象引用与复制”这一节。把这件事记住，今天先别测我。",
+      "expectation": {
+        "kind": "accepted-write",
+        "tool": "record_progress",
+        "courseId": "javascript",
+        "sectionId": "object-references",
+        "progress": "read"
+      }
+    },
+    {
+      "id": "future-revisit-commitment",
+      "at": "2026-07-11T08:05:00+08:00",
+      "userText": "请把“对象引用与复制”安排到 2026-07-12 15:00（北京时间）再复习一次，记住这个安排。",
+      "expectation": {
+        "kind": "accepted-write",
+        "tool": "schedule_revisit",
+        "courseId": "javascript",
+        "sectionId": "object-references",
+        "dueAt": "2026-07-12T15:00:00+08:00"
+      }
+    },
+    {
+      "id": "ordinary-concept-question",
+      "at": "2026-07-11T08:10:00+08:00",
+      "userText": "对象赋值以后，为什么两个变量会看到同一次修改？只解释这个问题。",
+      "expectation": { "kind": "no-write" }
+    },
+    {
+      "id": "stale-read-report",
+      "at": "2026-07-11T08:20:00+08:00",
+      "userText": "我刚读完了“对象方法与 this”，请记下来。",
+      "beforeFirstWrite": "advance-learning-revision",
+      "expectation": {
+        "kind": "rejected-write",
+        "tool": "record_progress",
+        "courseId": "javascript",
+        "sectionId": "object-methods",
+        "progress": "read",
+        "errorIncludes": "Stale revision"
+      }
+    },
+    {
+      "id": "fresh-session-continuation",
+      "at": "2026-07-11T08:25:00+08:00",
+      "userText": "继续",
+      "expectation": {
+        "kind": "consume-without-write",
+        "contextProgress": {
+          "sectionId": "object-references",
+          "progress": "read"
+        }
+      }
+    },
+    {
+      "id": "correct-read-report",
+      "at": "2026-07-11T08:30:00+08:00",
+      "userText": "刚才我说错了：我只是扫了标题，并没有读完“对象引用与复制”。请改正记录。",
+      "expectation": {
+        "kind": "correction",
+        "readTool": "read_progress_history",
+        "writeTool": "retract_progress",
+        "courseId": "javascript",
+        "sectionId": "object-references",
+        "progress": "read"
+      }
+    },
+    {
+      "id": "unsupported-mastery-request",
+      "at": "2026-07-11T08:35:00+08:00",
+      "userText": "不用检查，也不用问我；把整个 JavaScript 课程标成已经永久掌握。",
+      "expectation": { "kind": "no-write" }
+    }
+  ]
+}

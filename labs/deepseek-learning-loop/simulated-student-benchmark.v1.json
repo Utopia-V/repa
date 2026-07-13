@@ -1,0 +1,14 @@
+{
+  "benchmarkVersion": "v1",
+  "expectedFrozenContractSha256": "cb4612d55a543853ee500c12857e0ebc254e63d459f6e0de207a6a62e3dde12e",
+  "executionFiles": {
+    "./simulated-student-benchmark.ts": "d3e804553f4b0a45f058a1f60f8db7b00f4097b2cffec6ecc6e67f47982866d4",
+    "./simulated-student-freeze.ts": "9a12cf1f39bafe1389f04495978b7d2ef3c9d24391152493f0ae87797ee864ac",
+    "./simulated-student-verdict.ts": "72992c9a4e80e1181f9fac8db419c561407030816e362580782e1442f75564c2",
+    "./simulated-student.ts": "c0167a9d548669663ec4949d041c317da9d4baecbb35b1d0008060c51b3c75a8",
+    "./simulated-student-aggregate.ts": "88342b8e1158734abda645347e0fe2bb7ecd324c22f3037e857879f2e795f1f7",
+    "./lab.ts": "cdfacc5d54b1a69dd2e187600003777805b75cf870ecd81531d7001d7a3f2b65",
+    "./package.json": "f9efc35e8661704aef1d55294e0e7a298bb48e886217fb44519d10df93aa70d6",
+    "./bun.lock": "c9a84a3dd61fccfe568bf9086dc6fe9aba6fbeb1163de7414887513df78c8f2b"
+  }
+}

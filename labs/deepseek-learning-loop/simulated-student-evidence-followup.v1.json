@@ -1,0 +1,34 @@
+{
+  "version": "v1",
+  "expectedContractSha256": "99142b13f363a7aebafa3ff006d333cb342896296c7399c6f038efa858fef71c",
+  "model": {
+    "model": "deepseek-v4-flash",
+    "thinking": "disabled",
+    "temperature": 0
+  },
+  "inputArtifacts": [
+    {
+      "trial": 1,
+      "path": "./.runs/2026-07-11T07-45-36.814Z-simulated-student-benchmark-main-deepseek-v4-flash.json",
+      "sha256": "8d13495577c4fc652decd2a92dd08531697d3029197f4fd79b8d54c72486e688"
+    },
+    {
+      "trial": 2,
+      "path": "./.runs/2026-07-11T07-47-06.190Z-simulated-student-benchmark-main-deepseek-v4-flash.json",
+      "sha256": "9b4e2a737a76153da0eaba8aed0472577d773a649dc370334b6ad71f787b0be9"
+    },
+    {
+      "trial": 3,
+      "path": "./.runs/2026-07-11T07-48-26.429Z-simulated-student-benchmark-main-deepseek-v4-flash.json",
+      "sha256": "b5f9b0bee4c767d8b6a275d03208cb8a47a82428a79af8c78550ce64689cc902"
+    }
+  ],
+  "executionFiles": {
+    "./simulated-student-evidence-followup-contract.ts": "78a3c5c6fc608b23e52f92595115a826e0edf5f19f78577aeecec5b7f6b2a78a",
+    "./simulated-student-evidence-followup.ts": "a8eb2caa0e54eace176927965bc174bb10e6e2635ee6e6a6b3760d4ecec5830a",
+    "./simulated-student-benchmark.ts": "d3e804553f4b0a45f058a1f60f8db7b00f4097b2cffec6ecc6e67f47982866d4",
+    "./lab.ts": "cdfacc5d54b1a69dd2e187600003777805b75cf870ecd81531d7001d7a3f2b65",
+    "./frozen/simulated-student-evidence-followup-v1/package.json": "d03e3b5e138604381130fcad7af1a3f4407d53ffea82dac0ead09d7040e09153",
+    "./bun.lock": "c9a84a3dd61fccfe568bf9086dc6fe9aba6fbeb1163de7414887513df78c8f2b"
+  }
+}

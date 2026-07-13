@@ -1,0 +1,453 @@
+{
+  "protocolRevision": "als-021-v1",
+  "requestedModel": "deepseek-v4-flash",
+  "policyProfileRevision": "tutor-default-v2",
+  "provider": "deepseek",
+  "thinking": "disabled",
+  "temperature": "provider_default",
+  "providerSeed": null,
+  "maxModelSteps": 6,
+  "maxOutputTokensPerStep": 1200,
+  "maxRetries": 0,
+  "perConditionTimeoutMs": 90000,
+  "bunVersion": "1.3.14",
+  "runtimePlatform": "win32-x64",
+  "blindReviewSchemaRevision": "als-021-review-v2",
+  "blindReviewOrder": [
+    "block-1:position-14",
+    "block-4:position-9",
+    "block-7:position-4",
+    "block-1:position-13",
+    "block-4:position-8",
+    "block-7:position-3",
+    "block-1:position-12",
+    "block-4:position-7",
+    "block-7:position-2",
+    "block-1:position-11",
+    "block-4:position-6",
+    "block-7:position-1",
+    "block-1:position-10",
+    "block-4:position-5",
+    "block-6:position-14",
+    "block-1:position-9",
+    "block-4:position-4",
+    "block-6:position-13",
+    "block-1:position-8",
+    "block-4:position-3",
+    "block-6:position-12",
+    "block-1:position-7",
+    "block-4:position-2",
+    "block-6:position-11",
+    "block-1:position-6",
+    "block-4:position-1",
+    "block-6:position-10",
+    "block-1:position-5",
+    "block-3:position-14",
+    "block-6:position-9",
+    "block-1:position-4",
+    "block-3:position-13",
+    "block-6:position-8",
+    "block-1:position-3",
+    "block-3:position-12",
+    "block-6:position-7",
+    "block-1:position-2",
+    "block-3:position-11",
+    "block-6:position-6",
+    "block-1:position-1",
+    "block-3:position-10",
+    "block-6:position-5",
+    "block-8:position-14",
+    "block-3:position-9",
+    "block-6:position-4",
+    "block-8:position-13",
+    "block-3:position-8",
+    "block-6:position-3",
+    "block-8:position-12",
+    "block-3:position-7",
+    "block-6:position-2",
+    "block-8:position-11",
+    "block-3:position-6",
+    "block-6:position-1",
+    "block-8:position-10",
+    "block-3:position-5",
+    "block-5:position-14",
+    "block-8:position-9",
+    "block-3:position-4",
+    "block-5:position-13",
+    "block-8:position-8",
+    "block-3:position-3",
+    "block-5:position-12",
+    "block-8:position-7",
+    "block-3:position-2",
+    "block-5:position-11",
+    "block-8:position-6",
+    "block-3:position-1",
+    "block-5:position-10",
+    "block-8:position-5",
+    "block-2:position-14",
+    "block-5:position-9",
+    "block-8:position-4",
+    "block-2:position-13",
+    "block-5:position-8",
+    "block-8:position-3",
+    "block-2:position-12",
+    "block-5:position-7",
+    "block-8:position-2",
+    "block-2:position-11",
+    "block-5:position-6",
+    "block-8:position-1",
+    "block-2:position-10",
+    "block-5:position-5",
+    "block-7:position-14",
+    "block-2:position-9",
+    "block-5:position-4",
+    "block-7:position-13",
+    "block-2:position-8",
+    "block-5:position-3",
+    "block-7:position-12",
+    "block-2:position-7",
+    "block-5:position-2",
+    "block-7:position-11",
+    "block-2:position-6",
+    "block-5:position-1",
+    "block-7:position-10",
+    "block-2:position-5",
+    "block-4:position-14",
+    "block-7:position-9",
+    "block-2:position-4",
+    "block-4:position-13",
+    "block-7:position-8",
+    "block-2:position-3",
+    "block-4:position-12",
+    "block-7:position-7",
+    "block-2:position-2",
+    "block-4:position-11",
+    "block-7:position-6",
+    "block-2:position-1",
+    "block-4:position-10",
+    "block-7:position-5"
+  ],
+  "contrastReviewPlan": [
+    {
+      "executionKey": "block-2:agenda-triad",
+      "block": "block-2",
+      "sampleScenarioIds": [
+        "return_independent_prediction",
+        "return_discrimination",
+        "return_repair"
+      ]
+    },
+    {
+      "executionKey": "block-5:history-pair",
+      "block": "block-5",
+      "sampleScenarioIds": [
+        "failed_prose_represent",
+        "understood_prose_extend"
+      ]
+    },
+    {
+      "executionKey": "block-7:agenda-triad",
+      "block": "block-7",
+      "sampleScenarioIds": [
+        "return_repair",
+        "return_independent_prediction",
+        "return_discrimination"
+      ]
+    },
+    {
+      "executionKey": "block-2:history-pair",
+      "block": "block-2",
+      "sampleScenarioIds": [
+        "understood_prose_extend",
+        "failed_prose_represent"
+      ]
+    },
+    {
+      "executionKey": "block-4:agenda-triad",
+      "block": "block-4",
+      "sampleScenarioIds": [
+        "return_repair",
+        "return_discrimination",
+        "return_independent_prediction"
+      ]
+    },
+    {
+      "executionKey": "block-7:history-pair",
+      "block": "block-7",
+      "sampleScenarioIds": [
+        "failed_prose_represent",
+        "understood_prose_extend"
+      ]
+    },
+    {
+      "executionKey": "block-1:agenda-triad",
+      "block": "block-1",
+      "sampleScenarioIds": [
+        "return_repair",
+        "return_independent_prediction",
+        "return_discrimination"
+      ]
+    },
+    {
+      "executionKey": "block-4:history-pair",
+      "block": "block-4",
+      "sampleScenarioIds": [
+        "understood_prose_extend",
+        "failed_prose_represent"
+      ]
+    },
+    {
+      "executionKey": "block-6:agenda-triad",
+      "block": "block-6",
+      "sampleScenarioIds": [
+        "return_discrimination",
+        "return_independent_prediction",
+        "return_repair"
+      ]
+    },
+    {
+      "executionKey": "block-1:history-pair",
+      "block": "block-1",
+      "sampleScenarioIds": [
+        "failed_prose_represent",
+        "understood_prose_extend"
+      ]
+    },
+    {
+      "executionKey": "block-3:agenda-triad",
+      "block": "block-3",
+      "sampleScenarioIds": [
+        "return_discrimination",
+        "return_repair",
+        "return_independent_prediction"
+      ]
+    },
+    {
+      "executionKey": "block-6:history-pair",
+      "block": "block-6",
+      "sampleScenarioIds": [
+        "understood_prose_extend",
+        "failed_prose_represent"
+      ]
+    },
+    {
+      "executionKey": "block-8:agenda-triad",
+      "block": "block-8",
+      "sampleScenarioIds": [
+        "return_independent_prediction",
+        "return_discrimination",
+        "return_repair"
+      ]
+    },
+    {
+      "executionKey": "block-3:history-pair",
+      "block": "block-3",
+      "sampleScenarioIds": [
+        "failed_prose_represent",
+        "understood_prose_extend"
+      ]
+    },
+    {
+      "executionKey": "block-5:agenda-triad",
+      "block": "block-5",
+      "sampleScenarioIds": [
+        "return_independent_prediction",
+        "return_repair",
+        "return_discrimination"
+      ]
+    },
+    {
+      "executionKey": "block-8:history-pair",
+      "block": "block-8",
+      "sampleScenarioIds": [
+        "understood_prose_extend",
+        "failed_prose_represent"
+      ]
+    }
+  ],
+  "scenarioIds": [
+    "novice_worked_example",
+    "capable_independent_prediction",
+    "deadline_direct_help",
+    "explicit_later_return",
+    "failed_prose_represent",
+    "failed_prose_explicit_visual_control",
+    "understood_prose_extend",
+    "return_repair",
+    "return_independent_prediction",
+    "return_discrimination",
+    "return_reason_ablation",
+    "return_repair_current_form",
+    "return_independent_completed",
+    "return_independent_guided"
+  ],
+  "mainOrders": [
+    [
+      "novice_worked_example",
+      "return_repair",
+      "deadline_direct_help",
+      "understood_prose_extend",
+      "failed_prose_explicit_visual_control",
+      "return_independent_completed",
+      "capable_independent_prediction",
+      "return_discrimination",
+      "explicit_later_return",
+      "return_reason_ablation",
+      "return_independent_guided",
+      "failed_prose_represent",
+      "return_repair_current_form",
+      "return_independent_prediction"
+    ],
+    [
+      "return_independent_prediction",
+      "return_independent_completed",
+      "return_repair_current_form",
+      "return_reason_ablation",
+      "novice_worked_example",
+      "understood_prose_extend",
+      "failed_prose_represent",
+      "explicit_later_return",
+      "return_repair",
+      "return_discrimination",
+      "deadline_direct_help",
+      "return_independent_guided",
+      "capable_independent_prediction",
+      "failed_prose_explicit_visual_control"
+    ],
+    [
+      "return_discrimination",
+      "understood_prose_extend",
+      "return_reason_ablation",
+      "deadline_direct_help",
+      "failed_prose_represent",
+      "failed_prose_explicit_visual_control",
+      "return_independent_guided",
+      "novice_worked_example",
+      "return_independent_prediction",
+      "explicit_later_return",
+      "capable_independent_prediction",
+      "return_repair_current_form",
+      "return_repair",
+      "return_independent_completed"
+    ],
+    [
+      "explicit_later_return",
+      "return_repair_current_form",
+      "failed_prose_represent",
+      "return_discrimination",
+      "return_independent_prediction",
+      "novice_worked_example",
+      "deadline_direct_help",
+      "capable_independent_prediction",
+      "return_independent_guided",
+      "return_independent_completed",
+      "understood_prose_extend",
+      "return_repair",
+      "failed_prose_explicit_visual_control",
+      "return_reason_ablation"
+    ],
+    [
+      "deadline_direct_help",
+      "return_reason_ablation",
+      "capable_independent_prediction",
+      "return_independent_prediction",
+      "return_repair_current_form",
+      "return_independent_guided",
+      "explicit_later_return",
+      "failed_prose_explicit_visual_control",
+      "failed_prose_represent",
+      "understood_prose_extend",
+      "novice_worked_example",
+      "return_discrimination",
+      "return_independent_completed",
+      "return_repair"
+    ],
+    [
+      "return_independent_guided",
+      "deadline_direct_help",
+      "novice_worked_example",
+      "failed_prose_represent",
+      "return_repair",
+      "capable_independent_prediction",
+      "return_reason_ablation",
+      "return_independent_completed",
+      "return_discrimination",
+      "failed_prose_explicit_visual_control",
+      "return_repair_current_form",
+      "explicit_later_return",
+      "return_independent_prediction",
+      "understood_prose_extend"
+    ],
+    [
+      "failed_prose_explicit_visual_control",
+      "novice_worked_example",
+      "return_independent_completed",
+      "explicit_later_return",
+      "return_independent_guided",
+      "return_discrimination",
+      "return_repair",
+      "return_reason_ablation",
+      "understood_prose_extend",
+      "capable_independent_prediction",
+      "failed_prose_represent",
+      "return_independent_prediction",
+      "deadline_direct_help",
+      "return_repair_current_form"
+    ],
+    [
+      "understood_prose_extend",
+      "return_independent_prediction",
+      "failed_prose_explicit_visual_control",
+      "return_repair",
+      "explicit_later_return",
+      "failed_prose_represent",
+      "novice_worked_example",
+      "return_independent_guided",
+      "return_repair_current_form",
+      "deadline_direct_help",
+      "return_independent_completed",
+      "return_reason_ablation",
+      "return_discrimination",
+      "capable_independent_prediction"
+    ]
+  ],
+  "sha256": {
+    "AGENTS.md": "1ad70eb614a77d6cb3579b82a1d2de37dd90b5a7d9606641dff3bbd88af66a8a",
+    "bun.lock": "5e86ad9d0439e6461a3412e3dada48332104e5bd1184209f76c58da74054a477",
+    "docs/research/shared-tutor-policy-contrasting-traces-protocol-2026-07-12.md": "4bdaec2007160e62cc7cc9bfcd2bd12c6d209b946d9c31726fc464aa2a041354",
+    "labs/shared-tutor-policy-pressure/fixtures/course.md": "c9177048cbf9c09eaf0f4641ad6aab553344a9031d31681bfe829c2f942d6515",
+    "labs/shared-tutor-policy-pressure/fixtures/pilot-5171a2474590-provider-replay.json": "5e6e43d0e665bb69aeddce5598d81e08c749078adc8615a0c35af6d87c5637aa",
+    "labs/shared-tutor-policy-pressure/formal-review-lock.ts": "56365ed9f0c9ae78ddc6abb9ca1e435ea6eab8ecd30b7d6b97ca20de4fab121a",
+    "labs/shared-tutor-policy-pressure/formal-review.ts": "10a0e23196f0d548c7a859441330bf3b6b6cbb7b9033d525fd6ccfa4e025253f",
+    "labs/shared-tutor-policy-pressure/freeze.ts": "703b682f597de7b727b370ce2b0046fcfb04495ff04597b04041f501d6a53685",
+    "labs/shared-tutor-policy-pressure/harness.ts": "b1c2c6c0c06f582ce8b9c8fe18f2244f354f17d3f1ba2a98cacfa205e99a2c09",
+    "labs/shared-tutor-policy-pressure/observed-model.ts": "e3b3445b398e2f96be4811c962a171824afcb0a7eb2c559399e257c6eebb2bf1",
+    "labs/shared-tutor-policy-pressure/protocol.ts": "c2c4676bfd78572f6a090453d2390075dd49bed8c2b20c485ac4e37259667433",
+    "labs/shared-tutor-policy-pressure/provider-input-equivalence.ts": "4b0bf77f6aa42f27bccf62e8602339dd87416a298beec828c8608d494763011d",
+    "labs/shared-tutor-policy-pressure/review.ts": "e36927b634ae6b58971e695004fdc8034645072717932b4d25eaae1a2a6e5195",
+    "labs/shared-tutor-policy-pressure/run.ts": "d8c46f207c4e9612663543ee4e41d0767edc9f4699dc5967d6e98723e5c828d8",
+    "package.json": "4480d338db2070e48037c2bb27cdcd60f15adfc9731d15e72d7e865332290176",
+    "src/cli.ts": "5be4d16a5c6b042429d5c29b4326c7e31219d831909f7d4531b82ab49a41926a",
+    "src/interaction/records.ts": "2d5de7cc8268341bdb481e6ca46f83d51dcddd39708932c60ba082b78b876ce2",
+    "src/learning/agenda/future-attention-tool-execution.ts": "5a4ccbff84a56dc4b449b2cffd8b65169999b2a18a20df115ab23456fe9c7440",
+    "src/learning/agenda/future-attention.ts": "270e12aee0bcd725526cd6ada7a7558e69d1c888d59bb7a13ec3f911c3b19e84",
+    "src/learning/curriculum/course-correction.ts": "0d252039ed493925d3d7f73e7a0d8e8761f8438cacc3a8b0ca092b8acc8b1b5a",
+    "src/learning/curriculum/course-tool-execution.ts": "701ec17afc7cf8d4f8a55e6de5a28381bbbb3b9035a160f3527cd4c38f47ddff",
+    "src/learning/curriculum/course-view-revisions.ts": "6cc4e6ab3248be53a2d2e337bed98a7331ae3f7d313dbf0e0e15c3c2fbec1806",
+    "src/learning/curriculum/course-view.ts": "fdc86b3c043690a3d260be8f4b4fcb5f66a92420c98b52363c2fa1658daf8938",
+    "src/providers/deepseek.ts": "eaa023cde6872fbfd8e219e49992ab48525e86b195a30af4675b76175c3aa932",
+    "src/runtime/agenda-tools.ts": "bdd23c6d1dec5492854d552eb5c268807bb16cc5d7602968490d2dc9aa66f0cd",
+    "src/runtime/run-tutor-turn.ts": "ca2463186329fbe08c73f5025ddeeeb22442190979b513509ff3e7bbabb10f30",
+    "src/runtime/tutor-tool-binding.ts": "c190e1c8f5151eae1d866d0d9e8c66d168bc50ae3fe49c97c25b04e5efadbe4d",
+    "src/runtime/tutor-tools.ts": "8668e8c6d0e3b0b33d2634f44445e5ba566fc48c0945407efe4d5894021ef20b",
+    "src/sources/markdown-artifact.ts": "907bc4c6fa943eed3282a57d4f1bdb039b6d375f053097590075fbcc287ac668",
+    "src/storage/canonical-json.ts": "61f801ab95cfc41b90faef085e9a276c285c0ed0b0ce21bcc1d9d1eed3ce3a1e",
+    "src/storage/learner-home-owner.ts": "708c55b23af179d49cfe31f9e5d00f4974bd6988211c3a96df6668fa7a42d14f",
+    "src/storage/open-database.ts": "452d10dc2635ad9d36b0eba41b13ee77bbbbacae2fb09d5917f651fd953a3854",
+    "src/storage/system-state.ts": "271ce1374548a91bf0e9ae62b91ed0082cb2e0f663718adc044baa4db03e26b7",
+    "src/tutor/compile-context.ts": "dee9e4bda984fbdff9d5ab7580888e5678d1c150621a3d1cd8b3f177c4b2e6b4",
+    "src/tutor/learner-steering.ts": "2becccf636cd1f8a49343be9b9a1d5acffd4bf559eaef592140cf342597650ad",
+    "src/tutor/policy-profile.ts": "9f16d40c37c70b40993e2c13f21208c55987d474de2f27baae1c896750c1c0a3",
+    "src/tutor/render-system-prompt.ts": "5369ed80725e82fae87684d80418f6461338179eca387dbc2ceea2569a04ea26"
+  }
+}

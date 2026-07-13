@@ -1,72 +1,75 @@
-# Learning-semantic anchor lab
+# Learning-significance contract lab
 
 ## Question
 
-Can the foundation contracts carry one committed learning occurrence through a
-rebuildable learner projection, context assembly, and a changed next action
-without treating Session text or a failed tool call as learning evidence?
+Can one small SQLite-backed contract distinguish ordinary conversation,
+selected teaching, formal task results, correction, and time-derived review
+pressure while still changing the next Tutor action when learning-significant
+evidence changes?
 
 ## Semantic checksum
 
 Product-loop purpose:
 
-```text
-learning activity -> accepted occurrence -> revised state -> next action
-```
+~~~text
+learning activity -> source-linked result -> evidence interpretation
+-> rebuildable projection -> candidate reason -> next action
+~~~
 
-Owned durable fact:
+Owned durable facts:
 
-```text
-an accepted occurrence is committed once under a stable runtime operation ID
-```
+~~~text
+Session owns original interaction text
+Learning Domain owns formal task context, source-linked result,
+correctable evidence interpretation, and review obligations
+Tool runtime owns invocation settlement
+~~~
 
 Representative behavior:
 
-```text
-independent delayed success -> context supports advancing
-repeated independent failure with a related prerequisite -> context supports repair
-```
+~~~text
+formal independent miss -> assessment-triggered review candidate
+formal independent success -> locally ready-work candidate
+~~~
 
-Counterexample:
+These are deterministic wiring oracles, not accepted educational policy. In
+particular, one success does not establish global mastery and one miss does not
+rewrite a curriculum route.
 
-```text
-assistant text saying “mastered” and a failed learning-tool invocation do not
-change the learner projection
-```
+Counterexamples:
+
+~~~text
+ordinary clarification -> Session history only
+completed explanation whose activity contract requires verification
+-> verification obligation, not mastery evidence
+time passes -> due pressure changes, no evidence is invented
+~~~
 
 Failure and correction behavior:
 
-```text
-an exact operation retry is idempotent
-a conflicting reuse of the operation ID is rejected
-the current projection can be deleted and rebuilt from committed occurrences
-```
+~~~text
+learning result plus tool settlement commit atomically
+exact operation retry is idempotent
+conflicting operation reuse is rejected
+correction retracts or supersedes interpretation without deleting source
+projection can be rebuilt from active interpretations
+~~~
 
 ## Scope
 
-This is a contract fixture, not an MVP and not a proposed course ontology. The
-names `target`, `relatedTarget`, `stable`, and `needs_repair` are deliberately
-lab-local. They test separation and data flow; they are not production schema
-decisions.
+This directory remains a lab. Names such as local signal, candidate reason, and
+the test selector are not production schema or scheduling decisions. The lab
+tests authority boundaries and transaction behavior only.
 
-The deterministic Tutor policy is an oracle for wiring:
-
-```text
-same goal + different committed evidence -> materially different next action
-```
-
-It does not claim that these three states are a sufficient learner model or
-that the selected action improves human learning.
+Production code must not import this directory.
 
 ## Deletion condition
 
-Delete this lab after production tests cover all of the following with accepted
-runtime and learning-domain contracts:
+Delete this lab after accepted production contracts cover:
 
-- operation-idempotent occurrence commit;
-- projection rebuild from committed facts;
-- context provenance through source occurrence IDs and revision;
-- Session non-evidence excluded from learner state;
-- different committed evidence changes the Tutor's next action.
-
-Production code must not import this directory.
+- ordinary interaction excluded from learning state by default;
+- task context and source-linked result admission;
+- atomic local learning write and tool settlement;
+- interpretation correction/retraction and projection rebuild;
+- time-derived review pressure without invented evidence; and
+- materially different admitted evidence changing the next action.

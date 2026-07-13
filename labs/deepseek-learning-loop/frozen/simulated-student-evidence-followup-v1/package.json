@@ -1,0 +1,36 @@
+{
+  "name": "repa-deepseek-learning-loop-lab",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "scripted": "bun run experiment.ts scripted",
+    "dual": "bun run experiment.ts dual",
+    "ablation": "bun run ablation.ts",
+    "contract-transfer": "bun run contract-transfer.ts",
+    "tool-lifecycle": "bun run tool-lifecycle.ts",
+    "approval-cancellation": "bun run approval-cancellation.ts",
+    "stale-approval": "bun run stale-approval.ts",
+    "tool-catalog": "bun run tool-catalog.ts",
+    "code-mode-readonly": "bun run code-mode-readonly.ts",
+    "material-retrieval": "bun run material-retrieval.ts",
+    "untrusted-material": "bun run untrusted-material.ts",
+    "staged-model": "bun run staged-model.ts",
+    "isolated-model-handoff": "bun run isolated-model-handoff.ts",
+    "context-stratification": "bun run context-stratification.ts",
+    "alignment-annotation": "bun run alignment-annotation.ts",
+    "alignment-structured-output": "bun run alignment-structured-output.ts",
+    "simulated-student": "bun run simulated-student.ts",
+    "simulated-student:aggregate": "bun run simulated-student-aggregate.ts",
+    "simulated-student:evidence-followup": "bun run simulated-student-evidence-followup.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "2.0.41",
+    "acorn": "8.15.0",
+    "ai": "6.0.168",
+    "effect": "4.0.0-beta.83",
+    "typescript": "5.8.2",
+    "zod": "4.1.8"
+  }
+}
