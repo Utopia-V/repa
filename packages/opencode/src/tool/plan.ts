@@ -31,12 +31,12 @@ export const PlanExitTool = Tool.define(
             sessionID: ctx.sessionID,
             questions: [
               {
-                question: `Plan at ${plan} is complete. Would you like to switch to the build agent and start implementing?`,
-                header: "Build Agent",
+                question: `Plan at ${plan} is complete. Would you like to return to the Repa profile and carry it out?`,
+                header: "Continue",
                 custom: false,
                 options: [
-                  { label: "Yes", description: "Switch to build agent and start implementing the plan" },
-                  { label: "No", description: "Stay with plan agent to continue refining the plan" },
+                  { label: "Yes", description: "Return to the Repa profile and carry out the plan" },
+                  { label: "No", description: "Stay in the planning profile and continue refining the plan" },
                 ],
               },
             ],
@@ -55,7 +55,7 @@ export const PlanExitTool = Tool.define(
             sessionID: ctx.sessionID,
             role: "user",
             time: { created: Date.now() },
-            agent: "build",
+            agent: "repa",
             model,
           }
           yield* session.updateMessage(msg)
@@ -64,13 +64,13 @@ export const PlanExitTool = Tool.define(
             messageID: msg.id,
             sessionID: ctx.sessionID,
             type: "text",
-            text: `The plan at ${plan} has been approved, you can now edit files. Execute the plan`,
+            text: `The plan at ${plan} has been approved. Carry it out within the current request and permissions.`,
             synthetic: true,
           } satisfies SessionV1.TextPart)
 
           return {
-            title: "Switching to build agent",
-            output: "User approved switching to build agent. Wait for further instructions.",
+            title: "Returning to the Repa profile",
+            output: "The learner approved the plan and returned to the Repa profile.",
             metadata: {},
           }
         }).pipe(Effect.orDie),

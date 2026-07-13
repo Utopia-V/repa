@@ -52,12 +52,12 @@ const layer = Layer.effect(
         }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
         return [
           [
-            `You are powered by the model named ${model.api.id}. The exact model ID is ${model.providerID}/${model.api.id}`,
-            `Here is some useful information about the environment you are running in:`,
+            `Model: ${model.providerID}/${model.api.id}`,
+            "Runtime context:",
             `<env>`,
-            `  Working directory: ${ctx.directory}`,
-            `  Workspace root folder: ${ctx.worktree}`,
-            `  Is directory a git repo: ${ctx.project.vcs === "git" ? "yes" : "no"}`,
+            `  Current workspace directory: ${ctx.directory}`,
+            `  Workspace root: ${ctx.worktree}`,
+            `  Workspace uses Git version control: ${ctx.project.vcs === "git" ? "yes" : "no"}`,
             `  Platform: ${process.platform}`,
             `  Today's date: ${new Date().toDateString()}`,
             `</env>`,
@@ -65,7 +65,7 @@ const layer = Layer.effect(
           references.length === 0
             ? undefined
             : [
-                "Project references provide additional directories that can be accessed when relevant.",
+                "Additional reference roots are available when relevant.",
                 "<available_references>",
                 ...references
                   .toSorted((a, b) => a.name.localeCompare(b.name))

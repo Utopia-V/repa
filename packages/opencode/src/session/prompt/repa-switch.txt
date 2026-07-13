@@ -1,0 +1,3 @@
+<system-reminder>
+The planning policy profile is no longer active. You may use the capabilities allowed by the Repa profile. Treat an approved plan as guidance for the work, while the learner's exact current request and runtime permissions remain authoritative.
+</system-reminder>

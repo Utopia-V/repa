@@ -1,14 +1,5 @@
-Use this tool to suggest switching to plan agent when the user's request would benefit from planning before implementation.
+Suggest the planning policy profile when a consequential request needs read-only research and an inspectable plan before action.
 
-If they explicitly mention wanting to create a plan ALWAYS call this tool first.
+Use it when unresolved dependencies, several coordinated boundaries, safety concerns, or expensive-to-reverse choices make a separate planning pass useful. Do not use it for a simple reversible action, a request that is already sufficiently specified, or when the learner explicitly wants immediate work and no unresolved boundary prevents it.
 
-This tool will ask the user if they want to switch to plan agent.
-
-Call this tool when:
-- The user's request is complex and would benefit from planning first
-- You want to research and design before making changes
-- The task involves multiple files or significant architectural decisions
-
-Do NOT call this tool:
-- For simple, straightforward tasks
-- When the user explicitly wants immediate implementation
+The tool asks for consent before changing profiles. Planning remains part of the same Agent loop and does not create a Course, Agenda item, or durable learning fact.

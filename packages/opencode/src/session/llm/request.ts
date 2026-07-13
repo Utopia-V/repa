@@ -61,18 +61,17 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   const isOpenaiOauth = input.provider.id === "openai" && input.auth?.type === "oauth"
   const interactive = !input.agent.hidden
   const core = interactive ? SystemPrompt.product() : SystemPrompt.internal()
-  const extensions = [
-    ...(interactive ? SystemPrompt.provider(input.model) : []),
-    ...(input.agent.prompt ? [input.agent.prompt] : []),
-    ...(input.user.system ? [input.user.system] : []),
-  ].filter((item): item is string => Boolean(item))
+  const task = !interactive && input.agent.prompt ? [input.agent.prompt] : []
+  const extensions = (
+    interactive ? [...SystemPrompt.provider(input.model), input.agent.prompt, input.user.system] : []
+  ).filter((item): item is string => Boolean(item))
   yield* input.plugin.trigger(
     "experimental.chat.system.transform",
     { sessionID: input.sessionID, model: input.model },
     { system: extensions },
   )
   const protectedCores = new Set([SystemPrompt.product(), SystemPrompt.internal()])
-  const system = [core, ...input.system, ...extensions].filter(
+  const system = [core, ...(interactive ? input.system : task), ...extensions].filter(
     (item, index): item is string => Boolean(item) && (index === 0 || !protectedCores.has(item)),
   )
 
@@ -110,7 +109,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
           ...input.messages,
         ]
 
-  const params = yield* input.plugin.trigger(
+  const transformedParams = yield* input.plugin.trigger(
     "chat.params",
     {
       sessionID: input.sessionID,
@@ -129,6 +128,12 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       options,
     },
   )
+  const params = isOpenaiOauth
+    ? {
+        ...transformedParams,
+        options: { ...transformedParams.options, instructions: renderSystem(system) },
+      }
+    : transformedParams
 
   const { headers } = yield* input.plugin.trigger(
     "chat.headers",

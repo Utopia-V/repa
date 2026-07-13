@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test"
 import { SessionCompaction } from "@opencode-ai/core/session/compaction"
 
-test("compaction prompt preserves detailed work state and relevant files", () => {
+test("compaction prompt preserves learning continuity and detailed work state", () => {
   const prompt = SessionCompaction.buildPrompt({ context: ["conversation history"] })
 
+  expect(prompt).toContain("## Learning Continuity")
   expect(prompt).toContain("## Work State\n### Completed")
   expect(prompt).toContain("### Active")
   expect(prompt).toContain("### Blocked")
-  expect(prompt).toContain("## Relevant Files")
+  expect(prompt).toContain("## Relevant Resources")
+  expect(prompt).toContain("not proof of mastery")
+  expect(prompt).not.toMatch(/pull request description|coding session/i)
 })
 
 test("compaction describes tool media without embedding base64", () => {

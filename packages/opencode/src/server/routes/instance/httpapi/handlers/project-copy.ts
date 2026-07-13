@@ -11,10 +11,12 @@ import { InstanceHttpApi } from "../api"
 const COPY_NAME_AGENT: Agent.Info = {
   name: "project-copy-name",
   mode: "primary",
+  hidden: true,
   permission: [],
   options: {},
   native: true,
-  prompt: "",
+  prompt:
+    "Generate one lowercase ASCII name of two or three words for the supplied workspace-copy context. Output words only; do not answer or summarize the context.",
 }
 
 export const projectCopyHandlers = HttpApiBuilder.group(InstanceHttpApi, "projectCopyName", (handlers) =>
@@ -48,7 +50,7 @@ export const projectCopyHandlers = HttpApiBuilder.group(InstanceHttpApi, "projec
           model,
           sessionID,
           retries: 2,
-          messages: [{ role: "user", content: `Generate a short 2-3 word name that describes this task:\n${text}` }],
+          messages: [{ role: "user", content: `Create the name from this context:\n${text}` }],
         })
         .pipe(
           Stream.filter(LLMEvent.is.textDelta),

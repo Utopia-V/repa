@@ -115,11 +115,11 @@ test("turn summary starts at the left edge", async () => {
   const out = await setup()
 
   try {
-    await out.scrollback.writeTurnSummary({ agent: "Build", model: "Little Frank", duration: "2.2s" })
+    await out.scrollback.writeTurnSummary({ agent: "Repa", model: "Little Frank", duration: "2.2s" })
 
     const commits = claim(out.renderer)
     try {
-      expect(renderRows(commits.at(-1)!)[0]).toBe("▣ Build · Little Frank · 2.2s")
+      expect(renderRows(commits.at(-1)!)[0]).toBe("▣ Repa · Little Frank · 2.2s")
     } finally {
       destroy(commits)
     }

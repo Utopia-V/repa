@@ -31,6 +31,7 @@ import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/l
 import { Reference } from "@opencode-ai/core/reference"
 import { Location } from "@opencode-ai/core/location"
 import { PluginV2 } from "@opencode-ai/core/plugin"
+import { SystemPrompt } from "@/session/system"
 
 export const Info = Schema.Struct({
   name: Schema.String,
@@ -60,6 +61,16 @@ const GeneratedAgent = Schema.Struct({
   whenToUse: Schema.String,
   systemPrompt: Schema.String,
 })
+
+export function generationSystem(extensions: readonly string[]) {
+  const core = SystemPrompt.internal()
+  const protectedPrompts = new Set([core, SystemPrompt.product(), PROMPT_GENERATE])
+  return [
+    core,
+    PROMPT_GENERATE,
+    ...extensions.filter((item): item is string => Boolean(item) && !protectedPrompts.has(item)),
+  ]
+}
 
 export interface Interface {
   readonly get: (agent: string) => Effect.Effect<Info>
@@ -138,9 +149,9 @@ const layer = Layer.effect(
         const user = Permission.fromConfig(cfg.permission ?? {})
 
         const agents: Record<string, Info> = {
-          build: {
-            name: "build",
-            description: "The default agent. Executes tools based on configured permissions.",
+          repa: {
+            name: "repa",
+            description: "The default learning-first Repa profile for inquiry, teaching, planning, and practical work.",
             options: {},
             permission: Permission.merge(
               defaults,
@@ -155,17 +166,33 @@ const layer = Layer.effect(
           },
           plan: {
             name: "plan",
-            description: "Plan mode. Disallows all edit tools.",
+            description: "Planning policy profile. Reads and plans without changing learner artifacts.",
             options: {},
             permission: Permission.merge(
               defaults,
               Permission.fromConfig({
+                "*": "deny",
+                read: {
+                  "*": "allow",
+                  "*.env": "ask",
+                  "*.env.*": "ask",
+                  "*.env.example": "allow",
+                },
+                glob: "allow",
+                grep: "allow",
+                list: "allow",
+                webfetch: "allow",
+                websearch: "allow",
+                skill: "allow",
                 question: "allow",
                 plan_exit: "allow",
                 task: {
-                  general: "deny",
+                  "*": "deny",
+                  explore: "allow",
                 },
                 external_directory: {
+                  "*": "ask",
+                  ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
                   [path.join(Global.Path.data, "plans", "*")]: "allow",
                 },
                 edit: {
@@ -181,7 +208,8 @@ const layer = Layer.effect(
           },
           general: {
             name: "general",
-            description: `General-purpose agent for researching complex questions and executing multi-step tasks. Use this agent to execute multiple units of work in parallel.`,
+            description:
+              "General-purpose subagent for a bounded research question or an independently executable unit of work.",
             permission: Permission.merge(
               defaults,
               Permission.fromConfig({
@@ -202,7 +230,6 @@ const layer = Layer.effect(
                 grep: "allow",
                 glob: "allow",
                 list: "allow",
-                bash: "allow",
                 webfetch: "allow",
                 websearch: "allow",
                 read: "allow",
@@ -210,7 +237,8 @@ const layer = Layer.effect(
               }),
               user,
             ),
-            description: `Fast agent specialized for exploring codebases. Use this when you need to quickly find files by patterns (eg. "src/components/**/*.tsx"), search code for keywords (eg. "API endpoints"), or answer questions about the codebase (eg. "how do API endpoints work?"). When calling this agent, specify the desired thoroughness level: "quick" for basic searches, "medium" for moderate exploration, or "very thorough" for comprehensive analysis across multiple locations and naming conventions.`,
+            description:
+              "Read-only workspace explorer for locating and understanding learning materials, files, data, or source code. Give it one bounded question, the relevant scope, and the evidence needed in its result.",
             prompt: PROMPT_EXPLORE,
             options: {},
             mode: "subagent",
@@ -319,7 +347,7 @@ const layer = Layer.effect(
             agents,
             values(),
             sortBy(
-              [(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "build"), "desc"],
+              [(x) => (cfg.default_agent ? x.name === cfg.default_agent : x.name === "repa"), "desc"],
               [(x) => x.name, "asc"],
             ),
           )
@@ -377,8 +405,9 @@ const layer = Layer.effect(
           ? Option.getOrUndefined(yield* Effect.serviceOption(OtelTracer.OtelTracer))
           : undefined
 
-        const system = [PROMPT_GENERATE]
-        yield* plugin.trigger("experimental.chat.system.transform", { model: resolved }, { system })
+        const extensions: string[] = []
+        yield* plugin.trigger("experimental.chat.system.transform", { model: resolved }, { system: extensions })
+        const system = generationSystem(extensions)
         const existing = yield* InstanceState.useEffect(state, (s) => s.list())
 
         // TODO: clean this up so provider specific logic doesnt bleed over
@@ -405,7 +434,7 @@ const layer = Layer.effect(
                 )),
             {
               role: "user",
-              content: `Create an agent configuration based on this request: "${input.description}".\n\nIMPORTANT: The following identifiers already exist and must NOT be used: ${existing.map((i) => i.name).join(", ")}\n  Return ONLY the JSON object, no other text, do not wrap in backticks`,
+              content: `Create a specialized Repa agent profile for this request: "${input.description}".\n\nThe following identifiers already exist and must not be reused: ${existing.map((i) => i.name).join(", ")}\nReturn only the JSON object without a Markdown fence.`,
             },
           ],
           model: language,
@@ -420,7 +449,7 @@ const layer = Layer.effect(
             const result = streamObject({
               ...params,
               providerOptions: ProviderTransform.providerOptions(resolved, {
-                instructions: system.join("\n"),
+                instructions: system.join("\n\n"),
                 store: false,
               }),
               onError: () => {},

@@ -36,8 +36,8 @@ const skills: Skill.Info[] = [
   },
 ]
 
-const build: Agent.Info = {
-  name: "build",
+const repa: Agent.Info = {
+  name: "repa",
   mode: "primary",
   permission: Permission.fromConfig({ "*": "allow" }),
   options: {},
@@ -119,11 +119,25 @@ describe("session.system", () => {
     expect(internal).not.toContain("<repa_product_contract>")
   })
 
+  it.instance("environment describes a neutral learning workspace", () =>
+    Effect.gen(function* () {
+      const prompt = yield* SystemPrompt.Service
+      const output = (yield* prompt.environment({
+        providerID: "test",
+        api: { id: "test-model" },
+      } as Provider.Model)).join("\n")
+
+      expect(output).toContain("Current workspace directory")
+      expect(output).toContain("Workspace uses Git version control")
+      expect(output).not.toMatch(/Project references|Is directory a git repo|codebase/i)
+    }),
+  )
+
   it.effect("skills output is sorted by name and stable across calls", () =>
     Effect.gen(function* () {
       const prompt = yield* SystemPrompt.Service
-      const first = yield* prompt.skills(build)
-      const second = yield* prompt.skills(build)
+      const first = yield* prompt.skills(repa)
+      const second = yield* prompt.skills(repa)
       const output = first ?? (yield* Effect.fail(new NamedError.Unknown({ message: "missing skills output" })))
 
       expect(first).toBe(second)
@@ -142,7 +156,7 @@ describe("session.system", () => {
   it.effect("MCP output includes connected server instructions", () =>
     Effect.gen(function* () {
       const prompt = yield* SystemPrompt.Service
-      const output = yield* prompt.mcp(build)
+      const output = yield* prompt.mcp(repa)
 
       expect(output).toBe(
         [
@@ -162,7 +176,7 @@ describe("session.system", () => {
   it.effect("MCP output omits servers when all advertised tools are denied", () =>
     Effect.gen(function* () {
       const prompt = yield* SystemPrompt.Service
-      const output = yield* prompt.mcp(build, Permission.fromConfig({ "tool-server_*": "deny" }))
+      const output = yield* prompt.mcp(repa, Permission.fromConfig({ "tool-server_*": "deny" }))
 
       expect(output).toBe(
         [

@@ -41,6 +41,7 @@ type Options = {
   readonly programSystem?: string[]
   readonly userSystem?: string
   readonly transform?: (system: string[]) => void
+  readonly paramsTransform?: (params: { options: Record<string, unknown> }) => void
 }
 
 function prepare(options: Options = {}) {
@@ -83,6 +84,7 @@ function prepare(options: Options = {}) {
       plugin: {
         trigger: (name: string, _input: unknown, output: any) => {
           if (name === "experimental.chat.system.transform") options.transform?.(output.system)
+          if (name === "chat.params") options.paramsTransform?.(output)
           return Effect.succeed(output)
         },
         list: () => Effect.succeed([]),
@@ -137,6 +139,20 @@ describe("session.llm.request composition", () => {
     expect(instructions).toContain("<learning_context>bounded course context</learning_context>")
   })
 
+  test("restores protected OAuth instructions after a parameter hook", async () => {
+    const prepared = await prepare({
+      oauth: true,
+      paramsTransform(params) {
+        params.options = { instructions: "PLUGIN_REPLACEMENT" }
+      },
+    })
+    const instructions = prepared.params.options.instructions as string
+
+    expect(instructions).toBe(LLMRequestPrep.renderSystem(prepared.system))
+    expect(occurrences(instructions, "<repa_product_contract>")).toBe(1)
+    expect(instructions).not.toBe("PLUGIN_REPLACEMENT")
+  })
+
   test("leaves workflow messages clean while retaining the complete workflow system prompt", async () => {
     const prepared = await prepare({ workflow: true })
 
@@ -171,13 +187,23 @@ describe("session.llm.request composition", () => {
     expect(occurrences(instructions ?? "", "<repa_product_contract>")).toBe(1)
   })
 
-  test("gives hidden operations their narrow boundary instead of the interactive core", async () => {
-    const prepared = await prepare({ hidden: true, agentPrompt: "Generate only a session title." })
+  test("gives hidden operations only their narrow boundary and task prompt", async () => {
+    const prepared = await prepare({
+      hidden: true,
+      agentPrompt: "Generate only a session title.",
+      userSystem: "INTERACTIVE_CALLER_GUIDANCE",
+      transform(system) {
+        system.length = 0
+        system.push("PLUGIN_INTERNAL_EXTENSION")
+      },
+    })
     const joined = prepared.system.join("\n")
 
     expect(prepared.system[0]).toBe(SystemPrompt.internal())
     expect(joined).toContain("Generate only a session title.")
-    expect(joined).toContain("<learning_context>bounded course context</learning_context>")
+    expect(joined).toContain("PLUGIN_INTERNAL_EXTENSION")
+    expect(joined).not.toContain("<learning_context>bounded course context</learning_context>")
+    expect(joined).not.toContain("INTERACTIVE_CALLER_GUIDANCE")
     expect(joined).not.toContain("<repa_product_contract>")
     expect(joined).not.toContain(SystemPrompt.provider(model)[0])
   })

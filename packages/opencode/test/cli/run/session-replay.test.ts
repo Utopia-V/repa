@@ -12,7 +12,7 @@ function userMessage(id: string, text: string): SessionMessages[number] {
       time: {
         created: 1,
       },
-      agent: "build",
+      agent: "repa",
       model: {
         providerID: "openai",
         modelID: "gpt-5",
@@ -48,7 +48,7 @@ function assistantInfo(
     modelID: input.modelID ?? "gpt-5",
     providerID: input.providerID ?? "openai",
     mode: "chat",
-    agent: "build",
+    agent: "repa",
     path: {
       cwd: "/tmp",
       root: "/tmp",
@@ -193,7 +193,7 @@ function shellUserMessage(id: string): SessionMessages[number] {
       time: {
         created: 1,
       },
-      agent: "build",
+      agent: "repa",
       model: {
         providerID: "openai",
         modelID: "gpt-5",
@@ -279,12 +279,12 @@ describe("run session replay", () => {
       }),
       expect.objectContaining({
         kind: "system",
-        text: "▣ Build · gpt-5 · 2.8s",
+        text: "▣ Repa · gpt-5 · 2.8s",
         phase: "final",
         source: "system",
         messageID: "msg-1",
         summary: {
-          agent: "Build",
+          agent: "Repa",
           model: "gpt-5",
           duration: "2.8s",
         },
@@ -314,9 +314,9 @@ describe("run session replay", () => {
     expect(out.commits.at(-1)).toEqual(
       expect.objectContaining({
         kind: "system",
-        text: "▣ Build · Little Frank · 2.8s",
+        text: "▣ Repa · Little Frank · 2.8s",
         summary: {
-          agent: "Build",
+          agent: "Repa",
           model: "Little Frank",
           duration: "2.8s",
         },
@@ -346,7 +346,7 @@ describe("run session replay", () => {
     expect(out.commits.filter((commit) => commit.summary)).toEqual([
       expect.objectContaining({
         kind: "system",
-        text: "▣ Build · gpt-5 · 2.0s",
+        text: "▣ Repa · gpt-5 · 2.0s",
         messageID: "msg-step-2",
       }),
     ])

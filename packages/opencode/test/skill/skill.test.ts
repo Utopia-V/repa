@@ -64,6 +64,20 @@ const withHome = <A, E, R>(home: string, self: Effect.Effect<A, E, R>) =>
   )
 
 describe("skill", () => {
+  it.live("does not advertise the inherited OpenCode configuration skill", () =>
+    provideTmpdirInstance(
+      (dir) =>
+        withHome(
+          dir,
+          Effect.gen(function* () {
+            const skill = yield* Skill.Service
+            expect((yield* skill.all()).map((item) => item.name)).not.toContain("customize-opencode")
+          }),
+        ),
+      { git: true },
+    ),
+  )
+
   it.effect("formats verbose locations as XML-safe filesystem paths", () =>
     Effect.sync(() => {
       const output = Skill.fmt(

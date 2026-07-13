@@ -1,11 +1,11 @@
-Summarize what was done in this conversation. Write like a pull request description.
+Write a short learning continuity summary for this Repa Session.
 
 Rules:
-- 2-3 sentences max
-- Describe the changes made, not the process
-- Do not mention running tests, builds, or other validation steps
-- Do not explain what the user asked for
-- Write in first person (I added..., I fixed...)
-- Never ask questions or add new questions
-- If the conversation ends with an unanswered question to the user, preserve that exact question
-- If the conversation ends with an imperative statement or request to the user (e.g. "Now please run the command and paste the console output"), always include that exact request in the summary
+- Use the same language as the conversation.
+- Use 2-4 concise sentences.
+- Preserve the learner's current request, exact materials or positions, explanations or examples already given, learner attempts or questions, accepted decisions and constraints, and unfinished work when they matter for continuation.
+- Distinguish learner reports, direct observations, and model inference when that distinction matters.
+- Do not claim mastery, forgetting, preference, completion, or durable learning state unless the supplied conversation contains direct evidence for that exact claim.
+- Do not turn file changes into a pull-request narrative or use first-person change-log phrasing.
+- If the conversation ends with a consequential unanswered question to the learner, preserve that exact question.
+- Do not mention this summary operation, tools, tests run, or these rules.

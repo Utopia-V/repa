@@ -16,10 +16,13 @@ const SUMMARY_OUTPUT_TOKENS = 4_096
 const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
 <template>
 ## Objective
-- [one or two brief sentences describing what the user is trying to accomplish]
+- [one or two brief sentences describing the learner's current direction]
+
+## Learning Continuity
+- [relevant goals or questions, material and exact position, explanations/examples already used, learner attempts, and clearly attributed report/evidence/inference; otherwise "(none)"]
 
 ## Important Details
-- [constraints/preferences, decisions and why, important facts/assumptions, exact context needed to continue, or "(none)"]
+- [constraints, decisions and why, important facts or assumptions, exact context needed to continue, or "(none)"]
 
 ## Work State
 ### Completed
@@ -35,14 +38,15 @@ const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <te
 1. [immediate concrete action, or "(none)"]
 2. [next action if known, or "(none)"]
 
-## Relevant Files
-- [file or directory path: why it matters, or "(none)"]
+## Relevant Resources
+- [material, file, directory, URL, or exact source position: why it matters, or "(none)"]
 </template>
 
 Rules:
 - Keep every section, even when empty.
 - Use terse bullets, not prose paragraphs.
 - Preserve exact file paths, symbols, commands, error strings, URLs, and identifiers when known.
+- This is continuation context, not proof of mastery or durable learning truth. Do not promote learner reports, model inference, task completion, or an earlier summary into stronger evidence.
 - Do not mention the summary process or that context was compacted.`
 
 type Entry = {
