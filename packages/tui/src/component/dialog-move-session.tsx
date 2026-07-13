@@ -19,19 +19,34 @@ import { DialogWorkspaceFileChanges } from "./dialog-workspace-file-changes"
 import type { ProjectDirectories } from "@opencode-ai/sdk/v2"
 import { useRoute } from "../context/route"
 
-export type MoveSessionSelection = { type: "directory"; directory: string; subdirectory: boolean } | { type: "new" }
+export type SessionStartLocationSelection =
+  | { type: "directory"; directory: string; subdirectory: boolean }
+  | { type: "new" }
 type ProjectDirectory = ProjectDirectories[number]
 
-type DialogMoveSessionProps = {
+type DialogSessionStartLocationProps = {
   projectID: string
-  current?: MoveSessionSelection
-  onSelect: (selection: MoveSessionSelection) => void
-  onCurrentChange?: (selection: MoveSessionSelection) => void
+  current?: SessionStartLocationSelection
+  onSelect: (selection: SessionStartLocationSelection) => void
+  onCurrentChange?: (selection: SessionStartLocationSelection) => void
   initialDirectories?: ProjectDirectory[]
   initialRemoving?: string
 }
 
-export function DialogMoveSession(props: DialogMoveSessionProps) {
+export async function removeProjectCopyAfterLeavingCurrent<T>(input: {
+  current: boolean
+  mainDirectory?: string
+  switchToMain: (directory: string) => Promise<void>
+  remove: () => Promise<T>
+}) {
+  if (input.current) {
+    if (!input.mainDirectory) throw new Error("Cannot delete the active project copy without a main directory")
+    await input.switchToMain(input.mainDirectory)
+  }
+  return input.remove()
+}
+
+export function DialogSessionStartLocation(props: DialogSessionStartLocationProps) {
   const dialog = useDialog()
   const sdk = useSDK()
   const dimensions = useTerminalDimensions()
@@ -46,12 +61,16 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
   const [removing, setRemoving] = createSignal(props.initialRemoving)
   const [replacementCurrent, setReplacementCurrent] = createSignal<string>()
   const [loadError, setLoadError] = createSignal<unknown>()
-  const deleteHint = useCommandShortcut("dialog.move_session.delete")
+  const deleteHint = useCommandShortcut("dialog.session_start_location.delete")
   onMount(() => dialog.setSize("xlarge"))
 
   function reopen(initialRemoving?: string) {
     dialog.replace(() => (
-      <DialogMoveSession {...props} initialDirectories={directoryData()} initialRemoving={initialRemoving} />
+      <DialogSessionStartLocation
+        {...props}
+        initialDirectories={directoryData()}
+        initialRemoving={initialRemoving}
+      />
     ))
   }
 
@@ -109,7 +128,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
     )
   })
 
-  const options = createMemo<DialogSelectOption<MoveSessionSelection | undefined>[]>(() => {
+  const options = createMemo<DialogSelectOption<SessionStartLocationSelection | undefined>[]>(() => {
     if (showError()) return []
     const data = directoryData()
     const current = currentRoot()?.directory
@@ -190,24 +209,17 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
     return props.current
   })
 
-  async function removedCurrent(current: boolean) {
-    if (!current) return false
-    const fallback = projectContext.data.project.mainDir
-    if (fallback) setReplacementCurrent(fallback)
+  async function switchToMain(directory: string) {
+    await projectContext.sync(directory)
+    setReplacementCurrent(directory)
+    props.onCurrentChange?.({ type: "directory", directory, subdirectory: false })
     if (route.data.type === "session") {
       route.navigate({ type: "home" })
       dialog.clear()
-      return true
     }
-    if (fallback) {
-      props.onCurrentChange?.({ type: "directory", directory: fallback, subdirectory: false })
-      return true
-    }
-    dialog.clear()
-    return true
   }
 
-  async function remove(option: DialogSelectOption<MoveSessionSelection | undefined>) {
+  async function remove(option: DialogSelectOption<SessionStartLocationSelection | undefined>) {
     if (!option.value || option.value.type !== "directory" || option.value.subdirectory || removing()) return
     const data = directoryData()
     const selected = option.value
@@ -221,13 +233,18 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
     setToDelete(undefined)
     setRemoving(selected.directory)
     setWorking(true)
-    const result = await sdk.client.v2.projectCopy
-      .remove({
-        projectID: props.projectID,
-        location: { directory: sdk.directory },
-        directory: selected.directory,
-        force: false,
-      })
+    const result = await removeProjectCopyAfterLeavingCurrent({
+      current: deletingCurrent,
+      mainDirectory: projectContext.data.project.mainDir,
+      switchToMain,
+      remove: () =>
+        sdk.client.v2.projectCopy.remove({
+          projectID: props.projectID,
+          location: { directory: sdk.directory },
+          directory: selected.directory,
+          force: false,
+        }),
+    })
       .catch((error) => ({ error }))
     if (result.error) {
       setRemoving(undefined)
@@ -239,10 +256,14 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
           message: "This working copy has file changes. Do you want to delete it anyway?",
         })
         if (choice !== "yes") {
+          if (deletingCurrent) {
+            dialog.clear()
+            return
+          }
           reopen()
           return
         }
-        reopen(selected.directory)
+        if (!deletingCurrent) reopen(selected.directory)
         const forced = await sdk.client.v2.projectCopy
           .remove({
             projectID: props.projectID,
@@ -257,12 +278,19 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
             title: "Failed to delete project copy",
             message: errorMessage(forced.error),
           })
+          if (deletingCurrent) {
+            dialog.clear()
+            return
+          }
           reopen()
           return
         }
         setRemoving(undefined)
         setWorking(false)
-        if (await removedCurrent(deletingCurrent)) return
+        if (deletingCurrent) {
+          dialog.clear()
+          return
+        }
         reopen()
         return
       }
@@ -273,10 +301,13 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
       })
       return
     }
-    await refetch()
     setRemoving(undefined)
     setWorking(false)
-    if (await removedCurrent(deletingCurrent)) return
+    if (deletingCurrent) {
+      dialog.clear()
+      return
+    }
+    await refetch()
   }
 
   const fullHeight = createMemo(() =>
@@ -286,11 +317,11 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
   return (
     <box minHeight={showError() ? 5 : fullHeight()}>
       <DialogSelect
-        title="Move session"
+        title="Start session in another directory"
         titleView={
           <box flexDirection="row" gap={1}>
             <text fg={theme.text} attributes={TextAttributes.BOLD}>
-              Move session
+              Start session in another directory
             </text>
             <Show when={working() || directories.loading || loadedProject.loading}>
               <Spinner />
@@ -320,12 +351,12 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
             ? []
             : [
                 {
-                  command: "dialog.move_session.new",
-                  title: "new",
+                  command: "dialog.session_start_location.new",
+                  title: "new copy",
                   onTrigger: () => props.onSelect({ type: "new" }),
                 },
                 {
-                  command: "dialog.move_session.delete",
+                  command: "dialog.session_start_location.delete",
                   title: "delete",
                   disabled: (option) => {
                     const value = option?.value
@@ -335,7 +366,7 @@ export function DialogMoveSession(props: DialogMoveSessionProps) {
                   onTrigger: remove,
                 },
                 {
-                  command: "dialog.move_session.refresh",
+                  command: "dialog.session_start_location.refresh",
                   title: "refresh",
                   onTrigger: () => void refetch(),
                 },

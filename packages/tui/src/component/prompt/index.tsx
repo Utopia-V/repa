@@ -54,7 +54,7 @@ import { useArgs } from "../../context/args"
 import { REPA_BASE_MODE, useBindings, useCommandShortcut, useLeaderActive, useOpencodeKeymap } from "../../keymap"
 import { useTuiConfig } from "../../config"
 import { usePromptWorkspace } from "./workspace"
-import { usePromptMove } from "./move"
+import { usePromptStartLocation } from "./move"
 import { readLocalAttachment } from "./local-attachment"
 
 registerOpencodeSpinner()
@@ -206,7 +206,7 @@ export function Prompt(props: PromptProps) {
   const editorContextLabelState = createMemo(() => editor.labelState())
   const [auto, setAuto] = createSignal<AutocompleteRef>()
   const workspace = usePromptWorkspace(props.sessionID)
-  const move = usePromptMove({ projectID: project.project, sessionID: () => props.sessionID })
+  const startLocation = usePromptStartLocation({ projectID: project.project })
   const [cursorVersion, setCursorVersion] = createSignal(0)
   const currentProviderLabel = createMemo(() => local.model.parsed().provider)
   const hasRightContent = createMemo(() => Boolean(props.right))
@@ -541,13 +541,14 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
-        title: "Move session",
-        desc: "Move to another project dir",
-        name: "session.move",
+        title: "Start session in another directory",
+        desc: "Choose a local directory for the next session",
+        name: "session.start_location",
         category: "Session",
-        slashName: "move",
+        enabled: props.sessionID == null,
+        slashName: "directory",
         run: () => {
-          move.open()
+          startLocation.open()
         },
       },
     ].map((entry) => ({
@@ -572,7 +573,7 @@ export function Prompt(props: PromptProps) {
       "prompt.skills",
       "session.interrupt",
       "workspace.set",
-      "session.move",
+      "session.start_location",
     ]),
   }))
 
@@ -952,7 +953,7 @@ export function Prompt(props: PromptProps) {
       syncExtmarksWithPromptParts()
     }
     if (props.disabled) return false
-    if (workspace.creating() || move.creating()) return false
+    if (workspace.creating() || startLocation.creating()) return false
     if (auto()?.visible) return false
     if (!store.prompt.input) return false
     const agent = local.agent.current()
@@ -990,9 +991,9 @@ export function Prompt(props: PromptProps) {
       const selectedWorkspace = workspace.selection()
       const workspaceID = selectedWorkspace?.type === "existing" ? selectedWorkspace.workspaceID : undefined
 
-      const directory = await move.getDirectory(store.prompt.input)
-      if (move.pending() && !directory) return false
-      finishMoveProgress = Boolean(move.progress())
+      const directory = await startLocation.getDirectory(store.prompt.input)
+      if (startLocation.pending() && !directory) return false
+      finishMoveProgress = Boolean(startLocation.progress())
 
       const res = await sdk.client.session.create({
         directory,
@@ -1006,7 +1007,7 @@ export function Prompt(props: PromptProps) {
       })
 
       if (res.error) {
-        if (finishMoveProgress) move.finishSubmit()
+        if (finishMoveProgress) startLocation.finishSubmit()
         console.log("Creating a session failed:", res.error)
 
         toast.show({
@@ -1054,7 +1055,7 @@ export function Prompt(props: PromptProps) {
         : []
 
     if (store.mode === "shell") {
-      move.startSubmit()
+      startLocation.startSubmit()
       void sdk.client.session.shell({
         sessionID,
         agent: agent.name,
@@ -1069,7 +1070,7 @@ export function Prompt(props: PromptProps) {
       inputText.startsWith("/") &&
       sync.data.command.some((x) => x.name === inputText.split("\n")[0].split(" ")[0].slice(1))
     ) {
-      move.startSubmit()
+      startLocation.startSubmit()
       // Parse command from first line, preserve multi-line content in arguments
       const firstLineEnd = inputText.indexOf("\n")
       const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
@@ -1087,7 +1088,7 @@ export function Prompt(props: PromptProps) {
         parts: nonTextParts.filter((x) => x.type === "file"),
       })
     } else {
-      move.startSubmit()
+      startLocation.startSubmit()
       sdk.client.session
         .prompt(
           {
@@ -1139,7 +1140,7 @@ export function Prompt(props: PromptProps) {
       }, 50)
     }
     input.clear()
-    if (finishMoveProgress) move.finishSubmit()
+    if (finishMoveProgress) startLocation.finishSubmit()
     return true
   }
 
@@ -1622,17 +1623,17 @@ export function Prompt(props: PromptProps) {
                 </box>
               )}
             </Match>
-            <Match when={move.progress()}>
+            <Match when={startLocation.progress()}>
               {(progress) => (
                 <box paddingLeft={3}>
                   <Spinner color={theme.accent}>
                     {progress()}
-                    <span style={{ fg: theme.textMuted }}>{".".repeat(move.creatingDots())}</span>
+                    <span style={{ fg: theme.textMuted }}>{".".repeat(startLocation.creatingDots())}</span>
                   </Spinner>
                 </box>
               )}
             </Match>
-            <Match when={move.pendingNew()}>
+            <Match when={startLocation.pendingNew()}>
               <box paddingLeft={3}>
                 <text fg={theme.accent}>(new working copy)</text>
               </box>

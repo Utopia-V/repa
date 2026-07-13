@@ -80,10 +80,13 @@ test("resolves overrides without mutating input", () => {
   expect(input.keybinds).toEqual({ session_list: "ctrl+l" })
 })
 
-test("resolves a session move keybind", () => {
-  const config = resolve({ keybinds: { session_move: "ctrl+o" } }, { terminalSuspend: true })
+test("resolves a session start-location keybind without the old move alias", () => {
+  const config = resolve({ keybinds: { session_start_location: "ctrl+o" } }, { terminalSuspend: true })
 
-  expect(config.keybinds.get("session.move")).toMatchObject([{ key: "ctrl+o" }])
+  expect(config.keybinds.get("session.start_location")).toMatchObject([{ key: "ctrl+o" }])
+  expect(() =>
+    resolve({ keybinds: { session_move: "ctrl+o" } } as TuiConfigInfo, { terminalSuspend: true }),
+  ).toThrow("Unrecognized keybind: session_move")
 })
 
 test("disables suspend and assigns ctrl+z to undo when unsupported", () => {
