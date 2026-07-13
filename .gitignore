@@ -5,7 +5,12 @@ coverage/
 .env
 .env.*
 !.env.example
+.secret
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
 *.log
+labs/**/.runs/
+labs/**/.generated/
+.repa/
+tmp/
