@@ -27,7 +27,7 @@ import { useTuiStartup } from "./runtime"
 import { createSimpleContext } from "./helper"
 import { useExit } from "./exit"
 import { useArgs } from "./args"
-import { batch, onMount } from "solid-js"
+import { batch, onCleanup, onMount } from "solid-js"
 import path from "path"
 import { useKV } from "./kv"
 import { usePermission } from "./permission"
@@ -57,6 +57,7 @@ export const {
     const permission = usePermission()
     const [store, setStore] = createStore<{
       status: "loading" | "partial" | "complete"
+      cache_directory?: string
       provider: Provider[]
       provider_default: Record<string, string>
       provider_next: ProviderListResponse
@@ -72,6 +73,7 @@ export const {
       question: {
         [sessionID: string]: QuestionRequest[]
       }
+      request_directory: Record<string, string>
       config: Config
       session: Session[]
       session_status: {
@@ -110,9 +112,11 @@ export const {
       provider_auth: {},
       config: {},
       status: "loading",
+      cache_directory: undefined,
       agent: [],
       permission: {},
       question: {},
+      request_directory: {},
       command: [],
       provider: [],
       provider_default: {},
@@ -143,28 +147,43 @@ export const {
       hydratingSessions.get(sessionID)?.parts.add(partID)
     }
 
-    function sessionListQuery(): { scope?: "project"; path?: string } {
+    function sessionListQuery(instancePath = project.data.instance.path): { scope?: "project"; path?: string } {
       if (!kv.get("session_directory_filter_enabled", true)) return { scope: "project" }
-      if (!project.data.instance.path.worktree || !project.data.instance.path.directory) return { scope: "project" }
+      if (!instancePath.worktree || !instancePath.directory) return { scope: "project" }
       return {
         path: path
-          .relative(path.resolve(project.data.instance.path.worktree), project.data.instance.path.directory)
+          .relative(path.resolve(instancePath.worktree), instancePath.directory)
           .replaceAll("\\", "/"),
       }
     }
 
-    function listSessions() {
+    function listSessions(
+      directory = project.instance.directory(),
+      signal?: AbortSignal,
+      instancePath = project.data.instance.path,
+    ) {
       return sdk.client.session
-        .list({ start: Date.now() - 30 * 24 * 60 * 60 * 1000, ...sessionListQuery() })
+        .list(
+          { directory, start: Date.now() - 30 * 24 * 60 * 60 * 1000, ...sessionListQuery(instancePath) },
+          { throwOnError: true, signal },
+        )
         .then((x) => (x.data ?? []).toSorted((a, b) => a.id.localeCompare(b.id)))
     }
 
-    event.subscribe((event, { directory, workspace }) => {
+    event.subscribe((event, { directory, project: eventProject }) => {
+      const activeProject = project.project()
+      if (eventProject !== undefined && activeProject !== undefined && eventProject !== activeProject) return
       switch (event.type) {
         case "server.instance.disposed":
           void bootstrap()
           break
         case "permission.replied": {
+          setStore(
+            "request_directory",
+            produce((draft) => {
+              delete draft[event.properties.requestID]
+            }),
+          )
           const requests = store.permission[event.properties.sessionID]
           if (!requests) break
           const match = search(requests, event.properties.requestID, (r) => r.id)
@@ -186,10 +205,10 @@ export const {
               requestID: request.id,
               reply: "once",
               directory,
-              workspace,
             })
             break
           }
+          setStore("request_directory", request.id, directory)
           const requests = store.permission[request.sessionID]
           if (!requests) {
             setStore("permission", request.sessionID, [request])
@@ -212,6 +231,12 @@ export const {
 
         case "question.replied":
         case "question.rejected": {
+          setStore(
+            "request_directory",
+            produce((draft) => {
+              delete draft[event.properties.requestID]
+            }),
+          )
           const requests = store.question[event.properties.sessionID]
           if (!requests) break
           const match = search(requests, event.properties.requestID, (r) => r.id)
@@ -228,6 +253,7 @@ export const {
 
         case "question.asked": {
           const request = event.properties
+          setStore("request_directory", request.id, directory)
           const requests = store.question[request.sessionID]
           if (!requests) {
             setStore("question", request.sessionID, [request])
@@ -292,7 +318,6 @@ export const {
             produce((session) => {
               session.directory = event.properties.location.directory
               session.path = event.properties.subdirectory
-              session.workspaceID = event.properties.location.workspaceID
               session.time.updated = event.properties.timestamp
             }),
           )
@@ -417,13 +442,17 @@ export const {
         }
 
         case "lsp.updated": {
-          const workspace = project.workspace.current()
-          void sdk.client.lsp.status({ workspace }).then((x) => setStore("lsp", x.data ?? []))
+          const activeDirectory = project.instance.directory()
+          if (directory !== activeDirectory) break
+          void sdk.client.lsp.status({ directory: activeDirectory }).then((response) => {
+            if (project.instance.directory() !== activeDirectory) return
+            setStore("lsp", response.data ?? [])
+          })
           break
         }
 
         case "vcs.branch.updated": {
-          if (workspace === project.workspace.current()) {
+          if (directory === project.instance.directory()) {
             setStore("vcs", { branch: event.properties.branch })
           }
           break
@@ -434,106 +463,141 @@ export const {
     const exit = useExit()
     const args = useArgs()
 
-    async function bootstrap(input: { fatal?: boolean } = {}) {
+    let bootstrapGeneration = 0
+
+    async function bootstrap(
+      input: { fatal?: boolean; directory?: string; signal?: AbortSignal } = {},
+    ): Promise<boolean> {
+      const generation = ++bootstrapGeneration
       const fatal = input.fatal ?? true
-      const workspace = project.workspace.current()
-      const projectPromise = project.sync()
-      const sessionListPromise = projectPromise.then(() => listSessions())
+      const directory = input.directory ?? project.instance.directory()
+      const current = () => generation === bootstrapGeneration
+      const pending = () => current() && !input.signal?.aborted
+      const blockingRequest = { throwOnError: true as const, signal: input.signal }
+      const backgroundRequest = { throwOnError: true as const }
+      const projectPromise = project.prepare(directory, { signal: input.signal })
+      const continuingSessionsPromise = args.continue
+        ? projectPromise.then((snapshot) => {
+            if (!snapshot || !pending()) return undefined
+            return listSessions(directory, input.signal, snapshot.path)
+          })
+        : Promise.resolve(undefined)
 
       // blocking - include session.list when continuing a session
-      const providersPromise = sdk.client.config.providers({ workspace }, { throwOnError: true })
-      const providerListPromise = sdk.client.provider.list({ workspace }, { throwOnError: true })
+      const providersPromise = sdk.client.config.providers({ directory }, blockingRequest)
+      const providerListPromise = sdk.client.provider.list({ directory }, blockingRequest)
       const capabilitiesPromise = sdk.client.experimental.capabilities
-        .get({ workspace }, { throwOnError: true })
+        .get({ directory }, blockingRequest)
         .then((x) => x.data)
         .catch(() => undefined)
-      const agentsPromise = sdk.client.app.agents({ workspace }, { throwOnError: true })
-      const configPromise = sdk.client.config.get({ workspace }, { throwOnError: true })
-      await Promise.all([
-        providersPromise,
-        providerListPromise,
-        capabilitiesPromise,
-        agentsPromise,
-        configPromise,
-        projectPromise,
-        ...(args.continue ? [sessionListPromise] : []),
-      ])
-        .then(async () => {
-          const providersResponse = providersPromise.then((x) => x.data!)
-          const providerListResponse = providerListPromise.then((x) => x.data!)
-          const capabilitiesResponse = capabilitiesPromise
-          const agentsResponse = agentsPromise.then((x) => x.data ?? [])
-          const configResponse = configPromise.then((x) => x.data!)
-          const sessionListResponse = args.continue ? sessionListPromise : undefined
+      const agentsPromise = sdk.client.app.agents({ directory }, blockingRequest)
+      const configPromise = sdk.client.config.get({ directory }, blockingRequest)
 
-          return Promise.all([
-            providersResponse,
-            providerListResponse,
-            capabilitiesResponse,
-            agentsResponse,
-            configResponse,
-            ...(sessionListResponse ? [sessionListResponse] : []),
-          ]).then((responses) => {
-            const providers = responses[0]
-            const providerList = responses[1]
-            const capabilities = responses[2]
-            const agents = responses[3]
-            const config = responses[4]
-            const sessions = responses[5]
+      try {
+        const [providersResult, providerListResult, capabilities, agentsResult, configResult, projectSnapshot, sessions] =
+          await Promise.all([
+            providersPromise,
+            providerListPromise,
+            capabilitiesPromise,
+            agentsPromise,
+            configPromise,
+            projectPromise,
+            continuingSessionsPromise,
+          ])
+        if (!projectSnapshot || !pending()) return false
+        if (!providersResult.data || !providerListResult.data || !configResult.data) {
+          throw new Error(`Failed to hydrate local configuration at ${directory}`)
+        }
 
-            batch(() => {
-              setStore("provider", reconcile(providers.providers))
-              setStore("provider_default", reconcile(providers.default))
-              setStore("provider_next", reconcile(providerList))
-              setStore("capabilities", "experimentalBackgroundSubagents", capabilities?.backgroundSubagents === true)
-              setStore("agent", reconcile(agents))
-              setStore("config", reconcile(config))
-              if (sessions !== undefined) setStore("session", reconcile(sessions))
-            })
-          })
+        let committed = false
+        batch(() => {
+          committed = project.commit(projectSnapshot)
+          if (!committed) return
+          setStore("provider", reconcile(providersResult.data.providers))
+          setStore("provider_default", reconcile(providersResult.data.default))
+          setStore("provider_next", reconcile(providerListResult.data))
+          setStore("capabilities", "experimentalBackgroundSubagents", capabilities?.backgroundSubagents === true)
+          setStore("agent", reconcile(agentsResult.data ?? []))
+          setStore("config", reconcile(configResult.data))
+          setStore("session", reconcile(sessions ?? []))
+          setStore("command", reconcile([]))
+          setStore("lsp", reconcile([]))
+          setStore("mcp", reconcile({}))
+          setStore("mcp_resource", reconcile({}))
+          setStore("formatter", reconcile([]))
+          setStore("session_status", reconcile({}))
+          setStore("provider_auth", reconcile({}))
+          setStore("vcs", undefined)
+          setStore("cache_directory", directory)
+          setStore("status", "partial")
         })
-        .then(() => {
-          if (store.status !== "complete") setStore("status", "partial")
-          // non-blocking
-          void Promise.all([
-            ...(args.continue ? [] : [sessionListPromise.then((sessions) => setStore("session", reconcile(sessions)))]),
-            sdk.client.command.list({ workspace }).then((x) => setStore("command", reconcile(x.data ?? []))),
-            sdk.client.lsp.status({ workspace }).then((x) => setStore("lsp", reconcile(x.data ?? []))),
-            sdk.client.mcp.status({ workspace }).then((x) => setStore("mcp", reconcile(x.data ?? {}))),
-            sdk.client.experimental.resource
-              .list({ workspace })
-              .then((x) => setStore("mcp_resource", reconcile(x.data ?? {}))),
-            sdk.client.formatter.status({ workspace }).then((x) => setStore("formatter", reconcile(x.data ?? []))),
-            sdk.client.session.status({ workspace }).then((x) => {
-              setStore("session_status", reconcile(x.data ?? {}))
-            }),
-            sdk.client.provider.auth({ workspace }).then((x) => setStore("provider_auth", reconcile(x.data ?? {}))),
-            sdk.client.vcs.get({ workspace }).then((x) => setStore("vcs", reconcile(x.data))),
-          ]).then(() => {
-            setStore("status", "complete")
+        if (!committed) return false
+
+        // Once this directory is published, caller cancellation no longer owns
+        // its background hydration. A later bootstrap generation supersedes it.
+        void Promise.all([
+          args.continue ? Promise.resolve(undefined) : listSessions(directory, undefined, projectSnapshot.path),
+          sdk.client.command.list({ directory }, backgroundRequest),
+          sdk.client.lsp.status({ directory }, backgroundRequest),
+          sdk.client.mcp.status({ directory }, backgroundRequest),
+          sdk.client.experimental.resource.list({ directory }, backgroundRequest),
+          sdk.client.formatter.status({ directory }, backgroundRequest),
+          sdk.client.session.status({ directory }, backgroundRequest),
+          sdk.client.provider.auth({ directory }, backgroundRequest),
+          sdk.client.vcs.get({ directory }, backgroundRequest),
+        ])
+          .then(
+            ([backgroundSessions, commands, lsp, mcp, resources, formatter, statuses, auth, vcs]) => {
+              if (!current()) return
+              batch(() => {
+                if (backgroundSessions !== undefined) setStore("session", reconcile(backgroundSessions))
+                setStore("command", reconcile(commands.data ?? []))
+                setStore("lsp", reconcile(lsp.data ?? []))
+                setStore("mcp", reconcile(mcp.data ?? {}))
+                setStore("mcp_resource", reconcile(resources.data ?? {}))
+                setStore("formatter", reconcile(formatter.data ?? []))
+                setStore("session_status", reconcile(statuses.data ?? {}))
+                setStore("provider_auth", reconcile(auth.data ?? {}))
+                setStore("vcs", reconcile(vcs.data))
+                setStore("status", "complete")
+              })
+            },
+          )
+          .catch((error) => {
+            if (!current()) return
+            console.error("tui background hydration failed", error)
           })
+        return true
+      } catch (error) {
+        if (!pending()) return false
+        console.error("tui bootstrap failed", {
+          error: error instanceof Error ? error.message : String(error),
+          name: error instanceof Error ? error.name : undefined,
+          stack: error instanceof Error ? error.stack : undefined,
         })
-        .catch(async (e) => {
-          console.error("tui bootstrap failed", {
-            error: e instanceof Error ? e.message : String(e),
-            name: e instanceof Error ? e.name : undefined,
-            stack: e instanceof Error ? e.stack : undefined,
-          })
-          if (fatal) {
-            exit(e)
-          } else {
-            throw e
-          }
-        })
+        if (fatal) {
+          exit(error)
+          return false
+        }
+        throw error
+      }
     }
 
     onMount(() => {
       void bootstrap()
     })
+    onCleanup(() => {
+      bootstrapGeneration += 1
+    })
 
     const result = {
       data: store,
       set: setStore,
+      request: {
+        directory(requestID: string) {
+          return store.request_directory[requestID]
+        },
+      },
       get status() {
         return store.status
       },
@@ -554,7 +618,9 @@ export const {
           return sessionListQuery()
         },
         async refresh() {
-          const list = await listSessions()
+          const directory = project.instance.directory()
+          const list = await listSessions(directory)
+          if (project.instance.directory() !== directory) return
           setStore("session", reconcile(list))
         },
         status(sessionID: string) {

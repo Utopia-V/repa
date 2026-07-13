@@ -81,6 +81,7 @@ import { DialogRetryAction } from "../../component/dialog-retry-action"
 import { getRevertDiffFiles } from "../../util/revert-diff"
 import { REPA_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
+import { canShowSessionPrompt, enterSession, type SessionDirectoryAccess } from "./entry"
 import { LocationProvider } from "../../context/location"
 
 addDefaultParsers(parsers.parsers)
@@ -194,7 +195,7 @@ export function Session() {
   const session = createMemo(() => sync.session.get(route.sessionID))
   const location = createMemo(() => {
     const current = session()
-    return current ? { directory: current.directory, workspaceID: current.workspaceID } : undefined
+    return current ? { directory: current.directory } : undefined
   })
 
   createEffect(() => {
@@ -230,8 +231,21 @@ export function Session() {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
-  const visible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
-  const disabled = createMemo(() => permissions().length > 0 || questions().length > 0)
+  const requestDirectory = (request: { id: string; sessionID: string }) =>
+    sync.request.directory(request.id) ?? sync.session.get(request.sessionID)?.directory
+  const [directoryAccess, setDirectoryAccess] = createSignal<SessionDirectoryAccess>({ status: "pending" })
+  const visible = createMemo(
+    () =>
+      canShowSessionPrompt({
+        child: Boolean(session()?.parentID),
+        access: directoryAccess(),
+        permissions: permissions().length,
+        questions: questions().length,
+      }),
+  )
+  const disabled = createMemo(
+    () => directoryAccess().status !== "ready" || permissions().length > 0 || questions().length > 0,
+  )
 
   const pending = createMemo(() => {
     const completed = messages().findLast((x) => x.role === "assistant" && x.time.completed)?.id
@@ -276,10 +290,31 @@ export function Session() {
 
   createEffect(() => {
     const sessionID = route.sessionID
+    const controller = new AbortController()
+    const current = () => !controller.signal.aborted && route.sessionID === sessionID
+    onCleanup(() => controller.abort())
     void (async () => {
-      const previousWorkspace = untrack(() => project.workspace.current())
-      const result = await sdk.client.session.get({ sessionID }, { throwOnError: true })
-      if (!result.data) {
+      const previousDirectory = untrack(() => project.instance.directory())
+      const result = await enterSession({
+        sessionID,
+        activeDirectory: previousDirectory,
+        signal: controller.signal,
+        load: async (id, signal) => {
+          const response = await sdk.client.session.get(
+            { sessionID: id },
+            { throwOnError: true, signal },
+          )
+          return response.data
+        },
+        selectDirectory: (directory, signal) =>
+          sync.bootstrap({ fatal: false, directory, signal }),
+        currentDirectory: project.instance.directory,
+        reconnect: editor.reconnect,
+        hydrateTranscript: sync.session.sync,
+        setDirectoryAccess,
+      })
+      if (!current()) return
+      if (result.status === "missing") {
         toast.show({
           message: `Session not found: ${sessionID}`,
           variant: "error",
@@ -288,23 +323,17 @@ export function Session() {
         navigate({ type: "home" })
         return
       }
-
-      if (result.data.workspaceID !== previousWorkspace) {
-        project.workspace.set(result.data.workspaceID)
-
-        // Sync all the data for this workspace. Note that this
-        // workspace may not exist anymore which is why this is not
-        // fatal. If it doesn't we still want to show the session
-        // (which will be non-interactive)
-        try {
-          await sync.bootstrap({ fatal: false })
-        } catch {}
+      if (result.status === "ready" && result.directoryError) {
+        toast.show({
+          title: "Local material directory unavailable",
+          message: `The durable transcript is still available. ${errorMessage(result.directoryError)}`,
+          variant: "warning",
+          duration: 5000,
+        })
       }
-      editor.reconnect(result.data.directory)
-      await sync.session.sync(sessionID)
-      if (route.sessionID === sessionID && scroll) scroll.scrollBy(100_000)
+      if (result.status === "ready" && scroll) scroll.scrollBy(100_000)
     })().catch((error) => {
-      if (route.sessionID !== sessionID) return
+      if (!current()) return
       toast.show({
         message: errorMessage(error),
         variant: "error",
@@ -959,7 +988,7 @@ export function Session() {
       run: () => {
         void sdk.client.experimental.session.background({
           sessionID: route.sessionID,
-          workspace: project.workspace.current(),
+          directory: session()?.directory ?? project.instance.directory(),
         })
         dialog.clear()
       },
@@ -1215,17 +1244,19 @@ export function Session() {
                 </For>
               </scrollbox>
               <box flexShrink={0}>
-                <Show when={permissions().length > 0}>
-                  <PermissionPrompt
-                    request={permissions()[0]}
-                    directory={sync.session.get(permissions()[0].sessionID)?.directory}
-                  />
+                <Show when={permissions()[0]} keyed>
+                  {(request) => (
+                    <Show when={requestDirectory(request)} keyed>
+                      {(directory) => <PermissionPrompt request={request} directory={directory} />}
+                    </Show>
+                  )}
                 </Show>
-                <Show when={permissions().length === 0 && questions().length > 0}>
-                  <QuestionPrompt
-                    request={questions()[0]}
-                    directory={sync.session.get(questions()[0].sessionID)?.directory}
-                  />
+                <Show when={permissions().length === 0 ? questions()[0] : undefined} keyed>
+                  {(request) => (
+                    <Show when={requestDirectory(request)} keyed>
+                      {(directory) => <QuestionPrompt request={request} directory={directory} />}
+                    </Show>
+                  )}
                 </Show>
                 <Show when={session()?.parentID}>
                   <SubagentFooter />

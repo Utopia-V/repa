@@ -3,9 +3,10 @@ import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 import { createGitWorktreeProjectCopy } from "../../src/component/prompt/move"
 import { json } from "../fixture/tui-sdk"
 
-test("creates a git worktree copy and then creates the Session in its returned directory", async () => {
+test("routes project-copy naming and creation through the active directory before creating its Session", async () => {
   const projectID = "project-course"
-  const baseDirectory = "C:\\learning\\course"
+  const startupDirectory = "C:\\learning\\launcher"
+  const activeDirectory = "C:\\learning\\course"
   const worktreeRoot = "C:\\learning\\.repa-worktrees"
   const copyDirectory = "C:\\learning\\.repa-worktrees\\projec\\chapter-review"
   const requests: Array<{ method: string; url: URL; body?: unknown }> = []
@@ -33,12 +34,12 @@ test("creates a git worktree copy and then creates the Session in its returned d
       })
     throw new Error(`unexpected request: ${request.method} ${url.pathname}`)
   }) as typeof globalThis.fetch
-  const sdk = createOpencodeClient({ baseUrl: "http://test", directory: baseDirectory, fetch })
+  const sdk = createOpencodeClient({ baseUrl: "http://test", directory: startupDirectory, fetch })
 
   const directory = await createGitWorktreeProjectCopy({
     projectID,
     context: "review chapter 3",
-    sdkDirectory: baseDirectory,
+    activeDirectory,
     worktreeRoot,
     generateName: (input) => sdk.experimental.projectCopy.generateName(input, { throwOnError: true }),
     createCopy: (input) => sdk.v2.projectCopy.create(input, { throwOnError: true }),
@@ -62,6 +63,8 @@ test("creates a git worktree copy and then creates the Session in its returned d
     "/session",
   ])
   expect(requests[1]?.body).toMatchObject({ strategy: "git_worktree" })
+  expect(requests[0]?.url.searchParams.get("directory")).toBe(activeDirectory)
+  expect(requests[1]?.url.searchParams.get("location[directory]")).toBe(activeDirectory)
   expect(requests[2]?.url.searchParams.get("directory")).toBe(copyDirectory)
   expect(requests[3]?.url.searchParams.get("directory")).toBe(copyDirectory)
   expect(

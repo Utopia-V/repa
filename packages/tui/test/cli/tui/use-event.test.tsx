@@ -8,6 +8,8 @@ import { SDKProvider } from "../../../src/context/sdk"
 import { useEvent } from "../../../src/context/event"
 import { createEventSource, createFetch, directory } from "../../fixture/tui-sdk"
 import { TestTuiContexts } from "../../fixture/tui-environment"
+import { Flag } from "@opencode-ai/core/flag/flag"
+import type { FetchHandler } from "../../fixture/tui-sdk"
 
 const projectID = "proj_test"
 
@@ -48,11 +50,11 @@ function update(version: string): Event {
   }
 }
 
-async function mount() {
+async function mount(override?: FetchHandler) {
   const events = createEventSource()
-  const calls = createFetch()
+  const calls = createFetch(override)
   const seen: Event[] = []
-  const workspaces: Array<string | undefined> = []
+  const metadata: Array<{ directory: string; project: string | undefined; hasWorkspace: boolean }> = []
   let project!: ReturnType<typeof useProject>
   let done!: () => void
   const ready = new Promise<void>((resolve) => {
@@ -70,7 +72,7 @@ async function mount() {
               done()
             }}
             seen={seen}
-            workspaces={workspaces}
+            metadata={metadata}
           />
         </ProjectProvider>
       </SDKProvider>
@@ -78,21 +80,25 @@ async function mount() {
   ))
 
   await ready
-  return { app, emit: events.emit, project, seen, workspaces }
+  return { app, emit: events.emit, project, seen, metadata }
 }
 
 function Probe(props: {
   seen: Event[]
-  workspaces: Array<string | undefined>
+  metadata: Array<{ directory: string; project: string | undefined; hasWorkspace: boolean }>
   onReady: (ctx: { project: ReturnType<typeof useProject> }) => void
 }) {
   const project = useProject()
   const event = useEvent()
 
   onMount(() => {
-    event.subscribe((evt, { workspace }) => {
+    event.subscribe((evt, metadata) => {
       props.seen.push(evt)
-      props.workspaces.push(workspace)
+      props.metadata.push({
+        directory: metadata.directory,
+        project: "project" in metadata && typeof metadata.project === "string" ? metadata.project : undefined,
+        hasWorkspace: Object.hasOwn(metadata, "workspace"),
+      })
     })
     props.onReady({ project })
   })
@@ -101,8 +107,8 @@ function Probe(props: {
 }
 
 describe("useEvent", () => {
-  test("delivers events for the current project", async () => {
-    const { app, emit, seen, workspaces } = await mount()
+  test("exposes directory and project metadata without remote Workspace identity", async () => {
+    const { app, emit, seen, metadata } = await mount()
 
     try {
       emit(event(vcs("main"), { directory: "/tmp/other", project: projectID, workspace: "ws_a" }))
@@ -110,17 +116,16 @@ describe("useEvent", () => {
       await wait(() => seen.length === 1)
 
       expect(seen).toEqual([vcs("main")])
-      expect(workspaces).toEqual(["ws_a"])
+      expect(metadata).toEqual([{ directory: "/tmp/other", project: projectID, hasWorkspace: false }])
     } finally {
       app.renderer.destroy()
     }
   })
 
-  test("delivers current project events regardless of active workspace", async () => {
-    const { app, emit, project, seen } = await mount()
+  test("delivers same-project events from a sibling directory for navigation consumers", async () => {
+    const { app, emit, seen } = await mount()
 
     try {
-      project.workspace.set("ws_a")
       emit(event(vcs("ws"), { directory: "/tmp/other", project: projectID, workspace: "ws_b" }))
 
       await wait(() => seen.length === 1)
@@ -131,17 +136,34 @@ describe("useEvent", () => {
     }
   })
 
-  test("delivers truly global events even when a workspace is active", async () => {
-    const { app, emit, project, seen } = await mount()
+  test("delivers truly global events", async () => {
+    const { app, emit, seen } = await mount()
 
     try {
-      project.workspace.set("ws_a")
       emit(event(update("1.2.3"), { directory: "global" }))
 
       await wait(() => seen.length === 1)
 
       expect(seen).toEqual([update("1.2.3")])
     } finally {
+      app.renderer.destroy()
+    }
+  })
+
+  test("subscribes without starting remote Workspace sync", async () => {
+    const original = Flag.REPA_EXPERIMENTAL_WORKSPACES
+    const requests: string[] = []
+    Flag.REPA_EXPERIMENTAL_WORKSPACES = true
+    const { app } = await mount((url) => {
+      requests.push(url.pathname)
+      return undefined
+    })
+
+    try {
+      await Bun.sleep(30)
+      expect(requests.filter((pathname) => pathname === "/sync/start")).toEqual([])
+    } finally {
+      Flag.REPA_EXPERIMENTAL_WORKSPACES = original
       app.renderer.destroy()
     }
   })

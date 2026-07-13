@@ -228,8 +228,8 @@ export function Prompt(props: PromptProps) {
   let promptPartTypeId = 0
   const event = useEvent()
 
-  event.on("tui.prompt.append", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+  event.on("tui.prompt.append", (evt, { directory }) => {
+    if (directory !== project.instance.directory()) return
     if (!input || input.isDestroyed) return
     input.insertText(evt.properties.text)
     setTimeout(() => {
@@ -960,7 +960,7 @@ export function Prompt(props: PromptProps) {
       finishMoveProgress = Boolean(startLocation.progress())
 
       const res = await sdk.client.session.create({
-        directory,
+        directory: directory ?? project.instance.directory(),
         agent: agent.name,
         model: {
           providerID: selectedModel.providerID,

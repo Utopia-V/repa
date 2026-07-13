@@ -1,4 +1,4 @@
-import { batch } from "solid-js"
+import { batch, onCleanup } from "solid-js"
 import type { Path } from "@opencode-ai/sdk/v2"
 import { createStore, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
@@ -14,7 +14,7 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
       state: "",
       config: "",
       worktree: "",
-      directory: sdk.directory ?? "",
+      directory: sdk.directory ?? process.cwd(),
     } satisfies Path
 
     const [store, setStore] = createStore({
@@ -26,26 +26,67 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
       instance: {
         path: defaultPath,
       },
-      workspace: {
-        current: undefined as string | undefined,
-      },
     })
 
-    async function sync(directory?: string) {
-      const location = directory === undefined ? { workspace: store.workspace.current } : { directory }
+    let syncGeneration = 0
+    onCleanup(() => {
+      syncGeneration += 1
+    })
+
+    type Snapshot = {
+      generation: number
+      signal?: AbortSignal
+      path: Path
+      project: {
+        id: string
+        worktree: string
+        mainDir?: string
+      }
+    }
+
+    async function prepare(
+      directory = store.instance.path.directory,
+      options: { signal?: AbortSignal } = {},
+    ): Promise<Snapshot | undefined> {
+      const generation = ++syncGeneration
+      const location = { directory }
+      const request = { throwOnError: true as const, signal: options.signal }
       const [instancePath, project] = await Promise.all([
-        sdk.client.path.get(location),
-        sdk.client.project.current(location),
+        sdk.client.path.get(location, request),
+        sdk.client.project.current(location, request),
       ])
-      const directories = project.data?.id
-        ? await sdk.client.project.directories({ projectID: project.data.id, ...location })
-        : undefined
+      if (!instancePath.data || !project.data) throw new Error(`Failed to resolve local project at ${directory}`)
+      const directories = await sdk.client.project.directories(
+        { projectID: project.data.id, ...location },
+        request,
+      )
+      if (!directories.data) throw new Error(`Failed to resolve project directories at ${directory}`)
+      if (generation !== syncGeneration || options.signal?.aborted) return
+      return {
+        generation,
+        signal: options.signal,
+        path: instancePath.data,
+        project: {
+          id: project.data.id,
+          worktree: project.data.worktree,
+          mainDir: directories.data.findLast((item) => item.strategy === undefined)?.directory,
+        },
+      }
+    }
+
+    function commit(snapshot: Snapshot | undefined) {
+      if (!snapshot || snapshot.generation !== syncGeneration || snapshot.signal?.aborted) return false
       batch(() => {
-        setStore("instance", "path", reconcile(instancePath.data || defaultPath))
-        setStore("project", "id", project.data?.id)
-        setStore("project", "worktree", project.data?.worktree)
-        setStore("project", "mainDir", directories?.data?.findLast((item) => item.strategy === undefined)?.directory)
+        setStore("instance", "path", reconcile(snapshot.path))
+        setStore("project", "id", snapshot.project.id)
+        setStore("project", "worktree", snapshot.project.worktree)
+        setStore("project", "mainDir", snapshot.project.mainDir)
       })
+      return true
+    }
+
+    async function sync(directory = store.instance.path.directory, options: { signal?: AbortSignal } = {}) {
+      return commit(await prepare(directory, options))
     }
 
     return {
@@ -61,16 +102,8 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
           return store.instance.path.directory
         },
       },
-      workspace: {
-        current() {
-          return store.workspace.current
-        },
-        set(next?: string | null) {
-          const workspace = next ?? undefined
-          if (store.workspace.current === workspace) return
-          setStore("workspace", "current", workspace)
-        },
-      },
+      prepare,
+      commit,
       sync,
     }
   },

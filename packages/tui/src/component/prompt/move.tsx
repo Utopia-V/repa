@@ -20,16 +20,20 @@ type ProjectCopyCreationInput = {
 export async function createGitWorktreeProjectCopy(input: {
   projectID: string
   context?: string
-  sdkDirectory?: string
+  activeDirectory: string
   worktreeRoot: string
-  generateName: (input: { projectID: string; context?: string }) => Promise<{ data: { name: string } }>
+  generateName: (input: { projectID: string; context?: string; directory: string }) => Promise<{ data: { name: string } }>
   createCopy: (input: ProjectCopyCreationInput) => Promise<{ data?: { directory?: string } }>
   bootstrapDirectory: (directory: string) => Promise<unknown>
 }) {
-  const generated = await input.generateName({ projectID: input.projectID, context: input.context })
+  const generated = await input.generateName({
+    projectID: input.projectID,
+    context: input.context,
+    directory: input.activeDirectory,
+  })
   const result = await input.createCopy({
     projectID: input.projectID,
-    location: { directory: input.sdkDirectory },
+    location: { directory: input.activeDirectory },
     strategy: "git_worktree",
     directory: path.join(input.worktreeRoot, input.projectID.slice(0, 6)),
     name: generated.data.name,
@@ -60,7 +64,7 @@ export function usePromptStartLocation(input: { projectID: () => string | undefi
       const directory = await createGitWorktreeProjectCopy({
         projectID,
         context,
-        sdkDirectory: sdk.directory,
+        activeDirectory: project.instance.directory(),
         worktreeRoot: paths.worktree,
         generateName: (input) =>
           sdk.client.experimental.projectCopy.generateName(input, { throwOnError: true }),

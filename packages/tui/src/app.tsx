@@ -912,13 +912,13 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     bindings: tuiConfig.keybinds.gather("app_exit", ["app.exit"]),
   }))
 
-  event.on("tui.command.execute", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+  event.on("tui.command.execute", (evt, { directory }) => {
+    if (directory !== project.instance.directory()) return
     keymap.dispatchCommand(evt.properties.command)
   })
 
-  event.on("tui.toast.show", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+  event.on("tui.toast.show", (evt, { directory }) => {
+    if (directory !== project.instance.directory()) return
     toast.show({
       title: evt.properties.title,
       message: evt.properties.message,
@@ -927,8 +927,8 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     })
   })
 
-  event.on("tui.session.select", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+  event.on("tui.session.select", (evt, { project: eventProject }) => {
+    if (eventProject !== project.project()) return
     route.navigate({
       type: "session",
       sessionID: evt.properties.sessionID,
@@ -945,8 +945,8 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     }
   })
 
-  event.on("session.error", (evt, { workspace }) => {
-    if (workspace !== project.workspace.current()) return
+  event.on("session.error", (evt, { directory }) => {
+    if (directory !== project.instance.directory()) return
     const error = evt.properties.error
     if (error && typeof error === "object" && error.name === "MessageAbortedError") return
     const message = errorMessage(error)

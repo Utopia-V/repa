@@ -22,7 +22,8 @@ import { createStore, produce } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import { useSDK } from "./sdk"
 import { useEvent } from "./event"
-import { createSignal, onCleanup, onMount } from "solid-js"
+import { createEffect, createMemo, onCleanup, onMount } from "solid-js"
+import { useProject } from "./project"
 
 type LocationData = {
   agent?: AgentV2Info[]
@@ -48,11 +49,11 @@ type Data = {
 }
 
 function locationKey(location: LocationRef) {
-  return JSON.stringify([location.directory, location.workspaceID])
+  return location.directory
 }
 
-function locationQuery(ref?: LocationRef) {
-  return ref ? { directory: ref.directory, workspace: ref.workspaceID } : undefined
+function locationQuery(ref: LocationRef) {
+  return { directory: ref.directory }
 }
 
 export const { use: useData, provider: DataProvider } = createSimpleContext({
@@ -73,9 +74,12 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
 
     const sdk = useSDK()
     const events = useEvent()
-    const [defaultLocation, setDefaultLocation] = createSignal<LocationRef>({
-      directory: sdk.directory ?? process.cwd(),
-    })
+    const project = useProject()
+    const defaultLocation = createMemo<LocationRef>(() => ({ directory: project.instance.directory() }))
+    const resolveLocation = (ref?: LocationRef) => ref ?? defaultLocation()
+    const ensureLocation = (key: string) => {
+      if (!store.location[key]) setStore("location", key, {})
+    }
 
     const message = {
       update(sessionID: string, fn: (messages: SessionMessage[]) => void) {
@@ -390,7 +394,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           })
           break
         case "reference.updated":
-          void result.location.reference.refresh()
+          void result.location.reference.refresh(event.location)
           break
         case "integration.updated":
           void Promise.all([
@@ -407,7 +411,7 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
         handleEvent({
           ...event,
           data: event.properties,
-          location: { directory: metadata.directory, workspaceID: metadata.workspace },
+          location: { directory: metadata.directory },
         } as V2Event)
       })
       onCleanup(unsub)
@@ -466,19 +470,25 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           return defaultLocation()
         },
         async refresh(ref?: LocationRef) {
-          const response = await sdk.client.v2.location.get({ location: locationQuery(ref) }, { throwOnError: true })
+          const response = await sdk.client.v2.location.get(
+            { location: locationQuery(resolveLocation(ref)) },
+            { throwOnError: true },
+          )
           const location = response.data
           const key = locationKey(location)
-          if (!store.location[key]) setStore("location", key, {})
-          if (!ref) setDefaultLocation({ directory: location.directory, workspaceID: location.workspaceID })
+          ensureLocation(key)
         },
         agent: {
           list(location?: LocationRef) {
             return store.location[locationKey(location ?? defaultLocation())]?.agent
           },
           async refresh(ref?: LocationRef) {
-            const result = await sdk.client.v2.agent.list({ location: locationQuery(ref) }, { throwOnError: true })
+            const result = await sdk.client.v2.agent.list(
+              { location: locationQuery(resolveLocation(ref)) },
+              { throwOnError: true },
+            )
             const key = locationKey(result.data.location)
+            ensureLocation(key)
             setStore("location", key, "agent", result.data.data)
           },
         },
@@ -487,8 +497,12 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return store.location[locationKey(location ?? defaultLocation())]?.command
           },
           async refresh(ref?: LocationRef) {
-            const result = await sdk.client.v2.command.list({ location: locationQuery(ref) }, { throwOnError: true })
+            const result = await sdk.client.v2.command.list(
+              { location: locationQuery(resolveLocation(ref)) },
+              { throwOnError: true },
+            )
             const key = locationKey(result.data.location)
+            ensureLocation(key)
             setStore("location", key, "command", result.data.data)
           },
         },
@@ -498,10 +512,11 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
           },
           async refresh(ref?: LocationRef) {
             const result = await sdk.client.v2.integration.list(
-              { location: locationQuery(ref) },
+              { location: locationQuery(resolveLocation(ref)) },
               { throwOnError: true },
             )
             const key = locationKey(result.data.location)
+            ensureLocation(key)
             setStore("location", key, "integration", result.data.data)
           },
         },
@@ -510,8 +525,12 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return store.location[locationKey(location ?? defaultLocation())]?.model
           },
           async refresh(ref?: LocationRef) {
-            const result = await sdk.client.v2.model.list({ location: locationQuery(ref) }, { throwOnError: true })
+            const result = await sdk.client.v2.model.list(
+              { location: locationQuery(resolveLocation(ref)) },
+              { throwOnError: true },
+            )
             const key = locationKey(result.data.location)
+            ensureLocation(key)
             setStore("location", key, "model", result.data.data)
           },
         },
@@ -520,8 +539,12 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return store.location[locationKey(location ?? defaultLocation())]?.provider
           },
           async refresh(ref?: LocationRef) {
-            const result = await sdk.client.v2.provider.list({ location: locationQuery(ref) }, { throwOnError: true })
+            const result = await sdk.client.v2.provider.list(
+              { location: locationQuery(resolveLocation(ref)) },
+              { throwOnError: true },
+            )
             const key = locationKey(result.data.location)
+            ensureLocation(key)
             setStore("location", key, "provider", result.data.data)
           },
         },
@@ -530,8 +553,12 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return store.location[locationKey(location ?? defaultLocation())]?.reference
           },
           async refresh(ref?: LocationRef) {
-            const result = await sdk.client.v2.reference.list({ location: locationQuery(ref) }, { throwOnError: true })
+            const result = await sdk.client.v2.reference.list(
+              { location: locationQuery(resolveLocation(ref)) },
+              { throwOnError: true },
+            )
             const key = locationKey(result.data.location)
+            ensureLocation(key)
             setStore("location", key, "reference", result.data.data)
           },
         },
@@ -540,24 +567,29 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
             return store.location[locationKey(location ?? defaultLocation())]?.skill
           },
           async refresh(ref?: LocationRef) {
-            const result = await sdk.client.v2.skill.list({ location: locationQuery(ref) }, { throwOnError: true })
+            const result = await sdk.client.v2.skill.list(
+              { location: locationQuery(resolveLocation(ref)) },
+              { throwOnError: true },
+            )
             const key = locationKey(result.data.location)
+            ensureLocation(key)
             setStore("location", key, "skill", result.data.data)
           },
         },
       },
     }
 
-    onMount(() => {
+    createEffect(() => {
+      const location = defaultLocation()
       void Promise.allSettled([
-        result.location.refresh(),
-        result.location.agent.refresh(),
-        result.location.integration.refresh(),
-        result.location.model.refresh(),
-        result.location.provider.refresh(),
-        result.location.reference.refresh(),
-        result.location.command.refresh(),
-        result.location.skill.refresh(),
+        result.location.refresh(location),
+        result.location.agent.refresh(location),
+        result.location.integration.refresh(location),
+        result.location.model.refresh(location),
+        result.location.provider.refresh(location),
+        result.location.reference.refresh(location),
+        result.location.command.refresh(location),
+        result.location.skill.refresh(location),
       ]).then((settled) => {
         for (const failure of settled.filter((item) => item.status === "rejected"))
           console.error("Failed to refresh default location data", failure.reason)

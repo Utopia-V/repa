@@ -8,7 +8,6 @@ import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { useSDK } from "../../context/sdk"
 import { SplitBorder } from "../../ui/border"
 import { useSync } from "../../context/sync"
-import { useProject } from "../../context/project"
 import { filetype } from "../../util/filetype"
 import { Locale } from "../../util/locale"
 import { webSearchProviderLabel } from "../../util/tool-display"
@@ -108,9 +107,8 @@ function TextBody(props: { title: string; description?: string; icon?: string })
   )
 }
 
-export function PermissionPrompt(props: { request: PermissionRequest; directory?: string }) {
+export function PermissionPrompt(props: { request: PermissionRequest; directory: string }) {
   const sdk = useSDK()
-  const project = useProject()
   const sync = useSync()
   const [store, setStore] = createStore({
     stage: "permission" as PermissionStage,
@@ -169,7 +167,6 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               reply: "always",
               requestID: props.request.id,
               directory: props.directory,
-              workspace: project.workspace.current(),
             })
           }}
         />
@@ -182,7 +179,6 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
               requestID: props.request.id,
               directory: props.directory,
               message: message || undefined,
-              workspace: project.workspace.current(),
             })
           }}
           onCancel={() => {
@@ -419,7 +415,6 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
                     reply: "reject",
                     requestID: props.request.id,
                     directory: props.directory,
-                    workspace: project.workspace.current(),
                   })
                   return
                 }
@@ -427,7 +422,6 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory?
                   reply: "once",
                   requestID: props.request.id,
                   directory: props.directory,
-                  workspace: project.workspace.current(),
                 })
               }}
             />

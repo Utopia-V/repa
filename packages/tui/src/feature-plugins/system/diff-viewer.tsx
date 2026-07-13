@@ -108,7 +108,7 @@ function DiffViewer(props: { api: TuiPluginApi }) {
       mode: mode(),
       sessionID,
       messageID: params()?.messageID,
-      directory: sessionID ? props.api.state.session.get(sessionID)?.directory : undefined,
+      directory: sessionID ? props.api.state.session.get(sessionID)?.directory : props.api.state.path.directory,
     }
   })
   const [diff] = createResource(diffInput, async (input) => {

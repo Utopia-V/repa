@@ -86,9 +86,9 @@ export function Autocomplete(props: {
 }) {
   const editor = useEditorContext()
   const sdk = useSDK()
+  const project = useProject()
   const sync = useSync()
   const data = useData()
-  const project = useProject()
   const slashes = useCommandSlashes()
   const modeStack = useOpencodeModeStack()
   const { theme } = useTheme()
@@ -277,7 +277,9 @@ export function Autocomplete(props: {
     }
   }
 
-  const references = createMemo(() => data.location.reference.list() ?? [])
+  const references = createMemo(
+    () => data.location.reference.list(location() ?? { directory: project.instance.directory() }) ?? [],
+  )
 
   const referenceMatch = createMemo(() => {
     if (!store.visible || store.visible === "/") return
@@ -325,8 +327,7 @@ export function Autocomplete(props: {
         query: baseQuery,
         limit: "20",
         location: {
-          directory: input.location?.directory,
-          workspace: input.location?.workspaceID ?? project.workspace.current(),
+          directory: input.location?.directory ?? project.instance.directory(),
         },
       })
 

@@ -18,10 +18,28 @@ import { useCommandShortcut } from "../keymap"
 import { useEvent } from "../context/event"
 
 type SessionListFilter = { scope?: "project"; path?: string }
+type LocatedSessionList<T> = { directory: string; data?: T[] }
 
-export function createDialogSessionListQuery(input: { search?: string; filter: SessionListFilter }) {
+export function selectDialogSessionList<T>(input: {
+  directory: string
+  search?: LocatedSessionList<T>
+  browse?: LocatedSessionList<T>
+  fallback: { directory?: string; data: T[] }
+}) {
+  if (input.search?.directory === input.directory && input.search.data) return input.search.data
+  if (input.browse?.directory === input.directory && input.browse.data) return input.browse.data
+  if (input.fallback.directory === input.directory) return input.fallback.data
+  return []
+}
+
+export function createDialogSessionListQuery(input: {
+  directory: string
+  search?: string
+  filter: SessionListFilter
+}) {
   const search = input.search?.trim()
   return {
+    directory: input.directory,
     roots: true,
     limit: search ? 30 : 100,
     ...(search ? { search } : {}),
@@ -30,6 +48,7 @@ export function createDialogSessionListQuery(input: { search?: string; filter: S
 }
 
 export function loadDialogSessionList<T>(input: {
+  directory: string
   search?: string
   filter: SessionListFilter
   list: (query: ReturnType<typeof createDialogSessionListQuery>) => Promise<{ data?: T[] }>
@@ -58,24 +77,36 @@ export function DialogSessionList() {
   const quickSwitch9 = useCommandShortcut("session.quick_switch.9")
 
   const [browseResults, { refetch: refetchBrowse }] = createResource(
-    () => sync.session.query(),
-    (filter) => loadDialogSessionList({ filter, list: (query) => sdk.client.session.list(query) }),
+    () => ({ directory: project.instance.directory(), filter: sync.session.query() }),
+    async (input) => ({
+      directory: input.directory,
+      data: await loadDialogSessionList({
+        ...input,
+        list: (query) => sdk.client.session.list(query),
+      }),
+    }),
   )
   const [searchResults, { refetch }] = createResource(
-    () => ({ query: search(), filter: sync.session.query() }),
+    () => ({ directory: project.instance.directory(), query: search(), filter: sync.session.query() }),
     (input) => {
       if (!input.query) return undefined
       return loadDialogSessionList({
+        directory: input.directory,
         search: input.query,
         filter: input.filter,
         list: (query) => sdk.client.session.list(query),
-      })
+      }).then((data) => ({ directory: input.directory, data }))
     },
   )
 
   const currentSessionID = createMemo(() => (route.data.type === "session" ? route.data.sessionID : undefined))
   const sessions = createMemo(() => {
-    const result = searchResults() ?? browseResults() ?? sync.data.session
+    const result = selectDialogSessionList({
+      directory: project.instance.directory(),
+      search: searchResults(),
+      browse: browseResults(),
+      fallback: { directory: sync.data.cache_directory, data: sync.data.session },
+    })
     const synced = new Map(sync.data.session.map((session) => [session.id, session]))
     const ids = new Set(result.map((session) => session.id))
     const extra = [currentSessionID(), ...local.session.pinned()].flatMap((id) => {
@@ -103,7 +134,7 @@ export function DialogSessionList() {
       .map((x) => x.id)
   }
 
-  const browseOrder = createMemo(() => orderByRecency(browseResults() ?? sync.data.session))
+  const browseOrder = createMemo(() => orderByRecency(sessions()))
 
   const quickSwitchHint = createMemo(() => {
     const first = quickSwitch1()

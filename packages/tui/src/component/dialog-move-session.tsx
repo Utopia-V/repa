@@ -36,12 +36,12 @@ type DialogSessionStartLocationProps = {
 export async function removeProjectCopyAfterLeavingCurrent<T>(input: {
   current: boolean
   mainDirectory?: string
-  switchToMain: (directory: string) => Promise<void>
+  activateMain: (directory: string) => Promise<void>
   remove: () => Promise<T>
 }) {
   if (input.current) {
     if (!input.mainDirectory) throw new Error("Cannot delete the active project copy without a main directory")
-    await input.switchToMain(input.mainDirectory)
+    await input.activateMain(input.mainDirectory)
   }
   return input.remove()
 }
@@ -80,7 +80,7 @@ export function DialogSessionStartLocation(props: DialogSessionStartLocationProp
     () => (projectContext.project() === props.projectID ? undefined : props.projectID),
     (projectID) =>
       sdk.client.project
-        .current({}, { throwOnError: true })
+        .current({ directory: projectContext.instance.directory() }, { throwOnError: true })
         .then((result) => (result.data?.id === projectID ? result.data.worktree : undefined))
         .catch(() => undefined),
   )
@@ -94,10 +94,13 @@ export function DialogSessionStartLocation(props: DialogSessionStartLocationProp
     async (projectID, info): Promise<ProjectDirectory[] | undefined> => {
       try {
         await sdk.client.v2.projectCopy.refresh(
-          { projectID, location: { directory: sdk.directory } },
+          { projectID, location: { directory: projectContext.instance.directory() } },
           { throwOnError: true },
         )
-        const directories = await sdk.client.project.directories({ projectID }, { throwOnError: true })
+        const directories = await sdk.client.project.directories(
+          { projectID, directory: projectContext.instance.directory() },
+          { throwOnError: true },
+        )
         setLoadError(undefined)
         return directories.data ?? []
       } catch (error) {
@@ -209,8 +212,9 @@ export function DialogSessionStartLocation(props: DialogSessionStartLocationProp
     return props.current
   })
 
-  async function switchToMain(directory: string) {
-    await projectContext.sync(directory)
+  async function activateMain(directory: string) {
+    const activated = await sync.bootstrap({ fatal: false, directory })
+    if (!activated) throw new Error(`Failed to activate the main directory at ${directory}`)
     setReplacementCurrent(directory)
     props.onCurrentChange?.({ type: "directory", directory, subdirectory: false })
     if (route.data.type === "session") {
@@ -236,11 +240,11 @@ export function DialogSessionStartLocation(props: DialogSessionStartLocationProp
     const result = await removeProjectCopyAfterLeavingCurrent({
       current: deletingCurrent,
       mainDirectory: projectContext.data.project.mainDir,
-      switchToMain,
+      activateMain,
       remove: () =>
         sdk.client.v2.projectCopy.remove({
           projectID: props.projectID,
-          location: { directory: sdk.directory },
+          location: { directory: projectContext.instance.directory() },
           directory: selected.directory,
           force: false,
         }),
@@ -267,7 +271,7 @@ export function DialogSessionStartLocation(props: DialogSessionStartLocationProp
         const forced = await sdk.client.v2.projectCopy
           .remove({
             projectID: props.projectID,
-            location: { directory: sdk.directory },
+            location: { directory: projectContext.instance.directory() },
             directory: selected.directory,
             force: true,
           })

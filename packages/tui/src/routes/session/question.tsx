@@ -11,7 +11,7 @@ import { useBindings, useOpencodeModeStack } from "../../keymap"
 
 const QUESTION_MODE = "question"
 
-export function QuestionPrompt(props: { request: QuestionRequest; directory?: string }) {
+export function QuestionPrompt(props: { request: QuestionRequest; directory: string }) {
   const sdk = useSDK()
   const { theme } = useTheme()
   const renderer = useRenderer()

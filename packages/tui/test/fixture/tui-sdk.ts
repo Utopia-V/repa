@@ -11,6 +11,14 @@ export function json(data: unknown, init?: ResponseInit) {
   })
 }
 
+export function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
 export function eventSource(): EventSource {
   return { subscribe: async () => () => {} }
 }
@@ -95,6 +103,7 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
         data: [],
       })
     if (url.pathname === "/project/current") return json({ id: "proj_test" })
+    if (url.pathname === "/project/proj_test/directories") return json([{ directory: worktree }])
     if (url.pathname === "/api/reference")
       return json({ location: { directory, project: { id: "proj_test", directory } }, data: [] })
     if (url.pathname === "/provider") return json({ all: [], default: {}, connected: [] })

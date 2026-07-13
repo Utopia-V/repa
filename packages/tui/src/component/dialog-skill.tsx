@@ -5,6 +5,7 @@ import { useDialog } from "../ui/dialog"
 import { useSDK } from "../context/sdk"
 import { useTheme } from "../context/theme"
 import { errorMessage } from "../util/error"
+import { useProject } from "../context/project"
 
 export type DialogSkillProps = {
   onSelect: (skill: string) => void
@@ -13,6 +14,7 @@ export type DialogSkillProps = {
 export function DialogSkill(props: DialogSkillProps) {
   const dialog = useDialog()
   const sdk = useSDK()
+  const project = useProject()
   const { theme } = useTheme()
   dialog.setSize("large")
 
@@ -20,7 +22,7 @@ export function DialogSkill(props: DialogSkillProps) {
 
   const [skills] = createResource(() =>
     sdk.client.app
-      .skills({}, { throwOnError: true })
+      .skills({ directory: project.instance.directory() }, { throwOnError: true })
       .then((result) => result.data ?? [])
       // Catch so the rejected resource never reaches the memo below: reading
       // skills() in an errored state re-throws and tears down the dialog.

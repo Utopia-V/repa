@@ -29,8 +29,14 @@ test("refreshes resources into reactive getters", async () => {
   const events = createEventSource()
   const location = {
     directory,
+    workspaceID: "legacy_workspace",
     project: { id: "proj_test", directory },
   }
+  const responseLocation = {
+    directory,
+    project: { id: "proj_test", directory },
+  }
+  const agentRequests: URL[] = []
   const calls = createFetch((url) => {
     if (url.pathname === "/api/session/ses_test")
       return json({
@@ -44,11 +50,13 @@ test("refreshes resources into reactive getters", async () => {
           location: { directory },
         },
       })
-    if (url.pathname === "/api/agent")
+    if (url.pathname === "/api/agent") {
+      agentRequests.push(new URL(url))
       return json({
-        location,
+        location: responseLocation,
         data: [{ id: "repa", request: { headers: {}, body: {} }, mode: "primary", hidden: false, permissions: [] }],
       })
+    }
     return undefined
   }, events)
   let data!: ReturnType<typeof useData>
@@ -85,8 +93,21 @@ test("refreshes resources into reactive getters", async () => {
     await data.location.agent.refresh()
 
     expect(data.session.get("ses_test")?.title).toBe("Test session")
-    expect(data.location.default()).toEqual({ directory, workspaceID: undefined })
-    expect(data.location.agent.list(location)?.map((agent) => agent.id)).toEqual(["repa"])
+    expect({
+      defaultLocation: data.location.default(),
+      agentIDs: data.location.agent.list(location)?.map((agent) => agent.id),
+      directoryQueries: agentRequests.map((request) => request.searchParams.get("location[directory]")),
+      workspaceQueries: agentRequests.flatMap((request) =>
+        [request.searchParams.get("location[workspace]"), request.searchParams.get("workspace")].filter(
+          (value): value is string => value !== null,
+        ),
+      ),
+    }).toEqual({
+      defaultLocation: { directory },
+      agentIDs: ["repa"],
+      directoryQueries: agentRequests.map(() => directory),
+      workspaceQueries: [],
+    })
   } finally {
     app.renderer.destroy()
   }

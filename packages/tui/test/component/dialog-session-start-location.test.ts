@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test"
 import { removeProjectCopyAfterLeavingCurrent } from "../../src/component/dialog-move-session"
 
-test("leaves the active project copy before issuing its removal", async () => {
+test("activates the main directory before removing the active project copy", async () => {
   const calls: string[] = []
 
   const result = await removeProjectCopyAfterLeavingCurrent({
     current: true,
     mainDirectory: "C:\\learning\\course",
-    async switchToMain(directory) {
-      calls.push(`switch:${directory}`)
+    async activateMain(directory) {
+      calls.push(`activate:${directory}`)
       await Promise.resolve()
-      calls.push("switched")
+      calls.push("activated")
     },
     async remove() {
       calls.push("remove")
@@ -19,7 +19,11 @@ test("leaves the active project copy before issuing its removal", async () => {
   })
 
   expect(result).toBe("removed")
-  expect(calls).toEqual(["switch:C:\\learning\\course", "switched", "remove"])
+  expect(calls).toEqual([
+    "activate:C:\\learning\\course",
+    "activated",
+    "remove",
+  ])
 })
 
 test("refuses to remove the active project copy without a main directory", async () => {
@@ -28,7 +32,7 @@ test("refuses to remove the active project copy without a main directory", async
   await expect(
     removeProjectCopyAfterLeavingCurrent({
       current: true,
-      async switchToMain() {},
+      async activateMain() {},
       async remove() {
         removed = true
       },
@@ -38,14 +42,14 @@ test("refuses to remove the active project copy without a main directory", async
   expect(removed).toBe(false)
 })
 
-test("does not remove the active project copy when switching to main fails", async () => {
+test("does not remove the active project copy when main-directory activation fails", async () => {
   let removed = false
 
   await expect(
     removeProjectCopyAfterLeavingCurrent({
       current: true,
       mainDirectory: "C:\\learning\\course",
-      async switchToMain() {
+      async activateMain() {
         throw new Error("main directory unavailable")
       },
       async remove() {
