@@ -1,6 +1,6 @@
 # OpenCode fork Gate 1: lineage and provenance
 
-Status: In progress
+Status: Passed
 
 Date: 2026-07-13
 
@@ -32,7 +32,7 @@ license:    MIT
 ## Workspace arrangement
 
 - The current product path remains
-  `C:\Users\Discordance\Project\repa` and will be switched to
+  `C:\Users\Discordance\Project\repa` and is checked out on
   `codex/opencode-v1.17.18-baseline` at the exact pinned commit.
 - The pre-fork Repa `main` branch, including the accepted architecture and
   execution documents, remains directly readable at
@@ -40,6 +40,9 @@ license:    MIT
 - Both paths are Git worktrees of the same local object database, so
   `git worktree list` and the `main` ref recover the oracle location even after
   conversation compaction.
+- Pre-fork ignored local assets (`.reference/`, `.repa/`, `.secret`, and
+  generated lab contents) were moved without overwriting into the oracle
+  worktree. They do not make the fork baseline dirty.
 - `.reference/opencode` remains ignored, read-only evidence and is not used as
   a fetch, copy, alternates, object, or worktree source.
 
@@ -81,4 +84,32 @@ failure; preserve the failed state for inspection first.
 
 ## Result
 
-Pending execution.
+Passed.
+
+Execution evidence:
+
+- The pre-fork Repa documentation was committed on `main` as
+  `66c83442e8d6229194aeaee5960a5449a18f125a` before the worktree switch.
+- `opencode-upstream` fetches from
+  `https://github.com/anomalyco/opencode.git`; the remote tag
+  `v1.17.18` resolves to
+  `b1fc8113948b518835c2a39ece49553cffe9b30c`.
+- The fetched repository is not shallow. The pinned commit has 14,877
+  reachable commits, `git rev-list --objects --missing=print` reported zero
+  missing objects, and `git fsck --connectivity-only --no-dangling` passed.
+- The current fork branch and tag both resolve to tree
+  `d47e0f4006aefaab6a2f9afc476c41f7107fec5f`.
+- The current `LICENSE` and the pinned tag both resolve to Git blob
+  `6439474beed8e0271df9862eff97ffd70ec2464c`, whose header identifies the
+  MIT License and OpenCode copyright.
+- `C:\Users\Discordance\Project\repa` is clean on
+  `codex/opencode-v1.17.18-baseline`;
+  `C:\Users\Discordance\Project\repa-prefork-oracle` is clean on `main`
+  and contains the accepted Repa documents.
+- `.git/objects/info/alternates` is absent and
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES` is unset.
+- Before switching trees, `bun run check` passed all 244 pre-fork Repa tests
+  across 44 files with zero failures.
+
+No dependency installation, upstream build, rename, product edit, or other
+Gate 2+ action was performed.
