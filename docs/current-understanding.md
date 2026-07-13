@@ -235,6 +235,10 @@ These statements are deliberately weaker than accepted decisions.
    scheduler score has not been earned.
 5. Learner inference can remain sparse and consumer-specific until actual
    attempts, review, or open work demonstrate a need for a richer projection.
+6. One LearnerHome-level Assignment can probably pressure real-work planning
+   without a Goal aggregate or scheduler: strict source/deadline/disposition
+   facts are program-owned, while the learner and model retain current local
+   choice. Proposal 0006 fixes the first contract; implementation is pending.
 
 ## Questions still worth resolving
 
@@ -259,6 +263,10 @@ These statements are deliberately weaker than accepted decisions.
   durable representation?
 - Which durable causal occurrence and domain address belong to each future
   model-writable progress, revisit, assignment, and attempt command?
+- Which later consumer first requires an Assignment-to-Course, Goal, Artifact,
+  LMS, or calendar relation rather than lazy source detail?
+- What external identity and reconciliation rule should replace model-authored
+  new-versus-existing Assignment admission when an LMS connector exists?
 - Beyond the earned learner-response-before-disclosure boundary, which Agenda
   purposes actually need another explicit operative constraint rather than
   exact reason alone?
@@ -279,8 +287,12 @@ rather than by incidental runtime tables.
 
 The current product-capability review draft is
 [`proposals/0004-learning-native-capability-contract.md`](./proposals/0004-learning-native-capability-contract.md).
-The current conditional-purpose production contract draft is
+The implemented conditional-purpose production contract is
 [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](./proposals/0005-conditional-purpose-and-learner-role-contract.md).
+The reviewed next production contract is
+[`proposals/0006-deadline-sensitive-real-work-contract.md`](./proposals/0006-deadline-sensitive-real-work-contract.md),
+with its implementation plan in
+[`roadmap/08-first-deadline-sensitive-assignment.md`](./roadmap/08-first-deadline-sensitive-assignment.md).
 The current route and runtime phase review is
 [`research/broad-route-and-runtime-substrate-review-2026-07-12.md`](./research/broad-route-and-runtime-substrate-review-2026-07-12.md).
 The completed runtime milestone is
@@ -388,10 +400,19 @@ This path still does not preauthorize an activity table, difficulty enum,
 intervention state machine, universal future-action model, FSRS integration,
 or full learner projection.
 
-Goals, assignments, deadlines, multi-course choice, richer evidence, review
-scheduling, domain foundations, retrieval indexes, and TUI work remain peer
-horizons. Their order is chosen again from this architecture consequence rather
-than being inherited from the newest module.
+The post-0005 global review has now selected one deadline-sensitive real-work
+conflict as the next production pressure. The choice is not “finish the Agenda
+module”: it admits one LearnerHome-level, source-grounded Assignment that may
+alter a later Turn while Course, future attention, current steering, and the
+one-off plan retain separate owners. B2 already proves the model can consume
+the situation; Proposal 0006 and two adversarial reviews settle duplicate
+admission, strict time, correction, replay, truncation, inspection, and failure
+semantics before implementation.
+
+Broader goals, multiple assignments, durable time budgets, multi-course choice,
+richer evidence, review scheduling, domain foundations, retrieval indexes, and
+TUI work remain peer horizons. Their order is chosen again after this coherent
+slice rather than inherited from its newest table.
 
 The source synthesis is
 [`research/teaching-and-review-first-principles-2026-07-12.md`](./research/teaching-and-review-first-principles-2026-07-12.md),

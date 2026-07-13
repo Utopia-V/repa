@@ -133,6 +133,16 @@ Documents have different authority. Do not treat a research observation as an ac
   pinned Codex/AI SDK comparison shows why the known flattened-output defect
   does not block the learning-owned Proposal 0005 slice and records the trigger
   for any later response-item/phase work.
+- [`research/chatgpt-pro-next-pressure-path-review-2026-07-13.md`](research/chatgpt-pro-next-pressure-path-review-2026-07-13.md)
+  records the independent post-0005 comparison of learner-performance,
+  real-work, and graph paths plus the adopted and rejected review advice.
+- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md)
+  is the reviewed production-admission contract for one LearnerHome-level,
+  source-grounded Assignment conflict without a todo planner, scheduler,
+  Course owner, persistent plan, or evidence claim.
+- [`roadmap/08-first-deadline-sensitive-assignment.md`](roadmap/08-first-deadline-sensitive-assignment.md)
+  is the implementation and verification plan for that first production
+  slice; it is not yet an implementation result.
 
 ## Proposals
 
@@ -144,6 +154,7 @@ research. Proposals are not accepted decisions until promoted into ADRs.
 - [`proposals/0003-learning-native-responsibilities.md`](proposals/0003-learning-native-responsibilities.md) — historical working model promoted and refined by ADR-0012; not the current architecture authority.
 - [`proposals/0004-learning-native-capability-contract.md`](proposals/0004-learning-native-capability-contract.md) — current product-capability review draft; not an architecture or experiment protocol.
 - [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](proposals/0005-conditional-purpose-and-learner-role-contract.md) — implemented `tutor-default-v3` contract for one source-bound learner-response-before-disclosure constraint and one-candidate conditional purpose; not a general pedagogy framework.
+- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md) — reviewed and admitted first Assignment contract; not a Goal model, todo system, scheduler, or general work ontology.
 - [`research/proposal-0005-production-verification-2026-07-13.md`](research/proposal-0005-production-verification-2026-07-13.md) — implementation boundaries, deterministic evidence, historical-policy compatibility, and the bounded live provider qualification.
 
 The runtime defaults in proposal 0001 were accepted on 2026-07-11 and are
@@ -225,6 +236,7 @@ current proposal. Each document's status and scope note controls its use.
 - [`research/validation-and-state-storage.md`](research/validation-and-state-storage.md)
 - [`research/chatgpt-pro-foundation-review-2026-07-10.md`](research/chatgpt-pro-foundation-review-2026-07-10.md)
 - [`research/architecture-gate-and-response-admission-audit-2026-07-13.md`](research/architecture-gate-and-response-admission-audit-2026-07-13.md)
+- [`research/chatgpt-pro-next-pressure-path-review-2026-07-13.md`](research/chatgpt-pro-next-pressure-path-review-2026-07-13.md)
 - [`research/claude-code-v2.1.88-provenance.md`](research/claude-code-v2.1.88-provenance.md)
 - [`research/agent-harness-paradigms.md`](research/agent-harness-paradigms.md)
 - [`research/learning-representation-and-goals.md`](research/learning-representation-and-goals.md)

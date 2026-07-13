@@ -41,7 +41,14 @@ while deferring a general constraint vocabulary and multi-candidate choice.
 Proposal 0005 now implements that bounded contract under
 `tutor-default-v3`: exactly one legal constrained Agenda concern can shape a
 fresh-Session Tutor move, while an explicit current learner request still wins
-and older policy inputs remain reproducible.
+and older policy inputs remain reproducible. The post-0005 global review then
+compared richer Course graphs, learner-performance state, and real-work
+constraints instead of extending the newest module automatically. The next
+admitted production pressure is one deadline-sensitive Assignment conflict:
+Repa will preserve a source-grounded local obligation across Sessions while
+leaving current choice, Course structure, learning evidence, and the one-off
+plan separate. Proposal 0006 and Roadmap 08 fix the reviewed contract and
+implementation gates; production implementation is now pending.
 Start with the
 [`documentation map`](docs/README.md), the
 [`current understanding`](docs/current-understanding.md), and the

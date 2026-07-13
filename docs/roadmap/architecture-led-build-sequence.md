@@ -286,6 +286,45 @@ phases are deferred until repeated material leakage, partial recovery, or a
 real TUI consumer earns them. This is not permission for keywords, a
 response-approval tool, another model, or a second runtime.
 
+### Next admitted pressure: deadline-sensitive real work
+
+The post-0005 phase review compared three peer gaps instead of extending the
+newest Agenda mechanism by default:
+
+- a narrow learner-performance occurrence that might change a later action;
+- real assignments, deadlines, current time budgets, and direct-help steering;
+  and
+- richer Course/ontology graph representation.
+
+Course is already graph-shaped enough for current consumers; another relation
+must wait for a real branch, prerequisite, rejoin, or lineage query. Generic
+learner-evidence experiments remain negative, and same-Turn adaptation already
+has a zero-write path. A performance occurrence remains important, but it must
+first prove a cross-Session consumer rather than reopen a universal evidence
+schema.
+
+The selected next pressure is one real-work conflict. B2 already demonstrated
+that a source-linked deadline, reported duration, current time budget, due
+revisit, and untouched material can change a model-led near-term plan. The
+remaining risk is production ownership, not whether the model can subtract 25
+minutes from 45.
+
+Proposal 0006 therefore fixes a LearnerHome-level, Agenda-owned local
+Assignment representation with source, strict deadline interpretation,
+correction, disposition, query-time overdue state, bounded context, lazy
+detail, and current-request precedence. It explicitly rejects Course ownership,
+title/deadline deduplication, persistent plans, scores, schedulers, todo
+topology, and learning evidence. Two adversarial contract reviews found and
+closed duplicate-entity, half-correction, terminal-inspection, completion,
+time-precision, replay, truncation, and learner-visible correction failures.
+
+This is still part of the direct-real-work contrast inside the current parent
+pressure. It does not declare `teach, adapt, and return` complete, fix the order
+of later horizons, or authorize a full goals/assignments module.
+
+- Contract: [`../proposals/0006-deadline-sensitive-real-work-contract.md`](../proposals/0006-deadline-sensitive-real-work-contract.md)
+- Implementation plan: [`08-first-deadline-sensitive-assignment.md`](./08-first-deadline-sensitive-assignment.md)
+
 ### Exit evidence
 
 The pressure path has not exited. It exits only when:
@@ -311,11 +350,12 @@ The pressure path has not exited. It exits only when:
 These are peer horizons selected after returning to the whole product. Their
 order is not fixed by this document.
 
-### Goals, assignments, deadlines, and multi-concern Agenda
+### Broader goals, assignments, deadlines, and multi-concern Agenda
 
-Pressure the Tutor with long-term course progress, changed goals, assignment
-urgency, time budgets, detours, and intended rejoin. Add only the Agenda
-lifecycles required by those conflicts.
+Beyond the admitted first Assignment conflict, pressure the Tutor with
+long-term course progress, changed goals, multiple assignments, durable time
+budgets, detours, and intended rejoin. Add only the Agenda lifecycles required
+by those conflicts.
 
 ### Attempts, artifacts, evidence, and adaptive later action
 
