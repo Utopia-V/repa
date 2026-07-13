@@ -272,9 +272,12 @@ The dependency order is two reversible slices:
    and the top-level sharing `enterprise` field rather than migrating them
    into behavior. `REPA_AUTO_SHARE` is no longer a runtime flag, Session
    creation has no automatic-share branch, and instance bootstrap initializes
-   only retained local services. Active CLI, bootstrap, and HTTP composition
-   no longer registers `ShareNext` or `SessionShare`; their implementations
-   remain dormant only until Gate 5F deletes the closed dependency branch.
+   only retained local services. Instance bootstrap, the unused bootstrap-only
+   runtime, and HTTP composition no longer register `ShareNext`. The aggregate
+   CLI runtime keeps `ShareNext` and `SessionShare` only until Gate 5F deletes
+   the already-unregistered GitHub/share implementation branch whose Effect
+   types still name them; constructing those services does not subscribe or
+   contact the network.
 
 Evidence for 5C1 must make an active-account double fail if config asks it for
 identity, token, or organization config, while retained local config and an
