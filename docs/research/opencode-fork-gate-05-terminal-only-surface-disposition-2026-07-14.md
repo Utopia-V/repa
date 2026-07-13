@@ -218,12 +218,12 @@ rather than `SessionShare.create`. With legacy `share: "auto"` or the runtime
 auto-share flag enabled, an HTTP create still succeeds but makes no share
 upstream request and persists no share as a side effect.
 
-The explicit typed share/unshare endpoints and `SessionShare` service remain
-temporarily because the TUI still consumes them. Their public removal belongs
-to the later typed-route slice after Gate 5D removes those consumers. Instance
-bootstrap still initializes `ShareNext`; Gate 5C owns that startup/background
-path. Thus Gate 5B2 closes only the HTTP-create trigger and does not claim the
-gate-wide no-share invariant.
+At this slice, the explicit typed share/unshare endpoints and `SessionShare`
+service remained temporarily because the TUI still consumed them. Their public
+removal belonged to the later typed-route slice after Gate 5D removed those
+consumers. Instance bootstrap still initializes `ShareNext`; Gate 5C owns that
+startup/background path. Thus Gate 5B2 closes only the HTTP-create trigger and
+does not claim the gate-wide no-share invariant.
 
 Evidence requires a production HTTP Session-create request under automatic
 share configuration, a successfully readable created Session, and a bounded
@@ -231,15 +231,15 @@ fake upstream proving zero requests. The focused Session route test and
 OpenCode package typecheck are causal. Reverting the implementation commit
 restores the trigger; no schema or user data migration is involved.
 
-### Remaining Gate 5B route cutover
+### Gate 5B3 — retire remote routes and request selectors
 
-After the relevant Gate 5D TUI consumers are removed, a separately locked
-Gate 5B3 contract will remove the Console endpoints inside `ExperimentalApi`,
-the Session share/unshare endpoints, and the complete `ControlPlaneApi`,
-`SyncApi`, and `WorkspaceApi`. It will also reduce workspace routing to local
-directory and persisted-Session-directory selection, prove the removed paths
-and remote selectors unreachable, and regenerate current SDK artifacts from
-the typed API owner.
+After the relevant Gate 5D TUI consumers were removed, Gate 5B3 removed the
+Console endpoints inside `ExperimentalApi`, the Session share/unshare
+endpoints, and the complete `ControlPlaneApi`, `SyncApi`, and `WorkspaceApi`.
+It then reduced current routing to local directory and
+persisted-Session-directory selection, proved the removed paths and remote
+selectors unreachable, and regenerated current SDK artifacts from the typed
+API owner.
 
 The frozen legacy `packages/sdk/js/src/gen/` tree is not hand-edited to mimic
 generation. Its retirement or recovered source-of-truth is a Gate 5F
@@ -426,11 +426,10 @@ typecheck passed; an independent fresh-context review found no 5B1/5B2
 blocker and confirmed the test server is scoped and released by the Effect
 runner.
 
-Explicit typed share/unshare, Console, workspace, sync, and control-plane
-routes remain reachable, and instance bootstrap still initializes
-`ShareNext`. The next dependency boundary is the relevant Gate 5D TUI
-consumer cutover; Gate 5B3 then removes those typed routes and regenerates the
-owned current SDK artifacts. Gate 5 remains open.
+Instance bootstrap still initializes `ShareNext`; Gate 5C owns that remaining
+startup path. The explicit typed share/unshare, Console, workspace, sync, and
+control-plane routes no longer remain reachable after Gate 5B3 below. Gate 5
+remains open.
 
 Gate 5D1 passed at `54fb79af0565a9d6d87b225e2802ee5e27df1f87`.
 The real TUI command registry has no share/unshare command or slash alias, a
@@ -441,7 +440,7 @@ retained aliases; removed, unknown, and inherited object-property names emit
 no command event. The two focused behavior tests, TUI/plugin/OpenCode package
 typechecks, exact production-residue scan, `git diff --check`, and an
 independent fresh-context review passed. Passive historical fields and the
-typed HTTP/SDK surface remain assigned to Gate 5B3/5C rather than being hidden
+typed HTTP/SDK surface were assigned to Gate 5B3/5C rather than being hidden
 behind a TUI compatibility command.
 
 Gate 5D2 passed at `ce9299f506a1b1baf1577b3730e4d6124f5ebd3b`.
@@ -502,8 +501,29 @@ compatibility. The 17-file causal suite passed 65 tests, TUI typecheck and
 `git diff --check` passed, exact residue scans found no active remote routing
 consumer, and one fresh-context independent reviewer followed the causal chain
 across repairs and ended green after its two final concurrency counterexamples
-were fixed. Local project-copy operations remain for the directory-only Gate
-5B3 route cutover.
+were fixed. Local project-copy operations were the retained reduction consumed
+by the directory-only Gate 5B3 route cutover.
+
+Gate 5B3 route registration passed at
+`34474649b648efbe8e1cbfcc1d5f07f546e10435`. The released instance router no
+longer mounts Session share/unshare, Console, control-plane, sync, or remote
+Workspace groups. Legacy URL-shaped directory parameters resolve only to a
+local directory and cannot select a remote Workspace. Four local
+project-copy/worktree operations remain because they are ordinary local
+harness behavior rather than control-plane Workspace behavior.
+
+Gate 5B3 current-protocol and client cutover passed at
+`e3375ef08b9c27542cd43f4d6085bd9856443549`. Current protocol inputs,
+middleware, OpenAPI, and generated clients are directory-only: workspace
+query parameters, headers, create inputs, and configuration selectors are no
+longer accepted or emitted. A persisted historical `workspace_id` cannot
+restore a remote route; only the Session directory is selected. The 17
+retired operations are absent from current generated artifacts, while the
+four local project-copy operations remain. The legacy
+`packages/sdk/js/src/gen/` tree stays frozen for Gate 5F instead of being
+hand-edited. Seventy-one focused tests, all seven affected package typechecks,
+exact residue and generation-ownership scans, `git diff --check`, and an
+independent fresh-context review passed with no remaining Gate 5B3 finding.
 
 ## Rollback
 

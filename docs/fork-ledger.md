@@ -43,11 +43,15 @@ git show repa-prefork-oracle:<historical-record-path>
   `815a6a7c97ff1ad39e07fb8fead31fea61734473` and
   `8fc8b44790f7ddeb2b5a40736f6bafdb9e12d9ca`: the hosted Web catch-all is
   unregistered and HTTP Session creation is locally complete without
-  automatic sharing. Explicit typed share/workspace/control-plane routes and
-  instance-bootstrap synchronization remain tracked work. The related TUI
-  consumers must be removed before Gate 5B3 unregisters those schemas and
-  regenerates current SDK artifacts; no compatibility shell is admitted. Gate
-  5D1 passed at `54fb79af0565a9d6d87b225e2802ee5e27df1f87`:
+  automatic sharing. Gate 5B3 passed in two dependency-ordered commits:
+  `34474649b648efbe8e1cbfcc1d5f07f546e10435` removed the released remote route
+  registrations, and `e3375ef08b9c27542cd43f4d6085bd9856443549`
+  removed remote request selectors and regenerated only current clients. The
+  current HTTP/SDK surface is directory-only; 17 excluded operations are gone,
+  four local project-copy operations remain, and the legacy SDK tree stays
+  frozen for Gate 5F. Instance-bootstrap synchronization remains tracked by
+  Gate 5C; no compatibility shell is admitted. Gate 5D1 passed at
+  `54fb79af0565a9d6d87b225e2802ee5e27df1f87`:
   active TUI sharing commands, tips, display, dedicated plugin property, and
   legacy alias are gone while passive historical data remains for later
   dependency closure. Gate 5D2 passed at
@@ -66,7 +70,7 @@ git show repa-prefork-oracle:<historical-record-path>
   now a local directory published atomically across Project and Sync state;
   persisted Session directories, directory-owned request/event state, and
   generation-checked hydration replace the remote Workspace selector while
-  local project copies remain for the directory-only Gate 5B3 route cutover.
+  local project copies remain as ordinary local harness behavior.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release
