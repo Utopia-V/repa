@@ -42,13 +42,14 @@ learning tools.
 - The implementation language/runtime is TypeScript/Bun.
 - The harness is owned by this project; full agent frameworks are not the architectural center.
 - Harness ownership means owning composition and product semantics, not reimplementing universal agent machinery. Prefer mature open-source interfaces and libraries for provider calls, streaming, tool continuation, cancellation, and rendering unless an observed learning invariant conflicts with them.
-- A normal terminal-agent substrate is a prerequisite, not a learning feature to
-  re-derive. Repa may adapt or cleanly reimplement proven generic architecture
-  and behavior from the pinned OpenCode and Codex references. Their read-only
-  status forbids editing or importing them; it does not forbid architectural
-  reuse. Learning-System context, state, and policy extend that substrate and
-  must never be used to remove ordinary same-Session history, tool-loop,
-  streaming, cancellation, compaction, or continuation behavior.
+- Learning behavior is first-class; a generic harness is supporting machinery,
+  not a separate product or feature-parity milestone. Minimize Repa-owned
+  generic code. Prefer mature libraries and narrow adaptation of proven
+  OpenCode/Codex mechanisms, and cleanly reimplement only the part required by
+  a current learning-product consumer. Their read-only status forbids editing
+  or importing them; it does not forbid architectural reuse. Learning-System
+  context, state, and policy extend ordinary Session behavior rather than
+  replacing it.
 - Plan, study, review, and similar modes are policy profiles over one agent loop, not separate runtimes or duplicated executors.
 - Trust learner intent while separating reports, observations, evidence, and inference; routine state updates are non-blocking, inspectable, correctable, and reversible.
 - OpenCode is a pinned, read-only engineering reference, not a dependency or upstream fork.

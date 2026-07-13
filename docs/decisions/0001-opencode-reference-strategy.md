@@ -25,7 +25,8 @@ adaptation.
 - Repa can deliberately omit coding-specific and product-scale architecture.
 - Repa does not need a new learning-specific experiment before adapting an
   ordinary Session, context, tool-loop, cancellation, compaction, or streaming
-  mechanism whose generic problem already exists here.
+  mechanism whose generic problem already exists here and is required by a
+  current product path. This does not create a harness-parity backlog.
 - Upstream changes do not silently alter the project's design.
 - Updating the reference requires an explicit change to `references.lock.json` and a renewed source review.
 - Blank-page risk is reduced, but architectural understanding is still required before implementation.

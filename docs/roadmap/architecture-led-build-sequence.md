@@ -325,34 +325,30 @@ them. The completed aggregate is not itself that justification.
 - Verification and failed live gate: [`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md)
 - Governing correction: [`../research/semantic-drift-audit-2026-07-13.md`](../research/semantic-drift-audit-2026-07-13.md)
 
-### Establish the ordinary Agent substrate before another product slice
+### Repair only the supporting mechanics consumed by learning-first paths
 
-Current v3 proves a learning-semantic vertical path through a partial runtime;
-it is not the baseline terminal-agent harness. The next runtime phase starts
-from the pinned OpenCode/Codex architecture and chooses mature-library reuse or
-clean TypeScript/Bun reimplementation boundary by boundary. It does not require
-a new learning-specific experiment to justify ordinary Agent behavior.
+Current v3 proves one learning-semantic vertical path. There is no intervening
+"complete the harness" phase and no Codex/OpenCode parity backlog. For each
+learning-product path, first reuse a mature library; if its seam is insufficient,
+adapt the smallest proven OpenCode/Codex mechanism; write new generic runtime
+code only as the last bounded option.
 
-The first extraction must cover the coherent substrate rather than treating
-each missing feature as an unrelated Repa invention:
+The current consumers justify four repairs:
 
-1. interactive Session/Turn ownership and structured transcript reconstruction;
-2. verbatim same-Session dialogue while it fits, measured context accounting,
-   automatic/manual older-head compaction, a recent verbatim tail, original
+1. the natural-language terminal product needs an interactive Session surface
+   instead of only a one-shot command;
+2. long learning Sessions need verbatim continuity while they fit, then measured
+   context accounting, older-head compaction, a recent verbatim tail, original
    history retention, and truthful overflow/compaction failure;
-3. provider streaming and an event boundary that separates internal/control
-   work from learner-visible output;
-4. tool call/result continuation, cancellation, interruption, recovery, and
-   finite execution; and
-5. explicit extension seams where Learning-System context, capabilities, and
-   accepted state changes enter without owning the generic loop.
+3. Tutor interaction needs an event/admission boundary between internal control
+   work and learner-visible explanation; and
+4. Course use and retained learner steering need listing/selection and
+   withdrawal through the same Agent surface.
 
-Provider choice, terminal rendering, subagents, and other mature Agent
-capabilities should follow the same reuse/adaptation rule; exact staging depends
-on their coupling to the extracted substrate, not on whether they are
-learning-specific. Course listing/selection and retained-steering withdrawal
-remain separate product-surface repairs. No new Assignment or ontology slice
-precedes this correction.
+These are product consumers, not permission to build a provider matrix,
+subagent platform, plugin system, complete crash-resumption engine, or coding
+agent TUI. No new Assignment or ontology slice precedes the correction, but
+unrelated harness completeness must not block later learning work either.
 
 ### Exit evidence
 

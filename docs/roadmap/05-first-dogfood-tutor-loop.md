@@ -2,8 +2,8 @@
 
 Date: 2026-07-12
 
-Status: Vertical integration trace completed on 2026-07-12 under ADR-0011;
-baseline terminal-agent harness remains incomplete.
+Status: Learning-first vertical integration trace completed on 2026-07-12 under
+ADR-0011. Complete generic-harness parity is not an exit criterion.
 
 ## Outcome
 
@@ -17,9 +17,9 @@ complete when later course, material, route, review, and assignment behavior
 has a real runtime to enter; those domains are not pre-scaffolded here.
 
 "Complete" applies only to this trace. The one-shot CLI and thin AI-SDK loop do
-not establish the ordinary interactive Session, structured history,
-context-budget/compaction, output-event, cancellation/resumption, tool-runtime,
-or subagent behavior expected from a Codex/OpenCode-class terminal agent.
+not establish a complete generic harness. Missing generic behavior is added
+only when a learning-product path consumes it, preferably through an existing
+library or narrow reference-derived adaptation rather than new Repa machinery.
 
 ## Vertical path
 

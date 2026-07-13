@@ -1,8 +1,9 @@
 # Foundation phase
 
-Status: Runtime reference study and the accepted ADRs are complete; the
-production terminal-agent substrate is not. The
-learning-domain exit path is open again after maintainer review found that the
+Status: Runtime reference study and the accepted ADRs are complete. Generic
+harness completion is not a separate phase; mechanisms are reused or narrowly
+adapted as learning-first product paths need them. The learning-domain exit
+path is open again after maintainer review found that the
 formal-task fixtures had begun to overemphasize gradable practice. See
 [`../foundation/02-what-the-tutor-does.md`](../foundation/02-what-the-tutor-does.md).
 
@@ -87,11 +88,12 @@ Result:
 
 ## Foundation exit gate
 
-The runtime **reference and contract study** is complete. This does not claim
-that Repa has implemented a complete terminal-agent harness. The accepted
-contracts cover the interaction hierarchy, local transaction scope,
-process-local coordination, finite continuation, permission boundaries, and
-the separation of provider events from durable product state.
+The runtime **reference and contract study** is complete. It supplies reusable
+mechanisms and boundaries, not a requirement to implement a complete
+terminal-agent harness. The accepted contracts cover the interaction hierarchy,
+local transaction scope, process-local coordination, finite continuation,
+permission boundaries, and the separation of provider events from durable
+product state.
 
 Revised synthesis:
 [Foundation runtime contracts](../proposals/0001-foundation-runtime-contracts.md).

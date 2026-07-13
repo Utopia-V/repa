@@ -6,17 +6,19 @@ Date: 2026-07-12
 
 ## Clarification after the Session-context correction
 
-This decision does not authorize a thin custom loop to stand in for a normal
-terminal-agent harness. The ordinary Agent substrate may be adapted or cleanly
-reimplemented from OpenCode or Codex as readily as it may be composed from a
-library. Learning context and durable learning state are additional consumers
-and contributions; they do not replace same-Session dialogue, structured tool
-continuation, streaming, cancellation, compaction, or truthful resumption.
+This decision does not make generic harness construction a Repa product phase.
+Learning context, durable learning state, Tutor policy, and learning actions
+remain first-class. The supporting Agent mechanics should contribute as little
+project-owned code as practical: compose a mature library first, adapt a proven
+OpenCode/Codex mechanism when the public library seam is insufficient, and
+cleanly reimplement only the bounded part required by a live learning consumer.
+Learning state does not replace ordinary same-Session dialogue.
 
 AI SDK supplies useful provider and tool-call transport. It is not the owner of
 the complete Session, context-window, orchestration, or terminal-agent
 architecture. The completed dogfood trace proves one vertical integration path,
-not completion of the generic harness beneath the product.
+not completion of a generic harness and not a reason to create a feature-parity
+phase.
 
 ## Context
 
@@ -52,7 +54,8 @@ The project owns the composition and product meaning of:
 
 Mature libraries own generic mechanics where their public contracts suffice;
 otherwise Repa may adapt or reimplement the corresponding proven reference
-mechanism without first manufacturing a learning-specific justification:
+mechanism when a current product path needs it, without first manufacturing a
+learning-specific experiment and while minimizing Repa-owned code:
 
 - AI SDK owns provider adapters, model-request transport, streaming reduction,
   tool-call schema/transport, ordinary tool continuation, and abort
@@ -113,10 +116,10 @@ shapes may be deleted rather than wrapped.
 
 ## Reconsideration triggers
 
-Adapting or cleanly reimplementing generic OpenCode/Codex mechanisms is already
-authorized by this decision and is not a fallback. Reconsider a direct OpenCode
-fork, a sidecar engine, or another runtime when clean TypeScript/Bun adaptation
-would require maintaining a substantial duplicate engine or when a measured
+Narrow adaptation or clean reimplementation of a required OpenCode/Codex
+mechanism is already authorized. Reconsider a direct OpenCode fork, a sidecar
+engine, or another runtime when it would reduce total maintained project code
+and semantic coupling compared with the current composition, or when a measured
 trace exposes a boundary the chosen substrate cannot preserve. Reconsider the
 single-process execution lane only when a real concurrent or remote consumer
 requires a different owner.

@@ -58,14 +58,16 @@ product foundation or accepted ADRs.
 - This project owns harness composition and learning semantics. Mature
   libraries or clean reference-derived reimplementation may supply provider
   calls, Session/context management, streaming, tool continuation,
-  cancellation, compaction, rendering, subagents, and other generic mechanics.
-  Learning-System state extends this ordinary Agent substrate; it does not
-  replace same-Session dialogue or other baseline harness behavior.
+  cancellation, compaction, rendering, and other generic mechanics required by
+  current learning behavior. Minimize Repa-owned generic code; there is no
+  Codex/OpenCode feature-parity target. Learning-System state extends ordinary
+  Session behavior rather than replacing it.
 - ADR-0011 fixes the production runtime direction: one single-process,
   model-led Tutor loop; AI SDK owns provider/stream/tool transport mechanics;
   Repa owns Turn composition, per-sample learning context, durable learning
   command authority, and truthful continuation. Its runnable terminal dogfood
-  **vertical trace** is complete; the baseline terminal-agent harness is not.
+  **learning-first vertical trace** is complete; generic harness completion is
+  not a separate milestone.
 - ADR-0012 fixes the overall architecture: a single-process modular monolith
   centered on learning authorities rather than on the Agent loop. One local
   LearnerHome spans courses, LearningSpaces, and Sessions; one process owns its
@@ -436,16 +438,14 @@ of bounded rolling-horizon/workload-leveling models. The program must own
 closed arithmetic; model judgment remains useful for semantic decomposition,
 teaching, research, and genuinely open trade-offs.
 
-The same audit found current-v3 gaps that are independent of v4. More broadly,
-v3 is a learning-semantic vertical slice over an incomplete terminal-agent
-substrate, not a finished harness: long Sessions have no
-context-budget/compaction/overflow path, the CLI is one-shot rather than an
-interactive Session surface, and the runtime has not yet established complete
-structured-history, output-event, resumption, or subagent behavior. Separately,
-learner-visible output has no admission boundary, existing courses cannot be
-selected through the Agent, and durable timed steering cannot be withdrawn
-through the production tool surface. These gaps are recorded and prioritized
-rather than hidden behind future Assignment work.
+The same audit found concrete current-v3 gaps that are independent of v4: long
+learning Sessions have no context-budget/compaction/overflow path, the main
+natural-language terminal interaction is still a one-shot command, and
+learner-visible output has no admission boundary. Existing courses also cannot
+be selected through the Agent, and durable timed steering cannot be withdrawn
+through the production tool surface. Repair each with the smallest mature or
+reference-derived mechanism that serves the learning product. Unrelated Agent
+feature parity does not enter the roadmap.
 
 The source synthesis is
 [`research/teaching-and-review-first-principles-2026-07-12.md`](./research/teaching-and-review-first-principles-2026-07-12.md),

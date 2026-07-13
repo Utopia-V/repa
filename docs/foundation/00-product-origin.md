@@ -166,7 +166,10 @@ learning invariant conflicts with them. ADR-0012 centers the application on a
 single local LearnerHome and separate learning authorities inside one modular
 monolith; the Agent loop is the ordinary execution substrate, not the long-term
 learning-state model. The Learning System adds to that substrate rather than
-replacing its Session or context behavior.
+replacing its Session or context behavior. The engineering objective is the
+least Repa-owned generic runtime code that still lets learning context, state,
+tools, and Tutor policy act as first-class product behavior; matching the
+feature set of a coding agent is not an objective.
 
 ## Deliberately unresolved
 
