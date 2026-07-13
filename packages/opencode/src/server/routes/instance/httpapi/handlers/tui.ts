@@ -10,7 +10,6 @@ import * as SessionError from "./session-errors"
 
 const commandAliases = {
   session_new: "session.new",
-  session_share: "session.share",
   session_interrupt: "session.interrupt",
   session_compact: "session.compact",
   messages_page_up: "session.page.up",
@@ -71,8 +70,9 @@ export const tuiHandlers = HttpApiBuilder.group(InstanceHttpApi, "tui", (handler
     const executeCommand = Effect.fn("TuiHttpApi.executeCommand")(function* (ctx: {
       payload: typeof CommandPayload.Type
     }) {
-      // Legacy only publishes known aliases; unknown commands become undefined.
-      yield* publishCommand(commandAliases[ctx.payload.command as keyof typeof commandAliases])
+      if (!Object.hasOwn(commandAliases, ctx.payload.command)) return true
+      const command = commandAliases[ctx.payload.command as keyof typeof commandAliases]
+      yield* publishCommand(command)
       return true
     })
 
