@@ -184,7 +184,47 @@ function responseText(response: Response) {
 }
 
 describe("HttpApi UI fallback", () => {
-  it.live("serves the web UI through the HTTP API app", () =>
+  it.live("does not register a hosted Web fallback in the production route tree", () =>
+    Effect.gen(function* () {
+      const requests: string[] = []
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          const fetch = globalThis.fetch
+          globalThis.fetch = Object.assign(
+            (input: Parameters<typeof fetch>[0]) => {
+              requests.push(String(input))
+              return Promise.resolve(
+                new Response("<html>hosted</html>", { headers: { "content-type": "text/html" } }),
+              )
+            },
+            { preconnect: fetch.preconnect },
+          )
+          return fetch
+        }),
+        (fetch) =>
+          Effect.sync(() => {
+            globalThis.fetch = fetch
+          }),
+      )
+      const server = app()
+      const excluded = yield* Effect.all(
+        ["/", "/site.webmanifest", "/unknown-gate-5b-path"].map((path) => server.request(path)),
+      )
+      const retained = yield* Effect.all([server.request("/doc"), server.request("/global/health")])
+
+      expect({
+        excluded: excluded.map((response) => response.status),
+        retained: retained.map((response) => response.status),
+        hostedRequests: requests,
+      }).toEqual({
+        excluded: [404, 404, 404],
+        retained: [200, 200],
+        hostedRequests: [],
+      })
+    }),
+  )
+
+  it.live("serves the hosted Web UI when the dormant helper is assembled directly", () =>
     Effect.gen(function* () {
       let proxiedUrl: string | undefined
 
