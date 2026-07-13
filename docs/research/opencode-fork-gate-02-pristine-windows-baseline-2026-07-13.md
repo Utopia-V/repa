@@ -147,4 +147,33 @@ publication on Windows, not yet an attributed source or lockfile defect. No
 source patch, cache deletion, retry, typecheck, build, or test had been
 performed when this failure record was written.
 
+### Attempt 2: isolated cold cache passed
+
+A direct download probe fetched both failed tarballs, reproduced their exact
+`bun.lock` SHA-512 values, and listed both archives successfully. The partial
+attempt-1 install was then removed by validating and deleting only 38 Git-
+ignored `.husky/_/` or `node_modules/` paths inside the fork. The normal and
+ignored status were empty before the second attempt.
+
+Attempt 2 changed one variable: it used a new empty cache through Bun's
+documented `BUN_INSTALL_CACHE_DIR` while retaining the same command, lockfile,
+integrity checks, lifecycle scripts, and default concurrency:
+
+```powershell
+$env:BUN_INSTALL_CACHE_DIR = 'C:\Users\Discordance\Project\repa-prefork-oracle\tmp\gate2-bun-cache-attempt-2'
+bun install --frozen-lockfile
+```
+
+Outcome: exit 0 after 281.7 seconds. Bun reported 4,670 packages installed
+and 539 dependencies resolved/downloaded/extracted. Both
+`sst-win32-x64@4.13.1` and `fast-json-stringify@6.4.0` are present in the
+installed Bun package tree. The working tree and index remain clean, and the
+worktree `bun.lock` blob
+`2f31450ed0f42d50bdc524a050b7f457627e5c4e` exactly matches the pinned tag.
+
+This result localizes attempt 1 away from source, lockfile, registry bytes, or
+archive validity and toward shared-cache publication or transient Windows
+file locking. It does not distinguish those two cache-boundary causes and
+does not erase the recorded first failure.
+
 Pending execution.
