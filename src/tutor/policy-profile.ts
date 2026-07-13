@@ -9,13 +9,31 @@
 export const DEFAULT_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-v2"
 
 /**
+ * First production revision that exposes the conditional current-purpose
+ * contract. Keep this identity stable after CURRENT advances.
+ */
+export const CONDITIONAL_PURPOSE_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-v3"
+
+/**
+ * Candidate revision that exposes LearnerHome Assignment semantics. It stays
+ * explicit rather than CURRENT until its live provider qualification passes.
+ */
+export const ASSIGNMENT_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-v4"
+
+/**
  * Current production Tutor semantics. Bump this when model-visible defaults
  * or capability-selection meaning changes. The older DEFAULT-named export
  * remains pinned by ALS-021 and must not silently change historical provider
  * inputs.
  */
-export const CURRENT_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-v3"
+export const CURRENT_TUTOR_POLICY_PROFILE_REVISION =
+  CONDITIONAL_PURPOSE_TUTOR_POLICY_PROFILE_REVISION
 
 export function enablesConditionalFutureAttention(revision: string) {
-  return revision === CURRENT_TUTOR_POLICY_PROFILE_REVISION
+  return revision === CONDITIONAL_PURPOSE_TUTOR_POLICY_PROFILE_REVISION ||
+    revision === ASSIGNMENT_TUTOR_POLICY_PROFILE_REVISION
+}
+
+export function enablesAssignments(revision: string) {
+  return revision === ASSIGNMENT_TUTOR_POLICY_PROFILE_REVISION
 }

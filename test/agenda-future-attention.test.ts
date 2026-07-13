@@ -32,6 +32,7 @@ import { openRepaDatabase } from "../src/storage/open-database"
 import { readSystemState } from "../src/storage/system-state"
 import { beginTutorModelOperation, compileTutorContext } from "../src/tutor/compile-context"
 import {
+  CONDITIONAL_PURPOSE_TUTOR_POLICY_PROFILE_REVISION,
   CURRENT_TUTOR_POLICY_PROFILE_REVISION,
   DEFAULT_TUTOR_POLICY_PROFILE_REVISION,
 } from "../src/tutor/policy-profile"
@@ -55,6 +56,47 @@ afterEach(async () => {
 })
 
 describe("Agenda future-attention domain", () => {
+  test("the frozen v3 identity still composes one constrained conditional purpose", () => {
+    const fixture = agendaFixture("v3-conditional-purpose")
+    const created = createFutureAttentionConcern(fixture.database, {
+      effectId: "effect:agenda:v3:conditional",
+      concernId: "agenda:v3:conditional",
+      causeItemId: fixture.sourceItemId,
+      modelOperationId: fixture.modelOperationId,
+      target: fixture.target,
+      authorship: {
+        kind: "learner_requested",
+        learnerRequestExcerpt: "明天再独立检查一次",
+      },
+      reason: "Let the learner predict before Tutor disclosure.",
+      learnerRoleConstraint: {
+        kind: "learner_response_before_tutor_disclosure",
+      },
+      notBefore: 50,
+      occurredAt: 12,
+    })
+    createSession(fixture.database, { sessionId: "session:v3:conditional", createdAt: 100 })
+    admitUserTurn(fixture.database, {
+      sessionId: "session:v3:conditional",
+      turnId: "turn:v3:conditional",
+      itemId: "item:user:v3:conditional",
+      content: "继续。",
+      createdAt: 100,
+    })
+
+    expect(compileTutorContext(fixture.database, {
+      sessionId: "session:v3:conditional",
+      sampledAt: 101,
+      timeZone: "Asia/Shanghai",
+      policyProfileRevision: CONDITIONAL_PURPOSE_TUTOR_POLICY_PROFILE_REVISION,
+    }).conditionalCurrentPurpose).toMatchObject({
+      source: { concernId: created.concern.id },
+      learnerRoleConstraint: {
+        kind: "learner_response_before_tutor_disclosure",
+      },
+    })
+  })
+
   test("one admitted source and exact Course View target own one semantic create slot", () => {
     const fixture = agendaFixture("create-slot")
     const stateBefore = readSystemState(fixture.database)

@@ -12,6 +12,7 @@ const MIGRATIONS: readonly Migration[] = [
   { from: 2, to: 3, apply: migrateToVersion3 },
   { from: 3, to: 4, apply: migrateToVersion4 },
   { from: 4, to: 5, apply: migrateToVersion5 },
+  { from: 5, to: 6, apply: migrateToVersion6 },
 ]
 const CURRENT_SCHEMA_VERSION = MIGRATIONS.at(-1)?.to ?? 0
 
@@ -495,5 +496,79 @@ function migrateToVersion5(database: Database) {
       learner_role_constraint IS NULL
       OR learner_role_constraint = 'learner_response_before_tutor_disclosure'
     );
+  `)
+}
+
+function migrateToVersion6(database: Database) {
+  database.exec(`
+    CREATE TABLE agenda_assignment (
+      assignment_id TEXT PRIMARY KEY,
+      creation_effect_id TEXT NOT NULL UNIQUE REFERENCES durable_effect(effect_id),
+      creation_source_item_id TEXT NOT NULL REFERENCES session_item(item_id),
+      creation_model_operation_id TEXT NOT NULL REFERENCES model_operation(model_operation_id),
+      source_start_code_point INTEGER NOT NULL CHECK (source_start_code_point >= 0),
+      source_end_code_point INTEGER NOT NULL CHECK (
+        source_end_code_point > source_start_code_point
+      ),
+      source_excerpt TEXT NOT NULL,
+      creation_title TEXT NOT NULL,
+      creation_due_at INTEGER NOT NULL CHECK (creation_due_at >= 0),
+      creation_due_at_iso TEXT NOT NULL,
+      creation_interpretation_time_zone TEXT NOT NULL,
+      current_source_item_id TEXT NOT NULL REFERENCES session_item(item_id),
+      current_model_operation_id TEXT NOT NULL REFERENCES model_operation(model_operation_id),
+      current_source_start_code_point INTEGER NOT NULL CHECK (
+        current_source_start_code_point >= 0
+      ),
+      current_source_end_code_point INTEGER NOT NULL CHECK (
+        current_source_end_code_point > current_source_start_code_point
+      ),
+      current_source_excerpt TEXT NOT NULL,
+      title TEXT NOT NULL,
+      due_at INTEGER NOT NULL CHECK (due_at >= 0),
+      due_at_iso TEXT NOT NULL,
+      interpretation_time_zone TEXT NOT NULL,
+      admission_rationale TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('open', 'completed', 'cancelled')),
+      version INTEGER NOT NULL CHECK (version > 0),
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE agenda_assignment_transition (
+      transition_effect_id TEXT PRIMARY KEY REFERENCES durable_effect(effect_id),
+      assignment_id TEXT NOT NULL REFERENCES agenda_assignment(assignment_id),
+      kind TEXT NOT NULL CHECK (kind IN ('revise', 'complete', 'cancel', 'reopen')),
+      from_status TEXT NOT NULL CHECK (from_status IN ('open', 'completed', 'cancelled')),
+      to_status TEXT NOT NULL CHECK (to_status IN ('open', 'completed', 'cancelled')),
+      command_source_item_id TEXT NOT NULL REFERENCES session_item(item_id),
+      transition_model_operation_id TEXT NOT NULL REFERENCES model_operation(model_operation_id),
+      source_start_code_point INTEGER NOT NULL CHECK (source_start_code_point >= 0),
+      source_end_code_point INTEGER NOT NULL CHECK (
+        source_end_code_point > source_start_code_point
+      ),
+      source_excerpt TEXT NOT NULL,
+      title_after TEXT NOT NULL,
+      due_at_after INTEGER NOT NULL CHECK (due_at_after >= 0),
+      due_at_iso_after TEXT NOT NULL,
+      interpretation_time_zone_after TEXT NOT NULL,
+      rationale TEXT NOT NULL,
+      version_after INTEGER NOT NULL CHECK (version_after > 1),
+      occurred_at INTEGER NOT NULL,
+      UNIQUE (assignment_id, version_after),
+      CHECK (
+        (kind = 'revise' AND from_status = to_status)
+        OR (kind = 'complete' AND from_status = 'open' AND to_status = 'completed')
+        OR (kind = 'cancel' AND from_status = 'open' AND to_status = 'cancelled')
+        OR (
+          kind = 'reopen'
+          AND from_status IN ('completed', 'cancelled')
+          AND to_status = 'open'
+        )
+      )
+    );
+
+    CREATE INDEX open_agenda_assignment_by_deadline
+      ON agenda_assignment(status, due_at, assignment_id);
   `)
 }

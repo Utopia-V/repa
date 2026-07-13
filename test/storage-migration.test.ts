@@ -30,7 +30,7 @@ afterEach(async () => {
 })
 
 describe("ordered schema migrations", () => {
-  test("schema 1 interaction history survives every ordered migration through Agenda schema 5", () => {
+  test("schema 1 interaction history survives every ordered migration through Assignment schema 6", () => {
     const databasePath = temporaryDatabasePath()
     const database = openRepaDatabase(databasePath)
     openDatabases.push(database)
@@ -50,7 +50,7 @@ describe("ordered schema migrations", () => {
     const migrated = openRepaDatabase(databasePath)
     openDatabases.push(migrated)
     expect((migrated.query("PRAGMA user_version").get() as { user_version: number }).user_version)
-      .toBe(5)
+      .toBe(6)
     expect(readSessionItems(migrated, "session:v1").map((item) => item.content)).toEqual([
       "preserve me",
     ])
@@ -58,6 +58,8 @@ describe("ordered schema migrations", () => {
     expect(tableNames(migrated)).toContain("course_view_transition")
     expect(tableNames(migrated)).toContain("agenda_revisit")
     expect(tableNames(migrated)).toContain("agenda_revisit_transition")
+    expect(tableNames(migrated)).toContain("agenda_assignment")
+    expect(tableNames(migrated)).toContain("agenda_assignment_transition")
     expect(columnNames(migrated, "agenda_revisit")).toContain("learner_role_constraint")
   })
 
@@ -81,7 +83,7 @@ describe("ordered schema migrations", () => {
     expect(tableNames(inspected)).toContain("course")
   })
 
-  test("schema 2 upgrades through the Course View ledger into Agenda schema 5", () => {
+  test("schema 2 upgrades through the Course View ledger into Assignment schema 6", () => {
     const databasePath = temporaryDatabasePath()
     const database = openRepaDatabase(databasePath)
     openDatabases.push(database)
@@ -92,7 +94,7 @@ describe("ordered schema migrations", () => {
     const migrated = openRepaDatabase(databasePath)
     openDatabases.push(migrated)
     expect((migrated.query("PRAGMA user_version").get() as { user_version: number }).user_version)
-      .toBe(5)
+      .toBe(6)
     expect(tableNames(migrated)).toContain("course_view_transition")
     expect(tableNames(migrated)).toContain("agenda_revisit")
   })
@@ -108,7 +110,7 @@ describe("ordered schema migrations", () => {
     const migrated = openRepaDatabase(databasePath)
     openDatabases.push(migrated)
     expect((migrated.query("PRAGMA user_version").get() as { user_version: number }).user_version)
-      .toBe(5)
+      .toBe(6)
     expect(tableNames(migrated)).toContain("agenda_revisit")
     expect(tableNames(migrated)).toContain("agenda_revisit_transition")
     expect(indexNames(migrated)).toContain("open_agenda_revisit_by_course_and_time")
@@ -119,7 +121,7 @@ describe("ordered schema migrations", () => {
     const reopened = openRepaDatabase(databasePath)
     openDatabases.push(reopened)
     expect((reopened.query("PRAGMA user_version").get() as { user_version: number }).user_version)
-      .toBe(5)
+      .toBe(6)
     expect(tableNames(reopened).filter((name) => name.startsWith("agenda_revisit"))).toEqual([
       "agenda_revisit",
       "agenda_revisit_transition",
@@ -162,7 +164,7 @@ describe("ordered schema migrations", () => {
     const migrated = openRepaDatabase(databasePath)
     openDatabases.push(migrated)
     expect((migrated.query("PRAGMA user_version").get() as { user_version: number }).user_version)
-      .toBe(5)
+      .toBe(6)
     expect(columnNames(migrated, "agenda_revisit")).toContain("learner_role_constraint")
   })
 
@@ -183,6 +185,56 @@ describe("ordered schema migrations", () => {
       .toBe(4)
     expect(columnNames(inspected, "agenda_revisit")).toContain("learner_role_constraint")
   })
+
+  test("schema 5 adds the LearnerHome Assignment aggregate and remains reopenable", () => {
+    const databasePath = temporaryDatabasePath()
+    const database = openRepaDatabase(databasePath)
+    openDatabases.push(database)
+    downgradeFixtureToSchema5(database)
+    database.close()
+    openDatabases.splice(openDatabases.indexOf(database), 1)
+
+    const migrated = openRepaDatabase(databasePath)
+    openDatabases.push(migrated)
+    expect((migrated.query("PRAGMA user_version").get() as { user_version: number }).user_version)
+      .toBe(6)
+    expect(tableNames(migrated)).toContain("agenda_assignment")
+    expect(tableNames(migrated)).toContain("agenda_assignment_transition")
+    expect(indexNames(migrated)).toContain("open_agenda_assignment_by_deadline")
+    expect(columnNames(migrated, "agenda_assignment")).not.toContain("course_id")
+    expect(columnNames(migrated, "agenda_assignment")).toEqual(expect.arrayContaining([
+      "creation_title",
+      "creation_due_at",
+      "creation_due_at_iso",
+      "creation_interpretation_time_zone",
+    ]))
+    migrated.close()
+    openDatabases.splice(openDatabases.indexOf(migrated), 1)
+
+    const reopened = openRepaDatabase(databasePath)
+    openDatabases.push(reopened)
+    expect((reopened.query("PRAGMA user_version").get() as { user_version: number }).user_version)
+      .toBe(6)
+  })
+
+  test("a failed schema 6 migration retains schema 5 without partial Assignment tables", () => {
+    const databasePath = temporaryDatabasePath()
+    const database = openRepaDatabase(databasePath)
+    openDatabases.push(database)
+    downgradeFixtureToSchema5(database)
+    database.exec("CREATE TABLE agenda_assignment (wrong_shape TEXT)")
+    database.close()
+    openDatabases.splice(openDatabases.indexOf(database), 1)
+
+    expect(() => openRepaDatabase(databasePath)).toThrow()
+
+    const inspected = new Database(databasePath)
+    openDatabases.push(inspected)
+    expect((inspected.query("PRAGMA user_version").get() as { user_version: number }).user_version)
+      .toBe(5)
+    expect(tableNames(inspected)).not.toContain("agenda_assignment_transition")
+    expect(tableNames(inspected)).toContain("agenda_assignment")
+  })
 })
 
 function temporaryDatabasePath() {
@@ -194,6 +246,8 @@ function temporaryDatabasePath() {
 function downgradeFixtureToSchema1(database: Database) {
   database.exec(`
     PRAGMA foreign_keys = OFF;
+    DROP TABLE agenda_assignment_transition;
+    DROP TABLE agenda_assignment;
     DROP TABLE agenda_revisit_transition;
     DROP TABLE agenda_revisit;
     DROP TABLE course_view_transition;
@@ -216,6 +270,8 @@ function downgradeFixtureToSchema1(database: Database) {
 function downgradeFixtureToSchema2(database: Database) {
   database.exec(`
     PRAGMA foreign_keys = OFF;
+    DROP TABLE agenda_assignment_transition;
+    DROP TABLE agenda_assignment;
     DROP TABLE agenda_revisit_transition;
     DROP TABLE agenda_revisit;
     DROP TABLE course_view_transition;
@@ -227,6 +283,8 @@ function downgradeFixtureToSchema2(database: Database) {
 function downgradeFixtureToSchema3(database: Database) {
   database.exec(`
     PRAGMA foreign_keys = OFF;
+    DROP TABLE agenda_assignment_transition;
+    DROP TABLE agenda_assignment;
     DROP TABLE agenda_revisit_transition;
     DROP TABLE agenda_revisit;
     PRAGMA user_version = 3;
@@ -236,8 +294,18 @@ function downgradeFixtureToSchema3(database: Database) {
 
 function downgradeFixtureToSchema4(database: Database) {
   database.exec(`
+    DROP TABLE agenda_assignment_transition;
+    DROP TABLE agenda_assignment;
     ALTER TABLE agenda_revisit DROP COLUMN learner_role_constraint;
     PRAGMA user_version = 4;
+  `)
+}
+
+function downgradeFixtureToSchema5(database: Database) {
+  database.exec(`
+    DROP TABLE agenda_assignment_transition;
+    DROP TABLE agenda_assignment;
+    PRAGMA user_version = 5;
   `)
 }
 
