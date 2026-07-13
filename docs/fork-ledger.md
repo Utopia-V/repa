@@ -39,9 +39,14 @@ git show repa-prefork-oracle:<historical-record-path>
   unregister excluded surfaces before dependency-closed deletion. Gate 5A
   passed at `6503c280762a8cb2cc04e2cd0021498a8f0aa174`: the excluded root CLI
   handlers and CLI-owned sharing/import network paths are gone while retained
-  local commands remain. Gate 5B, HTTP and routing, is next; HTTP Session
-  automatic sharing and instance-bootstrap synchronization remain explicit
-  Gate 5B/5C blockers rather than accepted residue.
+  local commands remain. Gate 5B1 and 5B2 passed at
+  `815a6a7c97ff1ad39e07fb8fead31fea61734473` and
+  `8fc8b44790f7ddeb2b5a40736f6bafdb9e12d9ca`: the hosted Web catch-all is
+  unregistered and HTTP Session creation is locally complete without
+  automatic sharing. Explicit typed share/workspace/control-plane routes and
+  instance-bootstrap synchronization remain tracked work. The related TUI
+  consumers must be removed before Gate 5B3 unregisters those schemas and
+  regenerates current SDK artifacts; no compatibility shell is admitted.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release

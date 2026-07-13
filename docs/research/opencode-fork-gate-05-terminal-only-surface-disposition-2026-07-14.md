@@ -302,10 +302,35 @@ Gate 5 remains active. Gate 5A passed at
 - the OpenCode package typecheck and `git diff --check` passed, and an
   independent fresh-context review found no remaining Gate 5A blocker.
 
-The HTTP Session-create automatic-share path and instance-bootstrap
-ShareNext synchronization remain reachable. They are recorded Gate 5B/5C
-blockers, so this result neither claims the gate-wide no-network invariant nor
-closes Gate 5. Gate 5B1 and Gate 5B2 are now locked; Gate 5B1 is next.
+At the Gate 5A close, the HTTP Session-create automatic-share path and
+instance-bootstrap ShareNext synchronization remained reachable as recorded
+Gate 5B/5C blockers, so that result did not claim the gate-wide no-network
+invariant or close Gate 5. Gate 5B2 below closes the first path; bootstrap
+synchronization remains.
+
+Gate 5B1 passed at `815a6a7c97ff1ad39e07fb8fead31fea61734473`
+with the unused route dependency cleaned at
+`8e6e64d3ea52cae51f274e9c75289acdaf5fa7bb`. The production route tree now
+returns direct 404 responses for `/`, `/site.webmanifest`, and unknown paths,
+while `/doc` and `/global/health` remain reachable. The hosted helper is
+dormant for Gate 5F deletion. Its complete focused test file passed 13 tests,
+and no SDK artifact changed.
+
+Gate 5B2 passed at `8fc8b44790f7ddeb2b5a40736f6bafdb9e12d9ca`.
+Under `share: "auto"`, the production HTTP Session-create route now creates and
+re-reads a local Session without contacting the listening local share probe or
+persisting a share. The same test first failed against the old call graph with
+`POST /api/share` and a stored share URL, then passed after the one production
+call changed to `Session.Service.create`. The focused test and package
+typecheck passed; an independent fresh-context review found no 5B1/5B2
+blocker and confirmed the test server is scoped and released by the Effect
+runner.
+
+Explicit typed share/unshare, Console, workspace, sync, and control-plane
+routes remain reachable, and instance bootstrap still initializes
+`ShareNext`. The next dependency boundary is the relevant Gate 5D TUI
+consumer cutover; Gate 5B3 then removes those typed routes and regenerates the
+owned current SDK artifacts. Gate 5 remains open.
 
 ## Rollback
 
