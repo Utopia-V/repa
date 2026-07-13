@@ -432,6 +432,18 @@ routes remain reachable, and instance bootstrap still initializes
 consumer cutover; Gate 5B3 then removes those typed routes and regenerates the
 owned current SDK artifacts. Gate 5 remains open.
 
+Gate 5D1 passed at `54fb79af0565a9d6d87b225e2802ee5e27df1f87`.
+The real TUI command registry has no share/unshare command or slash alias, a
+legacy share URL is absent from the rendered sidebar, and the retained
+`sidebar_title` plugin slot still receives Session identity and title without
+a dedicated share property. Legacy bridge input now publishes only own,
+retained aliases; removed, unknown, and inherited object-property names emit
+no command event. The two focused behavior tests, TUI/plugin/OpenCode package
+typechecks, exact production-residue scan, `git diff --check`, and an
+independent fresh-context review passed. Passive historical fields and the
+typed HTTP/SDK surface remain assigned to Gate 5B3/5C rather than being hidden
+behind a TUI compatibility command. Gate 5D2 is next.
+
 ## Rollback
 
 Revert the smallest failing subgate and regenerate only artifacts owned by a

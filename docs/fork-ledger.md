@@ -46,7 +46,11 @@ git show repa-prefork-oracle:<historical-record-path>
   automatic sharing. Explicit typed share/workspace/control-plane routes and
   instance-bootstrap synchronization remain tracked work. The related TUI
   consumers must be removed before Gate 5B3 unregisters those schemas and
-  regenerates current SDK artifacts; no compatibility shell is admitted.
+  regenerates current SDK artifacts; no compatibility shell is admitted. Gate
+  5D1 passed at `54fb79af0565a9d6d87b225e2802ee5e27df1f87`:
+  active TUI sharing commands, tips, display, dedicated plugin property, and
+  legacy alias are gone while passive historical data remains for later
+  dependency closure.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release
