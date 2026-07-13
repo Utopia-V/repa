@@ -120,8 +120,10 @@ capability?
   Agent/MCP/provider/Session/database/export commands.
 - `packages/opencode/src/cli/cmd/run.ts` and
   `packages/opencode/src/cli/cmd/run/runtime.ts` remove the `--share` option and
-  every direct-run share callback. Hiding only the option is insufficient,
-  because automatic share configuration could otherwise retain the effect.
+  every CLI-owned direct-run share callback. This closes the explicit CLI
+  trigger; automatic sharing reached through Session HTTP creation and
+  startup synchronization remains owned by Gate 5B/5C rather than being
+  silently counted as part of this slice.
 - the import command is narrowed to local JSON. It retains offline
   export/import and current project/directory rebinding, while removing share
   URL parsing, authenticated network fetch, old/new share API fallback, and
@@ -149,9 +151,10 @@ available through retained terminal capabilities.
 - `run --help` has no share option, and supplying `--share` is rejected before
   Session execution. Source and focused tests show that no direct-run share
   callback remains.
-- a local `run -> export -> delete -> import -> export` round trip preserves
-  the offline capability. HTTP(S) import fails locally without a network call,
-  account header, or share API fallback.
+- a local JSON `import -> export -> delete -> import -> export` round trip
+  preserves Session, message, part, and current project/directory rebinding.
+  HTTP(S) import fails locally without a network call, account header, or
+  share API fallback.
 - `plugin`, `serve`, local `stats`, and the other retained root commands remain
   registered and keep their help contracts.
 - only the CLI help/snapshot tests, import tests, direct-run process tests, and
@@ -166,9 +169,13 @@ former command word must produce exit code 1.
 ### Exclusions and rollback
 
 Gate 5A does not remove HTTP/TUI share paths, hosted UI proxying, config keys,
-provider semantics, generated clients, or implementation files, and therefore
-does not claim that Gate 5 has passed. Revert the Gate 5A implementation commit
-to restore its registrations and callbacks; no schema or user data changes.
+provider semantics, generated clients, or implementation files. In
+particular, Session creation can still reach automatic sharing through the
+HTTP handler and `ShareNext`, and instance bootstrap can still synchronize
+already-shared Sessions; those are explicit blockers for Gate 5B/5C, not a
+Gate 5A success claim. Gate 5A therefore does not claim that Gate 5 has passed.
+Revert the Gate 5A implementation commit to restore its registrations and
+callbacks; no schema or user data changes.
 
 ## Gate-wide positive evidence
 
@@ -213,7 +220,28 @@ keeps an excluded surface public.
 
 ## Recorded result
 
-Pending. The Gate 5A contract is locked; implementation has not yet begun.
+Gate 5 remains active. Gate 5A passed at
+`6503c280762a8cb2cc04e2cd0021498a8f0aa174`.
+
+- the excluded Console, Web, GitHub-agent, and PR command handlers are no
+  longer registered at the root CLI; retained local commands remain visible;
+- `run` no longer owns a share option or direct share callback;
+- import is local-JSON-only, and a native-database
+  `import -> export -> delete -> import -> export` round trip preserved the
+  Session, message, part, and current project/directory rebinding;
+- HTTP(S) import was rejected without reaching a listening test server;
+- `bun test test/cli/help/help-snapshots.test.ts test/cli/import.test.ts
+  test/cli/root-shortcuts.test.ts` passed 5 tests and 27 snapshots;
+- `bun test -t "rejects --share before admitting a prompt"
+  test/cli/run/run-process.test.ts` passed the focused contract without a
+  provider request;
+- the OpenCode package typecheck and `git diff --check` passed, and an
+  independent fresh-context review found no remaining Gate 5A blocker.
+
+The HTTP Session-create automatic-share path and instance-bootstrap
+ShareNext synchronization remain reachable. They are recorded Gate 5B/5C
+blockers, so this result neither claims the gate-wide no-network invariant nor
+closes Gate 5. Gate 5B is next.
 
 ## Rollback
 

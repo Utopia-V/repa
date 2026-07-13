@@ -36,7 +36,12 @@ git show repa-prefork-oracle:<historical-record-path>
   learning-first Repa composition invariant.
 - Gate 5 is active under
   `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`:
-  unregister excluded surfaces before dependency-closed deletion.
+  unregister excluded surfaces before dependency-closed deletion. Gate 5A
+  passed at `6503c280762a8cb2cc04e2cd0021498a8f0aa174`: the excluded root CLI
+  handlers and CLI-owned sharing/import network paths are gone while retained
+  local commands remain. Gate 5B, HTTP and routing, is next; HTTP Session
+  automatic sharing and instance-bootstrap synchronization remain explicit
+  Gate 5B/5C blockers rather than accepted residue.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release
