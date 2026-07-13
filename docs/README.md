@@ -34,6 +34,11 @@ Documents have different authority. Do not treat a research observation as an ac
   gate the Windows fork build, native Interaction/database cutover, atomic
   learning tools, general material translation, scripted real-provider
   dogfood, and deletion of the old runner.
+- [`research/opencode-fork-gate-01-lineage-2026-07-13.md`](research/opencode-fork-gate-01-lineage-2026-07-13.md)
+  records the passed exact-history, tag, license, and worktree-provenance gate.
+- [`research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`](research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md)
+  is the active pristine Windows install, typecheck, build, and focused-test
+  gate. It permits no Repa product edits.
 - [`foundation/03-complete-learning-traces.md`](foundation/03-complete-learning-traces.md)
   is the review draft of the complete behavior baseline. It does not define a
   workflow or schema.
@@ -261,6 +266,8 @@ current proposal. Each document's status and scope note controls its use.
 - [`research/codex-rust-v0.144.1-runtime-contracts.md`](research/codex-rust-v0.144.1-runtime-contracts.md)
 - [`research/opencode-v1.17.18-agent-loop.md`](research/opencode-v1.17.18-agent-loop.md)
 - [`research/opencode-v1.17.18-runtime-contracts.md`](research/opencode-v1.17.18-runtime-contracts.md)
+- [`research/opencode-fork-gate-01-lineage-2026-07-13.md`](research/opencode-fork-gate-01-lineage-2026-07-13.md)
+- [`research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`](research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md)
 - [`research/message-and-model-event-contracts.md`](research/message-and-model-event-contracts.md)
 - [`research/tool-lifecycle-contracts.md`](research/tool-lifecycle-contracts.md)
 - [`research/session-serialization-and-recovery.md`](research/session-serialization-and-recovery.md)
