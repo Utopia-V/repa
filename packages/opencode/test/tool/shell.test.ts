@@ -1105,29 +1105,44 @@ describe("tool.shell abort", () => {
     ),
   )
 
-  it.live("streams metadata updates progressively", () =>
-    runIn(
-      projectRoot,
+  it.live(
+    "streams metadata updates progressively",
+    () =>
       Effect.gen(function* () {
-        const updates: string[] = []
-        const result = yield* run(
-          {
-            command: `echo first && sleep 0.1 && echo second`,
-          },
-          {
-            ...ctx,
-            metadata: (input) =>
-              Effect.sync(() => {
-                const output = (input.metadata as { output?: string })?.output
-                if (output) updates.push(output)
-              }),
-          },
+        const tmp = yield* tmpdirScoped()
+        const release = path.join(tmp, "shell-stream.release")
+        const child = [
+          bin,
+          quote(path.join(__dirname, "../fixture/shell-stream.ts").replaceAll("\\", "/")),
+          quote(release.replaceAll("\\", "/")),
+        ].join(" ")
+        const state = { partial: "" }
+        const result = yield* runIn(
+          projectRoot,
+          run(
+            {
+              command: PS.has(sh()) ? `& ${child}` : child,
+              timeout: 5_000,
+            },
+            {
+              ...ctx,
+              metadata: (input) =>
+                Effect.gen(function* () {
+                  const output = (input.metadata as { output?: string })?.output ?? ""
+                  if (!output.includes("first") || state.partial) return
+                  state.partial = output
+                  yield* Effect.promise(() => Bun.write(release, "continue"))
+                }),
+            },
+          ),
         )
+        expect(state.partial).toContain("first")
+        expect(state.partial).not.toContain("second")
         expect(result.output).toContain("first")
         expect(result.output).toContain("second")
-        expect(updates.length).toBeGreaterThan(1)
+        expect(result.metadata.exit).toBe(0)
       }),
-    ),
+    10_000,
   )
 })
 
