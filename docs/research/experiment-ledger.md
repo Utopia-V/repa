@@ -63,11 +63,18 @@ Use full names in notes and discussion:
 
 ## Active batch
 
-No lab is active. ALS-023 is retained as a failed experiment whose pressure
-scenario was selected incorrectly. It does **not** leave a near-deadline
-consideration question. The unqualified v4 runtime, prompt, tools, and
-dedicated tests have been deleted; schema 6 remains only as a compatibility
-tombstone.
+ALS-024 is active only as the pre-registered documentation
+[protocol](./source-linked-performance-occurrence-proof-2026-07-13.md). No
+executable lab, harness change, production state, or live-model run is active.
+The proof asks whether correct, incorrect, and assisted source-linked responses
+require one minimum occurrence for a materially different later fresh-Session
+Tutor decision, while explicitly allowing Agenda plus bounded lazy Interaction
+reads to win with no new durable meaning.
+
+ALS-023 is retained as a failed experiment whose pressure scenario was selected
+incorrectly. It does **not** leave a near-deadline consideration question. The
+unqualified v4 runtime, prompt, tools, and dedicated tests have been deleted;
+schema 6 remains only as a compatibility tombstone.
 ALS-022B/C reject a universal DeepSeek-V4-Flash selector;
 their stop rule remains in force. ALS-022D supports a simpler one-candidate
 conditional-default topology for the demonstrated independent-prediction

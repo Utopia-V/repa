@@ -252,6 +252,12 @@ These statements are deliberately weaker than accepted decisions.
    its representative emergency fixture was invalid, and it excluded learning
    context/nature, workload, capacity, progress, and cross-day allocation.
    Schema 6 remains only as an inert compatibility tombstone.
+7. A narrow source-linked performance occurrence may be the next earned
+   Learner Record meaning only if correct, incorrect, and assisted responses
+   require materially different later Tutor moves after the original Session is
+   absent. ALS-024 tests that consumer and must also allow the result that
+   Agenda plus bounded lazy Interaction reads are already sufficient. No
+   generic attempt, evidence, or mastery shape is preauthorized.
 
 ## Questions still worth resolving
 
@@ -420,6 +426,17 @@ pedagogy enum, second runtime, keyword filter, or model-review pass.
 This path still does not preauthorize an activity table, difficulty enum,
 intervention state machine, universal future-action model, FSRS integration,
 or full learner projection.
+
+ALS-024 is now the active documentation-only architecture proof for the first
+missing downstream decision in this path: after an independent-response Agenda
+purpose is served, a later fresh Session may need to distinguish correct,
+incorrect, and decisively assisted response histories. The
+[protocol](./research/source-linked-performance-occurrence-proof-2026-07-13.md)
+freezes authority separation, same- versus fresh-Session consumption,
+correction, retry, stale, crash, atomicity, dogfood, and zero-write gates before
+any production meaning is admitted. It requires no live model or harness and
+explicitly permits a negative result if current Agenda plus lazy Interaction
+detail already suffices.
 
 The post-0005 review incorrectly promoted B2's scene-specific 45/25/30-minute
 emergency into the next production pressure. Proposal 0006 then deferred the

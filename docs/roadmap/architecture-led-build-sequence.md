@@ -286,6 +286,27 @@ phases are deferred until repeated material leakage, partial recovery, or a
 real TUI consumer earns them. This is not permission for keywords, a
 response-approval tool, another model, or a second runtime.
 
+### Active architecture proof: source-linked performance occurrence
+
+Course is already graph-shaped enough for current consumers; another relation
+must wait for a real branch, prerequisite, rejoin, or lineage query. Generic
+learner-evidence experiments remain negative, and same-Session adaptation
+already has a zero-write path.
+
+The current missing consumer is narrower. After the Agenda-backed
+learner-response-before-disclosure purpose is served, correct and incorrect
+independent responses have the same addressed disposition but may require
+different Tutor moves in a later fresh Session. The same correct answer after
+decisive Tutor help must also remain distinct from independent performance.
+
+ALS-024 pre-registers the deterministic architecture proof for that boundary:
+[source-linked performance occurrence protocol](../research/source-linked-performance-occurrence-proof-2026-07-13.md).
+It tests current Agenda plus bounded lazy Interaction reads before admitting
+any new meaning, separates response, assistance, observation, inference, and
+Agenda authority, and freezes correction, retry, stale, crash, atomicity,
+dogfood, and zero-write gates. It is not a production contract, schema, generic
+attempt/evidence model, harness task, or live-model experiment.
+
 ### Withdrawn candidate: last-minute deadline conflict
 
 The post-0005 phase review compared three peer gaps instead of extending the
@@ -295,13 +316,6 @@ newest Agenda mechanism by default:
 - real assignments, deadlines, current time budgets, and direct-help steering;
   and
 - richer Course/ontology graph representation.
-
-Course is already graph-shaped enough for current consumers; another relation
-must wait for a real branch, prerequisite, rejoin, or lineage query. Generic
-learner-evidence experiments remain negative, and same-Turn adaptation already
-has a zero-write path. A performance occurrence remains important, but it must
-first prove a cross-Session consumer rather than reopen a universal evidence
-schema.
 
 The selected pressure was wrong. B2 demonstrated only that a scene-specific
 prompt could execute one last-minute 45/25/30-minute script. That rescue case is
@@ -396,7 +410,9 @@ observable consumers.
 Represent task purpose, response or artifact source, relevant assistance, and
 observed outcome when two later Tutor actions genuinely differ. Preserve
 observation, interpretation, inference, and resulting plan as separate meanings
-where behavior needs the distinction.
+where behavior needs the distinction. ALS-024 is the active proof of the first
+such candidate consumer; its result, including a possible rejection, must
+precede any production shape.
 
 ### Review scheduling and compression
 
