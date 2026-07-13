@@ -386,6 +386,86 @@ local `experimental.projectCopy.generateName` and v2 project-copy operations
 must survive; Gate 5B3 converts their routing middleware to directory-only
 rather than deleting their API group.
 
+## Gate 5E locked execution boundary: provider policy and self-update
+
+Gate 5E asks whether Repa can retain a complete generic local provider harness
+without silently carrying OpenCode's first-party Zen/Go product policy, and
+whether self-update can be absent until Repa owns a real release channel. These
+are two independent dependency graphs. Their implementation order may vary,
+but neither graph may be kept alive by a no-op compatibility surface.
+
+### Gate 5E1 — make first-party provider IDs ordinary
+
+`opencode` remains a legal explicit provider ID, but it receives no built-in
+catalog entry, anonymous/public credential, provider plugin, request header,
+request-body option, native-runtime eligibility, tool, model-selection
+priority, price presentation, ACP preference, retry action, or subscription
+copy. `opencode-go` is likewise excluded from the shared ModelsDev outward
+catalog. A user who explicitly configures an `opencode` endpoint, models, and
+credentials receives the same generic custom-provider path as any other ID.
+The raw models.dev cache is not a product registry and need not be rewritten;
+the shared outward projection owns the exclusion.
+
+The slice therefore removes the v1 magic provider loader and v2 built-in
+OpenCode provider plugin, exact-ID branches in LLM request/transform/native
+runtime/tool and selection code, CLI/TUI recommendation or “Free/Go”
+presentation, and the closed retry-upsell producer/schema/consumer graph.
+Current OpenAPI and SDK artifacts are regenerated from their schema owners;
+direct tests and recorded scenarios that exist only for the deleted product
+policy are deleted with it rather than converted into compatibility tests.
+
+Generic provider configuration, explicit provider/model headers, API-key and
+OAuth auth, external provider plugins, plugin tools, MCP tools, AI-SDK
+fallback, usage accounting, and actual catalog costs remain. GitHub Copilot's
+provider-local enterprise authentication remains because it is an explicit
+provider capability, not OpenCode Console or sharing state. Zenmux is an
+unrelated provider and remains. OpenCode-branded attribution headers on other
+retained transports belong to the later product-identity audit unless they
+are coupled to the exact first-party ID branch.
+
+Negative evidence requires a catalog containing `opencode`, `opencode-go`,
+and an ordinary control provider to expose only the control through released
+and current discovery surfaces. An explicitly configured provider named
+`opencode` must load without any public credential or ID-only request/tool/
+selection behavior. Limit-shaped errors retain generic retry information but
+produce no commercial URL or action, and current schemas/clients contain no
+retry action. Positive evidence covers generic custom providers and auth,
+explicit request headers, plugin/MCP tools, AI-SDK fallback, normal catalog
+costs, and GitHub Copilot enterprise auth.
+
+### Gate 5E2 — hibernate self-update by absence
+
+The unregistered upgrade/uninstall commands, the active fixed-error
+`POST /global/upgrade` route, the `Installation` service and its package-
+manager probes, updater-specific tests, `autoupdate` configuration and
+migration output, updater flags, installation-update events, and their TUI
+tip/fixture are deleted as one graph. A direct request to the retired path
+returns ordinary not found; Repa does not advertise a permanently unavailable
+operation. Old configuration keys become ignored excess data, and transient
+installation events require no recovery or data migration.
+
+Build identity is not updater policy. `InstallationVersion`,
+`InstallationChannel`, `InstallationLocal`, CLI `--version`, database channel
+isolation, user-agent/plugin compatibility uses, and the launcher's platform-
+package resolution remain. Ordinary server health and startup remain. The
+current OpenAPI and v2 SDK are regenerated; the frozen legacy SDK is not
+hand-edited. Initial installers, publish/release workflows, Nix/release
+identity, Web documentation, and Desktop's separate Electron updater remain
+later Gate 5F boundaries rather than being pulled into this slice.
+
+Negative evidence requires the config schemas/migration, event manifest,
+active route tree, current OpenAPI/SDK, runtime composition, and production
+source to contain no updater owner. Positive evidence covers CLI version,
+ordinary server startup and `/global/health`, retained build/channel identity,
+and local terminal commands. Focused owner tests, affected package typechecks,
+exact dependency scans, and `git diff --check` are causal.
+
+Each subgate is one revertible commit plus generated artifacts from changed
+owners. Neither changes user data or adds a fallback endpoint, compatibility
+field, empty service, or alternate registry. A future Repa provider product or
+updater requires a Repa-owned product contract and release authority rather
+than reactivating the inherited OpenCode policy accidentally.
+
 ## Gate 5F locked dependency closure: sharing and hosted GitHub automation
 
 The first Gate 5F slice asks whether the now-unreachable public-sharing branch
