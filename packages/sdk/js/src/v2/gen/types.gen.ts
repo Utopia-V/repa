@@ -142,13 +142,6 @@ export type InvalidRequestError = {
   field?: string
 }
 
-export type MoveSessionError = {
-  name: "MoveSessionError"
-  data: {
-    message: string
-  }
-}
-
 export type SnapshotFileDiff = {
   file?: string
   patch?: string
@@ -1414,7 +1407,6 @@ export type GlobalEvent = {
           command:
             | "session.list"
             | "session.new"
-            | "session.share"
             | "session.interrupt"
             | "session.compact"
             | "session.page.up"
@@ -1644,7 +1636,7 @@ export type GlobalEvent = {
 export type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR"
 
 /**
- * Server configuration for opencode serve and web commands
+ * Server configuration for repa serve and web commands
  */
 export type ServerConfig = {
   port?: number
@@ -1930,13 +1922,13 @@ export type Config = {
   default_agent?: string
   username?: string
   mode?: {
-    build?: AgentConfig
+    repa?: AgentConfig
     plan?: AgentConfig
     [key: string]: AgentConfig | undefined
   }
   agent?: {
     plan?: AgentConfig
-    build?: AgentConfig
+    repa?: AgentConfig
     general?: AgentConfig
     explore?: AgentConfig
     title?: AgentConfig
@@ -2123,16 +2115,6 @@ export type Provider = {
 
 export type ExperimentalCapabilities = {
   backgroundSubagents: boolean
-}
-
-export type ConsoleState = {
-  consoleManagedProviders: Array<string>
-  activeOrgName?: string
-  switchableOrgCount: number
-}
-
-export type EffectHttpApiErrorInternalServerError = {
-  _tag: "InternalServerError"
 }
 
 export type ToolListItem = {
@@ -2609,7 +2591,6 @@ export type EventTuiCommandExecute = {
     command:
       | "session.list"
       | "session.new"
-      | "session.share"
       | "session.interrupt"
       | "session.compact"
       | "session.page.up"
@@ -2644,31 +2625,6 @@ export type EventTuiSessionSelect = {
      * Session ID to navigate to
      */
     sessionID: string
-  }
-}
-
-export type Workspace = {
-  id: string
-  type: string
-  name: string
-  branch?: string | null
-  directory?: string | null
-  extra?: unknown | null
-  projectID: string
-  timeUsed: number | "NaN" | "Infinity" | "-Infinity" | "Infinity" | "-Infinity" | "NaN"
-}
-
-export type WorkspaceCreateError = {
-  name: "WorkspaceCreateError"
-  data: {
-    message: string
-  }
-}
-
-export type WorkspaceWarpError = {
-  name: "WorkspaceWarpError"
-  data: {
-    message: string
   }
 }
 
@@ -2971,7 +2927,6 @@ export type EventTuiCommandExecute2 = {
     command:
       | "session.list"
       | "session.new"
-      | "session.share"
       | "session.interrupt"
       | "session.compact"
       | "session.page.up"
@@ -3025,10 +2980,6 @@ export type IntegrationRef = {
 }
 
 export type SkillV2Source = SkillV2DirectorySource | SkillV2UrlSource | SkillV2EmbeddedSource
-
-export type MoveSessionDestination = {
-  directory: string
-}
 
 export type ModelRef = {
   id: string
@@ -3847,11 +3798,6 @@ export type ProjectDirectories = Array<{
 export type PtyTicketConnectToken = {
   ticket: string
   expires_in: number
-}
-
-export type WorkspaceEventConnectionStatus = {
-  workspaceID: string
-  status: "connected" | "connecting" | "disconnected" | "error"
 }
 
 export type LocationInfo = {
@@ -5768,7 +5714,6 @@ export type TuiCommandExecute = {
     command:
       | "session.list"
       | "session.new"
-      | "session.share"
       | "session.interrupt"
       | "session.compact"
       | "session.page.up"
@@ -7164,7 +7109,6 @@ export type AppLogData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/log"
 }
@@ -7186,37 +7130,6 @@ export type AppLogResponses = {
 }
 
 export type AppLogResponse = AppLogResponses[keyof AppLogResponses]
-
-export type ExperimentalControlPlaneMoveSessionData = {
-  body?: {
-    sessionID: string
-    destination: MoveSessionDestination
-    moveChanges?: boolean
-  }
-  path?: never
-  query?: never
-  url: "/experimental/control-plane/move-session"
-}
-
-export type ExperimentalControlPlaneMoveSessionErrors = {
-  /**
-   * MoveSessionError | InvalidRequestError
-   */
-  400: MoveSessionError | InvalidRequestError
-}
-
-export type ExperimentalControlPlaneMoveSessionError =
-  ExperimentalControlPlaneMoveSessionErrors[keyof ExperimentalControlPlaneMoveSessionErrors]
-
-export type ExperimentalControlPlaneMoveSessionResponses = {
-  /**
-   * Session moved
-   */
-  204: void
-}
-
-export type ExperimentalControlPlaneMoveSessionResponse =
-  ExperimentalControlPlaneMoveSessionResponses[keyof ExperimentalControlPlaneMoveSessionResponses]
 
 export type GlobalHealthData = {
   body?: never
@@ -7386,7 +7299,6 @@ export type EventSubscribeData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/event"
 }
@@ -7405,7 +7317,6 @@ export type ConfigGetData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/config"
 }
@@ -7433,7 +7344,6 @@ export type ConfigUpdateData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/config"
 }
@@ -7461,7 +7371,6 @@ export type ConfigProvidersData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/config/providers"
 }
@@ -7494,7 +7403,6 @@ export type ExperimentalCapabilitiesGetData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/capabilities"
 }
@@ -7519,110 +7427,11 @@ export type ExperimentalCapabilitiesGetResponses = {
 export type ExperimentalCapabilitiesGetResponse =
   ExperimentalCapabilitiesGetResponses[keyof ExperimentalCapabilitiesGetResponses]
 
-export type ExperimentalConsoleGetData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/console"
-}
-
-export type ExperimentalConsoleGetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * InternalServerError
-   */
-  500: EffectHttpApiErrorInternalServerError
-}
-
-export type ExperimentalConsoleGetError = ExperimentalConsoleGetErrors[keyof ExperimentalConsoleGetErrors]
-
-export type ExperimentalConsoleGetResponses = {
-  /**
-   * Active Console provider metadata
-   */
-  200: ConsoleState
-}
-
-export type ExperimentalConsoleGetResponse = ExperimentalConsoleGetResponses[keyof ExperimentalConsoleGetResponses]
-
-export type ExperimentalConsoleListOrgsData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/console/orgs"
-}
-
-export type ExperimentalConsoleListOrgsErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * InternalServerError
-   */
-  500: EffectHttpApiErrorInternalServerError
-}
-
-export type ExperimentalConsoleListOrgsError =
-  ExperimentalConsoleListOrgsErrors[keyof ExperimentalConsoleListOrgsErrors]
-
-export type ExperimentalConsoleListOrgsResponses = {
-  /**
-   * Switchable Console orgs
-   */
-  200: {
-    orgs: Array<{
-      accountID: string
-      accountEmail: string
-      accountUrl: string
-      orgID: string
-      orgName: string
-      active: boolean
-    }>
-  }
-}
-
-export type ExperimentalConsoleListOrgsResponse =
-  ExperimentalConsoleListOrgsResponses[keyof ExperimentalConsoleListOrgsResponses]
-
-export type ExperimentalConsoleSwitchOrgData = {
-  body?: {
-    accountID: string
-    orgID: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/console/switch"
-}
-
-export type ExperimentalConsoleSwitchOrgResponses = {
-  /**
-   * Switch success
-   */
-  200: boolean
-}
-
-export type ExperimentalConsoleSwitchOrgResponse =
-  ExperimentalConsoleSwitchOrgResponses[keyof ExperimentalConsoleSwitchOrgResponses]
-
 export type ToolListData = {
   body?: never
   path?: never
   query: {
     directory?: string
-    workspace?: string
     provider: string
     model: string
   }
@@ -7652,7 +7461,6 @@ export type ToolIdsData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/tool/ids"
 }
@@ -7680,7 +7488,6 @@ export type WorktreeRemoveData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/worktree"
 }
@@ -7708,7 +7515,6 @@ export type WorktreeListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/worktree"
 }
@@ -7736,7 +7542,6 @@ export type WorktreeCreateData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/worktree"
 }
@@ -7764,7 +7569,6 @@ export type WorktreeResetData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/worktree/reset"
 }
@@ -7792,7 +7596,6 @@ export type ExperimentalSessionListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
     roots?: boolean | "true" | "false"
     start?: number
     cursor?: number
@@ -7828,7 +7631,6 @@ export type ExperimentalSessionBackgroundData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/session/{sessionID}/background"
 }
@@ -7858,7 +7660,6 @@ export type ExperimentalResourceListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/resource"
 }
@@ -7889,7 +7690,6 @@ export type FindTextData = {
   path?: never
   query: {
     directory?: string
-    workspace?: string
     pattern: string
   }
   url: "/find"
@@ -7934,7 +7734,6 @@ export type FindFilesData = {
   path?: never
   query: {
     directory?: string
-    workspace?: string
     query: string
     dirs?: "true" | "false"
     type?: "file" | "directory"
@@ -7966,7 +7765,6 @@ export type FindSymbolsData = {
   path?: never
   query: {
     directory?: string
-    workspace?: string
     query: string
   }
   url: "/find/symbol"
@@ -7995,7 +7793,6 @@ export type FileListData = {
   path?: never
   query: {
     directory?: string
-    workspace?: string
     path: string
   }
   url: "/file"
@@ -8024,7 +7821,6 @@ export type FileReadData = {
   path?: never
   query: {
     directory?: string
-    workspace?: string
     path: string
   }
   url: "/file/content"
@@ -8053,7 +7849,6 @@ export type FileStatusData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/file/status"
 }
@@ -8081,7 +7876,6 @@ export type InstanceDisposeData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/instance/dispose"
 }
@@ -8109,7 +7903,6 @@ export type PathGetData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/path"
 }
@@ -8137,7 +7930,6 @@ export type VcsGetData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/vcs"
 }
@@ -8165,7 +7957,6 @@ export type VcsStatusData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/vcs/status"
 }
@@ -8193,7 +7984,6 @@ export type VcsDiffData = {
   path?: never
   query: {
     directory?: string
-    workspace?: string
     mode: "git" | "branch"
     context?: number
   }
@@ -8223,7 +8013,6 @@ export type VcsDiffRawData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/vcs/diff/raw"
 }
@@ -8253,7 +8042,6 @@ export type VcsApplyData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/vcs/apply"
 }
@@ -8283,7 +8071,6 @@ export type CommandListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/command"
 }
@@ -8311,7 +8098,6 @@ export type AppAgentsData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/agent"
 }
@@ -8339,7 +8125,6 @@ export type AppSkillsData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/skill"
 }
@@ -8372,7 +8157,6 @@ export type LspStatusData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/lsp"
 }
@@ -8400,7 +8184,6 @@ export type FormatterStatusData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/formatter"
 }
@@ -8428,7 +8211,6 @@ export type McpStatusData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp"
 }
@@ -8461,7 +8243,6 @@ export type McpAddData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp"
 }
@@ -8493,7 +8274,6 @@ export type McpAuthRemoveData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp/{name}/auth"
 }
@@ -8529,7 +8309,6 @@ export type McpAuthStartData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp/{name}/auth"
 }
@@ -8568,7 +8347,6 @@ export type McpAuthCallbackData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp/{name}/auth/callback"
 }
@@ -8602,7 +8380,6 @@ export type McpAuthAuthenticateData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp/{name}/auth/authenticate"
 }
@@ -8636,7 +8413,6 @@ export type McpConnectData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp/{name}/connect"
 }
@@ -8670,7 +8446,6 @@ export type McpDisconnectData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/mcp/{name}/disconnect"
 }
@@ -8702,7 +8477,6 @@ export type ProjectListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/project"
 }
@@ -8730,7 +8504,6 @@ export type ProjectCurrentData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/project/current"
 }
@@ -8758,7 +8531,6 @@ export type ProjectInitGitData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/project/git/init"
 }
@@ -8792,7 +8564,6 @@ export type ProjectUpdateData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/project/{projectID}"
 }
@@ -8826,7 +8597,6 @@ export type ProjectDirectoriesData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/project/{projectID}/directories"
 }
@@ -8858,7 +8628,6 @@ export type ExperimentalProjectCopyGenerateNameData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/experimental/project/{projectID}/copy/generate-name"
 }
@@ -8890,7 +8659,6 @@ export type PtyShellsData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/pty/shells"
 }
@@ -8922,7 +8690,6 @@ export type PtyListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/pty"
 }
@@ -8958,7 +8725,6 @@ export type PtyCreateData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/pty"
 }
@@ -8988,7 +8754,6 @@ export type PtyRemoveData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/pty/{ptyID}"
 }
@@ -9022,7 +8787,6 @@ export type PtyGetData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/pty/{ptyID}"
 }
@@ -9062,7 +8826,6 @@ export type PtyUpdateData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/pty/{ptyID}"
 }
@@ -9096,7 +8859,6 @@ export type PtyConnectTokenData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/pty/{ptyID}/connect-token"
 }
@@ -9132,7 +8894,6 @@ export type QuestionListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/question"
 }
@@ -9167,7 +8928,6 @@ export type QuestionReplyData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/question/{requestID}/reply"
 }
@@ -9201,7 +8961,6 @@ export type QuestionRejectData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/question/{requestID}/reject"
 }
@@ -9233,7 +8992,6 @@ export type PermissionListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/permission"
 }
@@ -9266,7 +9024,6 @@ export type PermissionReplyData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/permission/{requestID}/reply"
 }
@@ -9298,7 +9055,6 @@ export type ProviderListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/provider"
 }
@@ -9332,7 +9088,6 @@ export type ProviderAuthData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/provider/auth"
 }
@@ -9372,7 +9127,6 @@ export type ProviderOauthAuthorizeData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/provider/{providerID}/oauth/authorize"
 }
@@ -9408,7 +9162,6 @@ export type ProviderOauthCallbackData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/provider/{providerID}/oauth/callback"
 }
@@ -9436,7 +9189,6 @@ export type SessionListData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
     scope?: "project"
     path?: string
     roots?: boolean | "true" | "false"
@@ -9479,12 +9231,10 @@ export type SessionCreateData = {
       [key: string]: unknown
     }
     permission?: PermissionRuleset
-    workspaceID?: string
   }
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session"
 }
@@ -9512,7 +9262,6 @@ export type SessionStatusData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/status"
 }
@@ -9544,7 +9293,6 @@ export type SessionDeleteData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}"
 }
@@ -9578,7 +9326,6 @@ export type SessionGetData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}"
 }
@@ -9621,7 +9368,6 @@ export type SessionUpdateData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}"
 }
@@ -9655,7 +9401,6 @@ export type SessionChildrenData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/children"
 }
@@ -9689,7 +9434,6 @@ export type SessionTodoData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/todo"
 }
@@ -9723,7 +9467,6 @@ export type SessionDiffData = {
   }
   query?: {
     directory?: string
-    workspace?: string
     messageID?: string
   }
   url: "/session/{sessionID}/diff"
@@ -9754,7 +9497,6 @@ export type SessionMessagesData = {
   }
   query?: {
     directory?: string
-    workspace?: string
     limit?: number
     before?: string
   }
@@ -9808,7 +9550,6 @@ export type SessionPromptData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/message"
 }
@@ -9846,7 +9587,6 @@ export type SessionDeleteMessageData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/message/{messageID}"
 }
@@ -9885,7 +9625,6 @@ export type SessionMessageData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/message/{messageID}"
 }
@@ -9924,7 +9663,6 @@ export type SessionForkData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/fork"
 }
@@ -9958,7 +9696,6 @@ export type SessionAbortData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/abort"
 }
@@ -9992,7 +9729,6 @@ export type SessionInitData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/init"
 }
@@ -10019,82 +9755,6 @@ export type SessionInitResponses = {
 
 export type SessionInitResponse = SessionInitResponses[keyof SessionInitResponses]
 
-export type SessionUnshareData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/session/{sessionID}/share"
-}
-
-export type SessionUnshareErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-  /**
-   * InternalServerError
-   */
-  500: EffectHttpApiErrorInternalServerError
-}
-
-export type SessionUnshareError = SessionUnshareErrors[keyof SessionUnshareErrors]
-
-export type SessionUnshareResponses = {
-  /**
-   * Successfully unshared session
-   */
-  200: Session
-}
-
-export type SessionUnshareResponse = SessionUnshareResponses[keyof SessionUnshareResponses]
-
-export type SessionShareData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/session/{sessionID}/share"
-}
-
-export type SessionShareErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-  /**
-   * InternalServerError
-   */
-  500: EffectHttpApiErrorInternalServerError
-}
-
-export type SessionShareError = SessionShareErrors[keyof SessionShareErrors]
-
-export type SessionShareResponses = {
-  /**
-   * Successfully shared session
-   */
-  200: Session
-}
-
-export type SessionShareResponse = SessionShareResponses[keyof SessionShareResponses]
-
 export type SessionSummarizeData = {
   body?: {
     providerID: string
@@ -10106,7 +9766,6 @@ export type SessionSummarizeData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/summarize"
 }
@@ -10155,7 +9814,6 @@ export type SessionPromptAsyncData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/prompt_async"
 }
@@ -10204,7 +9862,6 @@ export type SessionCommandData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/command"
 }
@@ -10249,7 +9906,6 @@ export type SessionShellData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/shell"
 }
@@ -10293,7 +9949,6 @@ export type SessionRevertData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/revert"
 }
@@ -10331,7 +9986,6 @@ export type SessionUnrevertData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/unrevert"
 }
@@ -10372,7 +10026,6 @@ export type PermissionRespondData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/permissions/{permissionID}"
 }
@@ -10408,7 +10061,6 @@ export type PartDeleteData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/message/{messageID}/part/{partID}"
 }
@@ -10444,7 +10096,6 @@ export type PartUpdateData = {
   }
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/session/{sessionID}/message/{messageID}/part/{partID}"
 }
@@ -10471,145 +10122,6 @@ export type PartUpdateResponses = {
 
 export type PartUpdateResponse = PartUpdateResponses[keyof PartUpdateResponses]
 
-export type SyncStartData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/sync/start"
-}
-
-export type SyncStartErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type SyncStartError = SyncStartErrors[keyof SyncStartErrors]
-
-export type SyncStartResponses = {
-  /**
-   * Workspace sync started
-   */
-  200: boolean
-}
-
-export type SyncStartResponse = SyncStartResponses[keyof SyncStartResponses]
-
-export type SyncReplayData = {
-  body?: {
-    directory: string
-    events: Array<{
-      id: string
-      aggregateID: string
-      seq: number
-      type: string
-      data: {
-        [key: string]: unknown
-      }
-    }>
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/sync/replay"
-}
-
-export type SyncReplayErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type SyncReplayError = SyncReplayErrors[keyof SyncReplayErrors]
-
-export type SyncReplayResponses = {
-  /**
-   * Replayed sync events
-   */
-  200: {
-    sessionID: string
-  }
-}
-
-export type SyncReplayResponse = SyncReplayResponses[keyof SyncReplayResponses]
-
-export type SyncStealData = {
-  body?: {
-    sessionID: string
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/sync/steal"
-}
-
-export type SyncStealErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type SyncStealError = SyncStealErrors[keyof SyncStealErrors]
-
-export type SyncStealResponses = {
-  /**
-   * Session stolen into workspace
-   */
-  200: {
-    sessionID: string
-  }
-}
-
-export type SyncStealResponse = SyncStealResponses[keyof SyncStealResponses]
-
-export type SyncHistoryListData = {
-  body?: {
-    [key: string]: number
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/sync/history"
-}
-
-export type SyncHistoryListErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type SyncHistoryListError = SyncHistoryListErrors[keyof SyncHistoryListErrors]
-
-export type SyncHistoryListResponses = {
-  /**
-   * Sync events
-   */
-  200: Array<{
-    id: string
-    aggregate_id: string
-    seq: number
-    type: string
-    data: {
-      [key: string]: unknown
-    }
-  }>
-}
-
-export type SyncHistoryListResponse = SyncHistoryListResponses[keyof SyncHistoryListResponses]
-
 export type TuiAppendPromptData = {
   body?: {
     text: string
@@ -10617,7 +10129,6 @@ export type TuiAppendPromptData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/append-prompt"
 }
@@ -10645,7 +10156,6 @@ export type TuiOpenHelpData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/open-help"
 }
@@ -10673,7 +10183,6 @@ export type TuiOpenSessionsData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/open-sessions"
 }
@@ -10701,7 +10210,6 @@ export type TuiOpenThemesData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/open-themes"
 }
@@ -10729,7 +10237,6 @@ export type TuiOpenModelsData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/open-models"
 }
@@ -10757,7 +10264,6 @@ export type TuiSubmitPromptData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/submit-prompt"
 }
@@ -10785,7 +10291,6 @@ export type TuiClearPromptData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/clear-prompt"
 }
@@ -10815,7 +10320,6 @@ export type TuiExecuteCommandData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/execute-command"
 }
@@ -10848,7 +10352,6 @@ export type TuiShowToastData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/show-toast"
 }
@@ -10876,7 +10379,6 @@ export type TuiPublishData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/publish"
 }
@@ -10909,7 +10411,6 @@ export type TuiSelectSessionData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/select-session"
 }
@@ -10941,7 +10442,6 @@ export type TuiControlNextData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/control/next"
 }
@@ -10972,7 +10472,6 @@ export type TuiControlResponseData = {
   path?: never
   query?: {
     directory?: string
-    workspace?: string
   }
   url: "/tui/control/response"
 }
@@ -10994,233 +10493,6 @@ export type TuiControlResponseResponses = {
 }
 
 export type TuiControlResponseResponse = TuiControlResponseResponses[keyof TuiControlResponseResponses]
-
-export type ExperimentalWorkspaceAdapterListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/workspace/adapter"
-}
-
-export type ExperimentalWorkspaceAdapterListErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalWorkspaceAdapterListError =
-  ExperimentalWorkspaceAdapterListErrors[keyof ExperimentalWorkspaceAdapterListErrors]
-
-export type ExperimentalWorkspaceAdapterListResponses = {
-  /**
-   * Workspace adapters
-   */
-  200: Array<{
-    type: string
-    name: string
-    description: string
-  }>
-}
-
-export type ExperimentalWorkspaceAdapterListResponse =
-  ExperimentalWorkspaceAdapterListResponses[keyof ExperimentalWorkspaceAdapterListResponses]
-
-export type ExperimentalWorkspaceListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/workspace"
-}
-
-export type ExperimentalWorkspaceListErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalWorkspaceListError = ExperimentalWorkspaceListErrors[keyof ExperimentalWorkspaceListErrors]
-
-export type ExperimentalWorkspaceListResponses = {
-  /**
-   * Workspaces
-   */
-  200: Array<Workspace>
-}
-
-export type ExperimentalWorkspaceListResponse =
-  ExperimentalWorkspaceListResponses[keyof ExperimentalWorkspaceListResponses]
-
-export type ExperimentalWorkspaceCreateData = {
-  body?: {
-    id?: string
-    type: string
-    branch?: string | null
-    extra?: unknown | null
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/workspace"
-}
-
-export type ExperimentalWorkspaceCreateErrors = {
-  /**
-   * WorkspaceCreateError | BadRequest | InvalidRequestError
-   */
-  400: WorkspaceCreateError | EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type ExperimentalWorkspaceCreateError =
-  ExperimentalWorkspaceCreateErrors[keyof ExperimentalWorkspaceCreateErrors]
-
-export type ExperimentalWorkspaceCreateResponses = {
-  /**
-   * Workspace created
-   */
-  200: Workspace
-}
-
-export type ExperimentalWorkspaceCreateResponse =
-  ExperimentalWorkspaceCreateResponses[keyof ExperimentalWorkspaceCreateResponses]
-
-export type ExperimentalWorkspaceSyncListData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/workspace/sync-list"
-}
-
-export type ExperimentalWorkspaceSyncListErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalWorkspaceSyncListError =
-  ExperimentalWorkspaceSyncListErrors[keyof ExperimentalWorkspaceSyncListErrors]
-
-export type ExperimentalWorkspaceSyncListResponses = {
-  /**
-   * Workspace list synced
-   */
-  204: void
-}
-
-export type ExperimentalWorkspaceSyncListResponse =
-  ExperimentalWorkspaceSyncListResponses[keyof ExperimentalWorkspaceSyncListResponses]
-
-export type ExperimentalWorkspaceStatusData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/workspace/status"
-}
-
-export type ExperimentalWorkspaceStatusErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalWorkspaceStatusError =
-  ExperimentalWorkspaceStatusErrors[keyof ExperimentalWorkspaceStatusErrors]
-
-export type ExperimentalWorkspaceStatusResponses = {
-  /**
-   * Workspace status
-   */
-  200: Array<WorkspaceEventConnectionStatus>
-}
-
-export type ExperimentalWorkspaceStatusResponse =
-  ExperimentalWorkspaceStatusResponses[keyof ExperimentalWorkspaceStatusResponses]
-
-export type ExperimentalWorkspaceRemoveData = {
-  body?: never
-  path: {
-    id: string
-  }
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/workspace/{id}"
-}
-
-export type ExperimentalWorkspaceRemoveErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type ExperimentalWorkspaceRemoveError =
-  ExperimentalWorkspaceRemoveErrors[keyof ExperimentalWorkspaceRemoveErrors]
-
-export type ExperimentalWorkspaceRemoveResponses = {
-  /**
-   * Workspace removed
-   */
-  200: Workspace
-}
-
-export type ExperimentalWorkspaceRemoveResponse =
-  ExperimentalWorkspaceRemoveResponses[keyof ExperimentalWorkspaceRemoveResponses]
-
-export type ExperimentalWorkspaceWarpData = {
-  body?: {
-    id: string | null
-    sessionID: string
-    copyChanges?: boolean
-  }
-  path?: never
-  query?: {
-    directory?: string
-    workspace?: string
-  }
-  url: "/experimental/workspace/warp"
-}
-
-export type ExperimentalWorkspaceWarpErrors = {
-  /**
-   * WorkspaceWarpError | VcsApplyError | InvalidRequestError
-   */
-  400: WorkspaceWarpError | VcsApplyError | InvalidRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-}
-
-export type ExperimentalWorkspaceWarpError = ExperimentalWorkspaceWarpErrors[keyof ExperimentalWorkspaceWarpErrors]
-
-export type ExperimentalWorkspaceWarpResponses = {
-  /**
-   * Session warped
-   */
-  204: void
-}
-
-export type ExperimentalWorkspaceWarpResponse =
-  ExperimentalWorkspaceWarpResponses[keyof ExperimentalWorkspaceWarpResponses]
 
 export type V2HealthGetData = {
   body?: never
@@ -11259,7 +10531,6 @@ export type V2LocationGetData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/location"
@@ -11293,7 +10564,6 @@ export type V2AgentListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/agent"
@@ -11328,7 +10598,6 @@ export type V2SessionListData = {
   body?: never
   path?: never
   query?: {
-    workspace?: string
     limit?: number
     order?: "asc" | "desc"
     search?: string
@@ -11370,7 +10639,9 @@ export type V2SessionCreateData = {
     id?: string
     agent?: string
     model?: ModelRef
-    location?: LocationRef
+    location?: {
+      directory: string
+    }
   }
   path?: never
   query?: never
@@ -12032,7 +11303,6 @@ export type V2ModelListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/model"
@@ -12073,7 +11343,6 @@ export type V2ProviderListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/provider"
@@ -12116,7 +11385,6 @@ export type V2ProviderGetData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/provider/{providerID}"
@@ -12161,7 +11429,6 @@ export type V2IntegrationListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/integration"
@@ -12200,7 +11467,6 @@ export type V2IntegrationGetData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/integration/{integrationID}"
@@ -12242,7 +11508,6 @@ export type V2IntegrationConnectKeyData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/integration/{integrationID}/connect/key"
@@ -12284,7 +11549,6 @@ export type V2IntegrationConnectOauthData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/integration/{integrationID}/connect/oauth"
@@ -12324,7 +11588,6 @@ export type V2IntegrationAttemptCancelData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/integration/attempt/{attemptID}"
@@ -12361,7 +11624,6 @@ export type V2IntegrationAttemptStatusData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/integration/attempt/{attemptID}"
@@ -12403,7 +11665,6 @@ export type V2IntegrationAttemptCompleteData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/integration/attempt/{attemptID}/complete"
@@ -12441,7 +11702,6 @@ export type V2CredentialRemoveData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/credential/{credentialID}"
@@ -12479,7 +11739,6 @@ export type V2CredentialUpdateData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/credential/{credentialID}"
@@ -12513,7 +11772,6 @@ export type V2PermissionRequestListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/permission/request"
@@ -12780,7 +12038,6 @@ export type V2FsReadData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/fs/read/*"
@@ -12814,7 +12071,6 @@ export type V2FsListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
     path?: string
   }
@@ -12852,7 +12108,6 @@ export type V2FsFindData = {
   query: {
     location?: {
       directory?: string
-      workspace?: string
     }
     query: string
     type?: "file" | "directory"
@@ -12892,7 +12147,6 @@ export type V2CommandListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/command"
@@ -12929,7 +12183,6 @@ export type V2SkillListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/skill"
@@ -12995,7 +12248,6 @@ export type V2PtyListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/pty"
@@ -13040,7 +12292,6 @@ export type V2PtyCreateData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/pty"
@@ -13079,7 +12330,6 @@ export type V2PtyRemoveData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/pty/{ptyID}"
@@ -13119,7 +12369,6 @@ export type V2PtyGetData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/pty/{ptyID}"
@@ -13168,7 +12417,6 @@ export type V2PtyUpdateData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/pty/{ptyID}"
@@ -13211,7 +12459,6 @@ export type V2PtyConnectTokenData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/pty/{ptyID}/connect-token"
@@ -13257,7 +12504,6 @@ export type V2PtyConnectData = {
   }
   query?: {
     "location[directory]"?: string
-    "location[workspace]"?: string
     cursor?: string
     ticket?: string
   }
@@ -13300,7 +12546,6 @@ export type V2QuestionRequestListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/question/request"
@@ -13446,7 +12691,6 @@ export type V2ReferenceListData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/api/reference"
@@ -13488,7 +12732,6 @@ export type V2ProjectCopyRemoveData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/experimental/project/{projectID}/copy"
@@ -13524,7 +12767,6 @@ export type V2ProjectCopyCreateData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/experimental/project/{projectID}/copy"
@@ -13556,7 +12798,6 @@ export type V2ProjectCopyRefreshData = {
   query?: {
     location?: {
       directory?: string
-      workspace?: string
     }
   }
   url: "/experimental/project/{projectID}/copy/refresh"
@@ -13587,7 +12828,6 @@ export type PtyConnectData = {
   }
   query?: {
     directory?: string
-    workspace?: string
     cursor?: string
     ticket?: string
   }

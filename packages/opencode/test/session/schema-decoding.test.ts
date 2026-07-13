@@ -151,7 +151,7 @@ describe("Session.GlobalInfo", () => {
 })
 
 describe("Session input schemas", () => {
-  test("CreateInput accepts undefined and populated forms", () => {
+  test("CreateInput accepts local fields and drops retired workspace placement", () => {
     const decode = decodeUnknown(Session.CreateInput)
     expect(decode(undefined)).toBeUndefined()
 
@@ -162,7 +162,12 @@ describe("Session input schemas", () => {
       permission: [{ action: "ask" as const, pattern: "*", permission: "bash" }],
       workspaceID,
     }
-    expect(decode(populated)).toEqual(populated)
+    expect(decode(populated)).toEqual({
+      parentID: sessionID,
+      title: "child",
+      metadata: { source: "test" },
+      permission: [{ action: "ask", pattern: "*", permission: "bash" }],
+    })
   })
 
   test("ForkInput round-trips", () => {

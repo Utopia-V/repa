@@ -23,7 +23,7 @@ type OpenApiOperation = {
     readonly name: string
     readonly in: string
     readonly required?: boolean
-    readonly schema?: { readonly type?: string }
+    readonly schema?: OpenApiSchema
   }>
   readonly responses?: Record<string, OpenApiResponse>
   readonly requestBody?: { readonly required?: boolean }
@@ -70,6 +70,12 @@ function isBuiltInEndpointError(name: string) {
   return name.startsWith("EffectHttpApiError") || name.startsWith("effect_HttpApiError_")
 }
 
+function hasWorkspaceProperty(schema: OpenApiSchema | undefined): boolean {
+  if (!schema) return false
+  if (schema.properties?.workspace) return true
+  return schema.anyOf?.some(hasWorkspaceProperty) ?? false
+}
+
 describe("PublicApi Gate 5B3 route cutover", () => {
   test("keeps local project-copy routes", () => {
     const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
@@ -111,6 +117,32 @@ describe("PublicApi Gate 5B3 route cutover", () => {
         .filter(([method, path]) => spec.paths[path]?.[method] !== undefined)
         .map(([method, path, operationID]) => `${method.toUpperCase()} ${path} (${operationID})`),
     ).toEqual([])
+  })
+
+  test("omits retired remote workspace request selectors", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+
+    const selectors = Object.entries(spec.paths).flatMap(([path, item]) =>
+      methods.flatMap((method) =>
+        (item[method]?.parameters ?? [])
+          .filter(
+            (parameter) =>
+              parameter.in === "query" &&
+              (parameter.name === "workspace" ||
+                parameter.name === "location[workspace]" ||
+                hasWorkspaceProperty(parameter.schema)),
+          )
+          .map((parameter) => `${method.toUpperCase()} ${path} (${parameter.name})`),
+      ),
+    )
+
+    expect(selectors).toEqual([])
+  })
+
+  test("does not suggest the retired public-sharing command", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+
+    expect(JSON.stringify(spec)).not.toContain('"session.share"')
   })
 })
 
@@ -382,7 +414,7 @@ describe("PublicApi OpenAPI v2 errors", () => {
       spec.paths["/pty/{ptyID}/connect"]?.get?.parameters
         ?.filter((parameter) => parameter.in === "query")
         .map((parameter) => parameter.name),
-    ).toEqual(["directory", "workspace", "cursor", "ticket"])
+    ).toEqual(["directory", "cursor", "ticket"])
   })
 
   test("documents project not-found errors", () => {

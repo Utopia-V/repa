@@ -19,11 +19,7 @@ import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
-import { Flag } from "@opencode-ai/core/flag/flag"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
-import { registerAdapter } from "../../src/control-plane/adapters"
-import type { WorkspaceAdapter } from "../../src/control-plane/types"
-import { Workspace } from "../../src/control-plane/workspace"
 
 import { InstanceBootstrap as InstanceBootstrapService } from "../../src/project/bootstrap-service"
 import { InstanceStore } from "../../src/project/instance-store"
@@ -53,13 +49,12 @@ import { TestLLMServer } from "../lib/llm-server"
 import { testProviderConfig } from "../lib/test-provider"
 import { pollWithTimeout, testEffect } from "../lib/effect"
 
-const originalWorkspaces = Flag.REPA_EXPERIMENTAL_WORKSPACES
 const noopBootstrapLayer = Layer.succeed(
   InstanceBootstrapService.Service,
   InstanceBootstrapService.Service.of({ run: Effect.void }),
 )
 const appLayer = AppNodeBuilder.build(
-  LayerNode.group([InstanceStore.node, Project.node, Session.node, Workspace.node, Database.node, Ripgrep.node]),
+  LayerNode.group([InstanceStore.node, Project.node, Session.node, Database.node, Ripgrep.node]),
   [[InstanceStore.bootstrapNode, noopBootstrapLayer]],
 )
 const servedRoutes: Layer.Layer<never, Config.ConfigError, HttpServer.HttpServer> = HttpRouter.serve(
@@ -105,33 +100,6 @@ function createTextMessage(sessionID: SessionIDType, text: string) {
     return { info, part }
   })
 }
-
-const localAdapter = (directory: string): WorkspaceAdapter => ({
-  name: "Local Test",
-  description: "Create a local test workspace",
-  configure: (info) => ({ ...info, name: "local-test", directory }),
-  create: async () => {
-    await mkdir(directory, { recursive: true })
-  },
-  async remove() {},
-  target: () => ({ type: "local" as const, directory }),
-})
-
-const createLocalWorkspace = (input: { projectID: Project.Info["id"]; type: string; directory: string }) =>
-  Effect.acquireRelease(
-    Effect.gen(function* () {
-      registerAdapter(input.projectID, input.type, localAdapter(input.directory))
-      return yield* Workspace.Service.use((svc) =>
-        svc.create({
-          type: input.type,
-          branch: null,
-          extra: null,
-          projectID: input.projectID,
-        }),
-      )
-    }),
-    (info) => Workspace.use.remove(info.id).pipe(Effect.ignore),
-  )
 
 const insertLegacyAssistantMessage = (sessionID: SessionIDType, seq = 1, time = seq) =>
   Effect.gen(function* () {
@@ -205,17 +173,6 @@ const setLegacySummaryDiff = (sessionID: SessionIDType) =>
       .pipe(Effect.orDie)
   })
 
-const getWorkspaceID = (sessionID: SessionIDType) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database.Service
-    return yield* db
-      .select({ workspaceID: SessionTable.workspace_id })
-      .from(SessionTable)
-      .where(eq(SessionTable.id, sessionID))
-      .get()
-      .pipe(Effect.orDie)
-  })
-
 const clearSessionPath = (sessionID: SessionIDType) =>
   Effect.gen(function* () {
     const { db } = yield* Database.Service
@@ -264,7 +221,6 @@ function listenShareProbe(requests: Queue.Queue<string>) {
 }
 
 afterEach(async () => {
-  Flag.REPA_EXPERIMENTAL_WORKSPACES = originalWorkspaces
   await disposeAllInstances()
   await resetDatabase()
 })
@@ -463,7 +419,7 @@ describe("session HttpApi", () => {
   )
 
   it.instance(
-    "returns v2 public request errors for cursor and workspace query failures",
+    "returns v2 public cursor request errors",
     () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
@@ -499,13 +455,6 @@ describe("session HttpApi", () => {
         expect(yield* responseJson(invalidSessionCursor)).toMatchObject({
           _tag: "InvalidCursorError",
           message: "Invalid cursor",
-        })
-
-        const invalidWorkspace = yield* request(`/api/session?workspace=bad`, { headers })
-        expect(invalidWorkspace.status).toBe(400)
-        expect(yield* responseJson(invalidWorkspace)).toMatchObject({
-          _tag: "InvalidRequestError",
-          kind: "Query",
         })
 
         const messagePage = yield* request(`/api/session/${session.id}/message?limit=1`, { headers })
@@ -839,7 +788,7 @@ describe("session HttpApi", () => {
             const created = yield* requestJson<Session.Info>(SessionPaths.create, {
               method: "POST",
               headers,
-              body: JSON.stringify({ title: "local HTTP session" }),
+              body: JSON.stringify({ title: "local HTTP session", workspaceID: "wrk_retired" }),
             })
             const outbound = yield* Queue.take(requests).pipe(Effect.timeoutOption("500 millis"))
             const stored = yield* requestJson<Session.Info>(pathFor(SessionPaths.get, { sessionID: created.id }), {
@@ -847,12 +796,12 @@ describe("session HttpApi", () => {
             })
 
             expect({
-              created: { id: created.id, title: created.title },
-              stored: { id: stored.id, share: stored.share },
+              created: { id: created.id, title: created.title, workspaceID: created.workspaceID },
+              stored: { id: stored.id, share: stored.share, workspaceID: stored.workspaceID },
               outbound: Option.getOrUndefined(outbound),
             }).toEqual({
-              created: { id: created.id, title: "local HTTP session" },
-              stored: { id: created.id, share: undefined },
+              created: { id: created.id, title: "local HTTP session", workspaceID: undefined },
+              stored: { id: created.id, share: undefined, workspaceID: undefined },
               outbound: undefined,
             })
           }),
@@ -867,38 +816,6 @@ describe("session HttpApi", () => {
         },
       )
     }),
-  )
-
-  it.instance(
-    "persists selected workspace id when creating a session",
-    () =>
-      Effect.gen(function* () {
-        const test = yield* TestInstance
-        Flag.REPA_EXPERIMENTAL_WORKSPACES = true
-        const project = yield* Project.use.fromDirectory(test.directory)
-        const workspace = yield* createLocalWorkspace({
-          projectID: project.project.id,
-          type: "session-create-workspace",
-          directory: path.join(test.directory, ".workspace-local"),
-        })
-
-        const created = yield* requestJson<Session.Info>(`${SessionPaths.create}?workspace=${workspace.id}`, {
-          method: "POST",
-          headers: { "x-opencode-directory": test.directory, "content-type": "application/json" },
-          body: JSON.stringify({ title: "workspace session" }),
-        })
-        const messages = yield* request(
-          `${pathFor(SessionPaths.messages, { sessionID: created.id })}?workspace=${workspace.id}`,
-          {
-            headers: { "x-opencode-directory": test.directory },
-          },
-        )
-
-        expect(created).toMatchObject({ id: created.id, workspaceID: workspace.id })
-        expect(messages.status).toBe(200)
-        expect(yield* getWorkspaceID(created.id)).toEqual({ workspaceID: workspace.id })
-      }),
-    { git: true, config: { formatter: false, lsp: false, share: "disabled" } },
   )
 
   it.instance(

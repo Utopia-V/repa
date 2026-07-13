@@ -8,16 +8,14 @@ import { disposeAllInstances, tmpdir } from "../fixture/fixture"
 
 const context = Context.empty() as Context.Context<unknown>
 
+function rawRequest(route: string, init: RequestInit = {}) {
+  return HttpApiApp.webHandler().handler(new Request(`http://localhost${route}`, init), context)
+}
+
 function request(route: string, directory: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers)
   headers.set("x-opencode-directory", directory)
-  return HttpApiApp.webHandler().handler(
-    new Request(`http://localhost${route}`, {
-      ...init,
-      headers,
-    }),
-    context,
-  )
+  return rawRequest(route, { ...init, headers })
 }
 
 const Event = Schema.Struct({
@@ -87,6 +85,36 @@ describe("v2 location HttpApi", () => {
         data: {},
       }),
     ).toMatchObject({ location: { directory: "/tmp/project" } })
+  })
+
+  test("ignores retired workspace selectors when resolving the local fallback", async () => {
+    const baseline = await rawRequest("/api/location")
+    const query = await rawRequest("/api/location?location%5Bworkspace%5D=wrk_query")
+    const header = await rawRequest("/api/location", {
+      headers: { "x-opencode-workspace": "wrk_header" },
+    })
+
+    expect([baseline.status, query.status, header.status]).toEqual([200, 200, 200])
+    const expected = await baseline.json()
+    expect([await query.json(), await header.json()]).toEqual([expected, expected])
+  })
+
+  test("resolves an explicit directory without adding retired workspace identity", async () => {
+    await using tmp = await tmpdir({ git: true })
+    const query = new URLSearchParams({
+      "location[directory]": tmp.path,
+      "location[workspace]": "wrk_query",
+    })
+    const baseline = await rawRequest(`/api/location?location%5Bdirectory%5D=${encodeURIComponent(tmp.path)}`)
+    const selected = await rawRequest(`/api/location?${query}`, {
+      headers: {
+        "x-opencode-directory": `${tmp.path}-ignored`,
+        "x-opencode-workspace": "wrk_header",
+      },
+    })
+
+    expect([baseline.status, selected.status]).toEqual([200, 200])
+    expect(await selected.json()).toEqual(await baseline.json())
   })
 
   test("returns command and skill snapshots with resolved locations", async () => {

@@ -155,7 +155,7 @@ export const PtyConnectApi = HttpApi.make("pty-connect").add(
             ...operation,
             parameters: [
               ...(operation.parameters ?? []),
-              ...["directory", "workspace", "cursor", PTY_CONNECT_TICKET_QUERY].map((name) => ({
+              ...["directory", "cursor", PTY_CONNECT_TICKET_QUERY].map((name) => ({
                 in: "query",
                 name,
                 schema: { type: "string" },

@@ -429,18 +429,18 @@ describe("OpenAPI.fromSpec", () => {
     })
   })
 
-  test("serializes deep-object query parameters from the opencode fixture", async () => {
+  test("serializes the retained deep-object directory query from the opencode fixture", async () => {
     const client = recordingClient(() => json({ directory: "/tmp" }))
     const location = toolAt(OpenAPI.fromSpec({ spec: await opencodeSpec(), baseUrl }).tools, "v2.location.get")
     if (!Tool.isDefinition(location)) throw new Error("v2.location.get was not generated")
 
     await Effect.runPromise(
-      location.run({ location: { directory: "/tmp", workspace: "workspace-1" } }).pipe(Effect.provide(client.layer)),
+      location.run({ location: { directory: "/tmp" } }).pipe(Effect.provide(client.layer)),
     )
 
     const url = new URL(client.requests[0]!.url)
     expect(url.searchParams.get("location[directory]")).toBe("/tmp")
-    expect(url.searchParams.get("location[workspace]")).toBe("workspace-1")
+    expect(url.searchParams.get("location[workspace]")).toBeNull()
   })
 
   test("serializes supported simple and form parameter shapes", async () => {

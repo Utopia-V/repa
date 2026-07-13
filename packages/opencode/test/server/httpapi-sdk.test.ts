@@ -45,6 +45,8 @@ const original = {
 
 type ServerPath = "default" | "raw"
 type Sdk = ReturnType<typeof createOpencodeClient>
+type SdkConfig = NonNullable<Parameters<typeof createOpencodeClient>[0]>
+type SdkConfigIsDirectoryOnly = "experimental_workspaceID" extends keyof SdkConfig ? false : true
 type SdkResult = { response: Response; data?: unknown; error?: unknown }
 type Captured = { status: number; data?: unknown; error?: unknown }
 type ProjectFixture = { sdk: Sdk; directory: string }
@@ -64,20 +66,21 @@ function client(
     password?: string
     username?: string
     headers?: Record<string, string>
-    workspaceID?: string
+    retiredWorkspaceID?: string
     onRequest?: (request: Request) => void
   },
 ) {
   return serverFetch(serverPath, input).pipe(
-    Effect.map((fetch) =>
-      createOpencodeClient({
+    Effect.map((fetch) => {
+      const config = {
         baseUrl: "http://localhost",
         directory,
-        experimental_workspaceID: input?.workspaceID,
+        experimental_workspaceID: input?.retiredWorkspaceID,
         headers: input?.headers,
         fetch,
-      }),
-    ),
+      }
+      return createOpencodeClient(config)
+    }),
   )
 }
 
@@ -379,14 +382,14 @@ describe("HttpApi SDK", () => {
   )
 
   httpapi(
-    "routes configured SDK directory and workspace for v2 location GETs",
+    "routes configured SDK directory without retired workspace selectors",
     withProject("raw", { setup: writeStandardFiles }, ({ directory }) =>
       Effect.gen(function* () {
-        const workspaceID = "wrk_sdk"
-        let request: Request | undefined
+        const configIsDirectoryOnly: SdkConfigIsDirectoryOnly = true
+        const requests: Request[] = []
         const sdk = yield* client("raw", directory, {
-          workspaceID,
-          onRequest: (value) => (request = value),
+          retiredWorkspaceID: "wrk_retired",
+          onRequest: (value) => requests.push(value),
         })
         const found = yield* pollWithTimeout(
           call(() => sdk.v2.fs.find({ query: "hello", type: "file" })).pipe(
@@ -394,16 +397,34 @@ describe("HttpApi SDK", () => {
           ),
           "SDK file search index was not ready",
         )
-        const url = new URL(request!.url)
+        const retiredCreateInput = {
+          location: { directory, workspaceID: "wrk_retired" },
+        }
+        const created = yield* call(() => sdk.v2.session.create(retiredCreateInput))
+        const findRequest = requests.findLast((request) => new URL(request.url).pathname === "/api/fs/find")
+        const createRequest = requests.findLast(
+          (request) => request.method === "POST" && new URL(request.url).pathname === "/api/session",
+        )
+        const url = new URL(findRequest!.url)
 
+        expect(configIsDirectoryOnly).toBe(true)
         expect(found.response.status).toBe(200)
         expect(found.data).toMatchObject({ data: [{ path: "hello.txt", type: "file" }] })
+        expect(created.data?.data.location).toEqual({ directory })
         expect(url.searchParams.get("directory")).toBe(directory)
-        expect(url.searchParams.get("workspace")).toBe(workspaceID)
         expect(url.searchParams.get("location[directory]")).toBe(directory)
-        expect(url.searchParams.get("location[workspace]")).toBe(workspaceID)
-        expect(request!.headers.has("x-opencode-directory")).toBe(false)
-        expect(request!.headers.has("x-opencode-workspace")).toBe(false)
+        expect(findRequest!.headers.has("x-opencode-directory")).toBe(false)
+        expect({
+          workspace: url.searchParams.get("workspace"),
+          locationWorkspace: url.searchParams.get("location[workspace]"),
+          findWorkspaceHeader: findRequest!.headers.has("x-opencode-workspace"),
+          createWorkspaceHeader: createRequest!.headers.has("x-opencode-workspace"),
+        }).toEqual({
+          workspace: null,
+          locationWorkspace: null,
+          findWorkspaceHeader: false,
+          createWorkspaceHeader: false,
+        })
       }),
     ),
   )

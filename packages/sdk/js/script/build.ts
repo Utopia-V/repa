@@ -112,8 +112,7 @@ if (sseTypesPatched === sseTypesSource) {
 }
 await Bun.write(sseTypesPath, sseTypesPatched)
 
-await $`bun prettier --write src/gen`
-await $`bun prettier --write src/v2`
+await $`bun prettier --write src/v2/gen`
 await $`rm -rf dist`
 await $`bun tsc`
 await $`rm openapi.json`
