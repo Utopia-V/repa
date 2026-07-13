@@ -2,6 +2,11 @@ import type { Database } from "bun:sqlite"
 import { readLatestTurnEventAt } from "../interaction/records"
 import { canonicalJson } from "../storage/canonical-json"
 import { advanceSystemState, readSystemState } from "../storage/system-state"
+import {
+  EXPLICIT_OFFSET_TIMESTAMP_SUFFIX_PATTERN,
+  parseStrictOffsetTimestamp,
+  StrictOffsetTimestampError,
+} from "../time/strict-offset-timestamp"
 
 const RETAIN_KIND = "timed-learner-steering-v0"
 const RETAIN_SLOT = "one-time-bounded-policy-contribution-v0"
@@ -531,11 +536,25 @@ function parseRetainInput(value: unknown) {
   }
   if (
     typeof object.validUntil !== "string" ||
-    !/(?:[zZ]|[+-]\d{2}:\d{2})$/.test(object.validUntil)
+    !EXPLICIT_OFFSET_TIMESTAMP_SUFFIX_PATTERN.test(object.validUntil)
   ) {
     throw new InputError("validUntil must be an ISO-8601 timestamp with an explicit UTC offset")
   }
-  const validUntil = Date.parse(object.validUntil)
+  let validUntil: number
+  try {
+    validUntil = parseStrictOffsetTimestamp(object.validUntil, {
+      allowEndOfDay: true,
+      precision: "second-or-minute",
+    })
+  } catch (error) {
+    if (
+      error instanceof StrictOffsetTimestampError &&
+      error.code === "invalid_civil_time"
+    ) {
+      throw new InputError("validUntil contains an invalid civil date or time")
+    }
+    throw new InputError("validUntil must be an ISO-8601 timestamp with an explicit UTC offset")
+  }
   assertTimestamp(validUntil, "validUntil")
   return {
     verbatimExcerpt: object.verbatimExcerpt,

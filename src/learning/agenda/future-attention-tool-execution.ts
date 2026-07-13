@@ -4,6 +4,10 @@ import { readLatestTurnEventAt } from "../../interaction/records"
 import { canonicalJson } from "../../storage/canonical-json"
 import { readSystemState } from "../../storage/system-state"
 import {
+  parseStrictOffsetTimestamp,
+  StrictOffsetTimestampError,
+} from "../../time/strict-offset-timestamp"
+import {
   addressFutureAttentionConcern,
   createFutureAttentionConcern,
   dismissFutureAttentionConcern,
@@ -38,9 +42,6 @@ const AGENDA_TOOL_NAMES = new Set([
 const MAX_REASON_CODE_POINTS = 800
 const MAX_EXCERPT_CODE_POINTS = 500
 const MAX_RATIONALE_CODE_POINTS = 800
-export const EXPLICIT_OFFSET_TIMESTAMP_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:[zZ]|([+-])(\d{2}):(\d{2}))$/
-
 export type FutureAttentionToolFailure = {
   ok: false
   code:
@@ -949,47 +950,37 @@ function explicitOffsetTimestamp(value: unknown, label: string) {
       `${label} must be an ISO-8601 timestamp with an explicit UTC offset`,
     )
   }
-  const match = EXPLICIT_OFFSET_TIMESTAMP_PATTERN.exec(value)
-  if (!match) {
+  let timestamp: number
+  try {
+    timestamp = parseStrictOffsetTimestamp(value)
+  } catch (error) {
+    if (
+      error instanceof StrictOffsetTimestampError &&
+      error.code === "invalid_civil_time"
+    ) {
+      throw new ToolCommandError(
+        "invalid_input",
+        `${label} contains an invalid civil date or time`,
+      )
+    }
+    if (
+      error instanceof StrictOffsetTimestampError &&
+      error.code === "invalid_instant"
+    ) {
+      throw new ToolCommandError(
+        "invalid_input",
+        `${label} is not a valid non-negative timestamp`,
+      )
+    }
     throw new ToolCommandError(
       "invalid_input",
       `${label} must be an ISO-8601 timestamp with an explicit UTC offset`,
     )
   }
-  const year = Number(match[1])
-  const month = Number(match[2])
-  const day = Number(match[3])
-  const hour = Number(match[4])
-  const minute = Number(match[5])
-  const second = Number(match[6])
-  const offsetHour = match[8] === undefined ? 0 : Number(match[8])
-  const offsetMinute = match[9] === undefined ? 0 : Number(match[9])
-  if (
-    month < 1 ||
-    month > 12 ||
-    day < 1 ||
-    day > daysInMonth(year, month) ||
-    hour > 23 ||
-    minute > 59 ||
-    second > 59 ||
-    offsetHour > 23 ||
-    offsetMinute > 59
-  ) {
-    throw new ToolCommandError("invalid_input", `${label} contains an invalid civil date or time`)
-  }
-  const timestamp = Date.parse(value)
-  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+  if (timestamp < 0) {
     throw new ToolCommandError("invalid_input", `${label} is not a valid non-negative timestamp`)
   }
   return timestamp
-}
-
-function daysInMonth(year: number, month: number) {
-  if (month === 2) {
-    const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
-    return leap ? 29 : 28
-  }
-  return [4, 6, 9, 11].includes(month) ? 30 : 31
 }
 
 function settleSuccess(

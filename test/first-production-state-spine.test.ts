@@ -156,6 +156,75 @@ function executeTool(database: RepaDatabase, invocationId: string, executedAt: n
 }
 
 describe("first production state and context spine", () => {
+  test("timed steering rejects an impossible civil expiry instead of normalizing it", () => {
+    const { database } = openTemporaryDatabase()
+    const at = epoch("2026-02-27T08:00:00+08:00")
+    establishTurn(database, {
+      sessionId: "session:invalid-steering-expiry",
+      turnId: "turn:invalid-steering-expiry",
+      itemId: "item:invalid-steering-expiry",
+      content: "到月底都不要测试我",
+      at,
+    })
+    startOperation(database, {
+      sessionId: "session:invalid-steering-expiry",
+      turnId: "turn:invalid-steering-expiry",
+      modelOperationId: "model:invalid-steering-expiry",
+      at: at + 1,
+    })
+    recordToolInvocation(database, {
+      invocationId: "call:invalid-steering-expiry",
+      modelOperationId: "model:invalid-steering-expiry",
+      toolName: "retain_learning_wide_timed_steering",
+      input: {
+        verbatimExcerpt: "到月底都不要测试我",
+        validUntil: "2026-02-30T00:00:00+08:00",
+      },
+      createdAt: at + 2,
+    })
+
+    expect(executeTool(database, "call:invalid-steering-expiry", at + 3)).toMatchObject({
+      ok: false,
+      code: "invalid_input",
+    })
+    expect(listTimedLearnerSteering(database)).toEqual([])
+  })
+
+  test("timed steering preserves minute-precision ISO expiry accepted before strict validation", () => {
+    const { database } = openTemporaryDatabase()
+    const at = epoch("2026-07-14T08:00:00+08:00")
+    establishTurn(database, {
+      sessionId: "session:minute-steering-expiry",
+      turnId: "turn:minute-steering-expiry",
+      itemId: "item:minute-steering-expiry",
+      content: "今天先别测我",
+      at,
+    })
+    startOperation(database, {
+      sessionId: "session:minute-steering-expiry",
+      turnId: "turn:minute-steering-expiry",
+      modelOperationId: "model:minute-steering-expiry",
+      at: at + 1,
+    })
+    recordToolInvocation(database, {
+      invocationId: "call:minute-steering-expiry",
+      modelOperationId: "model:minute-steering-expiry",
+      toolName: "retain_learning_wide_timed_steering",
+      input: {
+        verbatimExcerpt: "今天先别测我",
+        validUntil: "2026-07-14T20:00+08:00",
+      },
+      createdAt: at + 2,
+    })
+
+    expect(executeTool(database, "call:minute-steering-expiry", at + 3)).toMatchObject({
+      ok: true,
+    })
+    expect(listTimedLearnerSteering(database)).toMatchObject([
+      { validUntil: epoch("2026-07-14T20:00:00+08:00") },
+    ])
+  })
+
   test("admitted input identity, rather than repeated text, determines a new occurrence", () => {
     const { database } = openTemporaryDatabase()
     const at = epoch("2026-07-11T08:00:00+08:00")

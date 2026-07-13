@@ -4,13 +4,13 @@ import {
   ADDRESS_FUTURE_ATTENTION_TOOL,
   CREATE_FUTURE_ATTENTION_TOOL,
   DISMISS_FUTURE_ATTENTION_TOOL,
-  EXPLICIT_OFFSET_TIMESTAMP_PATTERN,
   executeFutureAttentionTool,
   INSPECT_RECENT_FUTURE_ATTENTION_TOOL,
   READ_FUTURE_ATTENTION_SOURCE_TOOL,
   REOPEN_FUTURE_ATTENTION_TOOL,
   SUPERSEDE_FUTURE_ATTENTION_TOOL,
 } from "../learning/agenda/future-attention-tool-execution"
+import { EXPLICIT_OFFSET_TIMESTAMP_PATTERN } from "../time/strict-offset-timestamp"
 import {
   executeBoundTutorCapability,
   type TutorToolExecutionCoordinator,
