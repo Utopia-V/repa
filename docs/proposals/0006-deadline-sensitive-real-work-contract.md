@@ -2,10 +2,11 @@
 
 Date: 2026-07-13
 
-Status: Reviewed and admitted for the first production slice. This document
-selects one representative behavior and fixes the meanings that must hold
-through implementation. It does not authorize a generic task system, goal
-model, scheduler, or wider production schema.
+Status: Reviewed contract. The deterministic v4 candidate is implemented, but
+live provider qualification failed and production admission is withheld. This
+document fixes the meanings that must hold; it does not authorize a generic
+task system, goal model, scheduler, or wider production schema. See the
+[`implementation and qualification record`](../research/proposal-0006-production-verification-2026-07-13.md).
 
 ## Plain-language summary
 

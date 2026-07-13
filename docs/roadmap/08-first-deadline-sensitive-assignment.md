@@ -2,8 +2,9 @@
 
 Date: 2026-07-13
 
-Status: Implementation plan admitted by Proposal 0006; production work not yet
-verified.
+Status: Deterministic v4 candidate implemented and fully checked; live provider
+qualification failed, so v4 is explicit opt-in and the CLI remains on v3. See
+[`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md).
 
 ## Goal
 

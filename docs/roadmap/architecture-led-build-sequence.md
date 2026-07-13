@@ -286,7 +286,7 @@ phases are deferred until repeated material leakage, partial recovery, or a
 real TUI consumer earns them. This is not permission for keywords, a
 response-approval tool, another model, or a second runtime.
 
-### Next admitted pressure: deadline-sensitive real work
+### Implemented candidate, withheld admission: deadline-sensitive real work
 
 The post-0005 phase review compared three peer gaps instead of extending the
 newest Agenda mechanism by default:
@@ -303,11 +303,12 @@ has a zero-write path. A performance occurrence remains important, but it must
 first prove a cross-Session consumer rather than reopen a universal evidence
 schema.
 
-The selected next pressure is one real-work conflict. B2 already demonstrated
-that a source-linked deadline, reported duration, current time budget, due
-revisit, and untouched material can change a model-led near-term plan. The
-remaining risk is production ownership, not whether the model can subtract 25
-minutes from 45.
+The selected pressure was one real-work conflict. B2 demonstrated that a
+source-linked deadline, reported duration, current time budget, due revisit,
+and untouched material can change a model-led near-term plan. The production
+slice now proves the ownership and state boundary, but its live qualification
+showed that passive context does not reliably make the ordinary Tutor consider
+the conflict.
 
 Proposal 0006 therefore fixes a LearnerHome-level, Agenda-owned local
 Assignment representation with source, strict deadline interpretation,
@@ -322,8 +323,18 @@ This is still part of the direct-real-work contrast inside the current parent
 pressure. It does not declare `teach, adapt, and return` complete, fix the order
 of later horizons, or authorize a full goals/assignments module.
 
+Schema 6 and explicit `tutor-default-v4` are implemented and pass the complete
+deterministic repository gate. DeepSeek-V4-Flash nevertheless ignored the
+near-deadline Assignment in repeated broad-continuation samples, and creation
+was unstable. The non-learning-work negative control was repaired, but prompt
+rescue did not earn production admission. Per the rollback rule, the CLI stays
+on `tutor-default-v3`. The next gate is a focused comparison of
+program-owned *consideration* mechanisms—not another stronger prompt, generic
+selector, deadline-wins rule, or scheduler.
+
 - Contract: [`../proposals/0006-deadline-sensitive-real-work-contract.md`](../proposals/0006-deadline-sensitive-real-work-contract.md)
 - Implementation plan: [`08-first-deadline-sensitive-assignment.md`](./08-first-deadline-sensitive-assignment.md)
+- Verification and failed live gate: [`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md)
 
 ### Exit evidence
 

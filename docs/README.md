@@ -141,8 +141,11 @@ Documents have different authority. Do not treat a research observation as an ac
   source-grounded Assignment conflict without a todo planner, scheduler,
   Course owner, persistent plan, or evidence claim.
 - [`roadmap/08-first-deadline-sensitive-assignment.md`](roadmap/08-first-deadline-sensitive-assignment.md)
-  is the implementation and verification plan for that first production
-  slice; it is not yet an implementation result.
+  records the implemented deterministic v4 candidate and its failed live
+  provider gate; v4 is not the CLI default.
+- [`research/proposal-0006-production-verification-2026-07-13.md`](research/proposal-0006-production-verification-2026-07-13.md)
+  records the code/review evidence, live failures, v3 rollback decision, and
+  the unresolved program-owned consideration boundary.
 
 ## Proposals
 
@@ -154,8 +157,9 @@ research. Proposals are not accepted decisions until promoted into ADRs.
 - [`proposals/0003-learning-native-responsibilities.md`](proposals/0003-learning-native-responsibilities.md) — historical working model promoted and refined by ADR-0012; not the current architecture authority.
 - [`proposals/0004-learning-native-capability-contract.md`](proposals/0004-learning-native-capability-contract.md) — current product-capability review draft; not an architecture or experiment protocol.
 - [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](proposals/0005-conditional-purpose-and-learner-role-contract.md) — implemented `tutor-default-v3` contract for one source-bound learner-response-before-disclosure constraint and one-candidate conditional purpose; not a general pedagogy framework.
-- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md) — reviewed and admitted first Assignment contract; not a Goal model, todo system, scheduler, or general work ontology.
+- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md) — reviewed first Assignment contract with an implemented deterministic v4 candidate; live admission failed, so it remains explicit opt-in rather than current policy.
 - [`research/proposal-0005-production-verification-2026-07-13.md`](research/proposal-0005-production-verification-2026-07-13.md) — implementation boundaries, deterministic evidence, historical-policy compatibility, and the bounded live provider qualification.
+- [`research/proposal-0006-production-verification-2026-07-13.md`](research/proposal-0006-production-verification-2026-07-13.md) — deterministic Assignment evidence, independent-review fixes, failed DeepSeek qualification, and the reason the CLI stays on v3.
 
 The runtime defaults in proposal 0001 were accepted on 2026-07-11 and are
 recorded by [`decisions/0005-durable-turn-and-interaction-hierarchy.md`](decisions/0005-durable-turn-and-interaction-hierarchy.md),

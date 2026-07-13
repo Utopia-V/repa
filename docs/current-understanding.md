@@ -235,10 +235,12 @@ These statements are deliberately weaker than accepted decisions.
    scheduler score has not been earned.
 5. Learner inference can remain sparse and consumer-specific until actual
    attempts, review, or open work demonstrate a need for a richer projection.
-6. One LearnerHome-level Assignment can probably pressure real-work planning
-   without a Goal aggregate or scheduler: strict source/deadline/disposition
-   facts are program-owned, while the learner and model retain current local
-   choice. Proposal 0006 fixes the first contract; implementation is pending.
+6. One LearnerHome-level Assignment can preserve strict source, deadline,
+   disposition, correction, and lazy-history meaning without a Goal aggregate
+   or scheduler. The deterministic v4 candidate now proves that boundary. Live
+   DeepSeek-V4-Flash qualification did not reliably create or consider it in a
+   broad continuation, so passive compact context plus stronger prompt wording
+   is not an admitted action-selection boundary and v4 is not current.
 
 ## Questions still worth resolving
 
@@ -291,8 +293,10 @@ The implemented conditional-purpose production contract is
 [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](./proposals/0005-conditional-purpose-and-learner-role-contract.md).
 The reviewed next production contract is
 [`proposals/0006-deadline-sensitive-real-work-contract.md`](./proposals/0006-deadline-sensitive-real-work-contract.md),
-with its implementation plan in
-[`roadmap/08-first-deadline-sensitive-assignment.md`](./roadmap/08-first-deadline-sensitive-assignment.md).
+with its deterministic candidate and failed live gate recorded in
+[`roadmap/08-first-deadline-sensitive-assignment.md`](./roadmap/08-first-deadline-sensitive-assignment.md)
+and
+[`research/proposal-0006-production-verification-2026-07-13.md`](./research/proposal-0006-production-verification-2026-07-13.md).
 The current route and runtime phase review is
 [`research/broad-route-and-runtime-substrate-review-2026-07-12.md`](./research/broad-route-and-runtime-substrate-review-2026-07-12.md).
 The completed runtime milestone is
@@ -400,14 +404,22 @@ This path still does not preauthorize an activity table, difficulty enum,
 intervention state machine, universal future-action model, FSRS integration,
 or full learner projection.
 
-The post-0005 global review has now selected one deadline-sensitive real-work
-conflict as the next production pressure. The choice is not “finish the Agenda
-module”: it admits one LearnerHome-level, source-grounded Assignment that may
-alter a later Turn while Course, future attention, current steering, and the
-one-off plan retain separate owners. B2 already proves the model can consume
-the situation; Proposal 0006 and two adversarial reviews settle duplicate
-admission, strict time, correction, replay, truncation, inspection, and failure
-semantics before implementation.
+The post-0005 global review selected one deadline-sensitive real-work conflict
+as the next production pressure. The deterministic implementation now settles
+Assignment ownership, strict time, correction, replay, truncation, inspection,
+and failure semantics while Course, future attention, steering, and one-off
+plans retain separate owners. Independent review found and closed real
+compatibility, provenance, replay, normalized-time, and Unicode-source defects.
+
+The live gate changed the open question. DeepSeek-V4-Flash repeatedly ignored a
+report due in 30 minutes during a broad 45-minute continuation, and its earlier
+Assignment creation was not stable. Tightening the explicit non-learning-work
+boundary fixed that negative control, but countdown facts and stronger prompt
+guidance did not establish reliable consideration. The CLI therefore remains
+on qualified `tutor-default-v3`; `tutor-default-v4` is explicit opt-in. The next
+research must find how the Learning System requires a materially competing
+constraint to be considered without choosing the action through a universal
+selector, fixed urgency threshold, or scalar scheduler.
 
 Broader goals, multiple assignments, durable time budgets, multi-course choice,
 richer evidence, review scheduling, domain foundations, retrieval indexes, and
