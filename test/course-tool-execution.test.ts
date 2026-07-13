@@ -160,7 +160,9 @@ async function courseFixture(scope: string) {
     relativePath: "objects.md",
     observedAt: 3,
   })
-  const database = openRepaDatabase(join(root, "repa.sqlite"))
+  // These cases exercise course/tool transaction semantics, not database reopen.
+  // Keeping SQLite in memory avoids a Windows file-lock race during temp-source cleanup.
+  const database = openRepaDatabase(":memory:")
   openDatabases.push(database)
   createSession(database, { sessionId: `session:setup:${scope}`, createdAt: 1 })
   admitUserTurn(database, {
