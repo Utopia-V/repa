@@ -63,13 +63,17 @@ Use full names in notes and discussion:
 
 ## Active batch
 
-ALS-024 is active only as the pre-registered documentation
-[protocol](./source-linked-performance-occurrence-proof-2026-07-13.md). No
-executable lab, harness change, production state, or live-model run is active.
-The proof asks whether correct, incorrect, and assisted source-linked responses
-require one minimum occurrence for a materially different later fresh-Session
-Tutor decision, while explicitly allowing Agenda plus bounded lazy Interaction
-reads to win with no new durable meaning.
+ALS-024 remains active under its pre-registered
+[protocol](./source-linked-performance-occurrence-proof-2026-07-13.md).
+[Stage 0/1](./source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
+used a real item from the Repa architecture document and completed by paper and
+production-code-path inspection; no executable lab, harness change, production
+state, new test, or live-model run was needed. Correct-independent and
+incorrect-independent both become addressed and collapse to the same
+fresh-Session Course/Agenda/lazy-read view, while requiring different later
+moves. The assisted case remains distinguishable only through its open Agenda
+disposition. Stage 2 minimum-meaning ablation is admitted; no production
+occurrence, assistance field, or general evidence model is.
 
 ALS-023 is retained as a failed experiment whose pressure scenario was selected
 incorrectly. It does **not** leave a near-deadline consideration question. The

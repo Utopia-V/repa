@@ -252,12 +252,14 @@ These statements are deliberately weaker than accepted decisions.
    its representative emergency fixture was invalid, and it excluded learning
    context/nature, workload, capacity, progress, and cross-day allocation.
    Schema 6 remains only as an inert compatibility tombstone.
-7. A narrow source-linked performance occurrence may be the next earned
-   Learner Record meaning only if correct, incorrect, and assisted responses
-   require materially different later Tutor moves after the original Session is
-   absent. ALS-024 tests that consumer and must also allow the result that
-   Agenda plus bounded lazy Interaction reads are already sufficient. No
-   generic attempt, evidence, or mastery shape is preauthorized.
+7. ALS-024 Stage 0/1 establishes one concrete fresh-Session consumer. After an
+   independent correct and independent incorrect response both address the same
+   concern, current Course/Agenda context and allowed lazy reads expose neither
+   old response nor outcome, so the histories collide while requiring different
+   Tutor moves. The assisted case remains distinguishable only because its
+   independent-response concern stays open. This admits minimum-meaning
+   ablation, not a production occurrence, assistance field, generic attempt,
+   evidence, or mastery shape.
 
 ## Questions still worth resolving
 
@@ -427,16 +429,16 @@ This path still does not preauthorize an activity table, difficulty enum,
 intervention state machine, universal future-action model, FSRS integration,
 or full learner projection.
 
-ALS-024 is now the active documentation-only architecture proof for the first
-missing downstream decision in this path: after an independent-response Agenda
-purpose is served, a later fresh Session may need to distinguish correct,
-incorrect, and decisively assisted response histories. The
+ALS-024 remains the active architecture proof for the first missing downstream
+decision in this path. Its
+[Stage 0/1 result](./research/source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
+finds the exact current-baseline collision: addressed correct and incorrect
+independent responses disappear from routine fresh-Session Agenda context, and
+recent inspection exposes no response or outcome. The
 [protocol](./research/source-linked-performance-occurrence-proof-2026-07-13.md)
-freezes authority separation, same- versus fresh-Session consumption,
-correction, retry, stale, crash, atomicity, dogfood, and zero-write gates before
-any production meaning is admitted. It requires no live model or harness and
-explicitly permits a negative result if current Agenda plus lazy Interaction
-detail already suffices.
+now advances only to minimum-meaning ablation. The result used no lab, live
+model, harness, or production change and does not admit a schema or learner
+ontology.
 
 The post-0005 review incorrectly promoted B2's scene-specific 45/25/30-minute
 emergency into the next production pressure. Proposal 0006 then deferred the
