@@ -330,15 +330,17 @@ them. The completed aggregate is not itself that justification.
 The semantic audit found current-v3 contradictions that precede new Assignment
 or ontology code:
 
-1. bound the default Session history supplied to each model sample and record
-   omissions, so persistent state does not depend on an ever-growing transcript;
+1. keep same-Session dialogue verbatim while it fits, then add measured
+   automatic/manual compaction of the older head with a recent verbatim tail,
+   original-history retention, and truthful overflow/compaction failure;
 2. separate internal/control model phases from learner-visible output rather
    than relying on prompt non-disclosure;
 3. expose listing/selecting an existing Course; and
 4. expose withdrawal of retained timed learner steering.
 
-The first two protect core architecture claims and must be designed before
-another live product-policy experiment. Course switching is also a prerequisite
+The first item is generic conversation continuity rather than learning-state
+retrieval; the second protects a core product boundary. Both must be designed
+before another live product-policy experiment. Course switching is also a prerequisite
 for representative multi-course planning cases. These are scoped corrections,
 not permission to build a memory framework, response approval system, or global
 command registry.

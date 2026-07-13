@@ -87,13 +87,48 @@ This is evidence-rank drift, not a minor prompt defect.
 These defects are independent of dormant v4 and must not be hidden by the
 Assignment correction.
 
-### Unbounded default transcript
+### Missing compaction and context-limit recovery
 
-The default CLI reuses one `default` Session and sends all of its learner and
-assistant items on every Turn. Durable cross-Session state works, but the
-normal product path can still become dependent on an ever-growing transcript.
-That contradicts bounded working-set composition and recreates the failure mode
-the Learning System exists to remove.
+An earlier version of this audit incorrectly called full same-Session replay a
+semantic defect. It is not: one conversation should retain its dialogue while
+it fits, independently of the durable state used across Sessions. The actual
+gap is that the default CLI has no measured token budget, automatic/manual
+compaction, or truthful context-overflow recovery. A sufficiently long Session
+will eventually exceed the provider window.
+
+This gap was already recorded correctly in Roadmap 05 as “same-Session history
+is loaded without compaction,” and earlier OpenCode research already separated
+Session compaction from cross-Session learning memory. The erroneous semantic
+classification came from this audit, not from an unresolved product statement.
+
+The required generic harness behavior is to preserve verbatim history until a
+context threshold, then compact an older head while retaining a recent verbatim
+tail and the original durable transcript. The compacted representation is
+continuation context, not authoritative learning state. Pinned Codex implements
+automatic and manual compaction around model token limits; pinned OpenCode
+similarly summarizes an older head, retains a token-bounded recent tail, and can
+prune older tool output first. Repa should adapt that mechanism boundary rather
+than routinely omit current-conversation turns.
+
+Reference provenance for the future design:
+
+- Codex `rust-v0.144.1` at pinned commit `44918ea10c0f`, especially
+  `.reference/codex/codex-rs/core/src/session/turn.rs` and `compact.rs`:
+  preserve ordinary thread history, trigger compaction from measured model
+  limits, and replace model-visible history through an explicit compaction
+  event while retaining the durable rollout.
+- OpenCode `v1.17.18` at pinned commit `b1fc8113948b`, especially
+  `.reference/opencode/packages/opencode/src/session/compaction.ts`: select an
+  older head for summary, retain a bounded recent tail, and prune old tool
+  outputs as a separate pressure relief.
+- Current official Codex App Server documentation exposes
+  `thread/compact/start` and states that compaction may also happen
+  automatically.
+
+Repa preserves those invariants but keeps a deliberate difference: a
+conversation summary can support same-Session continuation, while durable
+Course, Agenda, learner, and planning meaning stays in its own correctable
+authority.
 
 ### No learner-visible output boundary
 
@@ -136,9 +171,9 @@ roadmap.
 ## Independent adversarial review
 
 ChatGPT GPT-5.6 Pro with extended effort reviewed a minimal packet after the
-local audits. It agreed that 0006 must be withdrawn as a product contract and
-that the v3 transcript contradiction is the highest semantic risk. It warned
-against two overreactions adopted here: a failed aggregate does not invalidate
+local audits. Its agreement that the v3 transcript was a semantic contradiction
+is discarded because the supplied packet contained that false premise. Its
+separate warning against two overreactions remains useful: a failed aggregate does not invalidate
 strict time/provenance/revision mechanisms individually, and classical
 scheduling models cannot be copied directly into learning planning without
 consumer evidence. The repository evidence, not reviewer agreement, remains
@@ -168,11 +203,14 @@ alternatives.
 
 In parallel, repair the current spine in product-semantic order:
 
-1. bound default transcript composition and make omissions inspectable;
+1. add measured context budgeting, automatic/manual compaction, recent-tail
+   preservation, and truthful overflow/compaction failure without routinely
+   truncating a same-Session conversation;
 2. separate internal model/control phases from learner-visible output;
 3. expose correction-complete course switching and steering withdrawal; and
 4. correct target-versus-current architecture wording.
 
-The first two protect the core claim that durable Learning-System state, rather
-than accidental prompt history or model prose, governs the product. New feature
+The first item is generic conversation continuity; it must remain distinct from
+cross-Session Learning-System state. The second protects the boundary between
+internal model/control work and learner-visible Tutor behavior. New feature
 work must not proceed by extending dormant v4 inward.

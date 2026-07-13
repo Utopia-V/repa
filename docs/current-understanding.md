@@ -433,8 +433,8 @@ of bounded rolling-horizon/workload-leveling models. The program must own
 closed arithmetic; model judgment remains useful for semantic decomposition,
 teaching, research, and genuinely open trade-offs.
 
-The same audit found current-v3 defects that are independent of v4: the default
-CLI replays an unbounded Session transcript, learner-visible output has no
+The same audit found current-v3 gaps that are independent of v4: long Sessions
+have no context-budget/compaction/overflow path, learner-visible output has no
 admission boundary, existing courses cannot be selected through the Agent, and
 durable timed steering cannot be withdrawn through the production tool surface.
 These core contradictions are recorded and prioritized in the semantic-drift

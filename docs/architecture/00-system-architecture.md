@@ -363,6 +363,15 @@ Context construction has three depths:
 | current-move detail | route neighborhood, exact material range, active assignment/revisit, recent activity or evidence that changes the move | selected during composition or read through a tool |
 | cold detail | complete old Sessions, full attempts, superseded interpretations, full course maps, unrelated materials | lazy search/read only |
 
+This depth policy governs Learning-System contributions and retrieval across
+Sessions; it does not mean silently truncating the active conversation. Within
+one Session, model-visible history remains verbatim while it fits the model
+window. Near a measured context threshold, the harness compacts an older head,
+keeps a recent verbatim tail, and preserves the original durable transcript.
+The compaction result is continuation context with provenance, not a learning
+fact or replacement for Course, Agenda, or learner-record state. Context-limit
+failure and compaction failure remain explicit terminal outcomes.
+
 The first sample in a fresh Session uses the current request, active agenda,
 recent durable focus, and small home-level candidates to resolve scope. If
 several choices would produce materially different behavior, the context
