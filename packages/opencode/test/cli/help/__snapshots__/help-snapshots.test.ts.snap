@@ -84,7 +84,6 @@ Options:
   -c, --continue     continue the last session                                             [boolean]
   -s, --session      session id to continue                                                 [string]
       --fork         fork the session before continuing (requires --continue or --session) [boolean]
-      --share        share the session                                                     [boolean]
   -m, --model        model to use in the format of provider/model                           [string]
       --agent        agent to use                                                           [string]
       --format       format: default (formatted) or json (raw JSON events)
@@ -188,26 +187,6 @@ Options:
       --cors         additional domains to allow for CORS                      [array] [default: []]"
 `;
 
-exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa web --help 1`] = `
-"repa web
-
-start Repa server and open web interface
-
-Options:
-  -h, --help         show help                                                             [boolean]
-  -v, --version      show version number                                                   [boolean]
-      --print-logs   print logs to stderr                                                  [boolean]
-      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
-      --pure         run without external plugins                                          [boolean]
-      --port         port to listen on                                         [number] [default: 0]
-      --hostname     hostname to listen on                           [string] [default: "127.0.0.1"]
-      --mdns         enable mDNS service discovery (defaults hostname to 0.0.0.0)
-                                                                          [boolean] [default: false]
-      --mdns-domain  custom domain name for mDNS service (default: repa.local)
-                                                                    [string] [default: "repa.local"]
-      --cors         additional domains to allow for CORS                      [array] [default: []]"
-`;
-
 exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa models --help 1`] = `
 "repa models [provider]
 
@@ -264,43 +243,10 @@ Options:
 exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa import --help 1`] = `
 "repa import <file>
 
-import session data from JSON file or URL
+import session data from a local JSON file
 
 Positionals:
-  file  path to JSON file or share URL                                           [string] [required]
-
-Options:
-  -h, --help        show help                                                              [boolean]
-  -v, --version     show version number                                                    [boolean]
-      --print-logs  print logs to stderr                                                   [boolean]
-      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
-      --pure        run without external plugins                                           [boolean]"
-`;
-
-exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa github --help 1`] = `
-"repa github
-
-manage GitHub agent
-
-Commands:
-  repa github install  install the GitHub agent
-  repa github run      run the GitHub agent
-
-Options:
-  -h, --help        show help                                                              [boolean]
-  -v, --version     show version number                                                    [boolean]
-      --print-logs  print logs to stderr                                                   [boolean]
-      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
-      --pure        run without external plugins                                           [boolean]"
-`;
-
-exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa pr --help 1`] = `
-"repa pr <number>
-
-fetch and checkout a GitHub PR branch, then run Repa
-
-Positionals:
-  number  PR number to checkout                                                  [number] [required]
+  file  path to a local JSON file                                                [string] [required]
 
 Options:
   -h, --help        show help                                                              [boolean]
@@ -542,34 +488,6 @@ Options:
       --print-logs  print logs to stderr                                                   [boolean]
       --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
       --pure        run without external plugins                                           [boolean]"
-`;
-
-exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa github install --help 1`] = `
-"repa github install
-
-install the GitHub agent
-
-Options:
-  -h, --help        show help                                                              [boolean]
-  -v, --version     show version number                                                    [boolean]
-      --print-logs  print logs to stderr                                                   [boolean]
-      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
-      --pure        run without external plugins                                           [boolean]"
-`;
-
-exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa github run --help 1`] = `
-"repa github run
-
-run the GitHub agent
-
-Options:
-  -h, --help        show help                                                              [boolean]
-  -v, --version     show version number                                                    [boolean]
-      --print-logs  print logs to stderr                                                   [boolean]
-      --log-level   log level                   [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
-      --pure        run without external plugins                                           [boolean]
-      --event       GitHub mock event to run the agent for                                  [string]
-      --token       GitHub personal access token (github_pat_********)                      [string]"
 `;
 
 exports[`Repa CLI help-text snapshots every documented command emits stable help text: repa db path --help 1`] = `

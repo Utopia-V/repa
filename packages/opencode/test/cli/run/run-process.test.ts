@@ -9,6 +9,24 @@ import { reply } from "../../lib/llm-server"
 import { cliIt } from "../../lib/cli-process"
 
 describe("opencode run (non-interactive subprocess)", () => {
+  cliIt.concurrent(
+    "rejects --share before admitting a prompt",
+    ({ llm, opencode }) =>
+      Effect.gen(function* () {
+        yield* llm.text("this response must remain unused")
+        const result = yield* opencode.run("do not admit this prompt", { extraArgs: ["--share"] })
+
+        expect({
+          nonzero: result.exitCode !== 0,
+          providerRequests: (yield* llm.inputs).length,
+        }).toEqual({
+          nonzero: true,
+          providerRequests: 0,
+        })
+      }),
+    30_000,
+  )
+
   // Happy path: prompt completes, output reaches stdout, process exits 0.
   // If this fails, all the others likely will too — debug here first.
   cliIt.concurrent(

@@ -51,13 +51,10 @@ const TOP_LEVEL = [
   "providers", // aliased to `auth`
   "agent",
   "serve",
-  "web",
   "models",
   "stats",
   "export",
   "import",
-  "github",
-  "pr",
   "session",
   "plugin",
   "db",
@@ -78,8 +75,6 @@ const SUBCOMMANDS = [
   ["agent", "list"],
   ["session", "list"],
   ["session", "delete"],
-  ["github", "install"],
-  ["github", "run"],
   ["db", "path"],
 ] as const
 
@@ -89,6 +84,70 @@ const SUBCOMMANDS = [
 const SNAPSHOT_ENV = { COLUMNS: "120" }
 
 describe("Repa CLI help-text snapshots", () => {
+  cliIt.live(
+    "unregisters excluded product handlers while retaining local harness commands",
+    ({ opencode: repa }) =>
+      Effect.gen(function* () {
+        const rootHelp = yield* repa.spawn(["--help"], { env: SNAPSHOT_ENV })
+        const excluded = [
+          { name: "web", marker: "start Repa server and open web interface" },
+          { name: "github", marker: "manage GitHub agent" },
+          { name: "pr", marker: "fetch and checkout a GitHub PR branch, then run Repa" },
+          { name: "console", marker: "log in to console" },
+        ] as const
+        const retained = [
+          { name: "serve", marker: "starts a headless Repa server" },
+          { name: "plugin", marker: "install plugin and update config" },
+          { name: "stats", marker: "show token usage and cost statistics" },
+          { name: "export", marker: "export session data as JSON" },
+          { name: "import", marker: "path to a local JSON file" },
+        ] as const
+
+        const excludedHelp = yield* Effect.all(
+          excluded.map((item) => repa.spawn([item.name, "--help"], { env: SNAPSHOT_ENV })),
+          { concurrency: "unbounded" },
+        )
+        const retainedHelp = yield* Effect.all(
+          retained.map((item) => repa.spawn([item.name, "--help"], { env: SNAPSHOT_ENV })),
+          { concurrency: "unbounded" },
+        )
+
+        expect({
+          rootHelp: {
+            excludesHostedCommands: !/repa (?:web|github|pr)\b/.test(rootHelp.stderr),
+            retainsLocalCommands: ["serve", "plugin", "stats", "export", "import"].every((name) =>
+              rootHelp.stderr.includes(`repa ${name}`),
+            ),
+          },
+          excluded: Object.fromEntries(
+            excluded.map((item, index) => [item.name, excludedHelp[index]?.stderr.includes(item.marker)]),
+          ),
+          retained: Object.fromEntries(
+            retained.map((item, index) => [item.name, retainedHelp[index]?.stderr.includes(item.marker)]),
+          ),
+        }).toEqual({
+          rootHelp: {
+            excludesHostedCommands: true,
+            retainsLocalCommands: true,
+          },
+          excluded: {
+            web: false,
+            github: false,
+            pr: false,
+            console: false,
+          },
+          retained: {
+            serve: true,
+            plugin: true,
+            stats: true,
+            export: true,
+            import: true,
+          },
+        })
+      }),
+    60_000,
+  )
+
   // Single test, parallel spawns. Each command's help fires under
   // `concurrency: 8` — wall-clock stays under ~10s even for ~35 commands,
   // versus ~1 minute if we serialized.
