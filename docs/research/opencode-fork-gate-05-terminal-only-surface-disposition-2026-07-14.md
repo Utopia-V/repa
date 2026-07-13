@@ -103,6 +103,12 @@ Gate 5 completion. A typed-reference failure after unregistration is evidence
 for the next dependency-closed slice, not permission to add a compatibility
 stub.
 
+The implementation order may cross the numbered ownership groups when a
+released consumer must be removed before its typed provider. Concrete
+dependency evidence has fixed the current order as Gate 5B1/5B2, the relevant
+Gate 5D TUI consumer slices, and then Gate 5B3 schema removal and generation.
+This is not permission to merge those ownership boundaries into one patch.
+
 ## Gate 5A locked contract: CLI front door
 
 ### Subquestion
@@ -240,6 +246,100 @@ generation. Its retirement or recovered source-of-truth is a Gate 5F
 dependency-closure decision. Local provider integration routes are not a
 marketplace surface and remain unless separate evidence shows an excluded
 control-plane dependency.
+
+## Gate 5D locked prerequisite boundary: released terminal consumers
+
+Gate 5D classifies effects rather than deleting every inherited use of a word.
+The local terminal debug console, local provider credentials, Session cache
+hydration, current directory, project copies, and Git worktrees remain. The
+excluded meanings are public sharing, OpenCode Console/account organization
+control, remote workspace placement and synchronization, and control-plane
+Session movement.
+
+These five slices are independently reversible and precede Gate 5B3.
+
+### Gate 5D1 — remove active sharing affordances
+
+Remove the Session share/unshare commands, slash names, bindings, keybindings,
+confirmation flow, tips, default sidebar URL display, dedicated plugin
+`share_url` slot property, and legacy `session_share` bridge alias. Do not
+leave disabled commands or unknown aliases that publish an undefined command.
+
+Historical Session `share` fields and an old `share_consent` local KV value do
+not require migration. They are passive data after the default display and
+dedicated extension point are gone. The public TUI-event suggestion and
+generated client methods remain owned by Gate 5B3; generated files are not
+edited manually.
+
+Evidence must prove the real TUI registry has no share/unshare command or
+slash alias, a Session carrying an old share URL does not render it, retained
+Session rename/export or transcript behavior remains, the sidebar plugin slot
+still receives Session identity and title, unknown legacy aliases publish no
+event, and TUI, plugin, and bridge owner typechecks pass.
+
+### Gate 5D2 — remove Console/account organization affordances
+
+Remove the organization dialog and commands, their keybinding, startup
+`experimental.console` request and state, Console-managed-provider display and
+selection branches, their helper, and the test fixture fallback that could
+hide a residual request. Do not replace the startup call with a swallowed 404.
+
+Retain the local `app.console` debug command, provider connect/auth hydration,
+ordinary API-key and OAuth flows, generic custom providers, and local provider
+credential help. Evidence must show the command registry and slash aliases
+exclude organization switching, startup makes no Console request, retained
+provider and debug commands remain, and the TUI typecheck has no deleted SDK
+consumer.
+
+### Gate 5D3 — separate local Session start location from control-plane move
+
+Remove movement of an existing Session through
+`experimental.controlPlane.moveSession`. Retain starting a new Session in an
+existing local directory or a newly created local project copy/worktree, and
+name that action truthfully as a start-location/directory choice rather than a
+remote workspace move. Remove the old `session_move` binding without a
+compatibility alias.
+
+Deleting the active local project copy must first return the TUI to its main
+directory before removing that copy. Evidence must cover project-copy creation
+with `strategy: "git_worktree"`, subsequent local Session creation in the
+returned directory, zero control-plane/workspace/sync requests, and safe
+fallback before active-copy deletion.
+
+### Gate 5D4 — remove remote Workspace surfaces
+
+Delete remote Workspace dialogs, commands, `/warp`, status blocking and
+labels, Session-create workspace placement, restore/delete recovery branches,
+and the `workspace_set` binding. Remove dependency-closed leaf components and
+their obsolete tests rather than adapting dormant files to the later SDK.
+
+Ordinary local Session deletion, Home/Session navigation, and local project
+copy management remain. `DialogWorkspaceFileChanges` still protects deletion
+of a locally changed project copy despite its inherited name and is not
+deleted by vocabulary match.
+
+### Gate 5D5 — reduce active Workspace routing to a local directory
+
+Replace the TUI's active remote Workspace selector with an active local
+directory selector. Retained requests and events use `{ directory }`; entering
+a Session selects its persisted directory. Remove only the remote
+`sdk.sync.start()` call and remote sync-event form. `SyncProvider`, bootstrap,
+and `session.sync()` remain as local cache hydration.
+
+Directory filtering must still prevent another active directory's VCS/LSP and
+TUI events from contaminating the view, while allowing valid same-project
+Session navigation. Permission responses keep their own Session directory
+rather than borrowing a global current directory. Local editor
+`workspaceFolders` and Zed's internal `workspace_id` are unrelated vocabulary
+and remain.
+
+Evidence must prove directory-only locations in retained requests, correct
+event isolation, a directory switch followed by local hydration, no
+`experimental.workspace`, `experimental.controlPlane.moveSession`, or
+`sdk.sync.start` consumer, and the focused TUI tests and typecheck. The retained
+local `experimental.projectCopy.generateName` and v2 project-copy operations
+must survive; Gate 5B3 converts their routing middleware to directory-only
+rather than deleting their API group.
 
 ## Gate-wide positive evidence
 
