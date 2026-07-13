@@ -1,6 +1,6 @@
 # OpenCode fork Gate 2: pristine Windows baseline
 
-Status: In progress — red after install attempt 1
+Status: In progress — red after focused Windows test attempt 1
 
 Date: 2026-07-13
 
@@ -80,7 +80,8 @@ configuration/thread/attention behavior.
 Gate 2 passes only when:
 
 1. every command above exits zero on the recorded Windows/Bun environment;
-2. the build artifact exists and reports the pinned application version;
+2. the build artifact exists, passes the build script's own version smoke
+   test, and has its actual script-derived version recorded;
 3. the working tree remains at
    `b1fc8113948b518835c2a39ece49553cffe9b30c`, has the pinned tree
    `d47e0f4006aefaab6a2f9afc476c41f7107fec5f`, and contains no tracked or
@@ -175,5 +176,58 @@ This result localizes attempt 1 away from source, lockfile, registry bytes, or
 archive validity and toward shared-cache publication or transient Windows
 file locking. It does not distinguish those two cache-boundary causes and
 does not erase the recorded first failure.
+
+### Typecheck and Windows build passed
+
+Both planned typechecks exited zero:
+
+```text
+packages/core:     tsgo --noEmit, exit 0, 6.2 seconds
+packages/opencode: tsgo --noEmit, exit 0, 11.6 seconds
+```
+
+The planned single Windows x64 build exited zero in 9.4 seconds and its own
+binary smoke test passed. The artifact was:
+
+```text
+path:    packages/opencode/dist/opencode-windows-x64/bin/opencode.exe
+bytes:   142379520
+sha256:  0434D3E97E0C54C7767CBB16C38C6B1CE0CCF1EC7E4E86B0F38AF829433CFCDB
+version: 0.0.0-codex/opencode-v1.17.18-baseline-202607131353
+```
+
+The pre-execution contract incorrectly called for the tag version string.
+Inspection of `packages/script/src/index.ts` showed that an ordinary branch
+build intentionally derives a timestamped preview version from the branch
+name unless `OPENCODE_VERSION` is injected. The parent gate requires the
+pinned source and released-v1 build path to work; binary/product identity is
+owned by Gate 3. Passing criterion 2 was therefore narrowed above to require
+the built-in smoke and exact recorded output, without injecting a version.
+
+### Focused test attempt 1: Windows shell environment failure
+
+The core package-scoped command passed 93 tests across six files with zero
+failures in 2.84 seconds.
+
+The opencode package-scoped nine-file command exited 1 after 162.25 seconds:
+
+```text
+281 pass
+14 skip
+11 fail
+762 expect() calls
+306 tests across 9 files
+```
+
+All 11 failures came from `test/tool/shell.test.ts`. Windows-only fixtures
+dereferenced `process.env.WINDIR`, but the test process received it as
+`undefined`; failures therefore occurred while constructing expected
+external paths, before the permission behavior under test could complete.
+The attention test's logged decode/notification errors were expected
+failure-path inputs and did not contribute failing tests.
+
+No source, lockfile, or tracked artifact changed. The gate remains red. The
+next diagnostic is limited to comparing the host `SystemRoot`/`WINDIR` values
+with what Bun inherits; no test or product source patch is admitted.
 
 Pending execution.
