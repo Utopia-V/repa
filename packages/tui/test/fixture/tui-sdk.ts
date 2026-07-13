@@ -74,8 +74,6 @@ export function createFetch(override?: FetchHandler, events?: ReturnType<typeof 
       [
         "/agent",
         "/command",
-        "/experimental/workspace",
-        "/experimental/workspace/status",
         "/formatter",
         "/lsp",
       ].includes(url.pathname)

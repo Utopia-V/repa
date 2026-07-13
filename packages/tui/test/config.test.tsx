@@ -89,6 +89,12 @@ test("resolves a session start-location keybind without the old move alias", () 
   ).toThrow("Unrecognized keybind: session_move")
 })
 
+test("rejects the removed workspace keybind without a compatibility alias", () => {
+  expect(() =>
+    resolve({ keybinds: { workspace_set: "ctrl+w" } } as TuiConfigInfo, { terminalSuspend: true }),
+  ).toThrow("Unrecognized keybind: workspace_set")
+})
+
 test("disables suspend and assigns ctrl+z to undo when unsupported", () => {
   const config = resolve({}, { terminalSuspend: false })
 
