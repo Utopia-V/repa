@@ -464,7 +464,20 @@ missing or failed fallback prevents removal, and forced-delete dialog
 lifecycles do not update an unmounted instance. The focused action-chain,
 deletion-safety, project-directory, config, Sync/Event regression tests, TUI
 typecheck, exact residue scan, `git diff --check`, and two-stage independent
-fresh-context review passed. Gate 5D4 is next.
+fresh-context review passed.
+
+Gate 5D4 passed at `d41fe19755a7611a5742b0d2c8bab50970bdd73b`.
+The released TUI has no remote Workspace dialogs, commands, `/warp`,
+keybinding, status label or blocking, Session-create placement, recovery, or
+remote delete branch. Dependency-closed UI leaves and their obsolete test
+were deleted; startup no longer lists or hydrates remote Workspaces, and the
+test fixture no longer masks those requests. Ordinary Session deletion,
+listing, navigation, and error toasts remain. Local project-copy/worktree
+creation, refresh, removal, `/directory`, and `DialogWorkspaceFileChanges`
+remain. The focused registry, startup, config, Session-list/sidebar, and Sync
+tests, TUI typecheck, exact dependency scan, `git diff --check`, and an
+independent fresh-context review passed. Active routing fields remain solely
+for Gate 5D5.
 
 ## Rollback
 

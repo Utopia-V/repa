@@ -58,7 +58,10 @@ git show repa-prefork-oracle:<historical-record-path>
   `6a9e5a9eda919205fb87e068e41b83010ccbd990`: existing Sessions no longer
   move through the control plane; the retained action chooses a local start
   directory or Git worktree for a new Session, and active-copy deletion first
-  returns to the main directory.
+  returns to the main directory. Gate 5D4 passed at
+  `d41fe19755a7611a5742b0d2c8bab50970bdd73b`: remote Workspace UI, placement,
+  status, recovery, deletion, and startup hydration are gone while local
+  project copies and ordinary Session deletion remain.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release
