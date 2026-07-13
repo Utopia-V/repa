@@ -5,6 +5,11 @@ Date: 2026-07-10
 Status: Research synthesis and engineering recommendation. The persistence
 details remain subject to a focused lab before becoming an ADR.
 
+Current scope note (2026-07-11): SQLite authority, source provenance, and
+early behavioral validation remain useful. Detailed evidence and projection
+storage in this document is a pre-benchmark design hypothesis, not the current
+learning-state plan.
+
 ## Questions
 
 Agentic Learning System has no large initial user base, and proving that it

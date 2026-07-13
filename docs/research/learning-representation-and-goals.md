@@ -5,6 +5,11 @@ Date: 2026-07-10
 Status: Research synthesis and design hypothesis. This document is not an
 accepted architecture decision.
 
+Current scope note (2026-07-11): the learning-science observations remain
+informative. The multi-layer ontology and learner-projection proposals are
+historical hypotheses that were not earned by ALS-015/ALS-016. They must not be
+used as the current schema or implementation sequence.
+
 ## Research question
 
 Math Academy makes learning operational through a fine-grained knowledge graph,

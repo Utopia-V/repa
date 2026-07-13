@@ -5,6 +5,12 @@ Date: 2026-07-10
 Status: Research synthesis and candidate runtime vocabulary. This document does
 not yet accept a production schema.
 
+Current scope note (2026-07-11): the provider and message findings remain
+informative. Learning traces in this document that force an explanation into
+independent response, evidence, projection, and obligation are historical
+fixtures. A valid explanation may produce only durable Session history and a
+small source-linked progress fact.
+
 OpenCode reference commit:
 `b1fc8113948b518835c2a39ece49553cffe9b30c` (`v1.17.18`)
 

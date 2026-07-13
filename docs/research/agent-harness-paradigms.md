@@ -2,6 +2,12 @@
 
 Date: 2026-07-10
 
+Current scope note (2026-07-11): the source observations about agent loops,
+tools, context, and memory remain useful. Any consequence that assumes every
+learning activity becomes evidence, a learner projection, or an obligation is
+a pre-benchmark design hypothesis and is not current product guidance. See
+[`../proposals/0003-learning-native-responsibilities.md`](../proposals/0003-learning-native-responsibilities.md).
+
 Primary implementation evidence:
 
 - Claude Code `v2.1.88`, recovered research snapshot described in
@@ -10,6 +16,9 @@ Primary implementation evidence:
   `b1fc8113948b518835c2a39ece49553cffe9b30c`
 - [`opencode-v1.17.18-agent-loop.md`](./opencode-v1.17.18-agent-loop.md)
 - [`opencode-v1.17.18-runtime-contracts.md`](./opencode-v1.17.18-runtime-contracts.md)
+- Codex `rust-v0.144.1` at
+  `44918ea10c0f99151c6710411b4322c2f5c96bea`
+- [`codex-rust-v0.144.1-runtime-contracts.md`](./codex-rust-v0.144.1-runtime-contracts.md)
 
 ## Finding in one sentence
 
@@ -36,7 +45,22 @@ sets the legal action space, while the model chooses an action within it.
 
 The interpreter that repeatedly constructs a model request, consumes the model
 response, settles requested tool calls, appends observations, and decides
-whether another provider turn is required.
+whether another model-sampling operation is required.
+
+### User turn
+
+The interaction boundary that begins with accepted user input and groups the
+agent work, accepted steering, model samples, and tools until the interaction
+completes, is interrupted, or fails. It is smaller than a conversation and
+larger than one model-sampling operation.
+
+### Model-sampling operation
+
+One logical request from the loop to the model adapter. The adapter may consume
+multiple provider streams or transport sends during retry and fallback. The
+current foundation proposal calls a nearby concept `ModelAttempt` but must
+clarify its exact boundary. Model/transport settlement does not settle the
+enclosing user turn or local tool effects.
 
 ### Agent runtime
 
@@ -48,8 +72,8 @@ recovery, and process placement.
 
 An opinionated product runtime that supplies an agent with built-in tools,
 context construction, permission policy, transcript behavior, compaction,
-skills or subagents, and an interaction surface. Claude Code and OpenCode are
-harnesses, not merely model SDK wrappers.
+skills or subagents, and an interaction surface. Claude Code, OpenCode, and
+Codex are harnesses, not merely model SDK wrappers.
 
 ### Domain system
 
@@ -65,8 +89,8 @@ management. This is evidence of emerging vocabulary, not an industry standard.
 
 ## The convergent kernel
 
-Claude Code and OpenCode both reduce to the following control loop despite very
-different surrounding architectures:
+Claude Code, OpenCode, and Codex reduce to the following control loop despite
+very different surrounding architectures:
 
 ```text
 accepted user input
@@ -75,7 +99,7 @@ accepted user input
 assemble model-visible request
        |
        v
-execute one provider turn
+execute one model-sampling operation
        |
        v
 project assistant output and proposed tool calls
@@ -88,8 +112,13 @@ validate -> authorize -> execute -> settle every tool call
        v
 append tool observations
        |
-       +--------------------------------------------> next provider turn
+       +----------------------------------------------> next model sample
 ```
+
+Codex makes one additional boundary explicit: the whole user-visible Turn may
+contain several model-sampling operations and their intervening tools. The term
+“provider turn” is therefore avoided below because it can ambiguously mean a
+user interaction, a logical model operation, or a physical request.
 
 Anthropic's public description calls agents systems in which the LLM
 dynamically controls process and tool use, in contrast to workflows whose paths
@@ -123,7 +152,7 @@ Neither dominates the other:
 - a product may use a model-led session that invokes deterministic domain
   workflows as tools.
 
-Plan mode is not necessarily a separate runtime paradigm. In both coding
+Plan mode is not necessarily a separate runtime paradigm. In all three coding
 agents it is largely a policy profile over the same loop: different
 instructions, visible tools, and permission rules. Repa should not create seven
 independent execution engines for plan, study, drill, review, assignment,
@@ -155,7 +184,7 @@ OpenCode's V2 direction exemplifies a session-owned runtime.
 
 One coordinator serializes execution per Session ID while allowing different
 sessions to run concurrently. Input admission is separated from execution;
-the runner promotes durable input at safe provider-turn boundaries. The TUI
+the runner promotes durable input at safe provider-sampling boundaries. The TUI
 submits commands and renders projections rather than owning the loop.
 
 This resembles the actor model without requiring a general actor framework:
@@ -187,12 +216,12 @@ receive serializable messages through a runtime, and can run in standalone or
 distributed environments. This is an actor/message-bus architecture aimed at
 multi-agent applications.
 
-Subagents do not require this architecture. Claude Code and OpenCode can expose
-an agent as a tool and recursively invoke the same basic loop. A distributed
+Subagents do not require this architecture. Claude Code, OpenCode, and Codex can
+expose an agent as a tool and recursively invoke the same basic loop. A distributed
 agent runtime is justified only when independent ownership, placement, or
 message routing is itself a requirement.
 
-## Three state-authority patterns visible in practice
+## State-authority patterns visible in practice
 
 ### Transcript journal plus live memory
 
@@ -212,6 +241,19 @@ OpenCode V2 admits inputs and publishes sequenced durable Session events, then
 projects messages, tool state, and context epochs. Live deltas are kept
 distinct from replayable events. This gives reconnect and replay clearer
 semantics, but adds schemas, projectors, migrations, and compatibility work.
+
+### Rollout journal plus query projection
+
+Codex persists selected canonical response items and turn lifecycle events to
+a JSONL rollout journal, then maintains SQLite metadata and paginated query
+projections. It flushes the journal before advancing SQLite and can backfill
+the projection from rollout history.
+
+This supports conversation reconstruction and client queries, but most
+in-flight coordination remains process-local: pending steering, approvals,
+provider streams, tool futures, and cancellation tokens are not a durable
+workflow. The design demonstrates that useful resume and exact in-flight
+recovery are separate guarantees.
 
 ### Graph snapshots
 
@@ -247,9 +289,12 @@ schema validation
 ```
 
 OpenCode expresses similar phases through registered definitions, per-turn
-execution context, the permission service, and durable tool-part states. The
-stable pattern is capability mediation: the model proposes an effect, but the
-runtime validates, authorizes, executes, and settles it.
+execution context, the permission service, and durable tool-part states. Codex
+uses a live runtime with approval, sandbox escalation, cancellation, and
+correlated model-visible outputs, but no general durable effect-reconciliation
+state machine. The stable pattern is capability mediation: the model proposes
+an effect, but the runtime validates, authorizes, executes, and reports it. The
+durability and exactly-once guarantees of the effect itself are domain-specific.
 
 ## Context construction is becoming a compiler boundary
 
@@ -281,15 +326,18 @@ the prompt.
 The following mechanisms are sufficiently convergent to treat as baseline
 patterns for Repa:
 
-1. One explicit provider turn at a time within an agent trajectory.
+1. A user-visible turn is distinct from each model-sampling operation inside
+   it.
 2. A typed model-event stream distinct from application state.
 3. Stable identities for sessions, messages, and tool calls.
-4. Every accepted tool call eventually receives exactly one terminal
-   settlement visible to subsequent model turns.
+4. Every complete model tool call receives a correlated model-visible output
+   before later sampling; this does not prove exactly-once external effects.
 5. Tool definitions are stable; executable tools receive per-turn context.
 6. Permission enforcement belongs in the execution path, not in the TUI.
 7. Cancellation propagates through provider and tool work.
-8. One active writer owns a Session's legal transitions.
+8. Ordinary Turn-driving work is single-lane within one resident
+   conversation/thread runtime; control input and child threads may proceed
+   through separate boundaries.
 9. Context is compiled from authoritative sources at explicit boundaries.
 10. Ephemeral render progress is not automatically durable history.
 
@@ -346,7 +394,7 @@ effects.
 
 Before implementation, the project should settle these contracts in order:
 
-1. Session command and event vocabulary.
+1. Session, user-turn, and provider-attempt boundaries.
 2. Provider-neutral model events.
 3. Tool-call lifecycle, including denied, cancelled, interrupted, and unknown
    post-crash outcomes.

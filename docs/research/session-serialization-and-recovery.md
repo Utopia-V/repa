@@ -5,6 +5,11 @@ Date: 2026-07-10
 Status: Research synthesis and candidate execution contract. No production
 `AgentRun` or persistence schema is accepted by this document.
 
+Current scope note (2026-07-11): Session ownership and recovery findings remain
+useful. Examples that assume every learning activity increments evidence,
+projection, or obligation revisions are pre-benchmark illustrations, not a
+required learning transaction.
+
 OpenCode reference commit:
 `b1fc8113948b518835c2a39ece49553cffe9b30c` (`v1.17.18`)
 

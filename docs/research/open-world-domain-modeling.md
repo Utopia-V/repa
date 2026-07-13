@@ -5,6 +5,11 @@ Date: 2026-07-10
 Status: Research synthesis and architectural hypothesis. This document does not
 yet establish an accepted Domain Pack format or implementation roadmap.
 
+Current scope note (2026-07-11): public curriculum sources, broad routes, and
+lazy local expansion remain useful ideas. The Domain Pack and learner-layer
+structures below are historical hypotheses and do not define the current
+architecture.
+
 ## Question
 
 Math Academy obtains reliable task selection from a closed, expert-authored

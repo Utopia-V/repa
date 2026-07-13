@@ -2,9 +2,53 @@
 
 ## Purpose
 
-The system is a local-first learning agent whose primary interface resembles a native terminal agent such as Claude Code, Codex, or OpenCode. A user describes a real learning situation in natural language; the system reads the local learning workspace, uses tools, conducts learning activities, gathers evidence, updates an inspectable learning state, and changes the next action accordingly.
+The system is a local-first learning agent whose primary interface resembles a
+native terminal agent such as Claude Code, Codex, or OpenCode. A user describes
+a real learning situation in natural language; the system reads the local
+learning workspace, uses tools, teaches, guides learning activities, remembers
+what matters, and adjusts later help.
 
-The system is not defined by whether it can explain a concept, edit Markdown, search the web, run code, parse PDFs, or call Anki. Mature agents already supply those general capabilities. The product is defined by the learning control loop they participate in.
+The Tutor must be able to explain concepts, demonstrate procedures, choose
+examples, answer questions, and change its teaching approach. Mature agents
+already supply many of the underlying model and tool capabilities. This product
+connects those capabilities to the learner's goals, history, materials, time,
+practice, review, and future learning.
+
+The continuity floor is knowing the relevant course, material, history, and
+constraints without asking the learner to restate them. The product payoff is
+higher: make content that is currently difficult more tractable, then help the
+resulting knowledge remain available and useful. Good explanation and
+scientific review are therefore product behaviors, not optional tools layered
+over progress tracking.
+
+`Scientific review` means choosing timing and form according to the intended
+learning change and available evidence. Retrieval, spacing, comparison,
+interleaving, relearning, explanation, application, and real work may all be
+useful under different conditions. No one of them is the architecture or the
+mandatory continuation of teaching.
+
+## Where the Tutor lives
+
+`Tutor` names the behavior of the integrated Learning System, not the role
+played by whichever model answers the current request. The program preserves
+the long-running learning loop: goals, course and material position, durable
+facts, real constraints, feedback, correction, and future attention. Models
+supply flexible semantic capabilities inside that loop: understanding open
+material, proposing structure, explaining, demonstrating, generating examples
+or tasks, interpreting responses, and adapting the current interaction.
+
+This distinction does not require a code-authored script for every learning
+move or prescribe a fixed program/model control ratio. The system may ask a
+model to choose, compare, or propose actions when no accepted deterministic
+rule exists. The invariant is that durable meaning, authority, correction, and
+continuity do not collapse into a prompt or a model assertion. The learner
+remains able to steer the immediate activity.
+
+A model may initiate a real, correctable durable write through a system-owned
+learning command. The runtime supplies trusted source, identity, revision,
+time, permission, and persistence; the model may supply the open semantic
+content and decide to write. Legal commitment makes the record part of the
+system, but it does not upgrade a report or inference into stronger evidence.
 
 ## Core loop
 
@@ -12,19 +56,25 @@ The system is not defined by whether it can explain a concept, edit Markdown, se
 goal, time, material, history, review pressure, deadlines
                             |
                             v
-                     choose next action
+                 choose next learning move
                             |
                             v
-              learn / recall / drill / repair / work
+       orient / explain / demonstrate / explore / practice
+                  / recall / review / repair / work
                             |
                             v
-             observe answer, process, help, and outcome
+        observe questions, responses, work, help, and outcome
                             |
                             v
-                 revise inspectable learning state
+       preserve what matters for future context and planning
                             |
                             +---------------------------> repeat
 ```
+
+The loop has no mandatory starting action. A learner may need an overview,
+worked examples, repeated operation, conceptual explanation, independent work,
+or review. The Tutor chooses and combines these moves while the learner can
+steer at any time.
 
 The system must be able to distinguish at least these categories conceptually, even if their final data model is not yet settled:
 
@@ -40,11 +90,36 @@ These categories must not collapse into a single `mastery` field or an undiffere
 Learning is native when it changes the agent's normal behavior rather than appearing only as optional tools. Examples include:
 
 - Context assembly includes relevant course state, recent evidence, due review, goals, and constraints.
+- Teaching uses the course overview and retrieves detail as needed. It does not
+  require a complete lesson script or a fully populated knowledge graph before
+  the interaction begins.
+- Explanation, demonstration, guided work, independent work, and review are
+  peer learning moves. Practice is not the required continuation of every
+  explanation.
 - Explanation does not silently count as mastery.
+- Ordinary questions and clarifications do not by themselves prove learning or
+  require a learning-state update. If an interaction later affects task
+  selection, its educational purpose, conditions, and source must remain
+  inspectable.
 - Assessment and active recall are normal continuations of teaching.
-- Errors may redirect the session toward a prerequisite rather than merely producing another explanation.
+- Formal task results may create review, diagnostic, or prerequisite-remediation
+  candidates according to the task's purpose and conditions. A conversational
+  difficulty or one isolated error does not by itself rewrite the course route
+  or learner state.
+- Source-grounded curricular relations are high-inertia when they exist.
+  Learner evidence does not silently edit those relations, while the learner's
+  current plan and task sequence remain adaptive.
+- Time can make a review due without creating a new learning observation or a
+  durable claim that the learner has forgotten.
 - Assignment urgency and learning value can change the session plan.
-- The end of a session exposes what was observed, what was inferred, and what future action changed.
+- When a Session produces a relevant durable change, the learner can inspect
+  what was recorded, what was inferred, and what future action changed. A
+  routine explanation does not require an expanded end-of-session audit.
+
+An interaction can be educationally valuable while leaving only Session history,
+source references, and a modest future reminder. Structured evidence exists to
+improve later teaching and planning; it is not a form that every explanation
+must fill.
 
 ## Product boundaries
 
@@ -63,17 +138,37 @@ Rep was a small HarmonyOS course project used to explore planning, knowledge dep
 
 ## Current technical decision
 
-The main implementation uses TypeScript and Bun. OpenCode is the primary engineering reference because it demonstrates a production terminal agent, not because its coding-specific architecture should be inherited. The harness will be implemented in this repository after its mechanisms are understood.
+The main implementation uses TypeScript and Bun. OpenCode is the primary
+engineering reference because it demonstrates a production terminal agent, not
+because its coding-specific architecture should be inherited. Codex is a
+secondary comparison reference used to separate convergent harness mechanisms
+from one upstream's product choices. This repository owns harness composition
+and product semantics; mature open-source interfaces and libraries should carry
+generic execution mechanics unless an observed learning invariant conflicts
+with them. ADR-0012 centers the application on a single local LearnerHome and
+separate learning authorities inside one modular monolith; the Agent loop is an
+outer execution mechanism rather than the long-term state model.
 
 ## Deliberately unresolved
 
 The following decisions remain open because source research and focused experiments are still required:
 
-- The durable message/session event model.
-- The exact boundary between the generic runtime and learning application layer.
-- Learner-state representation and confidence/calibration.
+- The durable Session schema beyond the demonstrated admitted-input,
+  model-operation, tool-settlement, and complete final-assistant occurrence
+  spine. Per-step provider diagnostics, partial-stream persistence, and their
+  replay meaning remain open.
+- Richer production shapes beyond the first implemented Course/material/route
+  and Agenda consumers: broader Material Map and search, learner history,
+  goals, assignments, and review authorities. Ownership and separation are
+  settled; future consumers still decide these unproved local shapes.
+- The exact selection rules and budgets within the accepted compact-current-
+  view plus lazy-detail context architecture.
+- Learner-state representation when a demonstrated future action needs more
+  than simple progress, task results, and revisits.
 - The task-selection policy and its explanation contract.
-- Persistence layout and correction/retraction semantics.
+- The domain-specific persistence layout for learning authorities not yet
+  implemented and their corrections. SQLite authority, revision distinctions,
+  and the first Course/Agenda tables are already settled by working consumers.
 - TUI framework and the point at which a richer interface is justified.
 
 Unresolved does not mean "let AI choose during implementation." These are explicit design decisions to settle with evidence.

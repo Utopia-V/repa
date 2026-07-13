@@ -1,5 +1,10 @@
 # Foundation phase
 
+Status: Runtime reference study and the accepted ADRs are complete. The
+learning-domain exit path is open again after maintainer review found that the
+formal-task fixtures had begun to overemphasize gradable practice. See
+[`../foundation/02-what-the-tutor-does.md`](../foundation/02-what-the-tutor-does.md).
+
 ## Goal
 
 Reach the point where the maintainer can design the first production
@@ -12,9 +17,12 @@ learning-semantic path instead of completing a generic harness in isolation.
 - Record the product origin and settled constraints.
 - Define the role of AI in engineering work.
 - Pin an executable OpenCode reference.
+- Pin Codex as an independent secondary comparison reference.
 - Trace the ordinary TUI-to-agent-loop path.
 - Trace the provider-event, durable-session, tool, permission, and execution-serialization boundaries.
 - Separate reusable agent mechanisms from OpenCode product-scale architecture.
+- Cross-check turn, sampling, tool-effect, approval, persistence, recovery,
+  context, mode, and budget assumptions against Codex.
 - Establish a strict TypeScript/Bun repository baseline.
 
 ## Source slices
@@ -43,38 +51,67 @@ Trace rule evaluation, request publication, user reply, cancellation, and tool r
 
 Result: [Permission flow contract findings](../research/permission-flow-contracts.md)
 
-### Learning-semantic anchor (completed)
+### Learning-significance contract lab (completed)
 
-Define the minimum contract required to carry one committed learning occurrence
-through learner-state projection, context assembly, Tutor action, and a changed
-next action. This is a contract fixture, not a complete curriculum model or
-learner ontology.
+Exercise ordinary clarification, selected explanation, formal task results,
+assistance conditions, correction, time-derived review, atomic local settlement,
+projection rebuild, and a changed next action. This remains a contract fixture,
+not a complete curriculum model, learner ontology, or scheduler policy.
 
-The fixture must distinguish a durable occurrence from a rebuildable model
-inference and must use the same Session/tool lifecycle being designed above.
+Result: [Learning-significance contract findings](../research/learning-semantic-anchor.md)
 
-Result: [Learning-semantic anchor findings](../research/learning-semantic-anchor.md)
+### Learning-task significance and scheduling (direction reviewed)
+
+Separate ordinary conversation from formal learning-task results, then specify
+how diagnostic, lesson, quiz, and review evidence may affect local scheduling
+without rewriting the curricular view. Account for naturally due review without
+inventing new evidence when time passes.
+
+Inputs:
+
+- [Math Academy task-selection and review findings](../research/math-academy-task-selection-and-review.md)
+- [Learning representation beyond topic mastery](../research/learning-representation-and-goals.md)
+
+Working result:
+[Learning-task significance and scheduling behavior](../proposals/0002-learning-task-significance-and-scheduling.md)
+
+### Codex comparative audit (completed)
+
+Trace the same runtime boundaries in an independently built agent. Use the
+comparison to find both missing contracts and defensive guarantees that are not
+general harness prerequisites.
+
+Result:
+[Codex `rust-v0.144.1` runtime-contract findings](../research/codex-rust-v0.144.1-runtime-contracts.md)
 
 ## Foundation exit gate
 
-Draft synthesis:
+The runtime portion is complete. The accepted contracts cover the interaction
+hierarchy, local transaction scope, process-local coordination, finite
+continuation, permission boundaries, and the separation of provider events from
+durable product state.
+
+Revised synthesis:
 [Foundation runtime contracts](../proposals/0001-foundation-runtime-contracts.md).
-The proposal remains subject to maintainer review and is not yet an ADR.
+The maintainer accepted its five defaults on 2026-07-11. ADR-0005, ADR-0006,
+and ADR-0007 record the interaction, transaction, recovery, and continuation
+boundaries.
 
-The phase ends when the repository contains a reviewed proposal for:
+The previous learning-domain gate centered a formal task, evidence
+interpretation, learner projection, and changed selector action. ALS-015 and
+ALS-016 did not earn that representation, and maintainer review found that the
+path displaced teaching and material learning. It remains historical research,
+not an unfinished foundation requirement.
 
-- `Message` and `MessagePart`;
-- provider-neutral `ModelEvent` for one provider attempt, distinct from the
-  complete Session run lifecycle;
-- `ToolDefinition`, `ToolCall`, and legal state transitions;
-- `PermissionRequest` and `PermissionDecision`;
-- serialized `AgentRun`/session execution;
-- persistence and interruption invariants;
-- the transaction boundary between durable Session facts, durable learning
-  occurrences, and rebuildable learner projections;
-- one trace demonstrating that different committed learning evidence changes
-  assembled context and the Tutor's next action.
+The product behavior baseline is now recorded in:
 
-No full TUI or broad learning schema is started before this gate. A focused lab
-may use SQLite and a minimal learning trace to validate an uncertain mechanism,
-but production code cannot depend on accidental lab structure.
+- [What the Tutor does](../foundation/02-what-the-tutor-does.md);
+- [Complete learning behavior traces](../foundation/03-complete-learning-traces.md);
+- [Current understanding](../current-understanding.md); and
+- [Learning-native responsibilities](../proposals/0003-learning-native-responsibilities.md).
+
+The B1/B2 behavior baseline is now historical evidence. Active work is selected
+from [the architecture-led build map](./architecture-led-build-sequence.md),
+which preserves peer product pressure paths instead of extending one numbered
+module sequence. No broad learning schema is selected without a demonstrated
+future consumer.

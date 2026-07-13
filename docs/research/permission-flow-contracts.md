@@ -6,6 +6,12 @@ Status: Research synthesis and candidate authorization contract. Exact rule
 syntax and persistence tables remain open until the foundation proposals are
 reviewed together.
 
+Current scope note (2026-07-11): the permission lifecycle remains useful.
+Assessment, projection, and review examples apply only when those writes
+actually occur. Simple material-position or explained-range updates need no
+invented learner projection, while external effects still follow authorization
+policy.
+
 OpenCode reference commit:
 `b1fc8113948b518835c2a39ece49553cffe9b30c` (`v1.17.18`)
 

@@ -2,877 +2,545 @@
 
 Date: 2026-07-10
 
-Status: Draft for maintainer review; internal coherence audit completed. This
-proposal is not an ADR and does not authorize production implementation.
+Status: Partially accepted historical synthesis. The runtime defaults were
+explicitly accepted by the maintainer on 2026-07-11 and promoted through
+ADR-0005, ADR-0006, and ADR-0007. Its evidence/projection product path is
+superseded as the current direction. Open learning-policy statements remain
+historical proposals rather than defaults.
 
-## Purpose
+Post-benchmark note (2026-07-11): the runtime defaults remain accepted, but the
+general evidence/projection path below did not pass ALS-015/ALS-016. It must not
+be implemented as a complete production schema. A later deterministic-task
+proposal also overemphasized gradable practice and is paused. The learning path
+must be reconsidered from the full Tutor behavior recorded in
+[`../foundation/02-what-the-tutor-does.md`](../foundation/02-what-the-tutor-does.md).
 
-Define the smallest runtime boundary that can support a terminal-native agent
-while making learning state part of the ordinary control loop:
+## Why this revision exists
 
-```text
-learning situation
--> selected action
--> learning activity
--> accepted occurrence
--> revised learner projection
--> changed next action
-```
+The first draft correctly found several real harness boundaries, but it treated
+future recovery mechanisms as though they all belonged in the first production
+slice. Independent review and the Codex comparison exposed four concrete
+problems:
 
-The proposal consolidates the completed foundation research:
+- no user-visible Turn existed above provider requests and local tools;
+- provider completion and local-tool completion were coupled incorrectly;
+- a runtime receipt could prove execution identity without preserving the
+  educational meaning required by ADR-0003; and
+- durable inbox, permission, effect-reconciliation, and exact-context machinery
+  were proposed before the product had a consumer for those guarantees.
 
-- [Message and model-event contract findings](../research/message-and-model-event-contracts.md)
-- [Tool lifecycle contract findings](../research/tool-lifecycle-contracts.md)
-- [Session serialization and recovery findings](../research/session-serialization-and-recovery.md)
-- [Permission flow contract findings](../research/permission-flow-contracts.md)
-- [Learning-semantic anchor findings](../research/learning-semantic-anchor.md)
-- [Validation and storage findings](../research/validation-and-state-storage.md)
+This revision keeps the smallest complete agent loop and makes one
+learning-significant result constrain it. It deliberately does not design a
+durable workflow engine.
 
-## Semantic checksum
+Inputs:
 
-Product-loop purpose:
+- [Accepted product origin](../foundation/00-product-origin.md)
+- [ADR-0002: Modes are policy profiles](../decisions/0002-modes-are-policy-profiles.md)
+- [ADR-0003: Learning state follows evidence](../decisions/0003-learning-state-follows-evidence.md)
+- [Learning-task significance and scheduling](./0002-learning-task-significance-and-scheduling.md)
+- [ChatGPT Pro review](../research/chatgpt-pro-foundation-review-2026-07-10.md)
+- [Codex runtime-contract findings](../research/codex-rust-v0.144.1-runtime-contracts.md)
 
-```text
-preserve enough trustworthy history for the Tutor's next action to depend on
-what the learner actually did, not only on the current chat message
-```
+## Authority of this document
 
-Owned durable facts and invariants:
+This proposal contains three different kinds of statement.
 
-```text
-Session owns ordered interaction and execution history
-Learning Domain owns accepted learning occurrences and current obligations
-learner projections and compiled context are rebuildable and source-linked
-only one process-owned drain executes one Session at a time
-a recorded tool invocation settles exactly once
-```
+### Already accepted
 
-Representative behavior:
+- Repa owns one TypeScript/Bun agent harness.
+- Modes contribute policy to one loop rather than creating separate runtimes.
+- Learning reports, observations, evidence, inferences, and actions remain
+  distinguishable.
+- Routine, provenance-preserving learning updates are inspectable,
+  correctable, reversible, and non-modal.
+- Learning semantics must affect context and next-action selection.
 
-```text
-the learner says “开始学习”
--> current learning context selects an activity
--> an answer produces an accepted occurrence
--> the next model attempt sees a revised projection
--> the Tutor changes its next action
-```
+### Accepted foundation defaults
 
-Prohibited behavior:
+- SQLite is the only authoritative machine store in the first implementation.
+- One durable Turn groups one user request and the resulting agent work.
+- One logical model operation is independent of local tool settlement.
+- Live coordination remains process-local unless restart recovery has a current
+  product consumer.
+- Local learning writes and their tool settlement share one SQLite transaction.
+- Every Turn has finite, code-enforced continuation limits.
 
-```text
-assistant text says “mastered”
-or a learning tool merely attempts or fails a write
--> learner state changes
-```
+These defaults were accepted and are recorded normatively in ADR-0005,
+ADR-0006, and ADR-0007.
 
-Failure and correction behavior:
+### Still open
 
-```text
-input retry is idempotent
-tool retry cannot duplicate an effect
-ambiguous post-crash effects are reconciled, not replayed
-projections can be rebuilt
-routine learning records are inspectable and correctable without modal friction
-```
+- the general admission rule for educational meaning inferred after an
+  interaction;
+- LLM-authored task-to-target alignment outside a reviewed domain source;
+- the first retention model and task-ranking policy; and
+- persistence guarantees for mid-Turn steering and future external effects.
+
+No type, table, or package is implied for the open concepts.
+
+## Historical product-bearing contract slice
+
+The paused production proposal tried to make this observable:
+
+~~~text
+accepted learning goal and current context
+-> Tutor selects a formal learning task
+-> learner produces a source-linked result under known conditions
+-> the Learning Domain admits a correctable evidence interpretation
+-> the learner projection changes
+-> the next context names the new projection
+-> the Tutor selects a materially different next action when appropriate
+~~~
+
+The path may span more than one Turn. For example, one Turn can present a task
+and a later Turn can carry the answer. A Turn is an interaction boundary, not a
+claim that a complete learning activity fits in one model response.
+
+The required counterexample is equally important:
+
+~~~text
+learner asks an ordinary clarification
+-> Tutor answers
+-> interaction history changes
+-> no learning result, evidence interpretation, review obligation,
+   or curricular relation changes
+~~~
+
+This remains useful as history and as a source of bounded runtime tests. It is
+not the current product sequence because it represents teaching too narrowly.
 
 ## Boundary map
 
-```mermaid
-flowchart TD
-    U["Terminal user"] --> T["TUI command/projection surface"]
-    T --> S["Session application boundary"]
-    S --> R["Process-local Session drain"]
-    R --> C["Learning-aware context compiler"]
-    C --> M["Model adapter"]
-    M --> E["ModelEvent reducer"]
-    E --> X["Tool runtime"]
-    X --> P["Permission boundary"]
-    X --> L["Learning Domain or external tool"]
-    L --> D["SQLite authority"]
-    E --> D
-    S --> D
-    D --> T
-```
+~~~text
+Terminal user
+      |
+      v
+Terminal interaction surface
+      |
+      v
+Session (long-lived conversation)
+      |
+      +-- Turn (one request and the resulting agent work)
+               |
+               v
+         single agent loop
+          /      |       \
+         v       v        v
+   context    model     tool runtime
+   compiler   adapter      |
+      ^                    +-- permission policy
+      |                    +-- Learning Domain
+      |                              |
+      +---------- SQLite <-----------+
+~~~
 
-Learning semantics enter at context compilation, tool vocabulary, domain
-transactions, continuation, and validation fixtures. Provider decoding and TUI
-rendering remain domain-independent.
+Provider decoding and terminal rendering remain domain-independent. Learning
+semantics enter through context selection, task/result tools, domain
+transactions, action selection, and review surfaces.
 
 ## Ownership
 
-| Boundary | Owns | Does not own |
+| Boundary | Owns | Explicitly does not own |
 |---|---|---|
-| Model adapter | Provider request/response translation and `ModelEvent` normalization | Session truth, permissions, learning evidence |
-| Session application | Input admission, ordered messages, attempts, tool/permission links | Learner inference or provider SDK objects |
-| Session drain | One serialized continuation loop and cancellation scope | Durable work truth or domain semantics |
-| Context compiler | Provider-ready context plus source/projection provenance | Learning facts or provider streaming |
-| Tool runtime | Definition materialization, input/output validation, invocation lifecycle | Permission policy or meaning of learning evidence |
-| Permission boundary | Whether a protected effect may occur | Whether the effect succeeded or proves learning |
-| Learning Domain | Accepted occurrences, operation receipts, current goals/obligations, projection rules | Session transcript and provider state |
-| TUI | Commands, live deltas, and durable projections | Authorization enforcement or persistence authority |
-| SQLite | Current structured state, append-mostly facts/audit, recovery anchors | Presentation and model reasoning |
+| Terminal surface | Input, live rendering, compact audit and correction entry points | Authorization or durable truth |
+| Session | Ordered durable interaction history across Turns | Learner inference |
+| Turn | One user-visible request, accepted steering, resulting model/tool work, and terminal outcome | Provider retry details or learning meaning |
+| Agent loop | Serialized continuation, cancellation scope, budgets, and safe boundaries | Persistence authority or domain inference |
+| Context compiler | Provider-ready context and provenance of selected learning state/policy | Facts or provider streaming |
+| Model adapter | One logical model operation, provider translation, normalized events, internal retry | Tool effects, Turn completion, learning state |
+| Tool runtime | Visible definitions, validation, correlation, execution and settlement | Permission policy or educational interpretation |
+| Permission policy | Whether a protected effect may begin | Whether it succeeded or proves learning |
+| Learning Domain | Task context, admitted results, evidence interpretation, corrections, obligations, and projection rules | Session text or provider state |
+| SQLite | Durable interaction and learning authority | Live stream state or presentation |
 
-## Identity and ordering
+## Interaction hierarchy
 
-The production types should use distinct branded string IDs. Their exact
-encoding is an implementation detail.
+The runtime uses five distinct meanings. They need clear identities in code but
+do not all require independent database tables.
 
-```ts
-type SessionID = string
-type InputID = string
-type MessageID = string
-type MessagePartID = string
-type ModelAttemptID = string
-type RuntimeInvocationID = string
-type ProviderCallID = string
-type PermissionRequestID = string
-type ContextSnapshotID = string
-type LearningOccurrenceID = string
-type EffectReceiptID = string
+### Session
 
-type RuntimeSchema<T> = {
-  parse(input: unknown): T
-}
+A long-lived conversation and learning-workspace interaction history.
 
-type ModelUsage = {
-  inputTokens: number
-  outputTokens: number
-  reasoningTokens?: number
-  cachedInputTokens?: number
-}
+### Turn
 
-type ModelFailure = {
-  message: string
-  code?: string
-  retryable: boolean
-}
+One user-visible request together with the agent work that follows, including
+accepted steering, model operations, tool calls, and the terminal outcome.
 
-type ModelToolResult = {
-  text: string
-}
-```
+The first implementation proposes:
 
-Important identity rules:
-
-1. `ProviderCallID` is stable only inside one provider attempt and may repeat
-   across attempts.
-2. `RuntimeInvocationID` is globally unique in the local database and is the
-   idempotency identity used by tools and domain receipts.
-3. Every durable Session mutation receives a monotonic `sessionSeq`; timestamps
-   do not define order.
-4. Client-supplied `InputID` supports exact retry. Reuse with different content
-   is a conflict.
-
-## Session input
-
-```ts
-type SessionInput = {
-  id: InputID
-  sessionID: SessionID
-  text: string
-  admittedSeq: number
-  visibleSeq?: number
-  admittedAt: number
-}
-```
-
-Legal transition:
-
-```text
-absent -> admitted -> visible
-```
-
-There is no reverse transition. Admission is durable before any wake. Making an
-input visible and appending its user message occur in one SQLite transaction.
-
-The initial product has one delivery policy. Inputs admitted during an active
-model attempt become visible at the next safe provider boundary. Deferred queue
-semantics are not included.
-
-## Message and MessagePart
-
-Session messages are application projections, not provider messages and not
-learning records.
-
-```ts
-type Message = UserMessage | AssistantMessage
-
-type UserMessage = {
-  id: MessageID
-  sessionID: SessionID
-  sessionSeq: number
-  kind: "user"
-  inputID: InputID
-  text: string
-  createdAt: number
-}
-
-type AssistantMessage = {
-  id: MessageID
-  sessionID: SessionID
-  sessionSeq: number
-  kind: "assistant"
-  attemptID: ModelAttemptID
-  parts: readonly MessagePart[]
-  createdAt: number
-}
-
-type MessagePart = TextPart | ToolPart
-
-type TextPart = {
-  id: MessagePartID
-  kind: "text"
-  text: string
-  completion: "complete" | "interrupted"
-}
-
-type ToolPart = {
-  id: MessagePartID
-  kind: "tool"
-  invocationID: RuntimeInvocationID
-}
-```
-
-Initial deliberate omissions:
-
-- no durable hidden-reasoning part;
-- no generic system message in user-visible history;
-- no attachment part until the first real attachment flow is designed;
-- no duplicate tool state inside the part; it references the invocation
-  projection;
-- no token-delta rows.
-
-Live text exists in an in-memory projection while streaming. Controlled
-interruption closes accumulated text as `interrupted`. A hard process loss may
-lose only the uncommitted live tail; the attempt is durably recovered as
-interrupted. Coalesced partial checkpoints may be added if observed loss makes
-that trade-off unacceptable.
-
-## ModelAttempt
-
-One attempt corresponds to one provider request.
-
-```ts
-type ModelAttemptStatus =
-  | "dispatching"
-  | "streaming"
-  | "completed"
-  | "failed"
-  | "interrupted"
-
-type ModelAttempt = {
-  id: ModelAttemptID
-  sessionID: SessionID
-  assistantMessageID: MessageID
-  contextSnapshotID: ContextSnapshotID
-  provider: string
-  model: string
-  status: ModelAttemptStatus
-  startedSeq: number
-  settledSeq?: number
-  finishReason?: string
-  usage?: ModelUsage
-  error?: ModelFailure
-  startedAt: number
-  completedAt?: number
-}
-```
-
-Legal transitions:
-
-```text
-dispatching -> streaming -> completed
-dispatching -> failed | interrupted
-streaming -> failed | interrupted
+~~~text
+running -> completed | failed | interrupted | exhausted
 terminal -> no transition
-```
+~~~
 
-`dispatching` commits before the provider network call. A crash in that gap is
-ambiguous provider work and recovers as interrupted; it is not silently
-redispatched.
+The initial user item and running Turn are committed before model work begins.
+At most one Turn is active for one resident Session runtime. Different Sessions
+may run concurrently.
 
-## Provider-neutral ModelEvent
+Acknowledged mid-Turn steering may remain process-local in the first slice. If
+the process dies before steering becomes durable history, it may be lost. The
+terminal surface must not claim a stronger guarantee.
 
-The model adapter emits events for one attempt only:
+### Logical model operation
 
-```ts
-type ModelEvent =
-  | { type: "text.started"; blockID: string }
-  | { type: "text.delta"; blockID: string; delta: string }
-  | { type: "text.ended"; blockID: string; text: string }
-  | { type: "tool_input.started"; providerCallID: ProviderCallID; name: string }
-  | { type: "tool_input.delta"; providerCallID: ProviderCallID; name: string; delta: string }
-  | { type: "tool_input.ended"; providerCallID: ProviderCallID; name: string; raw: string }
-  | {
-      type: "tool.called"
-      providerCallID: ProviderCallID
-      name: string
-      input: unknown
-      executionOwner: "runtime" | "provider"
-      providerMetadata?: unknown
-    }
-  | {
-      type: "provider_tool.succeeded"
-      providerCallID: ProviderCallID
-      name: string
-      result: unknown
-      providerMetadata?: unknown
-    }
-  | {
-      type: "provider_tool.failed"
-      providerCallID: ProviderCallID
-      name: string
-      error: ModelFailure
-      providerMetadata?: unknown
-    }
-  | { type: "response.completed"; finishReason: string; usage: ModelUsage }
-  | { type: "response.failed"; error: ModelFailure }
-```
+One request for a model decision at a context boundary. Provider authentication
+retries, transport retries, or fallback sends remain adapter details unless a
+diagnostic trace is enabled.
 
-Initial invariants:
+Its settlement depends only on model/transport behavior:
 
-1. A block starts once, accepts deltas only while active, and ends once.
-2. A tool name cannot change for one provider call identity.
-3. A complete `tool.called` follows complete input assembly and occurs once.
-4. A provider-hosted call settles once through a provider-tool event.
-5. Exactly one response terminal event occurs.
-6. Deltas are live-only; ended values drive durable Session content.
-7. Provider metadata is opaque and cannot control downstream domain branches.
-8. Provider response completion does not mean the Session drain or local tools
-   have completed.
+~~~text
+running -> completed | failed | interrupted
+terminal -> no transition
+~~~
 
-Provider step events are omitted until a supported provider requires them for
-correctness. Hidden reasoning or encrypted continuation data, if required, is
-stored as provider-specific attempt continuation data and is never learning
+A completed model operation may leave local tools to execute. It does not
+complete the Turn.
+
+### Tool invocation
+
+One complete model-requested call correlated to a logical model operation. The
+invocation is recorded before executor entry.
+
+The first local lifecycle is:
+
+~~~text
+recorded -> running -> succeeded | failed | cancelled
+recorded -> rejected | declined | cancelled
+terminal -> no transition
+~~~
+
+Invalid input, an unavailable definition, or a hard policy deny never enters
+the executor. Cancellation becomes terminal only after the executor has stopped
+and the runtime can account for the local effect.
+
+There is no generic terminal indeterminate state in the first slice. A future
+connector whose external effect can outlive cancellation must define its own
+unresolved/reconciliation contract before it is enabled.
+
+### Transport attempt
+
+One physical provider send. It is adapter diagnostics, not product state, by
+default.
+
+## Provider events and durable interaction
+
+The adapter normalizes only the events required by the first provider:
+
+- completed assistant text blocks;
+- complete tool calls with stable correlation;
+- model-operation completion, failure, usage, and interruption.
+
+Streaming deltas and partial tool-input buffers are process-local. Complete
+assistant text and complete tool calls become durable Turn items. An incomplete
+tool-input buffer is discarded and never executes.
+
+Malformed input in a provider-declared complete tool call fails that logical
+model operation or records a rejected invocation; it is not silently dropped.
+Hidden reasoning is neither durable product history nor learning evidence.
+
+## Finite continuation
+
+Before starting each additional logical model operation, the agent loop checks
+a Turn-scoped budget. The first implementation must enforce at least:
+
+- a maximum number of logical model operations; and
+- a maximum number of tool invocations.
+
+Token, elapsed-time, and cost limits may be added when the chosen provider
+exposes reliable data. Exact numeric defaults are configuration, not domain
+semantics.
+
+Exhaustion produces a durable Turn outcome that names the exhausted counter and
+its observed value. It does not masquerade as successful completion. The user
+may explicitly start a later Turn to continue.
+
+## Learning-significant records
+
+The foundation needs semantic roles, not a complete learner ontology.
+
+### Formal task context
+
+The educational purpose of a selected task, its targets, relevant alignment,
+and the conditions under which a result can be interpreted. A task may teach,
+exercise, assess, or require a target.
+
+### Source-linked task result
+
+What happened in one task attempt, under what observable conditions, and where
+the authoritative answer, tool result, or artifact version lives. It references
+Session history or an artifact rather than copying the original content.
+
+### Evidence interpretation
+
+What the source-linked result supports about a target, with the grading method,
+rule/model revision, assistance conditions, and uncertainty needed to explain
+the consequence. This is durable but fallible and correctable.
+
+### Learner projection
+
+A rebuildable view over active evidence interpretations for an active goal. It
+is not a declaration of the learner's inner state and is not curricular
+structure.
+
+### Scheduling consequence
+
+A reversible obligation or candidate reason such as verification, review, or
+local remediation. Passage of time may alter its urgency without creating new
 evidence.
 
-## ToolDefinition and per-attempt materialization
+These roles may share a transaction or storage record when their distinctions
+remain queryable. They must not collapse into one unqualified mastery number.
 
-The stable tool value owns one input schema, one output schema, one executor,
-and one model-output conversion.
+## Admission boundary
 
-```ts
-type ToolDefinition<Input, Output> = {
-  name: string
-  description: string
-  revision: string
-  inputSchema: RuntimeSchema<Input>
-  outputSchema: RuntimeSchema<Output>
-  execute(input: Input, context: ToolExecutionContext): Promise<Output>
-  toModelResult(output: Output): ModelToolResult
-}
+Session history becomes learning-significant only when:
 
-type ToolExecutionContext = {
-  sessionID: SessionID
-  assistantMessageID: MessageID
-  attemptID: ModelAttemptID
-  invocationID: RuntimeInvocationID
-  signal: AbortSignal
-  authorize(request: ToolAuthorization): Promise<void>
-}
-```
+1. an identifiable educational purpose exists;
+2. the task target and alignment are known well enough to interpret the result;
+3. assistance, hints, timing, grading, and other meaning-changing conditions
+   are recorded when relevant; and
+4. the result can legitimately change review pressure, local task priority, or
+   a verification obligation.
 
-This is a semantic shape, not a commitment to a particular schema library or
-Promise-based internal implementation.
+An ordinary clarification satisfies none of these by default.
 
-At attempt assembly, the tool runtime materializes the exact visible
-definitions and revisions. A later same-name registration change makes the old
-call stale; it never invokes the new handler.
+A selected explanation may create a future verification obligation. It does
+not itself provide mastery evidence.
 
-Tools resolve canonical resources, authorize, then perform protected effects.
-The registry does not infer authorization from tool visibility.
+A formal quiz miss may create targeted review candidates after the assessment
+boundary completes. It does not rewrite accepted curriculum relations.
 
-## ToolInvocation and settlement
+## Identity and idempotency
 
-Incremental tool input is a live reducer buffer keyed by provider call ID. It
-does not acquire a runtime invocation ID. Only a complete provider call creates
-and durably records a `ToolInvocation`.
+Semantic identity and execution identity are different:
 
-```ts
-type ToolPhase = "recorded" | "executing" | "settled"
+- a task-attempt identity plus its source reference identifies the observed
+  result;
+- an evidence-interpretation identity identifies one versioned educational
+  reading of that result; and
+- a runtime tool-invocation identity may act as an idempotency key for the
+  command that records them.
 
-type ToolInvocation = {
-  id: RuntimeInvocationID
-  sessionID: SessionID
-  attemptID: ModelAttemptID
-  assistantMessageID: MessageID
-  providerCallID: ProviderCallID
-  toolName: string
-  definitionRevision: string
-  executionOwner: "runtime" | "provider"
-  phase: ToolPhase
-  recordedSeq: number
-  executingSeq?: number
-  settledSeq?: number
-  rawInput?: string
-  input?: unknown
-  settlement?: ToolSettlement
-  createdAt: number
-  settledAt?: number
-}
+Replaying the same operation returns the existing commit. Reusing the operation
+key with conflicting input is rejected. The runtime invocation is not the
+domain identity and does not determine educational meaning.
 
-type ToolSettlement =
-  | {
-      outcome: "success"
-      structured: unknown
-      modelResult: ModelToolResult
-      effectReceiptID?: EffectReceiptID
-    }
-  | {
-      outcome: "rejected"
-      reason: "invalid_input" | "unknown_tool" | "stale_definition" | "policy_denied"
-      message: string
-    }
-  | { outcome: "declined"; requestID: PermissionRequestID; feedback?: string }
-  | {
-      outcome: "failed"
-      stage: "execution" | "output_validation" | "result_retention"
-      message: string
-      effect: { status: "none" } | { status: "committed"; receiptID: EffectReceiptID }
-    }
-  | { outcome: "cancelled"; message: string; effect: { status: "none" } }
-  | { outcome: "indeterminate"; message: string }
-```
+Re-evaluating the same source under a new rule does not insert a second answer.
+It appends a superseding evidence interpretation or correction.
 
-Legal transitions:
+## Correction and retraction
 
-```text
-live tool-input buffer -> recorded invocation
-incomplete live buffer -> discarded on interruption; never executed
-recorded -> executing
-recorded -> settled(rejected | cancelled)
-executing -> settled(any outcome)
-settled -> no transition
-```
+Original Session items, artifacts, and source-linked results are not invisibly
+rewritten.
 
-Semantics of terminal outcomes:
+A correction appends provenance and may:
 
-- `failed` and `cancelled` are used only when the runtime knows no authoritative
-  effect remains unaccounted for. A failed call may cite a committed receipt;
-  otherwise it explicitly states that no effect occurred.
-- possible or partially observed side effects produce `indeterminate` until
-  reconciliation.
-- a domain effect receipt turns a recovered invocation into `success` without
-  replaying it.
-- a recorded invocation settles exactly once; exact duplicate terminal input is
-  idempotent, conflicting settlement is a defect.
+- correct recorded conditions;
+- supersede an evidence interpretation;
+- retract an unsupported interpretation; or
+- replace a scheduling consequence derived from it.
 
-The initial runtime executes runtime-owned calls serially in provider order.
-Parallel read-only calls are deferred until observed latency justifies a
-conflict and backpressure policy.
+Projection rebuild considers only active interpretations after applying the
+correction chain. Derived schedules and context are recomputed from the revised
+projection. The original result remains inspectable.
 
-Provider-hosted calls cannot mutate Repa learning state, local files, review
-schedules, or other authoritative local facts.
+Correction is distinct from undoing an external effect. The first slice has no
+external effect-reconciliation contract.
 
-## PermissionRequest and PermissionDecision
+## Local transaction boundary
 
-```ts
-type PermissionRequest = {
-  id: PermissionRequestID
-  sessionID: SessionID
-  invocationID: RuntimeInvocationID
-  action: string
-  canonicalResources: readonly string[]
-  rememberableScopes: readonly string[]
-  explanation: Record<string, unknown>
-  policyRevision: string
-  status: "pending" | "decided" | "cancelled" | "invalidated"
-  createdSeq: number
-  terminalSeq?: number
-  createdAt: number
-}
+All first-slice authoritative state is in one SQLite database.
 
-type PermissionDecision = {
-  requestID: PermissionRequestID
-  sessionSeq: number
-  decidedAt: number
-} & (
-  | { outcome: "allow_once" }
-  | { outcome: "allow_scope"; rememberedScope: string }
-  | { outcome: "deny"; feedback?: string }
-)
-```
+When a runtime-owned learning tool records a formal task result, one transaction
+must:
 
-Rules:
+1. validate the source reference, task context, conditions, and operation key;
+2. insert or resolve the source-linked result;
+3. append the evidence interpretation or correction;
+4. update or invalidate the rebuildable learner projection and affected local
+   obligations; and
+5. settle the tool invocation with the model-visible result.
 
-1. Trusted tool code supplies canonical action/resources.
-2. Hard policy deny wins over remembered allow.
-3. Missing policy cannot widen authority.
-4. Permission is checked inside execution before the protected effect.
-5. Pending requests are durable and linked blockers, not tool phases.
-6. Exact duplicate decisions are idempotent; conflicting decisions are rejected.
-7. Target and policy are revalidated before an allow is consumed.
-8. Learner denial settles the invocation as declined and stops the current
-   continuation. Optional feedback becomes admitted user steering.
-9. Routine local learning occurrences are policy-allowed by default when they
-   are provenance-preserving, inspectable, and correctable.
+Either the transaction commits all five effects or none. This removes the
+first draft's receipt/reconciliation gap for local learning writes.
 
-Initial rule syntax can be exact action plus canonical resource prefix. A
-general wildcard language is deferred.
+Read-only tools need no receipt. External files, Anki, MCP, assignment
+submission, and other non-SQLite effects require connector-specific
+idempotency/reconciliation design later; the foundation does not pretend that a
+generic receipt can prove an arbitrary remote effect.
 
-## ContextSnapshot
+## Context provenance
 
-Every model attempt captures what the Tutor was allowed to know at dispatch.
+Every logical model operation that can choose a learning action receives a
+compact provenance cut containing at least:
 
-```ts
-type ContextSnapshot = {
-  id: ContextSnapshotID
-  sessionID: SessionID
-  sessionThroughSeq: number
-  learnerProjectionRevision: string
-  sourceOccurrenceIDs: readonly LearningOccurrenceID[]
-  activeGoalRevisions: readonly string[]
-  obligationRevisions: readonly string[]
-  courseSourceRevisions: readonly string[]
-  modePolicyRevision: string
-  compilerVersion: string
-  createdSeq: number
-  createdAt: number
-}
-```
+- the durable Session history boundary used;
+- the learner-projection revision used;
+- active goal, obligation, curriculum-source, and mode-policy revisions that
+  materially affected selection.
 
-The first schema may normalize source references into a child table rather than
-JSON arrays. The invariant is source-linked provenance, not this storage shape.
+The exact compiled prompt is not product authority and need not be persisted by
+default. A sensitive diagnostic trace may capture it separately. The provenance
+cut may be fields on the model-operation or selected-action record rather than
+a dedicated ContextSnapshot table.
 
-The provider prompt is rebuildable and provider-specific. It is not the source
-of truth. Retrieved documents remain untrusted content; only the context
-compiler can construct privileged instructions.
+Retrieved material remains untrusted content. Only the context compiler can
+construct privileged instructions.
 
-## Minimum learning-domain contract
+## Permission boundary
 
-The foundation does not accept a complete `Topic`, `Claim`, or curriculum
-schema. It needs only these roles:
+Permission is enforced immediately before protected execution using
+allow/ask/deny policy.
 
-```ts
-type LearningOccurrenceReceipt = {
-  occurrenceID: LearningOccurrenceID
-  operationID: RuntimeInvocationID
-  committedAt: number
-}
+- Plan policy can hard-deny mutation even if the model asks for it.
+- Routine provenance-preserving local learning writes are allowed by default
+  under ADR-0003.
+- External writes and difficult-to-reverse actions require explicit policy and
+  usually ask.
+- Permission approval does not prove execution or learning.
 
-type LearnerProjectionRef = {
-  revision: string
-  sourceOccurrenceIDs: readonly LearningOccurrenceID[]
-  compilerVersion: string
-}
-```
+Pending approval and remembered grants may remain process-local in the first
+slice. A restart cancels the waiting invocation and interrupts the Turn; it
+does not perform the protected effect. Durable approval is added only when a
+restart consumer exists.
 
-A learning tool transaction:
+## Persistence and recovery
 
-1. validates the proposed occurrence and provenance;
-2. uses `RuntimeInvocationID` as an idempotency operation key;
-3. commits the occurrence, any current structured state change, and an effect
-   receipt atomically;
-4. returns the receipt;
-5. lets learner projections rebuild from committed facts.
+### Durable in the first slice
 
-Session text, model reasoning, permission approval, and tool success do not by
-themselves define the occurrence's educational meaning.
+- Session, initial user item, Turn identity and terminal outcome;
+- complete assistant text and complete tool-call/result items;
+- recorded and terminal local tool invocations;
+- formal task contexts, source-linked results, evidence interpretations, and
+  corrections;
+- goals, obligations, scheduling reasons, and learner-projection revisions.
 
-## Modes are policy profiles
+### Process-local in the first slice
 
-One agent loop receives a mode policy that affects four consumers:
+- stream deltas and partial buffers;
+- adapter transport retries;
+- pending approval channels and remembered session-only grants;
+- mid-Turn steering before it enters durable history;
+- cancellation tokens and active-owner locks.
 
-```ts
-type ModePolicy = {
-  contextPolicyRevision: string
-  visibleToolNames: readonly string[]
-  permissionRulesRevision: string
-  continuationPolicyRevision: string
-}
-```
+### Recovery rules
 
-The exact policies remain data/configuration, not separate runtimes. Plan mode
-can omit mutation tools and still enforce a hard execution deny. Review mode
-can change default Tutor action and context without acquiring a second loop.
-
-## Process-local Session execution
-
-The coordinator interface is behaviorally:
-
-```ts
-type SessionExecution = {
-  activeSessions(): ReadonlySet<SessionID>
-  resume(sessionID: SessionID): Promise<void>
-  wake(sessionID: SessionID): void
-  interrupt(sessionID: SessionID): Promise<void>
-}
-```
-
-Process states:
-
-```text
-idle
-active
-stopping
-```
-
-Invariants:
-
-- one active owner per Session;
-- concurrent resumes join;
-- wake is advisory and coalesces to one successor;
-- a joined waiter's cancellation does not cancel the owner;
-- explicit interrupt cancels the owner and waits for cleanup;
-- input arriving during cleanup remains durable and may start one successor;
-- current-process active state is not persisted as authority.
-
-This does not require a durable `AgentRun` row. `ModelAttempt` and
-`ToolInvocation` are the durable execution boundaries.
-
-## Session drain algorithm
-
-```text
-1. acquire process-local Session ownership
-2. classify/reconcile nonterminal prior attempts, invocations, and permissions
-3. atomically make eligible admitted input visible
-4. stop if no durable work or continuation exists
-5. capture Session sequence and learning ContextSnapshot
-6. create ModelAttempt(dispatching)
-7. dispatch one provider request and reduce ModelEvents
-8. record every complete tool call before any local effect
-9. authorize and execute runtime-owned tools serially
-10. settle or reconcile every invocation
-11. close ModelAttempt and partial content
-12. re-query Session and Learning Domain state
-13. continue only for durable tool results, newly admitted input, or explicit policy
-14. release ownership after cleanup
-```
-
-Provider `response.completed` does not itself decide step 13.
-
-## SQLite authority and conceptual tables
-
-One local SQLite database is the machine-state authority. The names below are
-conceptual; migration design may adjust them.
-
-### Session-owned current and audit records
-
-```text
-sessions
-session_inputs
-messages
-message_parts
-model_attempts
-tool_invocations
-permission_requests
-permission_decisions
-context_snapshots
-context_snapshot_sources
-```
-
-Required constraints include:
-
-- unique input ID and exact retry payload;
-- unique `(session_id, session_seq)`;
-- unique runtime invocation ID;
-- at most one terminal tool settlement;
-- at most one permission decision per request;
-- one context snapshot per model attempt;
-- provider call ID uniqueness only within one attempt.
-
-### Learning-domain records
-
-```text
-append-mostly learning occurrences and corrections
-current structured goals and obligations
-domain operation receipts keyed by runtime invocation ID
-rebuildable learner projections with source references
-```
-
-Markdown, generated reports, and JSONL exports are views, not additional
-authorities.
-
-## Transaction boundaries
-
-| Transaction | Must commit atomically |
+| Restart observation | Required behavior |
 |---|---|
-| Input admission | Exact input payload, admitted sequence, retry identity |
-| Input visibility | Input visible sequence plus user message |
-| Attempt dispatch intent | Context snapshot, assistant message, and `ModelAttempt(dispatching)` |
-| Closed content | Full text part plus Session sequence/projection update |
-| Tool recording | Immutable invocation identity, definition revision, parsed/raw input boundary |
-| Permission request | Pending request plus link to invocation |
-| Permission decision | Terminal request state, decision, optional remembered grant audit |
-| Learning command | Occurrence/current-state changes plus effect receipt |
-| Tool settlement | Terminal invocation outcome plus optional receipt link |
+| Running Turn with no live owner | Mark interrupted; do not redispatch model work automatically |
+| Live-only text tail | Tail is lost; previously completed items remain |
+| Incomplete provider tool input | Discard; no invocation existed |
+| Recorded invocation whose executor never began | Cancel during Turn recovery; do not auto-execute |
+| Nonterminal local SQLite learning invocation | Atomic transaction proves no domain commit; cancel it |
+| Committed local learning invocation | Its tool settlement committed in the same transaction |
+| Pending process-local approval | No effect began; cancel invocation and interrupt Turn |
+| Terminal Turn | A later explicit user Turn may continue from durable history |
 
-The learning command and Session tool settlement are separate transactions.
-Their crash gap is reconciled through the unique effect receipt. A broad
-cross-domain transaction API is not introduced.
+The first slice guarantees resumable conversation and correct local learning
+facts. It does not guarantee restoration of an in-flight workflow.
 
-## Recovery matrix
+## Required contract tests
 
-| Durable state after restart | Recovery |
-|---|---|
-| Admitted input not visible | Eligible for explicit resume; no input is lost |
-| Visible input, no dispatch intent | Safe to create an attempt |
-| Dispatching/streaming attempt without terminal status | Close interrupted; do not auto-redispatch |
-| Live-only text tail | Tail may be lost; durable closed content remains |
-| Incomplete live tool-input buffer | Discard on recovery; no invocation existed and nothing executes |
-| Tool recorded, not executing | Execute only if explicitly resumed and definition revision remains valid |
-| Tool executing, no settlement | Reconcile receipt; otherwise cancelled or indeterminate, never blind replay |
-| Pending permission | Rehydrate request; revalidate target/policy before decision is consumed |
-| Decision committed, process died | Same invocation consumes exact decision after revalidation |
-| Tool settled, continuation missing | Safe to start a new attempt from durable history |
-| Terminal attempt, no pending work | Idle |
+### Turn and model boundaries
 
-Initial startup defaults:
+- the initial user item and running Turn commit before provider dispatch;
+- one resident Session cannot run two Turns concurrently;
+- one Turn can contain several logical model operations;
+- model completion is recorded independently of local tool settlement;
+- crash recovery marks a running Turn interrupted without redispatch;
+- continuation exhaustion is visible and code-enforced.
 
-- show pending input, permission, and indeterminate operations;
-- do not automatically redispatch an ambiguous provider attempt;
-- do not automatically replay any invocation;
-- ordinary explicit resume drains safe pending work after reconciliation.
+### Tool boundary
 
-## Learning-native end-to-end trace
+- a complete invocation record precedes executor entry;
+- invalid or hard-denied input never executes;
+- a local terminal settlement occurs exactly once;
+- incomplete provider tool input never executes;
+- cancellation is terminal only after local cleanup;
+- adapter retry details cannot create duplicate runtime invocations.
 
-1. `开始学习` is admitted before wake.
-2. The Session drain makes it visible and captures current learner projection
-   revision `L` with source occurrence IDs.
-3. The model selects a learning activity and proposes a runtime-owned learning
-   tool.
-4. The invocation is recorded before execution.
-5. Routine local policy allows it; the Learning Domain commits occurrence `O`
-   and receipt `R` under the runtime invocation ID.
-6. The invocation settles successfully with `R`.
-7. The learner projection rebuilds to `L+1` from accepted occurrences.
-8. The next model attempt captures `L+1`; it does not reuse context `L`.
-9. Different committed evidence can therefore change the next Tutor action.
+### Learning boundary
 
-Counterexamples:
+- an ordinary clarification changes only interaction history;
+- a selected explanation creates at most a verification obligation;
+- a source-linked formal result under known conditions can create an evidence
+  interpretation;
+- the local learning transaction and tool settlement are atomic;
+- exact operation replay is idempotent and conflicting replay fails;
+- correction supersedes or retracts interpretation without deleting source;
+- projections rebuild equivalently from active interpretations;
+- materially different evidence can change the next selected action;
+- time-derived review pressure creates no evidence record;
+- learner evidence changes local scheduling but not accepted curriculum
+  relations.
 
-- Assistant text claims mastery: Session changes, Learning Domain does not.
-- Learning tool fails validation: invocation settles rejected, no occurrence.
-- User declines an external effect: invocation settles declined, correction
-  becomes user steering, no equivalent bypass call is attempted automatically.
-- Process crashes after occurrence commit but before tool success: receipt `R`
-  reconciles the invocation without inserting `O` twice.
-- Model repeats a provider call ID in a later attempt: the new runtime
-  invocation does not collide with the old one.
-- Learner ignores a review panel: routine authorized recording remains valid,
-  while inference remains source-linked and correctable.
+## Historical implementation sequence
 
-## Required contract tests before production expansion
+The sequence below is not authorized. It is retained to show which runtime
+mechanisms led to the accepted ADRs and which learning assumptions were later
+paused.
 
-### Model reducer
+Implementation follows the product-bearing path rather than completing one
+horizontal infrastructure layer at a time.
 
-- interleaved text blocks preserve identity;
-- delta before start, duplicate start/end, name change, and duplicate terminal
-  response are rejected;
-- controlled interruption closes accumulated text;
-- provider call IDs scope to attempts.
+1. Record behavioral oracles for a casual clarification, a formal task result,
+   a correction, and time-derived review.
+2. Implement the minimum SQLite transaction that admits one source-linked task
+   result, evidence interpretation, projection revision, and local tool
+   settlement.
+3. Implement Session/Turn persistence and one serialized Turn owner sufficient
+   to drive that transaction.
+4. Implement one provider adapter and the smallest normalized model/tool event
+   path required by the same scenario.
+5. Compile the revised learner projection into the next model-operation context
+   and prove that the next action changes for a relevant evidence change.
+6. Add the minimal terminal surface only after the headless vertical path is
+   executable and inspectable.
 
-### Session input and execution
-
-- exact input retry is idempotent; conflicting retry fails;
-- visibility and user-message append are atomic;
-- concurrent resumes dispatch once;
-- wakes coalesce and lost wakes do not lose input;
-- explicit interrupt waits for cleanup;
-- different Sessions may run concurrently.
-
-### Tool lifecycle
-
-- invocation record precedes executor entry;
-- stale definition never invokes replacement handler;
-- invalid input never executes;
-- terminal settlement occurs exactly once;
-- interruption reconciles an effect receipt before deciding outcome;
-- provider-hosted mutation cannot reach authoritative local state.
-
-### Permission
-
-- hard deny overrides remembered allow;
-- renderer cannot bypass execution-layer authorization;
-- pending request survives renderer restart;
-- duplicate exact decision is idempotent;
-- target change invalidates a grant;
-- learner decline stops continuation and preserves feedback as steering.
-
-### Learning anchor
-
-- Session assertion and failed tool are not evidence;
-- accepted occurrence is idempotent by runtime invocation;
-- projection rebuild is equivalent;
-- context contains source/revision provenance;
-- different committed evidence changes the next action.
+Each step must leave the same vertical behavior more complete. No step may add
+a provider fleet, generic workflow engine, broad permission language, or full
+learning ontology.
 
 ## Explicitly deferred
 
-- full TUI implementation;
-- HTTP server, worker, SDK, or remote execution;
-- multi-agent and subagent orchestration;
-- MCP and plugin tool registration;
-- broad provider compatibility;
-- compaction and long-context policy;
-- durable `AgentRun` aggregate;
-- deferred input queue modes;
+- full-screen TUI and dashboard surfaces;
+- multiple providers, fallback routing, subagents, and multi-agent orchestration;
+- durable mid-Turn inbox and exactly-once steering;
+- durable pending permissions and remembered authorization policy;
+- general external-effect receipts and reconciliation;
 - parallel tool execution;
-- wildcard permission language;
-- provider-hosted local mutation;
-- hidden-reasoning persistence as product data;
-- full curriculum, claim, task-family, or mastery schema;
-- Anki, Obsidian, PDF, and shell integration;
-- mandatory blocking StateDiff approval;
-- cloud sync or multi-process ownership.
+- exact prompt/request capture outside optional diagnostics;
+- compaction and long-context policy;
+- complete curriculum, claim, task-family, or mastery schema;
+- FSRS parameterization and final task-ranking policy;
+- Anki, Obsidian, PDF, browser, shell, MCP, and assignment submission;
+- cloud sync, multi-process ownership, and a durable workflow/AgentRun aggregate.
 
-## Review defaults
+## Acceptance record
 
-Unless maintainer review changes them, the first implementation plan will
-assume:
+The maintainer accepted these five concrete defaults on 2026-07-11:
 
-1. one provider and one single-process terminal runtime;
-2. explicit resume after ambiguous crash state;
-3. serial runtime-owned tools;
-4. no provider-hosted mutation;
-5. routine provenance-preserving learning writes are non-modal;
-6. SQLite is the only machine-state authority;
-7. no complete learner ontology before the first accepted occurrence contract;
-8. production implementation begins with contract tests, not a TUI scaffold.
+1. A durable Turn starts with the initial user item and ends independently of
+   its constituent model operations and tools.
+2. Mid-Turn steering may be process-local in the first slice.
+3. Local learning writes and their tool settlement share one SQLite
+   transaction; generic effect receipts are deferred.
+4. Source-linked task result, evidence interpretation, learner projection, and
+   correction remain distinct semantic roles without committing to a complete
+   ontology.
+5. Every Turn has finite model-operation and tool-invocation limits with an
+   explicit exhausted outcome.
 
-## Internal coherence audit
+Their normative consequences are recorded in ADR-0005, ADR-0006, and ADR-0007.
+This proposal remains informative for the combined contract and for unresolved
+learning-policy questions.
 
-The draft has been checked against the repository's global coherence questions.
-
-1. **Product loop:** every runtime boundary either preserves the learning
-   situation/activity/evidence/state/action loop or remains a domain-independent
-   transport mechanism.
-2. **Durable ownership:** Session facts, learning occurrences, current
-   structured state, effect receipts, and rebuildable projections have distinct
-   owners.
-3. **Duplicate concepts:** provider call identity, runtime invocation identity,
-   permission request identity, and learning occurrence identity are related by
-   references rather than collapsed or duplicated as competing authorities.
-4. **Learning-native behavior:** learner projection revisions and source
-   occurrences participate in every model-attempt context boundary; learning is
-   not an optional tool added after a generic harness is complete.
-5. **Reference discipline:** OpenCode mechanisms are retained only where Repa
-   has the same serialization, streaming, permission, or recovery problem. Its
-   V1/V2 migration, worker/server split, broad registry overlays, coding tools,
-   and event framework are omitted.
-6. **Failure behavior:** no path infers that an effect did not occur merely from
-   a provider failure, tool error string, interruption, or process loss.
-7. **Scope control:** the proposal does not create a TUI, provider fleet,
-   curriculum ontology, integration layer, multi-agent framework, or disposable
-   product MVP.
-
-The material choices still awaiting maintainer review are the contract shapes
-and the defaults listed above, not additional open-ended product discovery.
-
-## Approval consequence
-
-If this proposal is accepted, the next work is not to generate the repository.
-It is to split the accepted decisions into small ADRs and implement the first
-contract tests in dependency order:
-
-```text
-IDs and SQLite transaction helpers
--> Session input admission/visibility
--> process-local Session coordinator
--> ModelEvent reducer and ModelAttempt projection
--> tool invocation lifecycle
--> permission request/decision
--> production form of the learning-semantic anchor
-```
-
-Any rejected section is revised here before its types enter production code.
+The fourth item records the original acceptance. ADR-0006 was later amended:
+only the effects a bounded command actually owns are required to commit with
+its tool settlement. A general Tutor interaction need not create an evidence
+interpretation, learner projection, or verification obligation. The current
+learning responsibility hypothesis is recorded separately in
+[`0003-learning-native-responsibilities.md`](./0003-learning-native-responsibilities.md).

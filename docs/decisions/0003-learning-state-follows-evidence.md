@@ -3,6 +3,12 @@
 Status: Accepted
 Date: 2026-07-10
 
+Scope clarification (2026-07-11): this ADR governs claims about ability,
+retention, and actions derived from those claims. A simple progress fact such
+as "this material range was read" or "this range was explained" can be kept
+without becoming learning evidence, an ability inference, or a verification
+obligation.
+
 ## Context
 
 Learning requires a cooperative learner. Designing an anti-cheat system for a
@@ -34,6 +40,16 @@ It distinguishes:
 A user report is recorded as the fact that the report occurred. Its content is
 not silently promoted to independently verified performance. For example,
 "watched a 45-minute video" may support exposure, but not verified mastery.
+
+Session text is not learning evidence by default. An ordinary question,
+clarification, or assistant explanation does not automatically change learner
+state. If an interaction is admitted as learning-significant, it needs enough
+educational purpose, observable conditions, and source provenance for the
+resulting review or task-selection consequence to remain explainable. This ADR
+does not require the interaction to have been marked in advance; that promotion
+boundary remains a proposal-level question. The learning layer refers to the
+original message, attempt, tool result, or artifact version rather than copying
+the source content into a second authority.
 
 Routine evidence and derived-state updates are non-blocking. They are applied
 automatically when the provenance and rule are known, while remaining
@@ -69,9 +85,14 @@ permission policy; this decision does not weaken tool authorization.
 
 ## Consequences
 
-- Evidence records require source and conditions such as self-report,
-  independent answer, hints, grading method, and confidence where relevant.
+- Evidence records require source and observable conditions such as
+  self-report, independent answer, hints, and grading method. Confidence belongs
+  to an inference and may be recomputed; it is not an original observation.
 - Learner-state inference cannot be a direct copy of self-assessment.
+- A learner error can change review pressure or local task priority without
+  changing source-grounded curricular relations.
+- The passage of time can change a derived review priority without creating a
+  new evidence record.
 - "I know this; skip it" may alter the immediate plan without producing a
   verified state transition.
 - The planner must tolerate disagreement between self-assessment and observed

@@ -23,7 +23,7 @@ separate workflows.
 
 The system has one agent loop and one tool-execution lifecycle.
 
-A mode changes the effective policy applied at a provider-turn boundary. Its
+A mode changes the effective policy applied at a model-sampling boundary. Its
 possible contributions include:
 
 - instructions and behavioral defaults;
@@ -54,7 +54,7 @@ restarting the Session.
 
 ## Consequences
 
-- Mode changes take effect only at explicit provider-turn boundaries.
+- Mode changes take effect only at explicit model-sampling boundaries.
 - In-flight tool calls retain the authorization and policy under which they
   were issued.
 - Session history and tool-call identities remain continuous across a mode
