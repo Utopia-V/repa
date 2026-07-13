@@ -86,10 +86,13 @@ Documents have different authority. Do not treat a research observation as an ac
   settlement, runtime ordering, and verified zero-write boundaries. It does
   not complete the wider shared-policy teaching trace.
 - [ALS-024 source-linked performance occurrence protocol](research/source-linked-performance-occurrence-proof-2026-07-13.md)
-  is the active documentation-only architecture proof. It tests whether
-  correct, incorrect, and assisted responses require one narrow source-linked
-  occurrence for a later fresh-Session Tutor decision. It admits no production
-  schema, learner-evidence ontology, harness, or live-model run.
+  governs the active architecture proof. Its
+  [Stage 0/1 result](research/source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
+  finds a fresh-Session collision, while
+  [Stage 2](research/source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
+  narrows the sufficient meaning to an existing service source plus local
+  derivation. No durable outcome, assistance field, production schema,
+  learner-evidence ontology, harness, or live-model run is admitted.
 - [`research/shared-tutor-policy-contrasting-traces-protocol-2026-07-12.md`](research/shared-tutor-policy-contrasting-traces-protocol-2026-07-12.md)
   is ALS-021's frozen controlled protocol for testing one shared production
   Tutor policy over fourteen contrasting conditions and eight formal blocks.

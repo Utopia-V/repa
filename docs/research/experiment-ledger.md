@@ -63,17 +63,21 @@ Use full names in notes and discussion:
 
 ## Active batch
 
-ALS-024 remains active under its pre-registered
+ALS-024 remains at an evidence gate under its pre-registered
 [protocol](./source-linked-performance-occurrence-proof-2026-07-13.md).
 [Stage 0/1](./source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
-used a real item from the Repa architecture document and completed by paper and
-production-code-path inspection; no executable lab, harness change, production
-state, new test, or live-model run was needed. Correct-independent and
-incorrect-independent both become addressed and collapse to the same
-fresh-Session Course/Agenda/lazy-read view, while requiring different later
-moves. The assisted case remains distinguishable only through its open Agenda
-disposition. Stage 2 minimum-meaning ablation is admitted; no production
-occurrence, assistance field, or general evidence model is.
+found the correct/incorrect fresh-Session collision.
+[Stage 2](./source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
+then completed by paper and production-code-path ablation: the deterministic
+fixture earns only a bounded read of the Agenda transition’s existing service
+occurrence plus source-bound local derivation. It does not earn a durable
+observed-outcome boundary; copied response/criterion/assistance is rejected.
+Current tools do not expose that service source, and changed material may leave
+the historical criterion unresolvable. No lab, harness, production state, new
+test, or live-model run is active. Stage 3 is not admitted. The next evidence
+must be one real non-deterministic, case-correctable observation whose corrected
+revision changes a later move; otherwise the durable observation boundary
+stops.
 
 ALS-023 is retained as a failed experiment whose pressure scenario was selected
 incorrectly. It does **not** leave a near-deadline consideration question. The

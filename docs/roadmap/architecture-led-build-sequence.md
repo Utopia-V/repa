@@ -301,11 +301,15 @@ decisive Tutor help must also remain distinct from independent performance.
 
 ALS-024 pre-registers the deterministic architecture proof for that boundary:
 [source-linked performance occurrence protocol](../research/source-linked-performance-occurrence-proof-2026-07-13.md).
-It tests current Agenda plus bounded lazy Interaction reads before admitting
-any new meaning, separates response, assistance, observation, inference, and
-Agenda authority, and freezes correction, retry, stale, crash, atomicity,
-dogfood, and zero-write gates. It is not a production contract, schema, generic
-attempt/evidence model, harness task, or live-model experiment.
+[Stage 0/1](../research/source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
+finds the correct/incorrect fresh-Session collision. Its
+[Stage 2 ablation](../research/source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
+then shows that the deterministic fixture needs only a bounded read through the
+existing Agenda service-occurrence reference plus source-bound local derivation;
+it does not earn durable outcome or assistance state. A durable observation
+stays blocked until one authentic, non-deterministic, source-bearing correction
+changes a later move. This remains a research gate, not a production contract,
+schema, generic evidence model, harness task, or live-model experiment.
 
 ### Withdrawn candidate: last-minute deadline conflict
 

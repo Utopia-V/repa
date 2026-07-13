@@ -252,14 +252,15 @@ These statements are deliberately weaker than accepted decisions.
    its representative emergency fixture was invalid, and it excluded learning
    context/nature, workload, capacity, progress, and cross-day allocation.
    Schema 6 remains only as an inert compatibility tombstone.
-7. ALS-024 Stage 0/1 establishes one concrete fresh-Session consumer. After an
-   independent correct and independent incorrect response both address the same
-   concern, current Course/Agenda context and allowed lazy reads expose neither
-   old response nor outcome, so the histories collide while requiring different
-   Tutor moves. The assisted case remains distinguishable only because its
-   independent-response concern stays open. This admits minimum-meaning
-   ablation, not a production occurrence, assistance field, generic attempt,
-   evidence, or mastery shape.
+7. ALS-024 Stage 0/1 establishes one concrete fresh-Session collision, but
+   Stage 2 narrows what it earns. For the deterministic fixture, the existing
+   Agenda transition’s service-occurrence reference plus exact Interaction and
+   criterion sources is sufficient to derive the current move; no durable
+   observed outcome is required. Current tools do not expose that service source
+   and historical criterion bytes may become unavailable after material drift.
+   A durable observation remains unearned until one real non-deterministic,
+   case-correctable judgment changes a later move. Copied response/criterion,
+   assistance, generic attempt, evidence, and mastery shapes are rejected.
 
 ## Questions still worth resolving
 
@@ -429,16 +430,17 @@ This path still does not preauthorize an activity table, difficulty enum,
 intervention state machine, universal future-action model, FSRS integration,
 or full learner projection.
 
-ALS-024 remains the active architecture proof for the first missing downstream
-decision in this path. Its
+ALS-024 remains at a narrower evidence gate. Its
 [Stage 0/1 result](./research/source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
-finds the exact current-baseline collision: addressed correct and incorrect
-independent responses disappear from routine fresh-Session Agenda context, and
-recent inspection exposes no response or outcome. The
-[protocol](./research/source-linked-performance-occurrence-proof-2026-07-13.md)
-now advances only to minimum-meaning ablation. The result used no lab, live
-model, harness, or production change and does not admit a schema or learner
-ontology.
+finds the addressed correct/incorrect collision. The
+[Stage 2 result](./research/source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
+shows that this exact deterministic fixture proves only source-bound local
+derivation through the existing service-occurrence reference, not a durable
+Learner Record observation. A wider copied occurrence and assistance field fail
+ablation. Before any such observation boundary, a real non-deterministic,
+source-bearing correction must change a later fresh-Session move; otherwise the
+path stops. No lab, live model, harness, production change, schema, or learner
+ontology is admitted.
 
 The post-0005 review incorrectly promoted B2's scene-specific 45/25/30-minute
 emergency into the next production pressure. Proposal 0006 then deferred the
