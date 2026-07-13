@@ -1,6 +1,6 @@
 # OpenCode fork Gate 2: pristine Windows baseline
 
-Status: In progress — red after focused Windows test attempt 1
+Status: In progress — red after focused Windows test attempt 2
 
 Date: 2026-07-13
 
@@ -229,5 +229,37 @@ failure-path inputs and did not contribute failing tests.
 No source, lockfile, or tracked artifact changed. The gate remains red. The
 next diagnostic is limited to comparing the host `SystemRoot`/`WINDIR` values
 with what Bun inherits; no test or product source patch is admitted.
+
+### Focused test attempt 2: one progressive-update failure remains
+
+Environment inspection found that the machine-level `WINDIR` was
+`C:\WINDOWS` and the process-level `SystemRoot` was the same, but the Codex
+process and its Bun/Node children had no process-level `WINDIR`. Restoring
+only that standard process variable removed all 11 path-construction
+failures:
+
+```powershell
+$env:WINDIR = $env:SystemRoot
+bun test --timeout 30000 --only-failures test/tool/shell.test.ts
+```
+
+The isolated file still exited 1 after 45.33 seconds:
+
+```text
+64 pass
+1 fail
+183 expect() calls
+65 tests across 1 file
+```
+
+The remaining `tool.shell abort > streams metadata updates progressively`
+case received complete final output containing both `first` and `second`, but
+the captured metadata update array had length 1 where the test requires more
+than 1. The failing assertion was at `test/tool/shell.test.ts:1128`; the
+reported test duration was exactly 1000 ms.
+
+This proves that the missing `WINDIR` was one harness-environment defect but
+does not explain the residual streaming cadence failure. The gate remains red
+and no source change has been made.
 
 Pending execution.
