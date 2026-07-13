@@ -34,7 +34,9 @@ git show repa-prefork-oracle:<historical-record-path>
 
 - Gate 4 is closed: released-v1 model carriers and stock profiles implement one
   learning-first Repa composition invariant.
-- Gate 5 is active: unregister excluded surfaces before dependency-closed deletion.
+- Gate 5 is active under
+  `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`:
+  unregister excluded surfaces before dependency-closed deletion.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release

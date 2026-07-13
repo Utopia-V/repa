@@ -13,6 +13,7 @@ legacy labs.
 - [System architecture](architecture/00-system-architecture.md)
 - [One-time fork roadmap](roadmap/09-one-time-opencode-fork-baseline.md)
 - [Fork provenance and gate ledger](fork-ledger.md)
+- [Active Gate 5 terminal-only surface contract](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions
