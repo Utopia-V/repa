@@ -106,11 +106,38 @@ expensive-to-reverse boundary. State the live decision, why it matters now,
 the recommended answer, and what materially changes under another answer.
 Cheap reversible details remain agent decisions.
 
+Maintainer correction is control feedback, not a prompt to explain the
+corrected concept back to its source. The agent first identifies the invalid
+prior claim, then audits the decisions, documents, code, tests, and plans that
+depended on it. It repairs or proposes the smallest affected change and states
+when no durable artifact was touched. A paraphrase is useful only when it
+resolves a real ambiguity.
+
 An explicit `grill-me` interaction may explore several dependent product or
 architecture choices, one at a time. It stops once remaining uncertainty is
 cheap or no plausible answer changes the plan. Accepted durable decisions are
 promoted to the appropriate project document; situational answers do not form
 a timeless preference profile.
+
+These collaboration defaults were informed by two practitioner reports from
+LastWhisper, read on 2026-07-13:
+
+- [Why does Codex keep auto-compacting?](https://zhuanlan.zhihu.com/p/2058727424167241456)
+  supplies the context-economy hypothesis: delegate when raw exploration is
+  much larger than its useful conclusion, keep the main context for synthesis,
+  and do not defeat isolation by duplicating worker exploration while waiting.
+  Its reported cost and context measurements are single-run observations, not
+  universal benchmarks.
+- [How is the `grill-me` Agent Skill in practice?](https://www.zhihu.com/question/2054005413406946147/answer/2054647380377597351)
+  supplies the taste-and-control framing: expose consequential latent choices
+  before fast execution and persist accepted decisions into shared project
+  context. It does not justify interrogating the maintainer about factual,
+  cheap, reversible, or non-controlling details.
+
+The articles are provenance, not authority. Concrete tool defaults, wait
+limits, model behavior, and provider guidance may change; retain the structural
+principles only while repository trajectories and current first-party evidence
+continue to support them.
 
 ## Reuse before invention
 

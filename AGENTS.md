@@ -125,6 +125,39 @@ learning tools.
 - Preserve meaning with behavioral examples, counterexamples, tests, recorded oracles, and decision provenance. Conversation memory and a model's confident paraphrase are not durable specifications.
 - At phase boundaries, re-read the product origin and accepted ADRs, then audit the repository for semantic drift before extending the latest local design.
 
+## Agent collaboration and context economy
+
+- The maintainer gives standing permission to use subagents or delegation in
+  this repository when the available harness supports them. Permission is not a
+  requirement to delegate. Use a fresh worker context when a bounded,
+  preferably read-only investigation will produce much more raw material than
+  the conclusion needed by the main agent, or when genuinely independent work
+  benefits from parallelism. Keep tightly coupled reasoning in one context.
+- Give a worker its parent question, motivation, scope, exclusions, and a
+  bounded evidence contract. It returns conclusions, decisive evidence,
+  confidence, and remaining unknowns rather than raw logs or a second project
+  narrative.
+- After delegating exploration, the main agent does not repeat it. If there is
+  no genuinely non-overlapping work, use one task-sized event wait instead of
+  short polling, heartbeat narration, premature wrap-up requests, or invented
+  "lightweight" duplicate exploration. Spot-check only evidence that can
+  change the decision after the worker returns.
+- Treat maintainer corrections as control input, not invitations to restate
+  the newly accepted concept. Identify the invalid prior claim, audit which
+  decisions, documents, code, tests, or plans depended on it, and make or
+  propose the smallest repair. If nothing durable was affected, say that
+  briefly. Do not fill the response with a tutorial the maintainer just gave.
+- Before asking a factual question, research it and form a recommendation.
+  Ask the maintainer only about unresolved choices that can change product
+  behavior, acceptable trade-offs, or expensive-to-reverse boundaries. State
+  the live decision, the recommended answer, and the material consequence of
+  alternatives so the question never has to be decoded.
+- Use an explicit `grill-me` interaction only for a consequential cluster of
+  dependent product or architecture choices. Resolve one live dependency at a
+  time, stop when remaining uncertainty is cheap or no plausible answer changes
+  the plan, and promote accepted durable decisions to the owning document.
+  Situational answers do not become timeless user preferences.
+
 ## Global coherence check
 
 Before optimizing a local module, confirm:
