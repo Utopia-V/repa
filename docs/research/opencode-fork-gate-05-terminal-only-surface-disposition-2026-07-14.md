@@ -387,6 +387,42 @@ local `experimental.projectCopy.generateName` and v2 project-copy operations
 must survive; Gate 5B3 converts their routing middleware to directory-only
 rather than deleting their API group.
 
+## Gate 5F locked dependency closure: sharing and hosted GitHub automation
+
+The first Gate 5F slice asks whether the now-unreachable public-sharing branch
+can be deleted without weakening local Session creation, offline
+export/import, ordinary Git, explicit code review, or neutral provider/plugin
+configuration. Its dependency root is the removed share routes and startup
+subscriber, not every historical field whose English name contains “share.”
+
+This slice deletes `ShareNext`, `SessionShare`, their direct tests, and the
+already-unregistered GitHub Action/PR command implementations that are their
+last aggregate-runtime consumer. Pure repository capabilities remain only
+when another current local consumer exists. The aggregate CLI runtime then
+removes the share nodes. Passive historical Session/share columns and rows are
+not read into behavior and remain for a later native-database/schema closure;
+this slice does not rewrite SQLite history merely to erase a dormant column.
+
+With the typed consumers gone, Gate 5C2 completes in the same dependency
+closure: released-v1 and current config schemas remove `share`, `autoshare`,
+and the top-level sharing `enterprise` field; migration no longer manufactures
+them; `REPA_AUTO_SHARE` disappears; and current OpenAPI/clients are regenerated
+from their owners. The frozen legacy SDK tree is not hand-edited. `autoupdate`
+belongs to Gate 5E and is deliberately not bundled here.
+
+Negative evidence requires no `ShareNext`/`SessionShare` production owner, no
+hosted GitHub/PR command implementation, and no current config/OpenAPI/client
+sharing selector. Positive evidence covers local Session creation and
+deletion, offline import/export, retained Git or project-copy behavior, and
+provider/MCP/plugin config decoding. Focused schema/config/runtime tests,
+affected typechecks, exact dependency scans, and `git diff --check` are causal;
+tests that directly exercise deleted hosted implementations are deleted with
+their owner rather than retained as a compatibility harness.
+
+Reverting this one slice restores the implementation branch and config
+contract. No data migration is involved, and no fallback endpoint, no-op
+service, or compatibility field is introduced.
+
 ## Gate-wide positive evidence
 
 - Local TUI, `run`, `attach`, `serve`, ACP, MCP, Sessions, tools, agents,
