@@ -4,6 +4,12 @@ Status: Completed architecture gate; **go to Proposal 0005 implementation**
 
 Date: 2026-07-13
 
+Scope clarification: this gate established that Proposal 0005 could safely run
+on the then-current architecture. It did not establish that the partial
+Repa-owned harness should remain the long-term substrate. ADR-0014 now
+supersedes that runtime direction while retaining Proposal 0005's learning
+behavior as an oracle.
+
 ## Plain-language result
 
 The current production architecture does not need to be replaced before the

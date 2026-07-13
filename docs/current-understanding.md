@@ -20,6 +20,17 @@ product foundation or accepted ADRs.
   flexible semantic interpretation, generation, and interaction and may
   participate in choices that no accepted deterministic policy settles. This
   neither fixes the exact control split nor makes pedagogy a program script.
+- The model may also manage lightweight durable workspace memory and initiate
+  writes into a system-provided file surface: directory conventions,
+  expression and collaboration preferences, resource paths, working notes, and
+  decision summaries. These are editable advisory sources, not merely prompt
+  memory and not automatically Learning authority.
+- Strongly typed state is reserved for meanings whose real consumers need
+  deterministic calculation, legal transitions, conflict detection,
+  permissions, or stable learning consequences. A soft file becomes Course,
+  Agenda, Learner Record, or Tutor-policy input only through an explicit,
+  source-linked domain operation; no universal preference or memory schema is
+  implied.
 - Ordinary Assignment behavior is advance planning for substantial work over
   days. The program owns accepted workload/capacity/deadline arithmetic,
   allocation, and recomputation; the learner or model may propose estimates,
@@ -55,24 +66,106 @@ product foundation or accepted ADRs.
 ## Settled engineering decisions
 
 - The implementation uses TypeScript and Bun.
-- This project owns harness composition and learning semantics. Mature
-  libraries or clean reference-derived reimplementation may supply provider
-  calls, Session/context management, streaming, tool continuation,
-  cancellation, compaction, rendering, and other generic mechanics required by
-  current learning behavior. Minimize Repa-owned generic code; there is no
-  Codex/OpenCode feature-parity target. Learning-System state extends ordinary
-  Session behavior rather than replacing it.
-- ADR-0011 fixes the production runtime direction: one single-process,
-  model-led Tutor loop; AI SDK owns provider/stream/tool transport mechanics;
-  Repa owns Turn composition, per-sample learning context, durable learning
-  command authority, and truthful continuation. Its runnable terminal dogfood
-  **learning-first vertical trace** is complete; generic harness completion is
-  not a separate milestone.
+- ADR-0014 fixes the production lineage: take a one-time full-history fork of
+  OpenCode `v1.17.18`, then evolve an independent Repa product. Repa owns the
+  resulting binary, defaults, database, migrations, terminal surface, and
+  release direction; it is not an OpenCode overlay or compatibility target.
+- The complete local Agent harness is part of the product destination. Mature
+  inherited Session, typed-item, provider, tool, permission, MCP, subagent,
+  compaction, cancellation, recovery, and terminal mechanics are retained
+  unless a demonstrated incompatibility justifies removal. Cloud,
+  marketplace, sharing, and other group-product surfaces are excluded.
+- ADR-0011 is superseded. Its AI SDK loop and real-provider dogfood remain
+  behavioral oracles, but the current one-shot runner is frozen against
+  further generic expansion and will be deleted after the fork cutover.
 - ADR-0012 fixes the overall architecture: a single-process modular monolith
   centered on learning authorities rather than on the Agent loop. One local
   LearnerHome spans courses, LearningSpaces, and Sessions; one process owns its
   writes, SQLite owns machine state, and no daemon runs while the terminal is
   closed.
+- The durable current Course never follows the invocation directory, folder
+  layout, Agenda pressure, or model preference automatically. Switching Course
+  requires an explicit learner request and then a visible confirmation bound
+  to the exact target and current focus revision before the transition commits.
+- Current Course is only the default retrieval prior for underspecified future
+  input. A request that mentions or requires another Course loads that Course's
+  bounded relevant context directly without switching or creating a temporary
+  focus entity; the request and immutable context cut already preserve what the
+  model saw. Confirmed switching changes the later default, not access.
+- Repa boots with global authority and directory routing. One LearnerHome and
+  native database apply regardless of the invocation directory; the current
+  directory is a candidate LearningSpace locator and permission root, not a
+  Course or database identity. A single broad learning tree, several unrelated
+  roots, and bounded subtrees are all valid. Unknown directories do not become
+  durable LearningSpaces or Courses merely because Repa starts there.
+- LearnerHome may retain zero or more explicitly approved content roots. Inside
+  one, Repa can discover, read, and search across the approved tree while the
+  current directory biases relevance. Outside them, access remains bounded to
+  the invocation directory unless the learner grants more. Repa never infers a
+  broader approved ancestor from directory contents, and root approval carries
+  no Course or LearningSpace semantics.
+- Content-root approval includes ordinary bounded use of selected material in
+  the configured remote or local model context. Repa does not add a separate
+  root-by-provider disclosure permission matrix; provider choice remains
+  ordinary harness configuration.
+- Approved roots define the maximum readable/searchable universe, not every
+  model sample's default scope. Current request, current-Course prior, Material
+  Map, and explicit references form the default working set. The Agent may
+  visibly widen bounded grep/search to an approved root without asking again;
+  it may not implicitly search all LearnerHome roots or the computer. The
+  system catalog resolves identity, revision, and scope while the inherited
+  search engine remains the single query mechanism.
+- Repa-owned database, cache, derived-artifact, and system soft-memory areas are
+  freely writable within their fixed boundaries. Mutating user content is a
+  separate permission from reading a content root: a request may be allowed
+  once, rejected, or permanently allowed for a canonical content-root or
+  subtree scope. Permanent rules survive restart, remain inspectable and
+  revocable, and govern only future writes.
+- Filesystem discovery is program-bounded while semantic organization is
+  primarily model-led. Code enumerates authorized paths, revisions, media
+  types, ignore rules and budgets; deterministic parsers recover mechanical
+  structure. The LLM selectively reads a bounded manifest and may propose
+  groupings, LearningSpaces, Course Views, or Material Map relations. Only a
+  validated source- and revision-bound domain command makes such a proposal
+  durable, normally with provisional or source-grounded status.
+- Content-root discovery is lazy. Root approval may create a cheap bounded
+  deterministic inventory, but it does not trigger full LLM classification.
+  Semantic inspection follows a current goal/request or an explicit budgeted
+  whole-root organization action. With no daemon, relevant traversal,
+  application wake, or explicit refresh discovers drift; exact revisions bind
+  only when content is observed or accepted.
+- Translation of inconvenient learning materials is learner-optional and
+  format-general. Canonical generated representations live in Repa's owned
+  artifact area with exact original, representation, tool, and translator
+  revisions; no sidecar is written into a content root by default. Source
+  drift preserves the old result and marks its relationship stale. The learner
+  may decline translation, lazily retranslate, or confirm continued use of the
+  explicitly old revision without pretending that it represents the changed
+  source. An explicit export is a separate user-owned artifact.
+- Accepted representations and retained snapshots are never automatically
+  evicted. Deletion is learner-explicit. Direct filesystem deletion or loss is
+  detected on access and recorded as unavailable while identity, lineage,
+  receipts, and historical references remain. Exact same-digest bytes may be
+  relinked; different bytes create a new artifact revision.
+- Representation quality is a learner-owned cost trade-off, not one global
+  verification policy. The learner may spend more model/tool budget, provide
+  or correct readable text manually, proceed with recorded ambiguity, or stop
+  using the source. Translation only derives a readable form of one exact
+  source revision; it does not admit local-RAG ingestion, chunking, embeddings,
+  vector search, or automatic prompt injection. Current retrieval remains
+  bounded manifest/search/read plus lazy context selection.
+- For mutable remote material, Repa defaults to retaining the smallest exact
+  content snapshot actually used by a learning move, with locator, time,
+  selector, revision/digest, acquisition provenance, and reproducibility
+  status. The learner may request supported full-page capture; URL-only
+  observations that cannot be retained stay explicitly non-reproducible.
+  Acquisition or normalization may come from an ordinary Skill/MCP capability;
+  no Repa-specific web-reader subsystem is admitted.
+- No dedicated memory subsystem is currently justified. Future ordinary Agent
+  file capabilities may support scoped read/write/search, optimistic content
+  revision checks, a bounded ambient entry, and at most a rebuildable thin
+  index. The LLM may own the note semantics; the host still owns root
+  confinement, source/version identity, loading bounds, safety, and receipts.
 - ADR-0013 fixes the demonstrated state-to-model control topology: no mandatory
   selector model. Tutor composition filters program-known legality and may
   bind one legal Agenda concern as an exact, Turn-scoped conditional default;
@@ -95,10 +188,10 @@ product foundation or accepted ADRs.
   mutation. Local Tutor tools settle through one per-Turn FIFO lane, and a
   second mutation waits for a new context cut. This is a causal consistency
   rule for model/tool concurrency, not a learning workflow or separate runtime.
-- One state-changing terminal process owns a LearnerHome through a separate
-  SQLite `BEGIN IMMEDIATE` ownership file. This leaves the main state database
-  free to commit each Turn/domain transition and releases ownership on process
-  exit without a daemon or guessed stale-lock timeout.
+- One state-changing process owns a LearnerHome. The current separate SQLite
+  ownership file proves the single-writer behavior but is not a compatibility
+  mechanism for the fork; the native runtime may use its mature local lock as
+  long as second-writer failure and recovery remain truthful.
 - Interaction, sources/artifacts, optional domain foundations, Course Views,
   Material Maps, learner records, Agenda, and Tutor policy retain separate
   authority. They use typed references; they do not become one universal
@@ -124,6 +217,14 @@ product foundation or accepted ADRs.
 - Tutor context is a bounded, immutable observation over those authorities.
   Routine context carries a small relevant view and references; exact
   materials, old Sessions, attempts, and full maps remain lazy reads.
+- Read authorization, system-visible course resources, model-visible retrieval,
+  and learner-visible disclosure are separate boundaries. The LLM lazily
+  inspects ordinary resources from a composed working set and may explicitly
+  broaden search within approved roots. Answer-like roles are soft or
+  source-grounded material meaning, not special file types. Independent-work
+  policy normally constrains Tutor disclosure rather than making the Tutor
+  ignorant of the answer. Explicit model-blind work may narrow one sample's
+  content/tools through ordinary context and permission mechanics.
 - Course Views use a versioned ordered hierarchy plus only the sparse,
   module-owned, typed, provenance-bearing relations that real queries earn.
   Material alignment, learner progress, and Agenda remain separate. SQLite is
@@ -139,12 +240,25 @@ product foundation or accepted ADRs.
   product subsystem worth designing on its own. Repa owns only the domain
   meaning and authorization of durable learning-state transitions carried by
   that transport.
-- OpenCode is the primary pinned reference and Codex is a secondary pinned
-  comparison reference. Neither is currently a production dependency or an
-  adopted fork. A downstream OpenCode fork remains a falsifiable substrate
-  candidate, not the default hidden by ADR-0001.
+- `.reference/opencode` remains a pinned read-only audit source, while the
+  production lineage is a separate full-history OpenCode v1 fork. The released
+  v1 path is the sole initial runner; preview v2 is design evidence only. Codex
+  remains a secondary comparison reference.
 - One agent loop serves different policy profiles. Plan, study, review, and
   similar labels do not create separate runtimes.
+- Interactive launch is sessionless. It shows a deterministic current view,
+  and the first ordinary learner input creates a fresh Session and first Turn.
+  Before that, an explicit slash command or CLI option may continue/select an
+  old Session. The UI does not mock suggested learner prompts inside the input
+  box. Deterministic navigation, inspection, and harness controls use the
+  inherited discoverable slash-command/command-palette mechanism and create no
+  model input unless explicitly defined as a visible learner request.
+- Existing OpenCode local control commands are retained when their behavior
+  does not contradict Repa's Session, Interaction, permission, source, or
+  learning-authority semantics. Undo/fork/compact and similar commands require
+  invariant-level review rather than nominal preservation; cloud/share
+  commands remain excluded. No Repa Tutor slash-command catalog is designed in
+  the fork baseline—new commands wait for actual repeated consumers.
 - A durable Turn groups one admitted user request and the resulting model and
   tool work. Provider completion, tool settlement, and Turn completion remain
   distinct.
@@ -186,8 +300,8 @@ product foundation or accepted ADRs.
   loop, complete transcript API, general tool executor, cancellation runner, or
   TUI, so its successful tests do not by themselves establish a production
   agent spine.
-- ADR-0011's first dogfood milestone supplied the missing real
-  consumer: `bun run repa` executes an AI-SDK model/tool loop, recompiles
+- The superseded ADR-0011 dogfood milestone supplied a real behavioral oracle:
+  `bun run repa` executes an AI-SDK model/tool loop, recompiles
   learning context between samples, persists user/tool/assistant history, and
   continues from the same SQLite Session in another process. A separate real
   invocation also proved that a **new Session**, containing only its own new
@@ -207,6 +321,8 @@ product foundation or accepted ADRs.
 - A mandatory expanded StateDiff before every routine learning update.
 - Treating a deterministic formal exercise as the first complete product path.
 - Treating model-generated summaries as original observations.
+- Turning every workspace convention or user preference into typed database
+  state, or treating a model-written note as hard policy or learning evidence.
 - Rewriting source-grounded curricular relations after one learner error.
 - Making Markdown notes the machine source of truth.
 - Adopting a full agent framework as the architectural center merely to avoid
@@ -219,6 +335,9 @@ product foundation or accepted ADRs.
   next.
 - A stored universal intervention pipeline, difficulty taxonomy, or
   `FutureAction` that unifies every reason to teach, review, plan, or work.
+- Extending the current one-shot AI SDK runner into a complete private harness.
+- Continuing ALS-024 or recruiting the maintainer as a learner merely because
+  the latest local result exposed another possible state distinction.
 
 The formal-task, evidence-interpretation, and learner-projection work remains
 useful as research history and as a possible bounded mechanism for future
@@ -246,21 +365,10 @@ These statements are deliberately weaker than accepted decisions.
    scheduler score has not been earned.
 5. Learner inference can remain sparse and consumer-specific until actual
    attempts, review, or open work demonstrate a need for a richer projection.
-6. The deleted LearnerHome-level v4 Assignment experiment produced historical
-   evidence about strict source binding, disposition, correction, replay, and
-   lazy history. It did not prove the intended Assignment product boundary:
-   its representative emergency fixture was invalid, and it excluded learning
-   context/nature, workload, capacity, progress, and cross-day allocation.
-   Schema 6 remains only as an inert compatibility tombstone.
-7. ALS-024 Stage 0/1 establishes one concrete fresh-Session collision, but
-   Stage 2 narrows what it earns. For the deterministic fixture, the existing
-   Agenda transition’s service-occurrence reference plus exact Interaction and
-   criterion sources is sufficient to derive the current move; no durable
-   observed outcome is required. Current tools do not expose that service source
-   and historical criterion bytes may become unavailable after material drift.
-   A durable observation remains unearned until one real non-deterministic,
-   case-correctable judgment changes a later move. Copied response/criterion,
-   assistance, generic attempt, evidence, and mastery shapes are rejected.
+6. The optional source-to-readable-representation boundary is accepted, but
+   the fork trace must still decide its smallest native schema and prove
+   failure/drift behavior. It does not earn a PDF type hierarchy or
+   conversion-pipeline subsystem.
 
 ## Questions still worth resolving
 
@@ -301,9 +409,9 @@ These statements are deliberately weaker than accepted decisions.
   of learner-visible Tutor dialogue while natural reminders remain possible?
 - Which claims about teaching quality require a real learner and cannot be
   established through simulated students?
-- Which parts of the current global revision and generic `durable_effect`
-  mechanism remain useful receipts after course/material domain records arrive,
-  and which should be narrowed or deleted rather than generalized?
+- Which inherited Session/message/part identities can directly carry the
+  accepted Turn, model-operation, tool-invocation, and context-cut meanings,
+  and which need one narrow native Repa record during the fork cutover?
 
 Production types and tables remain local to demonstrated consumers. ADR-0012
 now fixes authority and dependency direction, while route/material, progress,
@@ -323,13 +431,17 @@ and
 [`research/proposal-0006-production-verification-2026-07-13.md`](./research/proposal-0006-production-verification-2026-07-13.md).
 The governing correction is
 [`research/semantic-drift-audit-2026-07-13.md`](./research/semantic-drift-audit-2026-07-13.md).
-The current route and runtime phase review is
+The historical route and runtime phase review that preceded ADR-0011 is
 [`research/broad-route-and-runtime-substrate-review-2026-07-12.md`](./research/broad-route-and-runtime-substrate-review-2026-07-12.md).
-The completed runtime milestone is
+The completed pre-fork runtime milestone is
 [`roadmap/05-first-dogfood-tutor-loop.md`](./roadmap/05-first-dogfood-tutor-loop.md).
 The accepted architecture is
-[`architecture/00-system-architecture.md`](./architecture/00-system-architecture.md),
-and its implementation sequence is
+[`architecture/00-system-architecture.md`](./architecture/00-system-architecture.md).
+The current substrate decision and implementation sequence are
+[`decisions/0014-one-time-opencode-fork.md`](./decisions/0014-one-time-opencode-fork.md)
+and
+[`roadmap/09-one-time-opencode-fork-baseline.md`](./roadmap/09-one-time-opencode-fork-baseline.md).
+The earlier product-pressure map remains historical guidance in
 [`roadmap/architecture-led-build-sequence.md`](./roadmap/architecture-led-build-sequence.md).
 The completed course-continuity milestone is
 [`roadmap/06-real-course-material-continuity.md`](./roadmap/06-real-course-material-continuity.md).
@@ -356,126 +468,83 @@ The exact-reason ablation that earns one operative learner-role constraint is
 
 ## Current build direction
 
-The runtime, overall architecture, and real course/material continuity are
-complete boundaries. The earlier entity-linear sequence—activity records,
-then Agenda, then evidence and adaptive review—has been withdrawn as the
-automatic roadmap.
+The current implementation phase is the **one-time OpenCode fork and native
+Repa baseline** governed by ADR-0014 and
+[`roadmap/09-one-time-opencode-fork-baseline.md`](./roadmap/09-one-time-opencode-fork-baseline.md).
+The pre-fork runner proved learning semantics but did not establish a complete
+or trustworthy generic harness. It receives no further generic features.
 
-Work is now selected on two axes:
+This is not a one-pass rewrite. Roadmap 09's phases are requirement clusters
+implemented through separate reversible evidence gates; a gate includes its
+owned exception, restart, replay, and rollback cases before it can pass. The
+first authorized engineering move is only the lineage/provenance gate. Later
+gates are refined from the immediately preceding evidence rather than
+pre-authorized as one large patch.
 
-1. a learner-visible product pressure path; and
-2. the engineering gates that keep authority, context, correction, and failure
-   behavior sound.
+The pre-fork code remains a live black-box oracle: `bun run check` passed 244
+tests with 0 failures on 2026-07-13. Its exact disposition is recorded in
+[`research/pre-fork-repa-asset-audit-2026-07-13.md`](./research/pre-fork-repa-asset-audit-2026-07-13.md).
+Small pure utilities are only carry candidates; Course, Agenda, Tutor, source,
+and interaction behavior is ported as native contracts; the old runner,
+database, provider adapter, and runtime-coupled labs are not compatibility
+dependencies. Nothing is deleted until its native positive and failure
+oracles exist.
 
-The current pressure path is **teach, adapt, and return**: use real material to
-help with one currently difficult part, change the move when the learner's
-response calls for it, and later return in a purpose-appropriate form when
-there is a real reason. It must use contrasting procedural, conceptual,
-discrimination, delayed-return, and direct-real-work cases so no one teaching
-method becomes the architecture.
+OpenCode's built-in prompts and product surfaces are also cutover targets, not
+neutral inherited plumbing. The pinned v1 selects several coding-first base
+prompts by provider and uses additional coding assumptions in default/hidden
+agents, compaction, summaries, titles, exploration, tool descriptions, plan
+reminders, and built-in commands. Every interactive provider path must
+implement the same Repa product contract and accept the same Learning-System
+composition inputs, although provider-specific rendering may differ. The base
+prompt is not the Tutor; Tutor behavior emerges as native learning authorities
+join that composition. Hidden calls receive narrow Repa-owned prompts for their
+actual task. Useful local coding mechanics may remain as explicit capabilities.
+Account/share/sync/control-plane and other excluded group surfaces first lose
+all registration and reachability, then their implementations are deleted in
+dependency-closed slices before cutover.
 
-The deterministic pressure proof and Roadmap 07 implementation have now earned
-one specific production Agenda revisit: a source-linked future-attention
-concern with bounded cross-Session context, lazy detail, explicit disposition,
-and learner-bound correction. They have not earned a general alignment engine,
-learner-evidence representation, or scheduler.
+The active sequence is:
 
-ALS-021 has now closed the shared-policy pressure. All 112 formal samples
-completed under `tutor-default-v2`. The predeclared zero-write gate passed only
-91/96, two required-material conditions reached only 6/8, and both raw blind
-reviewers gave the independent-prediction return 0/8. The broad qualitative
-instrument itself failed calibration with 518 disagreements, so no adjudicated
-fine-grained score was manufactured. These limits do not hide the decisive
-behavior: the source-linked Agenda reason survived into a fresh Session, but
-the Tutor still disclosed the answer before the intended unaided prediction.
+1. obtain and reproduce a full-history OpenCode `v1.17.18` fork on Windows;
+2. establish Repa-owned application paths, binary, database identity, and one
+   released-v1 Session runner;
+3. replace coding-first provider and hidden prompts with one Repa product
+   contract and Learning-System composition boundary, then separately remove
+   or scope inherited product surfaces by behavior;
+4. map learner Turn, model operation, typed item, tool invocation, context cut,
+   cancellation, and terminal outcome without shadow lifecycle tables;
+5. adapt the inherited EventV2 transaction seam so a local learning transition
+   and exact Tool Part settlement commit together;
+6. admit learner-optional, general source-to-readable-representation
+   translation with exact revision lineage and a canonical Repa-owned artifact
+   location, without turning it into a local-RAG pipeline; and
+7. run a fixed scripted learner through the real provider/tool loop, then prove
+   restart, fresh-Session continuity, compaction, and failure truth before
+   deleting the old runner.
 
-The architecture direction is therefore narrower than "add more memory" or
-"improve the prompt." ALS-022A showed that explicit binding repairs the tested
-realization. ALS-022B/C then showed that a mandatory selector model does not
-reliably decide current request versus Agenda versus ambiguity. ALS-022D
-removed that classifier: the program bound the sole legal concern as a
-conditional default in the ordinary sample, retained exact-current-request
-priority, and passed all ten contrasts.
+The source-grounded Course View, route continuity, Agenda future attention,
+conditional learner-response-before-disclosure behavior, model-write
+authority, correction, and fresh-Session continuity remain required behavior
+oracles. Their current schemas and adapters are not compatibility targets.
 
-An inspectable selected current-purpose contribution is therefore an accepted
-composition invariant when durable state governs a move, but it is not an
-unconditional winner or universal preliminary stage. The program owns
-legality, candidate count, exact source/version/target/reason, priority, scope,
-and durable effects. The model owns the compatible current-request override and
-flexible explanation, example, question, research, representation, and tool
-use. Multiple material candidates remain unresolved rather than silently
-ranked.
+ALS-024 is completed and parked. Stage 2 showed that its deterministic fixture
+did not earn durable learner-outcome state; no Stage 3, human learner test,
+production schema, or new evidence experiment follows from it. The withdrawn
+minute-scale Assignment route likewise remains historical only.
 
-Proposal 0005 now implements the first production contribution contract under
-`tutor-default-v3`: exact source meaning, the earned
-learner-response-before-disclosure constraint,
-conditional priority, override outcome, Turn/failure scope, conservative
-migration, correction, and full-count promotion. Schema v5 performs no legacy
-backfill; zero or multiple legal candidates fail closed. A fresh-Session live
-DeepSeek smoke asked for the intended prediction before explanation without
-narrating control state. This does not prove any wider constraint vocabulary.
-ALS-022A/D/E also showed that
-pre-tool and internal control prose can enter the persisted learner-visible
-answer. The architecture gate found no architecture blocker. A pinned Codex and
-AI SDK comparison narrowed the defect to the current runner's Turn-wide text
-flattening: Codex preserves assistant message items and optional
-commentary/final phases rather than censoring arbitrary prompt vocabulary.
-The implementation renders the operative meaning naturally and tests the
-learner-facing result. It does not preemptively add phase metadata or split
-assistant items; repeated material leakage, partial recovery, or a real TUI
-consumer may earn that later. None of this admits a durable aggregate, mode,
-pedagogy enum, second runtime, keyword filter, or model-review pass.
+The earlier **teach, adapt, and return** pressure path remains the next
+learner-visible product horizon after substrate cutover. It does not compete
+with the fork phase and cannot be used to justify more state work on the old
+runner. Assignment planning, richer learner evidence, review scheduling, and
+Course graph expansion remain deferred until the native Repa baseline exists
+and a representative behavior needs them.
 
-This path still does not preauthorize an activity table, difficulty enum,
-intervention state machine, universal future-action model, FSRS integration,
-or full learner projection.
-
-ALS-024 remains at a narrower evidence gate. Its
-[Stage 0/1 result](./research/source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
-finds the addressed correct/incorrect collision. The
-[Stage 2 result](./research/source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
-shows that this exact deterministic fixture proves only source-bound local
-derivation through the existing service-occurrence reference, not a durable
-Learner Record observation. A wider copied occurrence and assistance field fail
-ablation. Before any such observation boundary, a real non-deterministic,
-source-bearing correction must change a later fresh-Session move; otherwise the
-path stops. No lab, live model, harness, production change, schema, or learner
-ontology is admitted.
-
-The post-0005 review incorrectly promoted B2's scene-specific 45/25/30-minute
-emergency into the next production pressure. Proposal 0006 then deferred the
-very meanings required by ordinary multi-day planning and handed the local
-schedule to model judgment. ALS-023's provider failure therefore cannot define
-a new product-level consideration problem. Proposal 0006 is withdrawn; the v4
-runtime, prompt, tools, and dedicated tests have been deleted rather than
-preserved by sunk cost. Schema 6 remains only as a compatibility tombstone;
-historical strict-time, provenance, transition, and replay evidence may inform
-a future consumer but does not preserve the aggregate shape.
-
-The corrected Assignment boundary starts with representative substantial work:
-learning context or nature, deadline, estimated remaining work, relevant
-capacity, allocation, progress feedback, and replanning. Exact schema and
-algorithm remain open pending a consumer-driven architecture proof and review
-of bounded rolling-horizon/workload-leveling models. The program must own
-closed arithmetic; model judgment remains useful for semantic decomposition,
-teaching, research, and genuinely open trade-offs.
-
-The same audit found concrete current-v3 gaps that are independent of the
-deleted v4 experiment: long
-learning Sessions have no context-budget/compaction/overflow path, the main
-natural-language terminal interaction is still a one-shot command, and
-learner-visible output has no admission boundary. Existing courses also cannot
-be selected through the Agent, and durable timed steering cannot be withdrawn
-through the production tool surface. Repair each with the smallest mature or
-reference-derived mechanism that serves the learning product. Unrelated Agent
-feature parity does not enter the roadmap.
-
-The source synthesis is
-[`research/teaching-and-review-first-principles-2026-07-12.md`](./research/teaching-and-review-first-principles-2026-07-12.md),
-the deterministic meaning proof is
-[`research/teach-adapt-return-architecture-proof-2026-07-12.md`](./research/teach-adapt-return-architecture-proof-2026-07-12.md),
-and the active two-axis build map is
-[`roadmap/architecture-led-build-sequence.md`](./roadmap/architecture-led-build-sequence.md).
+The fork must not become an OpenCode compatibility project. Local capabilities
+are retained when useful, but learning determines defaults and durable meaning.
+A capability reduction succeeds only when the learning consumer's identity,
+ownership, lifecycle, correction, and failure behavior survive; otherwise a
+separate learning-native authority is required.
 
 ## Work-selection rule
 
@@ -484,3 +553,9 @@ different results would change a design decision. New production concepts must
 name the future Tutor behavior that consumes them. Product outcome names,
 teaching strategies, and transient diagnoses do not become runtime types merely
 because they organize the current analysis.
+
+During Roadmap 09, the next task must close one fork gate: reproducible build,
+native identity/migration, atomic tool/domain settlement, material
+representation, or the scripted real-provider trace. Do not extend the old
+runner, reopen ALS-024, add a compatibility layer, or implement the same
+learning behavior in both v1 and preview v2.

@@ -60,24 +60,14 @@ Use full names in notes and discussion:
 | ALS-022D | 2026-07-13 | Can a program-bound sole Agenda concern act as a conditional default inside the ordinary realizing sample while explicit current requests override it? | Yes for the tested independent-prediction concern: 10/10 generic-continuation, direct-answer, direct-comparison, completed-occurrence, and redirection cases passed behavior and state gates. No selector sample ran. Overrides left the concern open; completed occurrences addressed it. The intervention restated the known learner-role constraint, so general reason compilation and multi-candidate policy remain open. | `conditional-current-purpose-result-2026-07-13.md` |
 | ALS-022E | 2026-07-13 | Is exact Agenda reason plus conditional-default status sufficient without explicitly restating its learner-role/help-order constraint? | No. The mechanical screen was 6/8, but strict inspection found only 3/8 valid independent predictions: two disclosed answers, one posed no prediction, and two supplied decisive rules first. Exact source reason and operative constraint are distinct. This earns a narrow contract for `learner response before Tutor disclosure`, not a universal pedagogy enum. | `exact-reason-conditional-default-result-2026-07-13.md` |
 | ALS-023 | 2026-07-13 | Can the deterministic Proposal 0006 Assignment candidate reliably create, survive a Session boundary, affect a near-deadline broad continuation, and reject unrelated job work under the production DeepSeek-V4-Flash Tutor? | The run failed, and its product interpretation is withdrawn. Persistence, provenance, correction, lazy reads, and policy-version isolation passed deterministically; live creation was unstable, broad continuation ignored the fixture, and one response exposed an internal ID. More importantly, the 45/25/30-minute emergency is outside Repa's product scope, not merely unrepresentative. It cannot establish a product consideration boundary or qualify the v4 aggregate. The CLI remains on v3. | `proposal-0006-production-verification-2026-07-13.md`; `semantic-drift-audit-2026-07-13.md` |
+| ALS-024 | 2026-07-13 | Does the addressed independent-correct/incorrect collision earn a durable source-linked performance occurrence? | Stage 0/1 found the fresh-Session collision, but Stage 2 showed that the deterministic fixture needs only the existing Agenda service-occurrence reference plus bounded source reads and local derivation. Durable outcome, copied response/criterion, assistance, generic attempt, evidence, and mastery shapes were not earned. The line is completed and parked; no Stage 3 or maintainer-as-learner run is admitted. | `source-linked-performance-occurrence-proof-2026-07-13.md`; `source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md`; `source-linked-performance-occurrence-stage-2-result-2026-07-13.md` |
 
-## Active batch
+## Active batch: none
 
-ALS-024 remains at an evidence gate under its pre-registered
-[protocol](./source-linked-performance-occurrence-proof-2026-07-13.md).
-[Stage 0/1](./source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
-found the correct/incorrect fresh-Session collision.
-[Stage 2](./source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
-then completed by paper and production-code-path ablation: the deterministic
-fixture earns only a bounded read of the Agenda transition’s existing service
-occurrence plus source-bound local derivation. It does not earn a durable
-observed-outcome boundary; copied response/criterion/assistance is rejected.
-Current tools do not expose that service source, and changed material may leave
-the historical criterion unresolvable. No lab, harness, production state, new
-test, or live-model run is active. Stage 3 is not admitted. The next evidence
-must be one real non-deterministic, case-correctable observation whose corrected
-revision changes a later move; otherwise the durable observation boundary
-stops.
+There is no active learning experiment. ADR-0014 and Roadmap 09 move the project
+to the one-time OpenCode fork and native Repa baseline. Build, database,
+transaction, material-representation, and scripted-provider checks are
+implementation gates, not another ALS learner-state campaign.
 
 ALS-023 is retained as a failed experiment whose pressure scenario was selected
 incorrectly. It does **not** leave a near-deadline consideration question. The
@@ -274,22 +264,14 @@ Full findings are in
 
 ## Next experiment entry gate
 
-ALS-018 closed the two state-boundary questions exposed by ALS-017 and produced
-an executable state/context candidate. The 2026-07-12 phase review found that
-it also embedded a partial generic agent host before the substrate decision.
-Its learning-semantic tests remain evidence; the review provisionally removes
-the "first production spine" label as authorization to extend its Session,
-Turn, model, tool, recovery, or global-revision shapes.
+No new ALS entry precedes the fork cutover. A later experiment must arise from
+a post-cutover learner-visible consumer, state how different results change a
+product decision, and avoid continuing an old stage number by momentum.
 
-For generic host work, the next discriminating experiment is architecture
-distillation followed by one runtime-seam trace. The pinned OpenCode/Codex
-sources and tests first establish the end-to-end control sequence, owners, and
-fault semantics; mature libraries then realize the trace while Repa supplies
-only loop composition and learning semantics. The experiment identifies which
-ALS-018 records are domain invariants versus runner duplication. OpenCode
-modification or a fork is reopened only if the trace exposes a necessary
-boundary that the library path cannot supply without rebuilding generic
-runtime machinery.
+The next repository work is the executable sequence in
+[`../roadmap/09-one-time-opencode-fork-baseline.md`](../roadmap/09-one-time-opencode-fork-baseline.md).
+
+## Historical gate evolution
 
 ALS-019 completed the independent course-route pressure test. It rejected the
 ordered-list/one-pointer baseline and promoted only the semantic distinctions

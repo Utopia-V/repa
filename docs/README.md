@@ -16,6 +16,24 @@ Documents have different authority. Do not treat a research observation as an ac
 - [`current-understanding.md`](current-understanding.md) separates settled
   intent, accepted engineering decisions, abandoned defaults, working
   hypotheses, and open questions.
+- [`decisions/0014-one-time-opencode-fork.md`](decisions/0014-one-time-opencode-fork.md)
+  is the current substrate decision: Repa becomes an independent,
+  learning-native product through a one-time full-history OpenCode v1 fork,
+  one native SQLite database, and no production overlay or dual runtime.
+- [`research/opencode-one-time-fork-audit-2026-07-13.md`](research/opencode-one-time-fork-audit-2026-07-13.md)
+  records the license, package, v1/v2, public-seam, database, transaction, and
+  failure evidence that supports ADR-0014.
+- [`research/pre-fork-repa-asset-audit-2026-07-13.md`](research/pre-fork-repa-asset-audit-2026-07-13.md)
+  classifies the still-runnable production code, tests, and labs as carry
+  candidates, behavioral or black-box oracles, historical evidence, or
+  cutover deletions. It forbids keeping them alive through a dual-runtime
+  compatibility layer.
+- [`roadmap/09-one-time-opencode-fork-baseline.md`](roadmap/09-one-time-opencode-fork-baseline.md)
+  is the active staged implementation plan. Its minimum evidence gates prevent
+  phase-wide implementation, bind failure handling to each local change, and
+  gate the Windows fork build, native Interaction/database cutover, atomic
+  learning tools, general material translation, scripted real-provider
+  dogfood, and deletion of the old runner.
 - [`foundation/03-complete-learning-traces.md`](foundation/03-complete-learning-traces.md)
   is the review draft of the complete behavior baseline. It does not define a
   workflow or schema.
@@ -43,9 +61,9 @@ Documents have different authority. Do not treat a research observation as an ac
   records the current route-representation hypothesis, audits OpenCode/Codex
   reuse boundaries, and records the evidence that preceded ADR-0011.
 - [`decisions/0011-single-process-tutor-loop-over-mature-mechanics.md`](decisions/0011-single-process-tutor-loop-over-mature-mechanics.md)
-  fixes the runtime direction: Repa-owned single-process composition over
-  mature provider, streaming, tool, cancellation, and later rendering
-  mechanics.
+  is the superseded decision that produced the first Repa-owned real-provider
+  loop. Its trace remains evidence; its generic runner is not the current
+  substrate direction.
 - [`roadmap/05-first-dogfood-tutor-loop.md`](roadmap/05-first-dogfood-tutor-loop.md)
   records the completed first real-provider Tutor loop and cross-process
   consumption of durable learning state, including a distinct fresh-Session
@@ -61,9 +79,9 @@ Documents have different authority. Do not treat a research observation as an ac
 - [`architecture/00-system-architecture.md`](architecture/00-system-architecture.md)
   is the normative detailed architecture and current-code transition audit.
 - [`roadmap/architecture-led-build-sequence.md`](roadmap/architecture-led-build-sequence.md)
-  is the active two-axis build map: learner-visible product pressure paths over
-  the accepted engineering gates. It withdraws the earlier automatic
-  activity/Agenda/evidence phase chain.
+  is the historical product-pressure map that withdrew the earlier automatic
+  activity/Agenda/evidence phase chain. Its learning gates remain useful, but
+  Roadmap 09 now owns the active cutover sequence.
 - [`roadmap/06-real-course-material-continuity.md`](roadmap/06-real-course-material-continuity.md)
   is the completed first ADR-0012 product milestone: revision-bound local
   Markdown and Agent-created provisional routes now continue from durable,
@@ -86,13 +104,13 @@ Documents have different authority. Do not treat a research observation as an ac
   settlement, runtime ordering, and verified zero-write boundaries. It does
   not complete the wider shared-policy teaching trace.
 - [ALS-024 source-linked performance occurrence protocol](research/source-linked-performance-occurrence-proof-2026-07-13.md)
-  governs the active architecture proof. Its
+  is completed and parked research. Its
   [Stage 0/1 result](research/source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
   finds a fresh-Session collision, while
   [Stage 2](research/source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
   narrows the sufficient meaning to an existing service source plus local
   derivation. No durable outcome, assistance field, production schema,
-  learner-evidence ontology, harness, or live-model run is admitted.
+  learner-evidence ontology, harness, live-model run, or next stage is admitted.
 - [`research/shared-tutor-policy-contrasting-traces-protocol-2026-07-12.md`](research/shared-tutor-policy-contrasting-traces-protocol-2026-07-12.md)
   is ALS-021's frozen controlled protocol for testing one shared production
   Tutor policy over fourteen contrasting conditions and eight formal blocks.

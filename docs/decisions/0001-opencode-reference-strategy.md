@@ -1,7 +1,12 @@
 # ADR-0001: Use OpenCode as a pinned read-only reference
 
-Status: Accepted
+Status: Superseded by [ADR-0014](./0014-one-time-opencode-fork.md)
 Date: 2026-07-10
+
+This document remains the historical decision that created the pinned,
+read-only `.reference/opencode` checkout. That checkout boundary still holds,
+but the conclusion that production must remain an independent
+reimplementation no longer governs the product lineage.
 
 ## Context
 

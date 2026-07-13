@@ -153,32 +153,43 @@ Rep was a small HarmonyOS course project used to explore planning, knowledge dep
 
 ## Current technical decision
 
-The main implementation uses TypeScript and Bun. OpenCode is the primary
-engineering reference because it demonstrates a production terminal agent.
-Its generic Agent architecture and behavior may be adapted or cleanly
-reimplemented; its coding-specific tools, product semantics, and package
-topology are not inherited automatically. Codex is a secondary comparison
-reference used to separate convergent harness mechanisms from one upstream's
-product choices. This repository owns harness composition and product
-semantics; mature open-source interfaces, libraries, or reference-derived
-reimplementation should carry generic execution mechanics unless an observed
-learning invariant conflicts with them. ADR-0012 centers the application on a
-single local LearnerHome and separate learning authorities inside one modular
-monolith; the Agent loop is the ordinary execution substrate, not the long-term
-learning-state model. The Learning System adds to that substrate rather than
-replacing its Session or context behavior. The engineering objective is the
-least Repa-owned generic runtime code that still lets learning context, state,
-tools, and Tutor policy act as first-class product behavior; matching the
-feature set of a coding agent is not an objective.
+The implementation uses TypeScript and Bun. ADR-0014 creates Repa from a
+one-time full-history fork of OpenCode `v1.17.18`, after which Repa is an
+independent product with its own binary, product semantics, database,
+migrations, terminal surface, and release direction. OpenCode is not a runtime
+host for a Repa overlay and Repa has no obligation to preserve OpenCode data,
+configuration, product behavior, or future v2 migration path.
+
+The fork inherits mature local Session, typed-item, provider, tool,
+permission, MCP, subagent, compaction, cancellation, recovery, and terminal
+mechanics. Cloud, marketplace, account, sharing, and other group-product
+surfaces are outside the baseline. Existing local coding capabilities may
+remain available when useful, but learning determines the default Agent
+behavior, context, durable meanings, tools, and interface. A coding concept
+does not become a Course, Agenda item, learner observation, or Tutor policy by
+renaming it.
+
+ADR-0012 still centers the application on one local LearnerHome and separate
+learning authorities inside one modular monolith. The inherited Agent loop is
+the ordinary execution substrate, not the long-term learning-state model. One
+Repa-native SQLite database contains the Interaction and separate learning
+authorities without collapsing them into a universal event/fact store.
+
+Before adding new machinery, the design attempts to reduce a required learning
+behavior to an inherited or mature mechanism. The reduction is valid only when
+the learning behavior's ownership, identity, lifecycle, correction, and
+failure contract survive. This is mechanism reuse, not semantic equivalence.
+Codex remains a secondary comparison reference for convergent behavior and
+failure properties.
 
 ## Deliberately unresolved
 
 The following decisions remain open because source research and focused experiments are still required:
 
-- The durable Session schema beyond the demonstrated admitted-input,
-  model-operation, tool-settlement, and complete final-assistant occurrence
-  spine. Per-step provider diagnostics, partial-stream persistence, and their
-  replay meaning remain open.
+- The exact native mapping from inherited Session/message/part records to an
+  admitted learner Turn, model operation, physical tool invocation, immutable
+  context cut, and terminal outcome. Their distinct meanings are settled; the
+  fork gate decides the least duplicate representation.
 - Richer production shapes beyond the first implemented Course/material/route
   and Agenda consumers: broader Material Map and search, learner history,
   goals, assignments, and review authorities. Ownership and separation are
@@ -191,6 +202,8 @@ The following decisions remain open because source research and focused experime
 - The domain-specific persistence layout for learning authorities not yet
   implemented and their corrections. SQLite authority, revision distinctions,
   and the first Course/Agenda tables are already settled by working consumers.
-- TUI framework and the point at which a richer interface is justified.
+- The learning-native projection and interaction design over the inherited
+  terminal mechanics. The TUI framework itself is no longer a blank-page
+  choice.
 
 Unresolved does not mean "let AI choose during implementation." These are explicit design decisions to settle with evidence.

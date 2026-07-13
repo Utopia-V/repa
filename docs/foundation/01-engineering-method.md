@@ -119,6 +119,33 @@ cheap or no plausible answer changes the plan. Accepted durable decisions are
 promoted to the appropriate project document; situational answers do not form
 a timeless preference profile.
 
+Before asking the maintainer or extending a consequential proposal, use a
+bounded `grill-yourself` pass when it can still change the design. State the
+proposal's strongest hidden assumption, construct the cheapest decisive
+counterexample, inspect its failure and recovery boundary, and compare the
+latest wording with product origin and accepted decisions. Factual, source,
+and engineering contradictions are researched and repaired directly. Only a
+remaining product value or expensive trade-off is eligible for `grill-me`.
+This is not a mandatory review ritual for cheap reversible work.
+
+The interaction extracts a few high-variance design coordinates rather than
+enumerating every imaginable branch. Before admitting a question, the agent
+must establish all of the following:
+
+1. repository, source, and reference research cannot answer it;
+2. the maintainer can control the answer;
+3. two plausible answers would materially change product behavior, an
+   expensive-to-reverse boundary, or the next implementation plan;
+4. resolving it now costs less than discovering the mismatch during fast
+   implementation; and
+5. the agent can state a recommendation and its evidence.
+
+The highest upstream admitted question is asked first. Its answer prunes the
+design tree before a dependent question is considered. Already accepted
+intent, factual lookup, generic preference fishing, agent-owned implementation
+trivia, and hypothetical distinctions that do not change action are excluded
+by default.
+
 These collaboration defaults were informed by two practitioner reports from
 LastWhisper, read on 2026-07-13:
 
@@ -150,11 +177,12 @@ mechanism. When a standard library, runtime facility, database, or maintained
 API already owns the boundary, using it directly needs no ceremonial research
 artifact.
 
-OpenCode and Codex are concrete references for agent-runtime behavior, not the
-only sources of design. Textbooks, standards, papers, language/runtime
-facilities, databases, and smaller focused libraries may provide a better
-model. Reuse the mechanism or invariant when Repa has the same problem; keep
-learning semantics owned here when the problem is genuinely domain-specific.
+OpenCode is both the accepted one-time code lineage and a pinned source oracle;
+Codex remains a comparison reference. Neither is the only source of design.
+Textbooks, standards, papers, language/runtime facilities, databases, and
+smaller focused libraries may provide a better model. Reduce a Repa behavior to
+an inherited or mature mechanism when its contract survives; keep learning
+semantics owned here when the problem is genuinely domain-specific.
 
 ## Human-owned decisions
 

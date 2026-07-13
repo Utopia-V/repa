@@ -1,8 +1,11 @@
 # ADR-0011: Build one Repa-owned Tutor loop over mature agent mechanics
 
-Status: Accepted
+Status: Superseded by [ADR-0014](./0014-one-time-opencode-fork.md)
 
 Date: 2026-07-12
+
+The real-provider loop and its learning invariants remain behavioral evidence.
+The Repa-owned generic runner is no longer the production substrate direction.
 
 ## Clarification after the Session-context correction
 

@@ -40,24 +40,41 @@ learning tools.
 
 - The main interaction is a natural-language terminal agent.
 - The implementation language/runtime is TypeScript/Bun.
-- The harness is owned by this project; full agent frameworks are not the architectural center.
-- Harness ownership means owning composition and product semantics, not reimplementing universal agent machinery. Prefer mature open-source interfaces and libraries for provider calls, streaming, tool continuation, cancellation, and rendering unless an observed learning invariant conflicts with them.
-- Learning behavior is first-class; a generic harness is supporting machinery,
-  not a separate product or feature-parity milestone. Minimize Repa-owned
-  generic code. Prefer mature libraries and narrow adaptation of proven
-  OpenCode/Codex mechanisms, and cleanly reimplement only the part required by
-  a current learning-product consumer. Their read-only status forbids editing
-  or importing them; it does not forbid architectural reuse. Learning-System
-  context, state, and policy extend ordinary Session behavior rather than
-  replacing it.
+- Repa is an independent product created from a one-time full-history fork of
+  OpenCode `v1.17.18`. The project owns the resulting harness composition,
+  product semantics, database, migrations, and release direction; OpenCode is
+  not a runtime dependency, overlay host, or compatibility target.
+- The complete local Agent harness is part of the product destination. Reuse
+  the fork's mature Session, typed-item, provider, tool, permission, MCP,
+  subagent, compaction, cancellation, recovery, and terminal mechanics rather
+  than selectively rebuilding them. Cloud, account, sharing, marketplace, and
+  other group-product surfaces are not part of the baseline.
+- Learning behavior is first-class: it shapes default Agent behavior, context,
+  durable Session meaning, database authorities, tools, terminal surfaces, and
+  task selection. Generic harness mechanics remain domain-independent and do
+  not become the architectural center merely because they were inherited.
+- Before creating new Repa machinery, try to reduce the required learning
+  behavior to an inherited or mature mechanism in the computational sense.
+  Reuse is valid only when ownership, identity, lifecycle, correction, and
+  failure behavior are preserved; it does not imply that an OpenCode coding
+  concept and a Repa learning concept are the same thing.
 - Plan, study, review, and similar modes are policy profiles over one agent loop, not separate runtimes or duplicated executors.
 - Trust learner intent while separating reports, observations, evidence, and inference; routine state updates are non-blocking, inspectable, correctable, and reversible.
-- OpenCode is a pinned, read-only engineering reference, not a dependency or upstream fork.
-- Codex is a pinned, read-only secondary comparison reference; it does not
-  change the TypeScript/Bun implementation choice or authorize a fork.
+- `.reference/opencode` remains a pinned, read-only source audit checkout. The
+  production fork must be obtained separately from full upstream history and
+  retain the MIT license and exact upstream provenance; never turn the ignored
+  reference checkout into the production source tree.
+- The first fork baseline uses OpenCode's released v1 execution path. Preview
+  v2 may supply individually reviewed design ideas, but Repa must not ship or
+  maintain v1 and v2 as two production runtimes.
+- Codex remains a pinned, read-only secondary comparison reference. It does
+  not change the TypeScript/Bun implementation choice or create a second
+  product lineage.
 - The old Rep HarmonyOS project contributes product history only. Its code and data model are not migration targets.
 - Learning semantics must shape context construction, default actions, durable session meaning, review surfaces, and task selection. Low-level provider and rendering code should remain domain-independent.
-- Do not freeze a detailed production architecture from reference study alone. Use isolated labs to expose a concrete semantic or failure boundary first, then promote only the demonstrated invariant.
+- ADR-0014 settles the fork and native-database direction. Concrete identity,
+  transaction, migration, and cutover shapes still require the executable
+  fork gate; do not promote a source-level resemblance into a working invariant.
 - Treat explanation, demonstration, guided work, independent work, review, and
   planning as peer Tutor actions. No one action is the mandatory center or
   continuation of every learning interaction.
@@ -95,8 +112,13 @@ learning tools.
 - `.reference/` is read-only research material and is excluded from Git.
 - Never edit files under `.reference/`.
 - Never import source from `.reference/` into production code.
+- Obtain the production OpenCode fork from a separate full-history upstream
+  clone at the accepted tag/commit. Preserve its history and required MIT
+  notices.
 - When adapting a design, record the source file, pinned commit, preserved invariant, and deliberate differences.
-- Preserve required license notices if substantial source is copied. Prefer reimplementation from understood behavior over copying.
+- Inherited source may be transformed inside the real fork. Outside that fork,
+  prefer public libraries or behavior-level reuse over copying isolated files
+  out of `.reference`.
 
 ## AI engineering rules
 
@@ -165,6 +187,24 @@ learning tools.
   time, stop when remaining uncertainty is cheap or no plausible answer changes
   the plan, and promote accepted durable decisions to the owning document.
   Situational answers do not become timeless user preferences.
+- Before asking the maintainer or extending a consequential proposal, run a
+  bounded `grill-yourself` pass when it can still change the design. Challenge
+  the strongest hidden assumption with a counterexample, check the relevant
+  failure/recovery boundary, and compare the latest wording against product
+  origin and accepted decisions. Research and repair evidence-owned mistakes
+  directly; bring only the remaining maintainer-owned trade-off to `grill-me`.
+  Do not turn this into recurring ceremony for cheap, reversible work.
+- Treat `grill-me` as high-variance decision extraction, not exhaustive
+  interviewing. A question is admissible only when repository/reference
+  research cannot settle it, the maintainer can actually control the answer,
+  at least two plausible answers lead to materially different product behavior
+  or an expensive boundary, and deciding now is cheaper than discovering the
+  mismatch during implementation. Ask the highest upstream admitted question
+  first, include a reasoned recommendation, and derive downstream questions
+  from its answer. Do not ask for facts, confirmation of already accepted
+  intent, generic preferences without a concrete consequence, implementation
+  trivia the agent should own, or hypothetical branches whose answers would
+  not change the next plan.
 
 ## Global coherence check
 

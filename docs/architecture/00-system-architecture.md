@@ -1,25 +1,27 @@
 # Repa system architecture
 
-Date: 2026-07-12
+Date: 2026-07-13
 
-Status: Accepted architecture baseline under ADR-0012. This document is
-normative for ownership, dependency direction, state authority, and failure
-boundaries. Names shown in examples are not automatically production types,
-tables, or packages.
+Status: Accepted architecture baseline under ADR-0012, with runtime lineage and
+native persistence amended by ADR-0014. This document is normative for
+ownership, dependency direction, state authority, and failure boundaries.
+Names shown in examples are not automatically production types, tables, or
+packages.
 
 ## Decision in one paragraph
 
-Repa is a single-process, local modular monolith centered on durable learning
-authorities rather than on its model loop. One local `LearnerHome` contains a
-single learner's state across courses, workspaces, and Sessions. The Agent
-runtime is the Tutor's flexible execution arm: it composes an immutable,
+Repa is an independent, single-process, local modular monolith created from a
+one-time OpenCode v1 fork and centered on durable learning authorities rather
+than on its model loop. One local `LearnerHome` contains a single learner's
+state across courses, workspaces, and Sessions. The inherited and transformed
+Agent runtime is the Tutor's flexible execution arm: it composes an immutable,
 bounded view of relevant state for each model sample, exposes ordinary agent
 capabilities and authorized learning commands, and records the interaction.
 The LLM may research, teach, choose a local move, propose a course, and initiate
 real writes. It does not own the authoritative history, legal transitions, or
-cross-Session continuity. SQLite owns machine state; local files and observed
-source content remain revision-bound artifacts. No daemon runs while the
-terminal is closed.
+cross-Session continuity. One Repa-native SQLite database owns machine state;
+local files and observed source content remain revision-bound artifacts. No
+daemon runs while the terminal is closed.
 
 In plain language: the program keeps the long-term map and the books; the LLM
 looks at the useful part of that map and does the flexible intellectual work.
@@ -58,8 +60,9 @@ pre-create every future class or table.
 The design is constrained by executable evidence rather than by a desired
 folder layout.
 
-1. ADR-0011 and the real-provider dogfood trace establish one Repa-owned Tutor
-   loop over AI SDK provider, streaming, and tool mechanics.
+1. The superseded ADR-0011 runner and real-provider dogfood trace establish the
+   learning behavior that the fork must preserve; ADR-0014 and the OpenCode
+   source audit establish the mature v1 fork and native-database direction.
 2. A real fresh Session received active learning-wide state without importing
    the old Session transcript. Session identity is therefore not the learning
    memory boundary.
@@ -148,8 +151,8 @@ owner, transaction, and returned meaning are explicit.
 
 ```mermaid
 flowchart TB
-  UI["Terminal / future TUI"] --> RT["Tutor runtime\nSession and Turn owner"]
-  RT <--> MODEL["Model port\nAI SDK + provider adapter"]
+  UI["Repa terminal / TUI"] --> RT["Forked Agent runtime\nSession and Turn owner"]
+  RT <--> MODEL["Inherited provider/model layer"]
   RT --> COMPOSE["Tutor composition\ncontext, policy, capabilities"]
   COMPOSE --> Q["Learning queries\nsmall projections + source refs"]
   RT --> CAPS["Sample-bound capabilities"]
@@ -158,7 +161,7 @@ flowchart TB
 
   Q --> AUTH["Learning authorities"]
   CMD --> AUTH
-  AUTH --> DB[("SQLite LearnerHome")]
+  AUTH --> DB[("Repa-native SQLite LearnerHome")]
   RT --> INTERACTION["Interaction records"]
   INTERACTION --> DB
 
@@ -220,15 +223,123 @@ new table. It contains multiple `LearningSpace`s, courses, goals, and Sessions.
 Current storage can retain several courses, but the production Agent does not
 yet expose list/select behavior for switching among existing courses.
 
+The durable current Course is learner-controlled state. Invocation directory,
+folder layout, discovered material, Agenda pressure, and model judgment may
+surface information or a proposed target, but none may switch that Course.
+Changing it requires an explicit learner request followed by a visible
+confirmation bound to the exact target Course/View and current focus revision;
+only then may a validated command commit the transition. The learner can
+withdraw before commit, and a rejected or stale confirmation changes nothing.
+
+Current Course is a retrieval prior for underspecified future requests, not an
+exclusive scope or access-control boundary. When the learner's current request
+mentions or semantically requires another Course, context composition loads a
+bounded relevant view of that Course and the Tutor answers from it without
+changing the durable default. This needs no temporary-Course aggregate or
+`TurnFocus` fact: the admitted request and context cut already record what the
+sample consumed. A confirmed Course switch changes only which Course is the
+default when later input does not supply a better target.
+
 A `LearningSpace` scopes material roots, course views, artifacts, and ordinary
 context selection for a real body of work. It is not an isolation boundary for
 all learning state: a global deadline, retained steering, or cross-course goal
 may still contribute when relevant.
 
+Boot uses **global authority with directory routing**. Repa always opens the
+same LearnerHome and native database; the invocation directory is a candidate
+LearningSpace locator and the default filesystem-permission anchor, not a
+database boundary or a Course identity. The product prescribes no filesystem
+topology. One learner may keep a single broad learning directory with nested
+categories, another may use several unrelated roots, and a LearningSpace may
+use a whole root or a bounded subtree. Entering an unknown directory permits an
+ordinary Session there but does not silently create a durable LearningSpace or
+Course. Directory names and moves remain source-location facts until an
+explicit learning operation accepts or reconciles their meaning.
+
+LearnerHome may retain zero or more explicitly approved content roots for
+cross-directory discovery. When the invocation directory is inside one of
+them, Repa may read and search the approved root while using the current
+directory only as a relevance bias. Outside every approved root, the current
+directory is the default bounded scope. Repa never climbs to a broader parent
+and treats it as approved merely because its contents look educational. Root
+approval is a capability fact, not a Course, LearningSpace, or classification.
+It authorizes bounded use of selected content by the configured Agent/model as
+the ordinary purpose of granting the root, whether that model is remote or
+local. Repa adds no content-root-by-provider permission matrix; model/provider
+selection and its account/privacy terms remain harness configuration.
+
+An approved root defines the maximum search universe, not the default working
+set of every model sample. The current request, current-Course retrieval prior,
+Material Map, and explicit resource references compose the default learning
+search scope. Ordinary grep/search/read mechanics start there. The Agent may
+explicitly widen a search to any approved content root when relevant; this
+needs no repeated permission prompt, but the wider scope and bounded result are
+visible in the tool record. No implicit “global” search spans all LearnerHome
+roots or the computer. An unapproved path still follows the ordinary directory
+permission flow.
+
+Repa-owned state, cache, derived-artifact, and system-provided soft-memory
+locations are freely writable by the product within their fixed boundaries.
+Approval of a user content root does not itself approve mutation. A write under
+a content root or narrower working subtree is evaluated separately and may be
+allowed once, rejected, or permanently allowed for a canonical path scope.
+Permanent path rules are durable, inspectable, and revocable; revocation
+changes future authority and does not pretend to undo earlier writes. A broad
+content-root write grant and a narrow working-subtree grant use the same
+permission mechanism rather than different learning-domain types.
+
+Directory discovery and semantic interpretation have different owners. The
+program enumerates only authorized paths, applies ignore and size bounds,
+records canonical location, media type and exact content revision, and exposes
+a bounded candidate manifest. Deterministic parsers or converters recover
+mechanical structure when available. The LLM chooses which candidates merit
+inspection and interprets names, nesting and contents to propose groupings,
+LearningSpaces, Course Views, or Material Map relations. A capability-scoped
+domain command then validates sources, revisions, structure and authority
+before accepting a provisional or source-grounded revision. The model cannot
+expand its own root access, perform an unbounded hidden scan, or turn a folder
+name directly into learning truth.
+
+Discovery is lazy. Approving a root may build or refresh only a cheap,
+deterministic, bounded inventory; it does not cause the LLM to read and classify
+the tree. Current goals, learner requests, and related source reads trigger
+selective semantic inspection. A learner may explicitly request a broader,
+budgeted “understand/organize this root” pass. With no background daemon,
+inventory drift is noticed on application wake, relevant traversal, or an
+explicit refresh. Exact content revisions are bound when bytes are actually
+observed or accepted, not guessed from an old inventory entry.
+
 A `Session` is an interaction history. It may begin in one space and later
 switch focus; it is not permanently equated with a course. Each Turn records
 the resolved learning references in its context cut. A fresh Session starts
 with no copied old transcript and receives current state through queries.
+
+Interactive launch opens a sessionless shell with a deterministic current-view
+projection. The first ordinary learner input atomically creates a fresh Session
+and its first Turn. Before that input, an explicit slash command or CLI option
+may continue the most recent Session or select one by identity. A new Session
+does not mean new learning state: it receives the bounded current
+Learning-System view and can retrieve old detail lazily. An interrupted Session
+remains visible and resumable, but restart never silently replays its ambiguous
+model or tool work. Repa preserves OpenCode's mature explicit continue
+mechanism rather than coupling the latest conversation to the current
+directory.
+
+The empty-shell current view is interface state, not placeholder prompt text
+and not a synthetic learner item. Deterministic navigation, inspection, and
+harness controls belong in the inherited discoverable slash-command/command-
+palette mechanism. Executing such a control command does not create a Session,
+Turn, or model call unless that command explicitly represents a learner request
+whose admission is visible to the learner.
+
+The fork retains OpenCode's existing local control commands when their
+observable behavior preserves Repa's Session, Interaction, permission, source,
+and learning-authority invariants. Retention is decided per behavior, not by
+renaming or copying a command list. Commands such as undo, fork, and compact
+must be audited against already committed learning effects; excluded cloud or
+sharing commands do not re-enter merely because the UI supports them. The
+baseline defines no Repa-specific Tutor slash-command catalog. Such commands
+arrive only when a real repeated product action earns one.
 
 ## Course, domain, and material ontology
 
@@ -265,6 +376,65 @@ A material artifact has an origin and current revision. Its outline and exact
 selectors belong to a Material Map. Alignment can be many-to-many in both
 directions. A material change creates a new artifact revision; it never
 silently changes what an old selector meant.
+
+When a source is not conveniently model-readable, an ordinary capability may
+offer to derive a readable representation. Translation is optional: the
+learner may decline it and continue with whatever bounded use of the original
+is possible. An accepted representation is stored canonically in the fixed
+Repa-owned artifact area rather than as a sidecar in the learner's content
+tree. Source/artifact authority records the exact original revision,
+representation path and revision, producing tool and translator revision, and
+their derivation relation. The original remains available; later Material Map
+selectors bind the representation revision. The learner may explicitly export
+a copy, but that user-owned copy is a new artifact rather than the canonical
+generated representation. This is a general source reduction, not a PDF
+entity or conversion-pipeline subsystem.
+
+Source drift never rewrites or deletes an accepted representation. It makes
+that representation stale relative to the new source revision. The learner
+may decline further translation, derive a new representation, or explicitly
+confirm continued use of the old representation. Continued use stays visibly
+bound to the old original and representation revisions; confirmation records
+the exact drift pair and does not relabel old bytes as a representation of the
+new source. Regeneration is lazy and never an automatic consequence of drift.
+
+Repa does not automatically evict accepted representations or retained source
+snapshots. Their bytes are removed only by an explicit learner deletion. The
+database preserves identity, lineage, receipts, and a deleted-or-missing state
+so historical context cuts never retarget silently. Because the learner can
+also edit Repa's local directories directly, artifact access verifies the
+expected path and revision: missing bytes become unavailable, not nonexistent.
+Relocating exact bytes with the same digest may restore availability; different
+bytes are admitted as a new artifact revision. Temporary staging files that
+were never accepted remain crash debris rather than durable artifacts.
+
+Repa imposes no universal quality-versus-cost policy for a lossy or uncertain
+representation. At the point the distinction matters, the learner may spend
+additional model/tool budget to inspect or improve the original, supply or
+correct readable content manually, accept the stated ambiguity, or stop using
+that source. The exact source and representation actually used remain visible
+in the context cut; accepting ambiguity does not silently promote uncertain
+text into exact source content.
+
+Representation derivation is not a local-RAG subsystem. Derivation changes how
+one exact source revision can be read; retrieval chooses which bounded sources
+or ranges are relevant to a request. This boundary admits no automatic corpus
+ingestion, chunk ontology, embedding store, vector index, top-k prompt
+injection, or background indexing. A later retrieval implementation may query
+originals or derived representations, but any index is rebuildable query
+machinery rather than source or learning authority.
+
+For a mutable remote source, Repa normally retains the smallest exact snapshot
+that materially supported the learning move, not merely a URL and not an
+unrequested mirror of the whole site. Source/artifact authority records the
+remote locator, observation time, selector, content revision or digest,
+acquisition tool, retained bytes or representation, and any known
+reproducibility limit. If exact retention is unavailable, the receipt says that
+the observation cannot be reproduced instead of treating a future fetch as the
+same source. At the learner's request, a web capability may retain the
+supported full-page content as another explicit artifact revision. Acquisition
+and normalization may be supplied by an ordinary Skill or MCP capability; this
+source rule does not require a Repa-owned web-reader subsystem.
 
 When a material revision invalidates a current alignment:
 
@@ -363,6 +533,48 @@ Context construction has three depths:
 | current-move detail | route neighborhood, exact material range, active assignment/revisit, recent activity or evidence that changes the move | selected during composition or read through a tool |
 | cold detail | complete old Sessions, full attempts, superseded interpretations, full course maps, unrelated materials | lazy search/read only |
 
+Read authorization, system-visible resource management, model-visible
+retrieval, and learner-visible disclosure are different boundaries.
+Source/artifact and Material Map authority may know that a course resource
+exists without placing its bytes in every model sample. Composition supplies a
+bounded default working set; the LLM uses ordinary search/read tools to inspect
+relevant ranges lazily and may explicitly widen them only within the approved
+resource universe. Content available to the Tutor model does not thereby
+become learner-visible output.
+
+The system resource catalog owns path identity, revision, accepted material
+relations, and scope resolution; it is not a second search authority. The
+learning-bound search tool can resolve a logical working set or approved root
+and reuse the inherited ripgrep engine. A semantic or vector index is admitted
+later only if a real corpus demonstrates that bounded ordinary search is
+insufficient, and remains rebuildable query acceleration rather than source
+authority.
+
+Answer keys, reference implementations, instructor material, and learner notes
+use this same path rather than special file types. Names, locations, headers,
+and contents may supply soft role evidence; an accepted mapping may supply
+stronger source-grounded meaning. An operative learner-response-before-
+disclosure constraint normally governs what the Tutor reveals, not whether the
+Tutor may know the answer. Only an explicit need for a model-blind attempt
+filters the relevant content or read capability from that sample. This reuses
+ordinary context and permission mechanics and does not admit an answer
+classifier or parallel material-loading system.
+
+Context may also contain **soft workspace memory**: a small, scoped file-backed
+contribution for directory conventions, expression/collaboration preferences,
+resource paths, working notes, or maintainer summaries. The LLM may manage this
+content and initiate ordinary file writes. It remains advisory context rather
+than Course, Agenda, Learner Record, or Tutor-policy authority. The host binds
+the canonical root, path, digest, scope, loading reason, expected revision,
+safety policy, and write receipt; a user can inspect, edit, or delete the source
+directly.
+
+Only a demonstrated consumer that needs deterministic calculation, legal
+transition, strong conflict detection, permission, or stable learning meaning
+promotes file content through an explicit source-linked domain command. This
+keeps lightweight memory flexible without letting prose silently acquire
+machine authority.
+
 This depth policy governs Learning-System contributions and retrieval across
 Sessions; it does not mean silently truncating the active conversation. Within
 one Session, model-visible history remains verbatim while it fits the model
@@ -383,6 +595,8 @@ prompt:
 
 - selected facts and compact projections;
 - typed source references and dependency versions;
+- bounded soft-memory contributions with path, digest, scope, and loading
+  reason;
 - policy contributions with priority and provenance;
 - the capability set available to this sample; and
 - explicit omissions or truncation when a budget is reached.
@@ -589,11 +803,15 @@ owns:
 - correction/supersession behavior; and
 - a model-visible result.
 
-Every successful state-changing command writes an immutable causal receipt in
-the same transaction. The receipt links physical invocation, semantic effect,
-source/actor, affected domain references, versions, and time. Domain payload
-stays in domain-owned records. This is an audit and recovery ledger, not an
-event store from which the whole database must replay.
+Every successful state-changing command writes its domain transition,
+immutable causal receipt, physical invocation settlement, and exact
+model-visible Tool Part result in the same transaction. The fork adapts the
+inherited durable-event transaction seam; it does not coordinate a learning
+database and an Interaction database after the fact. The receipt links
+physical invocation, semantic effect, source/actor, affected domain
+references, versions, and time. Domain payload stays in domain-owned records.
+This is an audit and recovery ledger, not an event store from which the whole
+database must replay.
 
 A cross-domain transition, such as completing an assignment with activity that
 also serves a revisit, is one explicit application operation over one SQLite
@@ -602,12 +820,17 @@ trigger that silently turns every artifact change into learning evidence.
 
 ## Runtime and interaction lifecycle
 
-This lifecycle uses only the ordinary Agent mechanics required by current
-learning behavior. Prefer mature libraries; adapt or reimplement a bounded
-OpenCode/Codex mechanism only where the needed seam is missing. Learning-specific
-context compilation, capabilities, durable state, and Tutor policy remain the
-architectural center. They extend ordinary Session behavior without creating a
-generic harness feature-parity project.
+The complete local Agent harness is inherited from and transformed inside the
+one-time OpenCode v1 fork. Repa does not rebuild Session, typed-item, provider,
+tool, permission, MCP, subagent, compaction, cancellation, recovery, and TUI
+mechanics one feature at a time. Learning-specific context compilation,
+capabilities, durable state, and Tutor policy remain the architectural center
+and extend the ordinary Session lifecycle.
+
+Only the released v1 runner has initial production authority. Preview v2 may
+inform a later Repa-owned replacement but cannot create a second Session,
+database, tool, or context truth. Local coding capabilities may remain
+available; their product semantics do not become learning meaning by default.
 
 The durable path for one Turn is:
 
@@ -615,7 +838,7 @@ The durable path for one Turn is:
 boot LearnerHome and recover orphaned work
 -> admit learner input and running Turn
 -> compile and persist one immutable context/capability cut
--> run one model sample through mature Agent mechanics
+-> run one model sample through the native forked Agent mechanics
 -> stream live output to the terminal
 -> execute generic tools and/or validated learning commands
 -> recompile after accepted state changes
@@ -623,9 +846,11 @@ boot LearnerHome and recover orphaned work
 -> terminate the Turn truthfully
 ```
 
-Provider deltas are live presentation data. Durable interaction records contain
-complete, correlated items and terminal outcomes. Provider completion, tool
-settlement, and Turn completion remain distinct.
+Provider deltas are live presentation data. Durable Interaction records contain
+complete, typed, correlated items and terminal outcomes. A real learner input,
+synthetic or compaction input, model operation, physical tool invocation,
+context cut, provider completion, tool settlement, and Turn completion remain
+distinct.
 
 At startup, ambiguous in-flight work is marked interrupted and is not blindly
 redispatched. Exact settled commands replay their receipts; new semantic work
@@ -634,10 +859,13 @@ code-enforced.
 
 ## Persistence, process ownership, and migration
 
-SQLite remains the sole machine-state authority. Large source/material content
-may stay in local files or a content-addressed cache; SQLite retains identity,
-revision, selector, provenance, and any bounded observed content required for
-audit.
+One Repa-owned `repa.db` is the sole machine-state authority for a
+LearnerHome. The fork establishes new application paths, a database identity
+marker, and forward-only Repa migrations; it does not open or migrate an
+OpenCode database or the pre-fork experimental Repa databases by inference.
+Large source/material content may stay in local files or a content-addressed
+cache; SQLite retains identity, revision, selector, provenance, and any bounded
+observed content required for audit.
 
 One process owns state-changing execution for a `LearnerHome` at a time. The
 application will acquire a local writer lease/lock at boot. A second writer
@@ -650,10 +878,11 @@ SQLite still enforces entity versions and uniqueness. If a conflict occurs,
 the later command fails with current state and can be reconsidered; there is no
 automatic last-write-wins merge of learning meaning.
 
-Schema migration has one ordered registry and one transaction per supported
-migration. Domain modules own the meaning and validation of their schema
-changes, but migration execution remains centralized so the database cannot
-partially advance. Before a destructive migration exists, backup/export and
+Schema migration has one Repa-owned ordered registry and one transaction per
+supported migration. Domain modules own the meaning and validation of their
+schema changes, but migration execution remains centralized so the database
+cannot partially advance. Preview-v2 and upstream post-fork migrations have no
+automatic authority. Before a destructive migration exists, backup/export and
 rollback behavior must be specified.
 
 There is no timer worker or daemon. At application wake, queries derive due,
@@ -663,6 +892,9 @@ overdue, and expired state from stored times and the trusted clock.
 
 - Material, web, and tool output is untrusted content, never privileged prompt
   policy.
+- Model-written workspace memory is advisory, scoped content. It cannot grant
+  capabilities, override current learner intent or typed policy, or assert
+  learning evidence merely by being loaded.
 - Filesystem tools are confined to declared LearningSpace/workspace roots
   unless the learner grants a broader capability.
 - Provider and model identifiers are runtime metadata, not learning evidence.
@@ -688,51 +920,51 @@ overdue, and expired state from stored times and the trusted clock.
 
 ## Target module ownership
 
-The target names below guide imports. Directories are created only when a real
-consumer arrives; this document does not authorize empty scaffolding.
+The full fork is one Repa product, not OpenCode plus a learning package. Its
+logical ownership remains:
 
 ```text
-src/
-  interaction/              Session, Turn, item, model/tool lifecycle
-  sources/                  generic workspace/source observations and revisions
-  learning/
-    curriculum/             Domain Foundation and Course View semantics
-    materials/              material maps, selectors, and alignments
-    learner/                progress, activity, evidence, inference projections
-    agenda/                 goals, assignments, deadlines, revisits, commitments
-  tutor/
-    policy/                 policy profiles and scoped steering
-    context/                current-view selection and dependency manifests
-  runtime/                  one Tutor loop and sample-bound capability binding
-  providers/                model adapters
-  terminal/                 CLI/TUI adapters
-  storage/                  SQLite boot, migrations, shared transaction utilities
+Repa product composition
+  interaction/harness       Session, Turn, typed item, model/tool lifecycle
+  sources/artifacts         origins, revisions, representations, selectors
+  curriculum/materials      Course View, Material Map, alignment
+  learner                   progress, activity, evidence, inference
+  agenda                    goals, assignments, revisits, commitments
+  tutor policy/context      scoped policy and bounded sample composition
+  outer capabilities        providers, files, shell, web, MCP, subagents
+  terminal                  Repa CLI/TUI projection
+  database composition      one repa.db, migrations, transaction utilities
 ```
 
+Inherited package names may remain while the fork is stabilized; they do not
+define the product's domain ownership. Directories are renamed or split only
+when a real import, release, or maintenance boundary requires it. A global
+brand rename is not a substitute for changing default behavior and authority.
+
 Learning modules may depend on small shared identity/provenance primitives and
-SQLite utilities, but not on `ai`, provider implementations, or terminal code.
-`tutor/context` uses read projections and performs no domain writes.
-`runtime` may depend on all inward application boundaries; nothing inward
-depends back on `runtime`.
+native SQLite utilities, but not on AI SDK, provider implementations, terminal
+code, or the fork's Session service. Tutor context uses read projections and
+performs no domain writes. The outer runtime may depend inward on application
+boundaries; nothing inward depends back on the runtime.
 
 ## Current-code audit
 
-The current production spine is retained as executable evidence, not treated
-as the final package topology.
+The pre-fork production spine is frozen as executable evidence until the fork
+cutover. It is not extended, imported into the fork as a compatibility layer,
+or treated as the final package topology.
 
 | Current shape | Architectural treatment |
 | --- | --- |
-| `interaction/records.ts` owns durable lifecycle invariants | preserve behavior; split only when course/material work creates real ownership seams |
-| `run-tutor-turn.ts` renders policy, defines tools, executes a domain command, and drives the model | prevent it from becoming a god module by extracting structured context rendering and sample-bound capability composition when the next capabilities arrive |
-| `compile-context.ts` returns one steering prompt | evolve it into structured contributions and a dependency manifest; prompt rendering becomes separate |
-| `learner-steering.ts` mixes domain transition and invocation settlement | retain its semantics; separate stable command execution from AI-SDK tool binding when a second learning command proves the boundary |
-| `open-database.ts` contains schema version 1 in one function | introduce an ordered migration registry before schema version 2 |
-| global `system_state.state_revision` | retain as a temporary commit watermark; do not make new domains conflict on unrelated writes |
-| generic `durable_effect` | keep for the proven slice; do not force all course, material, agenda, and learner records into its JSON payload |
-| final assistant text is one Session item | sufficient for the current CLI; typed content blocks wait for attachments, partial recovery, or TUI consumers |
+| `run-tutor-turn.ts`, current CLI/provider adapter, and `interaction/records.ts` | retain only as Turn/context/tool/failure oracles; delete after the native fork trace passes |
+| current `session_item`, `model_operation`, `tool_invocation`, `system_state`, and `durable_effect` tables | do not migrate or mirror; preserve accepted invariants through the native Session/message/part and domain schemas |
+| Course, material, Agenda, policy, and context modules | port their owned semantics and behavioral tests; rewrite trusted identities, transactions, and foreign keys against the native database |
+| current AI SDK tool bindings | delete; bind learning capabilities through the fork's native tool admission and atomic settlement path |
+| current one-string assistant history | replace with inherited typed items; never preserve flattened output for compatibility |
+| existing production tests | classify as invariant or old API; port invariant assertions and delete tests that only protect the superseded runner |
 
-This is structural refactoring through real consumers, not a preliminary rewrite
-of the working runtime.
+This is a deliberate substrate replacement. The cutover remains gated so the
+working oracle is not deleted before the native Repa path proves equivalent or
+better behavior.
 
 ## Rejected centers of gravity
 
@@ -762,10 +994,12 @@ Useful as an adapter and source model, but insufficient as the architecture
 center. Files do not by themselves own goals, due revisits, course progress,
 evidence meaning, or cross-Session Tutor policy.
 
-### Microservices, embedded HTTP server, or plugin kernel
+### Microservices or remote runtime as the product center
 
-Rejected until a second process, frontend, deployment, or independent
-extension owner creates a real boundary. Package count is not future-proofing.
+Rejected until a real remote or multi-user owner requires it. The fork may
+retain an inherited loopback server and local plugin/MCP mechanics as harness
+facilities; they do not divide the learning authorities into services or own
+product meaning. Package count is not future-proofing.
 
 ## Architecture fitness rules
 
@@ -778,8 +1012,8 @@ Every production extension must answer:
 5. What enters routine context, what is current-move detail, and what stays
    lazy?
 6. What happens on retry, stale input, interruption, and restart?
-7. Does it add a learning-native capability or merely grow generic Agent
-   infrastructure?
+7. Can the behavior be reduced to an inherited mechanism without losing its
+   learning contract? If not, which failed invariant justifies new machinery?
 
 Architecture-level behavioral checks must continue to cover:
 
@@ -795,10 +1029,10 @@ Architecture-level behavioral checks must continue to cover:
 ## Deliberately deferred
 
 - multi-user, cloud, or cross-device synchronization;
+- account, sharing, marketplace, and other group-product surfaces;
 - a background daemon or notification scheduler;
 - property-graph or vector databases;
 - a universal knowledge or learner ontology;
-- a general plugin/MCP host owned by Repa;
 - microservices, HTTP APIs, or remote runtime placement;
 - full event sourcing and deterministic replay of model work;
 - a universal scheduler score or global mastery scalar;

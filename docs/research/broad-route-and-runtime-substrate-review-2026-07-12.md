@@ -10,6 +10,11 @@ distinguish the remaining alternatives. Its sequencing becomes a project
 decision only after maintainer acceptance or after the experiments earn the
 relevant boundary.
 
+Update (2026-07-13): ADR-0014 supersedes this document's selective runtime
+composition recommendation with a one-time full OpenCode v1 fork. The route
+representation evidence remains valid historical input. Use
+`opencode-one-time-fork-audit-2026-07-13.md` for the current substrate evidence.
+
 ## Questions
 
 This review answers two related questions:

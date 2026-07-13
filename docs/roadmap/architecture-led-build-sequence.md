@@ -1,11 +1,12 @@
 # Product pressure paths and engineering gates
 
-Date: 2026-07-12
+Date: 2026-07-13
 
-Status: Active build map under ADR-0012. It replaces the earlier numbered
-`Phase 1 -> Phase 5` sequence, which incorrectly made domain-entity order look
-like product order. The completed course-continuity milestone remains valid.
-The automatic “activity/progress Phase 2” does not.
+Status: Historical product-pressure map under ADR-0012. It still governs how
+later learning behavior earns domain meanings, but ADR-0014 and
+[`09-one-time-opencode-fork-baseline.md`](./09-one-time-opencode-fork-baseline.md)
+now own the active substrate cutover. The completed Course and Agenda behavior
+remains valid; this document does not authorize work on the old runner.
 
 ## Goal
 
@@ -112,7 +113,7 @@ This work established the floor: Repa can know where the learner is and read
 the right material. It did not establish that Repa can reliably unlock a hard
 idea or make it last.
 
-## Current product pressure path: teach, adapt, and return
+## Next post-cutover product pressure path: teach, adapt, and return
 
 ### Parent outcome
 
@@ -286,7 +287,7 @@ phases are deferred until repeated material leakage, partial recovery, or a
 real TUI consumer earns them. This is not permission for keywords, a
 response-approval tool, another model, or a second runtime.
 
-### Active architecture proof: source-linked performance occurrence
+### Parked architecture proof: source-linked performance occurrence
 
 Course is already graph-shaped enough for current consumers; another relation
 must wait for a real branch, prerequisite, rejoin, or lineage query. Generic
@@ -299,17 +300,18 @@ independent responses have the same addressed disposition but may require
 different Tutor moves in a later fresh Session. The same correct answer after
 decisive Tutor help must also remain distinct from independent performance.
 
-ALS-024 pre-registers the deterministic architecture proof for that boundary:
+ALS-024 pre-registered the deterministic architecture proof for that boundary:
 [source-linked performance occurrence protocol](../research/source-linked-performance-occurrence-proof-2026-07-13.md).
 [Stage 0/1](../research/source-linked-performance-occurrence-stage-0-1-result-2026-07-13.md)
 finds the correct/incorrect fresh-Session collision. Its
 [Stage 2 ablation](../research/source-linked-performance-occurrence-stage-2-result-2026-07-13.md)
 then shows that the deterministic fixture needs only a bounded read through the
 existing Agenda service-occurrence reference plus source-bound local derivation;
-it does not earn durable outcome or assistance state. A durable observation
-stays blocked until one authentic, non-deterministic, source-bearing correction
-changes a later move. This remains a research gate, not a production contract,
-schema, generic evidence model, harness task, or live-model experiment.
+it does not earn durable outcome or assistance state. No Stage 3,
+maintainer-as-learner test, production contract, schema, generic evidence
+model, harness task, or live-model experiment follows from this line. Revisit
+the question only when ordinary post-cutover teaching creates a real downstream
+consumer.
 
 ### Withdrawn candidate: last-minute deadline conflict
 
@@ -344,13 +346,12 @@ them. The completed aggregate is not itself that justification.
 - Verification and failed live gate: [`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md)
 - Governing correction: [`../research/semantic-drift-audit-2026-07-13.md`](../research/semantic-drift-audit-2026-07-13.md)
 
-### Repair only the supporting mechanics consumed by learning-first paths
+### Historical harness gaps superseded by the fork baseline
 
-Current v3 proves one learning-semantic vertical path. There is no intervening
-"complete the harness" phase and no Codex/OpenCode parity backlog. For each
-learning-product path, first reuse a mature library; if its seam is insufficient,
-adapt the smallest proven OpenCode/Codex mechanism; write new generic runtime
-code only as the last bounded option.
+Current v3 proved one learning-semantic vertical path, but the selective
+harness-repair policy is superseded. ADR-0014 adopts the mature local OpenCode
+v1 harness through a one-time independent fork and uses learning behavior as
+the cutover gate.
 
 The current consumers justify four repairs:
 
@@ -364,10 +365,9 @@ The current consumers justify four repairs:
 4. Course use and retained learner steering need listing/selection and
    withdrawal through the same Agent surface.
 
-These are product consumers, not permission to build a provider matrix,
-subagent platform, plugin system, complete crash-resumption engine, or coding
-agent TUI. No new Assignment or ontology slice precedes the correction, but
-unrelated harness completeness must not block later learning work either.
+These gaps are now acceptance cases for Roadmap 09 rather than separate patches
+to the old runner. No new Assignment, ontology, or learner-evidence slice
+precedes the cutover.
 
 ### Exit evidence
 
@@ -414,9 +414,9 @@ observable consumers.
 Represent task purpose, response or artifact source, relevant assistance, and
 observed outcome when two later Tutor actions genuinely differ. Preserve
 observation, interpretation, inference, and resulting plan as separate meanings
-where behavior needs the distinction. ALS-024 is the active proof of the first
-such candidate consumer; its result, including a possible rejection, must
-precede any production shape.
+where behavior needs the distinction. ALS-024 rejected a durable shape for its
+deterministic fixture and is parked; a future consumer must establish a new
+parent question rather than continue its stage numbering.
 
 ### Review scheduling and compression
 

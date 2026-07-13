@@ -5,9 +5,10 @@ Date: 2026-07-10
 
 ## Context
 
-OpenCode is the project's primary executable reference, but relying on one
-implementation creates a different form of blank-page risk: an upstream product
-choice can be mistaken for a general agent-harness invariant.
+OpenCode is the project's accepted code lineage and primary executable source,
+but relying on one implementation creates a different risk: an inherited
+product choice can be mistaken for a general agent-harness invariant or a Repa
+learning requirement.
 
 Codex is an independently developed, open-source terminal agent with explicit
 thread, turn, item, tool, approval, persistence, interruption, and app-server
@@ -21,7 +22,8 @@ Codex release `rust-v0.144.1` at commit
 read-only checkout under `.reference/codex`.
 
 Codex is a secondary comparison reference. OpenCode remains the primary
-reference for the TypeScript/Bun implementation environment. Codex may be used
+lineage and source oracle for the TypeScript/Bun implementation environment.
+Codex may be used
 to challenge or corroborate runtime contracts, especially:
 
 - the distinction between a conversation, a user-visible turn, a provider

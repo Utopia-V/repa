@@ -1,15 +1,18 @@
 # ADR-0012: Center the modular monolith on learning authorities
 
-Status: Accepted
+Status: Accepted; runtime and persistence composition amended by
+[ADR-0014](./0014-one-time-opencode-fork.md)
 
 Date: 2026-07-12
 
 ## Context
 
-ADR-0011 established a real single-process Tutor loop over mature Agent
-mechanics. The next decision is larger: what owns the product as course,
-material, learner history, review, assignments, and long-term continuation are
-added.
+The initial ADR-0011 runner established a real single-process Tutor loop and
+proved that learning state can govern ordinary Agent execution. ADR-0014 later
+superseded that runner with a one-time OpenCode fork. This decision answers the
+larger question that survives the substrate change: what owns the product as
+course, material, learner history, review, assignments, and long-term
+continuation are added.
 
 Continuing to place prompt rendering, tool definitions, domain transitions,
 and learning queries directly in `runTutorTurn` would make the Agent loop the
@@ -155,8 +158,9 @@ The complete ownership and failure model is recorded in
 
 ## Consequences
 
-- `runTutorTurn` remains the current executable spine but cannot become the
-  owner of every prompt contribution, tool, and learning transition.
+- The pre-fork `runTutorTurn` remains a behavioral oracle until cutover, not a
+  compatibility API. The forked Agent runtime likewise cannot become the owner
+  of every prompt contribution, tool, and learning transition.
 - The next course/material consumers earn structured context contributions,
   capability composition, and migration separation; these are not built as an
   unused framework first.
@@ -165,9 +169,10 @@ The complete ownership and failure model is recorded in
   domains.
 - Inspection and correction remain part of each domain slice even before a
   full-screen TUI exists.
-- A global state machine, universal ontology, event-sourced blackboard,
-  property-graph database, plugin platform, HTTP server, and microservices are
-  outside the accepted architecture.
+- A global state machine, universal ontology, event-sourced learning
+  blackboard, property-graph database, and microservices are outside the
+  accepted architecture. Inherited local plugin and server mechanics may
+  remain outer harness facilities; they do not own learning meaning.
 
 ## Alternatives rejected
 
