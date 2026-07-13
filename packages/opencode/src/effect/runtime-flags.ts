@@ -14,7 +14,6 @@ const enabledByExperimental = (name: string) =>
   )
 
 export class Service extends ConfigService.Service<Service>()("@opencode/RuntimeFlags", {
-  autoShare: bool("REPA_AUTO_SHARE"),
   pure: bool("REPA_PURE"),
   disableDefaultPlugins: bool("REPA_DISABLE_DEFAULT_PLUGINS"),
   disableEmbeddedWebUi: bool("REPA_DISABLE_EMBEDDED_WEB_UI"),

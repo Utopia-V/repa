@@ -16,7 +16,6 @@ import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceStore } from "../../src/project/instance-store"
 import { Project } from "../../src/project/project"
 import { Vcs } from "../../src/project/vcs"
-import { ShareNext } from "../../src/share/share-next"
 import { Snapshot } from "../../src/snapshot"
 import { disposeAllInstances, tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
@@ -40,7 +39,6 @@ const startupProbeIt = testEffect(
     [LSP.node, Layer.mock(LSP.Service)({ init: initProbe("lsp") })],
     [Plugin.node, Layer.mock(Plugin.Service)({ init: initProbe("plugin") })],
     [Project.node, Layer.mock(Project.Service)({ init: initProbe("project") })],
-    [ShareNext.node, Layer.mock(ShareNext.Service)({ init: initProbe("share") })],
     [Snapshot.node, Layer.mock(Snapshot.Service)({ init: initProbe("snapshot") })],
     [Vcs.node, Layer.mock(Vcs.Service)({ init: initProbe("vcs") })],
   ]),
@@ -126,7 +124,6 @@ startupProbeIt.effect("Instance bootstrap initializes only retained local servic
     )
 
     expect(new Set(startupCalls)).toEqual(new Set(["format", "lsp", "plugin", "project", "snapshot", "vcs"]))
-    expect(startupCalls).not.toContain("share")
   }),
 )
 

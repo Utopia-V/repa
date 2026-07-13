@@ -18975,13 +18975,6 @@
               ]
             }
           },
-          "share": {
-            "type": "string",
-            "enum": ["manual", "auto", "disabled"]
-          },
-          "autoshare": {
-            "type": "boolean"
-          },
           "autoupdate": {
             "anyOf": [
               {
@@ -19205,15 +19198,6 @@
           },
           "attachment": {
             "$ref": "#/components/schemas/AttachmentConfig"
-          },
-          "enterprise": {
-            "type": "object",
-            "properties": {
-              "url": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": false
           },
           "tool_output": {
             "type": "object",

@@ -76,6 +76,30 @@ describe("Config", () => {
     }),
   )
 
+  it.effect("does not project removed sharing configuration", () =>
+    Effect.sync(() => {
+      const decoded = Schema.decodeUnknownSync(Config.Info)(
+        {
+          share: "auto",
+          autoshare: true,
+          enterprise: { url: "https://share.example.com" },
+        },
+        { onExcessProperty: "ignore" },
+      )
+      expect(Object.keys(decoded)).not.toContain("share")
+      expect(Object.keys(decoded)).not.toContain("autoshare")
+      expect(Object.keys(decoded)).not.toContain("enterprise")
+
+      const legacy = Schema.decodeUnknownSync(ConfigV1.Info)(
+        { snapshot: false, autoshare: true, enterprise: { url: "x" } },
+        { onExcessProperty: "ignore" },
+      )
+      const migrated = ConfigMigrateV1.migrate(legacy)
+      expect(Object.keys(migrated)).not.toContain("share")
+      expect(Object.keys(migrated)).not.toContain("enterprise")
+    }),
+  )
+
   it.effect("migrates arbitrary v1 configuration into valid v2 configuration", () =>
     Effect.sync(() => {
       FastCheck.assert(
@@ -279,8 +303,6 @@ describe("Config", () => {
                 model: "anthropic/claude",
                 default_agent: "reviewer",
                 autoupdate: "notify",
-                share: "disabled",
-                enterprise: { url: "https://share.example.com" },
                 username: "test-user",
                 permissions: [
                   { action: "bash", resource: "*", effect: "ask" },
@@ -365,8 +387,6 @@ describe("Config", () => {
             expect(documents[0]?.info.model).toBe("anthropic/claude")
             expect(documents[0]?.info.default_agent).toBe("reviewer")
             expect(documents[0]?.info.autoupdate).toBe("notify")
-            expect(documents[0]?.info.share).toBe("disabled")
-            expect(documents[0]?.info.enterprise).toEqual({ url: "https://share.example.com" })
             expect(documents[0]?.info.username).toBe("test-user")
             expect(documents[0]?.info.permissions).toEqual([
               { action: "bash", resource: "*", effect: "ask" },
@@ -502,7 +522,6 @@ describe("Config", () => {
                 shell: "/bin/zsh",
                 default_agent: "reviewer",
                 snapshot: false,
-                autoshare: true,
                 permission: {
                   bash: "ask",
                   edit: { "*.md": "allow", "*": "deny" },
@@ -582,7 +601,6 @@ describe("Config", () => {
             expect(documents[0]?.info.shell).toBe("/bin/zsh")
             expect(documents[0]?.info.default_agent).toBe("reviewer")
             expect(documents[0]?.info.snapshots).toBe(false)
-            expect(documents[0]?.info.share).toBe("auto")
             expect(documents[0]?.info.permissions).toEqual([
               { action: "bash", resource: "*", effect: "ask" },
               { action: "edit", resource: "*.md", effect: "allow" },

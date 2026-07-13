@@ -3,17 +3,14 @@ import { afterEach, describe, expect } from "bun:test"
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { mkdir } from "node:fs/promises"
-import Http from "node:http"
 import path from "node:path"
-import { Cause, Config, Context, Effect, Exit, Layer, Option, Queue } from "effect"
+import { Cause, Config, Effect, Exit, Layer } from "effect"
 import {
   HttpClient,
   HttpClientRequest,
   HttpClientResponse,
   HttpRouter,
   HttpServer,
-  HttpServerRequest,
-  HttpServerResponse,
 } from "effect/unstable/http"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -198,26 +195,6 @@ function responseJson(response: HttpClientResponse.HttpClientResponse) {
 
 function requestJson<T>(path: string, init?: RequestInit) {
   return request(path, init).pipe(Effect.flatMap(json<T>))
-}
-
-function listenShareProbe(requests: Queue.Queue<string>) {
-  return Effect.gen(function* () {
-    const context = yield* Layer.build(NodeHttpServer.layer(Http.createServer, { host: "127.0.0.1", port: 0 }))
-    const server = Context.get(context, HttpServer.HttpServer)
-    yield* server.serve(
-      HttpServerRequest.HttpServerRequest.use((request) =>
-        Effect.gen(function* () {
-          yield* Queue.offer(requests, `${request.method} ${request.url}`)
-          return yield* HttpServerResponse.json({
-            id: "shr_gate_5b",
-            url: "https://share.invalid/gate-5b",
-            secret: "sec_gate_5b",
-          })
-        }),
-      ),
-    )
-    return HttpServer.formatAddress(server.address)
-  })
 }
 
 afterEach(async () => {
@@ -773,49 +750,7 @@ describe("session HttpApi", () => {
           }),
         ).toBe(true)
       }),
-    { git: true, config: { formatter: false, lsp: false, share: "disabled" } },
-  )
-
-  it.live("creates a local Session without automatic sharing from the HTTP handler", () =>
-    Effect.gen(function* () {
-      const requests = yield* Queue.unbounded<string>()
-      const shareUrl = yield* listenShareProbe(requests)
-
-      yield* provideTmpdirInstance(
-        (directory) =>
-          Effect.gen(function* () {
-            const headers = { "x-opencode-directory": directory, "content-type": "application/json" }
-            const created = yield* requestJson<Session.Info>(SessionPaths.create, {
-              method: "POST",
-              headers,
-              body: JSON.stringify({ title: "local HTTP session", workspaceID: "wrk_retired" }),
-            })
-            const outbound = yield* Queue.take(requests).pipe(Effect.timeoutOption("500 millis"))
-            const stored = yield* requestJson<Session.Info>(pathFor(SessionPaths.get, { sessionID: created.id }), {
-              headers,
-            })
-
-            expect({
-              created: { id: created.id, title: created.title, workspaceID: created.workspaceID },
-              stored: { id: stored.id, share: stored.share, workspaceID: stored.workspaceID },
-              outbound: Option.getOrUndefined(outbound),
-            }).toEqual({
-              created: { id: created.id, title: "local HTTP session", workspaceID: undefined },
-              stored: { id: created.id, share: undefined, workspaceID: undefined },
-              outbound: undefined,
-            })
-          }),
-        {
-          git: true,
-          config: {
-            formatter: false,
-            lsp: false,
-            share: "auto",
-            enterprise: { url: shareUrl },
-          },
-        },
-      )
-    }),
+    { git: true, config: { formatter: false, lsp: false } },
   )
 
   it.instance(
@@ -895,7 +830,7 @@ describe("session HttpApi", () => {
         const global = yield* requestJson<Session.Info[]>(`${ExperimentalPaths.session}?${globalQuery}`, { headers })
         expect(global.map((item) => item.id)).toContain(created.id)
       }),
-    { git: true, config: { formatter: false, lsp: false, share: "disabled" } },
+    { git: true, config: { formatter: false, lsp: false } },
   )
 
   it.instance(
@@ -920,7 +855,7 @@ describe("session HttpApi", () => {
           expect({ spelling, ids: listed.map((item) => item.id) }).toEqual({ spelling, ids: [created.id] })
         }
       }),
-    { git: true, config: { formatter: false, lsp: false, share: "disabled" } },
+    { git: true, config: { formatter: false, lsp: false } },
     { timeout: 15000 },
   )
 
@@ -942,7 +877,7 @@ describe("session HttpApi", () => {
         const listed = yield* requestJson<Session.Info[]>(`${SessionPaths.list}?${query}`, { headers })
         expect(listed.map((item) => item.id)).toContain(driveRootSession.id)
       }),
-    { git: true, config: { formatter: false, lsp: false, share: "disabled" } },
+    { git: true, config: { formatter: false, lsp: false } },
     { timeout: 15000 },
   )
 

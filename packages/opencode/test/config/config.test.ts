@@ -659,18 +659,17 @@ it.instance("handles command configuration", () =>
   }),
 )
 
-it.instance("migrates autoshare to share field", () =>
-  Effect.gen(function* () {
-    const test = yield* TestInstance
-    yield* writeConfigEffect(test.directory, {
-      $schema: "https://opencode.ai/config.json",
-      autoshare: true,
+describe("removed sharing configuration", () => {
+  for (const [key, value] of [
+    ["share", "auto"],
+    ["autoshare", true],
+    ["enterprise", { url: "https://share.example.com" }],
+  ] as const) {
+    test(`rejects ${key}`, () => {
+      expect(() => ConfigParse.schema(ConfigV1.Info, { [key]: value }, `test:${key}`)).toThrow()
     })
-    const config = yield* Config.use.get()
-    expect(config.share).toBe("auto")
-    expect(config.autoshare).toBe(true)
-  }),
-)
+  }
+})
 
 it.instance("migrates mode field to agent field", () =>
   Effect.gen(function* () {
@@ -1159,15 +1158,14 @@ it.instance(
     yield* writeManagedSettingsEffect({
       $schema: "https://opencode.ai/config.json",
       model: "managed/model",
-      share: "disabled",
+      username: "managed-user",
     })
 
     const config = yield* Config.use.get()
     expect(config.model).toBe("managed/model")
-    expect(config.share).toBe("disabled")
-    expect(config.username).toBe("testuser")
+    expect(config.username).toBe("managed-user")
   }),
-  { config: { model: "user/model", share: "auto", username: "testuser" } },
+  { config: { model: "user/model", username: "testuser" } },
 )
 
 it.instance(
@@ -1927,7 +1925,6 @@ test("parseManagedPlist strips MDM metadata keys", async () => {
           PayloadUUID: "AAAA-BBBB-CCCC",
           PayloadVersion: 1,
           _manualProfile: true,
-          share: "disabled",
           model: "mdm/model",
         }),
       ),
@@ -1935,7 +1932,6 @@ test("parseManagedPlist strips MDM metadata keys", async () => {
     ),
     "test:mobileconfig",
   )
-  expect(config.share).toBe("disabled")
   expect(config.model).toBe("mdm/model")
   // MDM keys must not leak into the parsed config
   expect((config as any).PayloadUUID).toBeUndefined()

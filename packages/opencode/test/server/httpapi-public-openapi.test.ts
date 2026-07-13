@@ -144,6 +144,15 @@ describe("PublicApi Gate 5B3 route cutover", () => {
 
     expect(JSON.stringify(spec)).not.toContain('"session.share"')
   })
+
+  test("omits retired sharing configuration", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+    const properties = spec.components.schemas.Config?.properties
+
+    expect(properties).toBeDefined()
+    expect(Object.keys(properties ?? {})).not.toEqual(expect.arrayContaining(["share", "autoshare", "enterprise"]))
+    expect(properties).toHaveProperty("autoupdate")
+  })
 })
 
 describe("PublicApi OpenAPI v2 errors", () => {

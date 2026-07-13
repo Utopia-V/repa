@@ -1909,8 +1909,6 @@ export type Config = {
         },
       ]
   >
-  share?: "manual" | "auto" | "disabled"
-  autoshare?: boolean
   /**
    * Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications
    */
@@ -1991,9 +1989,6 @@ export type Config = {
     [key: string]: boolean
   }
   attachment?: AttachmentConfig
-  enterprise?: {
-    url?: string
-  }
   tool_output?: {
     max_lines?: number
     max_bytes?: number

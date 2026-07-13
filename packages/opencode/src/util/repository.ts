@@ -210,15 +210,6 @@ export function validateRepositoryBranch(branch: string) {
   }
 }
 
-export function parseGitHubRemote(input: string) {
-  const cleaned = normalizeRepositoryInput(input)
-  if (!cleaned.includes("://") && !cleaned.match(/^(?:[^@/\s]+@)?github\.com:/)) return null
-
-  const parsed = parseRepositoryReference(cleaned)
-  if (!parsed || parsed.host !== "github.com" || !parsed.owner || parsed.segments.length !== 2) return null
-  return { owner: parsed.owner, repo: parsed.repo }
-}
-
 export function repositoryCachePath(input: Reference) {
   return path.join(Global.Path.repos, ...input.host.split(":"), ...input.segments)
 }
