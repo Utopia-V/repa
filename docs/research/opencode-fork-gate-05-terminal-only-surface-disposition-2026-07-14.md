@@ -451,7 +451,20 @@ and selection branches are gone; ordinary API-key, OAuth, custom-provider,
 `provider.connect`, provider-auth hydration, and the local `app.console` debug
 command remain. The full-app behavior test, focused provider-option tests, TUI
 typecheck, exact production-residue scan, `git diff --check`, and an independent
-fresh-context review passed. Gate 5D3 is next.
+fresh-context review passed.
+
+Gate 5D3 passed at `6a9e5a9eda919205fb87e068e41b83010ccbd990`.
+The TUI no longer moves an existing Session through the control plane. Its
+retained Home action is `session.start_location` with `/directory`: it selects
+an existing local directory or creates a local project copy with
+`strategy: "git_worktree"` for the next Session. The old command, slash, and
+`session_move` binding have no compatibility alias. Deleting the active copy
+now synchronizes the main directory before either normal or forced removal;
+missing or failed fallback prevents removal, and forced-delete dialog
+lifecycles do not update an unmounted instance. The focused action-chain,
+deletion-safety, project-directory, config, Sync/Event regression tests, TUI
+typecheck, exact residue scan, `git diff --check`, and two-stage independent
+fresh-context review passed. Gate 5D4 is next.
 
 ## Rollback
 

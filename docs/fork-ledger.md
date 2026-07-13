@@ -54,7 +54,11 @@ git show repa-prefork-oracle:<historical-record-path>
   `ce9299f506a1b1baf1577b3730e4d6124f5ebd3b`: Console/account organization
   commands, startup state, and provider branches are gone from the released
   TUI while ordinary provider authentication and the local debug console
-  remain.
+  remain. Gate 5D3 passed at
+  `6a9e5a9eda919205fb87e068e41b83010ccbd990`: existing Sessions no longer
+  move through the control plane; the retained action chooses a local start
+  directory or Git worktree for a new Session, and active-copy deletion first
+  returns to the main directory.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release
