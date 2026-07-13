@@ -53,29 +53,28 @@ export type Prepared = {
 const mergeOptions = (target: Record<string, any>, source: Record<string, any> | undefined): Record<string, any> =>
   mergeDeep(target, source ?? {}) as Record<string, any>
 
+export function renderSystem(system: readonly string[]) {
+  return system.join("\n\n")
+}
+
 export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: PrepareInput) {
   const isOpenaiOauth = input.provider.id === "openai" && input.auth?.type === "oauth"
-  const system = [
-    [
-      ...(input.agent.prompt ? [input.agent.prompt] : SystemPrompt.provider(input.model)),
-      ...input.system,
-      ...(input.user.system ? [input.user.system] : []),
-    ]
-      .filter((x) => x)
-      .join("\n"),
-  ]
-
-  const header = system[0]
+  const interactive = !input.agent.hidden
+  const core = interactive ? SystemPrompt.product() : SystemPrompt.internal()
+  const extensions = [
+    ...(interactive ? SystemPrompt.provider(input.model) : []),
+    ...(input.agent.prompt ? [input.agent.prompt] : []),
+    ...(input.user.system ? [input.user.system] : []),
+  ].filter((item): item is string => Boolean(item))
   yield* input.plugin.trigger(
     "experimental.chat.system.transform",
     { sessionID: input.sessionID, model: input.model },
-    { system },
+    { system: extensions },
   )
-  if (system.length > 2 && system[0] === header) {
-    const rest = system.slice(1)
-    system.length = 0
-    system.push(header, rest.join("\n"))
-  }
+  const protectedCores = new Set([SystemPrompt.product(), SystemPrompt.internal()])
+  const system = [core, ...input.system, ...extensions].filter(
+    (item, index): item is string => Boolean(item) && (index === 0 || !protectedCores.has(item)),
+  )
 
   const variant =
     !input.small && input.model.variants && input.user.model.variant
@@ -96,7 +95,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     delete options.reasoningSummary
     delete options.include
   }
-  if (isOpenaiOauth) options.instructions = system.join("\n")
+  if (isOpenaiOauth) options.instructions = renderSystem(system)
 
   const messages =
     isOpenaiOauth || input.isWorkflow

@@ -123,7 +123,7 @@ const live: Layer.Layer<
           approvalHandler?: (approvalTools: { name: string; args: string }[]) => Promise<{ approved: boolean }>
         }
         workflowModel.sessionID = input.sessionID
-        workflowModel.systemPrompt = prepared.system.join("\n")
+        workflowModel.systemPrompt = LLMRequestPrep.renderSystem(prepared.system)
         workflowModel.toolExecutor = async (toolName, argsJson, _requestID) => {
           const t = prepared.tools[toolName]
           if (!t || !t.execute) {

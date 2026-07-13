@@ -84,10 +84,39 @@ const it = testEffect(
 )
 
 describe("session.system", () => {
-  test("selects the Meta prompt for Muse Spark model IDs", () => {
-    expect(SystemPrompt.provider({ api: { id: "meta/muse-spark-preview" } } as Provider.Model)[0]).toContain(
-      "Meta Muse Spark",
-    )
+  test("former provider branches share one learning-first operation guide", () => {
+    const representatives = [
+      "meta/muse-spark-preview",
+      "gpt-4.1",
+      "o3",
+      "gpt-5.4",
+      "gpt-5.4-codex",
+      "gemini-3-pro",
+      "claude-sonnet-4-6",
+      "trinity-large",
+      "kimi-k2.5",
+      "fallback-model",
+    ]
+    const prompts = representatives.map((id) => SystemPrompt.provider({ api: { id } } as Provider.Model).join("\n"))
+
+    expect(new Set(prompts).size).toBe(1)
+    for (const prompt of prompts) {
+      expect(prompt).toContain("terminal workspace")
+      expect(prompt).not.toMatch(/OpenCode|coding agent|software engineering tasks/i)
+    }
+  })
+
+  test("interactive and internal cores have distinct Repa-owned contracts", () => {
+    const interactive = SystemPrompt.product()
+    const internal = SystemPrompt.internal()
+
+    expect(interactive).toContain("<repa_product_contract>")
+    expect(interactive).toContain("terminal-native Learning System")
+    expect(interactive).toContain("current request")
+    expect(interactive).toContain("not proof of mastery")
+    expect(interactive).toContain("coding")
+    expect(internal).toContain("<repa_internal_operation>")
+    expect(internal).not.toContain("<repa_product_contract>")
   })
 
   it.effect("skills output is sorted by name and stable across calls", () =>
