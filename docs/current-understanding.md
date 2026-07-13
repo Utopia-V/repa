@@ -24,7 +24,8 @@ product foundation or accepted ADRs.
   days. The program owns accepted workload/capacity/deadline arithmetic,
   allocation, and recomputation; the learner or model may propose estimates,
   interpret and decompose the work, and advise on meaning-sensitive choices.
-  Last-minute rescue of a tiny task is not the representative product case.
+  Last-minute rescue of a task already inside a minute-scale deadline window is
+  not a Repa product behavior.
 - Explanation, demonstration, guided work, independent work, practice, review,
   and planning are peer actions. No action is the required continuation of
   every interaction.

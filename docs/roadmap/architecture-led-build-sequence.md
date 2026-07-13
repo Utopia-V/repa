@@ -304,9 +304,9 @@ first prove a cross-Session consumer rather than reopen a universal evidence
 schema.
 
 The selected pressure was wrong. B2 demonstrated only that a scene-specific
-prompt could execute one last-minute 45/25/30-minute script. It did not prove
-that the emergency was representative or that model-led one-Turn scheduling
-was the intended Assignment behavior. Proposal 0006 then excluded learning
+prompt could execute one last-minute 45/25/30-minute script. That rescue case is
+outside Repa's product scope and cannot define any Learning-System behavior.
+Proposal 0006 then excluded learning
 context/nature, workload, progress, capacity, and cross-day allocation—the
 quantities needed for ordinary advance planning.
 

@@ -7,7 +7,8 @@ bundles are Git-ignored, so this is not a frozen benchmark artifact, not the
 formal three-condition comparison, and not an educational-effectiveness claim.
 The traces used scene-specific Tutor policies and do not prove default action
 selection or product completeness. In particular, Trace 5's 45/25/30-minute
-emergency is not representative of intended cross-day Assignment planning; see
+emergency is outside Repa's product scope rather than a low-priority Assignment
+scenario; see
 [`semantic-drift-audit-2026-07-13.md`](./semantic-drift-audit-2026-07-13.md).
 
 ## Result

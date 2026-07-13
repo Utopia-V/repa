@@ -4,7 +4,7 @@ Date: 2026-07-13
 
 Status: **Withdrawn as a product contract and current pressure path.** The
 deterministic v4 candidate remains dormant and unaccepted. The representative
-45/25/30-minute emergency fixture was promoted beyond its evidence and excluded
+45/25/30-minute emergency fixture was outside Repa's product scope and excluded
 the workload, capacity, learning-context, and cross-day allocation meanings
 required by the intended Assignment behavior. This document is retained only
 as a historical engineering artifact. See the

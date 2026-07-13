@@ -12,8 +12,9 @@ Assignment schema or authorize new production planning code.
 The maintainer clarified that ordinary Assignment behavior is advance planning
 for work that takes hours or days. A representative case is roughly five hours
 of work due several days later, distributed before the deadline and recomputed
-after progress or availability changes. A task needing a few minutes immediately
-before its deadline is outside the intended default distribution.
+after progress or availability changes. Last-minute rescue after a task has
+already collapsed to a minute-scale deadline window is outside Repa's product
+scope, not a lower-priority or minority scenario.
 
 The program owns durable quantities, trusted time, feasibility arithmetic,
 cross-day allocation, correction, and recomputation. The learner or model may
@@ -154,7 +155,8 @@ consumer-driven architecture proof over representative long-horizon cases:
 4. changed daily availability or a missed allocation followed by recomputation;
 5. work whose semantic decomposition or learning value needs model help;
 6. direct learner override; and
-7. a last-minute emergency only as a minority counterexample, not the oracle.
+7. an explicit prohibited counterexample showing that minute-scale last-minute
+   rescue creates no Repa scheduling requirement.
 
 For each decision, identify the owner, source, uncertainty, correction path,
 failure behavior, and exact downstream consumer. Compare bounded rolling-horizon

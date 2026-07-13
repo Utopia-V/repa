@@ -1,8 +1,8 @@
 # Withdrawn deadline-sensitive Assignment production slice
 
 Status: **Historical implementation plan; not an active roadmap item.** Its
-representative last-minute conflict was outside the intended ordinary product
-distribution, and it explicitly deferred the state needed for cross-day
+last-minute conflict was outside Repa's product scope, and it explicitly
+deferred the state needed for cross-day
 workload planning. The dormant v4 candidate is unaccepted. See
 [`../research/semantic-drift-audit-2026-07-13.md`](../research/semantic-drift-audit-2026-07-13.md).
 

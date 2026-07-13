@@ -2,7 +2,7 @@
 
 Correction (2026-07-13): the provider observations and deterministic test
 results below remain historical evidence, but the selected 45/25/30-minute
-pressure scenario was not representative of the intended Assignment product.
+pressure scenario was outside Repa's product scope.
 The failure therefore does not establish a missing near-deadline consideration
 mechanism, and the proposed next research boundary is withdrawn. Proposal 0006
 and dormant v4 are unaccepted; see

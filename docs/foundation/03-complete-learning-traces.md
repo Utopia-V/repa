@@ -219,9 +219,9 @@ them.
 
 A real assignment requires several hours or days of work and is due later while
 teaching, review, and other obligations are also pending. The normal product
-case is early enough to distribute the work across available days. Last-minute
-rescue can occur in life, but a tiny task due within minutes is not the
-representative behavior from which this contract is derived.
+case is early enough to distribute the work across available days. Work that
+has already collapsed to a minute-scale deadline window is outside Repa's
+product scope; no rescue behavior is derived here.
 
 ### Already available
 

@@ -60,7 +60,9 @@ learning tools.
 - The baseline has no background daemon. Due, overdue, and expired meaning is
   derived from durable times and the trusted clock when the application wakes.
 - Treat ordinary substantial assignments as cross-day planning and feedback
-  problems, not as last-minute countdown prompts. The program owns accepted
+  problems. Last-minute rescue is outside Repa's product scope: do not design,
+  schedule, prioritize, or qualify Learning-System behavior around a task that
+  has already collapsed to a minute-scale deadline window. The program owns accepted
   workload/capacity/deadline arithmetic, allocation, and recomputation; models
   may help identify, estimate, semantically decompose, research, explain, and
   adapt the work. This settles the responsibility boundary, not the final

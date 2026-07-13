@@ -16,7 +16,7 @@ export const CONDITIONAL_PURPOSE_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-
 
 /**
  * Withdrawn historical candidate that exposes the Proposal 0006 Assignment
- * experiment. It cannot become CURRENT by passing the old emergency-scenario
+ * experiment. It cannot become CURRENT by passing the old out-of-scope scenario
  * qualification; keep it explicit only while its reusable mechanics and
  * deletion boundary are audited.
  */

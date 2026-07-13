@@ -124,8 +124,9 @@ Learning is native when it changes the agent's normal behavior rather than appea
 - A substantial assignment can change the plan before it becomes urgent. Its
   subject or learning context, source/nature, deadline, estimated remaining
   work, known capacity, and relation to learning determine which facts matter.
-  The representative behavior is advance allocation and later replanning over
-  days, not rescue of a few minutes of work immediately before a deadline.
+  The behavior is advance allocation and later replanning over days.
+  Last-minute rescue after a task has collapsed to a minute-scale deadline
+  window is outside Repa's product scope.
 - When a Session produces a relevant durable change, the learner can inspect
   what was recorded, what was inferred, and what future action changed. A
   routine explanation does not require an expanded end-of-session audit.
