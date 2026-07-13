@@ -139,6 +139,17 @@ learning tools.
   framework, ontology, state machine, or benchmark merely to make the work look
   rigorous. A bounded, reversible task with a clear boundary can be implemented
   and verified directly.
+- Scope verification to the change and the claim, not to a habitual command
+  bundle. Run the smallest check that could falsify the claim and whose outcome
+  the changed files can actually affect. Pure documentation or research-record
+  changes normally need diff, link, formatting, and worktree checks—not
+  typecheck, build, or product tests—unless they alter executable configuration
+  or a generated contract. A focused code or test change runs its owning check
+  and directly affected suite; broaden only when dependency reach or risk makes
+  another result causally relevant. Reserve full applicable suites for actual
+  phase boundaries, releases, cross-cutting changes, or evidence invalidated by
+  environment/source drift. Do not run unrelated checks merely to perform a
+  verification ritual.
 - Before inventing consequential reusable machinery for runtime scheduling,
   mode composition, queues, concurrency, caching, recovery, or performance,
   look for a relevant established CS model and inspect mature implementations.
@@ -218,6 +229,9 @@ Before optimizing a local module, confirm:
    exists here, or only because the reference happens to contain it.
 
 ## Commands
+
+These are available verification scopes, not a mandatory sequence for every
+change. Select among them using the causal verification rule above.
 
 ```powershell
 bun run check:reference

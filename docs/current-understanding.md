@@ -476,10 +476,11 @@ or trustworthy generic harness. It receives no further generic features.
 
 This is not a one-pass rewrite. Roadmap 09's phases are requirement clusters
 implemented through separate reversible evidence gates; a gate includes its
-owned exception, restart, replay, and rollback cases before it can pass. The
-first authorized engineering move is only the lineage/provenance gate. Later
-gates are refined from the immediately preceding evidence rather than
-pre-authorized as one large patch.
+owned exception, restart, replay, and rollback cases before it can pass. Gates
+1 and 2A now pass: the exact-tag Gate 2 failure was localized to an inherited
+PowerShell 5.1 test-command defect, then corrected without a runtime change.
+Gate 3 Repa identity isolation is next. Later gates are refined from the
+immediately preceding evidence rather than pre-authorized as one large patch.
 
 The pre-fork code remains a live black-box oracle: `bun run check` passed 244
 tests with 0 failures on 2026-07-13. Its exact disposition is recorded in

@@ -37,12 +37,15 @@ Documents have different authority. Do not treat a research observation as an ac
 - [`research/opencode-fork-gate-01-lineage-2026-07-13.md`](research/opencode-fork-gate-01-lineage-2026-07-13.md)
   records the passed exact-history, tag, license, and worktree-provenance gate.
 - [`research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`](research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md)
-  is the active pristine Windows install, typecheck, build, and focused-test
-  gate. It permits no Repa product edits.
+  preserves the exact-tag pristine Windows install, typecheck, build, and
+  focused-test run, including its inherited test failure.
 - [`research/opencode-windows-shell-progressive-metadata-diagnostic-2026-07-13.md`](research/opencode-windows-shell-progressive-metadata-diagnostic-2026-07-13.md)
   corrects the initial attribution of Gate 2's remaining shell-test failure:
   the inherited command is invalid in the selected PowerShell 5.1 shell, while
   a condition handshake proves progressive metadata before process exit.
+- [`research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md`](research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md)
+  records the passed test-only correction and causally scoped verification.
+  Gate 3 Repa identity isolation is next.
 - [`foundation/03-complete-learning-traces.md`](foundation/03-complete-learning-traces.md)
   is the review draft of the complete behavior baseline. It does not define a
   workflow or schema.
@@ -273,6 +276,7 @@ current proposal. Each document's status and scope note controls its use.
 - [`research/opencode-fork-gate-01-lineage-2026-07-13.md`](research/opencode-fork-gate-01-lineage-2026-07-13.md)
 - [`research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`](research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md)
 - [`research/opencode-windows-shell-progressive-metadata-diagnostic-2026-07-13.md`](research/opencode-windows-shell-progressive-metadata-diagnostic-2026-07-13.md)
+- [`research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md`](research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md)
 - [`research/message-and-model-event-contracts.md`](research/message-and-model-event-contracts.md)
 - [`research/tool-lifecycle-contracts.md`](research/tool-lifecycle-contracts.md)
 - [`research/session-serialization-and-recovery.md`](research/session-serialization-and-recovery.md)

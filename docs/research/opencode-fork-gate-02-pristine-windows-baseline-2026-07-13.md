@@ -1,6 +1,6 @@
 # OpenCode fork Gate 2: pristine Windows baseline
 
-Status: Failed — inherited test defect diagnosed, blocked before Gate 3
+Status: Failed as executed — resolved by passed Gate 2A; Gate 3 unblocked
 
 Date: 2026-07-13
 
@@ -12,6 +12,9 @@ Prior gate: [Gate 1 lineage and provenance](opencode-fork-gate-01-lineage-2026-0
 
 Follow-up diagnosis:
 [Windows shell progressive-metadata diagnostic](opencode-windows-shell-progressive-metadata-diagnostic-2026-07-13.md)
+
+Resolution gate:
+[Gate 2A deterministic Windows shell test](opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md)
 
 ## Parent uncertainty
 
@@ -345,3 +348,14 @@ permanent baseline exception as the evidence-backed next action.
 No Gate 3 rename, identity, path, database, prompt, or product change was
 performed. The fork remains at the exact pinned commit with only ignored
 dependency and build artifacts present.
+
+### Resolution after the exact-tag run
+
+Gate 2's historical non-zero result is not rewritten. The separate
+[Gate 2A](opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md)
+implemented the diagnosed test-contract correction in fork commit
+`a72f507de45788f3fb8556d883cdad919f33db43`. The corrected target passed 1/1,
+and the directly affected shell file passed 65/65. The unchanged install,
+typecheck, build, core-test, and non-shell OpenCode evidence above remains
+valid. The blocker is resolved rather than waived, so Gate 3 may now be
+planned.

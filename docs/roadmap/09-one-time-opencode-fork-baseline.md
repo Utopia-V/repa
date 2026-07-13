@@ -64,11 +64,16 @@ Before changing code for a gate, record a small gate contract that names:
   meaning; and
 - the exact rollback action if the evidence fails.
 
-Each gate ends with focused tests for the changed boundary, the affected
-inherited tests, a diff audit against ADR-0014 and ADR-0012, and a recorded
-result. Run the full applicable suite at every phase boundary. Do not defer
-known exception handling to a final hardening phase: the failure cases owned by
-a gate are part of that gate's definition of done.
+Each code-bearing gate ends with focused tests for the changed boundary, the
+affected inherited tests, a diff audit against ADR-0014 and ADR-0012, and a
+recorded result. A documentation-only correction instead verifies its diff,
+links, status, and provenance; it does not trigger unrelated product tests.
+Verification follows causal impact: reuse still-valid recorded results for
+unchanged boundaries, rerun the owning checks for changed boundaries, and run
+the full applicable suite once when actually declaring a phase boundary—not
+after every checkpoint or documentation commit. Do not defer known exception
+handling to a final hardening phase: the failure cases owned by a gate are part
+of that gate's definition of done.
 
 If a gate unexpectedly requires a second database, a compatibility bridge to
 the old runner, changes across two still-unsettled learning authorities, or a
@@ -112,9 +117,12 @@ paths are easy to demonstrate.
 | 18. Real-provider integration | Run one bounded real-provider trace only after deterministic and fault gates pass. | Provider outage, malformed stream/tool result, cancellation, and budget/context exhaustion remain attributable. Provider success does not waive deterministic failures. |
 | 19. Cutover and deletion | Port the remaining required learning behavior tests, then delete the old runner/schema and runtime-coupled lab harnesses from the product line. | Prove the fork no longer imports, invokes, dual-writes, or falls back to old code. The pre-fork history remains reachable as an oracle; reverting the cutover checkpoint restores the prior development line. |
 
-Gate 1, not Phase 1 as a whole, is the first authorized engineering move after
-this plan. Later gate contracts are refined from the evidence immediately
-before them rather than guessed now from file names.
+Gate 1 passed. Gate 2 preserved the exact-tag Windows failure; its diagnosis
+showed an invalid inherited PowerShell 5.1 test command rather than a runtime
+streaming defect. Gate 2A then corrected only that test contract and passed.
+Gate 3 is the next authorized engineering move. Later gate contracts are
+refined from the evidence immediately before them rather than guessed now from
+file names.
 
 ## Legacy asset use during the gates
 

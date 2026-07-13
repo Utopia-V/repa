@@ -1,7 +1,7 @@
 # OpenCode Windows shell progressive-metadata diagnostic
 
-Status: Completed — no runtime streaming defect observed in the exact Gate 2
-environment; the inherited test command is invalid for the selected shell
+Status: Completed — diagnosis implemented by passed Gate 2A; no runtime
+streaming defect observed in the exact Gate 2 environment
 
 Date: 2026-07-13
 
@@ -106,6 +106,10 @@ or permanent failure waiver. A correct regression test should:
 - assert that `first` is visible before releasing the child;
 - assert final `first` and `second` output and exit 0; and
 - avoid asserting a particular operating-system chunk count.
+
+That correction was implemented and verified by
+[Gate 2A](opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md)
+in fork commit `a72f507de45788f3fb8556d883cdad919f33db43`.
 
 The result is intentionally not generalized to cmd, Git Bash, PowerShell 7,
 other Bun releases, or other Windows versions. The localized PowerShell error
