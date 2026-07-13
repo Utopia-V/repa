@@ -7,8 +7,10 @@
     "noEmit": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "types": ["bun"]
   },
-  "include": ["scripts/**/*.ts", "test/**/*.ts", "labs/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "labs/**/*.ts"],
+  "exclude": ["labs/deepseek-learning-loop/**"]
 }
