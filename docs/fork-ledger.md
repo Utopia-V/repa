@@ -50,7 +50,11 @@ git show repa-prefork-oracle:<historical-record-path>
   5D1 passed at `54fb79af0565a9d6d87b225e2802ee5e27df1f87`:
   active TUI sharing commands, tips, display, dedicated plugin property, and
   legacy alias are gone while passive historical data remains for later
-  dependency closure.
+  dependency closure. Gate 5D2 passed at
+  `ce9299f506a1b1baf1577b3730e4d6124f5ebd3b`: Console/account organization
+  commands, startup state, and provider branches are gone from the released
+  TUI while ordinary provider authentication and the local debug console
+  remain.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release

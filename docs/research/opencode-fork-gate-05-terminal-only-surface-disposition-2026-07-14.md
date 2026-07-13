@@ -442,7 +442,16 @@ no command event. The two focused behavior tests, TUI/plugin/OpenCode package
 typechecks, exact production-residue scan, `git diff --check`, and an
 independent fresh-context review passed. Passive historical fields and the
 typed HTTP/SDK surface remain assigned to Gate 5B3/5C rather than being hidden
-behind a TUI compatibility command. Gate 5D2 is next.
+behind a TUI compatibility command.
+
+Gate 5D2 passed at `ce9299f506a1b1baf1577b3730e4d6124f5ebd3b`.
+The released TUI no longer registers organization switching or requests
+`experimental.console` during startup. Console-managed-provider presentation
+and selection branches are gone; ordinary API-key, OAuth, custom-provider,
+`provider.connect`, provider-auth hydration, and the local `app.console` debug
+command remain. The full-app behavior test, focused provider-option tests, TUI
+typecheck, exact production-residue scan, `git diff --check`, and an independent
+fresh-context review passed. Gate 5D3 is next.
 
 ## Rollback
 
