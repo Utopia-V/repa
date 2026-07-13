@@ -61,7 +61,12 @@ git show repa-prefork-oracle:<historical-record-path>
   returns to the main directory. Gate 5D4 passed at
   `d41fe19755a7611a5742b0d2c8bab50970bdd73b`: remote Workspace UI, placement,
   status, recovery, deletion, and startup hydration are gone while local
-  project copies and ordinary Session deletion remain.
+  project copies and ordinary Session deletion remain. Gate 5D5 passed at
+  `00061ce349e01b9273a40e424f8bb2c3eb01d9c9`: the TUI's active routing truth is
+  now a local directory published atomically across Project and Sync state;
+  persisted Session directories, directory-owned request/event state, and
+  generation-checked hydration replace the remote Workspace selector while
+  local project copies remain for the directory-only Gate 5B3 route cutover.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release

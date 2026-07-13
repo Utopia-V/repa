@@ -479,6 +479,32 @@ tests, TUI typecheck, exact dependency scan, `git diff --check`, and an
 independent fresh-context review passed. Active routing fields remain solely
 for Gate 5D5.
 
+Gate 5D5 passed at `00061ce349e01b9273a40e424f8bb2c3eb01d9c9`.
+The TUI now publishes one active local-directory snapshot across Project and
+Sync state. Retained non-Session requests carry that directory explicitly;
+entering a Session selects its persisted directory before enabling the prompt,
+while an unavailable material directory leaves the durable transcript
+readable and the prompt unavailable. Same-project sibling Session events
+remain navigable, but cross-project events and another directory's VCS, LSP,
+Session-list, MCP, Data, and late bootstrap results cannot overwrite the active
+view. Manual permission and question requests retain their event directory.
+Deleting the active project copy first completes one atomic activation of the
+main directory.
+
+Failure before publication preserves the previous complete snapshot. After a
+new directory is published, its directory-owned background caches remain
+honestly empty and `partial` until one generation-consistent hydration batch
+completes; caller cancellation after publication no longer strands that
+batch. A background endpoint failure currently leaves `partial` state and a
+diagnostic log until a later bootstrap; automatic retry and same-directory ABA
+freshness are non-blocking generic-harness follow-ups, not remote Workspace
+compatibility. The 17-file causal suite passed 65 tests, TUI typecheck and
+`git diff --check` passed, exact residue scans found no active remote routing
+consumer, and one fresh-context independent reviewer followed the causal chain
+across repairs and ended green after its two final concurrency counterexamples
+were fixed. Local project-copy operations remain for the directory-only Gate
+5B3 route cutover.
+
 ## Rollback
 
 Revert the smallest failing subgate and regenerate only artifacts owned by a
