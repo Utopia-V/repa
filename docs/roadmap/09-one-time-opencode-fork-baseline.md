@@ -121,9 +121,11 @@ Gate 1 passed. Gate 2 preserved the exact-tag Windows failure; its diagnosis
 showed an invalid inherited PowerShell 5.1 test command rather than a runtime
 streaming defect. Gate 2A then corrected only that test contract and passed.
 Gate 3 then established independent Repa product and state identity at fork
-commit `0ffed9f62`. Gate 4 is the next authorized engineering move. Later gate
-contracts are refined from the evidence immediately before them rather than
-guessed now from file names.
+commit `0ffed9f62`. Gate 4 established the protected learning-first composition
+spine at `9c7b74f41` and completed truthful released-v1 profiles and hidden
+operations at `17e25eab2`. Gate 5 is the next authorized engineering move.
+Later gate contracts are refined from the evidence immediately before them
+rather than guessed now from file names.
 
 The first accepted product baseline is terminal-only. Inherited Web and Desktop
 clients are deferred until real use justifies a separately accepted support

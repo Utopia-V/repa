@@ -1,6 +1,6 @@
 # Repa documentation
 
-Status: Fork Gates 0–3 closed; Gate 4 is active. Gate 2 preserved a failing
+Status: Fork Gates 0–4 closed; Gate 5 is active. Gate 2 preserved a failing
 upstream test result and Gate 2A resolved that blocker without rewriting it.
 
 This directory is the normative documentation spine carried into the production

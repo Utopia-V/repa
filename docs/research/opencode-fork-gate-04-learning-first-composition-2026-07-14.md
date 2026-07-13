@@ -1,6 +1,6 @@
 # OpenCode fork Gate 4: learning-first composition boundary
 
-Status: In progress — contract locked before production changes
+Status: Passed
 
 Date: 2026-07-14
 
@@ -45,6 +45,29 @@ that ontology on hidden or delegated paths.
 The request-preparation seam therefore owns the product composition invariant.
 Provider transport and native runtime code remain domain-independent consumers
 of its prepared result.
+
+## Source adaptation record
+
+The inherited mechanism comes from OpenCode `v1.17.18` at
+`b1fc8113948b518835c2a39ece49553cffe9b30c`, principally:
+
+- `packages/opencode/src/session/llm/request.ts` and
+  `packages/opencode/src/session/llm.ts` for request preparation, streaming,
+  tool continuation, cancellation, and provider lowering;
+- `packages/opencode/src/session/system.ts` for program-composed context;
+- `packages/opencode/src/agent/agent.ts` for profile and permission
+  composition; and
+- `packages/opencode/src/tool/registry.ts` and the existing tool
+  implementations for capability registration and settlement.
+
+Repa preserves those mature transport, event, rendering, permission, and tool
+mechanics. It deliberately replaces the inherited model-family coding prompts
+with one protected Repa product core, makes agent and plugin guidance additive,
+gives hidden operations a separate protected task boundary, reasserts protected
+OAuth instructions after parameter hooks, makes `repa` the broad default
+profile, and makes Plan and Explore deny-by-default. This adapts the
+composition invariant rather than OpenCode's package topology or product
+ontology.
 
 ## Composition contract
 
@@ -192,7 +215,60 @@ changed only where released v1 imports the same implementation.
 
 ## Recorded result
 
-Pending.
+Gate 4 passed at two code checkpoints:
+
+- `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` established the protected
+  composition spine and ordinary, OAuth, workflow, native, and hidden carrier
+  contracts.
+- `17e25eab2784b8bd71bef7a91effb9ae352bf0ae` made the released-v1 profiles,
+  reminders, tools, hidden prompts, terminal labels, and test fixtures
+  learning-first.
+
+The resulting released-v1 behavior has one protected Repa core plus protected
+program context and an extensible guidance region. Hidden title, summary,
+compaction, and agent-generation calls receive their narrow protected task
+contracts without interactive learner context. The stock Plan profile now
+denies arbitrary shell, Session todo writes, general or unknown subagents, and
+unknown MCP/plugin tools; it explicitly permits only read-oriented operations,
+learner interaction controls, read-only Explore delegation, and the Repa-owned
+plan-file exception. Explicit learner configuration still merges last.
+
+Verification evidence:
+
+- 43 Agent permission/profile tests passed, including default identity,
+  deny-by-default Plan and Explore behavior, `.env` and external-root asks,
+  plan-file access, and explicit user override.
+- 29 focused composition, carrier, hidden-operation, reminder, static
+  model-visible-text, and generic-tool-description tests passed.
+- the released-v1 skill and direct-terminal footer group passed 40 tests with
+  five pre-existing skips; it proves that `customize-opencode` is no longer
+  advertised and the visible default mode is Repa.
+- affected inherited configuration/tool, SessionPrompt, compaction,
+  instruction/processor/snapshot, CLI run/replay, Server, core compaction, and
+  TUI groups passed. Their recorded totals were respectively 75; 43 with 14
+  skips; 77 with one skip and one todo; 70 with one skip; 47; 2; and 30 tests.
+- the remaining changed non-shell tool group passed 154 tests. The shell group
+  passed 65 tests when the test process mapped its missing `WINDIR` alias to
+  the present `SystemRoot`; the initially absent alias was an environment
+  observation, not a product-code fallback.
+- Core, OpenCode, and TUI typechecks passed. `git diff --check` passed, and a
+  released-production source scan found no stock agent/default/mode identity
+  named `build`.
+- a fresh-context review inspected the full checkpoint-plus-working-tree delta
+  and permission execution paths, reported no blocker, and assigned 0.95
+  confidence. It did not substitute for the executable evidence above.
+
+Four unrelated narrow-width TUI wrapping snapshots differed from their stored
+baselines during a wider snapshot run. They were not accepted or rewritten;
+the causally changed Repa-label snapshot passed independently.
+
+Classified exclusions remain explicit. Preview-v2's embedded OpenCode
+configuration skill is not imported by released v1 and remains outside this
+gate. Explicit command templates such as `/init` and `/review`, remaining
+account/share/commercial/control-plane tips and routes, provider-catalog
+commercial semantics, and the inherited updater are Gate 5 inventory. No
+compatibility alias, old prompt fallback, second executor, or runtime read from
+the pre-fork oracle was introduced.
 
 ## Rollback
 

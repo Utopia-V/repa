@@ -22,6 +22,7 @@ worktree. Their pins are durable; their paths are not part of this fork.
 | 2. Windows baseline | Preserved inherited invalid PowerShell test failure | exact upstream tree | `docs/research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md` |
 | 2A. Test correction | Corrected only the invalid shell test contract | `a72f507de45788f3fb8556d883cdad919f33db43` | `docs/research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md` |
 | 3. Repa identity | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback | `0ffed9f62159b5383b62da73bd270de7f8775e09` | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md` |
+| 4. Learning-first composition | One protected Repa product core across released-v1 carriers, narrow hidden operations, and truthful stock profiles | `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` + `17e25eab2784b8bd71bef7a91effb9ae352bf0ae` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md` |
 
 Read a historical record with:
 
@@ -31,9 +32,9 @@ git show repa-prefork-oracle:<historical-record-path>
 
 ## Active and deferred boundaries
 
-- Gate 4 is active: establish one learning-first composition invariant across
-  all provider-selected interactive paths and narrow hidden model operations.
-- Gate 5 follows: unregister excluded surfaces before dependency-closed deletion.
+- Gate 4 is closed: released-v1 model carriers and stock profiles implement one
+  learning-first Repa composition invariant.
+- Gate 5 is active: unregister excluded surfaces before dependency-closed deletion.
 - The first accepted baseline is terminal-only. Web and Desktop clients are
   deferred until real use justifies a separately accepted support gate.
 - OpenCode account, organization, share, marketplace, marketing, and release
