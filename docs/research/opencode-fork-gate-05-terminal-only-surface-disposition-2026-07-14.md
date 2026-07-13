@@ -247,6 +247,47 @@ dependency-closure decision. Local provider integration routes are not a
 marketplace surface and remain unless separate evidence shows an excluded
 control-plane dependency.
 
+## Gate 5C locked execution boundary: config and startup
+
+Gate 5C asks whether an ordinary local startup can become complete without
+consulting inherited account, organization, Console, or sharing services,
+even when old account rows, share rows, environment variables, or excluded
+config keys are present. It does not prohibit network chosen explicitly by a
+retained provider, remote MCP server, plugin, Git reference, or well-known
+custom-provider authentication flow.
+
+The dependency order is two reversible slices:
+
+1. **5C1 — remove automatic account/Console config composition.** `Config`
+   stops consulting the active OpenCode account, refreshing its token,
+   fetching `/api/config`, injecting a Console token, or publishing derived
+   Console state. Local/global/project/managed config, explicit well-known
+   provider config, plugin provenance, and environment/file substitution
+   remain. Active runtime and HTTP layer composition no longer registers the
+   now-unconsumed Account node.
+2. **5C2 — remove sharing configuration and startup synchronization.** The
+   released and current config schemas reject or ignore `share`, `autoshare`,
+   and the top-level sharing `enterprise` field rather than migrating them
+   into behavior. `REPA_AUTO_SHARE` is no longer a runtime flag, Session
+   creation has no automatic-share branch, and instance bootstrap initializes
+   only retained local services. Active CLI, bootstrap, and HTTP composition
+   no longer registers `ShareNext` or `SessionShare`; their implementations
+   remain dormant only until Gate 5F deletes the closed dependency branch.
+
+Evidence for 5C1 must make an active-account double fail if config asks it for
+identity, token, or organization config, while retained local config and an
+explicit well-known provider config still load. Evidence for 5C2 must make a
+sharing-init double observable and prove ordinary Instance bootstrap never
+calls it while the retained plugin config hook still runs. Schema tests cover
+both released-v1 and current config projections; exact residue scans cover
+the active composition owners. Only focused config/bootstrap/runtime tests,
+affected package typechecks, and `git diff --check` are causal.
+
+Revert either slice to restore only that registration/config behavior. No
+data migration or compatibility reader is added: the baseline has no user-data
+contract, and passive historical Session/share columns remain a Gate 5F
+dependency-closure question.
+
 ## Gate 5D locked prerequisite boundary: released terminal consumers
 
 Gate 5D classifies effects rather than deleting every inherited use of a word.
