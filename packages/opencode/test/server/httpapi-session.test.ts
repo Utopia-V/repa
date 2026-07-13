@@ -3,9 +3,18 @@ import { afterEach, describe, expect } from "bun:test"
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { mkdir } from "node:fs/promises"
+import Http from "node:http"
 import path from "node:path"
-import { Cause, Config, Effect, Exit, Layer } from "effect"
-import { HttpClient, HttpClientRequest, HttpClientResponse, HttpRouter, HttpServer } from "effect/unstable/http"
+import { Cause, Config, Context, Effect, Exit, Layer, Option, Queue } from "effect"
+import {
+  HttpClient,
+  HttpClientRequest,
+  HttpClientResponse,
+  HttpRouter,
+  HttpServer,
+  HttpServerRequest,
+  HttpServerResponse,
+} from "effect/unstable/http"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -33,7 +42,13 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import * as DateTime from "effect/DateTime"
 import { eq } from "drizzle-orm"
 import { resetDatabase } from "../fixture/db"
-import { disposeAllInstances, provideInstanceEffect, TestInstance, tmpdirScoped } from "../fixture/fixture"
+import {
+  disposeAllInstances,
+  provideInstanceEffect,
+  provideTmpdirInstance,
+  TestInstance,
+  tmpdirScoped,
+} from "../fixture/fixture"
 import { TestLLMServer } from "../lib/llm-server"
 import { testProviderConfig } from "../lib/test-provider"
 import { pollWithTimeout, testEffect } from "../lib/effect"
@@ -226,6 +241,26 @@ function responseJson(response: HttpClientResponse.HttpClientResponse) {
 
 function requestJson<T>(path: string, init?: RequestInit) {
   return request(path, init).pipe(Effect.flatMap(json<T>))
+}
+
+function listenShareProbe(requests: Queue.Queue<string>) {
+  return Effect.gen(function* () {
+    const context = yield* Layer.build(NodeHttpServer.layer(Http.createServer, { host: "127.0.0.1", port: 0 }))
+    const server = Context.get(context, HttpServer.HttpServer)
+    yield* server.serve(
+      HttpServerRequest.HttpServerRequest.use((request) =>
+        Effect.gen(function* () {
+          yield* Queue.offer(requests, `${request.method} ${request.url}`)
+          return yield* HttpServerResponse.json({
+            id: "shr_gate_5b",
+            url: "https://share.invalid/gate-5b",
+            secret: "sec_gate_5b",
+          })
+        }),
+      ),
+    )
+    return HttpServer.formatAddress(server.address)
+  })
 }
 
 afterEach(async () => {
@@ -790,6 +825,48 @@ describe("session HttpApi", () => {
         ).toBe(true)
       }),
     { git: true, config: { formatter: false, lsp: false, share: "disabled" } },
+  )
+
+  it.live("creates a local Session without automatic sharing from the HTTP handler", () =>
+    Effect.gen(function* () {
+      const requests = yield* Queue.unbounded<string>()
+      const shareUrl = yield* listenShareProbe(requests)
+
+      yield* provideTmpdirInstance(
+        (directory) =>
+          Effect.gen(function* () {
+            const headers = { "x-opencode-directory": directory, "content-type": "application/json" }
+            const created = yield* requestJson<Session.Info>(SessionPaths.create, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ title: "local HTTP session" }),
+            })
+            const outbound = yield* Queue.take(requests).pipe(Effect.timeoutOption("500 millis"))
+            const stored = yield* requestJson<Session.Info>(pathFor(SessionPaths.get, { sessionID: created.id }), {
+              headers,
+            })
+
+            expect({
+              created: { id: created.id, title: created.title },
+              stored: { id: stored.id, share: stored.share },
+              outbound: Option.getOrUndefined(outbound),
+            }).toEqual({
+              created: { id: created.id, title: "local HTTP session" },
+              stored: { id: created.id, share: undefined },
+              outbound: undefined,
+            })
+          }),
+        {
+          git: true,
+          config: {
+            formatter: false,
+            lsp: false,
+            share: "auto",
+            enterprise: { url: shareUrl },
+          },
+        },
+      )
+    }),
   )
 
   it.instance(
