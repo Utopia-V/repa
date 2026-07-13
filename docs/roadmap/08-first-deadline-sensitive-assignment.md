@@ -1,12 +1,19 @@
-# First deadline-sensitive Assignment production slice
+# Withdrawn deadline-sensitive Assignment production slice
+
+Status: **Historical implementation plan; not an active roadmap item.** Its
+representative last-minute conflict was outside the intended ordinary product
+distribution, and it explicitly deferred the state needed for cross-day
+workload planning. The dormant v4 candidate is unaccepted. See
+[`../research/semantic-drift-audit-2026-07-13.md`](../research/semantic-drift-audit-2026-07-13.md).
 
 Date: 2026-07-13
 
-Status: Deterministic v4 candidate implemented and fully checked; live provider
-qualification failed, so v4 is explicit opt-in and the CLI remains on v3. See
+Historical result: the deterministic v4 candidate was implemented and checked;
+live provider qualification failed, v4 stayed explicit opt-in, and the CLI
+remained on v3. That result does not reverse the withdrawal above. See
 [`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md).
 
-## Goal
+## Historical goal
 
 Carry one source-grounded, correctable real assignment from an earlier Session
 into the ordinary Tutor loop so a trusted deadline and current learner time
@@ -28,7 +35,7 @@ learner reports one precise learning-related assignment
 The normative behavior and failure contract is
 [`../proposals/0006-deadline-sensitive-real-work-contract.md`](../proposals/0006-deadline-sensitive-real-work-contract.md).
 
-## Non-goals
+## Historical non-goals now withdrawn from product design
 
 This slice does not add Goal, Course/Artifact/LMS association, durable time
 budgets, subtasks, progress percentages, priority or learning-value scores,

@@ -20,6 +20,11 @@ product foundation or accepted ADRs.
   flexible semantic interpretation, generation, and interaction and may
   participate in choices that no accepted deterministic policy settles. This
   neither fixes the exact control split nor makes pedagogy a program script.
+- Ordinary Assignment behavior is advance planning for substantial work over
+  days. The program owns accepted workload/capacity/deadline arithmetic,
+  allocation, and recomputation; the learner or model may propose estimates,
+  interpret and decompose the work, and advise on meaning-sensitive choices.
+  Last-minute rescue of a tiny task is not the representative product case.
 - Explanation, demonstration, guided work, independent work, practice, review,
   and planning are peer actions. No action is the required continuation of
   every interaction.
@@ -235,12 +240,12 @@ These statements are deliberately weaker than accepted decisions.
    scheduler score has not been earned.
 5. Learner inference can remain sparse and consumer-specific until actual
    attempts, review, or open work demonstrate a need for a richer projection.
-6. One LearnerHome-level Assignment can preserve strict source, deadline,
-   disposition, correction, and lazy-history meaning without a Goal aggregate
-   or scheduler. The deterministic v4 candidate now proves that boundary. Live
-   DeepSeek-V4-Flash qualification did not reliably create or consider it in a
-   broad continuation, so passive compact context plus stronger prompt wording
-   is not an admitted action-selection boundary and v4 is not current.
+6. The dormant LearnerHome-level v4 Assignment candidate proves only narrow
+   mechanics around strict source, deadline, disposition, correction, replay,
+   and lazy history. It does not prove the intended Assignment product boundary:
+   its representative emergency fixture was invalid, and it excluded learning
+   context/nature, workload, capacity, progress, and cross-day allocation. v4
+   is unaccepted rather than merely awaiting a stronger consideration policy.
 
 ## Questions still worth resolving
 
@@ -267,6 +272,9 @@ These statements are deliberately weaker than accepted decisions.
   model-writable progress, revisit, assignment, and attempt command?
 - Which later consumer first requires an Assignment-to-Course, Goal, Artifact,
   LMS, or calendar relation rather than lazy source detail?
+- What is the smallest correctable representation of estimated remaining work,
+  known capacity, allocation, and progress that lets the program plan and
+  replan substantial work across days without becoming a generic todo system?
 - What external identity and reconciliation rule should replace model-authored
   new-versus-existing Assignment admission when an LMS connector exists?
 - Beyond the earned learner-response-before-disclosure boundary, which Agenda
@@ -291,12 +299,15 @@ The current product-capability review draft is
 [`proposals/0004-learning-native-capability-contract.md`](./proposals/0004-learning-native-capability-contract.md).
 The implemented conditional-purpose production contract is
 [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](./proposals/0005-conditional-purpose-and-learner-role-contract.md).
-The reviewed next production contract is
+The withdrawn historical Assignment contract is
 [`proposals/0006-deadline-sensitive-real-work-contract.md`](./proposals/0006-deadline-sensitive-real-work-contract.md),
-with its deterministic candidate and failed live gate recorded in
+with its dormant deterministic candidate, failed live gate, and semantic-drift
+correction recorded in
 [`roadmap/08-first-deadline-sensitive-assignment.md`](./roadmap/08-first-deadline-sensitive-assignment.md)
 and
 [`research/proposal-0006-production-verification-2026-07-13.md`](./research/proposal-0006-production-verification-2026-07-13.md).
+The governing correction is
+[`research/semantic-drift-audit-2026-07-13.md`](./research/semantic-drift-audit-2026-07-13.md).
 The current route and runtime phase review is
 [`research/broad-route-and-runtime-substrate-review-2026-07-12.md`](./research/broad-route-and-runtime-substrate-review-2026-07-12.md).
 The completed runtime milestone is
@@ -404,27 +415,29 @@ This path still does not preauthorize an activity table, difficulty enum,
 intervention state machine, universal future-action model, FSRS integration,
 or full learner projection.
 
-The post-0005 global review selected one deadline-sensitive real-work conflict
-as the next production pressure. The deterministic implementation now settles
-Assignment ownership, strict time, correction, replay, truncation, inspection,
-and failure semantics while Course, future attention, steering, and one-off
-plans retain separate owners. Independent review found and closed real
-compatibility, provenance, replay, normalized-time, and Unicode-source defects.
+The post-0005 review incorrectly promoted B2's scene-specific 45/25/30-minute
+emergency into the next production pressure. Proposal 0006 then deferred the
+very meanings required by ordinary multi-day planning and handed the local
+schedule to model judgment. ALS-023's provider failure therefore cannot define
+a new product-level consideration problem. Proposal 0006 is withdrawn; v4
+remains dormant and unaccepted. Its strict-time, provenance, transition, and
+replay mechanisms are candidates for independent reuse, not reasons to preserve
+the aggregate shape.
 
-The live gate changed the open question. DeepSeek-V4-Flash repeatedly ignored a
-report due in 30 minutes during a broad 45-minute continuation, and its earlier
-Assignment creation was not stable. Tightening the explicit non-learning-work
-boundary fixed that negative control, but countdown facts and stronger prompt
-guidance did not establish reliable consideration. The CLI therefore remains
-on qualified `tutor-default-v3`; `tutor-default-v4` is explicit opt-in. The next
-research must find how the Learning System requires a materially competing
-constraint to be considered without choosing the action through a universal
-selector, fixed urgency threshold, or scalar scheduler.
+The corrected Assignment boundary starts with representative substantial work:
+learning context or nature, deadline, estimated remaining work, relevant
+capacity, allocation, progress feedback, and replanning. Exact schema and
+algorithm remain open pending a consumer-driven architecture proof and review
+of bounded rolling-horizon/workload-leveling models. The program must own
+closed arithmetic; model judgment remains useful for semantic decomposition,
+teaching, research, and genuinely open trade-offs.
 
-Broader goals, multiple assignments, durable time budgets, multi-course choice,
-richer evidence, review scheduling, domain foundations, retrieval indexes, and
-TUI work remain peer horizons. Their order is chosen again after this coherent
-slice rather than inherited from its newest table.
+The same audit found current-v3 defects that are independent of v4: the default
+CLI replays an unbounded Session transcript, learner-visible output has no
+admission boundary, existing courses cannot be selected through the Agent, and
+durable timed steering cannot be withdrawn through the production tool surface.
+These core contradictions are recorded and prioritized in the semantic-drift
+audit rather than hidden behind future Assignment work.
 
 The source synthesis is
 [`research/teaching-and-review-first-principles-2026-07-12.md`](./research/teaching-and-review-first-principles-2026-07-12.md),

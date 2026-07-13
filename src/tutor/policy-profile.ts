@@ -15,8 +15,10 @@ export const DEFAULT_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-v2"
 export const CONDITIONAL_PURPOSE_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-v3"
 
 /**
- * Candidate revision that exposes LearnerHome Assignment semantics. It stays
- * explicit rather than CURRENT until its live provider qualification passes.
+ * Withdrawn historical candidate that exposes the Proposal 0006 Assignment
+ * experiment. It cannot become CURRENT by passing the old emergency-scenario
+ * qualification; keep it explicit only while its reusable mechanics and
+ * deletion boundary are audited.
  */
 export const ASSIGNMENT_TUTOR_POLICY_PROFILE_REVISION = "tutor-default-v4"
 

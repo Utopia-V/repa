@@ -2,8 +2,10 @@
 
 Date: 2026-07-13
 
-Status: Independent architecture review input. It informs Proposal 0006 but is
-not an accepted decision or a substitute for repository evidence.
+Status: Historical independent review input, superseded by
+[`semantic-drift-audit-2026-07-13.md`](./semantic-drift-audit-2026-07-13.md).
+The review packet inherited B2's emergency fixture and helped over-weight it;
+its recommendation does not support Proposal 0006 as a product contract.
 
 ## Decision under review
 

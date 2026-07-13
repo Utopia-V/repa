@@ -59,26 +59,25 @@ Use full names in notes and discussion:
 | ALS-022C | 2026-07-13 | After program filtering and immutable source binding, can DeepSeek-V4-Flash choose `current_request`, one Agenda source, or `unresolved`? | No. Transport and local admission passed 18/18, but exact source selection was 10/18. It ignored Agenda in all four generic-continuation samples and refused unresolved in both multiple-candidate samples. Compatible-source disagreements do not change the decisive failure. Per the frozen stop rule, no further universal selector prompt/enum rescue is admitted. | `governing-source-selector-result-2026-07-13.md` |
 | ALS-022D | 2026-07-13 | Can a program-bound sole Agenda concern act as a conditional default inside the ordinary realizing sample while explicit current requests override it? | Yes for the tested independent-prediction concern: 10/10 generic-continuation, direct-answer, direct-comparison, completed-occurrence, and redirection cases passed behavior and state gates. No selector sample ran. Overrides left the concern open; completed occurrences addressed it. The intervention restated the known learner-role constraint, so general reason compilation and multi-candidate policy remain open. | `conditional-current-purpose-result-2026-07-13.md` |
 | ALS-022E | 2026-07-13 | Is exact Agenda reason plus conditional-default status sufficient without explicitly restating its learner-role/help-order constraint? | No. The mechanical screen was 6/8, but strict inspection found only 3/8 valid independent predictions: two disclosed answers, one posed no prediction, and two supplied decisive rules first. Exact source reason and operative constraint are distinct. This earns a narrow contract for `learner response before Tutor disclosure`, not a universal pedagogy enum. | `exact-reason-conditional-default-result-2026-07-13.md` |
-| ALS-023 | 2026-07-13 | Can the deterministic Proposal 0006 Assignment candidate reliably create, survive a Session boundary, affect a near-deadline broad continuation, and reject unrelated job work under the production DeepSeek-V4-Flash Tutor? | No. Persistence, provenance, correction, lazy reads, and policy-version isolation passed deterministically, and tightened admission wording repaired the unrelated-job negative control. Live creation remained unstable, later broad continuation repeatedly ignored the Assignment, and one response exposed an internal ID. Passive compact context, countdown facts, and stronger prompt wording did not earn v4 admission; the CLI remains on v3. | `proposal-0006-production-verification-2026-07-13.md` |
+| ALS-023 | 2026-07-13 | Can the deterministic Proposal 0006 Assignment candidate reliably create, survive a Session boundary, affect a near-deadline broad continuation, and reject unrelated job work under the production DeepSeek-V4-Flash Tutor? | The run failed, and its product interpretation is withdrawn. Persistence, provenance, correction, lazy reads, and policy-version isolation passed deterministically; live creation was unstable, broad continuation ignored the fixture, and one response exposed an internal ID. More importantly, the 45/25/30-minute emergency was not representative of intended multi-day Assignment planning. It cannot establish a product consideration boundary or qualify the v4 aggregate. The CLI remains on v3. | `proposal-0006-production-verification-2026-07-13.md`; `semantic-drift-audit-2026-07-13.md` |
 
 ## Active batch
 
-No lab is active. ALS-023 closes prompt-rescue work for the current Assignment
-design and leaves one focused architecture question: how the Learning System
-requires a materially competing durable constraint to be considered without a
-universal selector, scalar scheduler, or hard-coded deadline winner.
+No lab is active. ALS-023 is retained as a failed experiment whose pressure
+scenario was selected incorrectly. It does **not** leave a near-deadline
+consideration question and does not qualify the dormant v4 Assignment shape.
 ALS-022B/C reject a universal DeepSeek-V4-Flash selector;
 their stop rule remains in force. ALS-022D supports a simpler one-candidate
 conditional-default topology for the demonstrated independent-prediction
 purpose. ALS-022E then rejects exact reason plus selected status as sufficient:
 the demonstrated concern needs an explicit learner-response-before-disclosure
 constraint. ADR-0013 and Proposal 0005 now record the resulting architecture
-and reviewable first-production contract. Proposal 0006 now has a deterministic
-candidate but failed its live gate. No further live model work is admitted for
-the same prompt/context topology. The next gate is a focused architecture
-proof of the consideration boundary before another production-policy revision.
-A general constraint vocabulary and multi-candidate policy remain explicitly
-unproved.
+and reviewable first-production contract. Proposal 0006 is withdrawn as a
+product contract. No further live model work is admitted for the same
+prompt/context topology. The next Assignment evidence must start from
+representative cross-day workload, capacity, correction, and replanning cases,
+after a consumer-driven architecture proof. A general constraint vocabulary
+and multi-candidate policy remain explicitly unproved.
 
 ## Completed batch detail: ALS-003 tool lifecycle and semantic authority
 

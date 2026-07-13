@@ -213,48 +213,62 @@ The full solution, every hint, detailed scratch work, and tentative error
 stories remain in the Session or task artifact unless a future decision needs
 them.
 
-## Trace 5: a deadline changes the near-term plan
+## Trace 5: substantial real work changes the multi-day plan
 
 ### Situation
 
-A real assignment is due soon while planned teaching and review are also
-pending. The assignment may have low learning value, high learning value, or a
-mixture of both.
+A real assignment requires several hours or days of work and is due later while
+teaching, review, and other obligations are also pending. The normal product
+case is early enough to distribute the work across available days. Last-minute
+rescue can occur in life, but a tiny task due within minutes is not the
+representative behavior from which this contract is derived.
 
 ### Already available
 
-- the deadline and completion state;
-- the learner's available time;
+- the assignment identity, subject or learning context, and source/nature;
+- the deadline, estimated remaining work, and completion state;
+- known available capacity over the relevant days;
 - current course progress and due review; and
 - the assignment's known relation to learning goals.
 
 ### Tutor behavior
 
-The Tutor changes the near-term plan. It may compress a low-value task, teach
-the material needed for a valuable task, or postpone less urgent new material
-and review. The learner remains able to override the trade-off.
+The Learning System checks whether the remaining work fits the remaining
+capacity, allocates a reasonable amount before the deadline, and revises that
+allocation when progress, availability, estimates, or the deadline changes.
+The Tutor may compress a low-learning-value deliverable, teach the material
+needed for valuable work, or postpone less urgent new material and review. The
+LLM may help interpret or decompose the work and explain alternatives, but it
+is not responsible for remembering the quantities or performing the basic
+cross-day arithmetic. The learner remains able to correct inputs and override
+the proposed trade-off.
 
 The temporary decision does not become a claim about the learner's long-term
 ability or preferred way of learning.
 
 ### Candidate minimal record
 
-- the deadline and current assignment state;
-- any commitment or deferral that should survive the Session; and
-- the near-term plan change.
+- the assignment's durable identity and learning context;
+- the deadline, estimated remaining work, relevant capacity, and current
+  disposition, with source and uncertainty where needed;
+- the current allocation or commitment that must survive the Session; and
+- enough completion feedback to recompute the remaining plan.
 
 ### Later automatic behavior
 
 The task continues to affect planning until it is completed, cancelled, or
-otherwise resolved. Passing the deadline can turn it into overdue work, a
-late-submission decision, or a recorded loss; it does not make the task vanish.
-Deferred learning and review return to consideration when the real constraint
-allows it, without requiring the learner to remember and restate each one.
+otherwise resolved. Each relevant planning cycle can compare work left with
+capacity left; no Session transcript has to reconstruct those quantities.
+Passing the deadline can turn it into overdue work, a late-submission decision,
+or a recorded loss; it does not make the task vanish. Deferred learning and
+review return to consideration when the real constraint allows it, without
+requiring the learner to remember and restate each one.
 
 ### Raw history only
 
-The full trade-off discussion, rough time estimates, and discarded plans stay
-in the Session unless one becomes a real commitment.
+The full trade-off discussion, discarded decompositions, and abandoned plans
+stay in the Session. Estimates or allocations that affect later planning are
+durable, source-aware, and correctable rather than cold prose.
 
 ## Trace 6: resume several days later
 

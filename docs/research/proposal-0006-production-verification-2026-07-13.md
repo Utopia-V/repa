@@ -1,5 +1,13 @@
 # Proposal 0006 implementation and qualification record
 
+Correction (2026-07-13): the provider observations and deterministic test
+results below remain historical evidence, but the selected 45/25/30-minute
+pressure scenario was not representative of the intended Assignment product.
+The failure therefore does not establish a missing near-deadline consideration
+mechanism, and the proposed next research boundary is withdrawn. Proposal 0006
+and dormant v4 are unaccepted; see
+[`semantic-drift-audit-2026-07-13.md`](./semantic-drift-audit-2026-07-13.md).
+
 Date: 2026-07-13
 
 Status: Deterministic `tutor-default-v4` candidate implemented; live
@@ -127,29 +135,24 @@ bound $0.00315098), respectively. The initial observability failure and final
 early stop did not produce complete accounting, so no invented total is
 reported. Ignored local output contains no API key or headers.
 
-## Decision and next research boundary
+## Corrected decision
 
-The failure is not a reason to delete the Assignment aggregate: persistence,
-authority, correction, and recovery are independently demonstrated. It is also
-not evidence that a deadline must deterministically win. The missing behavior
-is narrower:
+The provider result remains a truthful failure of the tested implementation,
+but the former consideration question was inferred from an invalid product
+oracle. It is not the next research boundary. Persistence, authority,
+correction, and recovery were demonstrated only for the narrow v4 shape; they
+do not justify preserving that aggregate by sunk cost.
 
-> When the current request is broad, how does the Learning System guarantee
-> that a materially competing durable constraint is considered before the
-> model starts a move, without manufacturing a universal scalar priority or
-> hard-coded scenario action?
+The next Assignment work must begin with representative multi-day workload,
+capacity, progress, and replanning consumers. Strict time, provenance,
+transition, and replay mechanisms may be reused only if that corrected design
+needs them. Deadline-first context and model-owned one-Turn scheduling are not
+admitted policies.
 
-Another stronger sentence in the same prompt is not admitted. ALS-022B/C
-already reject a universal preliminary selector, while this qualification
-shows that passive compact context plus ordinary prompt guidance is not a
-reliable consideration boundary. The next work must compare program-owned
-candidate/consideration mechanisms, active-tool or step shaping, and an
-explicit unresolved/ask path. It must preserve current-request authority and
-model flexibility, and it must not turn deadline ordering into Tutor policy.
-
-Until that boundary is demonstrated:
+As a result:
 
 - `tutor-default-v4` is explicit opt-in only;
 - the CLI remains on `tutor-default-v3`;
-- Roadmap 08 is not marked implemented; and
-- no more prompt-rescue provider samples are authorized for this exact design.
+- Roadmap 08 is withdrawn as an active roadmap item; and
+- no more prompt or control rescue samples are authorized for this emergency
+  fixture.

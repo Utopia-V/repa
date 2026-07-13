@@ -306,11 +306,13 @@ does not promote their illustrative details into a schema.
 
 Those decisions follow demonstrated consumers and failure boundaries.
 
-## Capability gate
+## Historical capability gate
 
-An experimental implementation is sufficient to represent the current product
-only when it can execute all six behavior traces while satisfying the
-cross-capability requirements.
+This gate was used to check a bounded integration layer. Executing all six
+scene-specific traces is not sufficient to represent the current product or
+its default policy; the traces are mechanism regressions, not a product lower
+bound. The original gate required all six traces plus the cross-capability
+requirements below.
 
 It may cover one course and bounded materials. It must still use real code to:
 

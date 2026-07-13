@@ -110,11 +110,13 @@ The state also changes at different rates:
 | --- | --- | --- |
 | slow | domain foundations, course structure, accepted curricular relations | high-inertia; a learner error does not rewrite it |
 | medium | material alignment, progress, activities, observations, evidence, correctable hypotheses | changes after meaningful interactions or source revisions |
-| fast | goals, agenda focus, revisits, commitments, scoped steering | re-evaluated around each Turn |
+| planning horizon | assignments, remaining-work estimates, capacity, cross-day allocations, commitments | recomputed when time, progress, estimates, or availability changes |
+| fast | current focus, revisits, scoped steering, current learner direction | re-evaluated around each Turn |
 | query-time | due/overdue/expired status and time pressure | derived from stored facts and the current clock; no daemon event is required |
 
-In plain language: the course map changes slowly, today's route can change
-quickly, and “due now” can become true simply because time passed.
+In plain language: the course map changes slowly, multi-day work is rebalanced
+when its inputs change, today's route can change quickly, and “due now” can
+become true simply because time passed.
 
 ## Chosen structural style
 
@@ -203,15 +205,20 @@ with Course View code. That does not transfer semantic ownership to the
 curricular structure, and a later Agenda slice must not treat the learner's
 anchor as a course revision.
 
-The current view derives `activeFocus` from the agenda when a live detour
+Target composition derives `activeFocus` from the agenda when a live detour
 exists; otherwise it derives it from route progress. This prevents two durable
 `currentNode` values from drifting while preserving the semantic distinction.
+Production does not yet implement durable detour, intended-rejoin, or derived
+`activeFocus` behavior; they are ownership requirements for a future consumer,
+not current capability.
 
 ## LearnerHome, LearningSpace, and Session
 
 `LearnerHome` is the logical root of one learner's local authority. Initially
 it may be represented by a database path and home configuration rather than a
 new table. It contains multiple `LearningSpace`s, courses, goals, and Sessions.
+Current storage can retain several courses, but the production Agent does not
+yet expose list/select behavior for switching among existing courses.
 
 A `LearningSpace` scopes material roots, course views, artifacts, and ordinary
 context selection for a real body of work. It is not an isolation boundary for
@@ -378,9 +385,11 @@ only record of which state or authority was used.
 
 The program does not enumerate every legal explanation or teaching move. It
 owns hard constraints, computable facts, domain legality, and any deterministic
-consequence that must always occur. The LLM owns open semantic judgment inside
-that space, including explanation, research, examples, route proposals, and
-local action choice. The learner owns goals and can steer or interrupt.
+consequence that must always occur. This includes workload/capacity/deadline
+arithmetic and recomputation for accepted planning inputs. The LLM owns open
+semantic judgment inside that space, including explanation, research, examples,
+route proposals, semantic work decomposition, and interaction-level adaptation.
+The learner owns goals and can steer or interrupt.
 
 Policy resolves in this order:
 
@@ -526,7 +535,7 @@ that “program” always decides while “model” only writes prose.
 
 | Program-led | Model-led | Mixed initiative |
 | --- | --- | --- |
-| identity, revisions, source binding, time math, due/overdue derivation, legal transitions, atomicity, correction mechanics, context budgets, capability/permission enforcement | open-source research, semantic material interpretation, coarse route proposals, explanations, examples, questions, comparisons, and interaction-level adaptation | selecting a next move among real concerns, refining a course view, interpreting open-ended work, forming a gap hypothesis, and making a near-term plan |
+| identity, revisions, source binding, time math, due/overdue derivation, workload/capacity feasibility, cross-day allocation and recomputation, legal transitions, atomicity, correction mechanics, context budgets, capability/permission enforcement | open-source research, semantic material interpretation and work decomposition, coarse route proposals, explanations, examples, questions, comparisons, and interaction-level adaptation | selecting among genuinely different feasible routes, refining a course view, interpreting open-ended work, forming a gap hypothesis, and adapting a plan where meaning or learner preference matters |
 
 For mixed work, code supplies trustworthy facts, hard boundaries, available
 capabilities, and any deterministic consequence; the model supplies semantic
@@ -534,9 +543,9 @@ judgment; the learner may redirect. The model may directly commit an authorized
 local transition, so “mixed” does not mean every action waits for a hidden
 second controller.
 
-In plain language: the program is strongest at keeping continuity and rules
-straight; the LLM is strongest at understanding and teaching messy content;
-neither replaces the other where both are needed.
+In plain language: the program remembers the numbers and does the calendar
+math; the LLM understands what the work means and helps teach, split, or adapt
+it. Neither replaces the other where both are needed.
 
 ## Capabilities and commands
 

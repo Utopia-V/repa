@@ -286,7 +286,7 @@ phases are deferred until repeated material leakage, partial recovery, or a
 real TUI consumer earns them. This is not permission for keywords, a
 response-approval tool, another model, or a second runtime.
 
-### Implemented candidate, withheld admission: deadline-sensitive real work
+### Withdrawn candidate: last-minute deadline conflict
 
 The post-0005 phase review compared three peer gaps instead of extending the
 newest Agenda mechanism by default:
@@ -303,38 +303,45 @@ has a zero-write path. A performance occurrence remains important, but it must
 first prove a cross-Session consumer rather than reopen a universal evidence
 schema.
 
-The selected pressure was one real-work conflict. B2 demonstrated that a
-source-linked deadline, reported duration, current time budget, due revisit,
-and untouched material can change a model-led near-term plan. The production
-slice now proves the ownership and state boundary, but its live qualification
-showed that passive context does not reliably make the ordinary Tutor consider
-the conflict.
+The selected pressure was wrong. B2 demonstrated only that a scene-specific
+prompt could execute one last-minute 45/25/30-minute script. It did not prove
+that the emergency was representative or that model-led one-Turn scheduling
+was the intended Assignment behavior. Proposal 0006 then excluded learning
+context/nature, workload, progress, capacity, and cross-day allocation—the
+quantities needed for ordinary advance planning.
 
-Proposal 0006 therefore fixes a LearnerHome-level, Agenda-owned local
-Assignment representation with source, strict deadline interpretation,
-correction, disposition, query-time overdue state, bounded context, lazy
-detail, and current-request precedence. It explicitly rejects Course ownership,
-title/deadline deduplication, persistent plans, scores, schedulers, todo
-topology, and learning evidence. Two adversarial contract reviews found and
-closed duplicate-entity, half-correction, terminal-inspection, completion,
-time-precision, replay, truncation, and learner-visible correction failures.
+Schema 6 and explicit `tutor-default-v4` remain implemented behind a dormant
+policy revision, and their deterministic tests remain useful historical
+evidence. They are not an admitted Assignment boundary. ALS-023 cannot establish
+a new near-deadline consideration problem because its product oracle was
+invalid. The CLI correctly stays on `tutor-default-v3`.
 
-This is still part of the direct-real-work contrast inside the current parent
-pressure. It does not declare `teach, adapt, and return` complete, fix the order
-of later horizons, or authorize a full goals/assignments module.
-
-Schema 6 and explicit `tutor-default-v4` are implemented and pass the complete
-deterministic repository gate. DeepSeek-V4-Flash nevertheless ignored the
-near-deadline Assignment in repeated broad-continuation samples, and creation
-was unstable. The non-learning-work negative control was repaired, but prompt
-rescue did not earn production admission. Per the rollback rule, the CLI stays
-on `tutor-default-v3`. The next gate is a focused comparison of
-program-owned *consideration* mechanisms—not another stronger prompt, generic
-selector, deadline-wins rule, or scheduler.
+Strict timestamp parsing, source provenance, revisions, correction, replay, and
+transaction behavior may be reused only when a corrected consumer justifies
+them. The completed aggregate is not itself that justification.
 
 - Contract: [`../proposals/0006-deadline-sensitive-real-work-contract.md`](../proposals/0006-deadline-sensitive-real-work-contract.md)
 - Implementation plan: [`08-first-deadline-sensitive-assignment.md`](./08-first-deadline-sensitive-assignment.md)
 - Verification and failed live gate: [`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md)
+- Governing correction: [`../research/semantic-drift-audit-2026-07-13.md`](../research/semantic-drift-audit-2026-07-13.md)
+
+### Immediate coherence repair before another product slice
+
+The semantic audit found current-v3 contradictions that precede new Assignment
+or ontology code:
+
+1. bound the default Session history supplied to each model sample and record
+   omissions, so persistent state does not depend on an ever-growing transcript;
+2. separate internal/control model phases from learner-visible output rather
+   than relying on prompt non-disclosure;
+3. expose listing/selecting an existing Course; and
+4. expose withdrawal of retained timed learner steering.
+
+The first two protect core architecture claims and must be designed before
+another live product-policy experiment. Course switching is also a prerequisite
+for representative multi-course planning cases. These are scoped corrections,
+not permission to build a memory framework, response approval system, or global
+command registry.
 
 ### Exit evidence
 
@@ -361,12 +368,20 @@ The pressure path has not exited. It exits only when:
 These are peer horizons selected after returning to the whole product. Their
 order is not fixed by this document.
 
-### Broader goals, assignments, deadlines, and multi-concern Agenda
+### Long-horizon goals, assignments, deadlines, and multi-concern Agenda
 
-Beyond the admitted first Assignment conflict, pressure the Tutor with
-long-term course progress, changed goals, multiple assignments, durable time
-budgets, detours, and intended rejoin. Add only the Agenda lifecycles required
-by those conflicts.
+There is no admitted first Assignment conflict. Start from representative
+substantial work: multiple learning contexts, estimated remaining workload,
+available capacity over days, learner corrections, progress feedback, missed
+allocations, and replanning. The program owns feasibility arithmetic and
+reproducible allocation from accepted inputs. The model may help identify,
+estimate, semantically decompose, teach through, or explain the work and may
+propose meaning-sensitive alternatives. Compare classical rolling-horizon and
+workload-leveling ideas without turning one score or scheduler into the Tutor.
+
+This horizon also pressures long-term course progress, changed goals, detours,
+and intended rejoin. Add only the Agenda and planning lifecycles required by
+observable consumers.
 
 ### Attempts, artifacts, evidence, and adaptive later action
 

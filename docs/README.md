@@ -134,18 +134,20 @@ Documents have different authority. Do not treat a research observation as an ac
   does not block the learning-owned Proposal 0005 slice and records the trigger
   for any later response-item/phase work.
 - [`research/chatgpt-pro-next-pressure-path-review-2026-07-13.md`](research/chatgpt-pro-next-pressure-path-review-2026-07-13.md)
-  records the independent post-0005 comparison of learner-performance,
-  real-work, and graph paths plus the adopted and rejected review advice.
+  records a historical post-0005 comparison whose packet inherited B2's
+  emergency bias; its Assignment-path recommendation is superseded.
 - [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md)
-  is the reviewed production-admission contract for one LearnerHome-level,
-  source-grounded Assignment conflict without a todo planner, scheduler,
-  Course owner, persistent plan, or evidence claim.
+  is a withdrawn historical contract whose emergency fixture was promoted
+  beyond its evidence; it is not an active Assignment design.
 - [`roadmap/08-first-deadline-sensitive-assignment.md`](roadmap/08-first-deadline-sensitive-assignment.md)
-  records the implemented deterministic v4 candidate and its failed live
-  provider gate; v4 is not the CLI default.
+  records the dormant deterministic v4 candidate and its withdrawn roadmap
+  status; v4 is not the CLI default or an accepted product boundary.
 - [`research/proposal-0006-production-verification-2026-07-13.md`](research/proposal-0006-production-verification-2026-07-13.md)
-  records the code/review evidence, live failures, v3 rollback decision, and
-  the unresolved program-owned consideration boundary.
+  records the code/review evidence and live failures. Its former
+  program-owned-consideration next question is withdrawn.
+- [`research/semantic-drift-audit-2026-07-13.md`](research/semantic-drift-audit-2026-07-13.md)
+  is the governing correction: intended Assignment behavior is cross-day
+  workload planning, and it also records four independent current-v3 defects.
 
 ## Proposals
 
@@ -157,9 +159,10 @@ research. Proposals are not accepted decisions until promoted into ADRs.
 - [`proposals/0003-learning-native-responsibilities.md`](proposals/0003-learning-native-responsibilities.md) — historical working model promoted and refined by ADR-0012; not the current architecture authority.
 - [`proposals/0004-learning-native-capability-contract.md`](proposals/0004-learning-native-capability-contract.md) — current product-capability review draft; not an architecture or experiment protocol.
 - [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](proposals/0005-conditional-purpose-and-learner-role-contract.md) — implemented `tutor-default-v3` contract for one source-bound learner-response-before-disclosure constraint and one-candidate conditional purpose; not a general pedagogy framework.
-- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md) — reviewed first Assignment contract with an implemented deterministic v4 candidate; live admission failed, so it remains explicit opt-in rather than current policy.
+- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md) — withdrawn historical Assignment contract; its implemented v4 candidate is dormant and unaccepted.
 - [`research/proposal-0005-production-verification-2026-07-13.md`](research/proposal-0005-production-verification-2026-07-13.md) — implementation boundaries, deterministic evidence, historical-policy compatibility, and the bounded live provider qualification.
-- [`research/proposal-0006-production-verification-2026-07-13.md`](research/proposal-0006-production-verification-2026-07-13.md) — deterministic Assignment evidence, independent-review fixes, failed DeepSeek qualification, and the reason the CLI stays on v3.
+- [`research/proposal-0006-production-verification-2026-07-13.md`](research/proposal-0006-production-verification-2026-07-13.md) — historical deterministic Assignment evidence, independent-review fixes, failed DeepSeek qualification, and the later correction of its product interpretation.
+- [`research/semantic-drift-audit-2026-07-13.md`](research/semantic-drift-audit-2026-07-13.md) — accepted correction of the Assignment pressure path plus the current-runtime semantic audit.
 
 The runtime defaults in proposal 0001 were accepted on 2026-07-11 and are
 recorded by [`decisions/0005-durable-turn-and-interaction-hierarchy.md`](decisions/0005-durable-turn-and-interaction-hierarchy.md),

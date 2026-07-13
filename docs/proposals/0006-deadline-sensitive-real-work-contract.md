@@ -2,11 +2,18 @@
 
 Date: 2026-07-13
 
-Status: Reviewed contract. The deterministic v4 candidate is implemented, but
-live provider qualification failed and production admission is withheld. This
-document fixes the meanings that must hold; it does not authorize a generic
-task system, goal model, scheduler, or wider production schema. See the
+Status: **Withdrawn as a product contract and current pressure path.** The
+deterministic v4 candidate remains dormant and unaccepted. The representative
+45/25/30-minute emergency fixture was promoted beyond its evidence and excluded
+the workload, capacity, learning-context, and cross-day allocation meanings
+required by the intended Assignment behavior. This document is retained only
+as a historical engineering artifact. See the
+[`semantic drift audit`](../research/semantic-drift-audit-2026-07-13.md) and the
 [`implementation and qualification record`](../research/proposal-0006-production-verification-2026-07-13.md).
+
+Nothing below is a current product requirement or implementation plan. Narrow
+mechanisms such as strict time parsing, provenance, and revision history must
+be justified independently before reuse.
 
 ## Plain-language summary
 
@@ -22,7 +29,7 @@ owns a correctable local representation of the report it received. The current
 learner request still governs the Turn; the model makes the local trade-off;
 and the resulting one-off plan normally remains ordinary Session history.
 
-## Why this is the next pressure path
+## Historical rationale for the pressure path
 
 This behavior connects two peer parts of the product that production has not
 yet forced to coexist:
@@ -470,7 +477,7 @@ Learner-visible acceptance additionally requires that:
 - ordinary-language correction reaches the legal revision/reopen path while
   preserving the old source and interpretation.
 
-## Production admission and verification
+## Historical production admission and verification plan
 
 No new architecture-changing model uncertainty remains before the first
 implementation: B2 already demonstrated that the model can consume this kind
