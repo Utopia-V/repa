@@ -500,6 +500,10 @@ function migrateToVersion5(database: Database) {
 }
 
 function migrateToVersion6(database: Database) {
+  // Compatibility tombstone for databases created by the withdrawn Assignment
+  // experiment. The runtime no longer reads or writes these tables. Keeping the
+  // ordered migration avoids silently invalidating an existing schema-6 file;
+  // any future removal needs an explicit, data-aware migration decision.
   database.exec(`
     CREATE TABLE agenda_assignment (
       assignment_id TEXT PRIMARY KEY,

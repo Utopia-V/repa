@@ -5,21 +5,23 @@ results below remain historical evidence, but the selected 45/25/30-minute
 pressure scenario was outside Repa's product scope.
 The failure therefore does not establish a missing near-deadline consideration
 mechanism, and the proposed next research boundary is withdrawn. Proposal 0006
-and dormant v4 are unaccepted; see
+and v4 are unaccepted; the runtime, prompt, tools, and dedicated tests have
+since been deleted. Schema 6 remains only as an inert compatibility tombstone;
+see
 [`semantic-drift-audit-2026-07-13.md`](./semantic-drift-audit-2026-07-13.md).
 
 Date: 2026-07-13
 
-Status: Deterministic `tutor-default-v4` candidate implemented; live
-DeepSeek-V4-Flash qualification **failed**. Schema 6 and the explicit v4 policy
-remain readable and testable, but `CURRENT_TUTOR_POLICY_PROFILE_REVISION` and
-the CLI remain on qualified `tutor-default-v3`.
+Status: Historical record of a deterministic `tutor-default-v4` candidate
+whose live DeepSeek-V4-Flash qualification **failed**. The candidate code was
+subsequently deleted; `CURRENT_TUTOR_POLICY_PROFILE_REVISION` and the CLI stay
+on qualified `tutor-default-v3`.
 
 ## Outcome in plain language
 
-Repa now has a coherent, source-grounded Assignment capability behind an
-explicit policy revision. It can remember a real learning-related assignment
-across Sessions, derive overdue state from time, read old details lazily,
+The deleted candidate had a coherent, source-grounded Assignment capability
+behind an explicit policy revision. It could remember a learning-related
+assignment across Sessions, derive overdue state from time, read old details lazily,
 inspect and correct its interpretation, and preserve completion/cancellation/
 reopen history without changing Course progress or inventing learning
 evidence.
@@ -29,10 +31,10 @@ live runs, DeepSeek-V4-Flash sometimes created the Assignment and sometimes did
 not. More importantly, it repeatedly started new teaching while a report was
 due in 30 minutes and the learner had only 45 minutes, despite the compact
 deadline, explicit countdown, due learning concern, and guidance to read cold
-detail before choosing a trade-off. The v4 policy is therefore not enabled by
-default.
+detail before choosing a trade-off. The candidate was therefore never enabled
+by default and was later removed.
 
-## Implemented boundary
+## Historical implemented boundary (removed)
 
 - Schema 6 adds a LearnerHome-scoped `agenda_assignment` aggregate and
   immutable transition history without a Course foreign key.
@@ -151,8 +153,9 @@ admitted policies.
 
 As a result:
 
-- `tutor-default-v4` is explicit opt-in only;
+- `tutor-default-v4` has been deleted;
 - the CLI remains on `tutor-default-v3`;
+- schema 6 remains only as an inert compatibility tombstone;
 - Roadmap 08 is withdrawn as an active roadmap item; and
 - no more prompt or control rescue samples are authorized for this emergency
   fixture.

@@ -3,11 +3,12 @@
 Date: 2026-07-13
 
 Status: **Withdrawn as a product contract and current pressure path.** The
-deterministic v4 candidate remains dormant and unaccepted. The representative
-45/25/30-minute emergency fixture was outside Repa's product scope and excluded
-the workload, capacity, learning-context, and cross-day allocation meanings
-required by the intended Assignment behavior. This document is retained only
-as a historical engineering artifact. See the
+unaccepted deterministic v4 runtime, prompt, tools, and dedicated tests have
+been deleted; schema 6 remains only as an inert compatibility tombstone. The
+representative 45/25/30-minute emergency fixture was outside Repa's product
+scope and excluded the workload, capacity, learning-context, and cross-day
+allocation meanings required by the intended Assignment behavior. This
+document is retained only as a historical engineering artifact. See the
 [`semantic drift audit`](../research/semantic-drift-audit-2026-07-13.md) and the
 [`implementation and qualification record`](../research/proposal-0006-production-verification-2026-07-13.md).
 

@@ -29,25 +29,11 @@ import {
   REOPEN_FUTURE_ATTENTION_TOOL,
   SUPERSEDE_FUTURE_ATTENTION_TOOL,
 } from "../learning/agenda/future-attention-tool-execution"
-import {
-  CANCEL_ASSIGNMENT_TOOL,
-  COMPLETE_ASSIGNMENT_TOOL,
-  CREATE_ASSIGNMENT_TOOL,
-  INSPECT_ASSIGNMENTS_TOOL,
-  READ_ASSIGNMENT_SOURCE_TOOL,
-  REOPEN_ASSIGNMENT_TOOL,
-  REVISE_ASSIGNMENT_TOOL,
-  type AssignmentToolName,
-} from "../learning/agenda/assignment-tool-execution"
 import type { TutorContextCut } from "../tutor/compile-context"
 import { executeLearnerSteeringTool } from "../tutor/learner-steering"
-import {
-  enablesAssignments,
-  enablesConditionalFutureAttention,
-} from "../tutor/policy-profile"
+import { enablesConditionalFutureAttention } from "../tutor/policy-profile"
 import { EXPLICIT_OFFSET_TIMESTAMP_SUFFIX_PATTERN } from "../time/strict-offset-timestamp"
 import { createAgendaTools, type AgendaTutorToolName } from "./agenda-tools"
-import { createAssignmentTools } from "./assignment-tools"
 import {
   createTutorToolExecutionCoordinator,
   executeBoundTutorCapability,
@@ -60,7 +46,6 @@ export { requireTutorStepContext, type TutorStepContext } from "./tutor-tool-bin
 export const RETAIN_STEERING_TOOL = "retain_learning_wide_timed_steering"
 
 type TutorToolName =
-  | AssignmentToolName
   | AgendaTutorToolName
   | typeof RETAIN_STEERING_TOOL
   | typeof REGISTER_MARKDOWN_COURSE_TOOL
@@ -85,9 +70,6 @@ export function createTutorTools(input: {
 }) {
   const coordinator = createTutorToolExecutionCoordinator()
   return {
-    ...(enablesAssignments(input.policyProfileRevision)
-      ? createAssignmentTools(input, coordinator)
-      : {}),
     ...createAgendaTools(input, coordinator, {
       exposeLearnerRoleConstraint: enablesConditionalFutureAttention(
         input.policyProfileRevision,
@@ -304,17 +286,6 @@ export function createTutorTools(input: {
 
 export function activeTutorToolNames(context: TutorContextCut): TutorToolName[] {
   const names: TutorToolName[] = [RETAIN_STEERING_TOOL]
-  if (enablesAssignments(context.policyProfileRevision)) {
-    names.push(
-      CREATE_ASSIGNMENT_TOOL,
-      INSPECT_ASSIGNMENTS_TOOL,
-      READ_ASSIGNMENT_SOURCE_TOOL,
-      REVISE_ASSIGNMENT_TOOL,
-      COMPLETE_ASSIGNMENT_TOOL,
-      CANCEL_ASSIGNMENT_TOOL,
-      REOPEN_ASSIGNMENT_TOOL,
-    )
-  }
   if (!context.activeCourse) {
     names.push(REGISTER_MARKDOWN_COURSE_TOOL, CREATE_PROVISIONAL_COURSE_TOOL)
     return names

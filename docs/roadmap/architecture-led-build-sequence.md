@@ -310,11 +310,12 @@ Proposal 0006 then excluded learning
 context/nature, workload, progress, capacity, and cross-day allocation—the
 quantities needed for ordinary advance planning.
 
-Schema 6 and explicit `tutor-default-v4` remain implemented behind a dormant
-policy revision, and their deterministic tests remain useful historical
-evidence. They are not an admitted Assignment boundary. ALS-023 cannot establish
-a new near-deadline consideration problem because its product oracle was
-invalid. The CLI correctly stays on `tutor-default-v3`.
+The explicit `tutor-default-v4` runtime, prompt, tools, and dedicated tests
+have been deleted. Schema 6 remains only as an inert compatibility tombstone
+so an existing experimental database is not silently invalidated. The former
+deterministic results remain historical evidence, not an admitted Assignment
+boundary. ALS-023 cannot establish a new near-deadline consideration problem
+because its product oracle was invalid. The CLI stays on `tutor-default-v3`.
 
 Strict timestamp parsing, source provenance, revisions, correction, replay, and
 transaction behavior may be reused only when a corrected consumer justifies

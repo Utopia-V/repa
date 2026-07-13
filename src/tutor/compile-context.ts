@@ -16,11 +16,7 @@ import {
   readFutureAttentionContext,
   type FutureAttentionContextConcern,
 } from "../learning/agenda/future-attention"
-import {
-  readAssignmentContext,
-  type AssignmentContextItem,
-} from "../learning/agenda/assignment"
-import { enablesAssignments, enablesConditionalFutureAttention } from "./policy-profile"
+import { enablesConditionalFutureAttention } from "./policy-profile"
 
 export type ActiveLearnerSteering = {
   effectId: string
@@ -59,11 +55,6 @@ export type TutorContext = {
   futureAttention: Readonly<{
     totalOpen: number
     concerns: readonly Readonly<FutureAttentionContextConcern>[]
-  }>
-  assignments: Readonly<{
-    totalActive: number
-    offset: number
-    assignments: readonly Readonly<AssignmentContextItem>[]
   }>
   conditionalCurrentPurpose: ConditionalCurrentPurpose | null
   policyPrompt: string
@@ -167,9 +158,6 @@ export function compileTutorContext(
           limit: 8,
         })
       : { totalOpen: 0, concerns: [] }
-    const assignments = enablesAssignments(input.policyProfileRevision)
-      ? readAssignmentContext(database, { at: input.sampledAt, offset: 0, limit: 8 })
-      : { totalActive: 0, offset: 0, assignments: [] }
     const conditionalCandidate = activeCourse &&
         enablesConditionalFutureAttention(input.policyProfileRevision)
       ? readConditionalFutureAttentionCandidate(database, {
@@ -201,7 +189,6 @@ export function compileTutorContext(
       activeLearnerSteering: contributions,
       activeCourse,
       futureAttention,
-      assignments,
       conditionalCurrentPurpose,
       policyPrompt: renderLearnerSteeringPolicy(contributions),
     } satisfies TutorContext
@@ -219,18 +206,11 @@ export function compileTutorContext(
     Object.freeze(cut.activeLearnerSteering)
     if (cut.activeCourse) freezeActiveCourse(cut.activeCourse)
     freezeFutureAttention(cut.futureAttention)
-    freezeAssignments(cut.assignments)
     if (cut.conditionalCurrentPurpose) freezeConditionalCurrentPurpose(
       cut.conditionalCurrentPurpose,
     )
     return Object.freeze(cut)
   }).deferred()
-}
-
-function freezeAssignments(context: TutorContext["assignments"]) {
-  for (const assignment of context.assignments) Object.freeze(assignment)
-  Object.freeze(context.assignments)
-  Object.freeze(context)
 }
 
 function freezeConditionalCurrentPurpose(purpose: ConditionalCurrentPurpose) {

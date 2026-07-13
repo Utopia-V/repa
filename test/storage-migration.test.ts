@@ -30,7 +30,7 @@ afterEach(async () => {
 })
 
 describe("ordered schema migrations", () => {
-  test("schema 1 interaction history survives every ordered migration through Assignment schema 6", () => {
+  test("schema 1 interaction history survives every ordered migration through schema 6", () => {
     const databasePath = temporaryDatabasePath()
     const database = openRepaDatabase(databasePath)
     openDatabases.push(database)
@@ -83,7 +83,7 @@ describe("ordered schema migrations", () => {
     expect(tableNames(inspected)).toContain("course")
   })
 
-  test("schema 2 upgrades through the Course View ledger into Assignment schema 6", () => {
+  test("schema 2 upgrades through the Course View ledger into schema 6", () => {
     const databasePath = temporaryDatabasePath()
     const database = openRepaDatabase(databasePath)
     openDatabases.push(database)
@@ -186,7 +186,7 @@ describe("ordered schema migrations", () => {
     expect(columnNames(inspected, "agenda_revisit")).toContain("learner_role_constraint")
   })
 
-  test("schema 5 adds the LearnerHome Assignment aggregate and remains reopenable", () => {
+  test("schema 5 reaches the retired Assignment compatibility tombstone and remains reopenable", () => {
     const databasePath = temporaryDatabasePath()
     const database = openRepaDatabase(databasePath)
     openDatabases.push(database)
@@ -217,7 +217,7 @@ describe("ordered schema migrations", () => {
       .toBe(6)
   })
 
-  test("a failed schema 6 migration retains schema 5 without partial Assignment tables", () => {
+  test("a failed compatibility-tombstone migration retains schema 5 without partial tables", () => {
     const databasePath = temporaryDatabasePath()
     const database = openRepaDatabase(databasePath)
     openDatabases.push(database)

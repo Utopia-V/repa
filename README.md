@@ -43,12 +43,14 @@ Proposal 0005 now implements that bounded contract under
 fresh-Session Tutor move, while an explicit current learner request still wins
 and older policy inputs remain reproducible. The post-0005 global review then
 compared richer Course graphs, learner-performance state, and real-work
-constraints instead of extending the newest module automatically. The next
-admitted production pressure is one deadline-sensitive Assignment conflict:
-Repa will preserve a source-grounded local obligation across Sessions while
-leaving current choice, Course structure, learning evidence, and the one-off
-plan separate. Proposal 0006 and Roadmap 08 fix the reviewed contract and
-implementation gates; production implementation is now pending.
+constraints instead of extending the newest module automatically. It also
+found that the proposed deadline-conflict slice had mistaken minute-scale
+emergency rescue for ordinary Assignment planning. That v4 runtime, prompt,
+tools, and tests have been deleted; schema 6 remains only as a compatibility
+tombstone for any database created during the experiment. The next Learning
+architecture proof targets a source-linked performance occurrence only where
+independent, incorrect, and assisted work must cause different later Tutor
+moves. It does not pre-admit a universal learner-event schema or mastery score.
 Start with the
 [`documentation map`](docs/README.md), the
 [`current understanding`](docs/current-understanding.md), and the

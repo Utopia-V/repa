@@ -246,12 +246,12 @@ These statements are deliberately weaker than accepted decisions.
    scheduler score has not been earned.
 5. Learner inference can remain sparse and consumer-specific until actual
    attempts, review, or open work demonstrate a need for a richer projection.
-6. The dormant LearnerHome-level v4 Assignment candidate proves only narrow
-   mechanics around strict source, deadline, disposition, correction, replay,
-   and lazy history. It does not prove the intended Assignment product boundary:
+6. The deleted LearnerHome-level v4 Assignment experiment produced historical
+   evidence about strict source binding, disposition, correction, replay, and
+   lazy history. It did not prove the intended Assignment product boundary:
    its representative emergency fixture was invalid, and it excluded learning
-   context/nature, workload, capacity, progress, and cross-day allocation. v4
-   is unaccepted rather than merely awaiting a stronger consideration policy.
+   context/nature, workload, capacity, progress, and cross-day allocation.
+   Schema 6 remains only as an inert compatibility tombstone.
 
 ## Questions still worth resolving
 
@@ -307,7 +307,7 @@ The implemented conditional-purpose production contract is
 [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](./proposals/0005-conditional-purpose-and-learner-role-contract.md).
 The withdrawn historical Assignment contract is
 [`proposals/0006-deadline-sensitive-real-work-contract.md`](./proposals/0006-deadline-sensitive-real-work-contract.md),
-with its dormant deterministic candidate, failed live gate, and semantic-drift
+with its deleted deterministic candidate, failed live gate, and semantic-drift
 correction recorded in
 [`roadmap/08-first-deadline-sensitive-assignment.md`](./roadmap/08-first-deadline-sensitive-assignment.md)
 and
@@ -425,10 +425,11 @@ The post-0005 review incorrectly promoted B2's scene-specific 45/25/30-minute
 emergency into the next production pressure. Proposal 0006 then deferred the
 very meanings required by ordinary multi-day planning and handed the local
 schedule to model judgment. ALS-023's provider failure therefore cannot define
-a new product-level consideration problem. Proposal 0006 is withdrawn; v4
-remains dormant and unaccepted. Its strict-time, provenance, transition, and
-replay mechanisms are candidates for independent reuse, not reasons to preserve
-the aggregate shape.
+a new product-level consideration problem. Proposal 0006 is withdrawn; the v4
+runtime, prompt, tools, and dedicated tests have been deleted rather than
+preserved by sunk cost. Schema 6 remains only as a compatibility tombstone;
+historical strict-time, provenance, transition, and replay evidence may inform
+a future consumer but does not preserve the aggregate shape.
 
 The corrected Assignment boundary starts with representative substantial work:
 learning context or nature, deadline, estimated remaining work, relevant
@@ -438,7 +439,8 @@ of bounded rolling-horizon/workload-leveling models. The program must own
 closed arithmetic; model judgment remains useful for semantic decomposition,
 teaching, research, and genuinely open trade-offs.
 
-The same audit found concrete current-v3 gaps that are independent of v4: long
+The same audit found concrete current-v3 gaps that are independent of the
+deleted v4 experiment: long
 learning Sessions have no context-budget/compaction/overflow path, the main
 natural-language terminal interaction is still a one-shot command, and
 learner-visible output has no admission boundary. Existing courses also cannot

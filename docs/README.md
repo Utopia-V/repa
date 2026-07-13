@@ -140,8 +140,8 @@ Documents have different authority. Do not treat a research observation as an ac
   is a withdrawn historical contract whose emergency fixture was promoted
   beyond its evidence; it is not an active Assignment design.
 - [`roadmap/08-first-deadline-sensitive-assignment.md`](roadmap/08-first-deadline-sensitive-assignment.md)
-  records the dormant deterministic v4 candidate and its withdrawn roadmap
-  status; v4 is not the CLI default or an accepted product boundary.
+  records the deleted deterministic v4 candidate and its withdrawn roadmap
+  status; only an inert schema-6 compatibility tombstone remains.
 - [`research/proposal-0006-production-verification-2026-07-13.md`](research/proposal-0006-production-verification-2026-07-13.md)
   records the code/review evidence and live failures. Its former
   program-owned-consideration next question is withdrawn.
@@ -159,7 +159,7 @@ research. Proposals are not accepted decisions until promoted into ADRs.
 - [`proposals/0003-learning-native-responsibilities.md`](proposals/0003-learning-native-responsibilities.md) — historical working model promoted and refined by ADR-0012; not the current architecture authority.
 - [`proposals/0004-learning-native-capability-contract.md`](proposals/0004-learning-native-capability-contract.md) — current product-capability review draft; not an architecture or experiment protocol.
 - [`proposals/0005-conditional-purpose-and-learner-role-contract.md`](proposals/0005-conditional-purpose-and-learner-role-contract.md) — implemented `tutor-default-v3` contract for one source-bound learner-response-before-disclosure constraint and one-candidate conditional purpose; not a general pedagogy framework.
-- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md) — withdrawn historical Assignment contract; its implemented v4 candidate is dormant and unaccepted.
+- [`proposals/0006-deadline-sensitive-real-work-contract.md`](proposals/0006-deadline-sensitive-real-work-contract.md) — withdrawn historical Assignment contract; its unaccepted v4 runtime has been deleted.
 - [`research/proposal-0005-production-verification-2026-07-13.md`](research/proposal-0005-production-verification-2026-07-13.md) — implementation boundaries, deterministic evidence, historical-policy compatibility, and the bounded live provider qualification.
 - [`research/proposal-0006-production-verification-2026-07-13.md`](research/proposal-0006-production-verification-2026-07-13.md) — historical deterministic Assignment evidence, independent-review fixes, failed DeepSeek qualification, and the later correction of its product interpretation.
 - [`research/semantic-drift-audit-2026-07-13.md`](research/semantic-drift-audit-2026-07-13.md) — accepted correction of the Assignment pressure path plus the current-runtime semantic audit.

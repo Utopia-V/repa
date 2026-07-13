@@ -3,14 +3,16 @@
 Status: **Historical implementation plan; not an active roadmap item.** Its
 last-minute conflict was outside Repa's product scope, and it explicitly
 deferred the state needed for cross-day
-workload planning. The dormant v4 candidate is unaccepted. See
+workload planning. The unaccepted v4 runtime, prompt, tools, and dedicated
+tests have since been deleted; schema 6 remains only as an inert compatibility
+tombstone. See
 [`../research/semantic-drift-audit-2026-07-13.md`](../research/semantic-drift-audit-2026-07-13.md).
 
 Date: 2026-07-13
 
 Historical result: the deterministic v4 candidate was implemented and checked;
-live provider qualification failed, v4 stayed explicit opt-in, and the CLI
-remained on v3. That result does not reverse the withdrawal above. See
+live provider qualification failed, the CLI remained on v3, and the candidate
+was later deleted. That result does not reverse the withdrawal above. See
 [`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md).
 
 ## Historical goal

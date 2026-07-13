@@ -51,8 +51,9 @@ This is evidence-rank drift, not a minor prompt defect.
   consideration mechanism. Its provider result is retained, but its product
   interpretation and proposed next research question are withdrawn.
 - `tutor-default-v4` is not an incomplete production admission waiting for a
-  stronger control mechanism. It is a dormant candidate whose aggregate shape
-  is unaccepted.
+  stronger control mechanism. Its unaccepted runtime, prompt, tools, and
+  dedicated tests have been deleted; schema 6 remains only as an inert
+  compatibility tombstone.
 - Deadline-first Assignment projection is not an earned semantic retrieval
   rule. Deadline alone cannot express workload pressure: a large task due later
   may require action before a tiny task due sooner.
@@ -84,8 +85,8 @@ This is evidence-rank drift, not a minor prompt defect.
 
 ## Current v3 defects found by the same audit
 
-These defects are independent of dormant v4 and must not be hidden by the
-Assignment correction.
+These defects are independent of the deleted v4 experiment and must not be
+hidden by the Assignment correction.
 
 ### Missing compaction and context-limit recovery
 
@@ -213,4 +214,4 @@ In parallel, repair the current spine in product-semantic order:
 The first item is generic conversation continuity; it must remain distinct from
 cross-Session Learning-System state. The second protects the boundary between
 internal model/control work and learner-visible Tutor behavior. New feature
-work must not proceed by extending dormant v4 inward.
+work must not reconstruct deleted v4 inward.
