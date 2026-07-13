@@ -1,6 +1,6 @@
 # OpenCode fork Gate 2: pristine Windows baseline
 
-Status: Failed — blocked before Gate 3
+Status: Failed — inherited test defect diagnosed, blocked before Gate 3
 
 Date: 2026-07-13
 
@@ -9,6 +9,9 @@ Parent decision: [ADR-0014](../decisions/0014-one-time-opencode-fork.md)
 Parent plan: [Roadmap 09](../roadmap/09-one-time-opencode-fork-baseline.md)
 
 Prior gate: [Gate 1 lineage and provenance](opencode-fork-gate-01-lineage-2026-07-13.md)
+
+Follow-up diagnosis:
+[Windows shell progressive-metadata diagnostic](opencode-windows-shell-progressive-metadata-diagnostic-2026-07-13.md)
 
 ## Parent uncertainty
 
@@ -277,11 +280,9 @@ were filtered out. The selected test took 1916 ms and the command exited 1
 after 4.62 seconds.
 
 The implementation calls `ctx.metadata` once for each decoded child-process
-output chunk. The test emits `first`, waits a fixed 100 ms, emits `second`,
-and assumes the operating-system pipe exposes two chunks. The final result
-contained both outputs, but Windows combined them into one observed chunk in
-both runs. This is a reproducible failure of the exact inherited test/behavior
-boundary, not evidence that can be waived as a one-off run.
+output chunk. At this point the result was provisionally attributed to Windows
+combining two valid writes. The follow-up diagnosis below corrects that
+attribution while preserving this observed command result.
 
 The 14 skipped tests in the original nine-file run were also accounted for:
 13 are explicitly Unix-only Session prompt tests and one is an explicitly
@@ -291,6 +292,28 @@ The fetched current `opencode-upstream/dev` versions of the relevant shell
 test and implementation are byte-identical to the pinned tree, and the pinned
 workflow set uses Windows for release signing but does not run the test suite
 on Windows.
+
+### Post-closure root-cause correction
+
+An isolated, no-source-change diagnostic established that the default shell is
+Windows PowerShell 5.1 and the inherited command
+`echo first && sleep 0.1 && echo second` is invalid in that shell. It exits 1
+without executing either `echo`; the parser error quotes the source command,
+which is why the test's final-output assertions still find both `first` and
+`second`. The number of non-empty metadata updates is therefore the accidental
+chunk count of one stderr diagnostic.
+
+A condition-handshake child was then observed through raw `Bun.spawn`, Effect
+ChildProcess `handle.stdout`, `handle.all`, `Stream.decodeText`, and the full
+Shell Tool `ctx.metadata` path. At every layer, `first` was visible before the
+observer released the child and before the child could emit `second` or exit.
+The full Shell Tool result exited 0 and progressively published `first`, then
+`first\nsecond\n`.
+
+The exact evidence and scope are recorded in the
+[Windows shell progressive-metadata diagnostic](opencode-windows-shell-progressive-metadata-diagnostic-2026-07-13.md).
+The diagnosis finds an inherited test defect in this environment, not a
+runtime progressive-output defect. No production or test file was changed.
 
 ### Final Gate 2 result
 
@@ -310,9 +333,14 @@ Blocking evidence:
 
 - the focused opencode command exits 1 on Windows;
 - after restoring the standard machine `WINDIR` into the sanitized process,
-  one progressive shell metadata test still fails reproducibly; and
-- making the gate green now requires either an explicit recorded baseline
-  exception or a separate change to the inherited test/behavior boundary.
+  one inherited shell metadata test remains unreliable because its command is
+  invalid for the selected PowerShell 5.1 shell and it does not assert a
+  successful exit; and
+- the precommitted all-zero gate rule still requires a separate correction to
+  that inherited test contract before the gate can become green.
+
+The condition-handshake diagnostic rules out a runtime streaming patch or a
+permanent baseline exception as the evidence-backed next action.
 
 No Gate 3 rename, identity, path, database, prompt, or product change was
 performed. The fork remains at the exact pinned commit with only ignored
