@@ -2,7 +2,8 @@
 
 Date: 2026-07-12
 
-Status: Completed on 2026-07-12 under ADR-0011.
+Status: Vertical integration trace completed on 2026-07-12 under ADR-0011;
+baseline terminal-agent harness remains incomplete.
 
 ## Outcome
 
@@ -14,6 +15,11 @@ relevant program-owned learning state.
 The milestone is an application spine, not a miniature course platform. It is
 complete when later course, material, route, review, and assignment behavior
 has a real runtime to enter; those domains are not pre-scaffolded here.
+
+"Complete" applies only to this trace. The one-shot CLI and thin AI-SDK loop do
+not establish the ordinary interactive Session, structured history,
+context-budget/compaction, output-event, cancellation/resumption, tool-runtime,
+or subagent behavior expected from a Codex/OpenCode-class terminal agent.
 
 ## Vertical path
 
@@ -121,4 +127,5 @@ Known limits remain explicit: only one kind of learning-wide state is currently
 projected; same-Session history is loaded without compaction; concurrent
 processes sharing one database are not supported; material reading and course
 position are not yet production features; and mid-Turn crash continuation is
-not claimed.
+not claimed. These are not evidence that the Learning System can omit ordinary
+Agent behavior; they delimit the thin trace that was proved.

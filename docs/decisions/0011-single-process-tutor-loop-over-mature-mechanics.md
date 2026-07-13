@@ -4,6 +4,20 @@ Status: Accepted
 
 Date: 2026-07-12
 
+## Clarification after the Session-context correction
+
+This decision does not authorize a thin custom loop to stand in for a normal
+terminal-agent harness. The ordinary Agent substrate may be adapted or cleanly
+reimplemented from OpenCode or Codex as readily as it may be composed from a
+library. Learning context and durable learning state are additional consumers
+and contributions; they do not replace same-Session dialogue, structured tool
+continuation, streaming, cancellation, compaction, or truthful resumption.
+
+AI SDK supplies useful provider and tool-call transport. It is not the owner of
+the complete Session, context-window, orchestration, or terminal-agent
+architecture. The completed dogfood trace proves one vertical integration path,
+not completion of the generic harness beneath the product.
+
 ## Context
 
 The repository has enough source research to stop treating the runtime shape as
@@ -36,7 +50,9 @@ The project owns the composition and product meaning of:
 - truthful terminal, interruption, and reopen behavior; and
 - the durable Session and learning projections needed for later continuation.
 
-Mature libraries own generic mechanics where their public contracts suffice:
+Mature libraries own generic mechanics where their public contracts suffice;
+otherwise Repa may adapt or reimplement the corresponding proven reference
+mechanism without first manufacturing a learning-specific justification:
 
 - AI SDK owns provider adapters, model-request transport, streaming reduction,
   tool-call schema/transport, ordinary tool continuation, and abort
@@ -57,10 +73,10 @@ learning contribution. A model-initiated learning command may change durable
 state between samples; the next sample receives a newly compiled contribution.
 
 OpenCode and Codex remain pinned behavioral references and fault oracles. Repa
-will adapt their demonstrated ownership and failure semantics, not their
-module names, dependency systems, server protocols, coding tools, or product
-topology. No new comparative architecture study is required before the first
-dogfood loop.
+will adapt their demonstrated generic architecture, ownership, and failure
+semantics where Repa has the same problem, without copying their module names,
+dependency systems, coding tools, or product topology by default. No new
+comparative architecture study is required for each ordinary harness feature.
 
 ## First product consequence
 
@@ -97,12 +113,13 @@ shapes may be deleted rather than wrapped.
 
 ## Reconsideration triggers
 
-Reconsider direct OpenCode modification, a sidecar engine, or another runtime
-only if a measured product trace shows that the selected libraries hide a
-required sampling/tool/cancellation boundary and Repa would otherwise have to
-reimplement substantial generic machinery. Reconsider the single-process
-execution lane only when a real concurrent or remote consumer requires a
-different owner.
+Adapting or cleanly reimplementing generic OpenCode/Codex mechanisms is already
+authorized by this decision and is not a fallback. Reconsider a direct OpenCode
+fork, a sidecar engine, or another runtime when clean TypeScript/Bun adaptation
+would require maintaining a substantial duplicate engine or when a measured
+trace exposes a boundary the chosen substrate cannot preserve. Reconsider the
+single-process execution lane only when a real concurrent or remote consumer
+requires a different owner.
 
 Line count, aesthetic preference, or the existence of a feature upstream is
 not a reconsideration trigger.

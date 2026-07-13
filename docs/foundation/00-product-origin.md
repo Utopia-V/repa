@@ -154,15 +154,19 @@ Rep was a small HarmonyOS course project used to explore planning, knowledge dep
 ## Current technical decision
 
 The main implementation uses TypeScript and Bun. OpenCode is the primary
-engineering reference because it demonstrates a production terminal agent, not
-because its coding-specific architecture should be inherited. Codex is a
-secondary comparison reference used to separate convergent harness mechanisms
-from one upstream's product choices. This repository owns harness composition
-and product semantics; mature open-source interfaces and libraries should carry
-generic execution mechanics unless an observed learning invariant conflicts
-with them. ADR-0012 centers the application on a single local LearnerHome and
-separate learning authorities inside one modular monolith; the Agent loop is an
-outer execution mechanism rather than the long-term state model.
+engineering reference because it demonstrates a production terminal agent.
+Its generic Agent architecture and behavior may be adapted or cleanly
+reimplemented; its coding-specific tools, product semantics, and package
+topology are not inherited automatically. Codex is a secondary comparison
+reference used to separate convergent harness mechanisms from one upstream's
+product choices. This repository owns harness composition and product
+semantics; mature open-source interfaces, libraries, or reference-derived
+reimplementation should carry generic execution mechanics unless an observed
+learning invariant conflicts with them. ADR-0012 centers the application on a
+single local LearnerHome and separate learning authorities inside one modular
+monolith; the Agent loop is the ordinary execution substrate, not the long-term
+learning-state model. The Learning System adds to that substrate rather than
+replacing its Session or context behavior.
 
 ## Deliberately unresolved
 

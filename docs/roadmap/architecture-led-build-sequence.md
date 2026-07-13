@@ -325,25 +325,34 @@ them. The completed aggregate is not itself that justification.
 - Verification and failed live gate: [`../research/proposal-0006-production-verification-2026-07-13.md`](../research/proposal-0006-production-verification-2026-07-13.md)
 - Governing correction: [`../research/semantic-drift-audit-2026-07-13.md`](../research/semantic-drift-audit-2026-07-13.md)
 
-### Immediate coherence repair before another product slice
+### Establish the ordinary Agent substrate before another product slice
 
-The semantic audit found current-v3 contradictions that precede new Assignment
-or ontology code:
+Current v3 proves a learning-semantic vertical path through a partial runtime;
+it is not the baseline terminal-agent harness. The next runtime phase starts
+from the pinned OpenCode/Codex architecture and chooses mature-library reuse or
+clean TypeScript/Bun reimplementation boundary by boundary. It does not require
+a new learning-specific experiment to justify ordinary Agent behavior.
 
-1. keep same-Session dialogue verbatim while it fits, then add measured
-   automatic/manual compaction of the older head with a recent verbatim tail,
-   original-history retention, and truthful overflow/compaction failure;
-2. separate internal/control model phases from learner-visible output rather
-   than relying on prompt non-disclosure;
-3. expose listing/selecting an existing Course; and
-4. expose withdrawal of retained timed learner steering.
+The first extraction must cover the coherent substrate rather than treating
+each missing feature as an unrelated Repa invention:
 
-The first item is generic conversation continuity rather than learning-state
-retrieval; the second protects a core product boundary. Both must be designed
-before another live product-policy experiment. Course switching is also a prerequisite
-for representative multi-course planning cases. These are scoped corrections,
-not permission to build a memory framework, response approval system, or global
-command registry.
+1. interactive Session/Turn ownership and structured transcript reconstruction;
+2. verbatim same-Session dialogue while it fits, measured context accounting,
+   automatic/manual older-head compaction, a recent verbatim tail, original
+   history retention, and truthful overflow/compaction failure;
+3. provider streaming and an event boundary that separates internal/control
+   work from learner-visible output;
+4. tool call/result continuation, cancellation, interruption, recovery, and
+   finite execution; and
+5. explicit extension seams where Learning-System context, capabilities, and
+   accepted state changes enter without owning the generic loop.
+
+Provider choice, terminal rendering, subagents, and other mature Agent
+capabilities should follow the same reuse/adaptation rule; exact staging depends
+on their coupling to the extracted substrate, not on whether they are
+learning-specific. Course listing/selection and retained-steering withdrawal
+remain separate product-surface repairs. No new Assignment or ontology slice
+precedes this correction.
 
 ### Exit evidence
 

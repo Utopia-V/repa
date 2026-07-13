@@ -602,6 +602,13 @@ trigger that silently turns every artifact change into learning evidence.
 
 ## Runtime and interaction lifecycle
 
+This lifecycle sits on an ordinary terminal-agent substrate. Repa may compose
+that substrate from mature libraries or adapt/reimplement it from the pinned
+OpenCode and Codex references. Learning-specific context compilation,
+capabilities, and durable state are additive hooks into the loop; they do not
+replace Session history, context-window management, tool continuation,
+streaming, cancellation, compaction, or resumption.
+
 The durable path for one Turn is:
 
 ```text

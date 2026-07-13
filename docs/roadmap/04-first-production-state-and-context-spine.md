@@ -163,9 +163,10 @@ Exit evidence on 2026-07-11:
 
 The 2026-07-12 review proposes two independent next experiments: distill one
 complete runtime trace from the pinned references and realize it through mature
-libraries; and pressure-test the course/material route representation
-separately. OpenCode modification is a fallback only if the distilled trace
-identifies a missing boundary that would otherwise force Repa to rebuild
-generic runtime machinery. A route domain model may be promoted on its own
-evidence if it does not depend on the candidate host tables. Neither path is
-another command-by-command extension of the present idempotency machinery.
+libraries or clean reference-derived reimplementation; and pressure-test the
+course/material route representation separately. Adapting OpenCode's generic
+architecture is already allowed. Only a direct fork remains a fallback when a
+clean TypeScript/Bun adaptation would otherwise duplicate a substantial engine.
+A route domain model may be promoted on its own evidence if it does not depend
+on the candidate host tables. Neither path is another command-by-command
+extension of the present idempotency machinery.
