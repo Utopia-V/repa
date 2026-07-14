@@ -1,8 +1,10 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "f14a9b18-8207-487e-a3d3-227e629ba9ad",
-  "prevIds": ["169a0f0f-d58f-479f-b024-fa1c7b9a09db"],
+  "id": "62da5553-1b3e-4aa5-909f-984611328819",
+  "prevIds": [
+    "f14a9b18-8207-487e-a3d3-227e629ba9ad"
+  ],
   "ddl": [
     {
       "name": "workspace",
@@ -22,6 +24,50 @@
     },
     {
       "name": "control_account",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_item",
+      "entityType": "tables"
+    },
+    {
+      "name": "course",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view_revision_item",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view_revision_mapping_group",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view_revision_mapping_source",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view_revision_mapping_target",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view_revision_reuse_citation",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view_revision_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view_revision",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_view",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_working_selection",
       "entityType": "tables"
     },
     {
@@ -369,6 +415,686 @@
       "name": "time_updated",
       "entityType": "columns",
       "table": "control_account"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "course_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_item"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "course_item"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "course"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "course"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "state_version",
+      "entityType": "columns",
+      "table": "course"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "withdrawal_reason",
+      "entityType": "columns",
+      "table": "course"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "course"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "course"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "item_id",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_item_id",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preorder_position",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "depth",
+      "entityType": "columns",
+      "table": "course_view_revision_item"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_key",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_key",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "group_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "item_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "group_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "item_id",
+      "entityType": "columns",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_view_id",
+      "entityType": "columns",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_view_id",
+      "entityType": "columns",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "item_id",
+      "entityType": "columns",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view_revision_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "course_view_revision_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "state_version",
+      "entityType": "columns",
+      "table": "course_view_revision_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "withdrawal_reason",
+      "entityType": "columns",
+      "table": "course_view_revision_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "course_view_revision_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "course_view_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "course_view_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_number",
+      "entityType": "columns",
+      "table": "course_view_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_revision_id",
+      "entityType": "columns",
+      "table": "course_view_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorship_basis",
+      "entityType": "columns",
+      "table": "course_view_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "course_view_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "course_view"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_view"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "course_view"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "state_version",
+      "entityType": "columns",
+      "table": "course_view"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "withdrawal_reason",
+      "entityType": "columns",
+      "table": "course_view"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "course_view"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "course_view"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_working_selection"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "course_working_selection"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "course_working_selection"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "course_working_selection"
     },
     {
       "type": "text",
@@ -1481,9 +2207,13 @@
       "table": "session_share"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1492,9 +2222,13 @@
       "table": "workspace"
     },
     {
-      "columns": ["active_account_id"],
+      "columns": [
+        "active_account_id"
+      ],
       "tableTo": "account",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -1503,9 +2237,355 @@
       "table": "account_state"
     },
     {
-      "columns": ["aggregate_id"],
+      "columns": [
+        "course_id"
+      ],
+      "tableTo": "course",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_item_course_id_course_id_fk",
+      "entityType": "fks",
+      "table": "course_item"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id"
+      ],
+      "tableTo": "course_view_revision",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_item_course_id_view_id_revision_id_course_view_revision_course_id_view_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_item"
+    },
+    {
+      "columns": [
+        "course_id",
+        "item_id"
+      ],
+      "tableTo": "course_item",
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_item_course_id_item_id_course_item_course_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_item"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "parent_item_id"
+      ],
+      "tableTo": "course_view_revision_item",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_item_course_id_view_id_revision_id_parent_item_id_course_view_revision_item_course_id_view_id_revision_id_item_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_item"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id"
+      ],
+      "tableTo": "course_view_revision",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_mapping_group_course_id_view_id_source_revision_id_course_view_revision_course_id_view_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "target_revision_id"
+      ],
+      "tableTo": "course_view_revision",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_mapping_group_course_id_view_id_target_revision_id_course_view_revision_course_id_view_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "group_id"
+      ],
+      "tableTo": "course_view_revision_mapping_group",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_mapping_source_course_id_view_id_source_revision_id_target_revision_id_group_id_course_view_revision_mapping_group_course_id_view_id_source_revision_id_target_revision_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "item_id"
+      ],
+      "tableTo": "course_view_revision_item",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_mapping_source_course_id_view_id_source_revision_id_item_id_course_view_revision_item_course_id_view_id_revision_id_item_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "group_id"
+      ],
+      "tableTo": "course_view_revision_mapping_group",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_mapping_target_course_id_view_id_source_revision_id_target_revision_id_group_id_course_view_revision_mapping_group_course_id_view_id_source_revision_id_target_revision_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "target_revision_id",
+        "item_id"
+      ],
+      "tableTo": "course_view_revision_item",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_mapping_target_course_id_view_id_target_revision_id_item_id_course_view_revision_item_course_id_view_id_revision_id_item_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "columns": [
+        "course_id",
+        "source_view_id",
+        "source_revision_id",
+        "item_id"
+      ],
+      "tableTo": "course_view_revision_item",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_reuse_citation_course_id_source_view_id_source_revision_id_item_id_course_view_revision_item_course_id_view_id_revision_id_item_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "columns": [
+        "course_id",
+        "target_view_id",
+        "target_revision_id",
+        "item_id"
+      ],
+      "tableTo": "course_view_revision_item",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_reuse_citation_course_id_target_view_id_target_revision_id_item_id_course_view_revision_item_course_id_view_id_revision_id_item_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id"
+      ],
+      "tableTo": "course_view_revision",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_state_course_id_view_id_revision_id_course_view_revision_course_id_view_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision_state"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id"
+      ],
+      "tableTo": "course_view",
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_course_id_view_id_course_view_course_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "predecessor_revision_id"
+      ],
+      "tableTo": "course_view_revision",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_revision_course_id_view_id_predecessor_revision_id_course_view_revision_course_id_view_id_id_fk",
+      "entityType": "fks",
+      "table": "course_view_revision"
+    },
+    {
+      "columns": [
+        "course_id"
+      ],
+      "tableTo": "course",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_view_course_id_course_id_fk",
+      "entityType": "fks",
+      "table": "course_view"
+    },
+    {
+      "columns": [
+        "course_id"
+      ],
+      "tableTo": "course",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_working_selection_course_id_course_id_fk",
+      "entityType": "fks",
+      "table": "course_working_selection"
+    },
+    {
+      "columns": [
+        "course_id",
+        "revision_id"
+      ],
+      "tableTo": "course_view_revision",
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_working_selection_course_id_revision_id_course_view_revision_course_id_id_fk",
+      "entityType": "fks",
+      "table": "course_working_selection"
+    },
+    {
+      "columns": [
+        "aggregate_id"
+      ],
       "tableTo": "event_sequence",
-      "columnsTo": ["aggregate_id"],
+      "columnsTo": [
+        "aggregate_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1514,9 +2594,13 @@
       "table": "event"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1525,9 +2609,13 @@
       "table": "permission"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1536,9 +2624,13 @@
       "table": "project_directory"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1547,9 +2639,13 @@
       "table": "message"
     },
     {
-      "columns": ["message_id"],
+      "columns": [
+        "message_id"
+      ],
       "tableTo": "message",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1558,9 +2654,13 @@
       "table": "part"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1569,9 +2669,13 @@
       "table": "session_context_epoch"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1580,9 +2684,13 @@
       "table": "session_input"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1591,9 +2699,13 @@
       "table": "session_message"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1602,9 +2714,13 @@
       "table": "session"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1613,9 +2729,13 @@
       "table": "todo"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -1624,137 +2744,540 @@
       "table": "session_share"
     },
     {
-      "columns": ["email", "url"],
+      "columns": [
+        "email",
+        "url"
+      ],
       "nameExplicit": false,
       "name": "control_account_pk",
       "entityType": "pks",
       "table": "control_account"
     },
     {
-      "columns": ["project_id", "directory"],
+      "columns": [
+        "revision_id",
+        "item_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_revision_item_pk",
+      "entityType": "pks",
+      "table": "course_view_revision_item"
+    },
+    {
+      "columns": [
+        "group_id",
+        "item_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_revision_mapping_source_pk",
+      "entityType": "pks",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "columns": [
+        "group_id",
+        "item_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_revision_mapping_target_pk",
+      "entityType": "pks",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "columns": [
+        "project_id",
+        "directory"
+      ],
       "nameExplicit": false,
       "name": "project_directory_pk",
       "entityType": "pks",
       "table": "project_directory"
     },
     {
-      "columns": ["session_id", "position"],
+      "columns": [
+        "session_id",
+        "position"
+      ],
       "nameExplicit": false,
       "name": "todo_pk",
       "entityType": "pks",
       "table": "todo"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "workspace_pk",
       "table": "workspace",
       "entityType": "pks"
     },
     {
-      "columns": ["name"],
+      "columns": [
+        "name"
+      ],
       "nameExplicit": false,
       "name": "data_migration_pk",
       "table": "data_migration",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "account_state_pk",
       "table": "account_state",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "account_pk",
       "table": "account",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "course_item_pk",
+      "table": "course_item",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "course_pk",
+      "table": "course",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_revision_mapping_group_pk",
+      "table": "course_view_revision_mapping_group",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_revision_reuse_citation_pk",
+      "table": "course_view_revision_reuse_citation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_revision_state_pk",
+      "table": "course_view_revision_state",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_revision_pk",
+      "table": "course_view_revision",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "course_view_pk",
+      "table": "course_view",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "course_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_working_selection_pk",
+      "table": "course_working_selection",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "credential_pk",
       "table": "credential",
       "entityType": "pks"
     },
     {
-      "columns": ["aggregate_id"],
+      "columns": [
+        "aggregate_id"
+      ],
       "nameExplicit": false,
       "name": "event_sequence_pk",
       "table": "event_sequence",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "permission_pk",
       "table": "permission",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "project_pk",
       "table": "project",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "message_pk",
       "table": "message",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "part_pk",
       "table": "part",
       "entityType": "pks"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "nameExplicit": false,
       "name": "session_context_epoch_pk",
       "table": "session_context_epoch",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "session_input_pk",
       "table": "session_input",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "session_message_pk",
       "table": "session_message",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "session_pk",
       "table": "session",
       "entityType": "pks"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "nameExplicit": false,
       "name": "session_share_pk",
       "table": "session_share",
       "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_item_course_idx",
+      "entityType": "indexes",
+      "table": "course_item"
+    },
+    {
+      "columns": [
+        {
+          "value": "withdrawal_reason",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_discovery_idx",
+      "entityType": "indexes",
+      "table": "course"
+    },
+    {
+      "columns": [
+        {
+          "value": "revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "preorder_position",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_item_page_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_item"
+    },
+    {
+      "columns": [
+        {
+          "value": "target_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_key",
+          "isExpression": false
+        },
+        {
+          "value": "target_key",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_mapping_group_page_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "columns": [
+        {
+          "value": "target_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_mapping_source_once_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "columns": [
+        {
+          "value": "group_id",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_mapping_source_page_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_mapping_source"
+    },
+    {
+      "columns": [
+        {
+          "value": "target_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_mapping_target_once_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "columns": [
+        {
+          "value": "group_id",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_mapping_target_page_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_mapping_target"
+    },
+    {
+      "columns": [
+        {
+          "value": "target_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_reuse_citation_page_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "view_id",
+          "isExpression": false
+        },
+        {
+          "value": "withdrawal_reason",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_state_active_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision_state"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "view_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_number",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_revision_list_idx",
+      "entityType": "indexes",
+      "table": "course_view_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "withdrawal_reason",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_view_discovery_idx",
+      "entityType": "indexes",
+      "table": "course_view"
     },
     {
       "columns": [
@@ -2065,6 +3588,209 @@
       "name": "todo_session_idx",
       "entityType": "indexes",
       "table": "todo"
+    },
+    {
+      "columns": [
+        "course_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "course_item_course_id_id_unique",
+      "entityType": "uniques",
+      "table": "course_item"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_item_owner_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision_item"
+    },
+    {
+      "columns": [
+        "revision_id",
+        "preorder_position"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_item_position_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision_item"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_mapping_group_owner_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "columns": [
+        "target_revision_id",
+        "item_id"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_reuse_citation_target_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision_reuse_citation"
+    },
+    {
+      "columns": [
+        "course_id",
+        "revision_id"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_state_course_id_revision_id_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision_state"
+    },
+    {
+      "columns": [
+        "course_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_course_id_id_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_course_view_id_id_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_number"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_revision_number_unique",
+      "entityType": "uniques",
+      "table": "course_view_revision"
+    },
+    {
+      "columns": [
+        "course_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "course_view_course_id_id_unique",
+      "entityType": "uniques",
+      "table": "course_view"
+    },
+    {
+      "value": "length(trim(\"title\")) BETWEEN 1 AND 200",
+      "name": "course_title_length",
+      "entityType": "checks",
+      "table": "course"
+    },
+    {
+      "value": "\"state_version\" >= 0",
+      "name": "course_state_version_nonnegative",
+      "entityType": "checks",
+      "table": "course"
+    },
+    {
+      "value": "\"withdrawal_reason\" IS NULL OR \"withdrawal_reason\" = 'removed'",
+      "name": "course_withdrawal_reason",
+      "entityType": "checks",
+      "table": "course"
+    },
+    {
+      "value": "length(trim(\"title\")) BETWEEN 1 AND 500",
+      "name": "course_view_revision_item_title_length",
+      "entityType": "checks",
+      "table": "course_view_revision_item"
+    },
+    {
+      "value": "\"preorder_position\" >= 0",
+      "name": "course_view_revision_item_position_nonnegative",
+      "entityType": "checks",
+      "table": "course_view_revision_item"
+    },
+    {
+      "value": "\"depth\" BETWEEN 0 AND 16",
+      "name": "course_view_revision_item_depth",
+      "entityType": "checks",
+      "table": "course_view_revision_item"
+    },
+    {
+      "value": "\"kind\" IN ('preserve', 'split', 'merge')",
+      "name": "course_view_revision_mapping_group_kind",
+      "entityType": "checks",
+      "table": "course_view_revision_mapping_group"
+    },
+    {
+      "value": "\"state_version\" >= 0",
+      "name": "course_view_revision_state_version_nonnegative",
+      "entityType": "checks",
+      "table": "course_view_revision_state"
+    },
+    {
+      "value": "\"withdrawal_reason\" IS NULL OR \"withdrawal_reason\" IN ('rejected_candidate', 'removed')",
+      "name": "course_view_revision_state_withdrawal_reason",
+      "entityType": "checks",
+      "table": "course_view_revision_state"
+    },
+    {
+      "value": "\"revision_number\" >= 1",
+      "name": "course_view_revision_number_positive",
+      "entityType": "checks",
+      "table": "course_view_revision"
+    },
+    {
+      "value": "(\"revision_number\" = 1 AND \"predecessor_revision_id\" IS NULL) OR (\"revision_number\" > 1 AND \"predecessor_revision_id\" IS NOT NULL)",
+      "name": "course_view_revision_predecessor_shape",
+      "entityType": "checks",
+      "table": "course_view_revision"
+    },
+    {
+      "value": "\"authorship_basis\" IN ('learner_authored', 'learner_directed', 'tutor_proposed')",
+      "name": "course_view_revision_authorship_basis",
+      "entityType": "checks",
+      "table": "course_view_revision"
+    },
+    {
+      "value": "length(trim(\"name\")) BETWEEN 1 AND 200",
+      "name": "course_view_name_length",
+      "entityType": "checks",
+      "table": "course_view"
+    },
+    {
+      "value": "\"state_version\" >= 0",
+      "name": "course_view_state_version_nonnegative",
+      "entityType": "checks",
+      "table": "course_view"
+    },
+    {
+      "value": "\"withdrawal_reason\" IS NULL OR \"withdrawal_reason\" = 'removed'",
+      "name": "course_view_withdrawal_reason",
+      "entityType": "checks",
+      "table": "course_view"
+    },
+    {
+      "value": "\"version\" >= 0",
+      "name": "course_working_selection_version_nonnegative",
+      "entityType": "checks",
+      "table": "course_working_selection"
     }
   ],
   "renames": []

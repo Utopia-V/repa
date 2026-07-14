@@ -15,6 +15,7 @@ import eventSourcedSessionInputMigration from "@opencode-ai/core/database/migrat
 import contextEpochAgentMigration from "@opencode-ai/core/database/migration/20260605042240_add_context_epoch_agent"
 import simplifyIntegrationCredentialsMigration from "@opencode-ai/core/database/migration/20260611192811_lush_chimera"
 import simplifySessionInputMigration from "@opencode-ai/core/database/migration/20260622202450_simplify_session_input"
+import courseViewAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260714191244_course_view_authority"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -36,9 +37,42 @@ const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
 
 const makeDb = EffectDrizzleSqlite.makeWithDefaults()
 type TestDatabase = Effect.Success<typeof makeDb>
+const courseTables = [
+  "course_view_revision_mapping_source",
+  "course_view_revision_mapping_target",
+  "course_view_revision_reuse_citation",
+  "course_working_selection",
+  "course_view_revision_item",
+  "course_view_revision_state",
+  "course_view_revision_mapping_group",
+  "course_view_revision",
+  "course_item",
+  "course_view",
+  "course",
+] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
   return Effect.forEach(input, (migration) => db.transaction((tx) => migration.up(tx)), { discard: true })
+}
+
+function courseSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE tbl_name LIKE 'course%' AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+        })),
+      ),
+    )
 }
 
 describe("DatabaseMigration", () => {
@@ -64,7 +98,7 @@ describe("DatabaseMigration", () => {
     }, 30_000)
   }
 
-  test("initializes one native Repa baseline", async () => {
+  test("initializes the current native Repa schema", async () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
@@ -88,11 +122,15 @@ describe("DatabaseMigration", () => {
           application_id: APPLICATION_ID,
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION,
+          user_version: DatabaseMigration.version,
         })
         expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
           { version: BASELINE_VERSION, id: BASELINE_ID },
+          { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
         ])
+        expect(
+          yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
+        ).toHaveLength(11)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('event_aggregate_seq_idx', 'event_aggregate_type_seq_idx', 'session_input_session_pending_seq_idx', 'session_input_session_pending_delivery_seq_idx', 'session_input_session_admitted_seq_idx', 'session_input_session_promoted_seq_idx', 'session_message_session_idx', 'session_message_session_type_idx', 'session_message_session_seq_idx', 'session_message_session_type_seq_idx', 'session_message_session_time_created_id_idx') ORDER BY name`,
@@ -107,6 +145,59 @@ describe("DatabaseMigration", () => {
           { name: "session_message_session_time_created_id_idx" },
           { name: "session_message_session_type_seq_idx" },
         ])
+      }),
+    )
+  })
+
+  test("upgrades a Gate 6 database without changing Session rows", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db, { migrations: [] })
+        yield* Effect.forEach(courseTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.run(
+          sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('global', '/learning', 1, 1, '[]')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES ('session', 'global', 'session', '/learning', 'Before Gate 7', 'test', 1, 1)`,
+        )
+
+        yield* DatabaseMigration.apply(db, {
+          fresh: false,
+          path: "gate-6.db",
+          migrations: [courseViewAuthorityMigration],
+        })
+
+        expect(yield* db.get(sql`SELECT id, title, directory FROM session WHERE id = 'session'`)).toEqual({
+          id: "session",
+          title: "Before Gate 7",
+          directory: "/learning",
+        })
+        expect(
+          yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
+        ).toHaveLength(11)
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + 1,
+        })
+      }),
+    )
+  })
+
+  test("builds the same Gate 7 schema through fresh and upgrade paths", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* courseSchema(db)
+
+        yield* Effect.forEach(courseTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.transaction((tx) => courseViewAuthorityMigration.up(tx))
+
+        expect(yield* courseSchema(db)).toEqual(fresh)
       }),
     )
   })
@@ -605,13 +696,14 @@ describe("DatabaseMigration", () => {
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db)
-        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 1}`))
+        yield* db.run(sql.raw(`PRAGMA user_version = ${DatabaseMigration.version + 1}`))
 
         const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "future.db" }))
 
         expect(error).toMatchObject({ reason: "future" })
-        expect(yield* db.all(sql`SELECT version, id FROM repa_migration`)).toEqual([
+        expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
           { version: BASELINE_VERSION, id: BASELINE_ID },
+          { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
         ])
       }),
     )
@@ -621,7 +713,7 @@ describe("DatabaseMigration", () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
-        yield* DatabaseMigration.apply(db)
+        yield* DatabaseMigration.apply(db, { migrations: [] })
         yield* db.run(sql`UPDATE repa_migration SET id = 'not-the-repa-baseline' WHERE version = 1`)
 
         const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "partial.db" }))
@@ -638,7 +730,7 @@ describe("DatabaseMigration", () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
-        yield* DatabaseMigration.apply(db)
+        yield* DatabaseMigration.apply(db, { migrations: [] })
         const failing = {
           id: "repa_test_failure",
           up(tx) {
