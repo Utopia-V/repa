@@ -35,53 +35,35 @@ git show repa-prefork-oracle:<historical-record-path>
 - Gate 4 is closed: released-v1 model carriers and stock profiles implement one
   learning-first Repa composition invariant.
 - Gate 5 is active under
-  `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`:
-  unregister excluded surfaces before dependency-closed deletion. Gate 5A
-  passed at `6503c280762a8cb2cc04e2cd0021498a8f0aa174`: the excluded root CLI
-  handlers and CLI-owned sharing/import network paths are gone while retained
-  local commands remain. Gate 5B1 and 5B2 passed at
-  `815a6a7c97ff1ad39e07fb8fead31fea61734473` and
-  `8fc8b44790f7ddeb2b5a40736f6bafdb9e12d9ca`: the hosted Web catch-all is
-  unregistered and HTTP Session creation is locally complete without
-  automatic sharing. Gate 5B3 passed in two dependency-ordered commits:
-  `34474649b648efbe8e1cbfcc1d5f07f546e10435` removed the released remote route
-  registrations, and `e3375ef08b9c27542cd43f4d6085bd9856443549`
-  removed remote request selectors and regenerated only current clients. The
-  current HTTP/SDK surface is directory-only; 17 excluded operations are gone,
-  four local project-copy operations remain, and the legacy SDK tree stays
-  frozen for Gate 5F. Instance-bootstrap synchronization remains tracked by
-  Gate 5C; no compatibility shell is admitted. Gate 5D1 passed at
-  `54fb79af0565a9d6d87b225e2802ee5e27df1f87`:
-  active TUI sharing commands, tips, display, dedicated plugin property, and
-  legacy alias are gone while passive historical data remains for later
-  dependency closure. Gate 5D2 passed at
-  `ce9299f506a1b1baf1577b3730e4d6124f5ebd3b`: Console/account organization
-  commands, startup state, and provider branches are gone from the released
-  TUI while ordinary provider authentication and the local debug console
-  remain. Gate 5D3 passed at
-  `6a9e5a9eda919205fb87e068e41b83010ccbd990`: existing Sessions no longer
-  move through the control plane; the retained action chooses a local start
-  directory or Git worktree for a new Session, and active-copy deletion first
-  returns to the main directory. Gate 5D4 passed at
-  `d41fe19755a7611a5742b0d2c8bab50970bdd73b`: remote Workspace UI, placement,
-  status, recovery, deletion, and startup hydration are gone while local
-  project copies and ordinary Session deletion remain. Gate 5D5 passed at
-  `00061ce349e01b9273a40e424f8bb2c3eb01d9c9`: the TUI's active routing truth is
-  now a local directory published atomically across Project and Sync state;
-  persisted Session directories, directory-owned request/event state, and
-  generation-checked hydration replace the remote Workspace selector while
-  local project copies remain as ordinary local harness behavior.
-- The first accepted baseline is terminal-only. Web and Desktop clients are
-  deferred until real use justifies a separately accepted support gate.
-- OpenCode account, organization, share, marketplace, marketing, and release
-  integrations remain outside the baseline. Zen and Go are not officially
-  supported providers in the first baseline; users may reach a compatible
-  endpoint only through the neutral generic custom-provider mechanism. No
-  special provider IDs, Console login, anonymous access, catalog priority,
-  pricing copy, or retry upsell is retained.
-- The inherited updater is unreachable after Gate 3 because it targets OpenCode
-  packages and release channels. A Repa updater requires its own package,
-  provenance, integrity, failure, rollback, and release-channel contract.
+  `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`.
+  Its governing result is product reachability, not a source-deletion quota.
+  Automatic account/share/sync behavior, OpenCode service requests, hosted UI
+  proxying, remote routes/selectors, and misleading TUI affordances remain
+  disconnected by the 5B, 5C, and 5D commits recorded in that document.
+- The earlier Gate 5A classification of `PrCommand` at `6503c2807` was wrong:
+  local `gh pr checkout` plus Repa launch is an independently useful explicit
+  capability. Only its OpenCode share-link import branch is excluded. Commit
+  `5edbd8638` then physically deleted PR, hosted GitHub, sharing source, and
+  direct tests on the insufficient ground that they formed a last-caller
+  closure; `0d393ec27` recorded that inference, and `04a2d91a0` extended it to
+  providers and updater code. These conclusions are superseded and require
+  selective repair rather than a blanket Gate 5 revert.
+- The Gate 5D5 implementation at `00061ce34` has passing local-directory
+  evidence, but its expanded state, cache, hydration, and concurrency scope is
+  under a separate necessity audit. Test success alone does not establish that
+  every added mechanism belongs to the local-directory stable state.
+- The first accepted baseline is terminal-only. Web/Desktop, marketplace,
+  hosted GitHub automation, commercial first-party provider policy, sharing
+  implementation, and updater implementation may remain hibernated. They are
+  not registered, shown, auto-started, background-networked, enabled by false
+  configuration, included in current release composition, or promised as
+  supported product behavior.
+- Physical source deletion requires concrete compatibility conflict,
+  continuing maintenance cost, security risk, or explicit product rejection.
+  Dependency closure, temporary lack of callers, and recoverability from Git
+  history are not sufficient. A future Repa updater still requires Repa-owned
+  package provenance, integrity, failure, rollback, and release-channel
+  contracts before activation.
 
 ## Historical evidence locators
 

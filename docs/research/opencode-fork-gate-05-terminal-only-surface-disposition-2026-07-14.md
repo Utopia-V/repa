@@ -1,6 +1,6 @@
 # OpenCode fork Gate 5: terminal-only surface disposition
 
-Status: In progress — parent contract locked before production changes
+Status: In progress — parent disposition corrected; further physical deletion paused
 
 Date: 2026-07-14
 
@@ -13,16 +13,16 @@ Starting fork commit: `6fd9f6449b1b90c12c12ac1ed03fb009fceeafe4`
 
 ## Parent uncertainty
 
-Can Repa make the first terminal-only local product truthful by removing every
-ordinary path to inherited account, group, hosted, marketplace, sharing,
+Can Repa make the first terminal-only local product truthful by disconnecting
+ordinary paths to inherited account, group, hosted, marketplace, sharing,
 commercial-provider, updater, Web, and Desktop product behavior while
-preserving the mature local Agent capabilities that reduce honestly into a
-learning system?
+preserving both useful local Agent capabilities and harmless hibernated source?
 
-This gate is about product reachability and dependency-closed disposition. It
-does not add learning authorities, migrate nonexistent user data, rename every
-internal symbol, or make an excluded feature appear absent by leaving a broken
-command, menu item, route, background call, or fallback endpoint behind.
+This gate is about product reachability, startup, current release composition,
+and truthful configuration. It does not impose a source-deletion quota, add
+learning authorities, migrate nonexistent user data, rename every internal
+symbol, or make an excluded feature appear absent by leaving a broken command,
+menu item, route, background call, or fallback endpoint behind.
 
 ## Accepted product boundary
 
@@ -35,21 +35,43 @@ when their behavior is truthful; they do not define Repa's ordinary ontology.
 
 The following inherited product semantics are excluded:
 
-| Surface | Gate 5 disposition | Preserved reduction |
+| Surface | First-baseline disposition | Preserved reduction |
 | --- | --- | --- |
-| OpenCode account, organization, and Console | unregister, then delete | local provider credentials and neutral custom endpoints |
-| public sharing and share import | unregister, then delete | independently meaningful local Session/file import, if the mixed command contains it |
-| sync, remote workspace, installation, and control plane | unregister, then delete | local directory routing and Instance context |
-| hosted Web and Desktop clients | remove public launch and proxy reachability, then delete baseline packaging | terminal `serve` only where it supports retained local clients/protocols |
-| marketplace browsing or installation | unregister, then delete | local plugin discovery and enable/disable behavior |
-| hosted GitHub Action, PR automation, and release integration | unregister, then delete | ordinary local Git and explicit review capability |
+| OpenCode account, organization, and Console | disconnect registration, startup, network, and visible configuration; hibernate harmless source | local provider credentials and neutral custom endpoints |
+| public sharing and share import | disconnect public/automatic paths and share-link import; hibernate implementation and direct tests | independently meaningful local Session/file import |
+| sync, remote workspace, installation, and control plane | disconnect remote registration, selectors, startup, and network; hibernate unused remote implementation | local directory routing and Instance context |
+| hosted Web and Desktop clients | remove public launch, proxy, automatic build, and current release reachability; hibernate clients | terminal `serve` only where it supports retained local clients/protocols |
+| marketplace browsing or installation | unregister and hibernate | local plugin discovery and enable/disable behavior |
+| hosted GitHub Action and release integration | unregister and hibernate; restore local `pr` without share-link import | ordinary local Git, PR checkout, Repa launch, and explicit review capability |
 | first-class OpenCode Zen/Go products | remove catalog identity and all ID-specific behavior | neutral generic custom-provider configuration |
-| inherited updater and upgrade UX | unregister, then delete | no updater until Repa owns release provenance, integrity, rollback, and migrations |
+| inherited updater and upgrade UX | disconnect route, configuration, startup, background work, and current release surface; hibernate implementation and direct tests | no active updater until Repa owns release provenance, integrity, rollback, and migrations |
 
-A mixed command or module is classified by behavior before removal. The name
+A mixed command or module is classified by behavior before disposition. The name
 `import`, `plugin`, `workspace`, or `serve` is not sufficient evidence that all
-of its behavior is excluded. Conversely, an implementation is not retained
-merely because its public registration was removed.
+of its behavior is excluded. Conversely, unregistration does not prove that
+source must be retained forever: physical deletion remains available when a
+concrete conflict, maintenance cost, security risk, or explicit product
+rejection is established.
+
+## Parent correction and current classification
+
+The earlier contract silently strengthened “outside the first baseline” into
+“no dormant implementation may remain,” then used dependency closure as its
+proof. That inference is invalid. Commit `5edbd8638` implemented it,
+`0d393ec27` recorded it as success, and `04a2d91a0` extended it to providers and
+the updater. No further physical deletion is authorized by those records.
+
+| Classification | Current Gate 5 work | Controlling reason |
+| --- | --- | --- |
+| Keep | account/share/sync automatic-start and network disconnection; hosted UI proxy removal; remote HTTP/selectors removal; misleading TUI/account/share/remote-workspace affordance removal; active sharing config removal | These changes make the terminal baseline truthful at the actual registries and startup owners. |
+| Repair | Gate 5A's whole-file `PrCommand` classification; selective effects of `5edbd8638` and its documentation; the claim that providers/updater must be physically absent | Mixed local and hosted behavior was classified by imports and last callers instead of independent effects. |
+| Hibernate | Web/Desktop, marketplace, hosted GitHub Action, sharing implementation and direct tests, commercial first-party provider policy, updater implementation and direct tests | They are outside current reachability and release promises, but no concrete deletion evidence has been established. |
+| Delete | No additional physical source category is currently authorized. Already-removed public registrations, automatic branches, false configuration, remote selectors, and misleading UI stay absent as behavior, not as a source-deletion precedent. | Physical deletion requires demonstrated conflict, continuing cost, security risk, or explicit rejection. |
+
+Gate 5D5's `00061ce34` local-directory state/cache/concurrency expansion is
+neither accepted nor rejected by this table. It requires a separate necessity
+audit against the stable local-directory boundary; passing tests establish
+behavior, not scope proportionality.
 
 ## Native owners
 
@@ -70,44 +92,28 @@ reachability. Search residue alone does not prove reachability either. Each
 slice must show both the absence of its public route and survival of the
 retained local behavior at the owning registry.
 
-## Sequential evidence boundaries
+## Implementation history and remaining parent work
 
-Gate 5 is one product gate but not one implementation patch. It advances
-through these independently reversible subgates:
+Gate 5 is one product Gate. The 5A–5F labels below are retained only as
+historical locators for existing commits; they are not a continuing ladder of
+user-visible micro-Gates. Atomic commits remain useful rollback units without
+creating new product contracts.
 
-1. **5A — root CLI front door:** remove clearly excluded root commands and
-   flags. Classify mixed local/import/plugin behavior before changing it.
-2. **5B — HTTP and routing:** unregister excluded API groups and handlers,
-   remove hosted UI proxying and remote workspace selection, retain local
-   directory and Instance routing, then regenerate typed clients from the
-   source schema.
-3. **5C — config and startup:** remove excluded config keys, migrations that
-   only manufacture those keys, bootstrap nodes, automatic sharing, sync, and
-   account/Console network work. Startup and Session creation become locally
-   complete without those services.
-4. **5D — terminal surface:** remove excluded commands, bindings, dialogs,
-   tips, workspace/share actions, marketplace actions, and commercial upsell
-   paths while retaining local plugin and provider operation.
-5. **5E — provider and updater semantics:** remove first-class Zen/Go catalog
-   entries, built-in provider plugins, ID-specific headers/tools/pricing/retry
-   behavior, and updater registration. Generic custom providers remain.
-6. **5F — dependency-closed deletion:** delete implementations, Web/Desktop
-   baseline packages and assets, hosted integrations, release workflows, and
-   now-unused dependencies after callers are gone. Generated artifacts are
-   regenerated from their owner rather than edited by hand.
+The parent work has three live questions:
 
-Every subgate records its narrower parent question, exact positive and negative
-evidence, and rollback before code changes. Passing an early reachability
-slice does not authorize leaving the corresponding implementation dormant at
-Gate 5 completion. A typed-reference failure after unregistration is evidence
-for the next dependency-closed slice, not permission to add a compatibility
-stub.
+1. Are all excluded baseline behaviors disconnected at their real registries,
+   startup owners, enabling configuration, network paths, and current release
+   composition while retained local behavior remains truthful?
+2. Have mixed capabilities been reduced by behavior—especially local `pr`
+   versus share-link import—rather than classified by dependency shape?
+3. Does the 5D5 local-directory design contain only the state and concurrency
+   needed for its stable local boundary?
 
-The implementation order may cross the numbered ownership groups when a
-released consumer must be removed before its typed provider. Concrete
-dependency evidence has fixed the current order as Gate 5B1/5B2, the relevant
-Gate 5D TUI consumer slices, and then Gate 5B3 schema removal and generation.
-This is not permission to merge those ownership boundaries into one patch.
+Provider and updater reachability may be completed as ordinary implementation
+slices under the first question. Web/Desktop, marketplace, hosted integrations,
+and unused implementation may hibernate. Dependency analysis follows semantic
+disposition and may reveal a concrete cost, but it does not decide product
+classification by itself.
 
 ## Gate 5A locked contract: CLI front door
 
@@ -121,9 +127,10 @@ capability?
 ### Owning changes
 
 - `packages/opencode/src/index.ts` unregisters `ConsoleCommand`, `WebCommand`,
-  `GithubCommand`, and `PrCommand`. It retains `ServeCommand`, `ImportCommand`,
+  and the hosted `GithubCommand`. It retains `ServeCommand`, `ImportCommand`,
   `PluginCommand`, the local database `StatsCommand`, and the other local
-  Agent/MCP/provider/Session/database/export commands.
+  Agent/MCP/provider/Session/database/export commands. `PrCommand` is restored
+  after reducing away OpenCode share-link import.
 - `packages/opencode/src/cli/cmd/run.ts` and
   `packages/opencode/src/cli/cmd/run/runtime.ts` remove the `--share` option and
   every CLI-owned direct-run share callback. This closes the explicit CLI
@@ -143,17 +150,19 @@ capability?
   plane participates.
 - root package shortcuts for Console, hosted statistics/SSO, and the deferred
   Web/Desktop/Storybook/translation clients are removed. Their workspaces and
-  implementations remain for later dependency-closed deletion.
+  implementations may remain hibernated.
 
-The `PrCommand` is excluded rather than reduced to generic Git: it wraps
-`gh pr checkout` in coding-product assumptions and imports OpenCode share links
-from pull-request text. Ordinary Git and explicit local review remain
-available through retained terminal capabilities.
+The original Gate 5A classification of `PrCommand` was wrong. Its `gh pr
+checkout` plus local Repa launch is independently useful and truthfully
+explicit; only the branch that parses and imports OpenCode share links from
+pull-request text is excluded. The correction restores the local command
+without restoring hosted sharing behavior.
 
 ### Evidence
 
-- root help and help snapshots expose no `web`, `github`, or `pr` command;
-  the hidden Console command is also unreachable by direct invocation.
+- root help and help snapshots expose no `web` or hosted `github` command;
+  the hidden Console command is also unreachable by direct invocation. They do
+  expose the reduced local `pr` command.
 - `run --help` has no share option, and supplying `--share` is rejected before
   Session execution. Source and focused tests show that no direct-run share
   callback remains.
@@ -164,8 +173,8 @@ available through retained terminal capabilities.
 - `plugin`, `serve`, local `stats`, and the other retained root commands remain
   registered and keep their help contracts.
 - only the CLI help/snapshot tests, import tests, direct-run process tests, and
-  the OpenCode typecheck are causal for this subgate. HTTP, TUI, provider, and
-  broad monorepo tests belong to later owners.
+  the OpenCode typecheck are causal for this historical slice. HTTP, TUI,
+  provider, and broad monorepo tests belong to later owners.
 
 Because the default command accepts a project argument, a removed word such as
 `web` may be interpreted as a local project path. The negative contract is that
@@ -174,14 +183,12 @@ former command word must produce exit code 1.
 
 ### Exclusions and rollback
 
-Gate 5A does not remove HTTP/TUI share paths, hosted UI proxying, config keys,
-provider semantics, generated clients, or implementation files. In
-particular, Session creation can still reach automatic sharing through the
-HTTP handler and `ShareNext`, and instance bootstrap can still synchronize
-already-shared Sessions; those are explicit blockers for Gate 5B/5C, not a
-Gate 5A success claim. Gate 5A therefore does not claim that Gate 5 has passed.
-Revert the Gate 5A implementation commit to restore its registrations and
-callbacks; no schema or user data changes.
+Gate 5A does not decide HTTP/TUI share paths, hosted UI proxying, config keys,
+provider semantics, generated clients, or physical implementation
+disposition. Its correction is selective: restore reduced local `pr` behavior
+without restoring share-link import, Console/Web/GitHub registration, or the
+removed `run --share` and HTTP(S)-import paths. No schema or user-data rollback
+is involved.
 
 ## Gate 5B locked execution boundary: HTTP and routing
 
@@ -264,19 +271,18 @@ The dependency order is two reversible slices:
    Console state. Local/global/project/managed config, explicit well-known
    provider config, plugin provenance, and environment/file substitution
    remain. HTTP layer composition no longer registers the now-unconsumed
-   Account node. The aggregate CLI runtime keeps the inert node until Gate 5F
-   deletes already-unregistered account command implementations whose Effect
-   types still name it; constructing that service performs no network work.
+   Account node. An inert implementation may remain hibernated when
+   constructing or importing it performs no network work and imposes no
+   concrete build or maintenance burden.
 2. **5C2 — remove sharing configuration and startup synchronization.** The
    released and current config schemas reject or ignore `share`, `autoshare`,
    and the top-level sharing `enterprise` field rather than migrating them
    into behavior. `REPA_AUTO_SHARE` is no longer a runtime flag, Session
    creation has no automatic-share branch, and instance bootstrap initializes
    only retained local services. Instance bootstrap, the unused bootstrap-only
-   runtime, and HTTP composition no longer register `ShareNext`. The aggregate
-   CLI runtime kept `ShareNext` and `SessionShare` only until the dependency-
-   closed Gate 5F slice below deleted the already-unregistered GitHub/share
-   implementation branch whose Effect types named them.
+   runtime, HTTP composition, and aggregate CLI runtime do not register
+   `ShareNext` or `SessionShare`. Their source and direct tests may remain
+   hibernated; hosted GitHub automation remains unregistered.
 
 Evidence for 5C1 must make an active-account double fail if config asks it for
 identity, token, or organization config, while retained local config and an
@@ -386,15 +392,17 @@ local `experimental.projectCopy.generateName` and v2 project-copy operations
 must survive; Gate 5B3 converts their routing middleware to directory-only
 rather than deleting their API group.
 
-## Gate 5E locked execution boundary: provider policy and self-update
+## Remaining reachability work: provider policy and self-update
 
-Gate 5E asks whether Repa can retain a complete generic local provider harness
-without silently carrying OpenCode's first-party Zen/Go product policy, and
-whether self-update can be absent until Repa owns a real release channel. These
-are two independent dependency graphs. Their implementation order may vary,
-but neither graph may be kept alive by a no-op compatibility surface.
+The remaining work asks whether Repa can retain a complete generic local
+provider harness without silently carrying OpenCode's first-party Zen/Go
+product policy, and whether self-update can be absent until Repa owns a real
+release channel. These
+are two independent behavior boundaries. Their implementation order may vary;
+inactive source may hibernate, but neither behavior may remain reachable
+through a no-op compatibility surface or false configuration.
 
-### Gate 5E1 — make first-party provider IDs ordinary
+### Make first-party provider IDs ordinary
 
 `opencode` remains a legal explicit provider ID, but it receives no built-in
 catalog entry, anonymous/public credential, provider plugin, request header,
@@ -406,13 +414,13 @@ credentials receives the same generic custom-provider path as any other ID.
 The raw models.dev cache is not a product registry and need not be rewritten;
 the shared outward projection owns the exclusion.
 
-The slice therefore removes the v1 magic provider loader and v2 built-in
-OpenCode provider plugin, exact-ID branches in LLM request/transform/native
-runtime/tool and selection code, CLI/TUI recommendation or “Free/Go”
-presentation, and the closed retry-upsell producer/schema/consumer graph.
-Current OpenAPI and SDK artifacts are regenerated from their schema owners;
-direct tests and recorded scenarios that exist only for the deleted product
-policy are deleted with it rather than converted into compatibility tests.
+The active baseline therefore omits the v1 magic provider loader and v2
+built-in OpenCode provider registration, exact-ID branches in LLM
+request/transform/native runtime/tool and selection code, CLI/TUI recommendation
+or “Free/Go” presentation, and the closed retry-upsell producer/schema/consumer
+graph. Current OpenAPI and SDK artifacts are regenerated from their schema
+owners. Source and direct tests for dormant provider policy may remain when
+they are outside current composition and impose no demonstrated cost.
 
 Generic provider configuration, explicit provider/model headers, API-key and
 OAuth auth, external provider plugins, plugin tools, MCP tools, AI-SDK
@@ -433,16 +441,18 @@ retry action. Positive evidence covers generic custom providers and auth,
 explicit request headers, plugin/MCP tools, AI-SDK fallback, normal catalog
 costs, and GitHub Copilot enterprise auth.
 
-### Gate 5E2 — hibernate self-update by absence
+### Hibernate self-update by absence
 
-The unregistered upgrade/uninstall commands, the active fixed-error
-`POST /global/upgrade` route, the `Installation` service and its package-
-manager probes, updater-specific tests, `autoupdate` configuration and
-migration output, updater flags, installation-update events, and their TUI
-tip/fixture are deleted as one graph. A direct request to the retired path
-returns ordinary not found; Repa does not advertise a permanently unavailable
-operation. Old configuration keys become ignored excess data, and transient
-installation events require no recovery or data migration.
+The unregistered upgrade/uninstall commands stay absent. The active fixed-error
+`POST /global/upgrade` route, `autoupdate` configuration and migration output,
+updater flags, installation-update events in the current public manifest,
+updater startup composition, and TUI updater tip are disconnected from the
+baseline. A direct request to the retired path returns ordinary not found;
+Repa does not advertise a permanently unavailable operation. Old configuration
+keys become ignored excess data, and transient installation events require no
+recovery or data migration. The `Installation` implementation, package-manager
+probe code, and direct updater tests may remain hibernated and are not part of
+unrelated default verification.
 
 Build identity is not updater policy. `InstallationVersion`,
 `InstallationChannel`, `InstallationLocal`, CLI `--version`, database channel
@@ -451,56 +461,51 @@ package resolution remain. Ordinary server health and startup remain. The
 current OpenAPI and v2 SDK are regenerated; the frozen legacy SDK is not
 hand-edited. Initial installers, publish/release workflows, Nix/release
 identity, Web documentation, and Desktop's separate Electron updater remain
-later Gate 5F boundaries rather than being pulled into this slice.
+hibernated or deferred rather than being pulled into this reachability change.
 
-Negative evidence requires the config schemas/migration, event manifest,
-active route tree, current OpenAPI/SDK, runtime composition, and production
-source to contain no updater owner. Positive evidence covers CLI version,
+Negative evidence requires the config schemas/migration, current event
+manifest, active route tree, current OpenAPI/SDK, and runtime composition to
+expose no updater owner. It does not require production source absence.
+Positive evidence covers CLI version,
 ordinary server startup and `/global/health`, retained build/channel identity,
 and local terminal commands. Focused owner tests, affected package typechecks,
 exact dependency scans, and `git diff --check` are causal.
 
-Each subgate is one revertible commit plus generated artifacts from changed
-owners. Neither changes user data or adds a fallback endpoint, compatibility
-field, empty service, or alternate registry. A future Repa provider product or
-updater requires a Repa-owned product contract and release authority rather
-than reactivating the inherited OpenCode policy accidentally.
+The two behavior changes may use separate revertible commits without becoming
+new product Gates. Neither changes user data or adds a fallback endpoint,
+compatibility field, empty service, or alternate registry. A future Repa
+provider product or updater requires a Repa-owned product contract and release
+authority rather than reactivating inherited policy accidentally.
 
-## Gate 5F locked dependency closure: sharing and hosted GitHub automation
+## Corrected sharing and GitHub disposition
 
-The first Gate 5F slice asks whether the now-unreachable public-sharing branch
-can be deleted without weakening local Session creation, offline
-export/import, ordinary Git, explicit code review, or neutral provider/plugin
-configuration. Its dependency root is the removed share routes and startup
-subscriber, not every historical field whose English name contains “share.”
+The public share routes, automatic Session sharing, share configuration,
+startup synchronization, TUI share affordances, and HTTP(S) share import stay
+disconnected. Released/current config schemas do not advertise `share`,
+`autoshare`, or the top-level sharing `enterprise` field; migration and
+`REPA_AUTO_SHARE` do not manufacture them; current generated artifacts follow
+those owners. These are product-reachability results and remain valid.
 
-This slice deletes `ShareNext`, `SessionShare`, their direct tests, and the
-already-unregistered GitHub Action/PR command implementations that are their
-last aggregate-runtime consumer. Pure repository capabilities remain only
-when another current local consumer exists. The aggregate CLI runtime then
-removes the share nodes. Passive historical Session/share columns and rows are
-not read into behavior and remain for a later native-database/schema closure;
-this slice does not rewrite SQLite history merely to erase a dormant column.
+The prior conclusion that `ShareNext`, `SessionShare`, their direct tests, the
+hosted GitHub Action, and `PrCommand` must all be physically deleted was not
+valid. Their last-caller relationship described implementation shape, not one
+product meaning. The correction therefore:
 
-With the typed consumers gone, Gate 5C2 completes in the same dependency
-closure: released-v1 and current config schemas remove `share`, `autoshare`,
-and the top-level sharing `enterprise` field; migration no longer manufactures
-them; `REPA_AUTO_SHARE` disappears; and current OpenAPI/clients are regenerated
-from their owners. The frozen legacy SDK tree is not hand-edited. `autoupdate`
-belongs to Gate 5E and is deliberately not bundled here.
+- restores `PrCommand` as an explicit local `gh pr checkout` plus Repa launch
+  capability, without OpenCode share-link import;
+- permits the hosted GitHub Action, sharing implementation, and direct tests to
+  remain hibernated and unregistered;
+- keeps share nodes out of ordinary aggregate runtime/startup composition; and
+- leaves passive historical Session/share columns inert for the later native
+  database decision rather than rewriting data for vocabulary cleanup.
 
-Negative evidence requires no `ShareNext`/`SessionShare` production owner, no
-hosted GitHub/PR command implementation, and no current config/OpenAPI/client
-sharing selector. Positive evidence covers local Session creation and
-deletion, offline import/export, retained Git or project-copy behavior, and
-provider/MCP/plugin config decoding. Focused schema/config/runtime tests,
-affected typechecks, exact dependency scans, and `git diff --check` are causal;
-tests that directly exercise deleted hosted implementations are deleted with
-their owner rather than retained as a compatibility harness.
-
-Reverting this one slice restores the implementation branch and config
-contract. No data migration is involved, and no fallback endpoint, no-op
-service, or compatibility field is introduced.
+Evidence must prove both halves: no active registration, automatic share,
+OpenCode share request, enabling config, or generated share selector; and a
+working local PR checkout/launch path plus retained local Session lifecycle,
+offline import/export, Git/project-copy, and provider/MCP/plugin configuration.
+Direct hibernated-feature tests may remain but do not enter verification for
+unrelated changes. No fallback endpoint, no-op service, or compatibility field
+is introduced.
 
 ## Gate-wide positive evidence
 
@@ -531,8 +536,10 @@ service, or compatibility field is introduced.
 - Missing excluded services do not produce a startup error, retry loop, hidden
   network call, dead menu item, compatibility adapter, or fallback to an
   OpenCode endpoint.
-- Deletion leaves no production import, package dependency, generated client
-  method, release job, or ordinary runtime path to the excluded behavior.
+- Current composition leaves no registered command, startup/background edge,
+  enabling configuration, generated client method, release job, or ordinary
+  runtime path to the excluded behavior. Hibernated source may retain internal
+  imports and direct tests outside that graph.
 
 ## Explicit exclusions
 
@@ -545,11 +552,13 @@ keeps an excluded surface public.
 
 ## Recorded result
 
-Gate 5 remains active. Gate 5A passed at
-`6503c280762a8cb2cc04e2cd0021498a8f0aa174`.
+Gate 5 remains active. Gate 5A's reachability work was recorded at
+`6503c280762a8cb2cc04e2cd0021498a8f0aa174`, but its whole-command
+classification of `PrCommand` is superseded by the parent correction.
 
-- the excluded Console, Web, GitHub-agent, and PR command handlers are no
-  longer registered at the root CLI; retained local commands remain visible;
+- the excluded Console, Web, and hosted GitHub-agent command handlers are no
+  longer registered at the root CLI; `PrCommand` was also unregistered but
+  must be restored after its share-link branch is removed;
 - `run` no longer owns a share option or direct share callback;
 - import is local-JSON-only, and a native-database
   `import -> export -> delete -> import -> export` round trip preserved the
@@ -560,8 +569,9 @@ Gate 5 remains active. Gate 5A passed at
 - `bun test -t "rejects --share before admitting a prompt"
   test/cli/run/run-process.test.ts` passed the focused contract without a
   provider request;
-- the OpenCode package typecheck and `git diff --check` passed, and an
-  independent fresh-context review found no remaining Gate 5A blocker.
+- the OpenCode package typecheck and `git diff --check` passed. The independent
+  review verified the then-current implementation contract but did not receive
+  enough upstream intent to test that contract's PR classification.
 
 At the Gate 5A close, the HTTP Session-create automatic-share path and
 instance-bootstrap ShareNext synchronization remained reachable as recorded
@@ -574,7 +584,7 @@ with the unused route dependency cleaned at
 `8e6e64d3ea52cae51f274e9c75289acdaf5fa7bb`. The production route tree now
 returns direct 404 responses for `/`, `/site.webmanifest`, and unknown paths,
 while `/doc` and `/global/health` remain reachable. The hosted helper is
-dormant for Gate 5F deletion. Its complete focused test file passed 13 tests,
+dormant and may remain hibernated. Its complete focused test file passed 13 tests,
 and no SDK artifact changed.
 
 Gate 5B2 passed at `8fc8b44790f7ddeb2b5a40736f6bafdb9e12d9ca`.
@@ -639,7 +649,9 @@ tests, TUI typecheck, exact dependency scan, `git diff --check`, and an
 independent fresh-context review passed. Active routing fields remain solely
 for Gate 5D5.
 
-Gate 5D5 passed at `00061ce349e01b9273a40e424f8bb2c3eb01d9c9`.
+Gate 5D5 implementation and behavior evidence were recorded at
+`00061ce349e01b9273a40e424f8bb2c3eb01d9c9`; its proportionality and necessity
+are under separate audit before parent-level acceptance.
 The TUI now publishes one active local-directory snapshot across Project and
 Sync state. Retained non-Session requests carry that directory explicitly;
 entering a Session selects its persisted directory before enabling the prompt,
@@ -681,38 +693,38 @@ longer accepted or emitted. A persisted historical `workspace_id` cannot
 restore a remote route; only the Session directory is selected. The 17
 retired operations are absent from current generated artifacts, while the
 four local project-copy operations remain. The legacy
-`packages/sdk/js/src/gen/` tree stays frozen for Gate 5F instead of being
+`packages/sdk/js/src/gen/` tree stays hibernated instead of being
 hand-edited. Seventy-one focused tests, all seven affected package typechecks,
 exact residue and generation-ownership scans, `git diff --check`, and an
 independent fresh-context review passed with no remaining Gate 5B3 finding.
 
-Gate 5C2 and the first Gate 5F dependency-closure slice passed at
-`5edbd86389ddbed59d0fe936a82052da7f09f473`. `ShareNext`, `SessionShare`, their
-direct tests, and the already-unregistered hosted GitHub Action/PR command
-branch were deleted rather than retained behind no-op services. The aggregate
-runtime no longer names either share service. Released-v1 and current config
-schemas no longer own `share`, `autoshare`, or the top-level sharing
-`enterprise` field; migration and `REPA_AUTO_SHARE` no longer manufacture the
-behavior, and current OpenAPI/SDK output was regenerated from the schema
-owner. `autoupdate` remains for Gate 5E, explicit GitHub Copilot enterprise
-provider authentication remains provider-local, and the frozen legacy SDK
-tree has zero diff.
+Commit `5edbd86389ddbed59d0fe936a82052da7f09f473` contains two differently
+classified results. Its active Gate 5C2 disconnection remains valid: aggregate
+runtime/startup no longer registers sharing; released/current config schemas
+do not own `share`, `autoshare`, or the top-level sharing `enterprise` field;
+migration and `REPA_AUTO_SHARE` no longer manufacture the behavior; and current
+OpenAPI/SDK output follows the schema owner. Its physical deletion of
+`ShareNext`, `SessionShare`, direct tests, hosted GitHub Action, and local
+`PrCommand` followed the invalid last-caller inference and requires selective
+repair. Explicit GitHub Copilot enterprise authentication remains
+provider-local, and the frozen legacy SDK tree has zero diff.
 
 The causal suite passed 187 tests: both config suites, runtime flags, current
 OpenAPI, the retained startup composition, local Session lifecycle, ordinary
 provider configuration, CLI command disposition, and the native-database
 local import/export round trip plus HTTP(S)-import rejection. Core, OpenCode,
-current SDK, and current client typechecks passed; exact scans found no share
-service owner, hosted GitHub/PR implementation, or current config/client
-selector, and `git diff --check` passed. Passive historical Session/share
-columns remain inert for the later native-database/schema closure. Gate 5 is
-still active because provider/updater semantics and the remaining broad 5F
-package/workflow deletions are separate slices.
+current SDK, and current client typechecks passed; those results show the
+deletion compiled, not that the deletion contract was reasonable. Passive
+historical Session/share columns remain inert for the later native-database/
+schema decision. Gate 5 remains active for selective restoration,
+provider/updater reachability, 5D5 necessity, and a parent-level disposition
+check—not a broad package/workflow deletion campaign.
 
 ## Rollback
 
-Revert the smallest failing subgate and regenerate only artifacts owned by a
-changed source schema. Before 5F, rollback does not require data recovery.
-After dependency deletion, the subgate commit remains the rollback unit; no
-compatibility implementation or disabled alternate registry is kept in the
-product tree.
+Do not revert all Gate 5 work. Preserve correct disconnections and select the
+causally complete repair for each misclassified behavior. Regenerate only
+artifacts owned by a changed source schema. No current repair requires data
+recovery; hibernated implementation is not a compatibility runtime and must
+remain outside registration, startup, background work, false configuration,
+and current release composition.

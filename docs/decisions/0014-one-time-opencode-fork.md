@@ -13,6 +13,11 @@ passed. References below to `.reference/` describe the pre-fork decision-time
 layout; current lineage and evidence are recorded in the
 [fork ledger](../fork-ledger.md).
 
+Amendment (2026-07-14): exclusion from the first baseline governs product
+reachability and release commitment; it does not by itself require physical
+source deletion. This amendment resolves an internal contradiction in the
+original text and restores the maintainer's stated preservation default.
+
 ## Context
 
 The first Repa-owned Tutor loop proved several learning invariants: relevant
@@ -109,10 +114,21 @@ Code review, repository initialization, and similar behavior may remain
 explicit local capabilities; they do not govern ordinary learning Sessions.
 Account, share/import-share, sync/control-plane workspace, marketplace, and
 comparable group-product commands, routes, configuration, and background
-behavior are excluded from the baseline rather than left as broken or dormant
-OpenCode surfaces. Surface registration and reachability are removed first;
-physical implementation is then deleted in dependency-closed slices before
-final cutover.
+behavior are excluded from the baseline. Exclusion means that ordinary users
+cannot register, discover, configure, auto-start, or accidentally network into
+the behavior, and that current builds and releases make no support promise for
+it. Source and direct tests may remain hibernated when they impose no concrete
+compatibility, security, build, or maintenance cost.
+
+Physical deletion is a separate disposition requiring evidence of an active
+conflict, continuing maintenance burden, security risk, or explicit product
+rejection. Dependency closure, lack of current callers, and recoverability from
+Git history are not sufficient evidence. Mixed modules are classified by their
+independently useful effects before dependency analysis: a local command does
+not inherit the product category of an optional hosted branch merely because
+it imports it. In particular, local pull-request checkout and launch may remain
+an explicit capability after OpenCode share-link import is removed; hosted
+GitHub automation may remain unregistered and hibernated.
 
 ### Native database
 

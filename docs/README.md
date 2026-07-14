@@ -1,7 +1,11 @@
 # Repa documentation
 
-Status: Fork Gates 0–4 closed; Gate 5 is active. Gate 2 preserved a failing
-upstream test result and Gate 2A resolved that blocker without rewriting it.
+Status: Fork Gates 0–4 closed; Gate 5 is active under a parent-level disposition
+correction. Further provider/updater or dependency deletion is paused until
+the correction recorded by the Gate 5 contract and fork ledger is complete.
+
+This file is the sole owner of volatile active-Gate status. `AGENTS.md` and the
+roadmap contain stable policy and links rather than copied “next Gate” state.
 
 This directory is the normative documentation spine carried into the production
 fork. It deliberately excludes the old runtime, bulk research narrative, and

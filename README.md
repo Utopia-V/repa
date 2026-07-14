@@ -26,16 +26,18 @@ local Agent mechanics may remain useful capabilities, but they are not the
 default ontology and do not silently become Course, Agenda, Tutor, or learner
 state.
 
-Fork Gates 0 through 3 are closed. Gate 4 is establishing the learning-first
-composition boundary across every interactive and hidden model call. See the
-[active roadmap](docs/roadmap/09-one-time-opencode-fork-baseline.md) and
-[fork ledger](docs/fork-ledger.md).
+Fork Gates 0 through 4 are closed and Gate 5 is active. The canonical current
+status lives in the [documentation map](docs/README.md); the
+[fork ledger](docs/fork-ledger.md) records exact evidence and corrections.
 
 The first accepted baseline is terminal-only. Inherited Web and Desktop clients
 are deliberately deferred until real use creates a supported product need.
 Cloud, account, sharing, marketplace, and inherited OpenCode release surfaces
-are outside the baseline. Ordinary external model providers and local
-credentials are a separate capability boundary.
+are outside the baseline. That means they are not registered, advertised,
+auto-started, networked in the background, or promised by the current release;
+it does not by itself require deleting safe hibernated source. Ordinary
+external model providers, local credentials, and explicit local capabilities
+such as PR checkout are separate behavior boundaries.
 
 ## Documentation
 

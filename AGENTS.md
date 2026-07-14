@@ -36,6 +36,24 @@ Do not reduce the product to a one-shot chat teacher, note generator, Anki skin,
 todo application, rigid command-line planner, or generic agent with a few
 learning tools.
 
+## Decision integrity
+
+- Preserve an authority chain from maintainer intent through accepted
+  decisions, agent-derived contracts, implementation, and evidence. Record the
+  source of a consequential derived decision.
+- A lower layer may make an upper decision concrete, but must not silently
+  strengthen optional, deferred, unsupported, or default-off into prohibited,
+  permanently removed, or physically deleted.
+- Classify a capability by its independently useful behavior before following
+  its dependency graph. A last reference is implementation evidence, not
+  product semantics.
+- A maintainer correction, changed effective instructions, workspace switch,
+  or newly expanded deletion/architecture scope invalidates affected derived
+  plans. Audit and repair their durable dependents before continuing code work.
+- Choose a causally complete, architecture-consistent scope for the intended
+  stable state. A smaller diff is preferable only among equally sufficient
+  designs; a wider change must not smuggle in another objective.
+
 ## Settled constraints
 
 - The main interaction is a natural-language terminal agent.
@@ -75,11 +93,10 @@ learning tools.
   does not create a second product lineage.
 - The old Rep HarmonyOS project contributes product history only. Its code and data model are not migration targets.
 - Learning semantics must shape context construction, default actions, durable session meaning, review surfaces, and task selection. Low-level provider and rendering code should remain domain-independent.
-- ADR-0014 settles the fork and native-database direction. Gates 0 and 1 passed;
-  Gate 2 recorded the inherited Windows test failure, Gate 2A corrected that
-  test contract, and Gate 3 passed at `0ffed9f62`. Gate 4 is next. Later
-  transaction, migration, and cutover claims still require their executable
-  gates; do not promote source resemblance into a working invariant.
+- ADR-0014 settles the fork and native-database direction. Current work status
+  is owned only by `docs/README.md`; exact passed evidence and provenance are
+  indexed by `docs/fork-ledger.md`. Do not copy volatile “next Gate” state into
+  this file or promote source resemblance into a working invariant.
 - Treat explanation, demonstration, guided work, independent work, review, and
   planning as peer Tutor actions. No one action is the mandatory center or
   continuation of every learning interaction.
@@ -149,7 +166,9 @@ learning tools.
   gate may authorize a new isolated experiment only with an explicit question
   and deletion condition; production code must not import it. Promote
   conclusions, not accidental experiment structure.
-- Every production change must be small enough that a maintainer can explain why each changed file exists and how data crosses its boundary.
+- Scope each production change around one coherent boundary so a maintainer can
+  explain why every changed file exists and how data crosses it. Complete the
+  boundary rather than optimizing diff size or preserving a wrong abstraction.
 - Prefer deleting a wrong abstraction over preserving it behind a compatibility shim.
 - For consequential or uncertain multi-step work, decompose by parent decision
   and evidence boundary, not by file or layer count. Each subtask must name the
@@ -182,7 +201,7 @@ learning tools.
 
 - Distinguish accepted product intent, accepted architecture decisions, working hypotheses, research observations, and illustrative examples. Do not silently promote an example or research vocabulary into a production requirement.
 - Product goals, values, and acceptable trade-offs belong to the maintainer. Technical claims, source behavior, and failure properties are settled by inspectable evidence rather than by either human or model authority alone.
-- If a requested implementation conflicts with an accepted invariant or concrete engineering evidence, do not comply silently and do not override the intent silently. State the conflict, show the evidence, and identify the smallest reconciliation.
+- If a requested implementation conflicts with an accepted invariant or concrete engineering evidence, do not comply silently and do not override the intent silently. State the conflict, show the evidence, and identify a causally complete reconciliation proportional to the conflict.
 - Ask for maintainer input only when an unresolved choice materially changes product behavior or an expensive-to-reverse boundary. Otherwise use a reversible, documented assumption and continue.
 - Preserve meaning with behavioral examples, counterexamples, tests, recorded oracles, and decision provenance. Conversation memory and a model's confident paraphrase are not durable specifications.
 - At phase boundaries, re-read the product origin and accepted ADRs, then audit the repository for semantic drift before extending the latest local design.
@@ -195,19 +214,20 @@ learning tools.
   preferably read-only investigation will produce much more raw material than
   the conclusion needed by the main agent, or when genuinely independent work
   benefits from parallelism. Keep tightly coupled reasoning in one context.
-- At the start of each consequential evidence gate, explicitly classify the
-  coherent parent decision the main agent owns, any bounded high-entropy
-  investigation suited to a fresh worker, and whether one independent review
-  question could still change gate acceptance. Delegate the investigation by
-  default when its raw context will greatly exceed its useful conclusion and
-  non-overlapping main work exists; if an obvious candidate stays local, record
-  why. Do not spawn workers performatively when the phase is one coupled model.
+- At a consequential parent decision boundary, identify the coherent decision
+  the main agent still owns, any bounded high-entropy investigation suited to a
+  fresh worker, and whether one independent review question could still change
+  acceptance. Internal implementation slices and atomic commits do not become
+  user-visible Gates unless they introduce a new parent product decision or
+  evidence boundary. Do not spawn workers performatively when the work is one
+  coupled model.
 - Independent review is not a confidence ritual. Use one fresh, preferably
-  read-only context at the boundary only when a concrete requirement, design,
-  security, data-integrity, or cross-cutting semantic question can still change
-  the result. The main agent owns evaluation of the returned evidence,
-  integration, and causal verification; same-context self-checking is not a
-  substitute for an independent review when independence is the point.
+  read-only context only when a concrete decision, design, security,
+  data-integrity, implementation, or evidence question can still change the
+  result. Give it the minimum authority chain—maintainer intent, accepted
+  decisions, the agent's derivation, and recent corrections—and allow it to
+  reject an agent-authored contract. The main agent owns evaluation and
+  integration; same-context self-checking is not independent review.
 - Give a worker its parent question, motivation, scope, exclusions, and a
   bounded evidence contract. It returns conclusions, decisive evidence,
   confidence, and remaining unknowns rather than raw logs or a second project
@@ -219,9 +239,10 @@ learning tools.
   change the decision after the worker returns.
 - Treat maintainer corrections as control input, not invitations to restate
   the newly accepted concept. Identify the invalid prior claim, audit which
-  decisions, documents, code, tests, or plans depended on it, and make or
-  propose the smallest repair. If nothing durable was affected, say that
-  briefly. Do not fill the response with a tutorial the maintainer just gave.
+  decisions, documents, code, tests, or plans depended on it, and make the
+  causally complete repair before resuming dependent work. If nothing durable
+  was affected, say that briefly. Do not fill the response with a tutorial the
+  maintainer just gave.
 - Before asking a factual question, research it and form a recommendation.
   Ask the maintainer only about unresolved choices that can change product
   behavior, acceptable trade-offs, or expensive-to-reverse boundaries. State
@@ -232,13 +253,11 @@ learning tools.
   time, stop when remaining uncertainty is cheap or no plausible answer changes
   the plan, and promote accepted durable decisions to the owning document.
   Situational answers do not become timeless user preferences.
-- Before asking the maintainer or extending a consequential proposal, run a
-  bounded `grill-yourself` pass when it can still change the design. Challenge
-  the strongest hidden assumption with a counterexample, check the relevant
-  failure/recovery boundary, and compare the latest wording against product
-  origin and accepted decisions. Research and repair evidence-owned mistakes
-  directly; bring only the remaining maintainer-owned trade-off to `grill-me`.
-  Do not turn this into recurring ceremony for cheap, reversible work.
+- Before extending an agent-derived consequential contract, deletion, or
+  architecture boundary, use the `decision-integrity` skill's bounded
+  `grill-yourself` pass when it can still change the design. Skip it for cheap,
+  reversible work; bring only unresolved maintainer-owned trade-offs to
+  `grill-me`.
 - Treat `grill-me` as high-variance decision extraction, not exhaustive
   interviewing. A question is admissible only when repository/reference
   research cannot settle it, the maintainer can actually control the answer,

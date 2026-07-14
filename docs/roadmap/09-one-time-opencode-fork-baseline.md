@@ -48,11 +48,12 @@ Repa behavior and tests are oracles; they are not compatibility APIs.
 
 ## Execution contract
 
-The five phases below are requirement clusters, not five implementation
-patches and not authorization to build the fork in one pass. Work advances
-through one reversible evidence gate at a time in an isolated fork
-worktree/branch. Passing a gate permits planning the next gate; it does not
-pre-authorize the rest of the phase.
+The five phases below are requirement clusters, not implementation patch
+counts and not authorization to build the fork in one pass. A named Gate marks
+a parent product decision or evidence boundary. Atomic commits and internal
+implementation slices do not become new Gates merely because they are useful
+rollback units. Passing a Gate permits choosing the next parent problem; it
+does not pre-authorize the rest of the phase.
 
 Before changing code for a gate, record a small gate contract that names:
 
@@ -90,9 +91,11 @@ data.
 
 ## Minimum evidence gates
 
-These are minimum separation points. A gate may be split further after
-inspection, but two gates may not be collapsed merely because their happy
-paths are easy to demonstrate.
+These are the required parent separation points. A Gate may use several
+implementation slices, but a new numbered or lettered Gate requires a new
+parent decision or evidence boundary. Scope each change completely enough to
+establish a coherent stable boundary and narrowly enough not to import an
+unrelated objective; diff size is secondary.
 
 | Gate | Bounded result | Required failure or rollback evidence |
 | --- | --- | --- |
@@ -101,7 +104,7 @@ paths are easy to demonstrate.
 | 2. Pristine Windows baseline | Build and run the focused released-v1 checks before renaming or learning changes. | Record upstream failures without patching around their identity. If the released v1 path is not reproducible without preview v2, return to ADR-0014. |
 | 3. Repa identity isolation | Change only binary/product identity and application-owned paths so a fresh Repa launch cannot read or write OpenCode state. [Passed 2026-07-13 at fork commit `0ffed9f62`.](../fork-ledger.md#closed-gate-sequence) | Exercise existing OpenCode homes, missing/unwritable paths, interrupted first launch, and database-name collision. Revert the identity checkpoint on failure. |
 | 4. Learning-first composition boundary | Make every provider-selected interactive path implement the same Repa product contract and accept the same Learning-System composition inputs; provider-specific rendering remains allowed only for demonstrated requirements. Give compaction, summary, title, and other hidden calls narrow Repa-owned prompts for their actual task. Rework default agent/profile meaning, exploration, tool descriptions, plan reminders, and model-visible environment contributions where they assume coding is the product. | Deterministically enumerate every provider selector and hidden agent path. An ordinary learning request must no longer receive a coding-product identity on any interactive branch; compaction cannot turn learning continuity into a coding summary or PR description. This gate proves the composition boundary, not that a base prompt alone is the Tutor or that all learning authorities are already implemented. Explicit coding work may still use coding capabilities without changing the default ontology. |
-| 5. Inherited product-surface disposition | Inventory commands, routes, agents, labels, configuration, and packages; retain, make explicit/optional, defer, or remove them by observable behavior. First prove excluded surfaces absent by unregistering their commands, routes, background entry points, and configuration; then delete implementation in dependency-closed subgates. No learning noun remapping occurs here. | Account/share/import-share/sync/control-plane and other excluded group surfaces are absent rather than visible-but-broken. `/init`, `/review`, todo, snapshot, undo/fork/compact, project/worktree, GitHub, and similar local surfaces stay red until their semantics cannot contradict learning authority. No dormant excluded implementation remains at final cutover, but physical deletion is not forced into the first surface-removal patch. |
+| 5. Inherited product-surface disposition | Inventory commands, routes, agents, labels, configuration, and packages; retain, make explicit/optional, hibernate, or remove them by observable behavior. Prove excluded product paths absent by disconnecting commands, routes, background entry points, false configuration, and current release composition. Decide physical source disposition separately from reachability. No learning noun remapping occurs here. | Account/share/import-share/sync/control-plane and other excluded group behavior is absent rather than visible-but-broken. `/init`, `/review`, todo, snapshot, undo/fork/compact, project/worktree, GitHub, and similar local surfaces remain explicit only where their independent semantics cannot contradict learning authority. Hibernated source is allowed; physical deletion requires concrete conflict, cost, risk, or explicit rejection. |
 | 6. Native database admission | Establish the Repa database identity, forward migration baseline, one-writer truth, and integrity checks before adding a learning command. | Reject old Repa, OpenCode, unknown, future, partially migrated, and corrupt files; inject migration failure; exercise abrupt writer death and a second writer. |
 | 7. Interaction lifecycle mapping | Map learner occurrence, Turn, model operation, Tool Part, context cut, and terminal outcomes onto v1 records without changing terminal launch semantics yet. | Exercise repeated text, synthetic/compaction input, provider failure, cancellation, exhaustion, crash/reopen, and orphaned tool work without silent rerun. |
 | 8. Sessionless terminal and continuation | Make the deterministic empty launch create no Session; the first ordinary input creates one; explicit continue/select resumes an existing transcript. | Exercise slash/control commands before input, invalid or missing resume targets, cancelled input, interrupted first admission, and reopen without synthetic learner occurrences. |
@@ -123,20 +126,20 @@ streaming defect. Gate 2A then corrected only that test contract and passed.
 Gate 3 then established independent Repa product and state identity at fork
 commit `0ffed9f62`. Gate 4 established the protected learning-first composition
 spine at `9c7b74f41` and completed truthful released-v1 profiles and hidden
-operations at `17e25eab2`. Gate 5 is now active: its CLI, released TUI
-consumer, remote HTTP route, and current-client selector cutovers have passed
-through `e3375ef08`; startup, provider/updater, and dependency-closed deletion
-slices remain. Later gate contracts are refined from the evidence immediately
-before them rather than guessed now from file names.
+operations at `17e25eab2`. Volatile active status is owned only by
+[`docs/README.md`](../README.md), with exact evidence in the
+[fork ledger](../fork-ledger.md); this roadmap does not predict the next slice
+from file names or dependency shape.
 
 The first accepted product baseline is terminal-only. Inherited Web and Desktop
-clients are deferred until real use justifies a separately accepted support
-Gate. Gate 5 may therefore remove their public commands, proxy/build edges, and
-release surfaces without treating that as a permanent rejection of future
-clients. OpenCode Zen/Go receive no first-class provider integration in this
-baseline; the generic custom-provider path remains available without Console,
-marketing, anonymous-access, or upsell semantics. The inherited updater remains
-absent until Repa owns a release, integrity, rollback, and migration contract.
+clients are deferred until real use justifies supported product work. Their
+public launch, proxy, automatic build, and release edges are disconnected from
+the baseline; source may hibernate without becoming a support promise. OpenCode
+Zen/Go receive no first-class provider integration in this baseline; the
+generic custom-provider path remains available without Console, marketing,
+anonymous-access, or upsell semantics. The inherited updater likewise remains
+unregistered and inactive until Repa owns a release, integrity, rollback, and
+migration contract; hibernation does not require deleting its implementation.
 
 ## Legacy asset use during the gates
 
@@ -211,19 +214,22 @@ survive; exclude cloud/share commands and repair or remove any undo, fork,
 compact, or related action that can contradict a durable learning transition.
 Do not invent Repa-specific Tutor slash commands during the baseline.
 
-Audit excluded product modules separately from prompts. Account, share and
-share-import, hosted GitHub action, sync/control-plane workspace, marketplace,
-and comparable group surfaces must be absent from the Repa baseline along with
-their routes, configuration, background work, and visible commands. A removed
-feature is not left as a broken menu item or a dormant network call. Local
-commands such as `/init` or `/review` are retained only as explicit scoped
-capabilities when their unchanged names and effects remain truthful.
+Audit excluded product modules separately from prompts. Automatic account and
+sharing behavior, share-link import, sync/control-plane workspace, marketplace,
+hosted GitHub automation, and comparable group behavior must be absent from the
+Repa baseline along with their routes, enabling configuration, background work,
+and visible commands. An excluded feature is not left as a broken menu item or
+dormant network call. Local commands such as `/init`, `/review`, or local PR
+checkout are retained as explicit scoped capabilities when their independent
+names and effects remain truthful.
 
-First remove excluded surfaces from registration and ordinary reachability and
-prove their absence. Physically delete their implementations afterward in
-small dependency-closed subgates. The final cutover ships no excluded dormant
-modules, but the first surface-removal patch does not also rewrite every shared
-dependency.
+First remove excluded behavior from registration, ordinary reachability,
+automatic startup, and current release composition, and prove those properties
+at their owners. Source may then remain hibernated. Consider physical deletion
+only when active conflict, continuing maintenance cost, security risk, or an
+explicit product rejection justifies it. Classify mixed modules by behavior
+before following dependencies; a last caller does not inherit the product
+classification of what it calls.
 
 The phase passes when a pinned Windows `repa` binary opens a new Repa home and
 database without reading or modifying OpenCode state; every interactive
