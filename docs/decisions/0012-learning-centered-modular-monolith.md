@@ -49,6 +49,11 @@ state authority. One process owns state-changing execution for a LearnerHome at
 a time. No background daemon is part of the product baseline; time-dependent
 state is derived when the application wakes.
 
+Courses belong directly to LearnerHome. Several Courses may remain ongoing at
+once, and a Course may use material from several LearningSpaces or approved
+roots. Filesystem grouping and the optional default Course used for
+underspecified context are neither Course ownership nor Course lifecycle.
+
 Session remains a durable interaction container, not the long-term learning
 memory boundary. A fresh Session receives relevant state through queries and
 does not import the old transcript.
@@ -74,6 +79,50 @@ generic graph, event, fact, or mastery model.
 A course view uses a versioned ordered hierarchy with sparse, module-owned,
 typed and provenance-bearing relations. Material structure, learner state, and
 agenda remain separate overlays. A graph database is not selected.
+
+A Course may exist before an honest route has been formed. It may retain
+several route-strategy Views and their exact revisions while selecting zero or
+one eligible revision for default navigation and durable targets. Working,
+historical, and candidate are derived relations of exact eligible revisions,
+not stored View lifecycle states. Course creation does not require a fabricated
+placeholder View. A selection is working state, not objective curriculum truth.
+Temporary focus and intended rejoin belong to Interaction or Agenda; they do
+not create a second generic current-item pointer.
+
+A Course View is a stable identity for one continuing route strategy. Each
+accepted structure is an immutable revision of that View, while a materially
+different organizing strategy is another View under the same Course. The
+working selection pins an exact revision and does not follow later revisions
+automatically. This is not a general version-control or merge model.
+
+A learner may explicitly author a View or directly request adoption of an
+exact candidate revision without a redundant confirmation. Repa or the Tutor
+may form an unselected candidate without changing navigation, but a
+Tutor-initiated change to the working selection requires learner acceptance.
+The old revision remains durable and existing references are not retargeted.
+
+Course item identity continues across revisions only through an explicit
+accepted mapping. Meaning-preserving rename or movement may reuse an identity;
+split, merge, semantic change, ambiguity, or conflict defaults to new
+identities and a recorded transition mapping. The learner may direct the LLM
+to author the transformation under supervision, while the domain authority
+validates the mapping and never silently migrates downstream learning state.
+
+Ordinary Course/View/Revision removal is reversible withdrawal from discovery
+and selection. It preserves immutable identity, revisions, and references and
+is not completion, abandonment, mastery, or physical deletion. Course
+withdrawal clears its selection; View or Revision withdrawal may clear or
+legally replace it within that Course. Any rejection or withdrawal that can
+observe or change working selection compares the exact expected target and its
+independent selection version in the same transaction. A non-null replacement
+also checks the replacement View and Revision's expected versions; clear and
+replacement both advance the selection version. Restoration never selects
+implicitly. Physical deep deletion is a later cross-authority operation that
+must show its impact and receive explicit learner authorization.
+
+The post-Gate-6 logical relationships and staged native admission boundaries
+are recorded in the
+[native learning data model](../architecture/01-native-learning-data-model.md).
 
 ### Tutor composition and the Agent runtime
 
@@ -107,6 +156,13 @@ command-specific causal/effect identity, entity-specific preconditions,
 atomic SQLite settlement, an immutable causal receipt, and correction or
 supersession behavior. Commands name meaningful transitions rather than generic
 CRUD.
+
+Physical admission may establish the domain authority before model command
+settlement exists. At that earlier boundary, an application-bound authorship
+basis is only the trusted caller's declaration; it is not proof of a learner
+message, model invocation, acceptance, or source grounding, and it does not
+change when the Revision is later selected. Model-issued writes remain
+unavailable until the causal receipt can bind those claims.
 
 Reads use consumer-specific projections. Command/query separation is an
 internal ownership rule, not authorization for a generic bus, separate CQRS

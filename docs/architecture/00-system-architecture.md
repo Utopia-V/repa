@@ -225,30 +225,35 @@ not current capability.
 `LearnerHome` is the logical root of one learner's local authority. Initially
 it may be represented by a database path and home configuration rather than a
 new table. It contains multiple `LearningSpace`s, courses, goals, and Sessions.
-Current storage can retain several courses, but the production Agent does not
-yet expose list/select behavior for switching among existing courses.
+Several Courses may remain ongoing simultaneously. A Course belongs directly
+to LearnerHome rather than to one directory or LearningSpace, and it may use
+material from several approved roots or LearningSpaces. The same material may
+support several Courses.
 
-The durable current Course is learner-controlled state. Invocation directory,
+An optional durable default Course preference is learner-controlled context
+state, not the identity of the only active subject. Invocation directory,
 folder layout, discovered material, Agenda pressure, and model judgment may
-surface information or a proposed target, but none may switch that Course.
+surface information or a proposed target, but none may change that preference.
 Changing it requires an explicit learner request followed by a visible
-confirmation bound to the exact target Course/View and current focus revision;
-only then may a validated command commit the transition. The learner can
-withdraw before commit, and a rejected or stale confirmation changes nothing.
+confirmation bound to the exact target Course/View and current preference
+revision; only then may a validated command commit the transition. The learner
+can withdraw before commit, and a rejected or stale confirmation changes
+nothing.
 
-Current Course is a retrieval prior for underspecified future requests, not an
-exclusive scope or access-control boundary. When the learner's current request
-mentions or semantically requires another Course, context composition loads a
-bounded relevant view of that Course and the Tutor answers from it without
-changing the durable default. This needs no temporary-Course aggregate or
-`TurnFocus` fact: the admitted request and context cut already record what the
-sample consumed. A confirmed Course switch changes only which Course is the
-default when later input does not supply a better target.
+The default Course preference is only a retrieval prior for underspecified
+future requests. When the current request mentions or semantically requires
+another Course—or several Courses—context composition loads their bounded
+relevant views and the Tutor answers from them without changing the durable
+default. This needs no temporary-Course aggregate or `TurnFocus` fact: the
+admitted request and context cut already record what the sample consumed. A
+confirmed preference change alters only the later fallback when input does not
+supply a better target.
 
-A `LearningSpace` scopes material roots, course views, artifacts, and ordinary
-context selection for a real body of work. It is not an isolation boundary for
-all learning state: a global deadline, retained steering, or cross-course goal
-may still contribute when relevant.
+A `LearningSpace` is an optional accepted grouping for material, work, and
+ordinary context selection. It is not the owner of a Course and is not an
+isolation boundary for all learning state: a Course may cross spaces, while a
+global deadline, retained steering, or cross-course goal may contribute when
+relevant.
 
 Boot uses **global authority with directory routing**. Repa always opens the
 same LearnerHome and native database; the invocation directory is a candidate
@@ -365,7 +370,62 @@ Each durable curricular assertion retains:
 - correction or supersession history when it changes.
 
 These bases are not one confidence ladder. An official syllabus can be
-authoritative about coverage while saying nothing about a prerequisite.
+authoritative about coverage while saying nothing about a prerequisite. An
+application-bound authorship basis is also not causal proof: learner acceptance,
+model invocation, and source grounding become durable claims only when their
+owning receipt or source authority can bind them. Authorship basis records how
+content was created, not whether that content is currently accepted or selected.
+
+A Course may exist before any honest Course View is available. It may retain
+several route-strategy Views and their exact revisions, with zero or one
+eligible revision selected as the default working view for broad navigation
+and durable item targets. Working, historical, and candidate are derived
+relations of exact eligible revisions rather than View lifecycle values.
+Absence of a view does not authorize a fabricated placeholder route. Other
+Views and revisions remain inspectable evidence or alternatives; replacing the
+working revision preserves old references and reconciles stable item identities
+explicitly. This does not limit LearnerHome to one ongoing Course, and it does
+not turn the working view into objective curriculum truth.
+
+A Course View has a stable identity for one continuing route strategy, and its
+revisions are immutable snapshots. Revising the same strategy preserves the
+View identity; a materially different organization, such as a syllabus route
+and an examination-review route, uses a different View. The working selection
+pins an exact revision and never advances merely because that View gains a
+newer revision. This borrows snapshot/lineage separation from version control
+without creating Git-style merge, rebase, or arbitrary branch machinery.
+
+The learner may explicitly author a Course View and may directly request that
+an exact candidate revision become the working route. Such a request is the
+authorization; Repa does not ask for the same confirmation twice. Repa or the
+Tutor may form an unselected candidate from new evidence, but may not silently
+redirect the working route. A Tutor-initiated selection change waits for
+learner acceptance, while the previous revision and its references remain
+intact.
+
+Item continuity across View revisions is conservative and explicit. Rename or
+movement may preserve one identity through a one-to-one same-ID mapping. Split
+and merge create new target identities; ambiguous many-to-many correspondence
+is rejected rather than guessed. Reuse outside an immediate preserve transition
+names an exact prior membership of the same Course item. Old learning records
+remain attached to their original identities and revisions. A learner may
+direct the LLM to author such a transformation under supervision, but fuzzy
+title matching or model confidence cannot migrate evidence or other dependent
+state.
+
+Ordinary removal of a Course, View, or rejected candidate revision is a
+reversible withdrawal from normal discovery and selection, not physical
+deletion and not a claim of completion, abandonment, or mastery. Eligibility
+requires the Course, View, and Revision all to remain active. A Course
+withdrawal can only clear its working selection; a selected View or Revision
+may be cleared or legally replaced within the Course. Every withdrawal or
+candidate rejection that can observe or change selection compares the exact
+expected target and its independent selection version in the same transaction,
+so stale model context cannot erase a learner's newer selection. A non-null
+replacement also checks the replacement View and Revision's expected versions;
+clear and replacement both advance the selection version. Restoration never
+selects implicitly. Deep deletion waits until all referring authorities exist
+and can present an exact impact scope for explicit learner authorization.
 
 ### Domain foundations are optional
 
@@ -818,6 +878,22 @@ references, versions, and time. Domain payload stays in domain-owned records.
 This is an audit and recovery ledger, not an event store from which the whole
 database must replay.
 
+The receipt and physical invocation settlement form one narrow shared Repa
+substrate across learning commands. That substrate owns trusted invocation,
+replay/conflict handling, execution context, and exact returned settlement.
+Each domain authority separately owns the semantic effect address, legal
+transition, entity preconditions, correction, and durable payload. Shared
+settlement therefore does not become a universal learning event or a second
+owner of domain meaning.
+
+The receipt and the domain records it supports do not inherit Session deletion
+lifecycle. Inherited Session, message, part, and event rows may continue to
+cascade when a transcript is deleted, but durable learning authorities never
+use those rows as cascade-owning parents. Ordinary transcript deletion leaves a
+minimal non-content causal receipt marked source-unavailable and preserves the
+learning state. Removing or superseding that state is a separate explicit
+deep-delete operation whose domain impact is visible before commit.
+
 A cross-domain transition, such as completing an assignment with activity that
 also serves a revisit, is one explicit application operation over one SQLite
 transaction. It must name both domain consequences; it cannot arise from a
@@ -946,6 +1022,12 @@ overdue, and expired state from stored times and the trusted clock.
 | conflicting local writer | reject/serialize through the LearnerHome owner and entity preconditions; never silently merge semantic state |
 
 ## Target module ownership
+
+The concrete logical relationships and post-Gate-6 staged native admission
+boundaries are specified in the
+[native learning data model](./01-native-learning-data-model.md). This section
+owns dependency direction; that document owns native data meaning and staged
+admission.
 
 The full fork is one Repa product, not OpenCode plus a learning package. Its
 logical ownership remains:

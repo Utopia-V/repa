@@ -1,476 +1,324 @@
-# One-time OpenCode fork and native Repa baseline
+# One-time OpenCode fork and native Repa engineering roadmap
 
-Status: Active implementation plan
+Status: Gates 0–6 are closed. The original unstarted Gate 7–19 contracts were
+superseded on 2026-07-14. The replacement Gate 7–17 engineering sequence was
+accepted on 2026-07-15. Each Gate still requires its own design grill before
+its contract or production implementation begins; active status lives in
+`docs/README.md`.
 
-Date: 2026-07-13
+Original date: 2026-07-13
+
+Recalibrated: 2026-07-14
 
 Decision: [ADR-0014](../decisions/0014-one-time-opencode-fork.md)
 
-Evidence: [Fork provenance and gate ledger](../fork-ledger.md)
+Architecture: [Learning-centered system architecture](../architecture/00-system-architecture.md)
+and [native learning data model](../architecture/01-native-learning-data-model.md)
+
+Evidence: [Fork provenance and closed-gate ledger](../fork-ledger.md)
 
 Legacy evidence: [Pre-fork Repa asset disposition audit](../research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Goal
 
-Replace the current partial Repa-owned harness with one independent,
-learning-native Repa product forked from OpenCode `v1.17.18`. The phase ends
-when the inherited local Agent mechanics, one native Repa database, the first
-learning authorities, material translation, and a scripted real-provider
-learning trace work through one production runtime.
+Continue the independent TypeScript/Bun Repa product from its admitted native
+database into a real learning system. The engineering must give Course,
+material, learner, Agenda, Tutor, and Interaction meanings durable structural
+homes without copying the pre-fork schema or burying them in generic chat
+memory, prompt text, or one universal fact model.
 
-This is a substrate cutover, not another learning-state experiment. Existing
-Repa behavior and tests are oracles; they are not compatibility APIs.
+The roadmap is an engineering order, not a product demo script. A Gate may
+establish a database, identity, transaction, module, recovery, or integration
+boundary before the whole learning experience is usable.
 
-## Non-goals
+## Why the old future route was withdrawn
 
-- no OpenCode or old Repa data/config/plugin compatibility;
-- no cloud, account, sharing, marketplace, or control-plane product work;
-- no v1/v2 dual production runtime;
-- no global rename before product behavior requires it;
-- no new learner-evidence, Assignment, scheduler, ontology, or ALS-024 work;
-- no human learner experiment;
-- no provider matrix or speculative abstraction layer; and
-- no compatibility wrapper around the current Repa runner or interaction
-  schema.
+Gates 0–6 established the fork, product identity, learning-first composition,
+terminal product surface, and native database lineage. The old Gate 7–19 route
+then ordered work largely by inherited infrastructure surfaces: Interaction,
+terminal admission, roots, observation, search, Course focus, one command,
+translation, and eventual integration.
 
-## Accepted starting assumptions
+That order was not justified by a settled native learning architecture. In
+particular, it had not decided the physical relationships among Course Views,
+materials, learner records, Agenda, Tutor context, and inherited Interaction
+records. Passing each infrastructure Gate could therefore have fixed locally
+reasonable structures that combined badly.
 
-- The production source begins from a full upstream history at OpenCode
-  `v1.17.18`, not from the ignored `.reference` checkout.
-- The fork preserves the MIT notice and records the upstream tag and commit.
-- OpenCode's released v1 Session/provider/tool/TUI path is the sole initial
-  production runner. Preview v2 is not wired into learning behavior.
-- One physical SQLite database can contain several separate authorities.
-- Existing local capabilities are retained unless a concrete incompatibility
-  or maintenance cost justifies removal.
-- A learning behavior is reduced to an inherited mechanism only when the
-  behavior's identity, ownership, correction, and failure contract survive.
+The correction withdraws only those unstarted contracts. It does not invalidate
+Gates 0–6, abandon numbered Gates, or require every future Gate to complete a
+learner-visible loop.
 
-## Execution contract
+## How the next route is formed
 
-The five phases below are requirement clusters, not implementation patch
-counts and not authorization to build the fork in one pass. A named Gate marks
-a parent product decision or evidence boundary. Atomic commits and internal
-implementation slices do not become new Gates merely because they are useful
-rollback units. Passing a Gate permits choosing the next parent problem; it
-does not pre-authorize the rest of the phase.
+1. Grill the overall architecture and engineering direction.
+2. Record the accepted authority boundaries, dependency order, and important
+   deferred choices.
+3. Divide that direction into numbered Gates that can be implemented and
+   checked incrementally.
+4. Before each Gate begins, grill its local design, failure behavior, and
+   evidence boundary again.
+5. Implement, verify, and close that Gate before advancing.
 
-Before changing code for a gate, record a small gate contract that names:
+A Gate is a maintainer-visible engineering increment. It may be structural and
+need not be independently useful to an end user. Its contract states what
+becomes true in the repository, which authority owns it, how it composes with
+existing state, and what evidence can falsify the claim.
 
-- the one parent uncertainty or behavior being resolved;
-- the native owner and inherited seam being exercised;
-- explicit exclusions, including adjacent behavior deferred to a later gate;
-- the positive path and boundary failures that must pass in the same change;
-- the old executable oracle or accepted document that supplies expected
-  meaning; and
-- the exact rollback action if the evidence fails.
+Gate size, diff size, reversibility, user visibility, end-to-end completeness,
+and test count are considerations rather than universal directions. Commits,
+migrations, tests, reviews, and internal phases do not become extra Gates merely
+because they exist.
 
-Each code-bearing gate ends with focused tests for the changed boundary, the
-affected inherited tests, a diff audit against ADR-0014 and ADR-0012, and a
-recorded result. A documentation-only correction instead verifies its diff,
-links, status, and provenance; it does not trigger unrelated product tests.
-Verification follows causal impact: reuse still-valid recorded results for
-unchanged boundaries, rerun the owning checks for changed boundaries, and run
-the full applicable suite once when actually declaring a phase boundary—not
-after every checkpoint or documentation commit. Do not defer known exception
-handling to a final hardening phase: the failure cases owned by a gate are part
-of that gate's definition of done.
+Verification follows the claim. Documentation corrections receive document
+checks. A schema or state transition receives migration, invariant, failure,
+and recovery evidence. Integration tests are used when integration is what the
+Gate claims. A full suite or real-provider run is not an automatic ritual.
 
-If a gate unexpectedly requires a second database, a compatibility bridge to
-the old runner, changes across two still-unsettled learning authorities, or a
-new reusable mechanism without a demonstrated consumer, keep the gate red and
-return to research or split it. Do not widen the patch merely to preserve
-momentum.
+Volatile current status is owned only by [the documentation index](../README.md).
 
-The pre-fork worktree remains unchanged and runnable as a black-box oracle
-until cutover. Fork production code never imports it, shells out to it, writes
-its database, or keeps it alive as a fallback. During pre-release development,
-rollback means reverting the gate checkpoint and discarding that gate's fresh
-Repa home/database; there is no backward migration contract for experimental
-data.
+## Closed fork foundation
 
-## Minimum evidence gates
-
-These are the required parent separation points. A Gate may use several
-implementation slices, but a new numbered or lettered Gate requires a new
-parent decision or evidence boundary. Scope each change completely enough to
-establish a coherent stable boundary and narrowly enough not to import an
-unrelated objective; diff size is secondary.
-
-| Gate | Bounded result | Required failure or rollback evidence |
+| Gate | Durable engineering result | Evidence |
 | --- | --- | --- |
-| 0. Pre-fork oracle freeze | Keep the current tree executable and classify production/tests/labs before porting. Completed on 2026-07-13 with `bun run check`: 244 passed, 0 failed. | Existing failures must be recorded before fork changes; never relabel them as fork regressions. See the asset audit. |
-| 1. Lineage and provenance | Create the isolated full-history fork at the exact OpenCode `v1.17.18` tag/commit and preserve MIT provenance. Make no product edits. | A wrong/shallow ancestry, dirty imported source, or use of `.reference` fails the gate; discard the isolated worktree/branch. |
-| 2. Pristine Windows baseline | Build and run the focused released-v1 checks before renaming or learning changes. | Record upstream failures without patching around their identity. If the released v1 path is not reproducible without preview v2, return to ADR-0014. |
-| 3. Repa identity isolation | Change only binary/product identity and application-owned paths so a fresh Repa launch cannot read or write OpenCode state. [Passed 2026-07-13 at fork commit `0ffed9f62`.](../fork-ledger.md#closed-gate-sequence) | Exercise existing OpenCode homes, missing/unwritable paths, interrupted first launch, and database-name collision. Revert the identity checkpoint on failure. |
-| 4. Learning-first composition boundary | Make every provider-selected interactive path implement the same Repa product contract and accept the same Learning-System composition inputs; provider-specific rendering remains allowed only for demonstrated requirements. Give compaction, summary, title, and other hidden calls narrow Repa-owned prompts for their actual task. Rework default agent/profile meaning, exploration, tool descriptions, plan reminders, and model-visible environment contributions where they assume coding is the product. | Deterministically enumerate every provider selector and hidden agent path. An ordinary learning request must no longer receive a coding-product identity on any interactive branch; compaction cannot turn learning continuity into a coding summary or PR description. This gate proves the composition boundary, not that a base prompt alone is the Tutor or that all learning authorities are already implemented. Explicit coding work may still use coding capabilities without changing the default ontology. |
-| 5. Inherited product-surface disposition | Inventory commands, routes, agents, labels, configuration, packages, and automatic repository workflows; retain, make explicit/optional, hibernate, or remove them by observable behavior. Prove excluded product paths absent by disconnecting commands, routes, background entry points, false configuration, and current release composition. Decide physical source disposition separately from reachability. No learning noun remapping occurs here. [Passed 2026-07-14 at fork commit `25e51861e`.](../fork-ledger.md#closed-gate-sequence) | Account/share/import-share/sync/control-plane and other excluded group behavior is absent rather than visible-but-broken. `/init`, `/review`, todo, snapshot, undo/fork/compact, project/worktree, GitHub, and similar local surfaces remain explicit only where their independent semantics cannot contradict learning authority. Hibernated source is allowed; physical deletion requires concrete conflict, cost, risk, or explicit rejection. Inherited automatic workflows are unregistered; designing Repa-owned CI is a later engineering decision. |
-| 6. Native database admission | Establish the Repa database identity, one Repa baseline followed only by Repa-owned migrations, one state-owning process per LearnerHome, and integrity checks before adding a learning command. Invalid or unrecognized databases stop before mutation and remain in place for explicit recovery or reset. A client explicitly attached to the owning server is not a second writer. Keep the lease independent of the current v1 TUI topology so a future proven server transport can replace refusal without changing database or learning semantics. [Passed 2026-07-14 at fork commit `6c0b7aa5b`.](../research/opencode-fork-gate-06-native-database-admission-2026-07-14.md) | Reject old Repa, OpenCode, unknown, future, partially migrated, and corrupt files without automatic replacement or inherited-journal import; inject migration failure; exercise abrupt writer death, stale-owner recovery, a refused second state owner, and an attached client that does not acquire another lease. |
-| 7. Interaction lifecycle mapping | Map learner occurrence, Turn, model operation, Tool Part, context cut, and terminal outcomes onto v1 records without changing terminal launch semantics yet. | Exercise repeated text, synthetic/compaction input, provider failure, cancellation, exhaustion, crash/reopen, and orphaned tool work without silent rerun. |
-| 8. Sessionless terminal and continuation | Make the deterministic empty launch create no Session; the first ordinary input creates one; explicit continue/select resumes an existing transcript. | Exercise slash/control commands before input, invalid or missing resume targets, cancelled input, interrupted first admission, and reopen without synthetic learner occurrences. |
-| 9. Root permission | Admit approved content roots with separate read and user-content write authority. Reuse the inherited permission flow before inventing policy code. | Exercise deny/allow-once/permanent/revoke, restart, moved or missing roots, case normalization, symlink/junction escape, narrow-subtree precedence, and unauthorized writes. |
-| 10. Source observation | Add bounded deterministic inventory and exact revision-bound observation inside approved roots, without automatic semantic classification. | Exercise file mutation during observation, delete/move between inventory and read, unreadable/binary inputs, same-path new bytes, and fail-closed old selectors. |
-| 11. Search scoping | Prove ordinary working-set search and visible bounded widening to one approved root through inherited ripgrep mechanics. | Exercise large/binary results, cancellation, empty or stale working sets, unapproved scope, and attempts at implicit all-LearnerHome or computer-wide search. |
-| 12. Course context and focus | Establish only the Course/focus authority needed to prove lazy same-sample cross-Course context and separately confirmed durable Course switching. A program-owned local focus command may commit the switch; this Gate does not claim model-tool settlement. | Exercise stale switch confirmation, rejection/withdrawal, cwd and discovery changes, model output, and cross-Course reads without unintended focus mutation or shadow focus records. |
-| 13. Isolated atomic model-issued learning command | Select one accepted model-facing command and prove domain transition, receipt, physical invocation settlement, exact model result, and Interaction projection in one transaction. | Inject failure before the write and at every commit/projector boundary; exercise physical replay, semantic duplicate, conflicting reuse, stale source/entity/context, abort, and concurrent writer. |
-| 14. Native loop integration | Drive that same command through the real v1 provider/tool continuation and restart path without a shadow executor. | Kill after commit but before model consumption, repeat the provider tool call, cancel mid-Turn, and reopen. Stored settlement must be returned without executing meaning twice. |
-| 15. Representation acceptance | Record one source revision and one canonical readable representation through external conversion plus short atomic acceptance. Decline is a valid result. | Exercise missing converter, unsupported input, timeout/cancel, malformed/empty output, temporary-file residue, write/rename failure, and database failure after conversion. No accepted row may point at absent bytes. |
-| 16. Representation drift and learner choice | Prove stale representation choice, retranslation, explicit export, deletion, external loss, and digest-based relink without retargeting history. | Exercise source change during/after conversion, old-revision reuse confirmation, same-digest relocation, different-content replacement, missing bytes, and repeated deletion/retranslation. |
-| 17. Deterministic product trace | Run the fixed learning trace through one production entry point, including restart, fresh Session, compaction, cancellation, tool failure, and Windows terminal rendering. | Any unexplained identity, hidden retry, lost transcript, false terminal outcome, or second authority keeps the gate red. |
-| 18. Real-provider integration | Run one bounded real-provider trace only after deterministic and fault gates pass. | Provider outage, malformed stream/tool result, cancellation, and budget/context exhaustion remain attributable. Provider success does not waive deterministic failures. |
-| 19. Production cutover and oracle boundary | Port the remaining required learning behavior oracles, remove only transitional compatibility paths that actually exist in the fork, and declare the fork the sole product line. The pre-fork runner, schema, and labs already live only in immutable oracle history and are not deletion targets. | Prove the fork does not import, invoke, dual-write, or fall back to oracle code. The oracle tag remains unchanged and reachable; reverting the cutover checkpoint restores the prior fork-development state without rewriting history. |
+| 0. Oracle freeze | Pre-fork behavior and assets classified before substrate replacement. | Immutable repa-prefork-oracle tag and asset audit |
+| 1. Lineage and provenance | Full-history MIT fork at OpenCode v1.17.18. | [Fork ledger](../fork-ledger.md#closed-gate-sequence) |
+| 2/2A. Windows baseline | Released-v1 Windows behavior preserved; one invalid inherited PowerShell test contract diagnosed and corrected. | Fork ledger |
+| 3. Repa identity | Independent binary, paths, configuration, and database filename with no OpenCode-state fallback. | Fork ledger |
+| 4. Learning-first composition | One Repa product identity across interactive carriers and narrow hidden operations. | [Gate 4 record](../research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md) |
+| 5. Product-surface disposition | Terminal-only baseline; excluded group behavior disconnected; harmless local capabilities and hibernated source retained. | [Gate 5 record](../research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md) |
+| 6. Native database admission | Repa-owned database identity and migration lineage with one state-owning process per LearnerHome. | [Gate 6 record](../research/opencode-fork-gate-06-native-database-admission-2026-07-14.md) |
 
-Gate 1 passed. Gate 2 preserved the exact-tag Windows failure; its diagnosis
-showed an invalid inherited PowerShell 5.1 test command rather than a runtime
-streaming defect. Gate 2A then corrected only that test contract and passed.
-Gate 3 then established independent Repa product and state identity at fork
-commit `0ffed9f62`. Gate 4 established the protected learning-first composition
-spine at `9c7b74f41` and completed truthful released-v1 profiles and hidden
-operations at `17e25eab2`. Gate 5 then established the terminal-only inherited
-surface boundary at `25e51861e`, including hibernation of all upstream-owned
-automatic repository workflows. Gate 6 established native database admission,
-a Repa-only forward lineage, and one state-owning process per LearnerHome at
-`6c0b7aa5b`. Volatile active status is owned only by
-[`docs/README.md`](../README.md), with exact evidence in the
-[fork ledger](../fork-ledger.md); this roadmap does not predict the next slice
-from file names or dependency shape.
+Gate 6 leaves baseline schema version 1 admitted, an empty post-baseline Repa
+migration registry, and no native learning tables. There is no user learning
+data compatibility obligation constraining the first learning migrations.
 
-The first accepted product baseline is terminal-only. Inherited Web and Desktop
-clients are deferred until real use justifies supported product work. Their
-public launch, proxy, automatic build, and release edges must be disconnected
-before this baseline is admitted; source may hibernate without becoming a
-support promise. OpenCode Zen/Go receive no first-class provider integration in
-this baseline; the generic custom-provider path remains available without
-Console, marketing, anonymous-access, or upsell semantics. The inherited
-updater likewise remains unregistered and inactive until Repa owns a release,
-integrity, rollback, and migration contract; hibernation does not require
-deleting its implementation.
+## Accepted architecture-grill decisions
 
-## Legacy asset use during the gates
+### Design depth before Gate decomposition
 
-The pre-fork oracle tree is useful in three different ways, detailed in the
-asset audit:
+Before choosing the replacement Gate sequence, establish one coherent logical
+skeleton across Course/Course View, source/material, Interaction, learner
+record, Agenda, and Tutor context. The skeleton settles:
 
-- a few pure utilities are carry candidates, subject to an inherited-mechanism
-  comparison and a current native consumer;
-- Course, Agenda, Tutor context, source, and interaction tests are behavioral
-  oracles whose contracts are re-expressed against native identities; and
-- the old CLI, provider adapter, runner, database schema, and runtime-coupled
-  labs remain black-box or historical evidence, not code dependencies.
+- stable identities and ownership;
+- version, provenance, and correction relationships;
+- cross-authority reference direction;
+- which state is authoritative and which is a projection; and
+- transaction and dependency boundaries that constrain implementation order.
 
-Independent deterministic labs may remain runnable in the oracle while their
-invariant is still useful. Labs coupled to `runTutorTurn` or the old database
-stay frozen there; adding a compatibility adapter merely to keep them green is
-forbidden. Cutover does not edit or delete those oracle bytes. Frozen formal
-model packages remain historical and are never regenerated.
+This decision does not freeze complete physical schemas, every column, command
+surface, lifecycle, algorithm, or package name. Those details remain local to
+the Gate that has enough evidence to own them. Designing only the first module
+would leave cross-authority conflicts undiscovered; designing all physical
+details now would promote unsupported guesses.
 
-## Phase 1: establish a reproducible fork baseline
+### Session deletion and durable learning provenance
 
-Create the fork in an isolated worktree or replacement branch so the current
-Repa history remains available as an oracle until cutover. Obtain full
-OpenCode history from upstream, verify the tag and commit, and record the
-license provenance.
+Durable learning state is not an inherited Session/Message/Part cascade child.
+Ordinary Session deletion removes transcript-owned rows while a minimal
+Repa-owned causal receipt survives without transcript content and records that
+the source is unavailable. Course, material, learner, Agenda, route, and policy
+state remain under their own deletion and correction lifecycles.
 
-Before product changes, prove the pinned baseline on Windows:
+An explicit deep-delete operation may later remove or supersede learning state
+derived from a Session after presenting the affected domain scope. Ephemeral
+Interaction projections and runtime-only focus may continue to follow Session
+deletion.
 
-```powershell
-bun install --frozen-lockfile
-bun run --cwd packages/core typecheck
-bun run --cwd packages/opencode typecheck
-bun run --cwd packages/opencode build --single --skip-install --skip-embed-web-ui
-```
+### Narrow shared command-settlement substrate
 
-Run the focused database/event, v1 Session prompt/processor, permission,
-cancellation, shell, and TUI tests that own later Repa changes. Record any
-baseline failure before patching it; do not make a failed upstream build look
-like a Repa regression.
+All model-issued durable learning commands share one narrow Repa-owned substrate
+for causal receipt, physical invocation identity and exact replay, trusted
+execution context, permission/time/context revisions, and the exact
+model-visible settlement. It also owns the non-content tombstone left when an
+originating transcript is deleted.
 
-Rename only product-owned surface required to isolate the application:
+Each learning authority still owns its semantic effect identity, legal
+transition, entity preconditions, correction/supersession rules, and domain
+records. The shared substrate does not define a universal learning event,
+replay the database, or make inherited OpenCode events the center of learning
+state.
 
-- binary and displayed product name;
-- global data/config/cache/state paths;
-- environment-variable prefix;
-- database filename and application identity; and
-- root package/release entry points needed for a reproducible Repa build.
+## Accepted structural facts
 
-Then replace the inherited coding-product default before adding learning-state
-features. Audit every model-visible and hidden prompt path, not only the
-fallback prompt: provider-selected base prompts, primary and hidden agents,
-compaction, summaries, titles, exploration, tool descriptions, plan reminders,
-command templates, instruction discovery, and environment contributions.
-Every interactive provider path implements the same Repa product contract and
-accepts the same Learning-System composition inputs; the exact rendering may
-vary for demonstrated provider requirements. Hidden calls receive narrow
-Repa-owned prompts for their actual task rather than the full interactive
-context. This establishes a composition boundary, not a prompt persona that
-pretends to be the whole Tutor. Provider-specific text cannot define a separate
-coding identity for that provider.
+These facts constrain the route but do not determine its Gate order:
 
-Learning-first does not mean deleting useful coding mechanics. A learner may
-still ask Repa to read or change code, use Git/LSP/patch/worktrees, or invoke an
-explicit code-review capability. Those actions remain capabilities inside the
-learning product. They do not make repository work the default ontology,
-convert Session summaries into pull-request descriptions, or turn OpenCode
-todo/review/project records into Agenda, Tutor review, Course, or LearnerHome.
+- one local LearnerHome and one native database span Courses, LearningSpaces,
+  Sessions, learner records, Agenda meaning, and Tutor policy;
+- several Courses may be ongoing simultaneously;
+- Course belongs to LearnerHome rather than a directory or LearningSpace;
+- an optional default Course preference is only a context-selection bias;
+- a Course may exist before any Course View, retain multiple View strategies and
+  revisions, derive candidate/historical/working relations per exact eligible
+  revision, and select zero or one working revision without inventing a
+  placeholder route;
+- material identity, exact source revision, readable representation, Material
+  Map, and Course alignment are different meanings;
+- Interaction, source/artifact, Course View, Material Map, learner record,
+  Agenda, and Tutor policy remain separate authorities;
+- Session history is Interaction truth, not the long-term learning-state
+  boundary;
+- models may initiate durable learning commands, while the runtime binds trusted
+  identity, source, revision, permission, transaction, correction, and tool
+  settlement;
+- the baseline has no background daemon; time-dependent meaning is derived when
+  Repa wakes; and
+- the pre-fork oracle and pinned references remain read-only evidence, not
+  dependencies or schemas to copy.
 
-Inventory the inherited local control commands by behavior. Retain those whose
-Session, Interaction, permission, and committed-learning-effect semantics
-survive; exclude cloud/share commands and repair or remove any undo, fork,
-compact, or related action that can contradict a durable learning transition.
-Do not invent Repa-specific Tutor slash commands during the baseline.
+## Evidence-constrained dependency graph
 
-Audit excluded product modules separately from prompts. Automatic account and
-sharing behavior, share-link import, sync/control-plane workspace, marketplace,
-hosted GitHub automation, and comparable group behavior must be absent from the
-Repa baseline along with their routes, enabling configuration, background work,
-and visible commands. An excluded feature is not left as a broken menu item or
-dormant network call. Local commands such as `/init`, `/review`, or local PR
-checkout are retained as explicit scoped capabilities when their independent
-names and effects remain truthful.
-
-First remove excluded behavior from registration, ordinary reachability,
-automatic startup, and current release composition, and prove those properties
-at their owners. Source may then remain hibernated. Consider physical deletion
-only when active conflict, continuing maintenance cost, security risk, or an
-explicit product rejection justifies it. Classify mixed modules by behavior
-before following dependencies; a last caller does not inherit the product
-classification of what it calls.
-
-The phase passes when a pinned Windows `repa` binary opens a new Repa home and
-database without reading or modifying OpenCode state; every interactive
-provider selector implements the Repa product contract and composition inputs;
-hidden calls use Repa-owned task-specific prompts; and excluded OpenCode
-product surfaces are unreachable and absent from the ordinary interface. It
-fails if the released v1 path cannot be built reproducibly, requires the
-preview v2 runner, or still defaults to a coding agent under any provider
-branch. Full Tutor behavior remains a later integrated-product gate rather
-than a claim made by the base prompt.
-
-## Phase 2: make Interaction and SQLite Repa-native
-
-Choose one Interaction identity mapping over the inherited v1 Session,
-message, part, and event projections. Preserve these meanings explicitly:
-
-- admitted learner occurrence versus synthetic/compaction input;
-- Turn terminal lifecycle;
-- one model operation per provider sample;
-- physical tool invocation and its exact model-visible settlement;
-- immutable per-sample learning context cut; and
-- interruption, exhaustion, failure, and reopen.
-
-Add a Repa database identity marker and a forward-only Repa migration baseline.
-Reject unknown, legacy OpenCode, old Repa, and future databases rather than
-guessing from a shared table name.
-
-Admit zero or more explicitly approved content roots and durable canonical
-path-permission rules. Reading an approved root and editing user content remain
-separate actions. Prove allow-once, reject, permanent allow across restart,
-revocation, narrow-subtree precedence, path move/symlink handling, and the
-unrestricted fixed Repa-owned artifact area through the inherited permission
-prompt/evaluator flow.
-
-Root approval may create only a bounded deterministic inventory. Do not launch
-an automatic LLM-wide classification pass. Prove goal-driven selective reads,
-an explicit budgeted broad organization action, drift discovery on wake/read,
-and exact revision binding when content is actually observed. Bind ordinary
-search first to the request/Course/material working set, then prove visible,
-bounded widening to an approved root without a repeated prompt. An unapproved
-root still prompts or denies, and no implicit search spans all LearnerHome roots
-or the computer. Reuse the inherited ripgrep mechanics; admit no second search
-authority or background semantic index.
-
-Do not copy the current `session`, `session_item`, `model_operation`,
-`tool_invocation`, `system_state`, or `durable_effect` tables into the new
-database. Preserve their accepted behavioral examples and failure tests, then
-implement those invariants through the native Interaction records. A narrow
-Turn or context-cut table is allowed only when the inherited message/part
-contract cannot represent its real consumer honestly.
-
-The phase passes when one multi-step Turn survives restart with stable typed
-items and no shadow lifecycle, interactive launch remains sessionless until the
-first ordinary input, and explicit slash/CLI continue or select resumes the
-intended transcript without first creating a Session. The deterministic empty
-view is not mock prompt text or a synthetic learner item. Compaction or replay
-may repeat old text but cannot manufacture a new learner occurrence;
-interrupted model or tool work is never silently rerun.
-
-Also prove that directory changes, discovery, and model output cannot mutate
-the durable current Course. A Course switch commits through a program-owned
-local focus command only after an explicit learner request and a second visible
-confirmation bound to the exact target and current focus revision; rejection,
-withdrawal, and stale confirmation leave the focus unchanged. This proves the
-focus authority, not model-facing Tool Part settlement.
-
-Verify separately that a learner request concerning another Course can load
-that Course's bounded context in the same ordinary sample without changing the
-durable default or creating a shadow temporary-focus record. The persisted
-request and context cut must be sufficient to explain the cross-Course read.
-
-## Phase 3: prove an atomic model-issued learning command in the inherited runtime
-
-Introduce one already accepted local learning command through the native tool
-path. Its purpose is to prove the transaction and identity seam, not to invent
-a new domain concept.
-
-Adapt EventV2/tool settlement so one SQLite transaction:
-
-1. validates the current invocation, context cut, source, permission, and
-   entity revision;
-2. commits the domain transition and immutable domain receipt;
-3. completes the same Tool Part with the exact model-visible result; and
-4. commits the Interaction event/projection.
-
-The result read back from SQLite is the result returned to the model. A later
-AI SDK stream item confirms or reuses the stored settlement; it cannot execute
-the command again.
-
-Inject failures before the domain write, after each projector/commit boundary,
-after database commit but before the model consumes the result, and during
-restart. Verify exact invocation replay, semantic duplicate through a new
-invocation, conflicting payload, stale source, abort, and second-writer
-behavior.
-
-The phase fails if any outcome permits a domain fact with a contradictory Tool
-Part, a completed Tool Part without the domain fact, process-local identity
-guessing, a second database, or a reconciler.
-
-## Phase 4: admit general material translation
-
-Use a real non-model-friendly local learning material. The input format is not
-a durable product enum. At first need, a capability may use a mature converter
-or model to offer a model-readable representation. The learner can decline
-translation; absence of a derived representation is a valid outcome rather
-than an error that the Agent silently retries around.
-
-The native source/artifact authority records:
-
-- original material identity, workspace-relative path, and exact revision;
-- derived representation path, content revision, media type, and translator
-  identity/revision;
-- the exact original revision from which it was produced;
-- the physical Tool Part and accepted-at time; and
-- the selector/alignment used for bounded later reads.
-
-External conversion completes before the short acceptance transaction. Output
-is written to a temporary path inside the fixed Repa-owned artifact area and
-atomically renamed; the database then accepts the canonical representation and
-settles the tool. A crash may leave an unreferenced file, never a database
-reference to missing bytes. Repa writes no derived sidecar into the learner's
-content tree by default. An explicit export creates a separate user-owned
-artifact and does not move canonical authority out of Repa's area.
-
-The original remains available. A changed original makes the old
-representation stale but does not rewrite or delete its historical meaning.
-Reconversion is lazy. After drift, the learner may decline conversion, accept
-a new representation, or confirm continued use of the existing representation
-for the exact old-representation/new-source revision pair. That confirmation
-does not claim that the old bytes represent the new source. Later Turns and
-fresh Sessions can reuse whichever exact representation revision was selected
-without automatic reconversion.
-
-Accepted representation bytes are not automatically evicted. Exercise
-learner-requested deletion, direct filesystem deletion, accidental loss,
-same-digest relocation/relink, and different-content replacement. Preserve
-the historical record and mark unavailable bytes explicitly; never retarget an
-old selector or context cut to replacement content.
-
-Do not hard-code one verification policy for uncertain conversion. Exercise
-learner-visible choices to spend more model/tool budget, provide or correct
-readable content manually, or proceed with explicit ambiguity. Preserve the
-exact original and representation revisions used in the resulting context cut.
-
-No PDF table, converter manager, format ontology, background pipeline, or
-vector index is admitted by this phase. Translation derives a readable artifact
-from one source revision; it does not perform corpus ingestion, chunking,
-embedding retrieval, top-k prompt injection, or any other local-RAG role.
-
-## Phase 5: scripted real-provider dogfood and cutover
-
-Drive the real Repa provider/tool/Session loop with a fixed learner script. The
-learner is not the maintainer and no claim about human learning quality is made.
-
-The representative trace is:
+The current fork and pre-fork behavior impose a partial order rather than one
+linear implementation chain:
 
 ```text
-select a learning workspace containing non-model-friendly material
--> learner accepts translation on the first bounded read
--> Repa records the readable representation in its owned artifact area
--> Tutor explains or demonstrates from the exact representation revision
--> scripted learner sends a materially different follow-up
--> Tutor adapts through the same Session/runtime
--> one accepted learning command changes current context
--> process restart and fresh Session preserve relevant learning state
--> original transcript and source remain available lazily
+native database admission and migrations (already complete)
+├─ independent domain identities and revision rules
+│  ├─ Course / Course View
+│  └─ source / artifact / representation
+└─ Interaction causal reference, retention, and command idempotency
+
+stable identities from both sides
+├─ Material Map and optional revision-bound Course alignment
+├─ learner and Agenda records with typed causal sources or targets
+└─ model-issued commands with trusted atomic settlement
+
+real authority reads
+└─ Tutor context projections and lazy continuation
 ```
 
-Exercise cancellation, long-context pressure/compaction, tool failure,
-restart, and terminal rendering through the same entry point. The trace must
-show the exact Session, learner Turn, model operation, Tool Part, context cut,
-source/representation revisions, domain transition, and terminal outcome.
+Course View and source/artifact can be established independently; alignment
+needs both. A domain schema or program-owned transition need not wait for model
+tool binding. A model-issued durable write does require command/effect identity,
+causal binding, retry behavior, and atomic settlement. Tutor context consumes
+real authority projections and is not their prerequisite.
 
-After deterministic and fault-injection gates pass, run one bounded real
-provider trace. Provider success is evidence of integration, not pedagogy.
+The inherited database already provides transactional migrations, one
+state-owning process, stable Session/Message/Part IDs, and atomic settlement of
+one Session event with its projection. It does not provide an atomic Turn, a
+durable learning-command identity, exactly-once tool effects, a global revision,
+or a safe long-lived provenance reference: deleting a Session currently
+removes its messages, parts, and event aggregate.
 
-Cut over only after the new trace passes. Then remove any dedicated
-compatibility path, tombstone, or obsolete API-only test that actually exists
-in the fork, and port the required learning-domain behavior oracles to the
-native runtime. The pre-fork runner, schema, tests, and labs remain unchanged in
-the immutable oracle; cutover makes them non-production history rather than
-physically deleting them.
+## Remaining physical and Gate-local questions
 
-## Repository and documentation cutover
+The logical direction is settled far enough to derive an engineering order.
+These questions remain for the Gate that owns the affected boundary:
 
-At cutover:
+### Native learning storage
 
-- ADR-0014 and this roadmap remain the active runtime authority;
-- ADR-0001/0011 remain historical superseded decisions;
-- current product and architecture documents describe the forked product, not
-  a Repa layer over OpenCode;
-- upstream provenance and MIT notices remain intact;
-- `.reference` stays read-only and is not a production source directory; and
-- the pre-fork Repa line remains reachable only as history/oracle, not as a
-  compatibility branch shipped to users.
+- Which physical records and modules first realize the accepted Course and
+  Course View model?
+- Which identities are stable across revisions, and which records are immutable
+  observations or selections?
+- Which constraints belong in SQLite, in domain transition code, or in both?
 
-## Verification gate
+### Interaction and command identity
 
-Run the fork's inherited checks plus Repa-specific architecture, migration,
-fault-injection, and vertical tests. At minimum verify:
+- Which existing Session, message, part, and event identities are already
+  sufficient for learner occurrence, model operation, tool invocation, and
+  terminal outcome?
+- What narrow additional identity or receipt is genuinely missing?
+- Which atomicity and replay guarantees must exist before the first model-issued
+  learning write?
 
-- clean/future/interrupted migration behavior, `foreign_key_check`, and
-  `integrity_check`;
-- one LearnerHome writer and truthful recovery;
-- multi-step typed Session history and compaction lineage;
-- exact model-operation/context-cut/tool identities;
-- atomic domain effect and Tool Part settlement;
-- source and derived-representation drift;
-- default working-set search, explicit approved-root widening, and denial of
-  implicit LearnerHome/computer-wide search;
-- declined translation, lazy regeneration, and confirmed stale-revision reuse;
-- learner-selected cost/quality handling without a RAG index or hidden
-  verification policy;
-- explicit artifact deletion and externally missing-artifact recovery truth;
-- same-Session and fresh-Session learning continuity;
-- cancellation and failure truth;
-- Windows binary and terminal behavior; and
-- no imports from `.reference` or production dual runtime.
+### Source, material, and filesystem authority
 
-## Stop and rollback rules
+- How do approved roots, artifact locations, exact revisions, representations,
+  selectors, and Course alignment depend on one another?
+- Which inherited read, search, permission, and tool-settlement mechanisms can
+  be used directly?
+- Where does external conversion end and Repa's atomic acceptance begin?
 
-- Stop if a gate's known failure cases are deferred as later cleanup while its
-  happy path is declared complete.
-- Stop if keeping an old test green requires a compatibility import, subprocess
-  bridge, mirrored record, or second production executor.
-- Stop if a patch crosses two unresolved authority boundaries without one
-  executable invariant that requires both; split the gate and return to the
-  parent uncertainty.
-- Stop if a learning capability requires simultaneous production changes in
-  both v1 and preview v2 runners.
-- Stop if a second database, shadow lifecycle, compatibility wrapper, global
-  event/fact table, or background reconciler appears.
-- Stop if coding nouns are merely renamed to learning nouns without preserving
-  the learning consumer's contract.
-- Stop if upstream mechanics are rewritten before a failed reduction is
-  demonstrated.
-- Keep the existing Repa branch as the rollback oracle until the new fork
-  passes the cutover gate; do not combine both runtimes to make partial
-  progress appear complete.
+### Learning context and continuity
+
+- Which durable state is authoritative, which state is a bounded projection,
+  and which detail remains lazy?
+- How do default Course preference, request-specific Course context, working
+  Course View, route continuity, Session transcript, and compaction remain
+  distinct?
+
+### Learner, Agenda, and planning authorities
+
+- Which learner occurrences or evidence distinctions deserve durable records
+  before richer adaptation exists?
+- Which future-attention, goal, Assignment, capacity, and allocation meanings
+  have independent lifecycle requirements?
+- What dependency order avoids both one universal table and a collection of
+  disconnected special cases?
+
+### Package and dependency direction
+
+- Which current OpenCode modules can remain domain-independent?
+- Where do Repa learning authorities live so the Agent runner composes them
+  without owning them?
+- Which boundary should be implemented first because later boundaries truly
+  depend on it, rather than because it is easiest to see or inherited from the
+  old route?
+
+## Gate sequence
+
+Accepted on 2026-07-15 from the settled logical skeleton and dependency
+evidence. No Gate below authorizes implementation until its own
+pre-implementation grill closes.
+
+The accepted Gate 7 contract is recorded in
+[Course and Course View authority](../research/opencode-fork-gate-07-course-view-authority-2026-07-15.md).
+
+| Gate | Structural boundary | Why this position | Does not imply | Closing evidence direction |
+| --- | --- | --- | --- | --- |
+| 7. [Course and Course View authority](../research/opencode-fork-gate-07-course-view-authority-2026-07-15.md) | Native Course identity, stable View identity, immutable View revisions, stable item identity, closed revision-transition mappings, reversible versioned withdrawal, bounded revision membership and reads, and optional exact versioned working selection. | These identities are referenced by alignment, route, learner, Agenda, and context. They do not depend on material or model-tool settlement. | Material, progress, mastery, a placeholder route, completion/abandonment lifecycle, physical deep deletion, fuzzy identity migration, Git-style merge machinery, automatic candidate promotion, causal provenance proof, or a model-issued write. | Course creation before a View; exact derived candidate/history/working relations; immutable View lineages; no automatic selection movement; stale rejection after learner selection and stale replacement after target withdrawal/restore both fail; the withdrawal/restore matrix preserves parent eligibility and Course clear-only behavior; the ordered-forest and preserve/split/merge contracts reject ambiguous mappings; cross-View item reuse cites an exact source; authorship basis remains creation provenance rather than acceptance state or causal proof; cursor-bounded reads, Multi-Course persistence, restart, and database invariants hold. |
+| 8. Learning-command settlement | Narrow causal receipt and physical invocation substrate, proven through one Course-owned command. | A real domain authority prevents the shared seam from becoming speculative; later model-issued writes reuse it. | Universal events, global revision, or domain-generic semantic effects. | Exact replay, conflicting reuse, Session deletion tombstone, crash boundaries, and atomic domain/result settlement. |
+| 9. Source and artifact authority | Logical artifact identity, locations, exact observed revisions, availability, and provenance. | Source is independent of Course but precedes Material Map, translation, and evidence grounded in exact content. | A root owning a Course, automatic classification, or material/Course alignment. | Same-path new bytes, move, missing source, immutable old revisions, and correction without retargeting. |
+| 10. Content-root authority and bounded observation | Approved roots, separate read/write grants, revoke semantics, bounded inventory/search, and exact file observation into Gate 9 records. | Real filesystem use needs authority and source identity; inherited tools can be reused only after this boundary is explicit. | Computer-wide indexing, a LearningSpace owner, or automatic semantic import. | Allow/revoke/restart, symlink or junction escape, mutation during read, cancellation, and bounded widening. |
+| 11. Readable representation lineage | External conversion followed by short atomic acceptance of an immutable representation revision. | Depends on exact artifact revisions and content authority; Course is unnecessary. | A universal RAG pipeline, mandatory conversion, or rewriting old selectors. | Decline, unsupported input, timeout, malformed output, missing bytes, retranslation, cleanup, and no accepted dangling path. |
+| 12. Material Map and Course alignment | Revision-bound material outline/selectors plus optional many-to-many alignment to exact Course View revisions/items. | Material Map needs source revisions; alignment needs both independent identity branches. | Material outline equaling Course route or alignment being required for every source. | Drift fails closed, unaligned maps remain valid, many-to-many relations, and working-view replacement preserves history. |
+| 13. Learner continuity foundation | Learner-owned route anchor and narrowly required progress references, distinct from focus, completion, evidence, and mastery. | Depends on Course/View identities and, for model-issued writes, Gate 8 settlement; it need not wait for a general learner ontology. | One global current item, one active Course, or mastery inference. | Independent Courses, stale anchors, correction, deleted source transcript, and no false semantic promotion. |
+| 14. Learning context and Session continuation | Default Course preference, request-specific Course selection, bounded authority projections, lazy detail, context cuts when needed, and truthful fresh/resumed Session behavior. | Consumes real Course, material, policy, and continuity records; it is not their storage prerequisite. | A second context database, eager transcript import, or a new runtime. | Cross-Course requests without preference mutation, restart, compaction, missing detail, and exact projection revisions. |
+| 15. Learner record and Tutor adaptation | Source-linked occurrences, evidence, and correctable hypotheses only where they alter later Tutor behavior. | Requires causal receipts and typed Course/material targets where relevant; context already has a projection seam to consume them. | A universal activity table, mastery score, or mandatory structured write per interaction. | Report/evidence/inference separation, correction, duplicate occurrence handling, zero-write teaching, and attributable adaptation. |
+| 16. Agenda authority | Separate goal, future-attention, commitment, deferral, and temporary-detour lifecycles with trusted-time derivation. | Uses existing causal, target, learner, and context boundaries without forcing all Agenda meanings into one shape. | A generic todo system, background daemon, or service implying correctness/mastery. | Eligibility over time, dismissal/supersession/reopen, incompatible current intent, restart, and source preservation. |
+| 17. Assignment and planning authority | Substantial Assignment obligations, workload/capacity inputs, progress, allocation, infeasibility, and recomputation. | Builds on Agenda and trusted time; begins only after its Gate grill has a representative multi-day planning pressure. | Minute-scale rescue, model-owned arithmetic, or every task becoming an Assignment. | Reproducible allocation, corrected estimates/availability, infeasibility, learner override, and recomputation from accepted inputs. |
+
+The sequence establishes dependency-guided engineering order rather than
+claiming that later Gate details are already designed. A Gate may be revised or
+the later sequence reordered when its grill exposes contradictory evidence,
+but a local implementation shape does not silently rewrite the accepted
+skeleton.
+
+## Oracle and reference use
+
+Use the pre-fork oracle for behavioral meanings, counterexamples, correction
+semantics, and restart/failure evidence. Do not import its runner, schema,
+prompt bytes, or tool APIs.
+
+Use pinned OpenCode and Codex references to understand mature provider,
+streaming, cancellation, tool, terminal, and storage mechanisms. Reuse a
+mechanism only when the same engineering problem exists in Repa. Reference
+package topology does not choose Repa's domain boundaries.
+
+## Release and cutover meaning
+
+The fork is already the sole active production line. The pre-fork tree is an
+immutable oracle, not a second runtime awaiting deletion.
+
+Individual engineering Gates may close before Repa has a broadly usable
+learning release. Release claims are made separately from Gate claims and need
+evidence matching the behavior actually promised.
+
+## Correction and stop rules
+
+- A maintainer correction invalidates derived route, Gate, document, code, or
+  test assumptions that depended on the old interpretation.
+- A passing test proves only the behavior its oracle can distinguish; it does
+  not justify the surrounding architecture by itself.
+- Dependency order is evidence about implementation order, not proof that two
+  modules share product meaning.
+- Do not add compatibility paths for experimental learning data that has no
+  migration obligation.
+- Do not create speculative universal managers, graphs, event tables, state
+  machines, or recovery frameworks merely to make later work appear prepared.
+- Do not require a structural Gate to impersonate a finished product, and do
+  not call an arbitrary partial change a Gate merely because it is small.
+- Keep the oracle tag immutable and never dual-run or dual-write the pre-fork
+  and fork systems.
