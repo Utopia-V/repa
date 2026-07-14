@@ -14948,31 +14948,6 @@
               "message": {
                 "type": "string"
               },
-              "action": {
-                "type": "object",
-                "properties": {
-                  "reason": {
-                    "type": "string"
-                  },
-                  "provider": {
-                    "type": "string"
-                  },
-                  "title": {
-                    "type": "string"
-                  },
-                  "message": {
-                    "type": "string"
-                  },
-                  "label": {
-                    "type": "string"
-                  },
-                  "link": {
-                    "type": "string"
-                  }
-                },
-                "required": ["reason", "provider", "title", "message", "label"],
-                "additionalProperties": false
-              },
               "next": {
                 "type": "integer",
                 "minimum": 0

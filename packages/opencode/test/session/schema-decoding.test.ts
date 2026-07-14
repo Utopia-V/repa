@@ -234,7 +234,7 @@ describe("SessionStatus.Info", () => {
     expect(decode({ type: "busy" })).toEqual({ type: "busy" })
   })
 
-  test("retry carries attempt/message/action/next", () => {
+  test("retry carries generic timing without inherited commercial actions", () => {
     const input = {
       type: "retry" as const,
       attempt: 1,
@@ -249,7 +249,12 @@ describe("SessionStatus.Info", () => {
       },
       next: 500,
     }
-    expect(decode(input)).toEqual(input)
+    expect(decode(input)).toEqual({
+      type: "retry",
+      attempt: 1,
+      message: "transient",
+      next: 500,
+    })
   })
 
   test("rejects unknown type", () => {

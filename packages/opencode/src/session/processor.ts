@@ -666,7 +666,6 @@ const layer = Layer.effect(
                     type: "retry",
                     attempt: info.attempt,
                     message: info.message,
-                    action: info.action,
                     next: info.next,
                   })
                 },

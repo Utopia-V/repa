@@ -669,14 +669,6 @@ export type SessionStatus =
       type: "retry"
       attempt: number
       message: string
-      action?: {
-        reason: string
-        provider: string
-        title: string
-        message: string
-        label: string
-        link?: string
-      }
       next: number
     }
   | {

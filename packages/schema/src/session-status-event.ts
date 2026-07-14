@@ -1,7 +1,6 @@
 export * as SessionStatusEvent from "./session-status-event"
 
 import { Schema } from "effect"
-import { optional } from "./schema"
 import { Event } from "./event"
 import { NonNegativeInt } from "./schema"
 import { SessionID } from "./session-id"
@@ -14,16 +13,6 @@ export const Info = Schema.Union([
     type: Schema.Literal("retry"),
     attempt: NonNegativeInt,
     message: Schema.String,
-    action: optional(
-      Schema.Struct({
-        reason: Schema.String,
-        provider: Schema.String,
-        title: Schema.String,
-        message: Schema.String,
-        label: Schema.String,
-        link: optional(Schema.String),
-      }),
-    ),
     next: NonNegativeInt,
   }),
   Schema.Struct({

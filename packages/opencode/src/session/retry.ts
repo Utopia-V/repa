@@ -7,18 +7,8 @@ import { isRecord } from "@/util/record"
 
 export type Err = ReturnType<NamedError["toObject"]>
 
-export type RetryReason = "free_tier_limit" | "account_rate_limit" | (string & {})
-
 export type Retryable = {
   message: string
-  action?: {
-    reason: RetryReason
-    provider: string
-    title: string
-    message: string
-    label: string
-    link?: string
-  }
 }
 
 export const RETRY_INITIAL_DELAY = 2000
@@ -117,7 +107,7 @@ function parseJSON(value: unknown) {
 export function policy(opts: {
   provider: string
   parse: (error: unknown) => Err
-  set: (input: { attempt: number; message: string; action?: Retryable["action"]; next: number }) => Effect.Effect<void>
+  set: (input: { attempt: number; message: string; next: number }) => Effect.Effect<void>
 }) {
   return Schedule.fromStepWithMetadata(
     Effect.succeed((meta: Schedule.InputMetadata<unknown>) => {
@@ -130,7 +120,6 @@ export function policy(opts: {
         yield* opts.set({
           attempt: meta.attempt,
           message: retry.message,
-          action: retry.action,
           next: now + wait,
         })
         return [meta.attempt, Duration.millis(wait)] as [number, Duration.Duration]
