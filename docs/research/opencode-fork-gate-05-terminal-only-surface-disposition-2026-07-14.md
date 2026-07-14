@@ -1,6 +1,6 @@
 # OpenCode fork Gate 5: terminal-only surface disposition
 
-Status: In progress — parent correction complete; inherited repository-workflow registration remains
+Status: Passed — 2026-07-14 at `25e51861effbddbdb04ae8fe88c4107d34ab91b2`
 
 Date: 2026-07-14
 
@@ -65,7 +65,7 @@ the updater. No further physical deletion is authorized by those records.
 | Classification | Current Gate 5 disposition | Controlling reason |
 | --- | --- | --- |
 | Keep | Correct account/share/sync startup and network disconnection; hosted UI proxy and remote-route removal; local `pr`, Git/project-copy, directory, provider, MCP, plugin, Session, and terminal harness behavior | These changes establish truthful runtime boundaries or retain independently useful local behavior. |
-| Repair | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; provider and updater ordinary reachability; inherited automatic GitHub repository-workflow registrations (remaining) | The earlier work confused dependency shape with product meaning and let local slices expand beyond their parent invariant. The completed repairs are recorded below; workflow registrations remain the actual repository-automation gap. |
+| Repair | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; provider and updater ordinary reachability; inherited automatic GitHub repository-workflow registrations | The earlier work confused dependency shape with product meaning and let local slices expand beyond their parent invariant. The completed repairs are recorded below. |
 | Hibernate | Web/Desktop and marketplace source; hosted GitHub Action source; the direct OpenCode provider plugin/tests; updater implementation/tests; dormant commercial retry dialog/art | These are outside current runtime reachability and support promises, but their source has no demonstrated conflict or continuing cost. |
 | Delete or remain deleted | Share-link import; automatic/public share owners that would require restoring removed account/config/Console authority; first-party provider magic branches; updater routes/config/events and other misleading public registrations | These specific branches either conflict with the accepted runtime boundary or cannot be restored without a false compatibility shell. This is evidence for those branches, not a precedent for deleting whole dormant products. |
 
@@ -97,7 +97,7 @@ reachability. Search residue alone does not prove reachability either. Each
 slice must show both the absence of its public route and survival of the
 retained local behavior at the owning registry.
 
-## Implementation history and remaining parent work
+## Implementation history and Gate 5 closure
 
 Gate 5 is one product Gate. The 5A–5F labels below are retained only as
 historical locators for existing commits; they are not a continuing ladder of
@@ -114,19 +114,18 @@ The parent correction resolved three questions:
 3. Gate 5D5 now contains the state needed for one local-directory boundary
    without its duplicate authority or speculative retry framework.
 
-One parent question remains before Gate 5 can close: all 26 inherited GitHub
-workflow definitions still occupy GitHub's active registration directory. They
-cover not only deploy, publish, Desktop, hosted-action, extension, container,
-and UI builds, but also upstream community-governance bots, hosted Agent/review
-entry points, repository-writing generation jobs, and inherited CI. A few jobs
-guard themselves to an upstream repository; most do not, and a job guard does
-not make the workflow an unregistered Repa definition. The inherited CI is not
-a truthful exception: it assumes upstream branches and Blacksmith runners and
-runs package scope that includes deferred clients. The coherent Gate 5 result
-is therefore to unregister every inherited workflow definition while retaining
-its source as hibernated evidence. Designing a new Repa-owned CI is explicitly
-outside Gate 5 and awaits a real repository, branch, runner, and verification
-contract.
+The final parent question concerned all 26 inherited GitHub workflow
+definitions in GitHub's active registration directory. They covered not only
+deploy, publish, Desktop, hosted-action, extension, container, and UI builds,
+but also upstream community-governance bots, hosted Agent/review entry points,
+repository-writing generation jobs, and inherited CI. A few jobs guarded
+themselves to an upstream repository; most did not, and a job guard did not
+make the workflow an unregistered Repa definition. The inherited CI was not a
+truthful exception: it assumed upstream branches and Blacksmith runners and ran
+package scope that includes deferred clients. Commit `25e51861e` moved every
+inherited definition out of `.github/workflows` without changing its content.
+Designing a new Repa-owned CI remains explicitly outside Gate 5 and awaits a
+real repository, branch, runner, and verification contract.
 
 ## Gate 5A locked contract: CLI front door
 
@@ -474,8 +473,8 @@ package resolution remain. Ordinary server health and startup remain. The
 current OpenAPI and v2 SDK are regenerated; the frozen legacy SDK is not
 hand-edited. Initial installers, Nix/release identity, Web documentation, and
 Desktop's separate Electron updater remain deferred rather than being pulled
-into this reachability change. Inherited repository-workflow registrations are
-not yet hibernated and form the one remaining Gate 5 parent boundary.
+into this reachability change. Inherited repository-workflow definitions now
+remain only as hibernated source outside GitHub's registration directory.
 
 Negative evidence requires the config schemas/migration, current event
 manifest, active route tree, current OpenAPI/SDK, and runtime composition to
@@ -554,10 +553,9 @@ is introduced.
   OpenCode endpoint.
 - Current runtime composition leaves no registered command,
   startup/background edge, enabling configuration, generated client method, or
-  ordinary execution path to the excluded behavior. Inherited GitHub workflow
-  registrations remain the explicit repository-automation parent gap;
-  hibernated source may retain internal imports and direct tests outside the
-  runtime graph.
+  ordinary execution path to the excluded behavior. No inherited GitHub
+  workflow remains registered; hibernated source may retain internal imports
+  and direct tests outside the runtime graph.
 
 ## Explicit exclusions
 
@@ -570,9 +568,9 @@ keeps an excluded surface public.
 
 ## Recorded result
 
-Gate 5 remains active only for the inherited automatic GitHub
-repository-workflow registration boundary. The parent disposition correction
-is complete:
+Gate 5 passed at `25e51861effbddbdb04ae8fe88c4107d34ab91b2`.
+The parent disposition correction and repository-workflow boundary are
+complete:
 
 - `03fbb078e` repaired the decision authority and active-status chain;
 - `53b41aa0d` restored local `pr` without share-link import and restored the
@@ -583,7 +581,14 @@ is complete:
   runtime/protocol boundary; and
 - `825b590b4` removed inherited first-party commercial-provider policy while
   preserving the generic custom-provider harness, followed by `0daeb6de5`
-  removing the commercial retry action from the current status contract.
+  removing the commercial retry action from the current status contract; and
+- `25e51861e` moved all 26 inherited workflow definitions out of GitHub's
+  active registration directory while preserving their exact source bytes.
+
+The closure check found zero files beneath `.github/workflows`, 26 inherited
+definitions beneath `.github/hibernated-workflows`, and zero content mismatch
+against their pre-move Git blobs. No product test could add evidence to that
+registration-and-preservation claim, so none was run.
 
 Gate 5A's earlier reachability work was recorded at
 `6503c280762a8cb2cc04e2cd0021498a8f0aa174`, but its whole-command
@@ -758,9 +763,9 @@ current SDK, and current client typechecks passed; those historical results show
 the deletion compiled, not that the deletion contract was reasonable. Passive
 historical Session/share columns remain inert for the later native-database/
 schema decision. The selective restoration, provider/updater reachability, and
-5D5 necessity work are now complete. Gate 5 remains active only for the
-inherited automatic GitHub repository-workflow registrations—not a broad
-package or source-deletion campaign and not a mandate to design Repa-owned CI.
+5D5 necessity work and inherited workflow unregistration are complete. Gate 5
+is closed without a broad package or source-deletion campaign and without
+turning Repa-owned CI design into part of this product-surface decision.
 
 ## Rollback
 

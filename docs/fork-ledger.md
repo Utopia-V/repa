@@ -23,6 +23,7 @@ worktree. Their pins are durable; their paths are not part of this fork.
 | 2A. Test correction | Corrected only the invalid shell test contract | `a72f507de45788f3fb8556d883cdad919f33db43` | `docs/research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md` |
 | 3. Repa identity | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback | `0ffed9f62159b5383b62da73bd270de7f8775e09` | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md` |
 | 4. Learning-first composition | One protected Repa product core across released-v1 carriers, narrow hidden operations, and truthful stock profiles | `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` + `17e25eab2784b8bd71bef7a91effb9ae352bf0ae` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md` |
+| 5. Inherited product-surface disposition | Terminal-only baseline with excluded runtime and automatic repository surfaces disconnected; useful local capabilities and harmless source retained | `25e51861effbddbdb04ae8fe88c4107d34ab91b2` | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
 
 Read a historical record with:
 
@@ -30,15 +31,15 @@ Read a historical record with:
 git show repa-prefork-oracle:<historical-record-path>
 ```
 
-## Active and deferred boundaries
+## Closed and deferred boundaries
 
 - Gate 4 is closed: released-v1 model carriers and stock profiles implement one
   learning-first Repa composition invariant.
-- Gate 5 is active under
+- Gate 5 is closed under
   `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`.
   Its governing result is product reachability, not a source-deletion quota.
-  The parent disposition correction is complete; Gate 5 remains open only for
-  the inherited automatic GitHub repository-workflow registration boundary.
+  The parent disposition correction and inherited automatic GitHub
+  repository-workflow unregistration are complete.
 - `03fbb078e` corrected ADR-0014, Roadmap 09, the Gate 5 contract, README,
   ledger, and AGENTS continuity so baseline exclusion no longer authorizes
   source deletion by implication.
@@ -65,13 +66,13 @@ git show repa-prefork-oracle:<historical-record-path>
   document.
 - Web/Desktop, marketplace, hosted GitHub automation, first-party commercial
   provider policy, and updater implementation may remain hibernated. Runtime
-  reachability is corrected, but all 26 inherited workflow definitions remain
-  registered. Besides automatic build/deploy/publish behavior, they include
+  reachability is corrected. `25e51861e` moved all 26 inherited workflow
+  definitions out of GitHub's active registration directory without changing
+  their contents. The hibernated set includes build/deploy/publish behavior,
   upstream community-governance bots, hosted Agent/review entry points,
   repository-writing generation jobs, and CI tied to upstream branches,
-  runners, and package scope. Unregistering those inherited definitions while
-  retaining their source is the one remaining Gate 5 parent problem. Designing
-  Repa-owned CI is a later engineering decision, not part of this Gate.
+  runners, and package scope. Designing Repa-owned CI is a later engineering
+  decision, not part of Gate 5.
 - Physical source deletion requires concrete compatibility conflict,
   continuing maintenance cost, security risk, or explicit product rejection.
   Dependency closure, temporary lack of callers, and recoverability from Git

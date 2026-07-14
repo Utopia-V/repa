@@ -1,8 +1,6 @@
 # Repa documentation
 
-Status: Fork Gates 0–4 closed. The Gate 5 parent correction is complete, and
-Gate 5 remains active for one parent boundary: inherited automatic GitHub
-repository-workflow registration. No next Gate has been selected.
+Status: Fork Gates 0–5 closed. No next Gate has been selected.
 
 This file is the sole owner of volatile active-Gate status. `AGENTS.md` and the
 roadmap contain stable policy and links rather than copied “next Gate” state.
@@ -17,7 +15,7 @@ legacy labs.
 - [System architecture](architecture/00-system-architecture.md)
 - [One-time fork roadmap](roadmap/09-one-time-opencode-fork-baseline.md)
 - [Fork provenance and gate ledger](fork-ledger.md)
-- [Active Gate 5 terminal-only surface contract](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
+- [Gate 5 terminal-only surface record](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions
