@@ -57,6 +57,7 @@ const TOP_LEVEL = [
   "import",
   "session",
   "plugin",
+  "pr",
   "db",
 ] as const
 
@@ -92,7 +93,6 @@ describe("Repa CLI help-text snapshots", () => {
         const excluded = [
           { name: "web", marker: "start Repa server and open web interface" },
           { name: "github", marker: "manage GitHub agent" },
-          { name: "pr", marker: "fetch and checkout a GitHub PR branch, then run Repa" },
           { name: "console", marker: "log in to console" },
         ] as const
         const retained = [
@@ -101,6 +101,7 @@ describe("Repa CLI help-text snapshots", () => {
           { name: "stats", marker: "show token usage and cost statistics" },
           { name: "export", marker: "export session data as JSON" },
           { name: "import", marker: "path to a local JSON file" },
+          { name: "pr", marker: "fetch and checkout a GitHub PR branch, then run Repa" },
         ] as const
 
         const excludedHelp = yield* Effect.all(
@@ -114,8 +115,8 @@ describe("Repa CLI help-text snapshots", () => {
 
         expect({
           rootHelp: {
-            excludesHostedCommands: !/repa (?:web|github|pr)\b/.test(rootHelp.stderr),
-            retainsLocalCommands: ["serve", "plugin", "stats", "export", "import"].every((name) =>
+            excludesHostedCommands: !/repa (?:web|github)\b/.test(rootHelp.stderr),
+            retainsLocalCommands: ["serve", "plugin", "stats", "export", "import", "pr"].every((name) =>
               rootHelp.stderr.includes(`repa ${name}`),
             ),
           },
@@ -133,7 +134,6 @@ describe("Repa CLI help-text snapshots", () => {
           excluded: {
             web: false,
             github: false,
-            pr: false,
             console: false,
           },
           retained: {
@@ -142,6 +142,7 @@ describe("Repa CLI help-text snapshots", () => {
             stats: true,
             export: true,
             import: true,
+            pr: true,
           },
         })
       }),
