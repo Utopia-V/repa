@@ -37,27 +37,39 @@ git show repa-prefork-oracle:<historical-record-path>
 - Gate 5 is active under
   `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`.
   Its governing result is product reachability, not a source-deletion quota.
-  Automatic account/share/sync behavior, OpenCode service requests, hosted UI
+  The parent disposition correction is complete; Gate 5 remains open only for
+  the inherited automatic build/deploy/publish workflow-registration boundary.
+- `03fbb078e` corrected ADR-0014, Roadmap 09, the Gate 5 contract, README,
+  ledger, and AGENTS continuity so baseline exclusion no longer authorizes
+  source deletion by implication.
+- `53b41aa0d` restored local `pr` as `gh pr checkout` plus Repa launch with no
+  share-link branch, and restored the hosted GitHub Action only as unregistered
+  source. The old sharing engines were not recreated: doing so would require a
+  false compatibility shell over removed account/config/Console owners.
+- `af506b635` accepted the local-directory invariant from Gate 5D5 while
+  removing its second activation authority and all-or-nothing hydration
+  commit. `Sync.bootstrap` is now the single publisher; successful background
+  caches commit independently and failures leave truthful partial state without
+  a new retry framework.
+- `4b2c7229a` disconnected inherited updater configuration, flags, events,
+  routes, runtime composition, generated current client surface, and TUI copy
+  while retaining direct updater implementation and tests as hibernated source.
+- `825b590b4` removed Zen/Go from built-in provider catalogs, plugin
+  composition, ID-specific request/tool/selection behavior, recommendation,
+  and retry upsell while preserving neutral explicit custom providers and the
+  directly testable dormant provider implementation. `0daeb6de5` removed the
+  commercial retry action from the current status schema, OpenAPI, and v2 SDK.
+- Automatic account/share/sync behavior, OpenCode service requests, hosted UI
   proxying, remote routes/selectors, and misleading TUI affordances remain
-  disconnected by the 5B, 5C, and 5D commits recorded in that document.
-- The earlier Gate 5A classification of `PrCommand` at `6503c2807` was wrong:
-  local `gh pr checkout` plus Repa launch is an independently useful explicit
-  capability. Only its OpenCode share-link import branch is excluded. Commit
-  `5edbd8638` then physically deleted PR, hosted GitHub, sharing source, and
-  direct tests on the insufficient ground that they formed a last-caller
-  closure; `0d393ec27` recorded that inference, and `04a2d91a0` extended it to
-  providers and updater code. These conclusions are superseded and require
-  selective repair rather than a blanket Gate 5 revert.
-- The Gate 5D5 implementation at `00061ce34` has passing local-directory
-  evidence, but its expanded state, cache, hydration, and concurrency scope is
-  under a separate necessity audit. Test success alone does not establish that
-  every added mechanism belongs to the local-directory stable state.
-- The first accepted baseline is terminal-only. Web/Desktop, marketplace,
-  hosted GitHub automation, commercial first-party provider policy, sharing
-  implementation, and updater implementation may remain hibernated. They are
-  not registered, shown, auto-started, background-networked, enabled by false
-  configuration, included in current release composition, or promised as
-  supported product behavior.
+  disconnected by the earlier 5B, 5C, and 5D commits recorded in the Gate 5
+  document.
+- Web/Desktop, marketplace, hosted GitHub automation, first-party commercial
+  provider policy, and updater implementation may remain hibernated. Runtime
+  reachability is corrected, but inherited workflows still include automatic
+  deploy, publish, Desktop, hosted-action, extension, container, and UI build
+  triggers. Their semantic disposition and unregistration are the one remaining
+  Gate 5 parent problem; this correction does not silently disable or delete
+  them.
 - Physical source deletion requires concrete compatibility conflict,
   continuing maintenance cost, security risk, or explicit product rejection.
   Dependency closure, temporary lack of callers, and recoverability from Git

@@ -26,9 +26,10 @@ local Agent mechanics may remain useful capabilities, but they are not the
 default ontology and do not silently become Course, Agenda, Tutor, or learner
 state.
 
-Fork Gates 0 through 4 are closed and Gate 5 is active. The canonical current
-status lives in the [documentation map](docs/README.md); the
-[fork ledger](docs/fork-ledger.md) records exact evidence and corrections.
+Fork Gates 0 through 4 are closed and Gate 5 is active after its parent
+disposition correction. No next Gate has been selected. The canonical current
+status lives in the [documentation map](docs/README.md); the [fork
+ledger](docs/fork-ledger.md) records exact evidence and corrections.
 
 The first accepted baseline is terminal-only. Inherited Web and Desktop clients
 are deliberately deferred until real use creates a supported product need.

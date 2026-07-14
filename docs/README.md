@@ -1,8 +1,9 @@
 # Repa documentation
 
-Status: Fork Gates 0–4 closed; Gate 5 is active under a parent-level disposition
-correction. Further provider/updater or dependency deletion is paused until
-the correction recorded by the Gate 5 contract and fork ledger is complete.
+Status: Fork Gates 0–4 closed. The Gate 5 parent correction is complete, and
+Gate 5 remains active for one parent boundary: inherited automatic
+build/deploy/publish workflow registration for deferred product surfaces. No
+next Gate has been selected.
 
 This file is the sole owner of volatile active-Gate status. `AGENTS.md` and the
 roadmap contain stable policy and links rather than copied “next Gate” state.

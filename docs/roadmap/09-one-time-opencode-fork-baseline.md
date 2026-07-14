@@ -133,13 +133,14 @@ from file names or dependency shape.
 
 The first accepted product baseline is terminal-only. Inherited Web and Desktop
 clients are deferred until real use justifies supported product work. Their
-public launch, proxy, automatic build, and release edges are disconnected from
-the baseline; source may hibernate without becoming a support promise. OpenCode
-Zen/Go receive no first-class provider integration in this baseline; the
-generic custom-provider path remains available without Console, marketing,
-anonymous-access, or upsell semantics. The inherited updater likewise remains
-unregistered and inactive until Repa owns a release, integrity, rollback, and
-migration contract; hibernation does not require deleting its implementation.
+public launch, proxy, automatic build, and release edges must be disconnected
+before this baseline is admitted; source may hibernate without becoming a
+support promise. OpenCode Zen/Go receive no first-class provider integration in
+this baseline; the generic custom-provider path remains available without
+Console, marketing, anonymous-access, or upsell semantics. The inherited
+updater likewise remains unregistered and inactive until Repa owns a release,
+integrity, rollback, and migration contract; hibernation does not require
+deleting its implementation.
 
 ## Legacy asset use during the gates
 

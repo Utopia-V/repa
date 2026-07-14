@@ -1,6 +1,6 @@
 # OpenCode fork Gate 5: terminal-only surface disposition
 
-Status: In progress — parent disposition corrected; further physical deletion paused
+Status: In progress — parent correction complete; release-workflow boundary remains
 
 Date: 2026-07-14
 
@@ -61,17 +61,20 @@ proof. That inference is invalid. Commit `5edbd8638` implemented it,
 `0d393ec27` recorded it as success, and `04a2d91a0` extended it to providers and
 the updater. No further physical deletion is authorized by those records.
 
-| Classification | Current Gate 5 work | Controlling reason |
+| Classification | Current Gate 5 disposition | Controlling reason |
 | --- | --- | --- |
-| Keep | account/share/sync automatic-start and network disconnection; hosted UI proxy removal; remote HTTP/selectors removal; misleading TUI/account/share/remote-workspace affordance removal; active sharing config removal | These changes make the terminal baseline truthful at the actual registries and startup owners. |
-| Repair | Gate 5A's whole-file `PrCommand` classification; selective effects of `5edbd8638` and its documentation; the claim that providers/updater must be physically absent | Mixed local and hosted behavior was classified by imports and last callers instead of independent effects. |
-| Hibernate | Web/Desktop, marketplace, hosted GitHub Action, sharing implementation and direct tests, commercial first-party provider policy, updater implementation and direct tests | They are outside current reachability and release promises, but no concrete deletion evidence has been established. |
-| Delete | No additional physical source category is currently authorized. Already-removed public registrations, automatic branches, false configuration, remote selectors, and misleading UI stay absent as behavior, not as a source-deletion precedent. | Physical deletion requires demonstrated conflict, continuing cost, security risk, or explicit rejection. |
+| Keep | Correct account/share/sync startup and network disconnection; hosted UI proxy and remote-route removal; local `pr`, Git/project-copy, directory, provider, MCP, plugin, Session, and terminal harness behavior | These changes establish truthful runtime boundaries or retain independently useful local behavior. |
+| Repair | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; provider and updater ordinary reachability; inherited automatic build/deploy/publish workflow registrations (remaining) | The earlier work confused dependency shape with product meaning and let local slices expand beyond their parent invariant. The completed repairs are recorded below; workflow registrations remain the actual release-boundary gap. |
+| Hibernate | Web/Desktop and marketplace source; hosted GitHub Action source; the direct OpenCode provider plugin/tests; updater implementation/tests; dormant commercial retry dialog/art | These are outside current runtime reachability and support promises, but their source has no demonstrated conflict or continuing cost. |
+| Delete or remain deleted | Share-link import; automatic/public share owners that would require restoring removed account/config/Console authority; first-party provider magic branches; updater routes/config/events and other misleading public registrations | These specific branches either conflict with the accepted runtime boundary or cannot be restored without a false compatibility shell. This is evidence for those branches, not a precedent for deleting whole dormant products. |
 
-Gate 5D5's `00061ce34` local-directory state/cache/concurrency expansion is
-neither accepted nor rejected by this table. It requires a separate necessity
-audit against the stable local-directory boundary; passing tests establish
-behavior, not scope proportionality.
+Gate 5D5's `00061ce34` local-directory invariant is accepted after the
+`af506b635` necessity repair. The active view needs one atomic directory
+publication and generation-safe hydration, but it does not need `Project.sync`
+as a second activation authority, all-or-nothing cache commit, automatic retry,
+or a general concurrency framework. `Sync.bootstrap` is the single publisher;
+successful caches commit independently and failures leave truthful partial
+state.
 
 ## Native owners
 
@@ -99,21 +102,23 @@ historical locators for existing commits; they are not a continuing ladder of
 user-visible micro-Gates. Atomic commits remain useful rollback units without
 creating new product contracts.
 
-The parent work has three live questions:
+The parent correction resolved three questions:
 
-1. Are all excluded baseline behaviors disconnected at their real registries,
-   startup owners, enabling configuration, network paths, and current release
-   composition while retained local behavior remains truthful?
-2. Have mixed capabilities been reduced by behavior—especially local `pr`
-   versus share-link import—rather than classified by dependency shape?
-3. Does the 5D5 local-directory design contain only the state and concurrency
-   needed for its stable local boundary?
+1. Runtime registries, startup/config/network owners, provider policy, and
+   updater reachability now exclude the inherited product behavior while
+   retained local behavior remains truthful.
+2. Local `pr` and the hosted/share branch are classified by their independent
+   effects rather than by a last-caller closure.
+3. Gate 5D5 now contains the state needed for one local-directory boundary
+   without its duplicate authority or speculative retry framework.
 
-Provider and updater reachability may be completed as ordinary implementation
-slices under the first question. Web/Desktop, marketplace, hosted integrations,
-and unused implementation may hibernate. Dependency analysis follows semantic
-disposition and may reveal a concrete cost, but it does not decide product
-classification by itself.
+One parent question remains before Gate 5 can close: inherited GitHub workflows
+still register automatic deploy, publish, Desktop, hosted-action, extension,
+container, and UI-build triggers. Some jobs are guarded to the upstream
+repository and others are not. This correction records that real build/release
+boundary rather than silently expanding into another deletion campaign. The
+next action must classify those workflows by current Repa release meaning and
+hibernate only the registrations that are outside the baseline.
 
 ## Gate 5A locked contract: CLI front door
 
@@ -203,8 +208,9 @@ before typed route removal and SDK regeneration.
 
 `packages/opencode/src/server/routes/instance/httpapi/server.ts` removes the
 raw `uiRoute`, its `serveUIEffect` import, and its merge into the production
-route tree. The helper implementation remains dormant until Gate 5F; this
-slice changes public reachability, not the typed API.
+route tree. The helper implementation remains dormant; any later physical
+source decision requires separate conflict, cost, risk, or product evidence.
+This slice changes public reachability, not the typed API.
 
 Evidence requires:
 
@@ -249,10 +255,10 @@ selectors unreachable, and regenerated current SDK artifacts from the typed
 API owner.
 
 The frozen legacy `packages/sdk/js/src/gen/` tree is not hand-edited to mimic
-generation. Its retirement or recovered source-of-truth is a Gate 5F
-dependency-closure decision. Local provider integration routes are not a
-marketplace surface and remain unless separate evidence shows an excluded
-control-plane dependency.
+generation. Its retirement or recovered source-of-truth remains a separate
+evidence-driven source decision rather than an automatic dependency closure.
+Local provider integration routes are not a marketplace surface and remain
+unless separate evidence shows an excluded control-plane dependency.
 
 ## Gate 5C locked execution boundary: config and startup
 
@@ -392,15 +398,14 @@ local `experimental.projectCopy.generateName` and v2 project-copy operations
 must survive; Gate 5B3 converts their routing middleware to directory-only
 rather than deleting their API group.
 
-## Remaining reachability work: provider policy and self-update
+## Resolved reachability work: provider policy and self-update
 
-The remaining work asks whether Repa can retain a complete generic local
-provider harness without silently carrying OpenCode's first-party Zen/Go
-product policy, and whether self-update can be absent until Repa owns a real
-release channel. These
-are two independent behavior boundaries. Their implementation order may vary;
-inactive source may hibernate, but neither behavior may remain reachable
-through a no-op compatibility surface or false configuration.
+The correction asked whether Repa can retain a complete generic local provider
+harness without silently carrying OpenCode's first-party Zen/Go product policy,
+and whether self-update can be absent until Repa owns a real release channel.
+It treated them as two independent behavior boundaries. Inactive source may
+hibernate, but neither behavior may remain reachable through a no-op
+compatibility surface or false configuration.
 
 ### Make first-party provider IDs ordinary
 
@@ -459,9 +464,11 @@ Build identity is not updater policy. `InstallationVersion`,
 isolation, user-agent/plugin compatibility uses, and the launcher's platform-
 package resolution remain. Ordinary server health and startup remain. The
 current OpenAPI and v2 SDK are regenerated; the frozen legacy SDK is not
-hand-edited. Initial installers, publish/release workflows, Nix/release
-identity, Web documentation, and Desktop's separate Electron updater remain
-hibernated or deferred rather than being pulled into this reachability change.
+hand-edited. Initial installers, Nix/release identity, Web documentation, and
+Desktop's separate Electron updater remain deferred rather than being pulled
+into this reachability change. Inherited publish/release workflow
+registrations are not yet hibernated and form the one remaining Gate 5 parent
+boundary.
 
 Negative evidence requires the config schemas/migration, current event
 manifest, active route tree, current OpenAPI/SDK, and runtime composition to
@@ -493,8 +500,10 @@ product meaning. The correction therefore:
 
 - restores `PrCommand` as an explicit local `gh pr checkout` plus Repa launch
   capability, without OpenCode share-link import;
-- permits the hosted GitHub Action, sharing implementation, and direct tests to
-  remain hibernated and unregistered;
+- restores the hosted GitHub Action as hibernated, unregistered source;
+- does not recreate the old sharing engines or their tests because they depend
+  on the removed active account/config/Console authority and would require a
+  false compatibility shell merely to compile and initialize;
 - keeps share nodes out of ordinary aggregate runtime/startup composition; and
 - leaves passive historical Session/share columns inert for the later native
   database decision rather than rewriting data for vocabulary cleanup.
@@ -536,10 +545,11 @@ is introduced.
 - Missing excluded services do not produce a startup error, retry loop, hidden
   network call, dead menu item, compatibility adapter, or fallback to an
   OpenCode endpoint.
-- Current composition leaves no registered command, startup/background edge,
-  enabling configuration, generated client method, release job, or ordinary
-  runtime path to the excluded behavior. Hibernated source may retain internal
-  imports and direct tests outside that graph.
+- Current runtime composition leaves no registered command,
+  startup/background edge, enabling configuration, generated client method, or
+  ordinary execution path to the excluded behavior. Inherited GitHub workflow
+  registrations remain the explicit build/release parent gap; hibernated source
+  may retain internal imports and direct tests outside the runtime graph.
 
 ## Explicit exclusions
 
@@ -552,13 +562,29 @@ keeps an excluded surface public.
 
 ## Recorded result
 
-Gate 5 remains active. Gate 5A's reachability work was recorded at
+Gate 5 remains active only for the inherited automatic
+build/deploy/publish-workflow registration boundary. The parent disposition
+correction is complete:
+
+- `03fbb078e` repaired the decision authority and active-status chain;
+- `53b41aa0d` restored local `pr` without share-link import and restored the
+  hosted GitHub Action only as unregistered, hibernated source;
+- `af506b635` accepted Gate 5D5 after narrowing activation and hydration to the
+  local-directory invariant;
+- `4b2c7229a` hibernated updater implementation behind a truthful current
+  runtime/protocol boundary; and
+- `825b590b4` removed inherited first-party commercial-provider policy while
+  preserving the generic custom-provider harness, followed by `0daeb6de5`
+  removing the commercial retry action from the current status contract.
+
+Gate 5A's earlier reachability work was recorded at
 `6503c280762a8cb2cc04e2cd0021498a8f0aa174`, but its whole-command
-classification of `PrCommand` is superseded by the parent correction.
+classification of `PrCommand` is superseded by that correction.
 
 - the excluded Console, Web, and hosted GitHub-agent command handlers are no
-  longer registered at the root CLI; `PrCommand` was also unregistered but
-  must be restored after its share-link branch is removed;
+  longer registered at the root CLI; `PrCommand` was incorrectly removed with
+  them and is now restored by `53b41aa0d` after removal of its share-link
+  branch;
 - `run` no longer owns a share option or direct share callback;
 - import is local-JSON-only, and a native-database
   `import -> export -> delete -> import -> export` round trip preserved the
@@ -650,8 +676,11 @@ independent fresh-context review passed. Active routing fields remain solely
 for Gate 5D5.
 
 Gate 5D5 implementation and behavior evidence were recorded at
-`00061ce349e01b9273a40e424f8bb2c3eb01d9c9`; its proportionality and necessity
-are under separate audit before parent-level acceptance.
+`00061ce349e01b9273a40e424f8bb2c3eb01d9c9`. The parent-level necessity audit
+accepted its local-directory invariant after the scope repair at `af506b635`:
+`Sync.bootstrap` is the single activation publisher, successful caches commit
+independently, and the correction introduces neither automatic retry nor a
+general concurrency framework.
 The TUI now publishes one active local-directory snapshot across Project and
 Sync state. Retained non-Session requests carry that directory explicitly;
 entering a Session selects its persisted directory before enabling the prompt,
@@ -664,18 +693,19 @@ Deleting the active project copy first completes one atomic activation of the
 main directory.
 
 Failure before publication preserves the previous complete snapshot. After a
-new directory is published, its directory-owned background caches remain
-honestly empty and `partial` until one generation-consistent hydration batch
-completes; caller cancellation after publication no longer strands that
-batch. A background endpoint failure currently leaves `partial` state and a
-diagnostic log until a later bootstrap; automatic retry and same-directory ABA
-freshness are non-blocking generic-harness follow-ups, not remote Workspace
-compatibility. The 17-file causal suite passed 65 tests, TUI typecheck and
-`git diff --check` passed, exact residue scans found no active remote routing
-consumer, and one fresh-context independent reviewer followed the causal chain
-across repairs and ended green after its two final concurrency counterexamples
-were fixed. Local project-copy operations were the retained reduction consumed
-by the directory-only Gate 5B3 route cutover.
+new directory is published, generation-consistent directory-owned caches
+commit independently; a failed endpoint leaves only its unavailable data
+truthfully empty and the snapshot `partial`, without discarding successful
+hydration. Caller cancellation after publication no longer strands the work.
+Automatic retry and same-directory ABA freshness remain non-blocking generic-
+harness follow-ups, not remote Workspace compatibility. The original 17-file
+causal suite passed 65 tests, TUI typecheck and `git diff --check` passed, exact
+residue scans found no active remote routing consumer, and one fresh-context
+independent reviewer followed the causal chain across repairs and ended green
+after its two final concurrency counterexamples were fixed. The later
+`af506b635` causal checks cover the narrowed single-publisher and partial-
+hydration behavior. Local project-copy operations were the retained reduction
+consumed by the directory-only Gate 5B3 route cutover.
 
 Gate 5B3 route registration passed at
 `34474649b648efbe8e1cbfcc1d5f07f546e10435`. The released instance router no
@@ -705,20 +735,24 @@ do not own `share`, `autoshare`, or the top-level sharing `enterprise` field;
 migration and `REPA_AUTO_SHARE` no longer manufacture the behavior; and current
 OpenAPI/SDK output follows the schema owner. Its physical deletion of
 `ShareNext`, `SessionShare`, direct tests, hosted GitHub Action, and local
-`PrCommand` followed the invalid last-caller inference and requires selective
-repair. Explicit GitHub Copilot enterprise authentication remains
+`PrCommand` followed the invalid last-caller inference. The selective repair at
+`53b41aa0d` restored local `pr` and the unregistered hosted Action. It did not
+recreate the sharing engines or their tests because those units require the
+removed active account/config/Console owners and would otherwise be a false
+compatibility shell. Explicit GitHub Copilot enterprise authentication remains
 provider-local, and the frozen legacy SDK tree has zero diff.
 
 The causal suite passed 187 tests: both config suites, runtime flags, current
 OpenAPI, the retained startup composition, local Session lifecycle, ordinary
 provider configuration, CLI command disposition, and the native-database
 local import/export round trip plus HTTP(S)-import rejection. Core, OpenCode,
-current SDK, and current client typechecks passed; those results show the
-deletion compiled, not that the deletion contract was reasonable. Passive
+current SDK, and current client typechecks passed; those historical results show
+the deletion compiled, not that the deletion contract was reasonable. Passive
 historical Session/share columns remain inert for the later native-database/
-schema decision. Gate 5 remains active for selective restoration,
-provider/updater reachability, 5D5 necessity, and a parent-level disposition
-check—not a broad package/workflow deletion campaign.
+schema decision. The selective restoration, provider/updater reachability, and
+5D5 necessity work are now complete. Gate 5 remains active only for the
+inherited automatic build/deploy/publish workflow registrations—not a broad
+package or source-deletion campaign.
 
 ## Rollback
 
