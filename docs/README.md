@@ -1,9 +1,8 @@
 # Repa documentation
 
 Status: Fork Gates 0–4 closed. The Gate 5 parent correction is complete, and
-Gate 5 remains active for one parent boundary: inherited automatic
-build/deploy/publish workflow registration for deferred product surfaces. No
-next Gate has been selected.
+Gate 5 remains active for one parent boundary: inherited automatic GitHub
+repository-workflow registration. No next Gate has been selected.
 
 This file is the sole owner of volatile active-Gate status. `AGENTS.md` and the
 roadmap contain stable policy and links rather than copied “next Gate” state.

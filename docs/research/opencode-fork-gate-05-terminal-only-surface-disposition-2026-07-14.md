@@ -1,6 +1,6 @@
 # OpenCode fork Gate 5: terminal-only surface disposition
 
-Status: In progress — parent correction complete; release-workflow boundary remains
+Status: In progress — parent correction complete; inherited repository-workflow registration remains
 
 Date: 2026-07-14
 
@@ -43,6 +43,7 @@ The following inherited product semantics are excluded:
 | hosted Web and Desktop clients | remove public launch, proxy, automatic build, and current release reachability; hibernate clients | terminal `serve` only where it supports retained local clients/protocols |
 | marketplace browsing or installation | unregister and hibernate | local plugin discovery and enable/disable behavior |
 | hosted GitHub Action and release integration | unregister and hibernate; restore local `pr` without share-link import | ordinary local Git, PR checkout, Repa launch, and explicit review capability |
+| inherited GitHub repository workflows | unregister the upstream-owned definitions and hibernate their source | a future Repa-owned CI/release design is a separate engineering decision |
 | first-class OpenCode Zen/Go products | remove catalog identity and all ID-specific behavior | neutral generic custom-provider configuration |
 | inherited updater and upgrade UX | disconnect route, configuration, startup, background work, and current release surface; hibernate implementation and direct tests | no active updater until Repa owns release provenance, integrity, rollback, and migrations |
 
@@ -64,7 +65,7 @@ the updater. No further physical deletion is authorized by those records.
 | Classification | Current Gate 5 disposition | Controlling reason |
 | --- | --- | --- |
 | Keep | Correct account/share/sync startup and network disconnection; hosted UI proxy and remote-route removal; local `pr`, Git/project-copy, directory, provider, MCP, plugin, Session, and terminal harness behavior | These changes establish truthful runtime boundaries or retain independently useful local behavior. |
-| Repair | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; provider and updater ordinary reachability; inherited automatic build/deploy/publish workflow registrations (remaining) | The earlier work confused dependency shape with product meaning and let local slices expand beyond their parent invariant. The completed repairs are recorded below; workflow registrations remain the actual release-boundary gap. |
+| Repair | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; provider and updater ordinary reachability; inherited automatic GitHub repository-workflow registrations (remaining) | The earlier work confused dependency shape with product meaning and let local slices expand beyond their parent invariant. The completed repairs are recorded below; workflow registrations remain the actual repository-automation gap. |
 | Hibernate | Web/Desktop and marketplace source; hosted GitHub Action source; the direct OpenCode provider plugin/tests; updater implementation/tests; dormant commercial retry dialog/art | These are outside current runtime reachability and support promises, but their source has no demonstrated conflict or continuing cost. |
 | Delete or remain deleted | Share-link import; automatic/public share owners that would require restoring removed account/config/Console authority; first-party provider magic branches; updater routes/config/events and other misleading public registrations | These specific branches either conflict with the accepted runtime boundary or cannot be restored without a false compatibility shell. This is evidence for those branches, not a precedent for deleting whole dormant products. |
 
@@ -88,7 +89,8 @@ consults:
 - terminal command, keybinding, dialog, tip, and action registration;
 - provider catalogs, built-in provider plugins, and ID-specific transforms;
 - package scripts, client generation, release composition, and physical module
-  dependencies.
+  dependencies; and
+- GitHub's exact `.github/workflows` registration directory.
 
 Tests that only instantiate an implementation directly do not prove public
 reachability. Search residue alone does not prove reachability either. Each
@@ -112,13 +114,19 @@ The parent correction resolved three questions:
 3. Gate 5D5 now contains the state needed for one local-directory boundary
    without its duplicate authority or speculative retry framework.
 
-One parent question remains before Gate 5 can close: inherited GitHub workflows
-still register automatic deploy, publish, Desktop, hosted-action, extension,
-container, and UI-build triggers. Some jobs are guarded to the upstream
-repository and others are not. This correction records that real build/release
-boundary rather than silently expanding into another deletion campaign. The
-next action must classify those workflows by current Repa release meaning and
-hibernate only the registrations that are outside the baseline.
+One parent question remains before Gate 5 can close: all 26 inherited GitHub
+workflow definitions still occupy GitHub's active registration directory. They
+cover not only deploy, publish, Desktop, hosted-action, extension, container,
+and UI builds, but also upstream community-governance bots, hosted Agent/review
+entry points, repository-writing generation jobs, and inherited CI. A few jobs
+guard themselves to an upstream repository; most do not, and a job guard does
+not make the workflow an unregistered Repa definition. The inherited CI is not
+a truthful exception: it assumes upstream branches and Blacksmith runners and
+runs package scope that includes deferred clients. The coherent Gate 5 result
+is therefore to unregister every inherited workflow definition while retaining
+its source as hibernated evidence. Designing a new Repa-owned CI is explicitly
+outside Gate 5 and awaits a real repository, branch, runner, and verification
+contract.
 
 ## Gate 5A locked contract: CLI front door
 
@@ -466,9 +474,8 @@ package resolution remain. Ordinary server health and startup remain. The
 current OpenAPI and v2 SDK are regenerated; the frozen legacy SDK is not
 hand-edited. Initial installers, Nix/release identity, Web documentation, and
 Desktop's separate Electron updater remain deferred rather than being pulled
-into this reachability change. Inherited publish/release workflow
-registrations are not yet hibernated and form the one remaining Gate 5 parent
-boundary.
+into this reachability change. Inherited repository-workflow registrations are
+not yet hibernated and form the one remaining Gate 5 parent boundary.
 
 Negative evidence requires the config schemas/migration, current event
 manifest, active route tree, current OpenAPI/SDK, and runtime composition to
@@ -548,8 +555,9 @@ is introduced.
 - Current runtime composition leaves no registered command,
   startup/background edge, enabling configuration, generated client method, or
   ordinary execution path to the excluded behavior. Inherited GitHub workflow
-  registrations remain the explicit build/release parent gap; hibernated source
-  may retain internal imports and direct tests outside the runtime graph.
+  registrations remain the explicit repository-automation parent gap;
+  hibernated source may retain internal imports and direct tests outside the
+  runtime graph.
 
 ## Explicit exclusions
 
@@ -562,9 +570,9 @@ keeps an excluded surface public.
 
 ## Recorded result
 
-Gate 5 remains active only for the inherited automatic
-build/deploy/publish-workflow registration boundary. The parent disposition
-correction is complete:
+Gate 5 remains active only for the inherited automatic GitHub
+repository-workflow registration boundary. The parent disposition correction
+is complete:
 
 - `03fbb078e` repaired the decision authority and active-status chain;
 - `53b41aa0d` restored local `pr` without share-link import and restored the
@@ -751,8 +759,8 @@ the deletion compiled, not that the deletion contract was reasonable. Passive
 historical Session/share columns remain inert for the later native-database/
 schema decision. The selective restoration, provider/updater reachability, and
 5D5 necessity work are now complete. Gate 5 remains active only for the
-inherited automatic build/deploy/publish workflow registrations—not a broad
-package or source-deletion campaign.
+inherited automatic GitHub repository-workflow registrations—not a broad
+package or source-deletion campaign and not a mandate to design Repa-owned CI.
 
 ## Rollback
 

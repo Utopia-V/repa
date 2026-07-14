@@ -38,7 +38,7 @@ git show repa-prefork-oracle:<historical-record-path>
   `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`.
   Its governing result is product reachability, not a source-deletion quota.
   The parent disposition correction is complete; Gate 5 remains open only for
-  the inherited automatic build/deploy/publish workflow-registration boundary.
+  the inherited automatic GitHub repository-workflow registration boundary.
 - `03fbb078e` corrected ADR-0014, Roadmap 09, the Gate 5 contract, README,
   ledger, and AGENTS continuity so baseline exclusion no longer authorizes
   source deletion by implication.
@@ -65,11 +65,13 @@ git show repa-prefork-oracle:<historical-record-path>
   document.
 - Web/Desktop, marketplace, hosted GitHub automation, first-party commercial
   provider policy, and updater implementation may remain hibernated. Runtime
-  reachability is corrected, but inherited workflows still include automatic
-  deploy, publish, Desktop, hosted-action, extension, container, and UI build
-  triggers. Their semantic disposition and unregistration are the one remaining
-  Gate 5 parent problem; this correction does not silently disable or delete
-  them.
+  reachability is corrected, but all 26 inherited workflow definitions remain
+  registered. Besides automatic build/deploy/publish behavior, they include
+  upstream community-governance bots, hosted Agent/review entry points,
+  repository-writing generation jobs, and CI tied to upstream branches,
+  runners, and package scope. Unregistering those inherited definitions while
+  retaining their source is the one remaining Gate 5 parent problem. Designing
+  Repa-owned CI is a later engineering decision, not part of this Gate.
 - Physical source deletion requires concrete compatibility conflict,
   continuing maintenance cost, security risk, or explicit product rejection.
   Dependency closure, temporary lack of callers, and recoverability from Git
