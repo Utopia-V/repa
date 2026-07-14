@@ -4,10 +4,10 @@ Status: Active production-fork ledger
 
 ## Lineage
 
-| Item | Exact identity | Role |
-| --- | --- | --- |
-| OpenCode | `v1.17.18` / `b1fc8113948b518835c2a39ece49553cffe9b30c` | Full-history MIT fork origin |
-| Codex | `rust-v0.144.1` / `44918ea10c0f99151c6710411b4322c2f5c96bea` | Read-only secondary design reference |
+| Item                 | Exact identity                                                     | Role                                                             |
+| -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------- |
+| OpenCode             | `v1.17.18` / `b1fc8113948b518835c2a39ece49553cffe9b30c`            | Full-history MIT fork origin                                     |
+| Codex                | `rust-v0.144.1` / `44918ea10c0f99151c6710411b4322c2f5c96bea`       | Read-only secondary design reference                             |
 | Pre-fork Repa oracle | `repa-prefork-oracle` / `db1ffdc4c84d52299c96e25121a776f7720ff9f2` | Immutable product, decision, research, and legacy-asset evidence |
 
 Locally materialized reference checkouts are ignored files beside the oracle
@@ -15,16 +15,17 @@ worktree. Their pins are durable; their paths are not part of this fork.
 
 ## Closed gate sequence
 
-| Gate | Result | Fork commit | Historical record |
-| --- | --- | --- | --- |
-| 0. Oracle freeze | Pre-fork behavior and assets classified | pre-fork lineage | `docs/roadmap/09-one-time-opencode-fork-baseline.md` at the oracle tag |
-| 1. Lineage | Exact full-history `v1.17.18` fork with MIT provenance | `b1fc8113948b518835c2a39ece49553cffe9b30c` | `docs/research/opencode-fork-gate-01-lineage-2026-07-13.md` |
-| 2. Windows baseline | Preserved inherited invalid PowerShell test failure | exact upstream tree | `docs/research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md` |
-| 2A. Test correction | Corrected only the invalid shell test contract | `a72f507de45788f3fb8556d883cdad919f33db43` | `docs/research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md` |
-| 3. Repa identity | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback | `0ffed9f62159b5383b62da73bd270de7f8775e09` | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md` |
-| 4. Learning-first composition | One protected Repa product core across released-v1 carriers, narrow hidden operations, and truthful stock profiles | `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` + `17e25eab2784b8bd71bef7a91effb9ae352bf0ae` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md` |
-| 5. Inherited product-surface disposition | Terminal-only baseline with excluded runtime and automatic repository surfaces disconnected; useful local capabilities and harmless source retained | `25e51861effbddbdb04ae8fe88c4107d34ab91b2` | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
-| 6. Native database admission | Native Repa database identity and forward lineage with one state-owning process per LearnerHome; explicit attach remains a client | `6c0b7aa5b` | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md` |
+| Gate                                     | Result                                                                                                                                              | Fork commit                                                                             | Historical record                                                                     |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 0. Oracle freeze                         | Pre-fork behavior and assets classified                                                                                                             | pre-fork lineage                                                                        | `docs/roadmap/09-one-time-opencode-fork-baseline.md` at the oracle tag                |
+| 1. Lineage                               | Exact full-history `v1.17.18` fork with MIT provenance                                                                                              | `b1fc8113948b518835c2a39ece49553cffe9b30c`                                              | `docs/research/opencode-fork-gate-01-lineage-2026-07-13.md`                           |
+| 2. Windows baseline                      | Preserved inherited invalid PowerShell test failure                                                                                                 | exact upstream tree                                                                     | `docs/research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`         |
+| 2A. Test correction                      | Corrected only the invalid shell test contract                                                                                                      | `a72f507de45788f3fb8556d883cdad919f33db43`                                              | `docs/research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md` |
+| 3. Repa identity                         | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback                                             | `0ffed9f62159b5383b62da73bd270de7f8775e09`                                              | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md`           |
+| 4. Learning-first composition            | One protected Repa product core across released-v1 carriers, narrow hidden operations, and truthful stock profiles                                  | `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` + `17e25eab2784b8bd71bef7a91effb9ae352bf0ae` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md`        |
+| 5. Inherited product-surface disposition | Terminal-only baseline with excluded runtime and automatic repository surfaces disconnected; useful local capabilities and harmless source retained | `25e51861effbddbdb04ae8fe88c4107d34ab91b2`                                              | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
+| 6. Native database admission             | Native Repa database identity and forward lineage with one state-owning process per LearnerHome; explicit attach remains a client                   | `6c0b7aa5b`                                                                             | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`         |
+| 7. Course and Course View authority      | LearnerHome-owned Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal   | `3bd6eb9d4`                                                                             | `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`             |
 
 Read a historical record with:
 
@@ -48,6 +49,30 @@ git show repa-prefork-oracle:<historical-record-path>
   One process owns local LearnerHome state, while explicit attached clients do
   not construct a second local runtime. Released, parity-complete OpenCode v2
   remains a future comparison trigger rather than an upgrade promise.
+- Gate 7 is closed under
+  `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`.
+  The first native learning authority now owns independent Courses, stable View
+  identity, immutable linear revisions, Course-owned item continuity, exact
+  mappings, bounded reads, and nullable versioned working selection without
+  importing Session, material, learner-record, Agenda, context, or model-tool
+  settlement semantics.
+- The former Gate 7–19 contracts never began and are superseded rather than
+  reordered. Gate-based engineering remains the accepted progress and
+  acceptance form. The post-Gate-6 architecture and roadmap grill settled the
+  native learning skeleton and dependency-guided replacement Gate 7–17
+  sequence; each Gate is still grilled again before implementation. The
+  original infrastructure-first progression failed to carry the accepted
+  Course, material, learner, Agenda, and Tutor data meanings into a coherent
+  native product path. The corrected
+  `docs/architecture/01-native-learning-data-model.md` makes Course
+  LearnerHome-owned, permits several ongoing Courses, separates an optional
+  default context preference from Course lifecycle, and gives each Course one
+  exact versioned working View Revision among retained alternatives and
+  history. Roadmap 09 now derives Course/View authority, command settlement,
+  source and content authority, readable representations, material alignment,
+  learner continuity, context, adaptation, Agenda, and assignment planning as
+  explicit structural Gates without turning their supporting mechanics into
+  independent product goals.
 - `03fbb078e` corrected ADR-0014, Roadmap 09, the Gate 5 contract, README,
   ledger, and AGENTS continuity so baseline exclusion no longer authorizes
   source deletion by implication.

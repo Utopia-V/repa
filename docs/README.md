@@ -1,20 +1,20 @@
 # Repa documentation
 
-Status: Gates 0–6 closed. The original unexecuted Gate 7–19 contracts are
-superseded. The replacement Gate 7–17 engineering sequence is accepted. Gate 7
-Course and Course View design grill and two maintainer contract reviews are
-closed. The accepted contract covers selection and withdrawal concurrency,
-derived revision relations, bounded hierarchy and reads, mapping, authorship,
-and transition legality. No post-Gate-6 production implementation has begun.
+Status: Gates 0–7 are closed. The original unexecuted Gate 7–19 contracts are
+superseded, and the replacement Gate 7–17 engineering sequence is accepted.
+Gate 7 Course and Course View authority passed at implementation commit
+`3bd6eb9d4`. Gate 8 has not begun.
 
-Current control point: Gate 6 passed at implementation commit `6c0b7aa5b`.
-Repa now admits only its native database lineage, keeps one state-owning process
-per LearnerHome, and treats explicit attachment as a client rather than another
-writer. Invalid or unrecognized files remain in place for deliberate recovery
-or reset. The post-Gate-6 grill and architecture correction established the
-native learning data model and the replacement dependency order. Gate 7 now
-receives its own design grill before an execution plan or production code
-begins.
+Current control point: Gate 7 now gives the native LearnerHome database its
+first learning authority. Repa can persist several independent Courses; each
+Course may exist without a View, retain stable View identities with immutable
+linear revisions, preserve Course-owned item identity through a closed
+preserve/split/merge algebra, and optionally select one exact eligible
+Revision. Versioned withdrawal, restoration, selection, bounded reads, and
+same-snapshot composite reads enforce the accepted concurrency and recovery
+rules. The implementation remains deliberately below Session, model-command,
+material, learner-record, Agenda, context, and terminal integration. Gate 8
+requires its own grill before a contract or implementation begins.
 
 Accepted grill result so far: define the complete logical skeleton across the
 major learning authorities before Gate decomposition, while leaving full
@@ -28,8 +28,8 @@ settlement substrate, while every learning authority retains ownership of its
 semantic effect identity and state transitions.
 
 The dependency-guided Gate 7–17 decomposition in Roadmap 09 is accepted. Gate 7
-design is accepted. A Course may exist before any honest Course View is
-available instead of forcing a placeholder route. A
+implements the accepted Course and View authority. A Course may exist before
+any honest Course View is available instead of forcing a placeholder route. A
 View is a stable route-strategy identity with immutable revisions, and the
 working selection pins one exact eligible revision rather than following new
 revisions automatically. Candidate, historical, and working are derived per
@@ -41,7 +41,8 @@ independent version in the same transaction. Gate 7 records only
 application-bound authorship basis; causal learner/model proof remains Gate 8.
 Non-null withdrawal replacements satisfy the same target-version checks as
 ordinary selection, closing the remaining ABA path. Collection reads are
-cursor-bounded and stably ordered. No Gate 7 implementation has begun.
+cursor-bounded and stably ordered, and multi-query domain reads observe one
+database snapshot rather than assembling impossible mixed states.
 
 This file is the sole owner of volatile active-work status. `AGENTS.md` and the
 roadmap contain stable policy and links rather than copied “next task” state.

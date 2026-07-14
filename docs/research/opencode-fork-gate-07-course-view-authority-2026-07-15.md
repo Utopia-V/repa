@@ -1,7 +1,6 @@
 # OpenCode fork Gate 7: Course and Course View authority
 
-Status: Accepted after maintainer contract review. No production implementation
-has begun.
+Status: Passed at implementation commit `3bd6eb9d4`. Gate 8 has not begun.
 
 Date: 2026-07-15
 
@@ -161,21 +160,21 @@ one SQLite transaction. Every expected target means exact ID including `null`;
 every expected version is compared-and-swapped. A mismatch fails the whole
 transition rather than being reinterpreted from current state.
 
-| Transition | Required current state and expectations | Selection effect |
-| --- | --- | --- |
-| Create Course | Validated title; identity is generated. | Atomically creates target `null` at initial version. |
-| Correct Course metadata | Course locally active; expected Course state version. | None. |
-| Create View and first revision | Course locally active; expected Course state version; generated View, revision, and new item IDs; any reused item has an exact source-membership citation. | None. |
-| Correct View metadata | Course and View locally active; expected Course and View state versions. | None. |
-| Add View revision | Course and View locally active; expected Course and View state versions; expected predecessor is the exact latest committed revision of that View. | None. |
-| Select or clear | Course locally active; expected Course state version and exact selection target/version. A non-null target also supplies the expected View and Revision state versions and must be eligible in that Course. | Writes the supplied exact target, including `null`, and advances the selection version. |
-| Reject candidate Revision | Course, View, and Revision locally active; target is still derived `candidate`; expected Course, View, and Revision state versions; exact expected selection target/version prove the target is not selected. | None; the Revision becomes withdrawn with reason `rejected_candidate`. |
-| Withdraw Revision | Course, View, and Revision locally active; expected Course, View, and Revision state versions; exact expected selection target/version. | If selected, explicitly clear or replace with another eligible Revision in the Course; a non-null replacement supplies its expected View and Revision state versions. Either change advances the selection version. Otherwise leave selection unchanged. |
-| Withdraw View | Course and View locally active; expected Course and View state versions; exact expected selection target/version. | If the selected Revision belongs to the View, explicitly clear or replace with an eligible Revision of another active View in the Course; a replacement supplies its expected View and Revision state versions. Either change advances the selection version. Otherwise leave selection unchanged. |
-| Withdraw Course | Course locally active; expected Course state version; exact expected selection target and version. | Writes target `null` and advances the selection version. No Revision of the withdrawing Course can be a valid replacement. |
-| Restore Course | Course locally withdrawn; expected Course state version. | Remains `null`. |
-| Restore View | Course locally active and View locally withdrawn; expected Course and View state versions. | None. |
-| Restore Revision | Course and View locally active and Revision locally withdrawn; expected Course, View, and Revision state versions. | None. |
+| Transition                     | Required current state and expectations                                                                                                                                                                       | Selection effect                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create Course                  | Validated title; identity is generated.                                                                                                                                                                       | Atomically creates target `null` at initial version.                                                                                                                                                                                                                                               |
+| Correct Course metadata        | Course locally active; expected Course state version.                                                                                                                                                         | None.                                                                                                                                                                                                                                                                                              |
+| Create View and first revision | Course locally active; expected Course state version; generated View, revision, and new item IDs; any reused item has an exact source-membership citation.                                                    | None.                                                                                                                                                                                                                                                                                              |
+| Correct View metadata          | Course and View locally active; expected Course and View state versions.                                                                                                                                      | None.                                                                                                                                                                                                                                                                                              |
+| Add View revision              | Course and View locally active; expected Course and View state versions; expected predecessor is the exact latest committed revision of that View.                                                            | None.                                                                                                                                                                                                                                                                                              |
+| Select or clear                | Course locally active; expected Course state version and exact selection target/version. A non-null target also supplies the expected View and Revision state versions and must be eligible in that Course.   | Writes the supplied exact target, including `null`, and advances the selection version.                                                                                                                                                                                                            |
+| Reject candidate Revision      | Course, View, and Revision locally active; target is still derived `candidate`; expected Course, View, and Revision state versions; exact expected selection target/version prove the target is not selected. | None; the Revision becomes withdrawn with reason `rejected_candidate`.                                                                                                                                                                                                                             |
+| Withdraw Revision              | Course, View, and Revision locally active; expected Course, View, and Revision state versions; exact expected selection target/version.                                                                       | If selected, explicitly clear or replace with another eligible Revision in the Course; a non-null replacement supplies its expected View and Revision state versions. Either change advances the selection version. Otherwise leave selection unchanged.                                           |
+| Withdraw View                  | Course and View locally active; expected Course and View state versions; exact expected selection target/version.                                                                                             | If the selected Revision belongs to the View, explicitly clear or replace with an eligible Revision of another active View in the Course; a replacement supplies its expected View and Revision state versions. Either change advances the selection version. Otherwise leave selection unchanged. |
+| Withdraw Course                | Course locally active; expected Course state version; exact expected selection target and version.                                                                                                            | Writes target `null` and advances the selection version. No Revision of the withdrawing Course can be a valid replacement.                                                                                                                                                                         |
+| Restore Course                 | Course locally withdrawn; expected Course state version.                                                                                                                                                      | Remains `null`.                                                                                                                                                                                                                                                                                    |
+| Restore View                   | Course locally active and View locally withdrawn; expected Course and View state versions.                                                                                                                    | None.                                                                                                                                                                                                                                                                                              |
+| Restore Revision               | Course and View locally active and Revision locally withdrawn; expected Course, View, and Revision state versions.                                                                                            | None.                                                                                                                                                                                                                                                                                              |
 
 Parent state versions are expectations whenever a child transition relies on
 their active state; withdrawing and restoring a parent therefore cannot create
@@ -404,6 +403,59 @@ boundary:
 
 No root-level, monorepo-wide, provider, Session, TUI, or later-learning-authority
 suite is part of this claim.
+
+## Implementation result
+
+The current implementation realizes this contract in `packages/core` without
+registering a Session command, model tool, prompt source, terminal surface, or
+later learning authority:
+
+- `src/course.ts` owns the capability-scoped Course API, atomic state
+  transitions, exact CAS rules, derived dispositions, bounded reads, and
+  same-transaction read snapshots;
+- `src/course/sql.ts` and the generated database schema own the eleven Course,
+  View, Revision, item, mapping, citation, selection, and withdrawal-state
+  tables plus their cross-Course and lifecycle constraints;
+- `src/course/revision.ts` validates the ordered forest, stable identity reuse,
+  and closed preserve/split/merge transition algebra before publication;
+- `src/course/cursor.ts` binds opaque keyset cursors to their endpoint, parent,
+  and withdrawal filter; and
+- `20260714191244_course_view_authority.ts` is the first post-baseline Repa
+  migration and produces the same Gate 7 schema as fresh initialization.
+
+Focused evidence run from `packages/core` on 2026-07-15:
+
+```text
+bun test test/course-authority.test.ts test/course-pagination.test.ts test/database-migration.test.ts
+28 pass, 0 fail, 184 assertions
+
+bun run migration --check
+No schema changes, nothing to migrate
+
+bun typecheck
+passed
+```
+
+The tests directly cover stale reject and stale withdrawal after a newer learner
+selection, replacement-target ABA, selected-View clear and replacement,
+restoration without implicit reselection, rollback, cross-Course constraints,
+derived dispositions, provided-but-blank parent rejection, hierarchy and
+mapping bounds, empty and cross-scope cursor rejection, exact no-duplicate
+membership across every bounded collection, database reopen with two Views, a
+successor Revision and persisted mapping, Gate 6 upgrade, and fresh/upgrade
+schema equivalence. Composite domain reads execute inside one database
+transaction so a concurrent writer cannot expose a
+Course/View/Revision/selection combination that never existed.
+
+Mutation methods currently return a consistent current-state read performed
+after their write transaction commits. That value is convenient Gate 7 domain
+state, not an exact causal receipt for the operation: another serialized write
+may commit before the read. Gate 8 must settle its own exact committed result
+and must not expose these convenience returns directly as a model-visible
+operation receipt.
+
+Implementation provenance is fixed by commit `3bd6eb9d4`; the accepted design
+and Gate contract were fixed immediately before it by commit `c70ac37c8`.
 
 ## Acceptance boundary
 
