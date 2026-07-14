@@ -24,6 +24,7 @@ worktree. Their pins are durable; their paths are not part of this fork.
 | 3. Repa identity | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback | `0ffed9f62159b5383b62da73bd270de7f8775e09` | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md` |
 | 4. Learning-first composition | One protected Repa product core across released-v1 carriers, narrow hidden operations, and truthful stock profiles | `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` + `17e25eab2784b8bd71bef7a91effb9ae352bf0ae` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md` |
 | 5. Inherited product-surface disposition | Terminal-only baseline with excluded runtime and automatic repository surfaces disconnected; useful local capabilities and harmless source retained | `25e51861effbddbdb04ae8fe88c4107d34ab91b2` | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
+| 6. Native database admission | Native Repa database identity and forward lineage with one state-owning process per LearnerHome; explicit attach remains a client | `6c0b7aa5b` | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md` |
 
 Read a historical record with:
 
@@ -40,6 +41,13 @@ git show repa-prefork-oracle:<historical-record-path>
   Its governing result is product reachability, not a source-deletion quota.
   The parent disposition correction and inherited automatic GitHub
   repository-workflow unregistration are complete.
+- Gate 6 is closed under
+  `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`.
+  A missing database receives one complete Repa baseline and only later
+  Repa-owned migrations; unrecognized state is refused without replacement.
+  One process owns local LearnerHome state, while explicit attached clients do
+  not construct a second local runtime. Released, parity-complete OpenCode v2
+  remains a future comparison trigger rather than an upgrade promise.
 - `03fbb078e` corrected ADR-0014, Roadmap 09, the Gate 5 contract, README,
   ledger, and AGENTS continuity so baseline exclusion no longer authorizes
   source deletion by implication.

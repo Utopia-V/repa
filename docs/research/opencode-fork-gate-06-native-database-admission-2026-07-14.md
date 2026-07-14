@@ -1,6 +1,6 @@
 # OpenCode fork Gate 6: native database admission
 
-Status: Contract accepted — implementation in progress
+Status: Passed at fork implementation commit `6c0b7aa5b`
 
 Date: 2026-07-14
 
@@ -126,10 +126,10 @@ database or learning-domain APIs.
 
 Admission runs SQLite's full integrity check and foreign-key check. In this
 Gate, “partial” means a state Repa can produce or recognize at its transaction
-boundary: identity, version, journal, or required baseline objects disagree.
-Gate 6 does not build a generalized schema-forensics manifest for arbitrary
-manual tampering. The atomic baseline and per-migration transactions prevent
-Repa itself from producing a committed half-schema.
+boundary: identity, version, or journal disagree, including a missing Repa
+journal. Gate 6 does not build a generalized schema-forensics manifest for
+arbitrary manual table changes. The atomic baseline and per-migration
+transactions prevent Repa itself from producing a committed half-schema.
 
 ## Failure behavior
 
@@ -195,3 +195,42 @@ Evidence must be capable of directly falsifying the boundary:
 Tests should target those admissions, crash boundaries, and two-process
 behavior. No monorepo-wide test or unrelated learning feature belongs to this
 evidence claim.
+
+## Result
+
+Gate 6 passed on 2026-07-14 at fork implementation commit `6c0b7aa5b`.
+
+The implementation now:
+
+- initializes a missing path from the complete generated schema with
+  `application_id`, `user_version`, and one `repa_migration` baseline row;
+- admits only an exact Repa journal prefix and applies each later Repa migration
+  atomically with its version and journal advance;
+- leaves inherited migration source in place as history while removing it from
+  runtime discovery and generation;
+- refuses foreign, future, inconsistent, unreadable, and integrity-invalid
+  databases without importing their journals or replacing their files;
+- acquires one process-level ownership lease before local AppRuntime or database
+  materialization, with immediate busy refusal and existing stale-lock recovery;
+- keeps full attach outside the local runtime command wrapper, routes mini
+  attach through the same client-only `run --attach` selection, and ensures
+  local TUI, command, server, and instance cleanup releases ownership; and
+- retains local `pr` behavior without making its parent process compete with
+  the Repa child it launches, while leaving `db path` available when admission
+  fails.
+
+Focused evidence was deliberately limited to claims this Gate changed:
+
+- `packages/core`: typecheck passed; the migration generator check passed;
+  `test/database-migration.test.ts` passed 17 tests covering baseline creation,
+  rejection, rollback, integrity, reopen, and concurrent initialization;
+- the existing filesystem-lock crash test plus the new immediate-acquire and
+  synchronous-release tests passed;
+- `packages/opencode`: typecheck passed; real-process ownership and
+  non-destructive CLI admission tests passed; and
+- two live `run --attach` process cases passed while an owning server was
+  active. Focused TUI routing, error-formatting, and local `pr` checks also
+  passed.
+
+No monorepo-wide suite or generic database-repair framework was added. Gate 7
+has not begun.
