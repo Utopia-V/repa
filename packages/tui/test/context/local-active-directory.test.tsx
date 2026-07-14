@@ -7,7 +7,7 @@ import { ExitProvider } from "../../src/context/exit"
 import { KVProvider } from "../../src/context/kv"
 import { LocalProvider, useLocal } from "../../src/context/local"
 import { PermissionProvider } from "../../src/context/permission"
-import { ProjectProvider, useProject } from "../../src/context/project"
+import { ProjectProvider } from "../../src/context/project"
 import { RouteProvider } from "../../src/context/route"
 import { SDKProvider } from "../../src/context/sdk"
 import { SyncProvider, useSync } from "../../src/context/sync"
@@ -53,7 +53,6 @@ test("routes retained MCP toggles through the active directory", async () => {
     if (url.pathname === "/mcp") return json({ "lesson-notes": { status: "disabled" } })
   })
   let local!: ReturnType<typeof useLocal>
-  let project!: ReturnType<typeof useProject>
   let sync!: ReturnType<typeof useSync>
   let done!: () => void
   const ready = new Promise<void>((resolve) => {
@@ -62,7 +61,6 @@ test("routes retained MCP toggles through the active directory", async () => {
 
   function Probe() {
     local = useLocal()
-    project = useProject()
     sync = useSync()
     onMount(done)
     return <box />
@@ -101,7 +99,6 @@ test("routes retained MCP toggles through the active directory", async () => {
   try {
     await ready
     await wait(() => sync.status === "complete")
-    await project.sync(selectedDirectory)
     await sync.bootstrap({ fatal: false, directory: selectedDirectory })
     await local.mcp.toggle("lesson-notes", selectedDirectory)
     sync.set("mcp", "lesson-notes", { status: "connected" })

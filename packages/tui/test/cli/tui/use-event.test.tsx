@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import type { Event, GlobalEvent } from "@opencode-ai/sdk/v2"
 import { onMount } from "solid-js"
-import { ProjectProvider, useProject } from "../../../src/context/project"
 import { SDKProvider } from "../../../src/context/sdk"
 import { useEvent } from "../../../src/context/event"
 import { createEventSource, createFetch, directory } from "../../fixture/tui-sdk"
@@ -55,7 +54,6 @@ async function mount(override?: FetchHandler) {
   const calls = createFetch(override)
   const seen: Event[] = []
   const metadata: Array<{ directory: string; project: string | undefined; hasWorkspace: boolean }> = []
-  let project!: ReturnType<typeof useProject>
   let done!: () => void
   const ready = new Promise<void>((resolve) => {
     done = resolve
@@ -64,31 +62,20 @@ async function mount(override?: FetchHandler) {
   const app = await testRender(() => (
     <TestTuiContexts>
       <SDKProvider url="http://test" directory={directory} events={events.source} fetch={calls.fetch}>
-        <ProjectProvider>
-          <Probe
-            onReady={async (ctx) => {
-              project = ctx.project
-              await project.sync()
-              done()
-            }}
-            seen={seen}
-            metadata={metadata}
-          />
-        </ProjectProvider>
+        <Probe onReady={done} seen={seen} metadata={metadata} />
       </SDKProvider>
     </TestTuiContexts>
   ))
 
   await ready
-  return { app, emit: events.emit, project, seen, metadata }
+  return { app, emit: events.emit, seen, metadata }
 }
 
 function Probe(props: {
   seen: Event[]
   metadata: Array<{ directory: string; project: string | undefined; hasWorkspace: boolean }>
-  onReady: (ctx: { project: ReturnType<typeof useProject> }) => void
+  onReady: () => void
 }) {
-  const project = useProject()
   const event = useEvent()
 
   onMount(() => {
@@ -100,7 +87,7 @@ function Probe(props: {
         hasWorkspace: Object.hasOwn(metadata, "workspace"),
       })
     })
-    props.onReady({ project })
+    props.onReady()
   })
 
   return <box />

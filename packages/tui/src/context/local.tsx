@@ -13,7 +13,6 @@ import { useTheme } from "./theme"
 import { useToast } from "../ui/toast"
 import { useRoute } from "./route"
 import { usePermission } from "./permission"
-import { useProject } from "./project"
 
 export type LocalTheme = {
   secondary: RGBA
@@ -61,8 +60,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const args = useArgs()
     const event = useEvent()
     const permission = usePermission()
-    const project = useProject()
-
     function isModelValid(model: { providerID: string; modelID: string }) {
       const provider = sync.data.provider.find((item) => item.id === model.providerID)
       return !!provider?.models[model.modelID]

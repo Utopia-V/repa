@@ -3,11 +3,17 @@ import { expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import type { Event, GlobalEvent } from "@opencode-ai/sdk/v2"
 import { onMount } from "solid-js"
+import { ArgsProvider } from "../../src/context/args"
 import { DataProvider, useData } from "../../src/context/data"
-import { ProjectProvider, useProject } from "../../src/context/project"
+import { ExitProvider } from "../../src/context/exit"
+import { KVProvider } from "../../src/context/kv"
+import { PermissionProvider } from "../../src/context/permission"
+import { ProjectProvider } from "../../src/context/project"
 import { SDKProvider } from "../../src/context/sdk"
+import { SyncProvider, useSync } from "../../src/context/sync"
 import { TestTuiContexts } from "../fixture/tui-environment"
 import { createEventSource, createFetch, directory, json, worktree } from "../fixture/tui-sdk"
+import { tmpdir } from "../fixture/fixture"
 
 const selectedDirectory = `${worktree}/course-b`
 
@@ -19,7 +25,7 @@ async function wait(fn: () => boolean, timeout = 2000) {
   }
 }
 
-async function mount() {
+async function mount(state: string) {
   const events = createEventSource()
   const referenceRequests: URL[] = []
   const calls = createFetch((url) => {
@@ -48,7 +54,7 @@ async function mount() {
     })
   }, events)
   let data!: ReturnType<typeof useData>
-  let project!: ReturnType<typeof useProject>
+  let sync!: ReturnType<typeof useSync>
   let done!: () => void
   const ready = new Promise<void>((resolve) => {
     done = resolve
@@ -56,32 +62,45 @@ async function mount() {
 
   function Probe() {
     data = useData()
-    project = useProject()
+    sync = useSync()
     onMount(done)
     return <box />
   }
 
   const app = await testRender(() => (
-    <TestTuiContexts>
-      <SDKProvider url="http://test" directory={directory} events={events.source} fetch={calls.fetch}>
-        <ProjectProvider>
-          <DataProvider>
-            <Probe />
-          </DataProvider>
-        </ProjectProvider>
-      </SDKProvider>
+    <TestTuiContexts paths={{ state }}>
+      <ArgsProvider>
+        <KVProvider>
+          <SDKProvider url="http://test" directory={directory} events={events.source} fetch={calls.fetch}>
+            <PermissionProvider>
+              <ProjectProvider>
+                <ExitProvider exit={() => {}}>
+                  <SyncProvider>
+                    <DataProvider>
+                      <Probe />
+                    </DataProvider>
+                  </SyncProvider>
+                </ExitProvider>
+              </ProjectProvider>
+            </PermissionProvider>
+          </SDKProvider>
+        </KVProvider>
+      </ArgsProvider>
     </TestTuiContexts>
   ))
 
   await ready
-  return { app, data, emit: events.emit, project, referenceRequests }
+  await wait(() => sync.status === "complete")
+  return { app, data, emit: events.emit, sync, referenceRequests }
 }
 
 test("uses the selected project directory as the default autocomplete cache location", async () => {
-  const ctx = await mount()
+  await using tmp = await tmpdir()
+  await Bun.write(`${tmp.path}/kv.json`, "{}")
+  const ctx = await mount(tmp.path)
 
   try {
-    await ctx.project.sync(selectedDirectory)
+    await ctx.sync.bootstrap({ fatal: false, directory: selectedDirectory })
     expect(ctx.data.location.default()).toEqual({ directory: selectedDirectory })
   } finally {
     ctx.app.renderer.destroy()
@@ -89,7 +108,9 @@ test("uses the selected project directory as the default autocomplete cache loca
 })
 
 test("refreshes a reference update into the event directory without contaminating the startup cache", async () => {
-  const ctx = await mount()
+  await using tmp = await tmpdir()
+  await Bun.write(`${tmp.path}/kv.json`, "{}")
+  const ctx = await mount(tmp.path)
 
   try {
     await wait(() => ctx.referenceRequests.length === 1)

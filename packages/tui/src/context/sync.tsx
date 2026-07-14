@@ -535,38 +535,55 @@ export const {
 
         // Once this directory is published, caller cancellation no longer owns
         // its background hydration. A later bootstrap generation supersedes it.
-        void Promise.all([
-          args.continue ? Promise.resolve(undefined) : listSessions(directory, undefined, projectSnapshot.path),
-          sdk.client.command.list({ directory }, backgroundRequest),
-          sdk.client.lsp.status({ directory }, backgroundRequest),
-          sdk.client.mcp.status({ directory }, backgroundRequest),
-          sdk.client.experimental.resource.list({ directory }, backgroundRequest),
-          sdk.client.formatter.status({ directory }, backgroundRequest),
-          sdk.client.session.status({ directory }, backgroundRequest),
-          sdk.client.provider.auth({ directory }, backgroundRequest),
-          sdk.client.vcs.get({ directory }, backgroundRequest),
-        ])
-          .then(
-            ([backgroundSessions, commands, lsp, mcp, resources, formatter, statuses, auth, vcs]) => {
-              if (!current()) return
-              batch(() => {
-                if (backgroundSessions !== undefined) setStore("session", reconcile(backgroundSessions))
-                setStore("command", reconcile(commands.data ?? []))
-                setStore("lsp", reconcile(lsp.data ?? []))
-                setStore("mcp", reconcile(mcp.data ?? {}))
-                setStore("mcp_resource", reconcile(resources.data ?? {}))
-                setStore("formatter", reconcile(formatter.data ?? []))
-                setStore("session_status", reconcile(statuses.data ?? {}))
-                setStore("provider_auth", reconcile(auth.data ?? {}))
-                setStore("vcs", reconcile(vcs.data))
-                setStore("status", "complete")
-              })
+        function hydrate<T>(name: string, request: Promise<T>, commit: (value: T) => void) {
+          return request.then(
+            (value) => {
+              if (!current()) return false
+              commit(value)
+              return true
+            },
+            (error) => {
+              if (current()) console.error(`tui background hydration failed: ${name}`, error)
+              return false
             },
           )
-          .catch((error) => {
-            if (!current()) return
-            console.error("tui background hydration failed", error)
-          })
+        }
+
+        void Promise.all([
+          hydrate(
+            "sessions",
+            args.continue ? Promise.resolve(undefined) : listSessions(directory, undefined, projectSnapshot.path),
+            (sessions) => {
+              if (sessions !== undefined) setStore("session", reconcile(sessions))
+            },
+          ),
+          hydrate("commands", sdk.client.command.list({ directory }, backgroundRequest), (response) =>
+            setStore("command", reconcile(response.data ?? [])),
+          ),
+          hydrate("lsp", sdk.client.lsp.status({ directory }, backgroundRequest), (response) =>
+            setStore("lsp", reconcile(response.data ?? [])),
+          ),
+          hydrate("mcp", sdk.client.mcp.status({ directory }, backgroundRequest), (response) =>
+            setStore("mcp", reconcile(response.data ?? {})),
+          ),
+          hydrate("mcp resources", sdk.client.experimental.resource.list({ directory }, backgroundRequest), (response) =>
+            setStore("mcp_resource", reconcile(response.data ?? {})),
+          ),
+          hydrate("formatters", sdk.client.formatter.status({ directory }, backgroundRequest), (response) =>
+            setStore("formatter", reconcile(response.data ?? [])),
+          ),
+          hydrate("session status", sdk.client.session.status({ directory }, backgroundRequest), (response) =>
+            setStore("session_status", reconcile(response.data ?? {})),
+          ),
+          hydrate("provider auth", sdk.client.provider.auth({ directory }, backgroundRequest), (response) =>
+            setStore("provider_auth", reconcile(response.data ?? {})),
+          ),
+          hydrate("vcs", sdk.client.vcs.get({ directory }, backgroundRequest), (response) =>
+            setStore("vcs", reconcile(response.data)),
+          ),
+        ]).then((hydrated) => {
+          if (current() && hydrated.every(Boolean)) setStore("status", "complete")
+        })
         return true
       } catch (error) {
         if (!pending()) return false

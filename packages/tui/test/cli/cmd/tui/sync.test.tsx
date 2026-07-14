@@ -124,7 +124,6 @@ describe("tui sync", () => {
       })
       await staleLspStarted.promise
 
-      await project.sync(latestDirectory)
       await sync.bootstrap({ fatal: false, directory: latestDirectory })
       await wait(() => sync.data.lsp[0]?.id === "latest")
 
@@ -153,9 +152,8 @@ describe("tui sync", () => {
     }, tmp.path)
 
     try {
-      await project.sync(selected)
       requests.length = 0
-      await sync.bootstrap({ fatal: false })
+      await sync.bootstrap({ fatal: false, directory: selected })
       const hydrated = requests.filter((url) =>
         ["/config/providers", "/provider", "/agent", "/config", "/command", "/lsp", "/mcp", "/formatter", "/session/status", "/provider/auth", "/vcs"].includes(url.pathname),
       )
@@ -252,6 +250,38 @@ describe("tui sync", () => {
     }
   })
 
+  test("a failed background endpoint does not discard the other directory caches", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/kv.json`, "{}")
+    const targetDirectory = `${worktree}/course-b`
+    const { app, project, sync } = await mount((url) => {
+      const requestedDirectory = url.searchParams.get("directory") ?? directory
+      if (url.pathname === "/path")
+        return json({ home: "/tmp", state: "", config: "", worktree, directory: requestedDirectory })
+      if (url.pathname === "/project/current") return json({ id: "proj_test", worktree })
+      if (url.pathname === "/project/proj_test/directories")
+        return json([{ directory: worktree }, { directory: targetDirectory, strategy: "git_worktree" }])
+      if (url.pathname === "/mcp" && requestedDirectory === targetDirectory)
+        return json({ course: { status: "connected" } })
+      if (url.pathname === "/vcs" && requestedDirectory === targetDirectory)
+        return json({ name: "HydrationFailed", message: "vcs unavailable" }, { status: 500 })
+      return undefined
+    }, tmp.path)
+
+    try {
+      expect(await sync.bootstrap({ fatal: false, directory: targetDirectory })).toBe(true)
+      await wait(() => sync.data.mcp.course?.status === "connected")
+
+      expect(project.instance.directory()).toBe(targetDirectory)
+      expect(sync.data.cache_directory).toBe(targetDirectory)
+      expect(sync.data.mcp.course?.status).toBe("connected")
+      expect(sync.data.vcs).toBeUndefined()
+      expect(sync.status).toBe("partial")
+    } finally {
+      app.renderer.destroy()
+    }
+  })
+
   test("a stale bootstrap cannot overwrite cache hydrated for a later directory", async () => {
     await using tmp = await tmpdir()
     await Bun.write(`${tmp.path}/kv.json`, "{}")
@@ -288,13 +318,11 @@ describe("tui sync", () => {
     }, tmp.path)
 
     try {
-      await project.sync(staleDirectory)
       delayStaleVcs = true
-      await sync.bootstrap({ fatal: false })
+      await sync.bootstrap({ fatal: false, directory: staleDirectory })
       await staleVcsStarted.promise
 
-      await project.sync(latestDirectory)
-      await sync.bootstrap({ fatal: false })
+      await sync.bootstrap({ fatal: false, directory: latestDirectory })
       await wait(() => sync.data.vcs?.branch === "latest-directory")
 
       staleVcs.resolve(json({ branch: "stale-directory" }))

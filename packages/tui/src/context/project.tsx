@@ -1,4 +1,4 @@
-import { batch, onCleanup } from "solid-js"
+import { batch } from "solid-js"
 import type { Path } from "@opencode-ai/sdk/v2"
 import { createStore, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
@@ -28,14 +28,7 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
       },
     })
 
-    let syncGeneration = 0
-    onCleanup(() => {
-      syncGeneration += 1
-    })
-
     type Snapshot = {
-      generation: number
-      signal?: AbortSignal
       path: Path
       project: {
         id: string
@@ -48,7 +41,6 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
       directory = store.instance.path.directory,
       options: { signal?: AbortSignal } = {},
     ): Promise<Snapshot | undefined> {
-      const generation = ++syncGeneration
       const location = { directory }
       const request = { throwOnError: true as const, signal: options.signal }
       const [instancePath, project] = await Promise.all([
@@ -61,10 +53,8 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
         request,
       )
       if (!directories.data) throw new Error(`Failed to resolve project directories at ${directory}`)
-      if (generation !== syncGeneration || options.signal?.aborted) return
+      if (options.signal?.aborted) return
       return {
-        generation,
-        signal: options.signal,
         path: instancePath.data,
         project: {
           id: project.data.id,
@@ -75,7 +65,7 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
     }
 
     function commit(snapshot: Snapshot | undefined) {
-      if (!snapshot || snapshot.generation !== syncGeneration || snapshot.signal?.aborted) return false
+      if (!snapshot) return false
       batch(() => {
         setStore("instance", "path", reconcile(snapshot.path))
         setStore("project", "id", snapshot.project.id)
@@ -83,10 +73,6 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
         setStore("project", "mainDir", snapshot.project.mainDir)
       })
       return true
-    }
-
-    async function sync(directory = store.instance.path.directory, options: { signal?: AbortSignal } = {}) {
-      return commit(await prepare(directory, options))
     }
 
     return {
@@ -104,7 +90,6 @@ export const { use: useProject, provider: ProjectProvider } = createSimpleContex
       },
       prepare,
       commit,
-      sync,
     }
   },
 })
