@@ -176,9 +176,12 @@ foreign concept.
 
 No current Repa or OpenCode user-data compatibility contract exists. The new
 fork starts with a new Repa home, database identity, and forward-only Repa
-migration history. Existing databases and the current runner remain read-only
-development evidence until the fork satisfies its verification gate, then the
-superseded generic runtime and schema are deleted rather than wrapped.
+migration history. The pre-fork runner, schema, and labs now exist only in the
+immutable oracle; any pre-fork database remains external development evidence.
+None is imported or admitted into the fork. Once the fork satisfies its
+verification gate, it becomes the sole product line and any transitional
+compatibility code that actually exists inside the fork is removed rather than
+wrapped. Cutover does not rewrite or delete the oracle.
 
 ## Consequences
 

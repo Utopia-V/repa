@@ -952,24 +952,25 @@ code, or the fork's Session service. Tutor context uses read projections and
 performs no domain writes. The outer runtime may depend inward on application
 boundaries; nothing inward depends back on the runtime.
 
-## Current-code audit
+## Pre-fork oracle audit
 
-The pre-fork production spine is frozen as executable evidence until the fork
-cutover. It is not extended, imported into the fork as a compatibility layer,
-or treated as the final package topology.
+The pre-fork production spine exists only in the immutable oracle tag and
+read-only oracle worktree. It is executable evidence, not source present in the
+fork to be deleted at cutover. It is not extended, imported as a compatibility
+layer, or treated as the final package topology.
 
-| Current shape | Architectural treatment |
+| Pre-fork oracle shape | Architectural treatment |
 | --- | --- |
-| `run-tutor-turn.ts`, current CLI/provider adapter, and `interaction/records.ts` | retain only as Turn/context/tool/failure oracles; delete after the native fork trace passes |
-| current `session_item`, `model_operation`, `tool_invocation`, `system_state`, and `durable_effect` tables | do not migrate or mirror; preserve accepted invariants through the native Session/message/part and domain schemas |
+| `run-tutor-turn.ts`, pre-fork CLI/provider adapter, and `interaction/records.ts` | retain in the immutable oracle as Turn/context/tool/failure evidence; never import or edit them during fork cutover |
+| pre-fork `session_item`, `model_operation`, `tool_invocation`, `system_state`, and `durable_effect` tables | do not migrate or mirror; preserve accepted invariants through the native Session/message/part and domain schemas |
 | Course, material, Agenda, policy, and context modules | port their owned semantics and behavioral tests; rewrite trusted identities, transactions, and foreign keys against the native database |
-| current AI SDK tool bindings | delete; bind learning capabilities through the fork's native tool admission and atomic settlement path |
-| current one-string assistant history | replace with inherited typed items; never preserve flattened output for compatibility |
-| existing production tests | classify as invariant or old API; port invariant assertions and delete tests that only protect the superseded runner |
+| pre-fork AI SDK tool bindings | leave in the oracle; bind learning capabilities independently through the fork's native tool admission and atomic settlement path |
+| pre-fork one-string assistant history | replace with inherited typed items; never preserve flattened output for compatibility |
+| pre-fork production tests | classify as invariant or old API; port invariant assertions and leave old-API-only tests as historical oracle evidence |
 
 This is a deliberate substrate replacement. The cutover remains gated so the
-working oracle is not deleted before the native Repa path proves equivalent or
-better behavior.
+fork is not declared the sole product line before its native path proves
+equivalent or better behavior; the oracle itself remains immutable afterward.
 
 ## Rejected centers of gravity
 

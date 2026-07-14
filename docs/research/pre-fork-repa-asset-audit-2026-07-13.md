@@ -134,10 +134,12 @@ stops running after its production dependency is deliberately retired is not
 automatically a regression. Its accepted invariant must already be present in
 a native test or owning document; otherwise deletion is premature.
 
-## Deletion boundary
+## Fork retirement boundary
 
-Nothing above is deleted merely to make the fork look clean. Deletion occurs
-only after all of the following are true for the affected behavior:
+The paths above now live only in the immutable pre-fork oracle and are not
+physical deletion targets. The following conditions govern removal of a
+transitional implementation that actually exists in the fork, or retirement of
+a carry candidate after it has been admitted there:
 
 1. the native gate names the replacement identity and owner;
 2. a positive case and the relevant failure/correction cases pass;
@@ -146,10 +148,10 @@ only after all of the following are true for the affected behavior:
 5. the fork contains no import, subprocess bridge, dual write, or compatibility
    wrapper to the old runtime.
 
-The final cutover may therefore delete a large amount of old code without
-discarding its useful meaning. What survives is selected by demonstrated
-consumer behavior, not by directory name or implementation effort already
-spent.
+The final cutover may therefore remove obsolete transitional code from the fork
+without preserving a second runtime. It does not edit the oracle. What is
+re-expressed in the fork is selected by demonstrated consumer behavior, not by
+directory name or implementation effort already spent.
 
 ## Remaining evidence-owned choices
 

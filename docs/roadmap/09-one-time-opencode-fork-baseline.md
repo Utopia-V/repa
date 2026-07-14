@@ -105,20 +105,20 @@ unrelated objective; diff size is secondary.
 | 3. Repa identity isolation | Change only binary/product identity and application-owned paths so a fresh Repa launch cannot read or write OpenCode state. [Passed 2026-07-13 at fork commit `0ffed9f62`.](../fork-ledger.md#closed-gate-sequence) | Exercise existing OpenCode homes, missing/unwritable paths, interrupted first launch, and database-name collision. Revert the identity checkpoint on failure. |
 | 4. Learning-first composition boundary | Make every provider-selected interactive path implement the same Repa product contract and accept the same Learning-System composition inputs; provider-specific rendering remains allowed only for demonstrated requirements. Give compaction, summary, title, and other hidden calls narrow Repa-owned prompts for their actual task. Rework default agent/profile meaning, exploration, tool descriptions, plan reminders, and model-visible environment contributions where they assume coding is the product. | Deterministically enumerate every provider selector and hidden agent path. An ordinary learning request must no longer receive a coding-product identity on any interactive branch; compaction cannot turn learning continuity into a coding summary or PR description. This gate proves the composition boundary, not that a base prompt alone is the Tutor or that all learning authorities are already implemented. Explicit coding work may still use coding capabilities without changing the default ontology. |
 | 5. Inherited product-surface disposition | Inventory commands, routes, agents, labels, configuration, packages, and automatic repository workflows; retain, make explicit/optional, hibernate, or remove them by observable behavior. Prove excluded product paths absent by disconnecting commands, routes, background entry points, false configuration, and current release composition. Decide physical source disposition separately from reachability. No learning noun remapping occurs here. [Passed 2026-07-14 at fork commit `25e51861e`.](../fork-ledger.md#closed-gate-sequence) | Account/share/import-share/sync/control-plane and other excluded group behavior is absent rather than visible-but-broken. `/init`, `/review`, todo, snapshot, undo/fork/compact, project/worktree, GitHub, and similar local surfaces remain explicit only where their independent semantics cannot contradict learning authority. Hibernated source is allowed; physical deletion requires concrete conflict, cost, risk, or explicit rejection. Inherited automatic workflows are unregistered; designing Repa-owned CI is a later engineering decision. |
-| 6. Native database admission | Establish the Repa database identity, forward migration baseline, one-writer truth, and integrity checks before adding a learning command. | Reject old Repa, OpenCode, unknown, future, partially migrated, and corrupt files; inject migration failure; exercise abrupt writer death and a second writer. |
+| 6. Native database admission | Establish the Repa database identity, forward migration baseline, one-writer truth, and integrity checks before adding a learning command. [Pre-contract evidence is recorded; maintainer `grill-me` is required before this Gate begins.](../research/opencode-fork-gate-06-native-database-admission-2026-07-14.md) | Reject old Repa, OpenCode, unknown, future, partially migrated, and corrupt files; inject migration failure; exercise abrupt writer death and a second writer. |
 | 7. Interaction lifecycle mapping | Map learner occurrence, Turn, model operation, Tool Part, context cut, and terminal outcomes onto v1 records without changing terminal launch semantics yet. | Exercise repeated text, synthetic/compaction input, provider failure, cancellation, exhaustion, crash/reopen, and orphaned tool work without silent rerun. |
 | 8. Sessionless terminal and continuation | Make the deterministic empty launch create no Session; the first ordinary input creates one; explicit continue/select resumes an existing transcript. | Exercise slash/control commands before input, invalid or missing resume targets, cancelled input, interrupted first admission, and reopen without synthetic learner occurrences. |
 | 9. Root permission | Admit approved content roots with separate read and user-content write authority. Reuse the inherited permission flow before inventing policy code. | Exercise deny/allow-once/permanent/revoke, restart, moved or missing roots, case normalization, symlink/junction escape, narrow-subtree precedence, and unauthorized writes. |
 | 10. Source observation | Add bounded deterministic inventory and exact revision-bound observation inside approved roots, without automatic semantic classification. | Exercise file mutation during observation, delete/move between inventory and read, unreadable/binary inputs, same-path new bytes, and fail-closed old selectors. |
 | 11. Search scoping | Prove ordinary working-set search and visible bounded widening to one approved root through inherited ripgrep mechanics. | Exercise large/binary results, cancellation, empty or stale working sets, unapproved scope, and attempts at implicit all-LearnerHome or computer-wide search. |
-| 12. Course context and focus | Prove lazy same-sample cross-Course context and separately confirmed durable Course switching. | Exercise stale switch confirmation, rejection/withdrawal, cwd changes, discovery and Agenda changes, and cross-Course reads without focus mutation or shadow focus records. |
-| 13. Isolated atomic learning command | Select one accepted command and prove domain transition, receipt, physical invocation settlement, exact model result, and Interaction projection in one transaction. | Inject failure before the write and at every commit/projector boundary; exercise physical replay, semantic duplicate, conflicting reuse, stale source/entity/context, abort, and concurrent writer. |
+| 12. Course context and focus | Establish only the Course/focus authority needed to prove lazy same-sample cross-Course context and separately confirmed durable Course switching. A program-owned local focus command may commit the switch; this Gate does not claim model-tool settlement. | Exercise stale switch confirmation, rejection/withdrawal, cwd and discovery changes, model output, and cross-Course reads without unintended focus mutation or shadow focus records. |
+| 13. Isolated atomic model-issued learning command | Select one accepted model-facing command and prove domain transition, receipt, physical invocation settlement, exact model result, and Interaction projection in one transaction. | Inject failure before the write and at every commit/projector boundary; exercise physical replay, semantic duplicate, conflicting reuse, stale source/entity/context, abort, and concurrent writer. |
 | 14. Native loop integration | Drive that same command through the real v1 provider/tool continuation and restart path without a shadow executor. | Kill after commit but before model consumption, repeat the provider tool call, cancel mid-Turn, and reopen. Stored settlement must be returned without executing meaning twice. |
 | 15. Representation acceptance | Record one source revision and one canonical readable representation through external conversion plus short atomic acceptance. Decline is a valid result. | Exercise missing converter, unsupported input, timeout/cancel, malformed/empty output, temporary-file residue, write/rename failure, and database failure after conversion. No accepted row may point at absent bytes. |
 | 16. Representation drift and learner choice | Prove stale representation choice, retranslation, explicit export, deletion, external loss, and digest-based relink without retargeting history. | Exercise source change during/after conversion, old-revision reuse confirmation, same-digest relocation, different-content replacement, missing bytes, and repeated deletion/retranslation. |
 | 17. Deterministic product trace | Run the fixed learning trace through one production entry point, including restart, fresh Session, compaction, cancellation, tool failure, and Windows terminal rendering. | Any unexplained identity, hidden retry, lost transcript, false terminal outcome, or second authority keeps the gate red. |
 | 18. Real-provider integration | Run one bounded real-provider trace only after deterministic and fault gates pass. | Provider outage, malformed stream/tool result, cancellation, and budget/context exhaustion remain attributable. Provider success does not waive deterministic failures. |
-| 19. Cutover and deletion | Port the remaining required learning behavior tests, then delete the old runner/schema and runtime-coupled lab harnesses from the product line. | Prove the fork no longer imports, invokes, dual-writes, or falls back to old code. The pre-fork history remains reachable as an oracle; reverting the cutover checkpoint restores the prior development line. |
+| 19. Production cutover and oracle boundary | Port the remaining required learning behavior oracles, remove only transitional compatibility paths that actually exist in the fork, and declare the fork the sole product line. The pre-fork runner, schema, and labs already live only in immutable oracle history and are not deletion targets. | Prove the fork does not import, invoke, dual-write, or fall back to oracle code. The oracle tag remains unchanged and reachable; reverting the cutover checkpoint restores the prior fork-development state without rewriting history. |
 
 Gate 1 passed. Gate 2 preserved the exact-tag Windows failure; its diagnosis
 showed an invalid inherited PowerShell 5.1 test command rather than a runtime
@@ -146,8 +146,8 @@ deleting its implementation.
 
 ## Legacy asset use during the gates
 
-The existing production tree is useful in three different ways, detailed in
-the asset audit:
+The pre-fork oracle tree is useful in three different ways, detailed in the
+asset audit:
 
 - a few pure utilities are carry candidates, subject to an inherited-mechanism
   comparison and a current native consumer;
@@ -156,11 +156,11 @@ the asset audit:
 - the old CLI, provider adapter, runner, database schema, and runtime-coupled
   labs remain black-box or historical evidence, not code dependencies.
 
-Independent deterministic labs may remain runnable until their invariant is
-covered natively. Labs coupled to `runTutorTurn` or the old database freeze at
-the point their dependency changes; adding a compatibility adapter merely to
-keep them green is forbidden. Frozen formal model packages remain historical
-bytes and are never regenerated.
+Independent deterministic labs may remain runnable in the oracle while their
+invariant is still useful. Labs coupled to `runTutorTurn` or the old database
+stay frozen there; adding a compatibility adapter merely to keep them green is
+forbidden. Cutover does not edit or delete those oracle bytes. Frozen formal
+model packages remain historical and are never regenerated.
 
 ## Phase 1: establish a reproducible fork baseline
 
@@ -292,18 +292,19 @@ view is not mock prompt text or a synthetic learner item. Compaction or replay
 may repeat old text but cannot manufacture a new learner occurrence;
 interrupted model or tool work is never silently rerun.
 
-Also prove that directory changes, discovery, Agenda state, and model output
-cannot mutate the durable current Course. A Course switch commits only after an
-explicit learner request and a second visible confirmation bound to the exact
-target and current focus revision; rejection, withdrawal, and stale
-confirmation leave the focus unchanged.
+Also prove that directory changes, discovery, and model output cannot mutate
+the durable current Course. A Course switch commits through a program-owned
+local focus command only after an explicit learner request and a second visible
+confirmation bound to the exact target and current focus revision; rejection,
+withdrawal, and stale confirmation leave the focus unchanged. This proves the
+focus authority, not model-facing Tool Part settlement.
 
 Verify separately that a learner request concerning another Course can load
 that Course's bounded context in the same ordinary sample without changing the
 durable default or creating a shadow temporary-focus record. The persisted
 request and context cut must be sufficient to explain the cross-Course read.
 
-## Phase 3: prove atomic learning commands in the inherited runtime
+## Phase 3: prove an atomic model-issued learning command in the inherited runtime
 
 Introduce one already accepted local learning command through the native tool
 path. Its purpose is to prove the transaction and identity seam, not to invent
@@ -408,10 +409,12 @@ source/representation revisions, domain transition, and terminal outcome.
 After deterministic and fault-injection gates pass, run one bounded real
 provider trace. Provider success is evidence of integration, not pedagogy.
 
-Cut over only after the new trace passes. Then delete the old Repa generic
-runner, old interaction/storage schema, dedicated compatibility tombstones,
-and tests whose only purpose is the superseded API. Port learning-domain
-behavior tests to the native runtime; do not preserve both implementations.
+Cut over only after the new trace passes. Then remove any dedicated
+compatibility path, tombstone, or obsolete API-only test that actually exists
+in the fork, and port the required learning-domain behavior oracles to the
+native runtime. The pre-fork runner, schema, tests, and labs remain unchanged in
+the immutable oracle; cutover makes them non-production history rather than
+physically deleting them.
 
 ## Repository and documentation cutover
 
