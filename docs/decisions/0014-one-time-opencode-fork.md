@@ -91,6 +91,15 @@ preview v2 rewrite. Useful v2 ideas may be adopted later through Repa-owned,
 consumer-driven changes; v2 code and migrations have no production authority
 merely because they exist in the inherited repository.
 
+When OpenCode v2 is released and demonstrates the local context, plugin, tool,
+provider, recovery, and Windows behavior Repa depends on, the project will
+perform a new evidence-based comparison. That is a review trigger, not a
+promise to rebase, preserve upstream compatibility, or replace accumulated
+Repa learning behavior. Repa may adopt a proven server topology or other
+mechanism selectively when it reduces current product complexity. Until then,
+keep the v1 ownership seams narrow enough to replace, but do not build preview-
+v2 adapters or speculative compatibility layers.
+
 Local capabilities such as file read/write/search, shell, patching, Git, LSP,
 worktrees, MCP, and subagents remain available by default when their mechanics
 are sound. Coding-specific prompts, agents, routes, and projections are

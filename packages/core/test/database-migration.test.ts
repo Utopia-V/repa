@@ -7,7 +7,7 @@ import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { Effect, Layer } from "effect"
 import { eq, inArray, sql } from "drizzle-orm"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
-import { migrations } from "@opencode-ai/core/database/migration.gen"
+import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "@opencode-ai/core/database/admission"
 import sessionUsageMigration from "@opencode-ai/core/database/migration/20260510033149_session_usage"
 import normalizeStoragePathsMigration from "@opencode-ai/core/database/migration/20260601010001_normalize_storage_paths"
 import sessionMessageProjectionOrderMigration from "@opencode-ai/core/database/migration/20260603040000_session_message_projection_order"
@@ -23,7 +23,6 @@ import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { SessionTable } from "@opencode-ai/core/session/sql"
-import sessionMetadataMigration from "@opencode-ai/core/database/migration/20260511173437_session-metadata"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
 import { Database } from "@opencode-ai/core/database/database"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
@@ -36,6 +35,11 @@ const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
   )
 
 const makeDb = EffectDrizzleSqlite.makeWithDefaults()
+type TestDatabase = Effect.Success<typeof makeDb>
+
+function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
+  return Effect.forEach(input, (migration) => db.transaction((tx) => migration.up(tx)), { discard: true })
+}
 
 describe("DatabaseMigration", () => {
   test("serializes concurrent embedded initialization for one database path", async () => {
@@ -60,7 +64,7 @@ describe("DatabaseMigration", () => {
     }, 30_000)
   }
 
-  test("applies tracked migrations to an empty database", async () => {
+  test("initializes one native Repa baseline", async () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
@@ -80,7 +84,15 @@ describe("DatabaseMigration", () => {
             sql`SELECT name FROM pragma_table_info('session_context_epoch') WHERE name IN ('agent', 'replacement_seq', 'revision')`,
           ),
         ).toBeUndefined()
-        expect(yield* db.get(sql`SELECT count(*) as count FROM migration`)).toEqual({ count: migrations.length })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA application_id"))).toEqual({
+          application_id: APPLICATION_ID,
+        })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION,
+        })
+        expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
+          { version: BASELINE_VERSION, id: BASELINE_ID },
+        ])
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('event_aggregate_seq_idx', 'event_aggregate_type_seq_idx', 'session_input_session_pending_seq_idx', 'session_input_session_pending_delivery_seq_idx', 'session_input_session_admitted_seq_idx', 'session_input_session_promoted_seq_idx', 'session_message_session_idx', 'session_message_session_type_idx', 'session_message_session_seq_idx', 'session_message_session_type_seq_idx', 'session_message_session_time_created_id_idx') ORDER BY name`,
@@ -99,7 +111,7 @@ describe("DatabaseMigration", () => {
     )
   })
 
-  test("rejects a non-empty database without a session table", async () => {
+  test("rejects a non-empty foreign database", async () => {
     await expect(
       run(
         Effect.gen(function* () {
@@ -108,7 +120,7 @@ describe("DatabaseMigration", () => {
           yield* DatabaseMigration.apply(db)
         }),
       ),
-    ).rejects.toThrow("Database is not empty and has no session table")
+    ).rejects.toThrow("is not a recognized Repa database")
   })
 
   test("backfills existing Context Epoch rows to the build agent", async () => {
@@ -122,7 +134,7 @@ describe("DatabaseMigration", () => {
           sql`INSERT INTO session_context_epoch (session_id, baseline, snapshot, baseline_seq) VALUES ('ses_existing', 'baseline', '{}', 0)`,
         )
 
-        yield* DatabaseMigration.applyOnly(db, [contextEpochAgentMigration])
+        yield* applyHistorical(db, [contextEpochAgentMigration])
 
         expect(yield* db.get(sql`SELECT agent FROM session_context_epoch WHERE session_id = 'ses_existing'`)).toEqual({
           agent: "build",
@@ -141,7 +153,7 @@ describe("DatabaseMigration", () => {
         yield* db.run(
           sql`CREATE UNIQUE INDEX credential_connector_active_idx ON credential (connector_id) WHERE active = 1`,
         )
-        yield* DatabaseMigration.applyOnly(db, [simplifyIntegrationCredentialsMigration])
+        yield* applyHistorical(db, [simplifyIntegrationCredentialsMigration])
 
         yield* db.run(
           sql`INSERT INTO credential (id, connector_id, method_id, label, value, active, time_created, time_updated) VALUES ('legacy', 'openai', 'oauth', 'Legacy', '{}', 1, 1, 1)`,
@@ -195,7 +207,7 @@ describe("DatabaseMigration", () => {
           sql`INSERT INTO session_input (id, session_id, prompt, delivery, time_created) VALUES ('msg_pending', 'session', '{}', 'steer', 1)`,
         )
 
-        yield* DatabaseMigration.applyOnly(db, [eventSourcedSessionInputMigration])
+        yield* applyHistorical(db, [eventSourcedSessionInputMigration])
 
         expect(yield* db.all(sql`SELECT id, workspace_id FROM session`)).toEqual([
           { id: "session", workspace_id: null },
@@ -266,8 +278,7 @@ describe("DatabaseMigration", () => {
         yield* db.run(
           sql`INSERT INTO session_context_epoch (session_id, baseline, snapshot, baseline_seq) VALUES ('session', 'baseline', '{}', 9)`,
         )
-        yield* db.run(sql`DELETE FROM migration WHERE id = ${simplifySessionInputMigration.id}`)
-        yield* DatabaseMigration.applyOnly(db, [simplifySessionInputMigration])
+        yield* applyHistorical(db, [simplifySessionInputMigration])
 
         const database = Layer.succeed(Database.Service, { db })
         yield* EventV2.Service.use((service) =>
@@ -351,7 +362,7 @@ describe("DatabaseMigration", () => {
           sql`INSERT INTO session_message (id, session_id, type, time_created, time_updated, data) VALUES ('stale_projection', 'session', 'user', 1, 1, '{}')`,
         )
 
-        yield* DatabaseMigration.applyOnly(db, [sessionMessageProjectionOrderMigration])
+        yield* applyHistorical(db, [sessionMessageProjectionOrderMigration])
 
         expect(yield* db.all(sql`SELECT id, session_id, data FROM message`)).toEqual([
           { id: "legacy_message", session_id: "session", data: '{"role":"user"}' },
@@ -385,7 +396,7 @@ describe("DatabaseMigration", () => {
           sql`INSERT INTO message (id, session_id, data) VALUES ('message_1', 'session_1', '{"role":"assistant","cost":1.25,"tokens":{"input":2,"output":3,"reasoning":4,"cache":{"read":5,"write":6}}}')`,
         )
 
-        yield* DatabaseMigration.applyOnly(db, [sessionUsageMigration])
+        yield* applyHistorical(db, [sessionUsageMigration])
 
         expect(
           yield* db.get(
@@ -431,7 +442,7 @@ describe("DatabaseMigration", () => {
           sql`INSERT INTO session (id, directory, path) VALUES (${"posix"}, ${"/home/me/we\\ird"}, ${"src\\weird"})`,
         )
 
-        yield* DatabaseMigration.applyOnly(db, [normalizeStoragePathsMigration])
+        yield* applyHistorical(db, [normalizeStoragePathsMigration])
 
         expect(yield* db.get(sql`SELECT worktree, sandboxes FROM project WHERE id = 'win'`)).toEqual({
           worktree: "C:/Repo/Thing",
@@ -564,10 +575,11 @@ describe("DatabaseMigration", () => {
     )
   })
 
-  test("imports existing drizzle migration state", async () => {
+  test("rejects an OpenCode-shaped database without importing its journal", async () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
+        yield* db.run(sql`CREATE TABLE session (id text PRIMARY KEY)`)
         yield* db.run(
           sql`CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, hash text NOT NULL, created_at numeric, name text, applied_at TEXT)`,
         )
@@ -576,68 +588,114 @@ describe("DatabaseMigration", () => {
           VALUES ('hash', 1, '20260127222353_familiar_lady_ursula', ${new Date().toISOString()})
         `)
 
-        yield* DatabaseMigration.applyOnly(db, [])
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "legacy.db" }))
 
-        expect(yield* db.get(sql`SELECT id FROM migration`)).toEqual({ id: "20260127222353_familiar_lady_ursula" })
+        expect(error).toMatchObject({ reason: "foreign", path: "legacy.db" })
+        expect(yield* db.all(sql`SELECT id FROM session`)).toEqual([])
+        expect(yield* db.get(sql`SELECT name FROM sqlite_master WHERE name = 'repa_migration'`)).toBeUndefined()
+        expect(yield* db.get(sql`SELECT name FROM __drizzle_migrations`)).toEqual({
+          name: "20260127222353_familiar_lady_ursula",
+        })
       }),
     )
   })
 
-  test("does not replay a migrated session metadata column", async () => {
+  test("rejects a future Repa database", async () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
-        yield* db.run(sql`CREATE TABLE session (id text PRIMARY KEY, metadata text)`)
-        yield* db.run(
-          sql`CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, hash text NOT NULL, created_at numeric, name text, applied_at TEXT)`,
-        )
-        yield* db.run(sql`
-          INSERT INTO __drizzle_migrations (hash, created_at, name, applied_at)
-          VALUES ('hash', 1, '20260511173437_session-metadata', ${new Date().toISOString()})
-        `)
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 1}`))
 
-        yield* DatabaseMigration.applyOnly(db, [sessionMetadataMigration])
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "future.db" }))
 
-        expect(yield* db.all(sql`SELECT id FROM migration`)).toEqual([{ id: "20260511173437_session-metadata" }])
-      }),
-    )
-  })
-
-  test("accepts the temporary replacement session metadata migration id", async () => {
-    await run(
-      Effect.gen(function* () {
-        const db = yield* makeDb
-        yield* db.run(sql`CREATE TABLE session (id text PRIMARY KEY, metadata text)`)
-        yield* db.run(sql`CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)`)
-        yield* db.run(sql`INSERT INTO migration (id, time_completed) VALUES ('20260530232709_lovely_romulus', 1)`)
-
-        yield* DatabaseMigration.applyOnly(db, [sessionMetadataMigration])
-
-        expect(yield* db.all(sql`SELECT id FROM migration ORDER BY id`)).toEqual([
-          { id: "20260511173437_session-metadata" },
-          { id: "20260530232709_lovely_romulus" },
+        expect(error).toMatchObject({ reason: "future" })
+        expect(yield* db.all(sql`SELECT version, id FROM repa_migration`)).toEqual([
+          { version: BASELINE_VERSION, id: BASELINE_ID },
         ])
       }),
     )
   })
 
-  test("skips drizzle import when migration table already has state", async () => {
+  test("rejects an inconsistent Repa migration lineage", async () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
-        yield* db.run(sql`CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)`)
-        yield* db.run(sql`INSERT INTO migration (id, time_completed) VALUES ('existing', 1)`)
-        yield* db.run(
-          sql`CREATE TABLE __drizzle_migrations (id INTEGER PRIMARY KEY, hash text NOT NULL, created_at numeric, name text, applied_at TEXT)`,
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(sql`UPDATE repa_migration SET id = 'not-the-repa-baseline' WHERE version = 1`)
+
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "partial.db" }))
+
+        expect(error).toMatchObject({ reason: "partial" })
+        expect(yield* db.get(sql`SELECT id FROM repa_migration WHERE version = 1`)).toEqual({
+          id: "not-the-repa-baseline",
+        })
+      }),
+    )
+  })
+
+  test("rolls a failed Repa migration back with its version and journal", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const failing = {
+          id: "repa_test_failure",
+          up(tx) {
+            return Effect.gen(function* () {
+              yield* tx.run(sql`CREATE TABLE should_rollback (id text PRIMARY KEY)`)
+              return yield* Effect.fail(new Error("injected migration failure"))
+            })
+          },
+        } satisfies DatabaseMigration.Migration
+
+        const error = yield* Effect.flip(
+          DatabaseMigration.apply(db, { fresh: false, path: "migration.db", migrations: [failing] }),
         )
-        yield* db.run(sql`
-          INSERT INTO __drizzle_migrations (hash, created_at, name, applied_at)
-          VALUES ('hash', 1, '20260127222353_familiar_lady_ursula', ${new Date().toISOString()})
-        `)
 
-        yield* DatabaseMigration.applyOnly(db, [])
+        expect(error).toMatchObject({ _tag: "DatabaseMigrationError" })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION,
+        })
+        expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
+          { version: BASELINE_VERSION, id: BASELINE_ID },
+        ])
+        expect(yield* db.get(sql`SELECT name FROM sqlite_master WHERE name = 'should_rollback'`)).toBeUndefined()
+      }),
+    )
+  })
 
-        expect(yield* db.all(sql`SELECT id FROM migration ORDER BY id`)).toEqual([{ id: "existing" }])
+  test("rejects existing foreign-key violations", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(sql`PRAGMA foreign_keys = OFF`)
+        yield* db.run(
+          sql`INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES ('orphan', 'missing', 1, 1, '{}')`,
+        )
+        yield* db.run(sql`PRAGMA foreign_keys = ON`)
+
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "orphan.db" }))
+
+        expect(error).toMatchObject({ reason: "corrupt" })
+        expect(yield* db.get(sql`SELECT id FROM message`)).toEqual({ id: "orphan" })
+      }),
+    )
+  })
+
+  test("reopens a current Repa baseline without changing durable rows", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(
+          sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('kept', '/', 1, 1, '[]')`,
+        )
+
+        yield* DatabaseMigration.apply(db, { fresh: false, path: "current.db" })
+
+        expect(yield* db.get(sql`SELECT id FROM project WHERE id = 'kept'`)).toEqual({ id: "kept" })
       }),
     )
   })

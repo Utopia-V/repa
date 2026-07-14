@@ -1,11 +1,14 @@
 # Repa documentation
 
-Status: Fork Gates 0–5 closed. Gate 6 is the next candidate but has not begun.
+Status: Fork Gates 0–5 closed. Gate 6 implementation is in progress.
 
-Current control point: conduct a maintainer `grill-me` on Gate 6's native
-database-admission choices before locking its contract or changing production
-code. The observed database gap is evidence for the conversation, not prior
-authorization for an implementation.
+Current control point: the Gate 6 maintainer grill and parent contract are
+complete. Implementation is limited to native database admission, a Repa-only
+forward migration lineage, and one state-owning process per LearnerHome.
+Explicit attached clients remain outside writer identity and the baseline adds
+no daemon. Invalid or unrecognized databases fail non-destructively and require
+deliberate recovery or reset; a fresh database records one Repa baseline and
+imports no inherited migration journal.
 
 This file is the sole owner of volatile active-Gate status. `AGENTS.md` and the
 roadmap contain stable policy and links rather than copied “next Gate” state.
@@ -21,7 +24,7 @@ legacy labs.
 - [One-time fork roadmap](roadmap/09-one-time-opencode-fork-baseline.md)
 - [Fork provenance and gate ledger](fork-ledger.md)
 - [Gate 5 terminal-only surface record](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
-- [Gate 6 pre-contract database-admission evidence](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
+- [Gate 6 native database-admission contract](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

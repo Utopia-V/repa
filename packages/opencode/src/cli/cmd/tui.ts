@@ -223,42 +223,53 @@ export const TuiThreadCommand = cmd({
         worker.terminate()
       }
 
-      const prompt = await input(args.prompt)
-      const config = await TuiConfig.get()
-
-      const network = resolveNetworkOptionsNoConfig(args)
-      const external = hasArg("--port") || hasArg("--hostname") || network.mdns === true
-
-      const headers = external ? ServerAuth.headers() : undefined
-
-      const transport = external
-        ? {
-            url: (await client.call("server", network)).url,
-            fetch: undefined,
-            events: undefined,
-            headers,
-          }
-        : {
-            url: "http://repa.internal",
-            fetch: createWorkerFetch(client),
-            events: createEventSource(client),
-          }
-
-      try {
-        await validateSession({
-          url: transport.url,
-          sessionID: args.session,
-          directory: cwd,
-          fetch: transport.fetch,
-          headers,
-        })
-      } catch (error) {
-        UI.error(errorMessage(error))
+      const ready = await withTimeout(client.call("ready", undefined), 5000).catch(() => ({
+        ok: false as const,
+        message: "Repa's local state runtime did not start",
+      }))
+      if (!ready.ok) {
+        UI.error(ready.message)
         process.exitCode = 1
+        await stop()
         return
       }
 
       try {
+        const prompt = await input(args.prompt)
+        const config = await TuiConfig.get()
+
+        const network = resolveNetworkOptionsNoConfig(args)
+        const external = hasArg("--port") || hasArg("--hostname") || network.mdns === true
+
+        const headers = external ? ServerAuth.headers() : undefined
+
+        const transport = external
+          ? {
+              url: (await client.call("server", network)).url,
+              fetch: undefined,
+              events: undefined,
+              headers,
+            }
+          : {
+              url: "http://repa.internal",
+              fetch: createWorkerFetch(client),
+              events: createEventSource(client),
+            }
+
+        try {
+          await validateSession({
+            url: transport.url,
+            sessionID: args.session,
+            directory: cwd,
+            fetch: transport.fetch,
+            headers,
+          })
+        } catch (error) {
+          UI.error(errorMessage(error))
+          process.exitCode = 1
+          return
+        }
+
         const { Effect } = await import("effect")
         const { run } = await import("../tui/layer")
         const { createLegacyTuiPluginHost } = await import("@/plugin/tui/runtime")

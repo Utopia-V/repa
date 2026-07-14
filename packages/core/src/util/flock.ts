@@ -2,6 +2,7 @@ import path from "path"
 import os from "os"
 import { randomBytes, randomUUID } from "crypto"
 import { mkdir, readFile, rm, stat, utimes, writeFile } from "fs/promises"
+import { readFileSync, rmSync } from "fs"
 import { Hash } from "./hash"
 import { Effect } from "effect"
 
@@ -59,10 +60,12 @@ export namespace Flock {
     acquired: true
     startHeartbeat: (intervalMs?: number) => void
     release: () => Promise<void>
+    releaseSync: () => void
   }
 
   export interface Lease {
     release: () => Promise<void>
+    releaseSync: () => void
     [Symbol.asyncDispose]: () => Promise<void>
   }
 
@@ -232,7 +235,10 @@ export namespace Flock {
       timer.unref?.()
     }
 
+    let released = false
+
     const release = async () => {
+      if (released) return
       if (timer) {
         clearInterval(timer)
         timer = undefined
@@ -262,12 +268,43 @@ export namespace Flock {
       }
 
       await rm(lockDir, { recursive: true, force: true })
+      released = true
+    }
+
+    const releaseSync = () => {
+      if (released) return
+      if (timer) {
+        clearInterval(timer)
+        timer = undefined
+      }
+
+      let current: { token?: string }
+      try {
+        const parsed = JSON.parse(readFileSync(metaPath, "utf8"))
+        current = parsed && typeof parsed === "object" ? parsed : {}
+      } catch (err) {
+        const errCode = code(err)
+        if (errCode === "ENOENT" || errCode === "ENOTDIR") {
+          throw new Error("Refusing to release: lock is compromised (metadata missing).")
+        }
+        if (err instanceof SyntaxError) {
+          throw new Error("Refusing to release: lock is compromised (metadata invalid).")
+        }
+        throw err
+      }
+      if (current.token !== token) {
+        throw new Error("Refusing to release: lock token mismatch (not the owner).")
+      }
+
+      rmSync(lockDir, { recursive: true, force: true })
+      released = true
     }
 
     return {
       acquired: true,
       startHeartbeat,
       release,
+      releaseSync,
     }
   }
 
@@ -307,14 +344,39 @@ export namespace Flock {
     }
   }
 
-  export async function acquire(key: string, input: Options = {}): Promise<Lease> {
-    input.signal?.throwIfAborted()
-    const cfg: Opts = {
+  function options(input: Options): Opts {
+    return {
       staleMs: input.staleMs ?? defaultOpts.staleMs,
       timeoutMs: input.timeoutMs ?? defaultOpts.timeoutMs,
       baseDelayMs: input.baseDelayMs ?? defaultOpts.baseDelayMs,
       maxDelayMs: input.maxDelayMs ?? defaultOpts.maxDelayMs,
     }
+  }
+
+  function lease(lock: Owned): Lease {
+    lock.startHeartbeat()
+    return {
+      release: lock.release,
+      releaseSync: lock.releaseSync,
+      [Symbol.asyncDispose]() {
+        return lock.release()
+      },
+    }
+  }
+
+  export async function tryAcquire(key: string, input: Options = {}): Promise<Lease | undefined> {
+    input.signal?.throwIfAborted()
+    const dir = input.dir ?? root()
+
+    await mkdir(dir, { recursive: true })
+    const lockfile = path.join(dir, Hash.fast(key) + ".lock")
+    const lock = await tryAcquireLockDir(lockfile, options(input))
+    if (!lock.acquired) return
+    return lease(lock)
+  }
+
+  export async function acquire(key: string, input: Options = {}): Promise<Lease> {
+    input.signal?.throwIfAborted()
     const dir = input.dir ?? root()
 
     await mkdir(dir, { recursive: true })
@@ -326,17 +388,9 @@ export namespace Flock {
         onWait: input.onWait,
         signal: input.signal,
       },
-      cfg,
+      options(input),
     )
-    lock.startHeartbeat()
-
-    const release = () => lock.release()
-    return {
-      release,
-      [Symbol.asyncDispose]() {
-        return release()
-      },
-    }
+    return lease(lock)
   }
 
   export async function withLock<T>(key: string, fn: () => Promise<T>, input: Options = {}) {

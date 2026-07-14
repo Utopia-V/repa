@@ -46,6 +46,12 @@ interface EffectCmdOpts<Args, A> {
   instance?: boolean | ((args: Args) => boolean)
   /** Defaults to process.cwd(). Override for commands that take a directory positional. */
   directory?: (args: Args) => string
+  /**
+   * Whether this invocation materializes the local LearnerHome runtime.
+   * Attached clients must select `client` and must not yield AppRuntime
+   * services. Defaults to `state-owner`.
+   */
+  runtime?: "state-owner" | "client" | ((args: Args) => "state-owner" | "client")
   handler: (args: WithDoubleDash<Args>) => Effect.Effect<A, CliError, AppServices | InstanceStore.Service>
 }
 
@@ -73,24 +79,44 @@ export const effectCmd = <Args, A>(opts: EffectCmdOpts<Args, A>) =>
     describe: opts.describe,
     builder: opts.builder as never,
     async handler(rawArgs) {
-      const { AppRuntime } = await import("@/effect/app-runtime")
       // yargs typing wraps Args in ArgumentsCamelCase<WithDoubleDash<...>>; cast at the boundary.
       const args = rawArgs as unknown as WithDoubleDash<Args>
-      const useInstance = typeof opts.instance === "function" ? opts.instance(args) : opts.instance !== false
-      if (!useInstance) {
-        await AppRuntime.runPromise(opts.handler(args))
+      const runtime = typeof opts.runtime === "function" ? opts.runtime(args) : (opts.runtime ?? "state-owner")
+      if (runtime === "client") {
+        await Effect.runPromise(opts.handler(args) as Effect.Effect<A, CliError, never>)
         return
       }
-      const { InstanceStore } = await import("@/project/instance-store")
-      const { InstanceRef } = await import("@/effect/instance-ref")
-      const directory = opts.directory?.(args) ?? process.cwd()
-      const { store, ctx } = await AppRuntime.runPromise(
-        InstanceStore.Service.use((store) => store.load({ directory }).pipe(Effect.map((ctx) => ({ store, ctx })))),
-      )
+
+      const { LearnerHomeOwnership } = await import("@/learner-home/ownership")
+      const ownership = await LearnerHomeOwnership.acquire()
+      let AppRuntime: (typeof import("@/effect/app-runtime"))["AppRuntime"] | undefined
       try {
-        await AppRuntime.runPromise(opts.handler(args).pipe(Effect.provideService(InstanceRef, ctx)))
+        AppRuntime = (await import("@/effect/app-runtime")).AppRuntime
+        const useInstance = typeof opts.instance === "function" ? opts.instance(args) : opts.instance !== false
+        if (!useInstance) {
+          await AppRuntime.runPromise(opts.handler(args))
+          return
+        }
+        const { InstanceStore } = await import("@/project/instance-store")
+        const { InstanceRef } = await import("@/effect/instance-ref")
+        const directory = opts.directory?.(args) ?? process.cwd()
+        const { store, ctx } = await AppRuntime.runPromise(
+          InstanceStore.Service.use((store) => store.load({ directory }).pipe(Effect.map((ctx) => ({ store, ctx })))),
+        )
+        try {
+          await AppRuntime.runPromise(opts.handler(args).pipe(Effect.provideService(InstanceRef, ctx)))
+        } finally {
+          await AppRuntime.runPromise(store.dispose(ctx))
+        }
       } finally {
-        await AppRuntime.runPromise(store.dispose(ctx))
+        try {
+          if (AppRuntime) {
+            await import("@/server/server").then(({ Server }) => Server.disposeDefault()).catch(() => {})
+            await AppRuntime.dispose().catch(() => {})
+          }
+        } finally {
+          await ownership.release()
+        }
       }
     },
   })

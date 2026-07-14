@@ -359,6 +359,30 @@ describe("util.flock", () => {
     expect(await exists(lockDir)).toBe(false)
   })
 
+  test("supports immediate acquisition without waiting on a healthy owner", async () => {
+    await using tmp = await tmpdir()
+    const dir = path.join(tmp.path, "locks")
+    const key = "flock:immediate"
+    await using first = await Flock.acquire(key, { dir })
+
+    const second = await Flock.tryAcquire(key, { dir })
+
+    expect(second).toBeUndefined()
+  })
+
+  test("supports token-checked synchronous release for process exit", async () => {
+    await using tmp = await tmpdir()
+    const dir = path.join(tmp.path, "locks")
+    const key = "flock:sync-release"
+    const lockDir = lock(dir, key)
+    const lease = await Flock.acquire(key, { dir })
+
+    lease.releaseSync()
+
+    expect(await exists(lockDir)).toBe(false)
+    await lease.release()
+  })
+
   test("refuses token mismatch release and recovers from stale", async () => {
     await using tmp = await tmpdir()
     const dir = path.join(tmp.path, "locks")

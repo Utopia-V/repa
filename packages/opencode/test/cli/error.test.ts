@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { AccountTransportError } from "../../src/account/schema"
+import { DatabaseAdmissionError, DatabaseMigrationError } from "@opencode-ai/core/database/admission"
+import { LearnerHomeBusyError } from "../../src/learner-home/ownership"
 import { FormatError } from "../../src/cli/error"
 import { UI } from "../../src/cli/ui"
 
@@ -91,5 +93,30 @@ describe("cli.error", () => {
 
   test("formats cancelled UI errors as empty output", () => {
     expect(FormatError(new UI.CancelledError())).toBe("")
+  })
+
+  test("formats LearnerHome ownership and database admission failures as actionable boundaries", () => {
+    expect(FormatError(new LearnerHomeBusyError({ database: "C:/home/repa.db" }))).toContain("repa attach <url>")
+
+    const admission = FormatError(
+      new DatabaseAdmissionError({
+        path: "C:/home/repa.db",
+        reason: "foreign",
+        detail: "The database is not a recognized Repa database",
+        currentVersion: 1,
+      }),
+    )
+    expect(admission).toContain("left the database in place")
+    expect(admission).toContain("C:/home/repa.db")
+
+    const migration = FormatError(
+      new DatabaseMigrationError({
+        path: "C:/home/repa.db",
+        migrationID: "repa_next",
+        fromVersion: 1,
+        toVersion: 2,
+      }),
+    )
+    expect(migration).toContain("rolled back")
   })
 })

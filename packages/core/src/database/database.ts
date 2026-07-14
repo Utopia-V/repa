@@ -2,13 +2,15 @@ export * as Database from "./database"
 
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { layer as sqliteLayer } from "#sqlite"
-import { Context, Effect, Layer } from "effect"
+import { Cause, Context, Effect, Layer } from "effect"
 import { Global } from "../global"
 import { Flag } from "../flag/flag"
 import { isAbsolute, join } from "path"
 import { DatabaseMigration } from "./migration"
+import { DatabaseAdmissionError, DatabaseMigrationError } from "./admission"
 import { InstallationChannel } from "../installation/version"
 import { makeGlobalNode } from "../effect/app-node"
+import { existsSync } from "node:fs"
 
 const makeDatabase = EffectDrizzleSqlite.makeWithDefaults()
 type DatabaseShape = Effect.Success<typeof makeDatabase>
@@ -19,25 +21,50 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/storage/Database") {}
 
-const layer = Layer.effect(
-  Service,
-  Effect.gen(function* () {
-    const db = yield* makeDatabase
+function databaseLayer(filename: string, fresh: boolean) {
+  return Layer.effect(
+    Service,
+    Effect.gen(function* () {
+      const db = yield* makeDatabase
 
-    yield* db.run("PRAGMA journal_mode = WAL")
-    yield* db.run("PRAGMA synchronous = NORMAL")
-    yield* db.run("PRAGMA busy_timeout = 5000")
-    yield* db.run("PRAGMA cache_size = -64000")
-    yield* db.run("PRAGMA foreign_keys = ON")
-    yield* db.run("PRAGMA wal_checkpoint(PASSIVE)")
-    yield* DatabaseMigration.apply(db)
+      yield* db.run("PRAGMA synchronous = FULL")
+      yield* db.run("PRAGMA busy_timeout = 5000")
+      yield* db.run("PRAGMA foreign_keys = ON")
+      yield* DatabaseMigration.apply(db, { path: filename, fresh })
 
-    return { db }
-  }).pipe(Effect.orDie),
-)
+      yield* db.run("PRAGMA journal_mode = WAL")
+      yield* db.run("PRAGMA synchronous = NORMAL")
+      yield* db.run("PRAGMA cache_size = -64000")
+
+      return { db }
+    }).pipe(
+      Effect.catchCause((cause) => {
+        const error = Cause.squash(cause)
+        if (error instanceof DatabaseAdmissionError || error instanceof DatabaseMigrationError)
+          return Effect.fail(error)
+        return Effect.fail(
+          new DatabaseAdmissionError({
+            path: filename,
+            reason: fresh ? "initialization" : "unavailable",
+            detail: fresh
+              ? `Could not create the Repa database at ${filename}`
+              : `Could not open the configured database at ${filename}`,
+            currentVersion: DatabaseMigration.version,
+            cause: error,
+          }),
+        )
+      }),
+    ),
+  )
+}
 
 export function layerFromPath(filename: string) {
-  return layer.pipe(Layer.provide(sqliteLayer({ filename })))
+  return Layer.unwrap(
+    Effect.sync(() => {
+      const fresh = filename === ":memory:" || !existsSync(filename)
+      return databaseLayer(filename, fresh).pipe(Layer.provide(sqliteLayer({ filename, disableWAL: true })))
+    }),
+  )
 }
 
 export function path() {
@@ -54,4 +81,4 @@ export function path() {
   return join(Global.Path.data, `repa-${InstallationChannel.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`)
 }
 
-export const node = makeGlobalNode({ service: Service, layer: layerFromPath(path()), deps: [] })
+export const node = makeGlobalNode({ service: Service, layer: layerFromPath(path()).pipe(Layer.orDie), deps: [] })

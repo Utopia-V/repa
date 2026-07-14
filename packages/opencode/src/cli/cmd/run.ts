@@ -49,6 +49,12 @@ function resolveRunInput(value?: string, piped?: string): string | undefined {
   return value + "\n" + piped
 }
 
+function enabledByExperimental(name: string) {
+  const value = process.env[name]
+  const truthy = (input: string | undefined) => input === "1" || input?.toLowerCase() === "true"
+  return value === undefined ? truthy(process.env.REPA_EXPERIMENTAL) : truthy(value)
+}
+
 type FilePart = {
   type: "file"
   url: string
@@ -129,6 +135,7 @@ export const RunCommand = effectCmd({
   // --attach connects to a remote server (no local instance needed); the
   // default path runs an in-process server and needs the project instance.
   instance: (args) => !args.attach,
+  runtime: (args) => (args.attach ? "client" : "state-owner"),
   // For --dir without --attach, load instance for the resolved target dir.
   // The handler also chdirs (preserving the legacy order: chdir → file resolution).
   directory: (args) => (args.dir && !args.attach ? path.resolve(process.cwd(), args.dir) : process.cwd()),
@@ -261,9 +268,11 @@ export const RunCommand = effectCmd({
     const { RuntimeFlags } = yield* Effect.promise(() => import("@/effect/runtime-flags"))
     const { InstanceRef } = yield* Effect.promise(() => import("@/effect/instance-ref"))
     const { ServerAuth } = yield* Effect.promise(() => import("@/server/auth"))
-    const agentSvc = yield* Agent.Service
-    const flags = yield* RuntimeFlags.Service
-    const localInstance = yield* InstanceRef
+    const agentSvc = args.attach ? undefined : yield* Agent.Service
+    const flags = args.attach
+      ? { experimentalBackgroundSubagents: enabledByExperimental("REPA_EXPERIMENTAL_BACKGROUND_SUBAGENTS") }
+      : yield* RuntimeFlags.Service
+    const localInstance = args.attach ? undefined : yield* InstanceRef
     yield* Effect.promise(async () => {
       const rawMessage = [...args.message, ...(args["--"] || [])].join(" ")
       const interactive = args.mini
@@ -574,6 +583,7 @@ export const RunCommand = effectCmd({
 
       async function localAgent() {
         if (!args.agent) return undefined
+        if (!agentSvc || !localInstance) throw new Error("Local agent resolution requires a local Repa runtime")
         const name = args.agent
 
         const entry = await Effect.runPromise(

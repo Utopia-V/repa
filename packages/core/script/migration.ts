@@ -9,7 +9,7 @@ import { parseArgs } from "util"
 
 const root = path.resolve(import.meta.dirname, "../../..")
 const snapshot = path.join(root, "packages/core/schema.json")
-const tsDir = path.join(root, "packages/core/src/database/migration")
+const tsDir = path.join(root, "packages/core/src/database/migration/repa")
 const registry = path.join(root, "packages/core/src/database/migration.gen.ts")
 const schema = path.join(root, "packages/core/src/database/schema.gen.ts")
 const args = parseArgs({
@@ -28,7 +28,7 @@ if (args.values.check) {
 await generate()
 
 async function generate() {
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-core-migration-"))
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "repa-core-migration-"))
   const incremental = path.join(temporary, "incremental")
   const full = path.join(temporary, "full")
   try {
@@ -41,6 +41,7 @@ async function generate() {
     if (generated.length > 1) throw new Error(`Expected one generated migration, found ${generated.length}.`)
     const name = generated[0]
     if (name) {
+      await fs.mkdir(tsDir, { recursive: true })
       const target = path.join(tsDir, `${name}.ts`)
       if (await Bun.file(target).exists()) throw new Error(`Database migration already exists: ${name}`)
       await Bun.write(
@@ -62,7 +63,7 @@ async function generate() {
 }
 
 async function check() {
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "opencode-core-migration-check-"))
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "repa-core-migration-check-"))
   const incremental = path.join(temporary, "incremental")
   const full = path.join(temporary, "full")
   try {
@@ -78,12 +79,18 @@ async function check() {
 
     await fs.mkdir(full)
     await drizzle(temporary, full, "schema")
-    if ((await Bun.file(schema).text()) !== (await formatTypescript(renderSchema(await generatedSql(full))))) {
+    if (
+      normalizeNewlines(await Bun.file(schema).text()) !==
+      normalizeNewlines(await formatTypescript(renderSchema(await generatedSql(full))))
+    ) {
       throw new Error("Current database schema is stale. Run `bun script/migration.ts` from packages/core.")
     }
 
     const migrations = await typescriptMigrations()
-    if ((await Bun.file(registry).text()) !== (await formatTypescript(renderRegistry(migrations)))) {
+    if (
+      normalizeNewlines(await Bun.file(registry).text()) !==
+      normalizeNewlines(await formatTypescript(renderRegistry(migrations)))
+    ) {
       throw new Error("Database migration registry is stale. Run `bun script/migration.ts` from packages/core.")
     }
   } finally {
@@ -107,7 +114,7 @@ export default { ...config, out: ${JSON.stringify(output)} }
 
 async function generatedMigrations(directory: string) {
   return (await Array.fromAsync(new Bun.Glob("*/migration.sql").scan({ cwd: directory })))
-    .map((file) => file.split("/")[0])
+    .map((file) => file.replaceAll("\\", "/").split("/")[0])
     .filter((name): name is string => name !== undefined)
     .sort()
 }
@@ -126,7 +133,7 @@ async function typescriptMigrations() {
 
 function renderMigration(name: string, sql: string) {
   return `import { Effect } from "effect"
-import type { DatabaseMigration } from "../migration"
+import type { DatabaseMigration } from "../../migration"
 
 export default {
   id: ${JSON.stringify(name)},
@@ -185,12 +192,22 @@ async function formatTypescript(input: string) {
 }
 
 function renderRegistry(names: string[]) {
+  if (names.length === 0) {
+    return `import type { DatabaseMigration } from "./migration"
+
+export const migrations = [] satisfies DatabaseMigration.Migration[]
+`
+  }
   return `import type { DatabaseMigration } from "./migration"
 
 export const migrations = (
   await Promise.all([
-${names.map((name) => `    import("./migration/${name}"),`).join("\n")}
+${names.map((name) => `    import("./migration/repa/${name}"),`).join("\n")}
   ])
 ).map((module) => module.default) satisfies DatabaseMigration.Migration[]
 `
+}
+
+function normalizeNewlines(input: string) {
+  return input.replaceAll("\r\n", "\n")
 }

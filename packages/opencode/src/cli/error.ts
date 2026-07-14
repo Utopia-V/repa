@@ -44,6 +44,38 @@ export function FormatError(input: unknown): string | undefined {
     return stringField(input, "message") ?? ""
   }
 
+  if (isTaggedError(input, "LearnerHomeBusyError")) {
+    const database = stringField(input, "database")
+    return [
+      `Another Repa process currently owns this LearnerHome${database ? ` (${database})` : ""}.`,
+      "If you intentionally started `repa serve`, connect with `repa attach <url>` instead.",
+    ].join("\n")
+  }
+
+  if (isTaggedError(input, "LearnerHomeOwnershipError")) {
+    const database = stringField(input, "database")
+    return `Could not establish local LearnerHome ownership${database ? ` for ${database}` : ""}. Check filesystem access and try again.`
+  }
+
+  if (isTaggedError(input, "DatabaseAdmissionError")) {
+    const detail = stringField(input, "detail") ?? "The configured database could not be admitted."
+    const path = stringField(input, "path")
+    return [
+      detail,
+      "Repa left the database in place and made no migration attempt.",
+      ...(path ? [`Move, inspect, or remove ${path} explicitly before retrying if you intend to reset it.`] : []),
+    ].join("\n")
+  }
+
+  if (isTaggedError(input, "DatabaseMigrationError")) {
+    const path = stringField(input, "path")
+    const migration = stringField(input, "migrationID")
+    return [
+      `Repa could not apply database migration${migration ? ` ${migration}` : ""}${path ? ` to ${path}` : ""}.`,
+      "The migration transaction was rolled back; the previous recognized database version remains authoritative.",
+    ].join("\n")
+  }
+
   // MCPFailed: { name: string }
   if (NamedError.hasName(input, "MCPFailed")) {
     const data = isRecord(input) && isRecord(input.data) ? stringField(input.data, "name") : undefined

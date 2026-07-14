@@ -8,6 +8,7 @@ import { writeHeapSnapshot } from "node:v8"
 import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Effect } from "effect"
+import { LearnerHomeOwnership, type Handle as OwnershipHandle } from "@/learner-home/ownership"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
 
 Heap.start()
@@ -25,8 +26,22 @@ GlobalBus.on("event", (event) => {
 })
 
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
+let ownership: OwnershipHandle | undefined
+const startup = await LearnerHomeOwnership.acquire().then(
+  (handle) => {
+    ownership = handle
+    return { ok: true as const }
+  },
+  (error) => ({
+    ok: false as const,
+    message: error instanceof Error ? error.message : String(error),
+  }),
+)
 
 export const rpc = {
+  ready() {
+    return startup
+  },
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
     const headers = { ...input.headers }
     const auth = ServerAuth.header()
@@ -65,8 +80,11 @@ export const rpc = {
     )
   },
   async shutdown() {
-    await InstanceRuntime.disposeAllInstances()
-    if (server) await server.stop(true)
+    if (server) await server.stop(true).catch(() => {})
+    await InstanceRuntime.disposeAllInstances().catch(() => {})
+    await Server.disposeDefault().catch(() => {})
+    await AppRuntime.dispose().catch(() => {})
+    await ownership?.release().catch(() => {})
     process.off("unhandledRejection", onUnhandledRejection)
     process.off("uncaughtException", onUncaughtException)
   },

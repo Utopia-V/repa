@@ -872,12 +872,27 @@ Large source/material content may stay in local files or a content-addressed
 cache; SQLite retains identity, revision, selector, provenance, and any bounded
 observed content required for audit.
 
+Admission of a foreign, unsupported-old, future, partially migrated, or
+corrupt database stops before mutation and leaves the configured file in
+place. Repa reports the observed reason and requires an explicit recovery or
+reset action; it does not silently quarantine the file and open a fresh
+LearnerHome. Because this is an exceptional path, the baseline owns truthful
+refusal and a deliberate reset boundary, not a general repair framework or
+automatic salvage policy.
+
 One process owns state-changing execution for a `LearnerHome` at a time. The
-application will acquire a local writer lease/lock at boot. A second writer
-fails clearly or opens an explicitly read-only inspection path; it does not
-silently run a competing Tutor. This matches the accepted single-user,
-non-daemon product while preventing two terminals from planning against the
-same stale agenda.
+state-owning server or worker acquires a local writer lease at boot. A second
+ordinary state-owning launch fails clearly; a frontend explicitly attached to
+the existing owner is not a second writer. The baseline does not add a read-
+only database opener, automatic attach discovery, or a background daemon.
+
+The lease protects LearnerHome authority without making the current v1 TUI
+worker topology part of the database or domain contract. Its acquisition and
+release remain localized at runtime admission, with truthful stale-owner and
+abrupt-exit recovery. A future proven server topology may replace refusal with
+attachment without changing database identity, migrations, or learning write
+semantics. This matches the accepted single-user baseline while preventing two
+terminals from silently running competing Tutors against stale shared state.
 
 SQLite still enforces entity versions and uniqueness. If a conflict occurs,
 the later command fails with current state and can be reconsidered; there is no
@@ -889,6 +904,13 @@ schema changes, but migration execution remains centralized so the database
 cannot partially advance. Preview-v2 and upstream post-fork migrations have no
 automatic authority. Before a destructive migration exists, backup/export and
 rollback behavior must be specified.
+
+The first admitted database is created from the complete Repa baseline schema
+and records one Repa baseline identity. Runtime admission does not import
+`__drizzle_migrations`, infer completion from inherited OpenCode migration IDs,
+or register the inherited migration chain as Repa history. Those source files
+may remain as implementation history where useful, but only migrations created
+after the Repa baseline participate in the forward runtime lineage.
 
 There is no timer worker or daemon. At application wake, queries derive due,
 overdue, and expired state from stored times and the trusted clock.
