@@ -8,6 +8,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { PluginV2 } from "@opencode-ai/core/plugin"
 import { PluginHost } from "@opencode-ai/core/plugin/host"
 import { OpencodePlugin } from "@opencode-ai/core/plugin/provider/opencode"
+import { ProviderPlugins } from "@opencode-ai/core/plugin/provider"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { testEffect } from "../lib/effect"
 import { PluginTestLayer } from "./fixture"
@@ -68,6 +69,12 @@ function withEnv<A, E, R>(vars: Record<string, string | undefined>, effect: () =
 const cost = (input: number, output = 0) => [{ input, output, cache: { read: 0, write: 0 } }]
 
 describe("OpencodePlugin", () => {
+  it.effect("remains directly testable without product registration", () =>
+    Effect.sync(() => {
+      expect(ProviderPlugins.map((plugin) => plugin.id)).not.toContain(PluginV2.ID.make("opencode"))
+    }),
+  )
+
   it.effect("registers account and service account methods", () =>
     Effect.gen(function* () {
       yield* addPlugin()
@@ -393,7 +400,7 @@ describe("OpencodePlugin", () => {
     ),
   )
 
-  it.effect("prefers gpt-5-nano as the opencode small model", () =>
+  it.effect("uses ordinary small-model selection when invoked directly", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       const providerID = ProviderV2.ID.opencode
@@ -416,7 +423,7 @@ describe("OpencodePlugin", () => {
 
       const selected = yield* catalog.model.small(providerID)
 
-      expect(selected?.id).toBe(ModelV2.ID.make("gpt-5-nano"))
+      expect(selected?.id).toBe(ModelV2.ID.make("cheap-mini"))
     }),
   )
 })

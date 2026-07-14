@@ -334,6 +334,28 @@ describe("CatalogV2", () => {
     }),
   )
 
+  it.effect("does not give a same-named custom provider a commercial-provider shortcut", () =>
+    Effect.gen(function* () {
+      const catalog = yield* Catalog.Service
+      const providerID = ProviderV2.ID.make("opencode")
+      yield* catalog.transform((catalog) => {
+        catalog.provider.update(providerID, () => {})
+        catalog.model.update(providerID, ModelV2.ID.make("gpt-5-nano"), (model) => {
+          model.cost = [{ input: 0, output: 0, cache: { read: 0, write: 0 } }]
+          model.time.released = Date.now()
+        })
+        catalog.model.update(providerID, ModelV2.ID.make("usable-mini"), (model) => {
+          model.capabilities.input = ["text"]
+          model.capabilities.output = ["text"]
+          model.cost = [{ input: 1, output: 1, cache: { read: 0, write: 0 } }]
+          model.time.released = Date.now()
+        })
+      })
+
+      expect((yield* catalog.model.small(providerID))?.id).toBe(ModelV2.ID.make("usable-mini"))
+    }),
+  )
+
   it.effect("removes providers denied by policy after loading", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service

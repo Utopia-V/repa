@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdir, unlink } from "fs/promises"
+import { mkdir } from "fs/promises"
 import path from "path"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -17,7 +17,6 @@ import { Plugin } from "../../src/plugin/index"
 import { Provider } from "@/provider/provider"
 
 import { RuntimeFlags } from "@/effect/runtime-flags"
-import { Filesystem } from "@/util/filesystem"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { InstanceStore } from "@/project/instance-store"
 import { testEffect } from "../lib/effect"
@@ -75,12 +74,6 @@ const providerLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
   )
 
 const list = Provider.use.list()
-
-const paid = (providers: Record<string, { models: Record<string, { cost: { input: number } }> }>) => {
-  const item = providers[ProviderV2.ID.make("opencode")]
-  expect(item).toBeDefined()
-  return Object.values(item.models).filter((model) => model.cost.input > 0).length
-}
 
 const languageBaseURL = (language: unknown) => (language as { config: { baseURL: string } }).config.baseURL
 
@@ -1146,15 +1139,52 @@ it.instance("ModelNotFoundError for provider includes suggestions", () =>
   }),
 )
 
-it.instance("ModelNotFoundError suggests catalog models for unloaded providers", () =>
+it.instance("inherited commercial providers stay out of built-in provider state", () =>
   Effect.gen(function* () {
     yield* remove("OPENCODE_API_KEY")
+    const providers = yield* list
+    expect(providers[ProviderV2.ID.opencode]).toBeUndefined()
+    expect(providers[ProviderV2.ID.make("opencode-go")]).toBeUndefined()
+
     const error = yield* Provider.use
       .getModel(ProviderV2.ID.opencode, ModelV2.ID.make("claude-haiku-fake-model"))
       .pipe(Effect.flip)
     if (!Provider.ModelNotFoundError.isInstance(error)) throw error
-    expect(error.suggestions ?? []).toContain("claude-haiku-4-5")
+    expect(error.suggestions ?? []).not.toContain("claude-haiku-4-5")
   }),
+)
+it.instance(
+  "same-named explicit config remains an ordinary custom provider",
+  Effect.gen(function* () {
+    const providers = yield* list
+    const provider = providers[ProviderV2.ID.opencode]
+    expect(provider).toMatchObject({
+      id: "opencode",
+      name: "Local Compatible Provider",
+      source: "config",
+    })
+    expect(Object.keys(provider.models)).toEqual(["local-model"])
+  }),
+  {
+    config: {
+      provider: {
+        opencode: {
+          name: "Local Compatible Provider",
+          npm: "@ai-sdk/openai-compatible",
+          api: "http://localhost:4141/v1",
+          env: [],
+          models: {
+            "local-model": {
+              name: "Local Model",
+              tool_call: true,
+              limit: { context: 4000, output: 1000 },
+            },
+          },
+          options: { apiKey: "local-key" },
+        },
+      },
+    },
+  },
 )
 
 it.instance("getProvider returns undefined for nonexistent provider", () =>
@@ -1882,57 +1912,4 @@ it.instance(
     expect(providers[ProviderV2.ID.anthropic]).toBeDefined()
     expect(providers[ProviderV2.ID.openai]).toBeUndefined()
   }),
-)
-
-it.effect("opencode loader keeps paid models when config apiKey is present", () =>
-  Effect.gen(function* () {
-    const noneDir = yield* tmpdirScoped()
-    const keyedDir = yield* tmpdirScoped({
-      config: { provider: { opencode: { options: { apiKey: "test-key" } } } },
-    })
-
-    const listIn = (directory: string) =>
-      Provider.use
-        .list()
-        .pipe(provideInstanceEffect(directory))
-        .pipe(Effect.provide(instanceStoreLayer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)))
-
-    const none = paid(yield* listIn(noneDir))
-    const keyedCount = paid(yield* listIn(keyedDir))
-
-    expect(none).toBe(0)
-    expect(keyedCount).toBeGreaterThan(0)
-  }).pipe(provideMultiInstance),
-)
-
-it.effect("opencode loader keeps paid models when auth exists", () =>
-  Effect.gen(function* () {
-    const noneDir = yield* tmpdirScoped()
-    const keyedDir = yield* tmpdirScoped()
-
-    const listIn = (directory: string) =>
-      Provider.use
-        .list()
-        .pipe(provideInstanceEffect(directory))
-        .pipe(Effect.provide(instanceStoreLayer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)))
-
-    const none = paid(yield* listIn(noneDir))
-
-    const authPath = path.join(Global.Path.data, "auth.json")
-    const original = yield* Effect.promise(() => Filesystem.readText(authPath).catch(() => undefined))
-
-    yield* Effect.acquireRelease(
-      Effect.promise(() => Filesystem.write(authPath, JSON.stringify({ opencode: { type: "api", key: "test-key" } }))),
-      () =>
-        Effect.promise(async () => {
-          if (original !== undefined) await Filesystem.write(authPath, original)
-          else await unlink(authPath).catch(() => undefined)
-        }),
-    )
-
-    const keyedCount = paid(yield* listIn(keyedDir))
-
-    expect(none).toBe(0)
-    expect(keyedCount).toBeGreaterThan(0)
-  }).pipe(provideMultiInstance),
 )

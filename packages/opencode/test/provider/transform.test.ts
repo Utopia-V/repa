@@ -73,6 +73,27 @@ describe("ProviderTransform.options - setCacheKey", () => {
     expect(result.promptCacheKey).toBeUndefined()
   })
 
+  test("does not infer commercial provider behavior from an explicit provider id", () => {
+    const result = ProviderTransform.options({
+      model: {
+        ...mockModel,
+        providerID: "opencode",
+        api: {
+          id: "kimi-k2-thinking",
+          url: "http://localhost:4141/v1",
+          npm: "@ai-sdk/openai-compatible",
+        },
+      },
+      sessionID,
+      providerOptions: {},
+    })
+
+    expect(result.chat_template_args).toBeUndefined()
+    expect(result.promptCacheKey).toBeUndefined()
+    expect(result.include).toBeUndefined()
+    expect(result.reasoningSummary).toBeUndefined()
+  })
+
   test("should set promptCacheKey for openai provider by default", () => {
     const openaiModel = {
       ...mockModel,

@@ -5,6 +5,11 @@ import { EventV2 } from "../event"
 import { ModelsDev } from "../models-dev"
 import { ProviderV2 } from "../provider"
 
+// Keep inherited OpenCode services available as dormant source, but do not
+// project them into Repa's built-in catalog. ConfigProviderPlugin runs later,
+// so an explicitly configured provider with the same id remains ordinary.
+const HIBERNATED_INHERITED_PROVIDERS = new Set(["opencode", "opencode-go"])
+
 function released(date: string) {
   const time = Date.parse(date)
   return Number.isFinite(time) ? time : 0
@@ -125,6 +130,7 @@ export const ModelsDevPlugin = define({
       Effect.fn(function* (integrations) {
         const data = yield* modelsDev.get()
         for (const item of Object.values(data)) {
+          if (HIBERNATED_INHERITED_PROVIDERS.has(item.id)) continue
           if (item.env.length === 0) continue
           const integrationID = item.id
           integrations.update(integrationID, (integration) => (integration.name = item.name))
@@ -143,6 +149,7 @@ export const ModelsDevPlugin = define({
       Effect.fn(function* (catalog) {
         const data = yield* modelsDev.get()
         for (const item of Object.values(data)) {
+          if (HIBERNATED_INHERITED_PROVIDERS.has(item.id)) continue
           const providerID = ProviderV2.ID.make(item.id)
           catalog.provider.update(providerID, (provider) => {
             provider.name = item.name

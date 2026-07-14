@@ -167,4 +167,45 @@ describe("ModelsDevPlugin", () => {
         }),
     ),
   )
+
+  it.effect("keeps inherited commercial providers out of the built-in catalog", () =>
+    Effect.gen(function* () {
+      const integrations = yield* Integration.Service
+      const catalog = yield* Catalog.Service
+      const models = ModelsDev.Service.of({
+        get: () =>
+          Effect.succeed({
+            opencode: {
+              id: "opencode",
+              name: "OpenCode Zen",
+              env: ["OPENCODE_API_KEY"],
+              npm: "@ai-sdk/openai-compatible",
+              api: "https://api.opencode.test/v1",
+              models: {},
+            },
+            "opencode-go": {
+              id: "opencode-go",
+              name: "OpenCode Go",
+              env: ["OPENCODE_API_KEY"],
+              npm: "@ai-sdk/openai-compatible",
+              api: "https://api.opencode.test/v1",
+              models: {},
+            },
+          } satisfies Record<string, ModelsDev.Provider>),
+        refresh: () => Effect.void,
+      })
+
+      yield* ModelsDevPlugin.effect(
+        host({
+          catalog: catalogHost(catalog),
+          integration: integrationHost(integrations),
+        }),
+      ).pipe(Effect.provideService(ModelsDev.Service, models))
+
+      expect(yield* catalog.provider.get(ProviderV2.ID.make("opencode"))).toBeUndefined()
+      expect(yield* catalog.provider.get(ProviderV2.ID.make("opencode-go"))).toBeUndefined()
+      expect(yield* integrations.get(Integration.ID.make("opencode"))).toBeUndefined()
+      expect(yield* integrations.get(Integration.ID.make("opencode-go"))).toBeUndefined()
+    }),
+  )
 })

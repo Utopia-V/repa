@@ -33,6 +33,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 10_000
+const HIBERNATED_INHERITED_PROVIDERS = new Set(["opencode", "opencode-go"])
 
 function wrapSSE(res: Response, ms: number, ctl: AbortController) {
   if (typeof ms !== "number" || ms <= 0) return res
@@ -176,29 +177,6 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           },
         },
       }),
-    opencode: Effect.fnUntraced(function* (input: Info) {
-      const env = yield* dep.env()
-      const hasKey = iife(() => {
-        if (input.env.some((item) => env[item])) return true
-        return false
-      })
-      const ok =
-        hasKey ||
-        Boolean(yield* dep.auth(input.id)) ||
-        Boolean((yield* dep.config()).provider?.["opencode"]?.options?.apiKey)
-
-      if (!ok) {
-        for (const [key, value] of Object.entries(input.models)) {
-          if (value.cost.input === 0) continue
-          delete input.models[key]
-        }
-      }
-
-      return {
-        autoload: Object.keys(input.models).length > 0,
-        options: ok ? {} : { apiKey: "public" },
-      }
-    }),
     openai: () =>
       Effect.succeed({
         autoload: false,
@@ -1332,7 +1310,11 @@ const layer = Layer.effect(
         const bridge = yield* EffectBridge.make()
         const cfg = yield* config.get()
         const modelsDev = yield* modelsDevSvc.get()
-        const catalog = mapValues(modelsDev, fromModelsDevProvider)
+        // These inherited commercial services remain in the models.dev source,
+        // but are not part of Repa's built-in provider catalog. Configuration
+        // below may still create an ordinary provider with the same id.
+        const builtinModelsDev = pickBy(modelsDev, (provider) => !HIBERNATED_INHERITED_PROVIDERS.has(provider.id))
+        const catalog = mapValues(builtinModelsDev, fromModelsDevProvider)
         const database = mapValues(catalog, toPublicInfo)
 
         const providers: Record<ProviderV2.ID, Info> = {} as Record<ProviderV2.ID, Info>
@@ -1427,7 +1409,7 @@ const layer = Layer.effect(
               model.provider?.npm ??
               provider.npm ??
               existingModel?.api.npm ??
-              modelsDev[providerID]?.npm ??
+              builtinModelsDev[providerID]?.npm ??
               "@ai-sdk/openai-compatible"
             const name = iife(() => {
               if (model.name) return model.name
@@ -1439,7 +1421,12 @@ const layer = Layer.effect(
               api: {
                 id: apiID,
                 npm: apiNpm,
-                url: model.provider?.api ?? provider?.api ?? existingModel?.api.url ?? modelsDev[providerID]?.api ?? "",
+                url:
+                  model.provider?.api ??
+                  provider?.api ??
+                  existingModel?.api.url ??
+                  builtinModelsDev[providerID]?.api ??
+                  "",
               },
               status: model.status ?? existingModel?.status ?? "active",
               name,
@@ -1890,11 +1877,9 @@ const layer = Layer.effect(
         return undefined
       }
 
-      const priority = providerID.startsWith("opencode")
-        ? ["gpt-nano"]
-        : providerID.startsWith("github-copilot")
-          ? ["gpt-mini", ...smallModelFamilyPriority]
-          : smallModelFamilyPriority
+      const priority = providerID.startsWith("github-copilot")
+        ? ["gpt-mini", ...smallModelFamilyPriority]
+        : smallModelFamilyPriority
       const models = sortBy(
         Object.values(provider.models),
         [(model) => model.release_date, "desc"],

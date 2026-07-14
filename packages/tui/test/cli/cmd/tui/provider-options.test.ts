@@ -26,6 +26,32 @@ describe("providerOptions", () => {
     ).toEqual(["openai", "anthropic", "aws", "mistral", "custom-z", "__opencode_custom_provider__"])
   })
 
+  test("treats explicitly configured OpenCode provider ids as ordinary providers", () => {
+    expect(
+      providerOptions([
+        { id: "opencode", name: "OpenCode Zen" },
+        { id: "opencode-go", name: "OpenCode Go" },
+      ]).slice(0, 2),
+    ).toEqual([
+      {
+        type: "provider",
+        title: "OpenCode Go",
+        value: "opencode-go",
+        providerID: "opencode-go",
+        description: undefined,
+        category: "Providers",
+      },
+      {
+        type: "provider",
+        title: "OpenCode Zen",
+        value: "opencode",
+        providerID: "opencode",
+        description: undefined,
+        category: "Providers",
+      },
+    ])
+  })
+
   test("does not collide with a configured provider named other", () => {
     const values = providerOptions([{ id: "other", name: "Other Provider" }]).map((option) => option.value)
     expect(new Set(values).size).toBe(values.length)
