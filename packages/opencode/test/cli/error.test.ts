@@ -109,6 +109,17 @@ describe("cli.error", () => {
     expect(admission).toContain("left the database in place")
     expect(admission).toContain("C:/home/repa.db")
 
+    const initialization = FormatError(
+      new DatabaseAdmissionError({
+        path: "C:/home/repa.db",
+        reason: "initialization",
+        detail: "Failed to initialize the Repa database",
+        currentVersion: 1,
+      }),
+    )
+    expect(initialization).toContain("did not commit database initialization")
+    expect(initialization).not.toContain("made no migration attempt")
+
     const migration = FormatError(
       new DatabaseMigrationError({
         path: "C:/home/repa.db",

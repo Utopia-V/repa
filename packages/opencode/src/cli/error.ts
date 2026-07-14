@@ -60,9 +60,12 @@ export function FormatError(input: unknown): string | undefined {
   if (isTaggedError(input, "DatabaseAdmissionError")) {
     const detail = stringField(input, "detail") ?? "The configured database could not be admitted."
     const path = stringField(input, "path")
+    const reason = stringField(input, "reason")
     return [
       detail,
-      "Repa left the database in place and made no migration attempt.",
+      reason === "initialization"
+        ? "Repa did not commit database initialization and left the configured path in place."
+        : "Repa left the database in place and made no migration attempt.",
       ...(path ? [`Move, inspect, or remove ${path} explicitly before retrying if you intend to reset it.`] : []),
     ].join("\n")
   }
