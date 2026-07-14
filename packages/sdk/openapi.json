@@ -416,95 +416,6 @@
         ]
       }
     },
-    "/global/upgrade": {
-      "post": {
-        "tags": ["global"],
-        "operationId": "global.upgrade",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Upgrade result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [true]
-                        },
-                        "version": {
-                          "type": "string"
-                        }
-                      },
-                      "required": ["success", "version"],
-                      "additionalProperties": false
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "enum": [false]
-                        },
-                        "error": {
-                          "type": "string"
-                        }
-                      },
-                      "required": ["success", "error"],
-                      "additionalProperties": false
-                    }
-                  ],
-                  "description": "Upgrade result"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "BadRequest | InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/effect_HttpApiError_BadRequest"
-                    },
-                    {
-                      "$ref": "#/components/schemas/InvalidRequestError"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "description": "Report that self-update is unavailable until a Repa release channel is defined.",
-        "summary": "Repa self-update availability",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "target": {
-                    "type": "string"
-                  }
-                },
-                "additionalProperties": false
-              }
-            }
-          }
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.global.upgrade({\n  ...\n})"
-          }
-        ]
-      }
-    },
     "/event": {
       "get": {
         "tags": ["event"],
@@ -13172,12 +13083,6 @@
             "$ref": "#/components/schemas/EventSessionError"
           },
           {
-            "$ref": "#/components/schemas/EventInstallationUpdated"
-          },
-          {
-            "$ref": "#/components/schemas/EventInstallationUpdate-available"
-          },
-          {
             "$ref": "#/components/schemas/EventFileEdited"
           },
           {
@@ -16904,56 +16809,6 @@
                   },
                   "type": {
                     "type": "string",
-                    "enum": ["installation.updated"]
-                  },
-                  "properties": {
-                    "type": "object",
-                    "properties": {
-                      "version": {
-                        "type": "string"
-                      }
-                    },
-                    "required": ["version"],
-                    "additionalProperties": false
-                  }
-                },
-                "required": ["id", "type", "properties"],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^evt_"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": ["installation.update-available"]
-                  },
-                  "properties": {
-                    "type": "object",
-                    "properties": {
-                      "version": {
-                        "type": "string"
-                      }
-                    },
-                    "required": ["version"],
-                    "additionalProperties": false
-                  }
-                },
-                "required": ["id", "type", "properties"],
-                "additionalProperties": false
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^evt_"
-                  },
-                  "type": {
-                    "type": "string",
                     "enum": ["file.edited"]
                   },
                   "properties": {
@@ -18974,18 +18829,6 @@
                 }
               ]
             }
-          },
-          "autoupdate": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "string",
-                "enum": ["notify"]
-              }
-            ],
-            "description": "Automatically update to the latest version. Set to true to auto-update, false to disable, or 'notify' to show update notifications"
           },
           "disabled_providers": {
             "type": "array",
@@ -21706,12 +21549,6 @@
           },
           {
             "$ref": "#/components/schemas/SessionError"
-          },
-          {
-            "$ref": "#/components/schemas/InstallationUpdated"
-          },
-          {
-            "$ref": "#/components/schemas/InstallationUpdate-available"
           },
           {
             "$ref": "#/components/schemas/FileEdited"
@@ -29205,100 +29042,6 @@
         "required": ["id", "type", "data"],
         "additionalProperties": false
       },
-      "InstallationUpdated": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^evt_"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["installation.updated"]
-          },
-          "durable": {
-            "type": "object",
-            "properties": {
-              "aggregateID": {
-                "type": "string"
-              },
-              "seq": {
-                "type": "integer"
-              },
-              "version": {
-                "type": "integer"
-              }
-            },
-            "required": ["aggregateID", "seq", "version"],
-            "additionalProperties": false
-          },
-          "location": {
-            "$ref": "#/components/schemas/LocationRef"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "version": {
-                "type": "string"
-              }
-            },
-            "required": ["version"],
-            "additionalProperties": false
-          }
-        },
-        "required": ["id", "type", "data"],
-        "additionalProperties": false
-      },
-      "InstallationUpdate-available": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^evt_"
-          },
-          "metadata": {
-            "type": "object"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["installation.update-available"]
-          },
-          "durable": {
-            "type": "object",
-            "properties": {
-              "aggregateID": {
-                "type": "string"
-              },
-              "seq": {
-                "type": "integer"
-              },
-              "version": {
-                "type": "integer"
-              }
-            },
-            "required": ["aggregateID", "seq", "version"],
-            "additionalProperties": false
-          },
-          "location": {
-            "$ref": "#/components/schemas/LocationRef"
-          },
-          "data": {
-            "type": "object",
-            "properties": {
-              "version": {
-                "type": "string"
-              }
-            },
-            "required": ["version"],
-            "additionalProperties": false
-          }
-        },
-        "required": ["id", "type", "data"],
-        "additionalProperties": false
-      },
       "FileEdited": {
         "type": "object",
         "properties": {
@@ -33079,56 +32822,6 @@
                 ]
               }
             },
-            "additionalProperties": false
-          }
-        },
-        "required": ["id", "type", "properties"],
-        "additionalProperties": false
-      },
-      "EventInstallationUpdated": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^evt_"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["installation.updated"]
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "version": {
-                "type": "string"
-              }
-            },
-            "required": ["version"],
-            "additionalProperties": false
-          }
-        },
-        "required": ["id", "type", "properties"],
-        "additionalProperties": false
-      },
-      "EventInstallationUpdate-available": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^evt_"
-          },
-          "type": {
-            "type": "string",
-            "enum": ["installation.update-available"]
-          },
-          "properties": {
-            "type": "object",
-            "properties": {
-              "version": {
-                "type": "string"
-              }
-            },
-            "required": ["version"],
             "additionalProperties": false
           }
         },

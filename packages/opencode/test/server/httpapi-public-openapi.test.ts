@@ -145,13 +145,21 @@ describe("PublicApi Gate 5B3 route cutover", () => {
     expect(JSON.stringify(spec)).not.toContain('"session.share"')
   })
 
-  test("omits retired sharing configuration", () => {
+  test("omits retired sharing and updater configuration", () => {
     const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
     const properties = spec.components.schemas.Config?.properties
 
     expect(properties).toBeDefined()
-    expect(Object.keys(properties ?? {})).not.toEqual(expect.arrayContaining(["share", "autoshare", "enterprise"]))
-    expect(properties).toHaveProperty("autoupdate")
+    expect(Object.keys(properties ?? {})).not.toEqual(
+      expect.arrayContaining(["share", "autoshare", "enterprise", "autoupdate"]),
+    )
+  })
+
+  test("omits the hibernated updater route and events", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+
+    expect(spec.paths).not.toHaveProperty("/global/upgrade")
+    expect(JSON.stringify(spec)).not.toContain("installation.update")
   })
 })
 

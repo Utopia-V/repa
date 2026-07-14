@@ -239,13 +239,8 @@ const TIPS: Tip[] = [
   "Use {highlight}--format json{/highlight} for machine-readable output in scripts",
   "Run {highlight}repa serve{/highlight} for headless API access to Repa",
   "Use {highlight}repa run --attach{/highlight} to connect to a running server",
-  "Run {highlight}repa upgrade{/highlight} to update to the latest version",
   "Run {highlight}repa auth list{/highlight} to see all configured providers",
   "Run {highlight}repa agent create{/highlight} for guided agent creation",
-  "Use {highlight}/opencode{/highlight} in GitHub issues/PRs to trigger AI actions",
-  "Run {highlight}opencode github install{/highlight} to set up the GitHub workflow",
-  "Comment {highlight}/opencode fix this{/highlight} on issues to auto-create PRs",
-  "Comment {highlight}/oc{/highlight} on PR code lines for targeted code reviews",
   'Use {highlight}"theme": "system"{/highlight} to match your terminal\'s colors',
   "Create JSON theme files in {highlight}.repa/themes/{/highlight} directory",
   "Themes support dark/light variants for both modes",
@@ -270,8 +265,6 @@ const TIPS: Tip[] = [
     shortcuts.commandList()
       ? `Toggle username display in chat via the command palette (${shortcutText(shortcuts.commandList())})`
       : "Toggle username display in chat via the command palette",
-  "Run {highlight}docker run -it --rm ghcr.io/anomalyco/opencode{/highlight} in a container",
-  "Use {highlight}/connect{/highlight} with OpenCode Zen for curated, tested models",
   "Commit your project's {highlight}AGENTS.md{/highlight} file to Git for team sharing",
   "Use {highlight}/review{/highlight} to review uncommitted changes, branches, or PRs",
   (shortcuts) => `Use ${commandText("/help", shortcuts.helpShow())} to show the help dialog`,

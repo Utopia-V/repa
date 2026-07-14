@@ -302,7 +302,6 @@ describe("Config", () => {
                 shell: "/bin/bash",
                 model: "anthropic/claude",
                 default_agent: "reviewer",
-                autoupdate: "notify",
                 username: "test-user",
                 permissions: [
                   { action: "bash", resource: "*", effect: "ask" },
@@ -386,7 +385,6 @@ describe("Config", () => {
             expect(documents[0]?.info.shell).toBe("/bin/bash")
             expect(documents[0]?.info.model).toBe("anthropic/claude")
             expect(documents[0]?.info.default_agent).toBe("reviewer")
-            expect(documents[0]?.info.autoupdate).toBe("notify")
             expect(documents[0]?.info.username).toBe("test-user")
             expect(documents[0]?.info.permissions).toEqual([
               { action: "bash", resource: "*", effect: "ask" },

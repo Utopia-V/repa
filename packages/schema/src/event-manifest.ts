@@ -5,7 +5,6 @@ import { Durable } from "./durable-event-manifest"
 import { Event } from "./event"
 import { FileSystem } from "./filesystem"
 import { FileSystemWatcher } from "./filesystem-watcher"
-import { InstallationEvent } from "./installation-event"
 import { Integration } from "./integration"
 import { LegacyEvent } from "./legacy-event"
 import { LspEvent } from "./lsp-event"
@@ -63,7 +62,6 @@ export const ServerDefinitions = Event.inventory(
 export const Definitions = Event.inventory(
   ...foundationDefinitions,
   ...sessionV1LiveDefinitions,
-  ...InstallationEvent.Definitions,
   ...featureDefinitions,
   ...SessionTodo.Event.Definitions,
   ...LspEvent.Definitions,

@@ -5,7 +5,7 @@ import { InstanceDisposed } from "@/server/event"
 import "@opencode-ai/core/account"
 import "@/server/event"
 import { Schema } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { described } from "./metadata"
 
 const GlobalHealth = Schema.Struct({
@@ -47,27 +47,11 @@ const GlobalEventSchema = Schema.Struct({
   ]),
 }).annotate({ identifier: "GlobalEvent" })
 
-export const GlobalUpgradeInput = Schema.Struct({
-  target: Schema.optional(Schema.String),
-})
-
-const GlobalUpgradeResult = Schema.Union([
-  Schema.Struct({
-    success: Schema.Literal(true),
-    version: Schema.String,
-  }),
-  Schema.Struct({
-    success: Schema.Literal(false),
-    error: Schema.String,
-  }),
-])
-
 export const GlobalPaths = {
   health: "/global/health",
   event: "/global/event",
   config: "/global/config",
   dispose: "/global/dispose",
-  upgrade: "/global/upgrade",
 } as const
 
 export const GlobalApi = HttpApi.make("global").add(
@@ -118,17 +102,6 @@ export const GlobalApi = HttpApi.make("global").add(
           identifier: "global.dispose",
           summary: "Dispose instance",
           description: "Clean up and dispose all Repa instances, releasing all resources.",
-        }),
-      ),
-      HttpApiEndpoint.post("upgrade", GlobalPaths.upgrade, {
-        payload: [HttpApiSchema.NoContent, GlobalUpgradeInput],
-        success: described(GlobalUpgradeResult, "Upgrade result"),
-        error: HttpApiError.BadRequest,
-      }).annotateMerge(
-        OpenApi.annotations({
-          identifier: "global.upgrade",
-          summary: "Repa self-update availability",
-          description: "Report that self-update is unavailable until a Repa release channel is defined.",
         }),
       ),
     )

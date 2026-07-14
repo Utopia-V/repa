@@ -65,8 +65,6 @@ import type {
   GlobalEventResponses,
   GlobalHealthErrors,
   GlobalHealthResponses,
-  GlobalUpgradeErrors,
-  GlobalUpgradeResponses,
   InstanceDisposeErrors,
   InstanceDisposeResponses,
   LspStatusErrors,
@@ -627,30 +625,6 @@ export class Global extends HeyApiClient {
     return (options?.client ?? this.client).post<GlobalDisposeResponses, GlobalDisposeErrors, ThrowOnError>({
       url: "/global/dispose",
       ...options,
-    })
-  }
-
-  /**
-   * Repa self-update availability
-   *
-   * Report that self-update is unavailable until a Repa release channel is defined.
-   */
-  public upgrade<ThrowOnError extends boolean = false>(
-    parameters?: {
-      target?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "body", key: "target" }] }])
-    return (options?.client ?? this.client).post<GlobalUpgradeResponses, GlobalUpgradeErrors, ThrowOnError>({
-      url: "/global/upgrade",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 

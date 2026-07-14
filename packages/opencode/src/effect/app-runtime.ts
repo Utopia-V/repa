@@ -43,7 +43,6 @@ import { Project } from "@/project/project"
 import { Vcs } from "@/project/vcs"
 import { Workspace } from "@/control-plane/workspace"
 import { Worktree } from "@/worktree"
-import { Installation } from "@/installation"
 import { Npm } from "@opencode-ai/core/npm"
 import { memoMap } from "@opencode-ai/core/effect/memo-map"
 import { BackgroundJob } from "@/background/job"
@@ -100,7 +99,6 @@ export const AppLayer = AppNodeBuilderV1.build(
     Vcs.node,
     Workspace.node,
     Worktree.node,
-    Installation.node,
   ]),
 ).pipe(Layer.provideMerge(AppNodeBuilderV1.build(Ripgrep.node)), Layer.provideMerge(Observability.layer))
 

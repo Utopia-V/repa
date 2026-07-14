@@ -1,18 +1,20 @@
-import { Config } from "@/config/config"
-import { AppRuntime } from "@/effect/app-runtime"
-import { Flag } from "@opencode-ai/core/flag/flag"
 import { Installation } from "@/installation"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { GlobalBus } from "@/bus/global"
 
-export async function upgrade() {
-  const config = await AppRuntime.runPromise(Config.Service.use((cfg) => cfg.getGlobal()))
-  if (config.autoupdate === false || Flag.REPA_DISABLE_AUTOUPDATE) return
+export type UpgradePolicy = {
+  mode: boolean | "notify"
+  alwaysNotify?: boolean
+}
+
+/** Hibernated updater logic. A future release owner must supply policy explicitly. */
+export async function upgrade(policy: UpgradePolicy) {
+  if (policy.mode === false) return
   const method = await Installation.method()
   const latest = await Installation.latest(method).catch(() => {})
   if (!latest) return
 
-  if (Flag.REPA_ALWAYS_NOTIFY_UPDATE) {
+  if (policy.alwaysNotify) {
     GlobalBus.emit("event", {
       directory: "global",
       payload: {
@@ -27,7 +29,7 @@ export async function upgrade() {
 
   const kind = Installation.getReleaseType(InstallationVersion, latest)
 
-  if (config.autoupdate === "notify" || kind !== "patch") {
+  if (policy.mode === "notify" || kind !== "patch") {
     GlobalBus.emit("event", {
       directory: "global",
       payload: {

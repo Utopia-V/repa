@@ -133,7 +133,6 @@ async function makeFixture(root: string) {
     XDG_STATE_HOME: xdg.state,
     REPA_TEST_HOME: home,
     REPA_TEST_MANAGED_CONFIG_DIR: managed.repa,
-    REPA_DISABLE_AUTOUPDATE: "1",
     REPA_DISABLE_MODELS_FETCH: "1",
     REPA_DISABLE_DEFAULT_PLUGINS: "1",
     REPA_DISABLE_CHANNEL_DB: "1",

@@ -1645,12 +1645,6 @@ const scenarios: Scenario[] = [
       },
       "status",
     ),
-  http.protected
-    .post("/global/upgrade", "global.upgrade")
-    .global()
-    .probe({ path: "/global/upgrade", body: { target: 1 } })
-    .at(() => ({ path: "/global/upgrade", body: { target: 1 } }))
-    .status(400),
 ]
 
 const llmScenarios = new Set([

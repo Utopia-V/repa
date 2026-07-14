@@ -39,13 +39,11 @@ function vcs(branch: string): Event {
   }
 }
 
-function update(version: string): Event {
+function disposed(): Event {
   return {
-    id: `evt_update_${version}`,
-    type: "installation.update-available",
-    properties: {
-      version,
-    },
+    id: "evt_disposed",
+    type: "global.disposed",
+    properties: {},
   }
 }
 
@@ -127,11 +125,11 @@ describe("useEvent", () => {
     const { app, emit, seen } = await mount()
 
     try {
-      emit(event(update("1.2.3"), { directory: "global" }))
+      emit(event(disposed(), { directory: "global" }))
 
       await wait(() => seen.length === 1)
 
-      expect(seen).toEqual([update("1.2.3")])
+      expect(seen).toEqual([disposed()])
     } finally {
       app.renderer.destroy()
     }

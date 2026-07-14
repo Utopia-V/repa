@@ -9,12 +9,14 @@ describe("public event manifest", () => {
     expect(EventManifest.Definitions).toBe(SchemaEventManifest.Definitions)
     expect(EventManifest.Latest).toBe(SchemaEventManifest.Latest)
     expect(EventManifest.Durable).toBe(SchemaEventManifest.Durable)
-    expect(EventManifest.Latest.size).toBe(88)
+    expect(EventManifest.Latest.size).toBe(86)
     expect(EventManifest.Latest.get("session.next.step.ended")).toBe(SessionEvent.Step.Ended)
     expect(EventManifest.Latest.get("todo.updated")).toBe(Todo.Event.Updated)
     expect(EventManifest.Latest.has("ide.installed")).toBe(false)
     expect(EventManifest.Latest.has("server.connected")).toBe(true)
     expect(EventManifest.Latest.has("global.disposed")).toBe(true)
+    expect(EventManifest.Latest.has("installation.updated")).toBe(false)
+    expect(EventManifest.Latest.has("installation.update-available")).toBe(false)
   })
 
   test("contains only the current step settlement versions", () => {

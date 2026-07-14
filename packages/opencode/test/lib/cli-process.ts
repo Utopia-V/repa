@@ -10,7 +10,7 @@
 //   - REPA_TEST_HOME           : pins os.homedir() → tmpdir
 //   - REPA_DISABLE_PROJECT_CONFIG : skip walking up for repa.json
 //   - REPA_PURE                : skip external plugin discovery + install
-//   - REPA_DISABLE_AUTOUPDATE / AUTOCOMPACT / MODELS_FETCH : no background work
+//   - REPA_DISABLE_AUTOCOMPACT / REPA_DISABLE_MODELS_FETCH : no background work
 // Plus HOME / XDG_* pointing at the tmpdir for belt-and-suspenders isolation.
 //
 // Today only `opencode.run` is fully wired. The shape supports adding more
@@ -70,7 +70,6 @@ function isolatedEnv(home: string, configJson: string): Record<string, string> {
     REPA_CONFIG_CONTENT: configJson,
     REPA_DISABLE_PROJECT_CONFIG: "1",
     REPA_PURE: "1",
-    REPA_DISABLE_AUTOUPDATE: "1",
     REPA_DISABLE_AUTOCOMPACT: "1",
     REPA_DISABLE_MODELS_FETCH: "1",
     REPA_AUTH_CONTENT: "{}",
