@@ -148,12 +148,16 @@ Gate 6 establishes three connected boundaries and no fourth subsystem:
    with different application-state roots still rendezvous; and unsafe
    hardlink aliases refuse before SQLite opens. For a missing database, aliases
    of its parent and concurrent creators converge on one creation authority.
-   The verified authority that wins ownership is also what SQLite opens, so a
-   rename, retarget, or path substitution cannot move the connection to an
-   unowned object. The current worker and command entry points use this
-   boundary; an explicit attach client bypasses local state materialization
-   entirely. Orderly exit releases ownership, and abrupt exit recovers according
-   to the selected mature mechanism without breaking a live owner.
+   That authority remains exclusive continuously after the winner creates and
+   opens the database: a later contender that now observes an existing file
+   still meets the same live owner until release rather than entering a new,
+   unheld rendezvous domain. The verified authority that wins ownership is also
+   what SQLite opens, so a rename, retarget, or path substitution cannot move
+   the connection to an unowned object. The current worker and command entry
+   points use this boundary; an explicit attach client bypasses local state
+   materialization entirely. Orderly exit releases ownership, and abrupt exit
+   recovers according to the selected mature mechanism without breaking a live
+   owner.
 
 The verified authority result is consumed only by runtime composition and the
 database opener; its identity and lock mechanics do not enter migration or
@@ -217,6 +221,12 @@ transactions prevent Repa itself from producing a committed half-schema.
 - the rendezvous location is derived from the physical authority or another
   process-global facility, never from a caller-selectable application-state
   root. A hardlink alias is rejected before SQLite creates a journal or WAL.
+- rendezvous exclusivity is one uninterrupted owner lifecycle from the
+  missing-path creation claim through file creation, SQLite open, and final
+  release. If the physical object identity becomes knowable only after
+  creation, acquiring or publishing that identity cannot release the creation
+  claim, expose an admission gap, or direct later existing-path contenders to a
+  separate unheld lock domain.
 - CLI/TUI/server entry points decide only whether they are a state owner or a
   pure attached client; they do not implement path identity or locking policy.
 - existing error formatting owns actionable database and ownership messages.
@@ -242,6 +252,11 @@ Evidence must be capable of directly falsifying the boundary:
 - two processes racing to create one missing database through aliased parent
   paths and different state roots publish exactly one initialized baseline;
   the loser neither opens nor mutates another database;
+- a barriered missing-to-existing handoff starts owner A while the path is
+  absent, pauses A only after it has created and opened SQLite while retaining
+  ownership, then starts contender B after B can observe the existing file. B
+  must refuse before SQLite open while A remains live; after A releases, B must
+  acquire the same authority and reopen the published database normally;
 - a controlled replacement or retargeting between authority discovery and
   SQLite open fails closed, proving that the ownership claim and opened
   database name the same authority rather than two observations of a mutable
