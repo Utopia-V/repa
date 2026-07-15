@@ -72,7 +72,7 @@ Before a purpose contribution can be formed, code owns and checks:
 - eligibility and timing;
 - target/view freshness;
 - source, entity, and policy revisions;
-- current course/target visibility;
+- relevant Course/target visibility for the current request;
 - the exact candidate count and truncation state; and
 - whether an accepted policy exists for promoting this candidate shape.
 
