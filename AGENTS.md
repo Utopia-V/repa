@@ -49,8 +49,10 @@ learning tools.
   semantics.
 - A lower fork layer may make an accepted decision concrete but may not turn
   optional, deferred, unsupported, or default-off behavior into prohibited,
-  permanently removed, or physically deleted behavior without new product or
-  engineering evidence.
+  permanently removed, or physically deleted behavior. New evidence may
+  invalidate the owning product or engineering decision, but that owner and its
+  durable dependents must be revised before lower layers act; evidence alone
+  does not promote lower-layer authority.
 - Apply maintainer corrections to the owning document and all affected durable
   dependents before resuming implementation. Choose the scope that establishes
   the intended stable product boundary without absorbing an adjacent objective.
@@ -270,13 +272,16 @@ learning tools.
   time, stop when remaining uncertainty is cheap or no plausible answer changes
   the plan, and promote accepted durable decisions to the owning document.
   Situational answers do not become timeless user preferences.
-- Use “steer-work” only as the parent control layer for a consequential
-  contract, semantic correction, deletion, or architecture boundary. Pair it
-  with the independently triggered exploration, project-document, planning,
-  execution, debugging, testing, verification, review, delegation, or Git
-  skill that owns the actual work. Its internal challenge should try to falsify
-  the current framing and compare the stable outcomes of narrower and wider
-  scopes. Bring only unresolved maintainer-owned trade-offs to “grill-me”.
+- Use “steer-work” as the parent control layer for consequential multi-step
+  product, architecture, or engineering work; consequential contracts,
+  semantic corrections, deletion or architecture boundaries; and work crossing
+  contexts or agents where scope or meaning can drift. It coordinates rather
+  than replacing the independently triggered exploration, project-document,
+  planning, execution, debugging, testing, verification, review, delegation,
+  or Git skill that owns the actual work. Its internal challenge should try to
+  falsify the current framing and compare the stable outcomes of narrower and
+  wider scopes. Bring only unresolved maintainer-owned trade-offs to
+  “grill-me”.
 - Treat `grill-me` as high-variance decision extraction, not exhaustive
   interviewing. A question is admissible only when repository/reference
   research cannot settle it, the maintainer can actually control the answer,

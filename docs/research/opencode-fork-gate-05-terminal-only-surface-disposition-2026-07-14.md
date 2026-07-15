@@ -578,6 +578,42 @@ is introduced.
   workflow remains registered; hibernated source may retain internal imports
   and direct tests outside the runtime graph.
 
+## Post-audit closing evidence
+
+The general Gate-wide checks above previously passed while the reopened v2,
+provider, and CORS behavior remained. They are necessary but cannot close Gate
+5 again without exact oracles for the missed owners:
+
+1. **Public v2 model execution:** the production protocol composition has no
+   public v2 prompt-admission operation or handler; current OpenAPI and generated
+   clients expose no such method; and a direct
+   `POST /api/session/:sessionID/prompt` receives not found without admitting an
+   input or scheduling model execution. Independently retained non-model v2
+   endpoints and dormant source are not removed merely to satisfy this oracle.
+2. **Provider-ID equivalence:** two otherwise identical explicit custom
+   providers whose IDs differ only between `opencode`/`opencode-*` and an
+   ordinary name produce the same request headers, project-lookup behavior, and
+   native-runtime eligibility. No `x-opencode-*` header or runtime selection is
+   caused by the ID alone.
+3. **Provider CLI truth:** provider login consumes the accepted filtered
+   provider projection and neither injects nor recommends OpenCode by name.
+   `models` and the run mini picker do not prioritize `opencode*` or label a
+   model `Free` because of its provider ID. An explicitly configured custom
+   provider named `opencode` remains usable and appears only through the generic
+   path.
+4. **CORS truth:** an `https://*.opencode.ai` origin is denied unless the user
+   explicitly configures that exact origin. Localhost, same-host requests, and
+   explicit user CORS entries remain accepted by their independent rules.
+5. **Owning-artifact consistency:** the protocol/OpenAPI/client generation
+   check, focused provider/request/native/CLI/CORS tests, affected package
+   typechecks, exact owner scans, and `git diff --check` pass. No unrelated
+   dormant-source test or monorepo-wide suite is required.
+
+Any result that merely hides a CLI label while retaining the request branch,
+removes a generated method without changing its protocol owner, or blocks the
+route while still admitting/scheduling the v2 prompt fails this evidence
+contract.
+
 ## Explicit exclusions
 
 This gate does not migrate or clean historical database fields, because no
@@ -589,9 +625,10 @@ keeps an excluded surface public.
 
 ## Recorded result
 
-Gate 5 passed at `25e51861effbddbdb04ae8fe88c4107d34ab91b2`.
-The parent disposition correction and repository-workflow boundary are
-complete:
+Gate 5 was recorded passed at
+`25e51861effbddbdb04ae8fe88c4107d34ab91b2`. The post-Gate-7 audit invalidated
+that gate-wide close claim, while preserving the parent disposition correction
+and repository-workflow boundary recorded by these commits:
 
 - `03fbb078e` repaired the decision authority and active-status chain;
 - `53b41aa0d` restored local `pr` without share-link import and restored the
@@ -600,9 +637,11 @@ complete:
   local-directory invariant;
 - `4b2c7229a` hibernated updater implementation behind a truthful current
   runtime/protocol boundary; and
-- `825b590b4` removed inherited first-party commercial-provider policy while
-  preserving the generic custom-provider harness, followed by `0daeb6de5`
-  removing the commercial retry action from the current status contract; and
+- `825b590b4` removed Zen/Go catalog/plugin composition and several inherited
+  first-party branches while preserving the generic custom-provider harness;
+  the later audit found the request/native/CLI residues named above.
+  `0daeb6de5` removed the commercial retry action from the current status
+  contract; and
 - `25e51861e` moved all 26 inherited workflow definitions out of GitHub's
   active registration directory while preserving their exact source bytes.
 
@@ -610,6 +649,10 @@ The closure check found zero files beneath `.github/workflows`, 26 inherited
 definitions beneath `.github/hibernated-workflows`, and zero content mismatch
 against their pre-move Git blobs. No product test could add evidence to that
 registration-and-preservation claim, so none was run.
+
+The historical checks below remain evidence for the behaviors they actually
+observe, not for the post-audit closing contract. Gate 5 closes again only when
+the exact v2, provider, CLI, and CORS oracles above pass.
 
 Gate 5A's earlier reachability work was recorded at
 `6503c280762a8cb2cc04e2cd0021498a8f0aa174`, but its whole-command

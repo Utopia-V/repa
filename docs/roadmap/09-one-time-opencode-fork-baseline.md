@@ -86,10 +86,10 @@ for bounded reopenings and the active control point.
 | Gate                           | Durable engineering result                                                                                                | Evidence                                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | 0. Oracle freeze               | Pre-fork behavior and assets classified before substrate replacement.                                                     | Immutable repa-prefork-oracle tag and asset audit                                                  |
-| 1. Lineage and provenance      | Full-history MIT fork at OpenCode v1.17.18.                                                                               | [Fork ledger](../fork-ledger.md#closed-gate-sequence)                                              |
+| 1. Lineage and provenance      | Full-history MIT fork at OpenCode v1.17.18.                                                                               | [Fork ledger](../fork-ledger.md#original-gate-close-evidence)                                      |
 | 2/2A. Windows baseline         | Released-v1 Windows behavior preserved; one invalid inherited PowerShell test contract diagnosed and corrected.           | Fork ledger                                                                                        |
 | 3. Repa identity               | Independent binary, paths, configuration, and database filename with no OpenCode-state fallback.                          | Fork ledger                                                                                        |
-| 4. Learning-first composition  | One Repa product identity across interactive carriers and narrow hidden operations.                                       | [Gate 4 record](../research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md)        |
+| 4. Learning-first composition  | One Repa product identity across interactive carriers and narrow program-owned internal operations.                       | [Gate 4 record](../research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md)        |
 | 5. Product-surface disposition | Terminal-only baseline; excluded group behavior disconnected; harmless local capabilities and hibernated source retained. | [Gate 5 record](../research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md) |
 | 6. Native database admission   | Repa-owned database identity and migration lineage with one state-owning process per LearnerHome.                         | [Gate 6 record](../research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)         |
 
@@ -207,12 +207,14 @@ tool binding. A model-issued durable write does require command/effect identity,
 causal binding, retry behavior, and atomic settlement. Tutor context consumes
 real authority projections and is not their prerequisite.
 
-The inherited database already provides transactional migrations, one
-state-owning process, stable Session/Message/Part IDs, and atomic settlement of
-one Session event with its projection. It does not provide an atomic Turn, a
-durable learning-command identity, exactly-once tool effects, a global revision,
-or a safe long-lived provenance reference: deleting a Session currently
-removes its messages, parts, and event aggregate.
+The database substrate already provides transactional migrations, stable
+Session/Message/Part IDs, and atomic settlement of one Session event with its
+projection. Repa requires one state-owning process per LearnerHome, but the
+Gate 6 audit reopened the runtime mechanism that enforces it; later runtime work
+cannot assume that enforcement is complete. The inherited database does not
+provide an atomic Turn, a durable learning-command identity, exactly-once tool
+effects, a global revision, or a safe long-lived provenance reference: deleting
+a Session currently removes its messages, parts, and event aggregate.
 
 ## Remaining physical and Gate-local questions
 

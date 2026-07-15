@@ -41,9 +41,9 @@ composition. Gate 4 is therefore open only for a real trust boundary:
   their narrow contracts through program-owned operation purpose.
 
 The public preview-v2 prompt path is not another carrier to make learning-first.
-ADR-0014 denies it production authority. Its registration and the wake it can
-schedule are Gate 5 product-reachability defects. Gate 4 performs its final
-carrier matrix only after Gate 5 fixes the production carrier set.
+ADR-0014 denies it production authority. Its public admission and the model
+execution it schedules are Gate 5 product-reachability defects. Gate 4 performs
+its final carrier matrix only after Gate 5 fixes the production carrier set.
 
 ## Evidence that fixes the owning seam
 
@@ -84,17 +84,19 @@ The inherited mechanism comes from OpenCode `v1.17.18` at
 Repa preserves those mature transport, event, rendering, permission, and tool
 mechanics. It deliberately replaces the inherited model-family coding prompts
 with one protected Repa product core, makes agent and plugin guidance additive,
-gives hidden operations a separate protected task boundary, reasserts protected
-OAuth instructions after parameter hooks, makes `repa` the broad default
-profile, and makes Plan and Explore deny-by-default. This adapts the
-composition invariant rather than OpenCode's package topology or product
-ontology.
+gives program-authorized internal operations a separate protected task
+boundary, reasserts protected OAuth instructions after parameter hooks, makes
+`repa` the broad default profile, and makes Plan and Explore deny-by-default.
+This adapts the composition invariant rather than OpenCode's package topology
+or product ontology.
 
 ## Composition contract
 
 ### Interactive samples
 
-Every non-hidden Agent sample contains these regions in this order:
+Every model sample admitted through an ordinary learner-, caller-, or
+publicly-selectable Agent path contains these regions in this order, regardless
+of presentation metadata such as `agent.hidden`:
 
 1. **Repa core:** one program-owned, non-replaceable product contract. It says
    that the model is one component of Repa's terminal-native Learning System;
@@ -124,14 +126,24 @@ The inherited model-family selector is collapsed unless a provider-specific
 requirement is demonstrated. Model transport differences remain in provider
 adapters, not in competing product identities.
 
+Public HTTP prompt admission, `run --agent`, and command-driven Agent selection
+reject Agents that are not publicly selectable. In particular, a primary Agent
+with `hidden: true` is rejected before sampling. That admission policy may use
+`hidden` to decide presentation or rejection, but `hidden` never grants
+internal authority. If persisted or malformed state nevertheless names such an
+Agent, the runtime fails before sampling or treats the sample as interactive;
+it never obtains the internal contract by recovering an Agent name or flag.
+
 ### Internal samples
 
-A hidden Agent sample receives one non-replaceable internal-operation boundary
-plus its narrow task prompt. It does not receive the full interactive product
-prompt or generic interactive operation guide. Internal prompts must state the
-actual artifact they produce and must not answer the conversation, call tools,
-infer durable learning truth, or turn a learning Session into a pull-request
-description.
+An internal sample exists only when a named program owner invokes a separate
+internal path with an explicit operation purpose. The purpose is not accepted
+from public input, inferred from an Agent name, recovered from `hidden`, or
+stored as a user-selectable profile. It selects one non-replaceable
+internal-operation boundary plus the narrow task prompt and carries no generic
+interactive operation guide. Internal prompts state the exact artifact they
+produce and must not answer the conversation, call tools, infer durable
+learning truth, or turn a learning Session into a pull-request description.
 
 The bounded internal operations in this gate are:
 
@@ -139,8 +151,10 @@ The bounded internal operations in this gate are:
 - anchored context compaction with a recent verbatim tail retained elsewhere;
 - any retained conversation-summary operation;
 - agent/profile generation; and
-- the read-only exploration subagent, which is delegated but not hidden and
-  therefore remains inside the interactive Repa contract.
+- project-copy naming.
+
+The read-only exploration subagent is delegated but lacks internal-operation
+authority and therefore remains inside the interactive Repa contract.
 
 ### Plugin boundary
 
@@ -164,12 +178,15 @@ whole-system replacement behavior.
    descriptions, todo/task delegation guidance, plan transitions, and model
    reminders. Tool names that truthfully describe a local capability may remain;
    no inherited todo or review record is renamed into Agenda or Tutor review.
-4. **Internal operations:** replace PR/coding summaries, coding-only title
-   examples, coding compaction language, and coding-agent generation with
-   narrow Repa-owned contracts.
+4. **Internal operations:** introduce program-owned operation purpose, move
+   title, summary, compaction, agent/profile generation, and project-copy naming
+   behind it, and replace their coding-first prompts with narrow Repa-owned
+   contracts. Public Agent selection cannot reach this path.
 5. **Gate audit:** deterministically scan every remaining prompt, profile,
-   reminder, and hidden call reachable from released v1; classify later Gate 5
-   surfaces rather than quietly repairing unreachable Web/Desktop behavior.
+   reminder, public Agent admission path, persisted Agent-selection recovery,
+   and program-authorized internal call reachable from released v1; classify
+   later Gate 5 surfaces rather than quietly repairing unreachable Web/Desktop
+   behavior.
 
 Each slice receives focused tests before its production change and can be
 reverted independently. Passing one slice does not authorize skipping the
@@ -187,13 +204,19 @@ The gate passes only when tests and a source audit show all of the following:
 3. Ordinary AI SDK messages, OpenAI OAuth instructions, workflow
    `systemPrompt`, and both native ordinary/OAuth lowering carry the core
    exactly once.
-4. Hidden title, compaction, and conversation-summary samples receive their
-   narrow task contracts and do not receive the interactive core.
-5. The default and exploration profiles, environment contribution, local
+4. Title, compaction, conversation-summary, agent/profile-generation, and
+   project-copy naming samples receive their narrow task contracts only through
+   the corresponding program-owned operation purpose and do not receive the
+   interactive core.
+5. Public HTTP, `run --agent`, and command selection reject a hidden primary
+   Agent before sampling and cannot invoke an internal purpose by supplying an
+   Agent name or `hidden` value. A persisted abnormal selection fails closed or
+   receives the complete interactive composition after restart.
+6. The default and exploration profiles, environment contribution, local
    instruction text, generic tool descriptions, plan reminders, and agent
    generator no longer say that software engineering, a codebase, a pull
    request, or OpenCode is the ordinary product context.
-6. Explicit learner-directed coding work still has file, search, shell, edit,
+7. Explicit learner-directed coding work still has file, search, shell, edit,
    patch, LSP, Git, and delegated exploration capabilities subject to the
    existing permission system.
 
@@ -205,9 +228,13 @@ The gate passes only when tests and a source audit show all of the following:
   not suppress shared or program-composed context.
 - **Carrier loss:** a core present in `Prepared.system` but absent from the
   actual carrier used by OAuth, workflow, or native execution fails the gate.
-- **Hidden-role leakage:** an internal title or compaction call that receives
-  the interactive Tutor contract, tools, or coding-product instructions fails
-  the gate.
+- **Public authority forgery:** an ordinary HTTP, CLI, command, or recovered
+  selection that obtains the internal contract from an Agent name, `hidden`, or
+  other caller-controlled metadata fails the gate.
+- **Operation-purpose leakage:** a program-owned title, summary, compaction,
+  agent/profile-generation, or project-copy naming call without its exact
+  internal purpose—or one that receives the interactive contract, tools, or
+  coding-product instructions—fails the gate.
 - **Ontology residue:** a reachable ordinary branch that identifies itself as
   OpenCode/a coding agent or treats a repository, PR, implementation plan, or
   quiz as the default learning unit keeps the gate red.
@@ -225,11 +252,15 @@ coding profile.
 Verification is causal rather than monorepo-wide:
 
 - new request-composition and provider/carrier matrix tests;
-- affected Agent, Session system, prompt, compaction, tool-description, and
-  reminder tests;
+- public HTTP, `run --agent`, command-selection, and persisted abnormal-selection
+  admission tests;
+- exact operation-purpose tests for title, summary, compaction,
+  agent/profile-generation, and project-copy naming, including attempts to
+  forge that purpose through public input;
+- affected Agent, Session system, prompt, tool-description, and reminder tests;
 - typechecks for changed production packages;
-- a deterministic static audit of released-v1 model-visible text and hidden
-  model call sites; and
+- a deterministic static audit of released-v1 model-visible text, public Agent
+  selectors, and internal operation-purpose call sites; and
 - one fresh-context review against the contract before the checkpoint commit.
 
 Web/Desktop reachability, account/share/control-plane removal, provider catalog
@@ -238,7 +269,7 @@ changed only where released v1 imports the same implementation.
 
 ## Recorded result
 
-Gate 4 passed at two code checkpoints:
+Gate 4 was recorded passed at two code checkpoints:
 
 - `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` established the protected
   composition spine and ordinary, OAuth, workflow, native, and hidden carrier
@@ -280,6 +311,13 @@ Verification evidence:
 - a fresh-context review inspected the full checkpoint-plus-working-tree delta
   and permission execution paths, reported no blocker, and assigned 0.95
   confidence. It did not substitute for the executable evidence above.
+
+Those results remain evidence for the protected released-v1 composition and
+learning-first prompt/profile work, but their hidden/non-hidden oracle cannot
+close the corrected trust contract. Re-closing Gate 4 additionally requires the
+public-admission, persisted-selection, and exact operation-purpose evidence
+defined above, followed by the final carrier matrix after Gate 5 fixes
+production reachability.
 
 Four unrelated narrow-width TUI wrapping snapshots differed from their stored
 baselines during a wider snapshot run. They were not accepted or rewritten;
