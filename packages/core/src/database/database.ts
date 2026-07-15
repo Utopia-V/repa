@@ -11,7 +11,6 @@ import { DatabaseAdmissionError, DatabaseMigrationError } from "./admission"
 import { DatabaseBusyError, DatabaseOwnershipError, DatabaseStorageError, DatabaseAuthority } from "./authority"
 import { InstallationChannel } from "../installation/version"
 import { makeGlobalNode } from "../effect/app-node"
-import { existsSync } from "node:fs"
 
 const makeDatabase = EffectDrizzleSqlite.makeWithDefaults()
 type DatabaseShape = Effect.Success<typeof makeDatabase>
@@ -22,7 +21,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/storage/Database") {}
 
-function databaseLayer(filename: string, fresh: boolean) {
+function databaseLayer(filename: string) {
   return Layer.effect(
     Service,
     Effect.gen(function* () {
@@ -31,7 +30,7 @@ function databaseLayer(filename: string, fresh: boolean) {
       yield* db.run("PRAGMA synchronous = FULL")
       yield* db.run("PRAGMA busy_timeout = 5000")
       yield* db.run("PRAGMA foreign_keys = ON")
-      yield* DatabaseMigration.apply(db, { path: filename, fresh })
+      yield* DatabaseMigration.apply(db, { path: filename })
 
       yield* db.run("PRAGMA journal_mode = WAL")
       yield* db.run("PRAGMA synchronous = NORMAL")
@@ -52,10 +51,8 @@ function databaseLayer(filename: string, fresh: boolean) {
         return Effect.fail(
           new DatabaseAdmissionError({
             path: filename,
-            reason: fresh ? "initialization" : "unavailable",
-            detail: fresh
-              ? `Could not create the Repa database at ${filename}`
-              : `Could not open the configured database at ${filename}`,
+            reason: "unavailable",
+            detail: `Could not open or initialize the Repa database at ${filename}`,
             currentVersion: DatabaseMigration.version,
             cause: error,
           }),
@@ -66,12 +63,7 @@ function databaseLayer(filename: string, fresh: boolean) {
 }
 
 export function layerFromPath(filename: string) {
-  return Layer.unwrap(
-    Effect.sync(() => {
-      const fresh = filename === ":memory:" || !existsSync(filename)
-      return databaseLayer(filename, fresh).pipe(Layer.provide(sqliteLayer({ filename, disableWAL: true })))
-    }),
-  )
+  return databaseLayer(filename).pipe(Layer.provide(sqliteLayer({ filename, disableWAL: true })))
 }
 
 export function runtimeLayerFromPath(filename: string) {
@@ -89,7 +81,7 @@ export function runtimeLayerFromPath(filename: string) {
       },
     }).pipe(
       Effect.map((target) =>
-        databaseLayer(target.filename, target.initialize).pipe(
+        databaseLayer(target.filename).pipe(
           Layer.provide(sqliteLayer({ filename: target.filename, disableWAL: true, exclusive: true })),
         ),
       ),

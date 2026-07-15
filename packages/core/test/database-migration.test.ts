@@ -165,7 +165,6 @@ describe("DatabaseMigration", () => {
         )
 
         yield* DatabaseMigration.apply(db, {
-          fresh: false,
           path: "gate-6.db",
           migrations: [courseViewAuthorityMigration],
         })
@@ -679,7 +678,7 @@ describe("DatabaseMigration", () => {
           VALUES ('hash', 1, '20260127222353_familiar_lady_ursula', ${new Date().toISOString()})
         `)
 
-        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "legacy.db" }))
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "legacy.db" }))
 
         expect(error).toMatchObject({ reason: "foreign", path: "legacy.db" })
         expect(yield* db.all(sql`SELECT id FROM session`)).toEqual([])
@@ -698,7 +697,7 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         yield* db.run(sql.raw(`PRAGMA user_version = ${DatabaseMigration.version + 1}`))
 
-        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "future.db" }))
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "future.db" }))
 
         expect(error).toMatchObject({ reason: "future" })
         expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
@@ -716,7 +715,7 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db, { migrations: [] })
         yield* db.run(sql`UPDATE repa_migration SET id = 'not-the-repa-baseline' WHERE version = 1`)
 
-        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "partial.db" }))
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "partial.db" }))
 
         expect(error).toMatchObject({ reason: "partial" })
         expect(yield* db.get(sql`SELECT id FROM repa_migration WHERE version = 1`)).toEqual({
@@ -741,9 +740,7 @@ describe("DatabaseMigration", () => {
           },
         } satisfies DatabaseMigration.Migration
 
-        const error = yield* Effect.flip(
-          DatabaseMigration.apply(db, { fresh: false, path: "migration.db", migrations: [failing] }),
-        )
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "migration.db", migrations: [failing] }))
 
         expect(error).toMatchObject({ _tag: "DatabaseMigrationError" })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
@@ -768,7 +765,7 @@ describe("DatabaseMigration", () => {
         )
         yield* db.run(sql`PRAGMA foreign_keys = ON`)
 
-        const error = yield* Effect.flip(DatabaseMigration.apply(db, { fresh: false, path: "orphan.db" }))
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "orphan.db" }))
 
         expect(error).toMatchObject({ reason: "corrupt" })
         expect(yield* db.get(sql`SELECT id FROM message`)).toEqual({ id: "orphan" })
@@ -785,7 +782,7 @@ describe("DatabaseMigration", () => {
           sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('kept', '/', 1, 1, '[]')`,
         )
 
-        yield* DatabaseMigration.apply(db, { fresh: false, path: "current.db" })
+        yield* DatabaseMigration.apply(db, { path: "current.db" })
 
         expect(yield* db.get(sql`SELECT id FROM project WHERE id = 'kept'`)).toEqual({ id: "kept" })
       }),

@@ -1,7 +1,7 @@
 export * as DatabaseAuthority from "./authority"
 
 import path from "node:path"
-import { closeSync, existsSync, openSync, readSync, realpathSync, statSync } from "node:fs"
+import { closeSync, existsSync, lstatSync, openSync, readSync, realpathSync, statSync } from "node:fs"
 import { Schema } from "effect"
 import { APPLICATION_ID, DatabaseAdmissionError } from "./admission"
 
@@ -45,7 +45,6 @@ export class DatabaseOwnershipError extends Schema.TaggedErrorClass<DatabaseOwne
 
 export type Target = {
   readonly filename: string
-  readonly initialize: boolean
 }
 
 export function preflight(filename: string, currentVersion: number): Target {
@@ -59,12 +58,10 @@ export function preflight(filename: string, currentVersion: number): Target {
 
   const absolute = path.resolve(filename)
   requireLocal(absolute)
-  const existed = existsSync(absolute)
-  const canonical = existed
-    ? realpathSync.native(absolute)
-    : path.join(realpathSync.native(path.dirname(absolute)), path.basename(absolute))
+  const entry = lstatSync(absolute, { throwIfNoEntry: false })
+  const canonical = entry ? resolveExisting(absolute, entry.isSymbolicLink()) : resolveMissing(absolute)
   requireLocal(canonical)
-  if (!existed) return { filename: canonical, initialize: true }
+  if (!entry) return { filename: canonical }
 
   const stats = statSync(canonical, { bigint: true })
   if (!stats.isFile()) {
@@ -81,9 +78,9 @@ export function preflight(filename: string, currentVersion: number): Target {
       detail: `The Repa database at ${canonical} has multiple hardlinks; SQLite journal and WAL ownership would be unsafe`,
     })
   }
-  if (stats.size === 0n) return { filename: canonical, initialize: true }
+  if (stats.size === 0n) return { filename: canonical }
   if (["-journal", "-wal", "-shm"].some((suffix) => existsSync(canonical + suffix))) {
-    return { filename: canonical, initialize: true }
+    return { filename: canonical }
   }
 
   const header = readHeader(canonical, currentVersion)
@@ -98,7 +95,7 @@ export function preflight(filename: string, currentVersion: number): Target {
       currentVersion,
     })
   }
-  return { filename: canonical, initialize: false }
+  return { filename: canonical }
 }
 
 export function openError(database: string, cause: unknown) {
@@ -125,6 +122,24 @@ function requireLocal(filename: string) {
     reason: "remote",
     detail: `The Repa LearnerHome database requires a stable local filesystem: ${filename}`,
   })
+}
+
+function resolveExisting(filename: string, symbolicLink: boolean) {
+  try {
+    return realpathSync.native(filename)
+  } catch (cause) {
+    if (!symbolicLink) throw cause
+    throw new DatabaseStorageError({
+      path: filename,
+      reason: "unsupported",
+      detail: `The configured Repa database is a file symlink whose target does not exist: ${filename}`,
+      cause,
+    })
+  }
+}
+
+function resolveMissing(filename: string) {
+  return path.join(realpathSync.native(path.dirname(filename)), path.basename(filename))
 }
 
 function readHeader(filename: string, currentVersion: number) {

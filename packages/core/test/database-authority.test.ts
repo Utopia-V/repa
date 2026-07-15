@@ -77,6 +77,58 @@ describe("Database runtime authority", () => {
     for (const suffix of ["-journal", "-wal", "-shm"]) expect(existsSync(filename + suffix)).toBe(false)
   })
 
+  test("does not let arbitrary sidecars authorize initialization of a clean identityless database", async () => {
+    await using tmp = await tmpdir()
+
+    for (const [sidecarIndex, suffix] of ["-journal", "-wal", "-shm"].entries()) {
+      for (const [stateIndex, payload] of [new Uint8Array(), Buffer.from("stale sidecar")].entries()) {
+        for (const userVersion of [0, 7]) {
+          const filename = path.join(tmp.path, `foreign-${sidecarIndex}-${stateIndex}-${userVersion}.db`)
+          const native = new NativeDatabase(filename)
+          native.run("VACUUM")
+          native.run(`PRAGMA user_version = ${userVersion}`)
+          native.close()
+          expect((await fs.stat(filename)).size).toBeGreaterThan(0)
+          await fs.writeFile(filename + suffix, payload)
+
+          const rejected = await Effect.runPromise(
+            Effect.flip(Effect.scoped(Layer.build(Database.runtimeLayerFromPath(filename)))),
+          )
+
+          if (payload.byteLength === 0) {
+            expect(rejected).toMatchObject({ _tag: "DatabaseAdmissionError", reason: "foreign" })
+          }
+          await fs.rm(filename + suffix, { force: true })
+          const reopened = new NativeDatabase(filename)
+          try {
+            expect(reopened.query("PRAGMA application_id").get()).toEqual({ application_id: 0 })
+            expect(reopened.query("PRAGMA user_version").get()).toEqual({ user_version: userVersion })
+            expect(reopened.query("SELECT name FROM sqlite_master WHERE name = 'repa_migration'").get()).toBeNull()
+          } finally {
+            reopened.close()
+          }
+        }
+      }
+    }
+  })
+
+  test("rejects a dangling final file symlink before SQLite can split main and sidecar paths", async () => {
+    await using tmp = await tmpdir()
+    const target = path.join(tmp.path, "target.db")
+    const alias = path.join(tmp.path, "alias.db")
+    await fs.symlink(target, alias, "file")
+
+    const rejected = await Effect.runPromise(
+      Effect.flip(Effect.scoped(Layer.build(Database.runtimeLayerFromPath(alias)))),
+    )
+
+    expect(rejected).toBeInstanceOf(DatabaseStorageError)
+    expect(existsSync(target)).toBe(false)
+    for (const filename of [alias, target]) {
+      for (const suffix of ["-journal", "-wal", "-shm"]) expect(existsSync(filename + suffix)).toBe(false)
+    }
+  })
+
   test("holds ownership on the retained database connection and releases it on runtime disposal", async () => {
     await using tmp = await tmpdir()
     const filename = path.join(tmp.path, "owned.db")

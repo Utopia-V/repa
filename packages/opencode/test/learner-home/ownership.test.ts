@@ -152,6 +152,16 @@ it.live(
     await fs.mkdir(actual)
     await fs.symlink(actual, alias, process.platform === "win32" ? "junction" : "dir")
 
+    const danglingTarget = path.join(actual, "dangling.db")
+    const danglingAlias = path.join(directory, "dangling-link.db")
+    await fs.symlink(danglingTarget, danglingAlias, "file")
+    await rejected(spawnOwner(danglingAlias), "DatabaseStorageError")
+    expect(existsSync(danglingTarget)).toBe(false)
+    for (const filename of [danglingAlias, danglingTarget]) {
+      for (const suffix of ["-journal", "-wal", "-shm"]) expect(existsSync(filename + suffix)).toBe(false)
+    }
+    await fs.rm(danglingAlias)
+
     const initialize = spawnOwner(database)
     try {
       await ready(initialize)

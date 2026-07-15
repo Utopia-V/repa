@@ -29,7 +29,6 @@ type JournalRow = {
 
 export interface ApplyOptions {
   readonly path?: string
-  readonly fresh?: boolean
   readonly migrations?: readonly Migration[]
 }
 
@@ -145,7 +144,7 @@ function initialize(db: Database, path: string, input: readonly Migration[]) {
   )
 }
 
-function observeNumber(db: Database, name: "application_id" | "user_version") {
+function observeNumber(db: Database, name: "application_id" | "user_version" | "page_count") {
   return db
     .get<Record<string, unknown>>(sql.raw(`PRAGMA ${name}`))
     .pipe(Effect.map((row) => Number(row ? Object.values(row)[0] : Number.NaN)))
@@ -276,11 +275,10 @@ export function apply(db: Database, options: ApplyOptions = {}) {
   return lock.withPermit(
     Effect.gen(function* () {
       const applicationID = yield* observeNumber(db, "application_id")
-      if (options.fresh !== false && applicationID === 0) {
-        const tables = yield* db.all<{ name: string }>(
-          sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
-        )
-        if (tables.length === 0) return yield* initialize(db, path, input)
+      if (applicationID === 0) {
+        const userVersion = yield* observeNumber(db, "user_version")
+        const pageCount = yield* observeNumber(db, "page_count")
+        if (userVersion === 0 && pageCount === 0) return yield* initialize(db, path, input)
       }
       yield* admitExisting(db, path, input)
     }),
