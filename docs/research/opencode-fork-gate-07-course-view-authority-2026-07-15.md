@@ -1,6 +1,7 @@
 # OpenCode fork Gate 7: Course and Course View authority
 
-Status: Passed at implementation commit `3bd6eb9d4`. Gate 8 has not begun.
+Status: Passed at implementation commit `3bd6eb9d4`. Current route status is
+owned by [the documentation index](../README.md).
 
 Date: 2026-07-15
 
@@ -17,11 +18,15 @@ it does not promote later Gate concerns into this Gate.
 
 ## Why this Gate exists
 
-Gate 6 established a Repa-owned SQLite lineage, atomic forward migrations, and
-one state-owning process per LearnerHome. The database still contains no native
-learning authority. Course, View, item, and working-route identities exist only
-in documentation, so later material alignment, learner continuity, Agenda, and
-context have no trustworthy target.
+Gate 6 established a Repa-owned SQLite lineage and atomic forward migrations.
+Its later runtime-ownership audit found that path aliases and configurable lock
+roots could bypass the intended single-owner lease. Gate 7 depends on the
+still-valid database and migration boundary, not that lease algorithm: its
+contract, schema, migration, and implementation remain closed while production
+consumption waits for the Gate 6 correction. The database otherwise contained
+no native learning authority. Course, View, item, and working-route identities
+existed only in documentation, so later material alignment, learner continuity,
+Agenda, and context had no trustworthy target.
 
 The pre-fork oracle proves useful behavior but not an admissible schema. Its
 Course was owned by a LearningSpace, source paths could determine Course

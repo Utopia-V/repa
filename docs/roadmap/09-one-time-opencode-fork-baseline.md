@@ -1,10 +1,9 @@
 # One-time OpenCode fork and native Repa engineering roadmap
 
-Status: Gates 0–7 are closed. The original unstarted Gate 7–19 contracts were
-superseded on 2026-07-14. The replacement Gate 7–17 engineering sequence was
-accepted on 2026-07-15. Each Gate still requires its own design grill before
-its contract or production implementation begins; active status lives in
-`docs/README.md`.
+Status: Stable engineering roadmap. The original unstarted Gate 7–19 contracts
+were superseded on 2026-07-14, and the replacement Gate 7–17 sequence was
+accepted on 2026-07-15. Current Gate disposition lives only in
+`docs/README.md`; this roadmap does not duplicate volatile close/reopen state.
 
 Original date: 2026-07-13
 
@@ -15,7 +14,7 @@ Decision: [ADR-0014](../decisions/0014-one-time-opencode-fork.md)
 Architecture: [Learning-centered system architecture](../architecture/00-system-architecture.md)
 and [native learning data model](../architecture/01-native-learning-data-model.md)
 
-Evidence: [Fork provenance and closed-gate ledger](../fork-ledger.md)
+Evidence: [Fork provenance and Gate ledger](../fork-ledger.md)
 
 Legacy evidence: [Pre-fork Repa asset disposition audit](../research/pre-fork-repa-asset-audit-2026-07-13.md)
 
@@ -33,7 +32,7 @@ boundary before the whole learning experience is usable.
 
 ## Why the old future route was withdrawn
 
-Gates 0–6 established the fork, product identity, learning-first composition,
+Gates 0–6 introduced the fork, product identity, learning-first composition,
 terminal product surface, and native database lineage. The old Gate 7–19 route
 then ordered work largely by inherited infrastructure surfaces: Interaction,
 terminal admission, roots, observation, search, Course focus, one command,
@@ -45,9 +44,10 @@ materials, learner records, Agenda, Tutor context, and inherited Interaction
 records. Passing each infrastructure Gate could therefore have fixed locally
 reasonable structures that combined badly.
 
-The correction withdraws only those unstarted contracts. It does not invalidate
-Gates 0–6, abandon numbered Gates, or require every future Gate to complete a
-learner-visible loop.
+That correction withdrew only those unstarted contracts. It did not itself
+invalidate Gates 0–6, abandon numbered Gates, or require every future Gate to
+complete a learner-visible loop. Later audits remain free to correct an
+earlier completion claim without invalidating unrelated later authorities.
 
 ## How the next route is formed
 
@@ -77,7 +77,11 @@ Gate claims. A full suite or real-provider run is not an automatic ritual.
 
 Volatile current status is owned only by [the documentation index](../README.md).
 
-## Closed fork foundation
+## Fork foundation boundaries
+
+This table names the durable boundary and its original evidence; it is not the
+owner of current acceptance status. See [the documentation index](../README.md)
+for bounded reopenings and the active control point.
 
 | Gate                           | Durable engineering result                                                                                                | Evidence                                                                                           |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
@@ -92,6 +96,15 @@ Volatile current status is owned only by [the documentation index](../README.md)
 Gate 6 leaves baseline schema version 1 admitted, an empty post-baseline Repa
 migration registry, and no native learning tables. There is no user learning
 data compatibility obligation constraining the first learning migrations.
+
+The numbering above is not a total dependency chain. Gate 4 has no structural
+precedence edge to Gates 5–7. Gate 5 determines the reachable carrier set for
+Gate 4's final audit and the active entrypoint set that Gate 6 must cover, but
+those are coverage relationships rather than shared product meaning. Gate 7
+depends on Gate 6's database identity, admission, forward lineage, and
+migration generator; it does not depend on the concrete runtime lease
+algorithm. A lease correction therefore leaves Gate 7 closed unless it changes
+that database or migration contract.
 
 ## Accepted architecture-grill decisions
 

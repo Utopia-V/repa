@@ -13,7 +13,11 @@ Status: Active production-fork ledger
 Locally materialized reference checkouts are ignored files beside the oracle
 worktree. Their pins are durable; their paths are not part of this fork.
 
-## Closed gate sequence
+## Original Gate close evidence
+
+The commits below are the historical acceptance points. They do not override
+the current disposition in `docs/README.md`; a later audit may preserve the
+implementation evidence while reopening one bounded completion claim.
 
 | Gate                                     | Result                                                                                                                                              | Fork commit                                                                             | Historical record                                                                     |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
@@ -33,29 +37,50 @@ Read a historical record with:
 git show repa-prefork-oracle:<historical-record-path>
 ```
 
-## Closed and deferred boundaries
+## Current audit disposition and deferred boundaries
 
-- Gate 4 is closed: released-v1 model carriers and stock profiles implement one
-  learning-first Repa composition invariant.
-- Gate 5 is closed under
-  `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md`.
-  Its governing result is product reachability, not a source-deletion quota.
-  The parent disposition correction and inherited automatic GitHub
-  repository-workflow unregistration are complete.
-- Gate 6 is closed under
-  `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`.
-  A missing database receives one complete Repa baseline and only later
-  Repa-owned migrations; unrecognized state is refused without replacement.
-  One process owns local LearnerHome state, while explicit attached clients do
-  not construct a second local runtime. Released, parity-complete OpenCode v2
-  remains a future comparison trigger rather than an upgrade promise.
+- Gate 4 is open only for the internal-call trust boundary. Public admission
+  can name a hidden primary Agent while request preparation treats `hidden` as
+  authority to discard the interactive Repa composition. Hidden remains
+  presentation metadata; program-owned operation purpose must authorize title,
+  summary, compaction, and other narrow internal calls. The final carrier audit
+  waits for Gate 5 to stabilize production reachability. The inherited v2
+  prompt route is a Gate 5 registration defect, not a second runtime for Gate 4
+  to maintain.
+- Gate 5 retains its corrected reachability-over-deletion policy and its valid
+  account/share/sync/updater/workflow disconnections, but its close claim is
+  boundedly reopened. Production still registers the v2 prompt admission that
+  can schedule model execution; provider IDs beginning with `opencode` still
+  receive request/native-runtime privileges; provider login, model listing,
+  and the run mini picker still recommend, prioritize, or label the commercial
+  provider specially; and `https://*.opencode.ai` still has an automatic CORS
+  grant. Explicitly configured custom providers remain valid but must be
+  ordinary. Harmless v2/provider/Web/Desktop source remains hibernated rather
+  than physically deleted.
+- Gate 6 database admission and forward migration lineage remain accepted: a
+  missing database receives one complete Repa baseline and later only
+  Repa-owned migrations, while unrecognized state is refused without
+  replacement. Its runtime-owner close claim is reopened because a resolved
+  path string hashed beneath a process-selected state root neither identifies
+  one physical database nor guarantees that contenders meet at one lock.
+  Two-process evidence found dual owners through junctions, file symlinks,
+  hardlinks, 8.3/long and DOS/extended path aliases, and different
+  `XDG_STATE_HOME` roots. The correction must jointly settle physical authority
+  identity and rendezvous location before SQLite is opened.
+  Commit `7abeeac3a` separately corrected the original false rollback wording
+  from “made no migration attempt” to the truthful claim that failed
+  initialization committed no database initialization; it belongs to the Gate
+  6 provenance even though it does not repair runtime ownership.
 - Gate 7 is closed under
   `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`.
   The first native learning authority now owns independent Courses, stable View
   identity, immutable linear revisions, Course-owned item continuity, exact
   mappings, bounded reads, and nullable versioned working selection without
   importing Session, material, learner-record, Agenda, context, or model-tool
-  settlement semantics.
+  settlement semantics. It depends on Gate 6's still-valid database and
+  migration lineage, not its lease algorithm. Production consumption remains
+  blocked until Gate 6 restores the one-owner runtime invariant.
+- Gate 8 has not begun and is paused until Gates 4–6 close again.
 - The former Gate 7–19 contracts never began and are superseded rather than
   reordered. Gate-based engineering remains the accepted progress and
   acceptance form. The post-Gate-6 architecture and roadmap grill settled the
@@ -89,10 +114,13 @@ git show repa-prefork-oracle:<historical-record-path>
   routes, runtime composition, generated current client surface, and TUI copy
   while retaining direct updater implementation and tests as hibernated source.
 - `825b590b4` removed Zen/Go from built-in provider catalogs, plugin
-  composition, ID-specific request/tool/selection behavior, recommendation,
-  and retry upsell while preserving neutral explicit custom providers and the
-  directly testable dormant provider implementation. `0daeb6de5` removed the
-  commercial retry action from the current status schema, OpenAPI, and v2 SDK.
+  composition, several ID-specific behaviors, recommendation, and retry upsell
+  while preserving neutral explicit custom providers and the directly testable
+  dormant provider implementation. The later audit found that request headers,
+  native eligibility, CLI login/list/picker presentation, and CORS still retain
+  first-party semantics, so this commit did not complete Gate 5's provider
+  boundary. `0daeb6de5` removed the commercial retry action from the current
+  status schema, OpenAPI, and v2 SDK.
 - Automatic account/share/sync behavior, OpenCode service requests, hosted UI
   proxying, remote routes/selectors, and misleading TUI affordances remain
   disconnected by the earlier 5B, 5C, and 5D commits recorded in the Gate 5

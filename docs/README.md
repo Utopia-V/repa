@@ -1,20 +1,45 @@
 # Repa documentation
 
-Status: Gates 0–7 are closed. The original unexecuted Gate 7–19 contracts are
-superseded, and the replacement Gate 7–17 engineering sequence is accepted.
-Gate 7 Course and Course View authority passed at implementation commit
-`3bd6eb9d4`. Gate 8 has not begun.
+Status: Gates 0–3 and Gate 7 are closed. Gates 4–6 are open only for the
+bounded corrections below. Gate 8 is paused until those corrections close and
+then requires its own grill before a contract or implementation begins.
 
-Current control point: Gate 7 now gives the native LearnerHome database its
-first learning authority. Repa can persist several independent Courses; each
-Course may exist without a View, retain stable View identities with immutable
-linear revisions, preserve Course-owned item identity through a closed
-preserve/split/merge algebra, and optionally select one exact eligible
-Revision. Versioned withdrawal, restoration, selection, bounded reads, and
-same-snapshot composite reads enforce the accepted concurrency and recovery
-rules. The implementation remains deliberately below Session, model-command,
-material, learner-record, Agenda, context, and terminal integration. Gate 8
-requires its own grill before a contract or implementation begins.
+## Active Gate map
+
+| Gate                                | Product-level result                                                                                                                              | Current disposition                                                                                                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 0. Oracle freeze                    | Preserved and classified the pre-fork learning product as evidence rather than a runtime dependency.                                              | Closed.                                                                                                                                                                                                |
+| 1. Lineage                          | Established the exact full-history MIT fork of OpenCode `v1.17.18`.                                                                               | Closed.                                                                                                                                                                                                |
+| 2/2A. Windows baseline              | Recorded the inherited Windows failure truthfully, then corrected only its invalid test oracle.                                                   | Closed.                                                                                                                                                                                                |
+| 3. Repa identity                    | Isolated the Repa executable, paths, configuration, environment, and database identity from OpenCode state.                                       | Closed.                                                                                                                                                                                                |
+| 4. Learning-first composition       | Gives legitimate released-v1 model calls one Repa product composition and narrow program-owned internal operations.                               | Bounded correction: `hidden` must cease acting as internal-call authority. The final carrier matrix follows Gate 5 reachability repair.                                                                |
+| 5. Local product surface            | Makes the current terminal product truthful while retaining useful local capabilities and harmless hibernated source.                             | Bounded correction: disconnect the production v2 model prompt/wake path, remove remaining provider-name privileges and commercial CLI presentation, and remove the inherited `opencode.ai` CORS grant. |
+| 6. Native database admission        | Owns Repa database admission, forward migration lineage, and the single state-owner boundary.                                                     | Admission and migration lineage remain accepted. Physical database identity and the cross-process lock rendezvous are open for correction.                                                             |
+| 7. Course and Course View authority | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal. | Closed. Contract, schema, migration, and implementation remain accepted; production consumption waits for Gate 6 runtime safety.                                                                       |
+| 8. Learning-command settlement      | Will bind trusted causal and invocation identity to one real Course-owned command.                                                                | Not begun; paused behind Gates 4–6.                                                                                                                                                                    |
+
+Gate numbers record engineering acceptance; they are not a total dependency
+chain. Gate 5 owns the reachable model-carrier set that Gate 4 must audit and
+the state-owning entrypoint set that Gate 6 must cover. Gate 7 has a hard
+dependency only on Gate 6's still-valid database identity and migration
+lineage, not on the faulty lease algorithm. Therefore the Gate 6 runtime
+correction does not reopen Gate 7.
+
+Current correction order is risk-driven rather than a new Gate sequence:
+settle Gate 6's physical authority and rendezvous design first, stabilize Gate
+5's production and provider surfaces, then repair Gate 4's internal-call trust
+boundary and audit the final carrier set. Only after all three close does Gate
+8 return to grill.
+
+Gate 7 now gives the native LearnerHome database its first learning authority.
+Repa can persist several independent Courses; each Course may exist without a
+View, retain stable View identities with immutable linear revisions, preserve
+Course-owned item identity through a closed preserve/split/merge algebra, and
+optionally select one exact eligible Revision. Versioned withdrawal,
+restoration, selection, bounded reads, and same-snapshot composite reads
+enforce the accepted concurrency and recovery rules. The implementation
+remains deliberately below Session, model-command, material, learner-record,
+Agenda, context, and terminal integration.
 
 Accepted grill result so far: define the complete logical skeleton across the
 major learning authorities before Gate decomposition, while leaving full
@@ -58,8 +83,9 @@ legacy labs.
 - [Native learning data model](architecture/01-native-learning-data-model.md)
 - [One-time fork roadmap](roadmap/09-one-time-opencode-fork-baseline.md)
 - [Fork provenance and gate ledger](fork-ledger.md)
+- [Gate 4 learning-first composition record](research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md)
 - [Gate 5 terminal-only surface record](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
-- [Gate 6 native database-admission result](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
+- [Gate 6 native database-admission record](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
 - [Accepted Gate 7 Course and Course View authority contract](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 

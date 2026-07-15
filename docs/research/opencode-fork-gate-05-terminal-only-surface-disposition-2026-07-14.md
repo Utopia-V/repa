@@ -1,6 +1,8 @@
 # OpenCode fork Gate 5: terminal-only surface disposition
 
-Status: Passed — 2026-07-14 at `25e51861effbddbdb04ae8fe88c4107d34ab91b2`
+Historical result: Passed on 2026-07-14 at
+`25e51861effbddbdb04ae8fe88c4107d34ab91b2`. Current disposition is owned by
+[the documentation index](../README.md).
 
 Date: 2026-07-14
 
@@ -35,17 +37,17 @@ when their behavior is truthful; they do not define Repa's ordinary ontology.
 
 The following inherited product semantics are excluded:
 
-| Surface | First-baseline disposition | Preserved reduction |
-| --- | --- | --- |
-| OpenCode account, organization, and Console | disconnect registration, startup, network, and visible configuration; hibernate harmless source | local provider credentials and neutral custom endpoints |
-| public sharing and share import | disconnect public/automatic paths and share-link import; hibernate implementation and direct tests | independently meaningful local Session/file import |
-| sync, remote workspace, installation, and control plane | disconnect remote registration, selectors, startup, and network; hibernate unused remote implementation | local directory routing and Instance context |
-| hosted Web and Desktop clients | remove public launch, proxy, automatic build, and current release reachability; hibernate clients | terminal `serve` only where it supports retained local clients/protocols |
-| marketplace browsing or installation | unregister and hibernate | local plugin discovery and enable/disable behavior |
-| hosted GitHub Action and release integration | unregister and hibernate; restore local `pr` without share-link import | ordinary local Git, PR checkout, Repa launch, and explicit review capability |
-| inherited GitHub repository workflows | unregister the upstream-owned definitions and hibernate their source | a future Repa-owned CI/release design is a separate engineering decision |
-| first-class OpenCode Zen/Go products | remove catalog identity and all ID-specific behavior | neutral generic custom-provider configuration |
-| inherited updater and upgrade UX | disconnect route, configuration, startup, background work, and current release surface; hibernate implementation and direct tests | no active updater until Repa owns release provenance, integrity, rollback, and migrations |
+| Surface                                                 | First-baseline disposition                                                                                                        | Preserved reduction                                                                       |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| OpenCode account, organization, and Console             | disconnect registration, startup, network, and visible configuration; hibernate harmless source                                   | local provider credentials and neutral custom endpoints                                   |
+| public sharing and share import                         | disconnect public/automatic paths and share-link import; hibernate implementation and direct tests                                | independently meaningful local Session/file import                                        |
+| sync, remote workspace, installation, and control plane | disconnect remote registration, selectors, startup, and network; hibernate unused remote implementation                           | local directory routing and Instance context                                              |
+| hosted Web and Desktop clients                          | remove public launch, proxy, automatic build, and current release reachability; hibernate clients                                 | terminal `serve` only where it supports retained local clients/protocols                  |
+| marketplace browsing or installation                    | unregister and hibernate                                                                                                          | local plugin discovery and enable/disable behavior                                        |
+| hosted GitHub Action and release integration            | unregister and hibernate; restore local `pr` without share-link import                                                            | ordinary local Git, PR checkout, Repa launch, and explicit review capability              |
+| inherited GitHub repository workflows                   | unregister the upstream-owned definitions and hibernate their source                                                              | a future Repa-owned CI/release design is a separate engineering decision                  |
+| first-class OpenCode Zen/Go products                    | remove catalog identity and all ID-specific behavior                                                                              | neutral generic custom-provider configuration                                             |
+| inherited updater and upgrade UX                        | disconnect route, configuration, startup, background work, and current release surface; hibernate implementation and direct tests | no active updater until Repa owns release provenance, integrity, rollback, and migrations |
 
 A mixed command or module is classified by behavior before disposition. The name
 `import`, `plugin`, `workspace`, or `serve` is not sufficient evidence that all
@@ -62,12 +64,30 @@ proof. That inference is invalid. Commit `5edbd8638` implemented it,
 `0d393ec27` recorded it as success, and `04a2d91a0` extended it to providers and
 the updater. No further physical deletion is authorized by those records.
 
-| Classification | Current Gate 5 disposition | Controlling reason |
-| --- | --- | --- |
-| Keep | Correct account/share/sync startup and network disconnection; hosted UI proxy and remote-route removal; local `pr`, Git/project-copy, directory, provider, MCP, plugin, Session, and terminal harness behavior | These changes establish truthful runtime boundaries or retain independently useful local behavior. |
-| Repair | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; provider and updater ordinary reachability; inherited automatic GitHub repository-workflow registrations | The earlier work confused dependency shape with product meaning and let local slices expand beyond their parent invariant. The completed repairs are recorded below. |
-| Hibernate | Web/Desktop and marketplace source; hosted GitHub Action source; the direct OpenCode provider plugin/tests; updater implementation/tests; dormant commercial retry dialog/art | These are outside current runtime reachability and support promises, but their source has no demonstrated conflict or continuing cost. |
-| Delete or remain deleted | Share-link import; automatic/public share owners that would require restoring removed account/config/Console authority; first-party provider magic branches; updater routes/config/events and other misleading public registrations | These specific branches either conflict with the accepted runtime boundary or cannot be restored without a false compatibility shell. This is evidence for those branches, not a precedent for deleting whole dormant products. |
+A 2026-07-15 post-Gate-7 audit also invalidated the later completion claim
+without reviving that deletion policy:
+
+- production still composes the preview-v2 `POST /api/session/:sessionID/prompt`
+  admission, whose normal resume behavior can wake the second model runner;
+  Gate 5 must remove that model-executing route from the production API,
+  OpenAPI, and generated current clients while retaining independently useful
+  non-model v2 source unless separately classified;
+- `opencode*` provider IDs still receive request headers and native-runtime
+  eligibility, while provider login, `models`, and the run mini picker still
+  recommend, prioritize, or label the commercial provider specially; and
+- the server still automatically trusts `https://*.opencode.ai` as a CORS
+  origin despite hosted Web being outside the baseline.
+
+An explicitly configured provider named `opencode` may remain, but it must use
+the same generic behavior as any other custom provider. Localhost, same-host,
+and explicitly configured CORS remain independently valid.
+
+| Classification           | Current Gate 5 disposition                                                                                                                                                                                                                                                        | Controlling reason                                                                                                                                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep                     | Correct account/share/sync startup and network disconnection; hosted UI proxy and remote-route removal; local `pr`, Git/project-copy, directory, provider, MCP, plugin, Session, and terminal harness behavior                                                                    | These changes establish truthful runtime boundaries or retain independently useful local behavior.                                                                                                                              |
+| Repair                   | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; updater reachability; inherited workflow registration; production v2 prompt admission; remaining provider-ID request/native/CLI presentation; inherited hosted CORS | The earlier classification and scope repairs remain complete. The post-Gate-7 v2, provider, and CORS residues are the bounded open work recorded above.                                                                         |
+| Hibernate                | Web/Desktop and marketplace source; hosted GitHub Action source; the direct OpenCode provider plugin/tests; updater implementation/tests; dormant commercial retry dialog/art                                                                                                     | These are outside current runtime reachability and support promises, but their source has no demonstrated conflict or continuing cost.                                                                                          |
+| Delete or remain deleted | Share-link import; automatic/public share owners that would require restoring removed account/config/Console authority; first-party provider magic branches; updater routes/config/events and other misleading public registrations                                               | These specific branches either conflict with the accepted runtime boundary or cannot be restored without a false compatibility shell. This is evidence for those branches, not a precedent for deleting whole dormant products. |
 
 Gate 5D5's `00061ce34` local-directory invariant is accepted after the
 `af506b635` necessity repair. The active view needs one atomic directory
@@ -104,7 +124,8 @@ historical locators for existing commits; they are not a continuing ladder of
 user-visible micro-Gates. Atomic commits remain useful rollback units without
 creating new product contracts.
 
-The parent correction resolved three questions:
+The earlier parent correction resolved three questions; those results remain
+valid but do not close the later audit findings:
 
 1. Runtime registries, startup/config/network owners, provider policy, and
    updater reachability now exclude the inherited product behavior while
@@ -604,9 +625,9 @@ classification of `PrCommand` is superseded by that correction.
   Session, message, part, and current project/directory rebinding;
 - HTTP(S) import was rejected without reaching a listening test server;
 - `bun test test/cli/help/help-snapshots.test.ts test/cli/import.test.ts
-  test/cli/root-shortcuts.test.ts` passed 5 tests and 27 snapshots;
+test/cli/root-shortcuts.test.ts` passed 5 tests and 27 snapshots;
 - `bun test -t "rejects --share before admitting a prompt"
-  test/cli/run/run-process.test.ts` passed the focused contract without a
+test/cli/run/run-process.test.ts` passed the focused contract without a
   provider request;
 - the OpenCode package typecheck and `git diff --check` passed. The independent
   review verified the then-current implementation contract but did not receive
@@ -763,9 +784,10 @@ current SDK, and current client typechecks passed; those historical results show
 the deletion compiled, not that the deletion contract was reasonable. Passive
 historical Session/share columns remain inert for the later native-database/
 schema decision. The selective restoration, provider/updater reachability, and
-5D5 necessity work and inherited workflow unregistration are complete. Gate 5
-is closed without a broad package or source-deletion campaign and without
-turning Repa-owned CI design into part of this product-surface decision.
+5D5 necessity work and inherited workflow unregistration remain valid. Gate 5
+was recorded closed without a broad package or source-deletion campaign, but
+the later audit reopened only the active v2, provider, and CORS residues named
+above. Repa-owned CI design remains outside this product-surface decision.
 
 ## Rollback
 

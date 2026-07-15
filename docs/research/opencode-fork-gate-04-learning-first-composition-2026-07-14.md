@@ -1,6 +1,7 @@
 # OpenCode fork Gate 4: learning-first composition boundary
 
-Status: Passed
+Historical result: Passed at `9c7b74f41` and `17e25eab2`. Current disposition
+is owned by [the documentation index](../README.md).
 
 Date: 2026-07-14
 
@@ -23,6 +24,26 @@ Tutor role?
 This gate replaces the inherited coding-product default. It does not claim that
 a prompt is the Tutor, add learning tables, reconstruct the old Repa runner, or
 pre-author the future learning-context schema.
+
+## Post-close audit correction
+
+The 2026-07-15 post-Gate-7 audit found that the released-v1 implementation uses
+the presentation property `agent.hidden` as internal-call authority. Ordinary
+public admission can name a hidden primary Agent, after which request
+preparation selects the narrow internal core and omits the interactive Repa
+composition. Gate 4 is therefore open only for a real trust boundary:
+
+- public HTTP, `run --agent`, and command admission must not obtain internal
+  authority by naming a hidden Agent;
+- persisted abnormal selections must fail closed or remain interactive rather
+  than becoming internal after restart; and
+- title, summary, compaction, project-copy naming, and similar operations enter
+  their narrow contracts through program-owned operation purpose.
+
+The public preview-v2 prompt path is not another carrier to make learning-first.
+ADR-0014 denies it production authority. Its registration and the wake it can
+schedule are Gate 5 product-reachability defects. Gate 4 performs its final
+carrier matrix only after Gate 5 fixes the production carrier set.
 
 ## Evidence that fixes the owning seam
 
@@ -94,8 +115,10 @@ Every non-hidden Agent sample contains these regions in this order:
 
 The current user message remains a user message rather than being copied into
 the system prompt. The core states its precedence over conditional remembered
-purpose. Gate 13 will bind exact durable learning context and command authority;
-Gate 4 only provides the native input boundary they will use.
+purpose. A later product consumer will bind exact durable learning context and
+command authority; Gate 4 only provides the native input boundary it will use.
+The former Gate 13 label was superseded before implementation by the corrected
+product-outcome roadmap.
 
 The inherited model-family selector is collapsed unless a provider-specific
 requirement is demonstrated. Model transport differences remain in provider

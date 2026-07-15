@@ -19,8 +19,11 @@ migration target.
 
 ## Purpose
 
-Gate 6 established one native `repa.db`, a Repa-only forward migration lineage,
-and one state-owning process per LearnerHome. It deliberately added no learning
+Gate 6 established one native `repa.db` and a Repa-only forward migration
+lineage, and accepted one state-owning process per LearnerHome as the runtime
+invariant. A later audit found that path aliases and configurable lock roots can
+bypass the current lease implementation; that bounded runtime correction does
+not change this logical data design. Gate 6 deliberately added no learning
 tables. Before the fork extends Interaction in isolation, this document fixes
 the learning data relationships that the native runtime must eventually serve.
 
@@ -411,20 +414,20 @@ to complete a user-visible trace and does not pre-assign Gate order.
 The resulting schema may eventually represent the following record families,
 but each family first appears only with a demonstrated consumer:
 
-| Consumer pressure | Record family | Required relation or behavior |
-| --- | --- | --- |
-| native Course use | Course identity | LearnerHome-owned; no LearningSpace owner and no global active status |
-| native Course use | default Course preference | optional, versioned learner-controlled retrieval bias |
-| native Course use | Course View identity | one stable identity per continuing route strategy; alternatives remain distinct within a Course |
-| native Course use | Course View revision and working selection | immutable revisions per View, zero or one exact working selection per Course; a Course without a View is valid and selection does not follow a newer revision automatically |
-| native Course use | Course item identity and View membership | Course-owned stable identity where justified; revision-bound title, parent, and order |
-| exact material use | artifact and exact revision | mutable location separated from exact observed content |
-| exact material use | readable representation | optional exact derivation from one artifact revision with availability truth |
-| material structure | material map | exact selectors bound to one artifact or representation revision; no Course dependency |
-| grounded material use | Course alignment | optional many-to-many relation bound to exact material and Course View revisions |
-| durable continuation | route anchor | learner-record-owned Course/View/item reference, distinct from current focus and mastery |
-| first durable command | causal source and command receipt | trusted Interaction/source identity and atomic domain/tool settlement |
-| exact continuation, if required | context cut | exact bounded manifest when existing Interaction records cannot express it honestly |
+| Consumer pressure               | Record family                              | Required relation or behavior                                                                                                                                               |
+| ------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| native Course use               | Course identity                            | LearnerHome-owned; no LearningSpace owner and no global active status                                                                                                       |
+| native Course use               | default Course preference                  | optional, versioned learner-controlled retrieval bias                                                                                                                       |
+| native Course use               | Course View identity                       | one stable identity per continuing route strategy; alternatives remain distinct within a Course                                                                             |
+| native Course use               | Course View revision and working selection | immutable revisions per View, zero or one exact working selection per Course; a Course without a View is valid and selection does not follow a newer revision automatically |
+| native Course use               | Course item identity and View membership   | Course-owned stable identity where justified; revision-bound title, parent, and order                                                                                       |
+| exact material use              | artifact and exact revision                | mutable location separated from exact observed content                                                                                                                      |
+| exact material use              | readable representation                    | optional exact derivation from one artifact revision with availability truth                                                                                                |
+| material structure              | material map                               | exact selectors bound to one artifact or representation revision; no Course dependency                                                                                      |
+| grounded material use           | Course alignment                           | optional many-to-many relation bound to exact material and Course View revisions                                                                                            |
+| durable continuation            | route anchor                               | learner-record-owned Course/View/item reference, distinct from current focus and mastery                                                                                    |
+| first durable command           | causal source and command receipt          | trusted Interaction/source identity and atomic domain/tool settlement                                                                                                       |
+| exact continuation, if required | context cut                                | exact bounded manifest when existing Interaction records cannot express it honestly                                                                                         |
 
 An accepted Gate may establish any causally sound subset whose invariants and
 integration boundary are real. This document neither authorizes empty future

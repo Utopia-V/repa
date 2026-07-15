@@ -1,6 +1,7 @@
 # OpenCode fork Gate 6: native database admission
 
-Status: Passed at fork implementation commit `6c0b7aa5b`
+Historical result: Passed at fork implementation commit `6c0b7aa5b`. Current
+disposition is owned by [the documentation index](../README.md).
 
 Date: 2026-07-14
 
@@ -13,6 +14,32 @@ This record owns the Gate 6 contract. It preserves the maintainer decisions,
 the source evidence that constrains their implementation, and the evidence
 that will close the Gate. The contract authorizes only the production changes
 named below.
+
+## Post-close audit correction
+
+The 2026-07-15 post-Gate-7 audit preserved database admission, forward
+migration lineage, and their evidence, but reopened the runtime-ownership
+claim. The implementation derives a key from `path.resolve()` plus Windows
+case folding and places its hash below the process-selected state root. Real
+two-process probes therefore admitted two owners for one physical database
+through junctions, file symlinks, hardlinks, 8.3/long paths, DOS/extended paths,
+and different `XDG_STATE_HOME` roots.
+
+The repair must settle two connected invariants before changing production
+code:
+
+1. **Physical authority identity:** aliases that reach one SQLite authority
+   cannot acquire independent ownership; unsafe hardlink aliases are rejected
+   rather than normalized into journal/WAL ambiguity.
+2. **Rendezvous location:** processes targeting that authority compete at one
+   lock independently of configurable application-state roots.
+
+The authority admitted by the lease must also be the authority SQLite actually
+opens, without a path-substitution window between identity, acquisition, and
+open. This requires a Gate 6 design grill against mature OS/file-object and
+SQLite locking mechanisms; a `realpath`-only or file-ID-only patch is not an
+accepted repair. The runtime correction remains outside database migration and
+learning-domain APIs.
 
 ## Why Gate 6 is a real candidate
 
@@ -198,7 +225,10 @@ evidence claim.
 
 ## Result
 
-Gate 6 passed on 2026-07-14 at fork implementation commit `6c0b7aa5b`.
+Gate 6 was recorded passed on 2026-07-14 at fork implementation commit
+`6c0b7aa5b`. The later audit preserves the admission and migration results below
+but invalidates the runtime-owner completion claim until the physical-authority
+and rendezvous correction closes.
 
 The implementation now:
 
@@ -232,5 +262,9 @@ Focused evidence was deliberately limited to claims this Gate changed:
   active. Focused TUI routing, error-formatting, and local `pr` checks also
   passed.
 
-No monorepo-wide suite or generic database-repair framework was added. Gate 7
-has not begun.
+No monorepo-wide suite or generic database-repair framework was added. At this
+checkpoint Gate 7 had not begun; its original contract and the other unexecuted
+Gate 7–19 contracts were later superseded. Gate-based engineering was retained,
+but the post-Gate-6 architecture and roadmap grill must first establish the
+overall structural direction and dependency order. Only then is it divided into
+Gates, each of which is grilled again before implementation.
