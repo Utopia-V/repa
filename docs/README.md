@@ -1,6 +1,6 @@
 # Repa documentation
 
-Status: Gates 0–3 and Gate 7 are closed. Gates 4–6 are open only for the
+Status: Gates 0–3 and Gates 6–7 are closed. Gates 4–5 are open only for the
 bounded corrections below. Gate 8 is paused until those corrections close and
 then requires its own grill before a contract or implementation begins.
 
@@ -14,22 +14,21 @@ then requires its own grill before a contract or implementation begins.
 | 3. Repa identity                    | Isolated the Repa executable, paths, configuration, environment, and database identity from OpenCode state.                                       | Closed.                                                                                                                                                                                                                       |
 | 4. Learning-first composition       | Gives legitimate released-v1 model calls one Repa product composition and narrow program-owned internal operations.                               | Bounded correction: `hidden` must cease acting as internal-call authority. The final carrier matrix follows Gate 5 reachability repair.                                                                                       |
 | 5. Local product surface            | Makes the current terminal product truthful while retaining useful local capabilities and harmless hibernated source.                             | Bounded correction: disconnect public v2 prompt admission and the model execution it schedules, remove remaining provider-name privileges and commercial CLI presentation, and remove the inherited `opencode.ai` CORS grant. |
-| 6. Native database admission        | Owns Repa database admission, forward migration lineage, and the single state-owner boundary.                                                     | Admission and migration lineage remain accepted. Physical database identity and the cross-process lock rendezvous are open for correction.                                                                                    |
-| 7. Course and Course View authority | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal. | Closed. Contract, schema, migration, and implementation remain accepted; production consumption waits for Gate 6 runtime safety.                                                                                              |
-| 8. Learning-command settlement      | Will bind trusted causal and invocation identity to one real Course-owned command.                                                                | Not begun; paused behind Gates 4–6.                                                                                                                                                                                           |
+| 6. Native database admission        | Owns Repa database admission, forward migration lineage, and the single state-owner boundary.                                                     | Closed again. Stable local aliases meet at one retained SQLite connection; hardlink, recognized remote, and ordinary `:memory:` targets refuse; ambiguous crash state receives only bounded pager recovery before admission.  |
+| 7. Course and Course View authority | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal. | Closed. Contract, schema, migration, implementation, and the Gate 6 runtime dependency are accepted.                                                                                                                          |
+| 8. Learning-command settlement      | Will bind trusted causal and invocation identity to one real Course-owned command.                                                                | Not begun; paused behind Gates 4–5.                                                                                                                                                                                           |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 owns the reachable model-carrier set that Gate 4 must audit and
 the state-owning entrypoint set that Gate 6 must cover. Gate 7 has a hard
-dependency only on Gate 6's still-valid database identity and migration
-lineage, not on the faulty lease algorithm. Therefore the Gate 6 runtime
-correction does not reopen Gate 7.
+dependency on Gate 6's database identity, migration lineage, and one-owner
+runtime invariant, not on a particular lock implementation. The Gate 6
+correction restored that invariant without reopening Gate 7.
 
-Current correction order is risk-driven rather than a new Gate sequence:
-settle Gate 6's physical authority and rendezvous design first, stabilize Gate
-5's production and provider surfaces, then repair Gate 4's internal-call trust
-boundary and audit the final carrier set. Only after all three close does Gate
-8 return to grill.
+The risk-driven Gate 6 safety correction is complete. The remaining correction
+line stabilizes Gate 5's production and provider surfaces, then repairs Gate
+4's internal-call trust boundary and audits the final carrier set. Only after
+both close does Gate 8 return to grill.
 
 Gate 7 now gives the native LearnerHome database its first learning authority.
 Repa can persist several independent Courses; each Course may exist without a

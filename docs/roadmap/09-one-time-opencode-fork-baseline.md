@@ -93,18 +93,20 @@ for bounded reopenings and the active control point.
 | 5. Product-surface disposition | Terminal-only baseline; excluded group behavior disconnected; harmless local capabilities and hibernated source retained. | [Gate 5 record](../research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md) |
 | 6. Native database admission   | Repa-owned database identity and migration lineage with one state-owning process per LearnerHome.                         | [Gate 6 record](../research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)         |
 
-Gate 6 leaves baseline schema version 1 admitted, an empty post-baseline Repa
-migration registry, and no native learning tables. There is no user learning
-data compatibility obligation constraining the first learning migrations.
+At its original close, Gate 6 left baseline schema version 1 admitted, an empty
+post-baseline Repa migration registry, and no native learning tables. Later
+Gates may add Repa migrations without changing that substrate boundary. There
+is no inherited user-data compatibility obligation constraining those learning
+migrations.
 
 The numbering above is not a total dependency chain. Gate 4 has no structural
 precedence edge to Gates 5–7. Gate 5 determines the reachable carrier set for
 Gate 4's final audit and the active entrypoint set that Gate 6 must cover, but
 those are coverage relationships rather than shared product meaning. Gate 7
-depends on Gate 6's database identity, admission, forward lineage, and
-migration generator; it does not depend on the concrete runtime lease
-algorithm. A lease correction therefore leaves Gate 7 closed unless it changes
-that database or migration contract.
+depends on Gate 6's database identity, admission, forward lineage, migration
+generator, and one-owner invariant; it does not depend on a particular lock
+implementation. A runtime-ownership correction therefore leaves Gate 7 closed
+unless it changes those database or migration contracts.
 
 ## Accepted architecture-grill decisions
 
@@ -209,12 +211,13 @@ real authority projections and is not their prerequisite.
 
 The database substrate already provides transactional migrations, stable
 Session/Message/Part IDs, and atomic settlement of one Session event with its
-projection. Repa requires one state-owning process per LearnerHome, but the
-Gate 6 audit reopened the runtime mechanism that enforces it; later runtime work
-cannot assume that enforcement is complete. The inherited database does not
-provide an atomic Turn, a durable learning-command identity, exactly-once tool
-effects, a global revision, or a safe long-lived provenance reference: deleting
-a Session currently removes its messages, parts, and event aggregate.
+projection. Repa requires one state-owning process per LearnerHome. The Gate 6
+record contains both the audit that invalidated the old path-string lease and
+the later retained-SQLite-connection correction that re-established this
+invariant. The inherited database does not provide an atomic Turn, a durable
+learning-command identity, exactly-once tool effects, a global revision, or a
+safe long-lived provenance reference: deleting a Session currently removes its
+messages, parts, and event aggregate.
 
 ## Remaining physical and Gate-local questions
 

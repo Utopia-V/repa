@@ -127,6 +127,34 @@ not another live Gate-status map.
   package provenance, integrity, failure, rollback, and release-channel
   contracts before activation.
 
+## 2026-07-15 Gate 6 runtime-owner correction provenance
+
+Current disposition remains owned only by `docs/README.md`. This section records
+the evidence that answered the audit finding above.
+
+- `9cc3fe17f` selected a retained-main-connection design, but its original
+  mutation-free-open claim failed crash-state review. `d7855d4ce` accepted the
+  corrected bounded-recovery contract: plainly foreign clean files refuse
+  before SQLite open, while ambiguous hot-journal/WAL sets may undergo only
+  SQLite pager recovery before admission on the same retained connection.
+- `16fcb3177` replaced the path-string/state-root lease with stable local-target
+  preflight and one exclusive SQLite connection retained for all database use.
+  Directory junction, file symlink, available 8.3, long, and DOS/extended
+  spellings converge; hardlinks, recognized remote targets, and ordinary
+  `:memory:` runtime materialization refuse. Fresh identity commits in rollback
+  mode before WAL, and the no-query database shell no longer launches a second
+  `sqlite3` connection behind Repa ownership.
+- Crash probes covered non-zero identityless baseline cache spill with a hot
+  journal, committed Repa WAL, and foreign WAL. Real two-process probes covered
+  concurrent missing creation, the missing-to-existing handoff, different
+  `XDG_STATE_HOME` roots, supported aliases, orderly release, and abrupt death.
+  Real CLI evidence covered clean foreign refusal, `:memory:`, query/shell
+  behavior, server ownership with `run --attach`, and local `pr` launch.
+- Fresh focused verification passed 34 Core tests with 213 assertions and 16
+  OpenCode tests with 79 assertions. Core and OpenCode typechecks, the migration
+  generator check, formatting, and diff checks passed. The nine Gate 7
+  Course/View tests passed as a dependency smoke check without reopening Gate 7.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

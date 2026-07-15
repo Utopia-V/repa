@@ -21,12 +21,13 @@ it does not promote later Gate concerns into this Gate.
 Gate 6 established a Repa-owned SQLite lineage and atomic forward migrations.
 Its later runtime-ownership audit found that path aliases and configurable lock
 roots could bypass the intended single-owner lease. Gate 7 depends on the
-still-valid database and migration boundary, not that lease algorithm: its
-contract, schema, migration, and implementation remain closed while production
-consumption waits for the Gate 6 correction. The database otherwise contained
-no native learning authority. Course, View, item, and working-route identities
-existed only in documentation, so later material alignment, learner continuity,
-Agenda, and context had no trustworthy target.
+database and migration boundary plus the one-owner invariant, not that lease
+algorithm. The retained-SQLite-connection correction at `16fcb3177` restored
+the invariant without changing this Gate, so its production dependency is now
+satisfied. The database otherwise contained no native learning authority.
+Course, View, item, and working-route identities existed only in documentation,
+so later material alignment, learner continuity, Agenda, and context had no
+trustworthy target.
 
 The pre-fork oracle proves useful behavior but not an admissible schema. Its
 Course was owned by a LearningSpace, source paths could determine Course

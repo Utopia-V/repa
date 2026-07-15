@@ -1,7 +1,9 @@
 # OpenCode fork Gate 6: native database admission
 
-Historical result: Passed at fork implementation commit `6c0b7aa5b`. Current
-disposition is owned by [the documentation index](../README.md).
+Historical result: Passed at fork implementation commit `6c0b7aa5b`; its
+runtime-owner claim was later invalidated. Corrected runtime-owner result:
+passed at `16fcb3177`. Current disposition is owned by
+[the documentation index](../README.md).
 
 Date: 2026-07-14
 
@@ -12,8 +14,8 @@ and [ADR-0014](../decisions/0014-one-time-opencode-fork.md)
 
 This record owns the Gate 6 contract. It preserves the maintainer decisions,
 the source evidence that constrains their implementation, and the evidence
-that will close the Gate. The contract authorizes only the production changes
-named below.
+that closes the Gate. The contract authorizes only the production changes named
+below.
 
 ## Post-close audit correction
 
@@ -514,15 +516,58 @@ this evidence claim.
 
 Gate 6 was recorded passed on 2026-07-14 at fork implementation commit
 `6c0b7aa5b`. The later audit preserves the admission and migration results below
-but invalidates the runtime-owner completion claim until the physical-authority
-and rendezvous correction closes. Design commit `9cc3fe17f` selected a promising
-retained-connection mechanism but did not pass the later crash-state audit; its
-claim that open-and-lock was mutation-free is not an accepted implementation
-contract. The corrected bounded-recovery sequence is now accepted and
-authorizes implementation, but Gate 6 remains open until that implementation
-and its closing evidence are integrated.
+but invalidated that commit's runtime-owner completion claim. Design commit
+`9cc3fe17f` selected a promising retained-connection mechanism but did not pass
+the later crash-state audit; its claim that open-and-lock was mutation-free is
+not an accepted implementation contract. `d7855d4ce` accepted the corrected
+bounded-recovery sequence, and `16fcb3177` implemented it with the closing
+evidence below. Gate 6 is closed again as of that implementation commit.
 
-The implementation now:
+The corrected implementation:
+
+- resolves the stable local target before SQLite open, converges supported
+  filesystem aliases, and rejects hardlinks and recognized remote targets
+  before journal/WAL or application access;
+- gives fresh, recognized Repa, and crash-ambiguous targets one native
+  connection which performs permitted pager recovery, acquires exclusive
+  ownership, runs admission, supplies SQL/Drizzle, and releases on layer close;
+- rejects ordinary `Database.node`/`REPA_DB=:memory:` materialization while
+  retaining explicit `layerFromPath(":memory:")` test injection;
+- publishes fresh schema, identity, version, and journal in rollback mode
+  before enabling WAL, including recovery from a non-zero identityless
+  cache-spill main file and hot journal;
+- removes the separate state-root filesystem lease, converges AppRuntime and
+  listener graphs on the process memo map, and makes TUI/command/server paths
+  consume the database-owned lifetime; and
+- keeps `db path` as a no-open diagnostic, makes `db <query>` use the retained
+  authority, and refuses the inherited no-query external `sqlite3` branch.
+
+Fresh correction evidence was limited to claims that could falsify this
+boundary:
+
+- Core authority and migration tests passed 25 tests with 96 assertions. They
+  covered clean-foreign byte preservation, retained-lock release, baseline
+  cache-spill recovery, Repa and foreign WAL recovery, fresh/upgrade equivalence,
+  admission failures, and atomic forward migration. Core typecheck and the
+  migration generator check passed.
+- Real OpenCode owner processes passed four tests with 38 assertions across
+  different state roots, concurrent missing creation, a barriered
+  missing-to-existing handoff, orderly and abrupt release, directory/file
+  aliases, available 8.3 and extended spellings, hardlink refusal, and UNC
+  refusal.
+- Real CLI and server tests passed 11 tests with 35 assertions for clean foreign
+  refusal, actionable errors, `:memory:`, query/shell behavior, one owning
+  server, and client-only `run --attach`. The local `pr` launch test passed
+  separately with six assertions, and same-process listener reuse was exercised
+  without a second database owner. OpenCode typecheck passed.
+- Gate 7's Course/View focused tests passed nine tests with 117 assertions as a
+  dependency smoke check. They did not reopen or modify the Gate 7 contract,
+  schema, migration, or implementation.
+- Prettier and Git diff checks passed. No monorepo-wide suite, custom VFS,
+  recovery framework, network-database classifier, or unrelated learning
+  mechanism was added.
+
+The original implementation had already:
 
 - initializes a missing path from the complete generated schema with
   `application_id`, `user_version`, and one `repa_migration` baseline row;
@@ -543,7 +588,8 @@ The implementation now:
   the Repa child it launches, while leaving `db path` available when admission
   fails.
 
-Focused evidence was deliberately limited to claims this Gate changed:
+Original focused evidence was deliberately limited to claims that close had
+changed:
 
 - `packages/core`: typecheck passed; the migration generator check passed;
   `test/database-migration.test.ts` passed 17 tests covering baseline creation,
@@ -558,13 +604,12 @@ Focused evidence was deliberately limited to claims this Gate changed:
 
 Those historical owner tests used the same configured path spelling and lock
 root. They remain evidence for acquisition lifecycle and attach classification,
-but cannot close physical identity, cross-state-root rendezvous, missing-path,
-hardlink, or authority/open TOCTOU behavior. Gate 6 closes again only with the
-re-derived evidence above.
+but could not close physical identity, cross-state-root rendezvous,
+missing-path, hardlink, or authority/open TOCTOU behavior. The correction and
+fresh evidence above now close those claims.
 
-No monorepo-wide suite or generic database-repair framework was added. At this
-checkpoint Gate 7 had not begun; its original contract and the other unexecuted
-Gate 7–19 contracts were later superseded. Gate-based engineering was retained,
-but the post-Gate-6 architecture and roadmap grill must first establish the
-overall structural direction and dependency order. Only then is it divided into
-Gates, each of which is grilled again before implementation.
+No monorepo-wide suite or generic database-repair framework was added. At the
+original checkpoint Gate 7 had not begun; its original contract and the other
+unexecuted Gate 7–19 contracts were later superseded. The replacement Gate 7
+Course/View authority is now independently closed, and this runtime correction
+restores its one-owner production prerequisite without changing its design.
