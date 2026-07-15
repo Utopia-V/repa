@@ -8,7 +8,7 @@ import { writeHeapSnapshot } from "node:v8"
 import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Effect } from "effect"
-import { LearnerHomeOwnership, type Handle as OwnershipHandle } from "@/learner-home/ownership"
+import { Database } from "@opencode-ai/core/database/database"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
 
 Heap.start()
@@ -26,12 +26,8 @@ GlobalBus.on("event", (event) => {
 })
 
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
-let ownership: OwnershipHandle | undefined
-const startup = await LearnerHomeOwnership.acquire().then(
-  (handle) => {
-    ownership = handle
-    return { ok: true as const }
-  },
+const startup = await AppRuntime.runPromise(Database.Service.use(() => Effect.void)).then(
+  () => ({ ok: true as const }),
   (error) => ({
     ok: false as const,
     message: error instanceof Error ? error.message : String(error),
@@ -84,7 +80,6 @@ export const rpc = {
     await InstanceRuntime.disposeAllInstances().catch(() => {})
     await Server.disposeDefault().catch(() => {})
     await AppRuntime.dispose().catch(() => {})
-    await ownership?.release().catch(() => {})
     process.off("unhandledRejection", onUnhandledRejection)
     process.off("uncaughtException", onUncaughtException)
   },

@@ -13,6 +13,7 @@ import * as Client from "effect/unstable/sql/SqlClient"
 import type { Connection } from "effect/unstable/sql/SqlConnection"
 import { classifySqliteError, SqlError } from "effect/unstable/sql/SqlError"
 import * as Statement from "effect/unstable/sql/Statement"
+import { DatabaseAuthority } from "./authority"
 import { Sqlite } from "./sqlite"
 
 const ATTR_DB_SYSTEM_NAME = "db.system.name"
@@ -33,6 +34,7 @@ interface Config {
   readonly create?: boolean
   readonly readwrite?: boolean
   readonly disableWAL?: boolean
+  readonly exclusive?: boolean
   readonly timeout?: number
   readonly allowExtension?: boolean
   readonly spanAttributes?: Record<string, unknown>
@@ -148,18 +150,37 @@ const nativeLayer = (config: Config) =>
   Layer.effect(
     Sqlite.Native,
     Effect.gen(function* () {
-      const native = new DatabaseSync(config.filename, {
-        readOnly: config.readonly,
-        timeout: config.timeout,
-        allowExtension: config.allowExtension,
-        enableForeignKeyConstraints: true,
-        open: true,
+      const native = yield* Effect.try({
+        try: () => open(config),
+        catch: (cause) => DatabaseAuthority.openError(config.filename, cause),
       })
       yield* Effect.addFinalizer(() => Effect.sync(() => native.close()))
-      if (config.disableWAL !== true && config.readonly !== true) native.exec("PRAGMA journal_mode = WAL;")
       return native
     }),
   )
+
+function open(config: Config) {
+  const native = new DatabaseSync(config.filename, {
+    readOnly: config.readonly,
+    timeout: config.timeout,
+    allowExtension: config.allowExtension,
+    enableForeignKeyConstraints: true,
+    open: true,
+  })
+  try {
+    if (config.exclusive) {
+      native.exec("PRAGMA main.locking_mode = EXCLUSIVE")
+      native.exec("PRAGMA busy_timeout = 0")
+      native.exec("BEGIN EXCLUSIVE")
+      native.exec("ROLLBACK")
+    }
+    if (config.disableWAL !== true && config.readonly !== true) native.exec("PRAGMA journal_mode = WAL;")
+    return native
+  } catch (cause) {
+    native.close()
+    throw cause
+  }
+}
 
 const sqliteLayer = (config: Config) => Layer.effect(Client.SqlClient, make(config))
 

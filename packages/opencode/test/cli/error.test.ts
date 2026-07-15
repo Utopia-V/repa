@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { AccountTransportError } from "../../src/account/schema"
 import { DatabaseAdmissionError, DatabaseMigrationError } from "@opencode-ai/core/database/admission"
-import { LearnerHomeBusyError } from "../../src/learner-home/ownership"
+import { DatabaseBusyError, DatabaseStorageError } from "@opencode-ai/core/database/authority"
 import { FormatError } from "../../src/cli/error"
 import { UI } from "../../src/cli/ui"
 
@@ -96,7 +96,16 @@ describe("cli.error", () => {
   })
 
   test("formats LearnerHome ownership and database admission failures as actionable boundaries", () => {
-    expect(FormatError(new LearnerHomeBusyError({ database: "C:/home/repa.db" }))).toContain("repa attach <url>")
+    expect(FormatError(new DatabaseBusyError({ database: "C:/home/repa.db" }))).toContain("repa attach <url>")
+    expect(
+      FormatError(
+        new DatabaseStorageError({
+          path: ":memory:",
+          reason: "memory",
+          detail: "The ordinary Repa runtime requires a filesystem database",
+        }),
+      ),
+    ).toContain("requires a filesystem database")
 
     const admission = FormatError(
       new DatabaseAdmissionError({

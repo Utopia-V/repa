@@ -8,6 +8,7 @@ import { Flag } from "../flag/flag"
 import { isAbsolute, join } from "path"
 import { DatabaseMigration } from "./migration"
 import { DatabaseAdmissionError, DatabaseMigrationError } from "./admission"
+import { DatabaseBusyError, DatabaseOwnershipError, DatabaseStorageError, DatabaseAuthority } from "./authority"
 import { InstallationChannel } from "../installation/version"
 import { makeGlobalNode } from "../effect/app-node"
 import { existsSync } from "node:fs"
@@ -40,7 +41,13 @@ function databaseLayer(filename: string, fresh: boolean) {
     }).pipe(
       Effect.catchCause((cause) => {
         const error = Cause.squash(cause)
-        if (error instanceof DatabaseAdmissionError || error instanceof DatabaseMigrationError)
+        if (
+          error instanceof DatabaseAdmissionError ||
+          error instanceof DatabaseMigrationError ||
+          error instanceof DatabaseBusyError ||
+          error instanceof DatabaseOwnershipError ||
+          error instanceof DatabaseStorageError
+        )
           return Effect.fail(error)
         return Effect.fail(
           new DatabaseAdmissionError({
@@ -67,6 +74,29 @@ export function layerFromPath(filename: string) {
   )
 }
 
+export function runtimeLayerFromPath(filename: string) {
+  return Layer.unwrap(
+    Effect.try({
+      try: () => DatabaseAuthority.preflight(filename, DatabaseMigration.version),
+      catch: (cause) => {
+        if (cause instanceof DatabaseAdmissionError || cause instanceof DatabaseStorageError) return cause
+        return new DatabaseStorageError({
+          path: filename,
+          reason: "unsupported",
+          detail: `Could not resolve the configured Repa database target: ${filename}`,
+          cause,
+        })
+      },
+    }).pipe(
+      Effect.map((target) =>
+        databaseLayer(target.filename, target.initialize).pipe(
+          Layer.provide(sqliteLayer({ filename: target.filename, disableWAL: true, exclusive: true })),
+        ),
+      ),
+    ),
+  )
+}
+
 export function path() {
   if (Flag.REPA_DB) {
     if (Flag.REPA_DB === ":memory:" || isAbsolute(Flag.REPA_DB)) return Flag.REPA_DB
@@ -81,4 +111,8 @@ export function path() {
   return join(Global.Path.data, `repa-${InstallationChannel.replace(/[^a-zA-Z0-9._-]/g, "-")}.db`)
 }
 
-export const node = makeGlobalNode({ service: Service, layer: layerFromPath(path()).pipe(Layer.orDie), deps: [] })
+export const node = makeGlobalNode({
+  service: Service,
+  layer: runtimeLayerFromPath(path()).pipe(Layer.orDie),
+  deps: [],
+})

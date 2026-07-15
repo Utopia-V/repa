@@ -104,8 +104,9 @@ function checks(db: Database | Transaction, path: string, version: number) {
 function initialize(db: Database, path: string, input: readonly Migration[]) {
   const expected = expectedJournal(input)
   const version = currentVersion(input)
-  return db
-    .transaction((tx) =>
+  return Effect.gen(function* () {
+    yield* db.run("PRAGMA journal_mode = DELETE")
+    yield* db.transaction((tx) =>
       Effect.gen(function* () {
         yield* schema.up(tx)
         yield* tx.run(sql`
@@ -130,18 +131,18 @@ function initialize(db: Database, path: string, input: readonly Migration[]) {
         yield* checks(tx, path, version)
       }),
     )
-    .pipe(
-      Effect.mapError(
-        (cause) =>
-          new DatabaseAdmissionError({
-            path,
-            reason: "initialization",
-            detail: `Failed to initialize the Repa database at ${path}`,
-            currentVersion: version,
-            cause,
-          }),
-      ),
-    )
+  }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new DatabaseAdmissionError({
+          path,
+          reason: "initialization",
+          detail: `Failed to initialize the Repa database at ${path}`,
+          currentVersion: version,
+          cause,
+        }),
+    ),
+  )
 }
 
 function observeNumber(db: Database, name: "application_id" | "user_version") {

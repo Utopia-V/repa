@@ -87,8 +87,6 @@ export const effectCmd = <Args, A>(opts: EffectCmdOpts<Args, A>) =>
         return
       }
 
-      const { LearnerHomeOwnership } = await import("@/learner-home/ownership")
-      const ownership = await LearnerHomeOwnership.acquire()
       let AppRuntime: (typeof import("@/effect/app-runtime"))["AppRuntime"] | undefined
       try {
         AppRuntime = (await import("@/effect/app-runtime")).AppRuntime
@@ -109,13 +107,9 @@ export const effectCmd = <Args, A>(opts: EffectCmdOpts<Args, A>) =>
           await AppRuntime.runPromise(store.dispose(ctx))
         }
       } finally {
-        try {
-          if (AppRuntime) {
-            await import("@/server/server").then(({ Server }) => Server.disposeDefault()).catch(() => {})
-            await AppRuntime.dispose().catch(() => {})
-          }
-        } finally {
-          await ownership.release()
+        if (AppRuntime) {
+          await import("@/server/server").then(({ Server }) => Server.disposeDefault()).catch(() => {})
+          await AppRuntime.dispose().catch(() => {})
         }
       }
     },

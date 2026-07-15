@@ -15,6 +15,7 @@ import { InstanceRef } from "../../src/effect/instance-ref"
 import { InstanceBootstrap } from "../../src/project/bootstrap-service"
 import type { InstanceContext } from "../../src/project/instance-context"
 import { InstanceRuntime } from "../../src/project/instance-runtime"
+import { AppRuntime } from "../../src/effect/app-runtime"
 import { InstanceStore } from "../../src/project/instance-store"
 import { TestLLMServer } from "../lib/llm-server"
 
@@ -46,6 +47,8 @@ export async function reloadTestInstance(input: { directory: string }) {
 }
 
 export async function disposeAllInstances() {
+  // Cleanup must not materialize AppRuntime merely to discover that it has no instances.
+  if (!AppRuntime.loaded()) return
   await InstanceRuntime.disposeAllInstances()
 }
 

@@ -44,7 +44,7 @@ export function FormatError(input: unknown): string | undefined {
     return stringField(input, "message") ?? ""
   }
 
-  if (isTaggedError(input, "LearnerHomeBusyError")) {
+  if (isTaggedError(input, "DatabaseBusyError")) {
     const database = stringField(input, "database")
     return [
       `Another Repa process currently owns this LearnerHome${database ? ` (${database})` : ""}.`,
@@ -52,9 +52,13 @@ export function FormatError(input: unknown): string | undefined {
     ].join("\n")
   }
 
-  if (isTaggedError(input, "LearnerHomeOwnershipError")) {
+  if (isTaggedError(input, "DatabaseOwnershipError")) {
     const database = stringField(input, "database")
     return `Could not establish local LearnerHome ownership${database ? ` for ${database}` : ""}. Check filesystem access and try again.`
+  }
+
+  if (isTaggedError(input, "DatabaseStorageError")) {
+    return stringField(input, "detail") ?? "The configured LearnerHome database storage is unsupported."
   }
 
   if (isTaggedError(input, "DatabaseAdmissionError")) {

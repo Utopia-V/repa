@@ -1,14 +1,13 @@
 import type { Argv } from "yargs"
-import { spawn } from "child_process"
 import { Database } from "@opencode-ai/core/database/database"
 import { Effect } from "effect"
 import { sql } from "drizzle-orm"
-import { effectCmd } from "../effect-cmd"
+import { effectCmd, fail } from "../effect-cmd"
 import { cmd } from "./cmd"
 
 const QueryCommand = effectCmd({
   command: "$0 [query]",
-  describe: "open an interactive sqlite3 shell or run a query",
+  describe: "run a query against the owned Repa database",
   instance: false,
   builder: (yargs: Argv) => {
     return yargs
@@ -36,10 +35,7 @@ const QueryCommand = effectCmd({
       }
       return
     }
-    const child = spawn("sqlite3", [Database.path()], {
-      stdio: "inherit",
-    })
-    yield* Effect.promise(() => new Promise((resolve) => child.on("close", resolve)))
+    return yield* fail("The integrated interactive database shell is not available; pass an explicit SQL query")
   }),
 })
 

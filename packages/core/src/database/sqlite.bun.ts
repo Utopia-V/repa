@@ -13,6 +13,7 @@ import * as Client from "effect/unstable/sql/SqlClient"
 import type { Connection } from "effect/unstable/sql/SqlConnection"
 import { classifySqliteError, SqlError } from "effect/unstable/sql/SqlError"
 import * as Statement from "effect/unstable/sql/Statement"
+import { DatabaseAuthority } from "./authority"
 import { Sqlite } from "./sqlite"
 
 const ATTR_DB_SYSTEM_NAME = "db.system.name"
@@ -34,6 +35,7 @@ interface Config {
   readonly create?: boolean
   readonly readwrite?: boolean
   readonly disableWAL?: boolean
+  readonly exclusive?: boolean
   readonly spanAttributes?: Record<string, unknown>
   readonly transformResultNames?: (str: string) => string
   readonly transformQueryNames?: (str: string) => string
@@ -56,9 +58,9 @@ const make = (options: Config) =>
     const run = (query: string, params: ReadonlyArray<unknown> = []) =>
       Effect.withFiber<Array<Record<string, unknown>>, SqlError>((fiber) => {
         const statement = native.query(query)
-        // @ts-ignore bun-types missing safeIntegers method, fixed in https://github.com/oven-sh/bun/pull/26627
-        statement.safeIntegers(Context.get(fiber.context, Client.SafeIntegers))
         try {
+          // @ts-ignore bun-types missing safeIntegers method, fixed in https://github.com/oven-sh/bun/pull/26627
+          statement.safeIntegers(Context.get(fiber.context, Client.SafeIntegers))
           return Effect.succeed((statement.all(...(params as any)) ?? []) as Array<Record<string, unknown>>)
         } catch (cause) {
           return Effect.fail(
@@ -66,15 +68,17 @@ const make = (options: Config) =>
               reason: classifySqliteError(cause, { message: "Failed to execute statement", operation: "execute" }),
             }),
           )
+        } finally {
+          statement.finalize()
         }
       })
 
     const runValues = (query: string, params: ReadonlyArray<unknown> = []) =>
       Effect.withFiber<Array<unknown[]>, SqlError>((fiber) => {
         const statement = native.query(query)
-        // @ts-ignore bun-types missing safeIntegers method, fixed in https://github.com/oven-sh/bun/pull/26627
-        statement.safeIntegers(Context.get(fiber.context, Client.SafeIntegers))
         try {
+          // @ts-ignore bun-types missing safeIntegers method, fixed in https://github.com/oven-sh/bun/pull/26627
+          statement.safeIntegers(Context.get(fiber.context, Client.SafeIntegers))
           return Effect.succeed((statement.values(...(params as any)) ?? []) as Array<unknown[]>)
         } catch (cause) {
           return Effect.fail(
@@ -82,6 +86,8 @@ const make = (options: Config) =>
               reason: classifySqliteError(cause, { message: "Failed to execute statement", operation: "execute" }),
             }),
           )
+        } finally {
+          statement.finalize()
         }
       })
 
@@ -155,16 +161,35 @@ const nativeLayer = (config: Config) =>
   Layer.effect(
     Sqlite.Native,
     Effect.gen(function* () {
-      const native = new Database(config.filename, {
-        readonly: config.readonly,
-        readwrite: config.readwrite ?? true,
-        create: config.create ?? true,
+      const native = yield* Effect.try({
+        try: () => open(config),
+        catch: (cause) => DatabaseAuthority.openError(config.filename, cause),
       })
       yield* Effect.addFinalizer(() => Effect.sync(() => native.close()))
-      if (config.disableWAL !== true) native.run("PRAGMA journal_mode = WAL;")
       return native
     }),
   )
+
+function open(config: Config) {
+  const native = new Database(config.filename, {
+    readonly: config.readonly,
+    readwrite: config.readwrite ?? true,
+    create: config.create ?? true,
+  })
+  try {
+    if (config.exclusive) {
+      native.run("PRAGMA main.locking_mode = EXCLUSIVE")
+      native.run("PRAGMA busy_timeout = 0")
+      native.run("BEGIN EXCLUSIVE")
+      native.run("ROLLBACK")
+    }
+    if (config.disableWAL !== true) native.run("PRAGMA journal_mode = WAL;")
+    return native
+  } catch (cause) {
+    native.close()
+    throw cause
+  }
+}
 
 const sqliteLayer = (config: Config) => Layer.effect(Client.SqlClient, make(config))
 

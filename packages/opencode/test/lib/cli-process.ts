@@ -67,6 +67,7 @@ function isolatedEnv(home: string, configJson: string): Record<string, string> {
     XDG_DATA_HOME: path.join(home, ".local/share"),
     XDG_STATE_HOME: path.join(home, ".local/state"),
     XDG_CACHE_HOME: path.join(home, ".cache"),
+    REPA_DB: path.join(home, "repa.db"),
     REPA_CONFIG_CONTENT: configJson,
     REPA_DISABLE_PROJECT_CONFIG: "1",
     REPA_PURE: "1",
@@ -282,7 +283,7 @@ export function withCliFixture<A, E>(
       const options = runOpts(opts)
       const proc = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          Bun.spawn(["bun", "run", "--conditions=browser", cliEntry, ...runArgs(message, opts)], {
+          Bun.spawn([process.execPath, "run", "--conditions=browser", cliEntry, ...runArgs(message, opts)], {
             cwd: home,
             env: { ...process.env, ...env, ...options?.env },
             stdin: "ignore",
@@ -323,7 +324,7 @@ export function withCliFixture<A, E>(
       // as a finalizer error during test teardown.
       const proc = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          Bun.spawn(["bun", "run", "--conditions=browser", cliEntry, ...argv], {
+          Bun.spawn([process.execPath, "run", "--conditions=browser", cliEntry, ...argv], {
             cwd: home,
             env: { ...process.env, ...env, ...opts?.env },
             stdout: "pipe",
@@ -394,7 +395,7 @@ export function withCliFixture<A, E>(
       // Either way we await proc.exited so the test scope doesn't leak.
       const proc = yield* Effect.acquireRelease(
         Effect.sync(() =>
-          Bun.spawn(["bun", "run", "--conditions=browser", cliEntry, ...argv], {
+          Bun.spawn([process.execPath, "run", "--conditions=browser", cliEntry, ...argv], {
             cwd: opts?.cwd ?? home,
             env: { ...process.env, ...env, ...opts?.env },
             stdin: "pipe",

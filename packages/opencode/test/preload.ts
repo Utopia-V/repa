@@ -10,6 +10,8 @@ import { afterAll } from "bun:test"
 const dir = path.join(os.tmpdir(), "opencode-test-data-" + process.pid)
 await fs.mkdir(dir, { recursive: true })
 afterAll(async () => {
+  const { Server } = await import("../src/server/server")
+  await Server.disposeDefault()
   const { AppRuntime } = await import("../src/effect/app-runtime")
   await AppRuntime.dispose()
 
@@ -83,8 +85,9 @@ delete process.env["OTEL_EXPORTER_OTLP_ENDPOINT"]
 delete process.env["OTEL_EXPORTER_OTLP_HEADERS"]
 delete process.env["OTEL_RESOURCE_ATTRIBUTES"]
 
-// Use in-memory sqlite
-process.env["REPA_DB"] = ":memory:"
+// Ordinary runtime tests use a real per-process database. Tests that need a
+// process-private in-memory database inject Database.layerFromPath explicitly.
+process.env["REPA_DB"] = path.join(dir, "repa.db")
 
 // Now safe to import from src/
 const { initProjectors } = await import("../src/server/projectors")
