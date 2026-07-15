@@ -43,6 +43,7 @@ export type StreamInput = {
   messages: ModelMessage[]
   small?: boolean
   tools: Record<string, Tool>
+  composition: LLMRequestPrep.Composition
   retries?: number
   toolChoice?: "auto" | "required" | "none"
 }
@@ -103,6 +104,11 @@ const live: Layer.Layer<
       )
 
       const isWorkflow = language instanceof GitLabWorkflowLanguageModel
+      if (isWorkflow && input.composition.type === "internal") {
+        return yield* Effect.fail(
+          new Error(`GitLab workflow models are unavailable for internal operation: ${input.composition.purpose}`),
+        )
+      }
       const prepared = yield* LLMRequestPrep.prepare({
         ...input,
         provider: item,
@@ -231,7 +237,7 @@ const live: Layer.Layer<
           llmClient,
           messages: prepared.messages,
           tools: prepared.tools,
-          toolChoice: input.toolChoice,
+          toolChoice: prepared.toolChoice,
           temperature: prepared.params.temperature,
           topP: prepared.params.topP,
           topK: prepared.params.topK,
@@ -316,7 +322,7 @@ const live: Layer.Layer<
           providerOptions: ProviderTransform.providerOptions(input.model, prepared.params.options),
           activeTools: Object.keys(prepared.tools).filter((x) => x !== "invalid"),
           tools: prepared.tools,
-          toolChoice: input.toolChoice,
+          toolChoice: prepared.toolChoice,
           maxOutputTokens: prepared.params.maxOutputTokens,
           abortSignal: input.abort,
           headers: prepared.headers,
@@ -364,17 +370,26 @@ const live: Layer.Layer<
             )
 
             const result = yield* run({ ...input, abort: ctrl.signal })
-
-            if (result.type === "native") return result.stream
-
-            // Adapter seam: both runtimes expose the same LLMEvent stream. Native
-            // already returns one; AI SDK streams are converted here.
-            const state = LLMAISDK.adapterState()
-            return Stream.fromAsyncIterable(result.result.fullStream, (e) =>
-              e instanceof Error ? e : new Error(String(e)),
-            ).pipe(
-              Stream.mapEffect((event) => LLMAISDK.toLLMEvents(state, event)),
-              Stream.flatMap((events) => Stream.fromIterable(events)),
+            const events =
+              result.type === "native"
+                ? result.stream
+                : (() => {
+                    const state = LLMAISDK.adapterState()
+                    return Stream.fromAsyncIterable(result.result.fullStream, (e) =>
+                      e instanceof Error ? e : new Error(String(e)),
+                    ).pipe(
+                      // Adapter seam: both runtimes expose the same LLMEvent stream.
+                      Stream.mapEffect((event) => LLMAISDK.toLLMEvents(state, event)),
+                      Stream.flatMap((items) => Stream.fromIterable(items)),
+                    )
+                  })()
+            if (input.composition.type === "interactive") return events
+            return events.pipe(
+              Stream.mapEffect((event) =>
+                event.type === "tool-call"
+                  ? Effect.fail(new Error(`Internal operation cannot call tool: ${event.name}`))
+                  : Effect.succeed(event),
+              ),
             )
           }),
         ),

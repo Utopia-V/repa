@@ -145,6 +145,7 @@ describe("tool.task", () => {
       Effect.gen(function* () {
         const agent = yield* Agent.Service
         const repa = yield* agent.get("repa")
+        if (!repa) throw new Error("missing repa test agent")
         const registry = yield* ToolRegistry.Service
         const get = Effect.fnUntraced(function* () {
           const tools = yield* registry.tools({ ...ref, agent: repa })
@@ -187,6 +188,7 @@ describe("tool.task", () => {
       Effect.gen(function* () {
         const agent = yield* Agent.Service
         const repa = yield* agent.get("repa")
+        if (!repa) throw new Error("missing repa test agent")
         const registry = yield* ToolRegistry.Service
         const description =
           (yield* registry.tools({ ...ref, agent: repa })).find((tool) => tool.id === TaskTool.id)?.description ?? ""

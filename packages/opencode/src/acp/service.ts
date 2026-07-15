@@ -436,7 +436,7 @@ export function make(input: {
     }
 
     if (params.configId === "mode") {
-      if (!snapshot.availableModes.some((mode) => mode.id === params.value)) {
+      if (!snapshot.selectableModeIDs.includes(params.value)) {
         return yield* new ACPError.InvalidModeError({ mode: params.value })
       }
       const state = yield* session.setMode(params.sessionId, params.value)
@@ -455,7 +455,7 @@ export function make(input: {
   const setSessionMode = Effect.fn("ACP.setSessionMode")(function* (params: SetSessionModeRequest) {
     const current = yield* session.get(params.sessionId)
     const snapshot = yield* configSnapshot(current)
-    if (!snapshot.availableModes.some((mode) => mode.id === params.modeId)) {
+    if (!snapshot.selectableModeIDs.includes(params.modeId)) {
       return yield* new ACPError.InvalidModeError({ mode: params.modeId })
     }
     yield* session.setMode(params.sessionId, params.modeId)
@@ -767,6 +767,7 @@ async function loadDirectorySnapshot(sdk: OpencodeClient, directory: string) {
       directory,
       providers,
       modes,
+      selectableModeIDs: agents.filter((agent) => agent.mode !== "subagent").map((agent) => agent.name),
       defaultModeID: agents.find((agent) => agent.mode === "primary" && agent.hidden !== true)?.name ?? "repa",
       commands: commands.toSorted((a, b) => a.name.localeCompare(b.name)),
       ...(defaultModel ? { defaultModel } : {}),

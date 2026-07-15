@@ -217,9 +217,13 @@ function processorLayer(result: "continue" | "compact") {
   )
 }
 
-function cfg(compaction?: ConfigV1.Info["compaction"]) {
+function configLayer(overrides: Partial<ConfigV1.Info>) {
   const base = Schema.decodeUnknownSync(ConfigV1.Info)({}) as ConfigV1.Info
-  return Layer.succeed(Config.Service, TestConfig.make({ get: () => Effect.succeed({ ...base, compaction }) }))
+  return Layer.succeed(Config.Service, TestConfig.make({ get: () => Effect.succeed({ ...base, ...overrides }) }))
+}
+
+function cfg(compaction?: ConfigV1.Info["compaction"]) {
+  return configLayer({ compaction })
 }
 
 const defaultProvider = wide()
@@ -357,6 +361,22 @@ function autocontinue(enabled: boolean) {
       if (name !== "experimental.compaction.autocontinue") return Effect.succeed(output)
       return Effect.sync(() => {
         ;(output as { enabled: boolean }).enabled = enabled
+        return output
+      })
+    },
+    list: () => Effect.succeed([]),
+    init: () => Effect.void,
+  })
+}
+
+function compactionExtension(input: { context: string; prompt: string }) {
+  return Layer.mock(Plugin.Service)({
+    trigger: <Name extends string, Input, Output>(name: Name, _input: Input, output: Output) => {
+      if (name !== "experimental.session.compacting") return Effect.succeed(output)
+      return Effect.sync(() => {
+        const current = output as { context: string[]; prompt?: string }
+        current.context.push(input.context)
+        current.prompt = input.prompt
         return output
       })
     },
@@ -798,6 +818,111 @@ describe("session.compaction.prune", () => {
 })
 
 describe("session.compaction.process", () => {
+  itCompaction.instance(
+    "binds the fixed compaction purpose while keeping plugin guidance additive",
+    () => {
+      const stub = llm()
+      let captured: LLM.StreamInput | undefined
+      stub.push(
+        reply("summary", (input) => {
+          captured = input
+        }),
+      )
+
+      return Effect.gen(function* () {
+        const ssn = yield* SessionNs.Service
+        const session = yield* ssn.create({})
+        yield* createUserMessage(session.id, "continuity source")
+        yield* createSummaryCompaction(session.id)
+
+        const messages = yield* ssn.messages({ sessionID: session.id })
+        const parentID = messages.at(-1)?.info.id
+        expect(parentID).toBeTruthy()
+        yield* SessionCompaction.use.process({
+          parentID: parentID!,
+          messages,
+          sessionID: session.id,
+          auto: false,
+        })
+
+        expect(captured?.composition).toEqual({ type: "internal", purpose: "compaction" })
+        expect(captured?.tools).toEqual({})
+        expect(captured?.system).toEqual([])
+        const prompt = JSON.stringify(captured?.messages)
+        expect(prompt).toContain("Create a new anchored summary")
+        expect(prompt).toContain("## Learning Continuity")
+        expect(prompt).toContain("PLUGIN_COMPACTION_CONTEXT")
+        expect(prompt).toContain("PLUGIN_COMPACTION_GUIDANCE")
+      }).pipe(
+        withCompaction({
+          llm: stub.llmLayer,
+          plugin: compactionExtension({
+            context: "PLUGIN_COMPACTION_CONTEXT",
+            prompt: "PLUGIN_COMPACTION_GUIDANCE",
+          }),
+        }),
+      )
+    },
+    { git: true },
+  )
+
+  itCompaction.instance(
+    "fails fresh and recovered markers before sampling when the compaction profile is disabled",
+    () => {
+      const stub = llm()
+      let samples = 0
+      stub.push((input) => {
+        samples += 1
+        return reply("must not sample")(input)
+      })
+
+      return Effect.gen(function* () {
+        const ssn = yield* SessionNs.Service
+        const session = yield* ssn.create({})
+        yield* createUserMessage(session.id, "continuity source")
+        yield* createSummaryCompaction(session.id)
+
+        const fresh = yield* ssn.messages({ sessionID: session.id })
+        const parentID = fresh.at(-1)?.info.id
+        expect(parentID).toBeTruthy()
+        const first = yield* SessionCompaction.use
+          .process({ parentID: parentID!, messages: fresh, sessionID: session.id, auto: false })
+          .pipe(Effect.exit)
+
+        expect(Exit.isFailure(first)).toBe(true)
+        if (Exit.isFailure(first)) {
+          expect(String(Cause.squash(first.cause))).toContain('Compaction agent "compaction" is unavailable')
+        }
+        expect(samples).toBe(0)
+
+        const recovered = yield* ssn.messages({ sessionID: session.id })
+        const marker = recovered.find((message) => message.info.id === parentID)
+        expect(marker?.parts.some((part) => part.type === "compaction")).toBe(true)
+        expect(recovered.some((message) => message.info.role === "assistant" && message.info.summary)).toBe(false)
+
+        const second = yield* SessionCompaction.use
+          .process({ parentID: parentID!, messages: recovered, sessionID: session.id, auto: false })
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(second)).toBe(true)
+        if (Exit.isFailure(second)) {
+          expect(String(Cause.squash(second.cause))).toContain('Compaction agent "compaction" is unavailable')
+        }
+        expect(samples).toBe(0)
+
+        const retained = yield* ssn.messages({ sessionID: session.id })
+        expect(
+          retained.find((message) => message.info.id === parentID)?.parts.some((part) => part.type === "compaction"),
+        ).toBe(true)
+      }).pipe(
+        withCompaction({
+          llm: stub.llmLayer,
+          config: configLayer({ agent: { compaction: { disable: true } } }),
+        }),
+      )
+    },
+    { git: true },
+  )
+
   it.instance(
     "throws when parent is not a user message",
     Effect.gen(function* () {

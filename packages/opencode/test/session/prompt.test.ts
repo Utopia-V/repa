@@ -57,6 +57,8 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
+import { InstanceStore } from "@/project/instance-store"
+import { TestConsole } from "effect/testing"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -511,6 +513,261 @@ it.instance("loop calls LLM and returns assistant message", () =>
     const parts = result.parts.filter((p) => p.type === "text")
     expect(parts.some((p) => p.type === "text" && p.text === "world")).toBe(true)
     expect(yield* llm.hits).toHaveLength(1)
+  }),
+)
+
+it.instance("explicitly named hidden summary profile remains an interactive sample", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({
+      title: "Pinned",
+      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+    })
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "summary",
+      noReply: true,
+      parts: [{ type: "text", text: "continue the learning conversation" }],
+    })
+    yield* llm.text("interactive summary profile response")
+
+    const result = yield* prompt.loop({ sessionID: chat.id })
+    expect(result.info.role).toBe("assistant")
+    expect(yield* llm.calls).toBe(1)
+
+    const body = JSON.stringify((yield* llm.inputs)[0])
+    expect(body).toContain("<repa_product_contract>")
+    expect(body).toContain("learning continuity")
+    expect(body).not.toContain("<repa_internal_operation>")
+  }),
+)
+
+it.instance("disabled title profile preserves the default title without sampling", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig((url) => ({
+      ...providerCfg(url),
+      agent: { title: { disable: true } },
+    }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({})
+    const originalTitle = chat.title
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "repa",
+      noReply: true,
+      parts: [{ type: "text", text: "hello" }],
+    })
+
+    const release = defer<void>()
+    yield* llm.hold("world", release.promise)
+    const fiber = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
+    yield* awaitWithTimeout(llm.wait(1), "timed out waiting for the ordinary sample")
+    yield* Effect.sleep("50 millis")
+    const calls = yield* llm.calls
+    const titleBeforeRelease = (yield* sessions.get(chat.id)).title
+    release.resolve()
+    yield* Fiber.join(fiber)
+
+    expect(Session.isDefaultTitle(originalTitle)).toBe(true)
+    expect(titleBeforeRelease).toBe(originalTitle)
+    expect((yield* sessions.get(chat.id)).title).toBe(originalTitle)
+    expect(calls).toBe(1)
+  }),
+)
+
+it.instance("retries title once after a disabled title profile returns", () =>
+  Effect.gen(function* () {
+    const { dir, llm } = yield* useServerConfig((url) => ({
+      ...providerCfg(url),
+      agent: { title: { disable: true } },
+    }))
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const store = yield* InstanceStore.Service
+    const chat = yield* sessions.create({})
+    const originalTitle = chat.title
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "repa",
+      noReply: true,
+      parts: [{ type: "text", text: "first question" }],
+    })
+    yield* llm.text("first response")
+    yield* prompt.loop({ sessionID: chat.id })
+
+    expect((yield* sessions.get(chat.id)).title).toBe(originalTitle)
+    expect(yield* llm.calls).toBe(1)
+
+    yield* writeConfig(dir, providerCfg(llm.url))
+    yield* store.reload({ directory: dir })
+    yield* store.provide(
+      { directory: dir },
+      Effect.gen(function* () {
+        const nextPrompt = yield* SessionPrompt.Service
+        const nextSessions = yield* Session.Service
+        yield* nextPrompt.prompt({
+          sessionID: chat.id,
+          agent: "repa",
+          noReply: true,
+          parts: [{ type: "text", text: "second question" }],
+        })
+        yield* llm.text("second response")
+        yield* nextPrompt.loop({ sessionID: chat.id })
+
+        const title = yield* pollWithTimeout(
+          Effect.gen(function* () {
+            const current = (yield* nextSessions.get(chat.id)).title
+            return Session.isDefaultTitle(current) ? undefined : current
+          }),
+          "title was not retried after the profile returned",
+        )
+        const titleCalls = (yield* llm.inputs).filter((input) =>
+          JSON.stringify(input).includes("Generate a title for this conversation"),
+        )
+
+        expect(title).toBe("E2E Title")
+        expect(titleCalls).toHaveLength(1)
+        expect(yield* llm.calls).toBe(3)
+      }),
+    )
+  }),
+)
+
+it.instance("does not duplicate a pending title or overwrite a newer manual title", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({})
+    const titleRelease = defer<void>()
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "repa",
+      noReply: true,
+      parts: [{ type: "text", text: "first question" }],
+    })
+    yield* llm.holdTitle("Generated Title", titleRelease.promise)
+    yield* llm.text("first response")
+    yield* prompt.loop({ sessionID: chat.id })
+
+    yield* pollWithTimeout(
+      Effect.gen(function* () {
+        const count = (yield* llm.inputs).filter((input) =>
+          JSON.stringify(input).includes("Generate a title for this conversation"),
+        ).length
+        return count === 1 ? count : undefined
+      }),
+      "first title sample did not remain pending across the ordinary loop boundary",
+    )
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "repa",
+      noReply: true,
+      parts: [{ type: "text", text: "second question" }],
+    })
+    yield* llm.text("second response")
+    yield* prompt.loop({ sessionID: chat.id })
+    yield* sessions.setTitle({ sessionID: chat.id, title: "Learner title" })
+    titleRelease.resolve()
+
+    yield* pollWithTimeout(
+      Effect.gen(function* () {
+        const lines = yield* TestConsole.logLines
+        return lines.includes("generated title discarded because the Session title changed") ? true : undefined
+      }),
+      "title generation did not reach the conditional write boundary",
+    )
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "repa",
+      noReply: true,
+      parts: [{ type: "text", text: "third question" }],
+    })
+    yield* llm.text("third response")
+    yield* prompt.loop({ sessionID: chat.id })
+
+    const titleCalls = (yield* llm.inputs).filter((input) =>
+      JSON.stringify(input).includes("Generate a title for this conversation"),
+    )
+    expect(titleCalls).toHaveLength(1)
+    expect((yield* sessions.get(chat.id)).title).toBe("Learner title")
+  }),
+)
+
+it.instance("serializes full Session patches against conditional title writes", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const events = yield* EventV2Bridge.Service
+    const chat = yield* sessions.create({})
+    const touchReady = yield* Deferred.make<void>()
+    const releaseTouch = yield* Deferred.make<void>()
+    const titlePublished = yield* Deferred.make<void>()
+    const originalPublish = events.publish
+    const mutableEvents = events as { publish: typeof events.publish }
+    let blockTouch = true
+
+    mutableEvents.publish = (definition, data, options) => {
+      if (definition.type !== Session.Event.Updated.type) return originalPublish(definition, data, options)
+      const update = data as typeof Session.Event.Updated.data.Type
+      if (update.sessionID !== chat.id) return originalPublish(definition, data, options)
+      if (blockTouch && Session.isDefaultTitle(update.info.title)) {
+        blockTouch = false
+        return Effect.gen(function* () {
+          yield* Deferred.succeed(touchReady, undefined)
+          yield* Deferred.await(releaseTouch)
+          return yield* originalPublish(definition, data, options)
+        })
+      }
+      if (update.info.title === "Generated Title") Deferred.doneUnsafe(titlePublished, Effect.void)
+      return originalPublish(definition, data, options)
+    }
+    yield* Effect.addFinalizer(() =>
+      Effect.sync(() => {
+        mutableEvents.publish = originalPublish
+      }),
+    )
+
+    const touchFiber = yield* sessions.touch(chat.id).pipe(Effect.forkChild)
+    yield* awaitWithTimeout(Deferred.await(touchReady), "touch did not reach the post-read publication barrier")
+    const titleFiber = yield* sessions
+      .setTitleIfDefault({ sessionID: chat.id, title: "Generated Title" })
+      .pipe(Effect.forkChild)
+    const escapedPatchLock = yield* Effect.race(
+      Deferred.await(titlePublished).pipe(Effect.as(true)),
+      Effect.sleep("250 millis").pipe(Effect.as(false)),
+    )
+
+    yield* Deferred.succeed(releaseTouch, undefined)
+    yield* Fiber.join(touchFiber)
+    expect(yield* Fiber.join(titleFiber)).toBe(true)
+    mutableEvents.publish = originalPublish
+
+    expect(escapedPatchLock).toBe(false)
+    expect((yield* sessions.get(chat.id)).title).toBe("Generated Title")
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "repa",
+      noReply: true,
+      parts: [{ type: "text", text: "continue after the title race" }],
+    })
+    yield* llm.text("ordinary response")
+    yield* prompt.loop({ sessionID: chat.id })
+
+    const titleCalls = (yield* llm.inputs).filter((input) =>
+      JSON.stringify(input).includes("Generate a title for this conversation"),
+    )
+    expect(titleCalls).toHaveLength(0)
+    expect((yield* sessions.get(chat.id)).title).toBe("Generated Title")
   }),
 )
 
@@ -1680,9 +1937,7 @@ it.instance(
       })
       yield* llm.text("after-shell")
 
-      const sh = yield* prompt
-        .shell({ sessionID: chat.id, agent: "repa", command: "sleep 0.2" })
-        .pipe(Effect.forkChild)
+      const sh = yield* prompt.shell({ sessionID: chat.id, agent: "repa", command: "sleep 0.2" }).pipe(Effect.forkChild)
       yield* waitForBusy(chat.id)
 
       const loop = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
@@ -1717,9 +1972,7 @@ it.instance(
       })
       yield* llm.text("done")
 
-      const sh = yield* prompt
-        .shell({ sessionID: chat.id, agent: "repa", command: "sleep 0.2" })
-        .pipe(Effect.forkChild)
+      const sh = yield* prompt.shell({ sessionID: chat.id, agent: "repa", command: "sleep 0.2" }).pipe(Effect.forkChild)
       yield* waitForBusy(chat.id)
 
       const a = yield* prompt.loop({ sessionID: chat.id }).pipe(Effect.forkChild)
@@ -1950,9 +2203,7 @@ unixNoLLMServer(
       Effect.gen(function* () {
         const { prompt, chat } = yield* boot()
 
-        const a = yield* prompt
-          .shell({ sessionID: chat.id, agent: "repa", command: "sleep 30" })
-          .pipe(Effect.forkChild)
+        const a = yield* prompt.shell({ sessionID: chat.id, agent: "repa", command: "sleep 30" }).pipe(Effect.forkChild)
         yield* waitForBusy(chat.id)
 
         const exit = yield* prompt.shell({ sessionID: chat.id, agent: "repa", command: "echo hi" }).pipe(Effect.exit)
@@ -2342,6 +2593,48 @@ noLLMServer.instance(
       }
     }),
   30_000,
+)
+
+it.instance("recovered unknown agent fails before sampling without changing the persisted selection", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const session = yield* sessions.create({})
+    const originalTitle = session.title
+    const message = yield* sessions.updateMessage({
+      id: MessageID.ascending(),
+      role: "user",
+      sessionID: session.id,
+      agent: "missing-recovered-agent",
+      model: ref,
+      time: { created: Date.now() },
+    })
+    yield* sessions.updatePart({
+      id: PartID.ascending(),
+      messageID: message.id,
+      sessionID: session.id,
+      type: "text",
+      text: "resume this persisted turn",
+    })
+
+    const exit = yield* prompt.loop({ sessionID: session.id }).pipe(Effect.exit)
+    expect(Exit.isFailure(exit)).toBe(true)
+    if (Exit.isFailure(exit)) {
+      const error = Cause.squash(exit.cause)
+      expect(NamedError.Unknown.isInstance(error)).toBe(true)
+      if (NamedError.Unknown.isInstance(error)) {
+        expect(error.data.message).toContain('Agent not found: "missing-recovered-agent"')
+      }
+    }
+    yield* Effect.sleep("50 millis")
+    expect(yield* llm.calls).toBe(0)
+    expect((yield* sessions.get(session.id)).title).toBe(originalTitle)
+
+    const persisted = (yield* sessions.messages({ sessionID: session.id })).find((item) => item.info.id === message.id)
+    expect(persisted?.info.role).toBe("user")
+    if (persisted?.info.role === "user") expect(persisted.info.agent).toBe("missing-recovered-agent")
+  }),
 )
 
 noLLMServer.instance(

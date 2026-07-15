@@ -104,12 +104,80 @@ test("routes retained MCP toggles through the active directory", async () => {
     sync.set("mcp", "lesson-notes", { status: "connected" })
     await local.mcp.toggle("lesson-notes", selectedDirectory)
 
-    expect(mcpCalls.map((url) => url.pathname)).toEqual([
-      "/mcp/lesson-notes/connect",
-      "/mcp/lesson-notes/disconnect",
-    ])
+    expect(mcpCalls.map((url) => url.pathname)).toEqual(["/mcp/lesson-notes/connect", "/mcp/lesson-notes/disconnect"])
     expect(mcpCalls.every((url) => url.searchParams.get("directory") === selectedDirectory)).toBe(true)
     expect(mcpCalls.every((url) => !url.searchParams.has("workspace"))).toBe(true)
+  } finally {
+    app.renderer.destroy()
+  }
+})
+
+test("keeps hidden primary agents out of discovery while accepting exact selection", async () => {
+  await using tmp = await tmpdir()
+  await Bun.write(`${tmp.path}/kv.json`, "{}")
+  const events = createEventSource()
+  const calls = createFetch((url) => {
+    if (url.pathname === "/agent")
+      return json([
+        { name: "repa", mode: "primary", permission: [], options: {} },
+        { name: "summary", mode: "primary", hidden: true, permission: [], options: {} },
+        { name: "general", mode: "subagent", hidden: true, permission: [], options: {} },
+      ])
+  })
+  let local!: ReturnType<typeof useLocal>
+  let sync!: ReturnType<typeof useSync>
+  let done!: () => void
+  const ready = new Promise<void>((resolve) => {
+    done = resolve
+  })
+
+  function Probe() {
+    local = useLocal()
+    sync = useSync()
+    onMount(done)
+    return <box />
+  }
+
+  const app = await testRender(() => (
+    <TestTuiContexts paths={{ state: tmp.path }}>
+      <ArgsProvider>
+        <KVProvider>
+          <ToastProvider>
+            <RouteProvider>
+              <TuiConfigProvider config={createTuiResolvedConfig()}>
+                <SDKProvider url="http://test" directory={directory} fetch={calls.fetch} events={events.source}>
+                  <PermissionProvider>
+                    <ProjectProvider>
+                      <ExitProvider exit={() => {}}>
+                        <SyncProvider>
+                          <ThemeProvider mode="dark" source={{ discover: async () => ({}) }}>
+                            <LocalProvider>
+                              <Probe />
+                            </LocalProvider>
+                          </ThemeProvider>
+                        </SyncProvider>
+                      </ExitProvider>
+                    </ProjectProvider>
+                  </PermissionProvider>
+                </SDKProvider>
+              </TuiConfigProvider>
+            </RouteProvider>
+          </ToastProvider>
+        </KVProvider>
+      </ArgsProvider>
+    </TestTuiContexts>
+  ))
+
+  try {
+    await ready
+    await wait(() => sync.status === "complete")
+
+    expect(local.agent.list().map((agent) => agent.name)).toEqual(["repa"])
+    expect(local.agent.get("summary")?.hidden).toBe(true)
+    expect(local.agent.get("general")).toBeUndefined()
+    local.agent.set("summary")
+    expect(local.agent.current()?.name).toBe("summary")
+    expect(local.agent.list().map((agent) => agent.name)).toEqual(["repa"])
   } finally {
     app.renderer.destroy()
   }

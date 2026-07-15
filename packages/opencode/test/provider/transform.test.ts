@@ -447,6 +447,7 @@ describe("ProviderTransform.options - gpt-5 textVerbosity", () => {
           model: { providerID: "azure", modelID: "gpt-5.4", variant: "high" },
         } as any,
         sessionID,
+        composition: { type: "interactive" },
         model,
         agent: {
           name: "test",

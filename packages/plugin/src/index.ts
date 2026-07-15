@@ -296,11 +296,11 @@ export interface Hooks {
   ) => Promise<void>
   "experimental.provider.small_model"?: (input: { provider: ProviderV2 }, output: { model?: ModelV2 }) => Promise<void>
   /**
-   * Called before session compaction starts. Allows plugins to customize
-   * the compaction prompt.
+   * Called before session compaction starts. Allows plugins to add bounded
+   * context or operational guidance beneath Repa's fixed compaction contract.
    *
    * - `context`: Additional context strings appended to the default prompt
-   * - `prompt`: If set, replaces the default compaction prompt entirely
+   * - `prompt`: Additional operational guidance appended after the default prompt
    */
   "experimental.session.compacting"?: (
     input: { sessionID: string },

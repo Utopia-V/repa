@@ -18,6 +18,11 @@ reachability and release commitment; it does not by itself require physical
 source deletion. This amendment resolves an internal contradiction in the
 original text and restores the maintainer's stated preservation default.
 
+Amendment (2026-07-16): Agent presentation metadata does not grant narrow
+internal-call authority. Every admitted Agent-driven sample is interactive;
+narrow auxiliary composition is selected only by a trusted program call
+origin. This propagates the Gate 4 authority correction into the owning ADR.
+
 ## Context
 
 The first Repa-owned Tutor loop proved several learning invariants: relevant
@@ -109,15 +114,24 @@ or tool data never silently becomes Agenda, Course, learner evidence, or other
 learning authority.
 
 The ordinary model-visible product identity is replaced rather than layered.
-Every provider-selected interactive path implements the same Repa product
-contract and accepts the same Learning-System composition inputs; exact prompt
-rendering may vary for demonstrated provider transport or tool-use
+Every admitted Agent-driven sample, including explicitly named hidden profiles
+and delegated helper agents, implements the same Repa product contract and
+accepts the same Learning-System composition inputs. `hidden` and other
+presentation or profile metadata cannot select a narrow sample class. Exact
+prompt rendering may vary for demonstrated provider transport or tool-use
 requirements. The base prompt is not the Tutor. Tutor remains the integrated
 behavior produced by runtime mechanics plus source, Course, learner, Agenda,
-policy, and other bounded learning contributions. Hidden Session calls such as
-compaction, summary, title, and helper agents use narrow Repa-owned prompts for
-their actual task; they do not receive the full interactive context, preserve
-a coding-first product identity, or discard learning continuity.
+policy, and other bounded learning contributions.
+
+Narrow released-v1 stream operations are selected only by a trusted program
+call origin and a closed operation purpose, currently title generation,
+compaction, and project-copy naming. `Agent.generate` retains its dedicated
+method, fixed generation system, and structured schema as a separate internal
+owner. The registered hidden `summary` profile is interactive when explicitly
+named; no automatic/program-owned internal summary caller exists today. Narrow
+internal operations use Repa-owned contracts for their exact artifact, do not
+receive the full interactive context or Agent tool authority, do not preserve a
+coding-first product identity, and do not discard learning continuity.
 
 Code review, repository initialization, and similar behavior may remain
 explicit local capabilities; they do not govern ordinary learning Sessions.

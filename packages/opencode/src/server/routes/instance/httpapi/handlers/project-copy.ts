@@ -15,8 +15,6 @@ const COPY_NAME_AGENT: Agent.Info = {
   permission: [],
   options: {},
   native: true,
-  prompt:
-    "Generate one lowercase ASCII name of two or three words for the supplied workspace-copy context. Output words only; do not answer or summarize the context.",
 }
 
 export const projectCopyHandlers = HttpApiBuilder.group(InstanceHttpApi, "projectCopyName", (handlers) =>
@@ -35,6 +33,7 @@ export const projectCopyHandlers = HttpApiBuilder.group(InstanceHttpApi, "projec
       const sessionID = SessionID.descending()
       const result = yield* llm
         .stream({
+          composition: { type: "internal", purpose: "project-copy-name" },
           agent: COPY_NAME_AGENT,
           user: {
             id: MessageID.ascending(),

@@ -141,6 +141,7 @@ const layer = Layer.effect(
     const flags = yield* RuntimeFlags.Service
     const database = yield* Database.Service
     const { db } = database
+    const titleInFlight = new Set<SessionID>()
     const ops = Effect.fn("SessionPrompt.ops")(function* () {
       return {
         cancel: (sessionID: SessionID) => cancel(sessionID),
@@ -191,19 +192,19 @@ const layer = Layer.effect(
     })
 
     const title = Effect.fn("SessionPrompt.ensureTitle")(function* (input: {
-      session: Session.Info
+      sessionID: SessionID
       history: SessionV1.WithParts[]
       providerID: ProviderV2.ID
       modelID: ModelV2.ID
     }) {
-      if (input.session.parentID) return
-      if (!Session.isDefaultTitle(input.session.title)) return
+      const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
+      if (session.parentID) return
+      if (!Session.isDefaultTitle(session.title)) return
 
       const real = (m: SessionV1.WithParts) =>
         m.info.role === "user" && !m.parts.every((p) => "synthetic" in p && p.synthetic)
       const idx = input.history.findIndex(real)
       if (idx === -1) return
-      if (input.history.filter(real).length !== 1) return
 
       const context = input.history.slice(0, idx + 1)
       const firstUser = context[idx]
@@ -224,13 +225,14 @@ const layer = Layer.effect(
         : yield* MessageV2.toModelMessagesEffect(context, mdl)
       const text = yield* llm
         .stream({
+          composition: { type: "internal", purpose: "title" },
           agent: ag,
           user: firstInfo,
           system: [],
           small: true,
           tools: {},
           model: mdl,
-          sessionID: input.session.id,
+          sessionID: input.sessionID,
           retries: 2,
           messages: [{ role: "user", content: "Generate a title for this conversation:\n" }, ...msgs],
         })
@@ -247,9 +249,41 @@ const layer = Layer.effect(
         .find((line) => line.length > 0)
       if (!cleaned) return
       const t = cleaned.length > 100 ? cleaned.substring(0, 97) + "..." : cleaned
-      yield* sessions
-        .setTitle({ sessionID: input.session.id, title: t })
-        .pipe(Effect.catchCause((cause) => Effect.logError("failed to generate title", { error: Cause.squash(cause) })))
+      return yield* sessions.setTitleIfDefault({ sessionID: input.sessionID, title: t })
+    })
+
+    const scheduleTitle = Effect.fn("SessionPrompt.scheduleTitle")(function* (input: {
+      sessionID: SessionID
+      history: SessionV1.WithParts[]
+      providerID: ProviderV2.ID
+      modelID: ModelV2.ID
+    }) {
+      const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
+      if (session.parentID) return
+      if (!Session.isDefaultTitle(session.title)) return
+      const start = yield* Effect.sync(() => {
+        if (titleInFlight.has(input.sessionID)) return false
+        titleInFlight.add(input.sessionID)
+        return true
+      })
+      if (!start) return
+      yield* title(input).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("title generation skipped", {
+            sessionID: input.sessionID,
+            error: Cause.squash(cause),
+          }),
+        ),
+        Effect.ensuring(Effect.sync(() => titleInFlight.delete(input.sessionID))),
+        Effect.tap((updated) =>
+          updated === false
+            ? Effect.logInfo("generated title discarded because the Session title changed", {
+                sessionID: input.sessionID,
+              })
+            : Effect.void,
+        ),
+        Effect.forkIn(scope),
+      )
     })
 
     const handleSubtask = Effect.fn("SessionPrompt.handleSubtask")(function* (input: {
@@ -1129,23 +1163,7 @@ const layer = Layer.effect(
             break
           }
 
-          step++
-          if (step === 1)
-            yield* title({
-              session,
-              modelID: lastUser.model.modelID,
-              providerID: lastUser.model.providerID,
-              history: msgs,
-            }).pipe(Effect.ignore, Effect.forkIn(scope))
-
-          const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
           const task = tasks.pop()
-
-          if (task?.type === "subtask") {
-            yield* handleSubtask({ task, model, lastUser, sessionID, session, msgs })
-            continue
-          }
-
           if (task?.type === "compaction") {
             const result = yield* compaction.process({
               messages: msgs,
@@ -1158,6 +1176,31 @@ const layer = Layer.effect(
             continue
           }
 
+          const agent = yield* agents.get(lastUser.agent)
+          if (!agent) {
+            const available = (yield* agents.list()).filter((a) => !a.hidden).map((a) => a.name)
+            const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
+            const error = new NamedError.Unknown({ message: `Agent not found: "${lastUser.agent}".${hint}` })
+            yield* events.publish(Session.Event.Error, { sessionID, error: error.toObject() })
+            throw error
+          }
+
+          step++
+          if (step === 1)
+            yield* scheduleTitle({
+              sessionID,
+              modelID: lastUser.model.modelID,
+              providerID: lastUser.model.providerID,
+              history: msgs,
+            })
+
+          const model = yield* getModel(lastUser.model.providerID, lastUser.model.modelID, sessionID)
+
+          if (task?.type === "subtask") {
+            yield* handleSubtask({ task, model, lastUser, sessionID, session, msgs })
+            continue
+          }
+
           if (
             lastFinished &&
             lastFinished.summary !== true &&
@@ -1167,14 +1210,6 @@ const layer = Layer.effect(
             continue
           }
 
-          const agent = yield* agents.get(lastUser.agent)
-          if (!agent) {
-            const available = (yield* agents.list()).filter((a) => !a.hidden).map((a) => a.name)
-            const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
-            const error = new NamedError.Unknown({ message: `Agent not found: "${lastUser.agent}".${hint}` })
-            yield* events.publish(Session.Event.Error, { sessionID, error: error.toObject() })
-            throw error
-          }
           const maxSteps = agent.steps ?? Infinity
           const isLastStep = step >= maxSteps
           msgs = yield* SessionReminders.apply({ messages: msgs, agent, session }).pipe(
@@ -1270,6 +1305,7 @@ const layer = Layer.effect(
             const format = lastUser.format ?? { type: "text" as const }
             if (format.type === "json_schema") system.push(STRUCTURED_OUTPUT_SYSTEM_PROMPT)
             const result = yield* handle.process({
+              composition: { type: "interactive" },
               user: lastUser,
               agent,
               permission: session.permission,

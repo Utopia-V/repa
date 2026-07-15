@@ -205,6 +205,7 @@ export const CodeModeTool = Tool.define(
           } satisfies Tool.ExecuteResult<Metadata>
         }
         const agent = yield* agents.get(ctx.agent)
+        if (!agent) throw new Error(`Agent not found: "${ctx.agent}"`)
         const session = yield* sessions.get(ctx.sessionID).pipe(Effect.orDie)
         const ruleset = Permission.merge(agent.permission, session.permission ?? [])
         const mcpTools = Permission.visibleTools(yield* mcp.tools(), ruleset)

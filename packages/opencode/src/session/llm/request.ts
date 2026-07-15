@@ -16,6 +16,10 @@ import { mergeDeep } from "remeda"
 
 const USER_AGENT = `repa/${InstallationVersion}`
 
+export type Composition =
+  | { readonly type: "interactive" }
+  | { readonly type: "internal"; readonly purpose: SystemPrompt.InternalPurpose }
+
 type PrepareInput = {
   readonly user: SessionV1.User
   readonly sessionID: string
@@ -27,11 +31,13 @@ type PrepareInput = {
   readonly messages: ModelMessage[]
   readonly small?: boolean
   readonly tools: Record<string, Tool>
+  readonly toolChoice?: "auto" | "required" | "none"
   readonly provider: Provider.Info
   readonly auth: Auth.Info | undefined
   readonly plugin: Plugin.Interface
   readonly flags: RuntimeFlags.Info
   readonly isWorkflow: boolean
+  readonly composition: Composition
 }
 
 export type Prepared = {
@@ -47,6 +53,7 @@ export type Prepared = {
   }
   readonly messageTransformOptions: Record<string, any>
   readonly headers: Record<string, string>
+  readonly toolChoice?: "auto" | "required" | "none"
 }
 
 const mergeOptions = (target: Record<string, any>, source: Record<string, any> | undefined): Record<string, any> =>
@@ -58,9 +65,9 @@ export function renderSystem(system: readonly string[]) {
 
 export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: PrepareInput) {
   const isOpenaiOauth = input.provider.id === "openai" && input.auth?.type === "oauth"
-  const interactive = !input.agent.hidden
+  const interactive = input.composition.type === "interactive"
   const core = interactive ? SystemPrompt.product() : SystemPrompt.internal()
-  const task = !interactive && input.agent.prompt ? [input.agent.prompt] : []
+  const task = input.composition.type === "internal" ? SystemPrompt.internalTask(input.composition.purpose) : undefined
   const extensions = (
     interactive ? [...SystemPrompt.provider(input.model), input.agent.prompt, input.user.system] : []
   ).filter((item): item is string => Boolean(item))
@@ -69,9 +76,10 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     { sessionID: input.sessionID, model: input.model },
     { system: extensions },
   )
-  const protectedCores = new Set([SystemPrompt.product(), SystemPrompt.internal()])
-  const system = [core, ...(interactive ? input.system : task), ...extensions].filter(
-    (item, index): item is string => Boolean(item) && (index === 0 || !protectedCores.has(item)),
+  const protectedPrompts = new Set([SystemPrompt.product(), SystemPrompt.internal(), ...(task ? [task] : [])])
+  const system = [core, ...(interactive ? input.system : [task]), ...extensions].filter(
+    (item, index): item is string =>
+      typeof item === "string" && (index === 0 || (!interactive && index === 1) || !protectedPrompts.has(item)),
   )
 
   const variant =
@@ -165,7 +173,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     hasToolCalls(input.messages)
   ) {
     // Copilot needs a tools field when replaying prior tool calls, even if no tools are currently enabled.
-    tools["_noop"] = aiTool({
+    const transport = {
       description: "Do not call this tool. It exists only for API compatibility and must never be invoked.",
       inputSchema: jsonSchema({
         type: "object",
@@ -173,8 +181,11 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
           reason: { type: "string", description: "Unused" },
         },
       }),
-      execute: async () => ({ output: "", title: "", metadata: {} }),
-    })
+    }
+    tools["_noop"] =
+      input.composition.type === "internal"
+        ? aiTool(transport)
+        : aiTool({ ...transport, execute: async () => ({ output: "", title: "", metadata: {} }) })
   }
 
   return {
@@ -182,6 +193,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     messages,
     tools: Object.fromEntries(Object.entries(tools).toSorted(([a], [b]) => a.localeCompare(b))),
     params,
+    toolChoice: input.composition.type === "internal" ? "none" : input.toolChoice,
     messageTransformOptions: options,
     headers: {
       "x-session-affinity": input.sessionID,
@@ -194,7 +206,8 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   }
 })
 
-function resolveTools(input: Pick<PrepareInput, "tools" | "agent" | "permission" | "user">) {
+function resolveTools(input: Pick<PrepareInput, "tools" | "agent" | "permission" | "user" | "composition">) {
+  if (input.composition.type === "internal") return {}
   const disabled = Permission.disabled(
     Object.keys(input.tools),
     Permission.merge(input.agent.permission, input.permission ?? []),

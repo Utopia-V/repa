@@ -5,6 +5,7 @@ import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import { Provider } from "@/provider/provider"
 
 import { generateObject, streamObject, type ModelMessage } from "ai"
+import { GitLabWorkflowLanguageModel } from "gitlab-ai-provider"
 import { Truncate } from "@/tool/truncate"
 import { Auth } from "../auth"
 import { ProviderTransform } from "@/provider/transform"
@@ -56,6 +57,20 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "Agent" })
 export type Info = DeepMutable<Schema.Schema.Type<typeof Info>>
 
+export class WorkflowModelUnavailableError extends Schema.TaggedErrorClass<WorkflowModelUnavailableError>()(
+  "AgentWorkflowModelUnavailableError",
+  {
+    providerID: ProviderV2.ID,
+    modelID: ModelV2.ID,
+  },
+) {
+  override get message() {
+    return `GitLab workflow model is unavailable for agent generation: ${this.providerID}/${this.modelID}`
+  }
+}
+
+export type GenerationError = Provider.DefaultModelError | WorkflowModelUnavailableError
+
 const GeneratedAgent = Schema.Struct({
   identifier: Schema.String,
   whenToUse: Schema.String,
@@ -73,7 +88,7 @@ export function generationSystem(extensions: readonly string[]) {
 }
 
 export interface Interface {
-  readonly get: (agent: string) => Effect.Effect<Info>
+  readonly get: (agent: string) => Effect.Effect<Info | undefined>
   readonly list: () => Effect.Effect<Info[]>
   readonly defaultInfo: () => Effect.Effect<Info>
   readonly defaultAgent: () => Effect.Effect<string>
@@ -86,7 +101,7 @@ export interface Interface {
       whenToUse: string
       systemPrompt: string
     },
-    Provider.DefaultModelError
+    GenerationError
   >
 }
 
@@ -401,6 +416,9 @@ const layer = Layer.effect(
         const model = input.model ?? (yield* provider.defaultModel())
         const resolved = yield* provider.getModel(model.providerID, model.modelID)
         const language = yield* provider.getLanguage(resolved)
+        if (language instanceof GitLabWorkflowLanguageModel) {
+          return yield* new WorkflowModelUnavailableError(model)
+        }
         const tracer = cfg.experimental?.openTelemetry
           ? Option.getOrUndefined(yield* Effect.serviceOption(OtelTracer.OtelTracer))
           : undefined

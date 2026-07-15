@@ -313,7 +313,7 @@ export function Prompt(props: PromptProps) {
       syncedSessionID = sessionID
 
       // Only set agent if it's a primary agent (not a subagent)
-      const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
+      const isPrimaryAgent = !!local.agent.get(msg.agent)
       if (msg.agent && isPrimaryAgent) {
         // Keep command line --agent if specified.
         if (!args.agent) local.agent.set(msg.agent)

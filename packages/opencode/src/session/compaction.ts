@@ -326,6 +326,7 @@ const layer = Layer.effect(
       }
 
       const agent = yield* agents.get("compaction")
+      if (!agent) throw new Error('Compaction agent "compaction" is unavailable')
       const model = agent.model
         ? yield* provider.getModel(agent.model.providerID, agent.model.modelID).pipe(Effect.orDie)
         : yield* provider.getModel(userMessage.model.providerID, userMessage.model.modelID).pipe(Effect.orDie)
@@ -339,13 +340,16 @@ const layer = Layer.effect(
         cfg,
         model,
       })
-      // Allow plugins to inject context or replace compaction prompt.
+      // Plugins may extend the task input, but the program-owned compaction contract remains fixed in the system prompt.
       const compacting = yield* plugin.trigger(
         "experimental.session.compacting",
         { sessionID: input.sessionID },
         { context: [], prompt: undefined },
       )
-      const nextPrompt = compacting.prompt ?? buildPrompt({ previousSummary, context: compacting.context })
+      const nextPrompt = buildPrompt({
+        previousSummary,
+        context: [...compacting.context, ...(compacting.prompt ? [compacting.prompt] : [])],
+      })
       const msgs = structuredClone(selected.head)
       yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
       const modelMessages = yield* MessageV2.toModelMessagesEffect(msgs, model, {
@@ -386,6 +390,7 @@ const layer = Layer.effect(
         model,
       })
       const result = yield* processor.process({
+        composition: { type: "internal", purpose: "compaction" },
         user: userMessage,
         agent,
         sessionID: input.sessionID,

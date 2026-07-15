@@ -300,6 +300,26 @@ describe("ACP service sessions", () => {
     expect(mcpAdds).toEqual(["tools"])
   })
 
+  it("keeps hidden modes out of discovery while admitting their exact ID", async () => {
+    const { service, prompts } = makeService()
+    const session = await Effect.runPromise(service.newSession({ cwd: "/workspace", mcpServers: [] }))
+    const modes = flattenSelectOptions(select(session, "mode"))
+
+    expect(modes.map((mode) => mode.value)).toEqual(["build", "plan"])
+    expect(await Effect.runPromise(service.setSessionMode({ sessionId: session.sessionId, modeId: "hidden" }))).toEqual(
+      {},
+    )
+    const updated = await Effect.runPromise(
+      service.setSessionConfigOption({ sessionId: session.sessionId, configId: "mode", value: "hidden" }),
+    )
+    expect(select(updated, "mode")?.currentValue).toBe("hidden")
+
+    await Effect.runPromise(
+      service.prompt({ sessionId: session.sessionId, prompt: [{ type: "text", text: "use the hidden profile" }] }),
+    )
+    expect(prompts[0]).toMatchObject({ agent: "hidden" })
+  })
+
   it("loads a session and restores model variant and mode from messages", async () => {
     const { service } = makeService([
       {

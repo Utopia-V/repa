@@ -346,6 +346,7 @@ const driveToolLoop = (scenario: RecordedScenario) =>
         model: { providerID: scenario.providerID, modelID },
       } satisfies SessionV1.User,
       sessionID,
+      composition: { type: "interactive" } as const,
       model: resolved,
       agent,
       system: [WEATHER_SYSTEM],

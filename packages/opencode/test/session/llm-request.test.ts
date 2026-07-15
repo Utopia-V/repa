@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import { Effect } from "effect"
-import type { ModelMessage } from "ai"
+import { jsonSchema, tool as aiTool, type ModelMessage, type Tool } from "ai"
 import type { Provider } from "@/provider/provider"
 import { ProviderTransform } from "@/provider/transform"
 import { LLMRequestPrep } from "@/session/llm/request"
@@ -45,10 +45,14 @@ type Options = {
   readonly userSystem?: string
   readonly transform?: (system: string[]) => void
   readonly paramsTransform?: (params: { options: Record<string, unknown> }) => void
+  readonly composition?: LLMRequestPrep.Composition
+  readonly messages?: ModelMessage[]
+  readonly tools?: Record<string, Tool>
+  readonly toolChoice?: "auto" | "required" | "none"
 }
 
 function prepare(options: Options = {}) {
-  const messages: ModelMessage[] = [{ role: "user", content: "Explain pointers with a diagram." }]
+  const messages: ModelMessage[] = options.messages ?? [{ role: "user", content: "Explain pointers with a diagram." }]
   const providerID = options.providerID ?? model.providerID
   const currentModel = { ...model, providerID, headers: options.modelHeaders ?? {} } as Provider.Model
   return Effect.runPromise(
@@ -75,7 +79,9 @@ function prepare(options: Options = {}) {
       } as any,
       system: options.programSystem ?? ["<learning_context>bounded course context</learning_context>"],
       messages,
-      tools: {},
+      tools: options.tools ?? {},
+      toolChoice: options.toolChoice,
+      composition: options.composition ?? { type: "interactive" },
       provider: {
         id: providerID,
         name: providerID,
@@ -194,25 +200,76 @@ describe("session.llm.request composition", () => {
     expect(occurrences(instructions ?? "", "<repa_product_contract>")).toBe(1)
   })
 
-  test("gives hidden operations only their narrow boundary and task prompt", async () => {
+  test("treats an explicitly named hidden profile as interactive presentation metadata", async () => {
     const prepared = await prepare({
       hidden: true,
-      agentPrompt: "Generate only a session title.",
+      agentPrompt: "SUMMARY_PROFILE_GUIDANCE",
       userSystem: "INTERACTIVE_CALLER_GUIDANCE",
       transform(system) {
         system.length = 0
-        system.push("PLUGIN_INTERNAL_EXTENSION")
+        system.push("PLUGIN_REPLACEMENT")
       },
     })
     const joined = prepared.system.join("\n")
 
-    expect(prepared.system[0]).toBe(SystemPrompt.internal())
-    expect(joined).toContain("Generate only a session title.")
-    expect(joined).toContain("PLUGIN_INTERNAL_EXTENSION")
-    expect(joined).not.toContain("<learning_context>bounded course context</learning_context>")
+    expect(prepared.system[0]).toBe(SystemPrompt.product())
+    expect(joined).toContain("<learning_context>bounded course context</learning_context>")
+    expect(joined).toContain("PLUGIN_REPLACEMENT")
+    expect(joined).not.toContain(SystemPrompt.internal())
+    expect(joined).not.toContain("SUMMARY_PROFILE_GUIDANCE")
     expect(joined).not.toContain("INTERACTIVE_CALLER_GUIDANCE")
-    expect(joined).not.toContain("<repa_product_contract>")
-    expect(joined).not.toContain(SystemPrompt.provider(model)[0])
+    expect(joined).toContain("<repa_product_contract>")
+  })
+
+  test("binds each internal stream purpose to its fixed task independent of Agent metadata", async () => {
+    for (const purpose of ["title", "compaction", "project-copy-name"] as const) {
+      const prepared = await prepare({
+        agentPrompt: "CONFIGURED_AGENT_REPLACEMENT",
+        userSystem: "INTERACTIVE_CALLER_GUIDANCE",
+        programSystem: ["<learning_context>must-not-cross</learning_context>"],
+        composition: { type: "internal", purpose },
+        transform(system) {
+          system.length = 0
+          system.push("PLUGIN_INTERNAL_CONTEXT", SystemPrompt.internalTask(purpose), SystemPrompt.product())
+        },
+      })
+      const joined = prepared.system.join("\n")
+
+      expect(prepared.system.slice(0, 2)).toEqual([SystemPrompt.internal(), SystemPrompt.internalTask(purpose)])
+      expect(joined).toContain("PLUGIN_INTERNAL_CONTEXT")
+      expect(occurrences(joined, SystemPrompt.internalTask(purpose))).toBe(1)
+      expect(joined).not.toContain("CONFIGURED_AGENT_REPLACEMENT")
+      expect(joined).not.toContain("INTERACTIVE_CALLER_GUIDANCE")
+      expect(joined).not.toContain("<learning_context>must-not-cross</learning_context>")
+      expect(joined).not.toContain("<repa_product_contract>")
+      expect(prepared.tools).toEqual({})
+      expect(prepared.toolChoice).toBe("none")
+    }
+  })
+
+  test("keeps Copilot replay compatibility wire-only for internal compaction", async () => {
+    const prepared = await prepare({
+      providerID: "github-copilot",
+      composition: { type: "internal", purpose: "compaction" },
+      toolChoice: "required",
+      messages: [
+        {
+          role: "assistant",
+          content: [{ type: "tool-call", toolCallId: "call-1", toolName: "read", input: {} }],
+        },
+      ],
+      tools: {
+        read: aiTool({
+          description: "Read a file",
+          inputSchema: jsonSchema({ type: "object", properties: {} }),
+          execute: async () => "domain-result",
+        }),
+      },
+    })
+
+    expect(Object.keys(prepared.tools)).toEqual(["_noop"])
+    expect(prepared.tools._noop?.execute).toBeUndefined()
+    expect(prepared.toolChoice).toBe("none")
   })
 
   test("filters an exact core copy injected by an extension hook", async () => {

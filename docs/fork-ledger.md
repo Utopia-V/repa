@@ -261,6 +261,166 @@ Resolution provenance:
   assertions. Core and OpenCode typechecks, formatting, and diff checks passed.
   Current Gate disposition remains owned by `docs/README.md`.
 
+## 2026-07-15 Gate 4 correction-grill provenance
+
+Current disposition remains owned only by `docs/README.md`. This section
+records correction provenance. Independent review run
+`gate4-20260715-authority-01` accepted both the contract/theory and
+implementation/evidence layers after the corrections described below. Closing
+facts are recorded separately at the end of this section.
+
+- The original Gate 4 checkpoints established the protected Repa interactive
+  composition and learning-first prompt/profile work, but request preparation
+  used `agent.hidden` to choose between interactive and internal composition.
+  The original contract and focused tests encoded the same assumption, so their
+  green result could not detect the authority error.
+- After Gate 5 stabilized production reachability, the released-v1 carrier
+  audit found that public HTTP, `repa run`, commands, Task delegation, and
+  Session/ACP recovery can all reach request preparation with a caller-selected
+  or persisted Agent. A hidden primary Agent or hidden subagent therefore
+  received the internal contract without a program-owned operation purpose.
+- The registered hidden `summary` primary profile is a real interactive carrier
+  when explicitly named. There is no automatic/program-owned internal summary
+  caller. The closed released-v1 stream-purpose set is title generation,
+  context compaction, and project-copy naming; the dedicated `Agent.generate`
+  method and fixed generation system remain a separate structured-output owner.
+  Preview-v2 and hosted GitHub model code remain hibernated outside the
+  production carrier set.
+- The derived correction makes every admitted Agent-driven sample interactive
+  regardless of `hidden`, preserves hidden as discovery/default presentation,
+  and requires each stream-internal owner to provide an in-process purpose with
+  a fixed semantic contract. `Agent.generate` keeps its dedicated owner.
+  Existing model and provider tuning may remain operational inputs; Agent
+  names, prompts, modes, configuration, plugins, public payloads, and persisted
+  messages cannot create or replace internal authority.
+- Internal operations admit no executable Agent/domain tools. A provider may
+  receive only a reserved non-executable wire declaration when replay history
+  requires it, paired with `toolChoice: none` and no executor. Title skips
+  before sampling when its optional profile is unavailable; fresh and recovered
+  compaction markers fail explicitly before sampling and remain recoverable;
+  neither substitutes the default interactive Agent.
+- A resolvable persisted Agent remains the selected interactive Agent. A
+  missing or disabled Agent fails before sampling with no silent fallback. This
+  follows the existing exact-steering and correction principles rather than a
+  new maintainer preference.
+
+Independent review run `gate4-20260715-authority-01` returned `Revise` for its
+contract/theory layer. It found four contract defects: `summary` was wrongly
+called dormant despite explicit interactive admission; `Agent.generate` was
+both preserved as a dedicated owner and required to carry a stream purpose;
+internal profile-loss and recovered-compaction semantics were undefined; and
+literal zero-tool language conflicted with Copilot replay transport. The same
+reviewer closed all four after the draft repaired those meanings.
+
+That closure pass returned `Revise` again because accepted ADR-0014 still
+classified summary and helper Agents as hidden internal calls. The ADR now
+states the corrected authority boundary: admitted Agent-driven samples are
+interactive; only trusted call origin selects the three stream purposes;
+`Agent.generate` retains its dedicated owner; and no automatic internal summary
+owner exists. The same reviewer closed that fifth finding and accepted the
+contract/theory layer of run `gate4-20260715-authority-01`. The accepted
+implementation replaces `hidden`-derived authority with a
+closed call-origin purpose union, gives missing Agent resolution a truthful
+optional type, binds the three real internal owners, preserves the dedicated
+`Agent.generate` owner and explicit hidden-summary interaction, and makes the
+Copilot replay declaration non-executable.
+
+The first implementation/evidence pass of that same review run returned
+`Revise` with four new findings. A GitLab Workflow model could install and use
+its own privileged executor/approval bridge before the downstream tool-call
+guard; TUI and ACP exact selectors still rejected hidden primary Agents; an
+ordinary recovered missing Agent was resolved after the title fiber started;
+and the promised title retry after a temporarily disabled profile was
+unreachable. The repaired implementation moves all four boundaries to admission:
+Workflow models fail before their bridge or sampling in the three stream
+purposes and independently in the dedicated `Agent.generate` owner,
+presentation lists remain filtered while exact primary-Agent identity remains
+selectable, ordinary Agent resolution precedes ordinary sampling while
+recovered compaction keeps its independent owner, and default-title state
+permits one deduplicated later attempt after the profile returns.
+
+The implementation/evidence closure pass closed all four findings above but
+returned `Revise` for one related title race. The asynchronous owner still used
+a run-start Session snapshot, so a later loop could retain default-title
+eligibility across guard removal, start a second provider sample, and overwrite
+a newer manual rename. The repaired implementation now reads persisted eligibility
+before scheduling and at job start, while the Session authority serializes
+manual and conditional writes by Session ID and commits generated text only if
+the persisted title remains default.
+
+Re-review confirmed the original stale-snapshot/manual-rename path was repaired
+but found that every `session.updated` patch still projected a full Session row.
+Because only explicit title methods used the lock, an earlier `touch`, metadata,
+permission, or other non-title snapshot could publish afterward and restore the
+default title. The lock now belongs to the common patch transition and covers
+its read, snapshot construction, and publication; the conditional title writer
+checks and invokes the unlocked internal patch while holding that same lock.
+
+The retained reviewer accepted the following causal evidence rather than a
+generic confidence claim:
+
+- OpenCode, Plugin, and TUI package typechecks pass.
+- The complete compaction file passes 54 tests with one intentional v2 skip;
+  ACP directory/session tests pass 39 checks, and the local-context TUI file
+  passes three. Focused request-composition, hidden prompt, carrier-audit,
+  title/profile recovery, Agent-resolution, Task, and real Copilot replay
+  checks pass.
+- Real `GitLabWorkflowLanguageModel` refusal oracles for the stream-purpose and
+  dedicated generation owners observe no provider network request, Permission
+  ask, executor call, or file write; the stream oracle also confirms that the
+  cached model's prior mutable callbacks were not replaced before failure.
+- A six-test prompt counterexample set passes 28 assertions. Its first causal
+  race oracle holds the first title across a completed ordinary loop, admits a
+  later loop and manual rename, waits until the conditional write discards the
+  generated value, then proves a subsequent loop neither samples again nor
+  overwrites the learner title. A second publication barrier holds `touch` after
+  it has built a default-title snapshot, proves the conditional writer cannot
+  escape the common patch lock, releases both transitions, and confirms the
+  generated title survives without a later title sample.
+- The deterministic source audit finds exactly three internal-purpose call
+  sites (`title`, `compaction`, and `project-copy-name`), one ordinary
+  interactive processor call, no `summary` purpose, and no public composition
+  selector.
+- A broader `session/llm.test.ts` probe is not recorded green: 24 tests passed,
+  including the new Gate 4 Copilot failure oracle, while four existing nested
+  runtime cases stopped on Gate 6 database ownership before their LLM
+  assertions. That result is preserved as a verification-boundary observation,
+  not hidden or promoted into Gate 4 evidence.
+
+## 2026-07-16 Gate 4 correction-close provenance
+
+Current disposition remains owned only by `docs/README.md`. The same top-level
+reviewer accepted the whole-Gate implementation/evidence layer after closing
+`G4-IE-001` through `G4-IE-005`; `G4-CT-001` through `G4-CT-005` remain closed.
+No new P0–P3 finding remained.
+
+- Every admitted Agent-driven released-v1 call now receives interactive Repa
+  composition regardless of `hidden`. Only trusted title, compaction, and
+  project-copy-name call origins select the narrow stream contract;
+  `Agent.generate` keeps its dedicated fixed structured-output owner.
+- Internal operations reject GitLab Workflow models before executor,
+  preapproval, permission, provider, or file-write activity can begin. Copilot
+  replay may retain only the accepted non-executable wire declaration with
+  `toolChoice: none`. Explicit hidden primary Agents remain selectable in TUI
+  and ACP while staying absent from ordinary discovery and cycling.
+- Recovered ordinary Agents resolve before any ordinary sample; recovered
+  compaction markers remain under their own owner. Disabled title profiles skip
+  without sampling and may retry once later while the Session title remains the
+  default. Every full-row Session patch and conditional/manual title write now
+  shares one per-Session serialization owner, so stale loop or patch snapshots
+  cannot duplicate title sampling or overwrite a newer non-default title.
+- Fresh closure evidence passed six prompt counterexamples with 28 assertions,
+  the complete Session test file with seven tests and 25 assertions, OpenCode
+  typecheck, `git diff --check`, and a production-source audit showing one
+  full-row Session-update publisher with no bypassing patch path. Previously
+  accepted unchanged focused evidence covers Workflow and Copilot refusal,
+  ACP/TUI carriers, compaction, composition authority, and affected package
+  typechecks.
+- A broader `session/llm.test.ts` observation remains explicitly non-green: 24
+  tests passed and four existing nested-runtime cases stopped at the Gate 6
+  database-owner boundary before their LLM assertions. No unrelated monorepo
+  suite or live external-provider traffic was promoted into Gate 4 evidence.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

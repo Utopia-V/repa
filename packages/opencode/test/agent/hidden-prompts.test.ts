@@ -3,6 +3,7 @@ import TITLE from "@/agent/prompt/title.txt"
 import SUMMARY from "@/agent/prompt/summary.txt"
 import COMPACTION from "@/agent/prompt/compaction.txt"
 import GENERATE from "@/agent/generate.txt"
+import PROJECT_COPY_NAME from "@/session/prompt/project-copy-name.txt"
 import { Agent } from "@/agent/agent"
 import { SystemPrompt } from "@/session/system"
 
@@ -39,5 +40,12 @@ describe("narrow Repa internal prompts", () => {
     expect(system).toContain("PLUGIN_REPLACEMENT")
     expect(system.join("\n").split("<repa_internal_operation>")).toHaveLength(2)
     expect(system.join("\n")).not.toContain("<repa_product_contract>")
+  })
+
+  test("project-copy naming returns only a bounded local slug", () => {
+    expect(PROJECT_COPY_NAME).toContain("lowercase ASCII slug")
+    expect(PROJECT_COPY_NAME).toContain("two or three words")
+    expect(PROJECT_COPY_NAME).toContain("Return no explanation")
+    expect(PROJECT_COPY_NAME).not.toMatch(/answer the request|summarize the context/i)
   })
 })

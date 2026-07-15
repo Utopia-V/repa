@@ -52,6 +52,29 @@ const openAIConfig = (model: ModelsDev.Provider["models"][string], baseURL: stri
   }
 }
 
+const copilotReplayConfig = (model: ModelsDev.Provider["models"][string], baseURL: string): Partial<ConfigV1.Info> => {
+  const providerID = "github-copilot-test"
+  const { experimental: _experimental, ...configModel } = model
+  return {
+    enabled_providers: [providerID],
+    provider: {
+      [providerID]: {
+        name: "Copilot replay test",
+        env: [],
+        npm: "@ai-sdk/openai",
+        api: "https://api.openai.com/v1",
+        models: {
+          [model.id]: JSON.parse(JSON.stringify(configModel)) as ConfigModel,
+        },
+        options: {
+          apiKey: "test-copilot-key",
+          baseURL,
+        },
+      },
+    },
+  }
+}
+
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([LLM.node, Provider.node])))
 
 // LLM.stream returns a Stream, not an Effect, so we can't use the serviceUse proxy.
@@ -792,6 +815,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -870,6 +894,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -937,6 +962,7 @@ describe("session.llm.stream", () => {
         const fiber = yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -1007,6 +1033,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           permission: [{ permission: "question", pattern: "*", action: "allow" }],
@@ -1109,6 +1136,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -1216,6 +1244,7 @@ describe("session.llm.stream", () => {
               model: { providerID: ProviderV2.ID.make("openai"), modelID: resolved.id, variant: "high" },
             } satisfies SessionV1.User,
             sessionID,
+            composition: { type: "interactive" },
             model: resolved,
             agent,
             system: ["You are a helpful assistant."],
@@ -1278,6 +1307,7 @@ describe("session.llm.stream", () => {
             model: { providerID: ProviderV2.ID.make("openai"), modelID: resolved.id, variant: "high" },
           } satisfies SessionV1.User,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -1361,6 +1391,7 @@ describe("session.llm.stream", () => {
             model: { providerID: ProviderV2.ID.make("openai"), modelID: resolved.id },
           } satisfies SessionV1.User,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: [],
@@ -1396,6 +1427,153 @@ describe("session.llm.stream", () => {
         expect(executed).toEqual({ args: { query: "weather" }, toolCallId: "call-injected-tool" })
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, "https://injected-openai.test/v1") },
+  )
+
+  it.instance(
+    "fails an internal Copilot replay transport call without executing caller-supplied tools",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("openai", "gpt-5.2").model
+        const chunks = [
+          {
+            type: "response.created",
+            sequence_number: 1,
+            response: {
+              id: "resp-internal-tool",
+              created_at: Math.floor(Date.now() / 1000),
+              model: model.id,
+              service_tier: null,
+            },
+          },
+          {
+            type: "response.output_item.added",
+            sequence_number: 2,
+            output_index: 0,
+            item: {
+              type: "function_call",
+              id: "item-internal-tool",
+              call_id: "call-internal-tool",
+              name: "_noop",
+              arguments: "",
+              status: "in_progress",
+            },
+          },
+          {
+            type: "response.function_call_arguments.delta",
+            sequence_number: 3,
+            output_index: 0,
+            item_id: "item-internal-tool",
+            delta: '{"query":"weather"}',
+          },
+          {
+            type: "response.function_call_arguments.done",
+            sequence_number: 4,
+            output_index: 0,
+            item_id: "item-internal-tool",
+            arguments: '{"query":"weather"}',
+          },
+          {
+            type: "response.output_item.done",
+            sequence_number: 5,
+            output_index: 0,
+            item: {
+              type: "function_call",
+              id: "item-internal-tool",
+              call_id: "call-internal-tool",
+              name: "_noop",
+              arguments: '{"query":"weather"}',
+              status: "completed",
+            },
+          },
+          {
+            type: "response.completed",
+            sequence_number: 6,
+            response: {
+              incomplete_details: null,
+              service_tier: null,
+              usage: {
+                input_tokens: 1,
+                input_tokens_details: null,
+                output_tokens: 1,
+                output_tokens_details: null,
+              },
+            },
+          },
+        ]
+        const request = waitRequest("/responses", createEventResponse(chunks, true))
+        let executed = false
+
+        const providerID = ProviderV2.ID.make("github-copilot-test")
+        const resolved = yield* Provider.use.getModel(providerID, ModelV2.ID.make(model.id))
+        const sessionID = SessionID.make("session-test-native-internal-tool")
+        const agent = {
+          name: "compaction",
+          mode: "primary",
+          hidden: true,
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const exit = yield* drain({
+          user: {
+            id: MessageID.make("msg_user-native-internal-tool"),
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: "repa",
+            model: { providerID, modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "internal", purpose: "compaction" },
+          model: resolved,
+          agent,
+          system: ["CALLER_CONTROLLED_SYSTEM"],
+          messages: [
+            {
+              role: "assistant",
+              content: [{ type: "tool-call", toolCallId: "prior-call", toolName: "read", input: {} }],
+            },
+            {
+              role: "tool",
+              content: [
+                {
+                  type: "tool-result",
+                  toolCallId: "prior-call",
+                  toolName: "read",
+                  output: { type: "text", value: "prior result" },
+                },
+              ],
+            },
+            { role: "user", content: "Summarize this history" },
+          ],
+          tools: {
+            lookup: tool({
+              description: "Lookup data",
+              inputSchema: z.object({ query: z.string() }),
+              execute: async () => {
+                executed = true
+                return { output: "looked up" }
+              },
+            }),
+          },
+          toolChoice: "required",
+        }).pipe(Effect.exit)
+
+        expect(Exit.isFailure(exit)).toBe(true)
+        if (Exit.isFailure(exit)) {
+          expect(String(Cause.squash(exit.cause))).toContain("Internal operation cannot call tool: _noop")
+        }
+        const captured = yield* Effect.promise(() => request)
+        expect(captured.body.tools).toEqual([
+          expect.objectContaining({
+            type: "function",
+            name: "_noop",
+          }),
+        ])
+        expect(captured.body.tool_choice).toBe("none")
+        expect(executed).toBe(false)
+      }),
+    { config: () => copilotReplayConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
   )
 
   it.instance(
@@ -1450,6 +1628,7 @@ describe("session.llm.stream", () => {
             model: { providerID: ProviderV2.ID.make("openai"), modelID: resolved.id },
           } satisfies SessionV1.User,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: [],
@@ -1579,6 +1758,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -1671,6 +1851,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -1851,6 +2032,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: [],
@@ -1967,6 +2149,7 @@ describe("session.llm.stream", () => {
         yield* drain({
           user,
           sessionID,
+          composition: { type: "interactive" },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],

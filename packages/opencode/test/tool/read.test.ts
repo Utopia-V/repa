@@ -282,6 +282,7 @@ describe("tool.read env file permissions", () => {
               Effect.gen(function* () {
                 const agent = yield* Agent.Service
                 const info = yield* agent.get(agentName)
+                if (!info) throw new Error(`missing test agent: ${agentName}`)
                 let asked = false
                 const next = {
                   ...ctx,

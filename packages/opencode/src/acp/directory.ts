@@ -36,6 +36,7 @@ export type Snapshot = {
   readonly modelOptions: readonly ModelOption[]
   readonly variantsByModel: Readonly<Record<string, ModelVariants>>
   readonly availableModes: readonly ModeOption[]
+  readonly selectableModeIDs: readonly string[]
   readonly defaultModeID: string
   readonly availableCommands: readonly Command.Info[]
   readonly defaultModel?: DefaultModel
@@ -63,6 +64,7 @@ export const build = (input: {
   readonly directory: string
   readonly providers: Record<ProviderV2.ID, Provider.Info>
   readonly modes: readonly ModeOption[]
+  readonly selectableModeIDs?: readonly string[]
   readonly defaultModeID: string
   readonly commands: readonly Command.Info[]
   readonly defaultModel?: DefaultModel
@@ -96,6 +98,7 @@ export const build = (input: {
       ),
     ),
     availableModes: input.modes,
+    selectableModeIDs: input.selectableModeIDs ?? input.modes.map((mode) => mode.id),
     defaultModeID: input.modes.some((mode) => mode.id === input.defaultModeID)
       ? input.defaultModeID
       : (input.modes[0]?.id ?? input.defaultModeID),
@@ -131,6 +134,7 @@ export const loaderLayer = Layer.effect(
                 name: item.name,
                 ...(item.description ? { description: item.description } : {}),
               })),
+            selectableModeIDs: agents.filter((item) => item.mode !== "subagent").map((item) => item.name),
             defaultModeID: defaultAgent.name,
             commands: commands.toSorted((a, b) => a.name.localeCompare(b.name)),
             ...(defaultModel._tag === "Some" ? { defaultModel: defaultModel.value } : {}),

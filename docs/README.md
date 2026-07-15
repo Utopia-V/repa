@@ -1,8 +1,7 @@
 # Repa documentation
 
-Status: Gates 0–3 and Gates 5–7 are closed. Gate 4 is open only for the bounded
-correction below. Gate 8 is paused until that correction closes and then
-requires its own grill before a contract or implementation begins.
+Status: Gates 0–7 are closed. Gate 8 has not begun and requires its own grill
+before a contract or implementation begins.
 
 ## Active Gate map
 
@@ -12,11 +11,11 @@ requires its own grill before a contract or implementation begins.
 | 1. Lineage                          | Established the exact full-history MIT fork of OpenCode `v1.17.18`.                                                                               | Closed.                                                                                                                                                                                                                                                                                                            |
 | 2/2A. Windows baseline              | Recorded the inherited Windows failure truthfully, then corrected only its invalid test oracle.                                                   | Closed.                                                                                                                                                                                                                                                                                                            |
 | 3. Repa identity                    | Isolated the Repa executable, paths, configuration, environment, and database identity from OpenCode state.                                       | Closed.                                                                                                                                                                                                                                                                                                            |
-| 4. Learning-first composition       | Gives legitimate released-v1 model calls one Repa product composition and narrow program-owned internal operations.                               | Bounded correction: `hidden` must cease acting as internal-call authority. The final carrier matrix follows Gate 5 reachability repair.                                                                                                                                                                            |
+| 4. Learning-first composition       | Gives legitimate released-v1 model calls one Repa product composition and narrow program-owned internal operations.                               | Closed again. Presentation metadata no longer grants internal authority; admitted Agent-driven calls receive interactive Repa composition, while three trusted call origins own narrow non-tool stream operations. Carrier, recovery, provider, and Session-title concurrency evidence is independently accepted.  |
 | 5. Local product surface            | Makes the current terminal product truthful while retaining useful local capabilities and harmless hibernated source.                             | Closed again. Public preview-v2 execution and its runners are absent from production while their implementation remains hibernated; registered provider and credential surfaces use the truthful outward projection; ambient hosted/Desktop CORS grants are gone; the existing updater hibernation remains intact. |
 | 6. Native database admission        | Owns Repa database admission, forward migration lineage, and the single state-owner boundary.                                                     | Closed again. Only a recovered zero-page acquisition state may initialize; arbitrary sidecars cannot promote a page-backed identityless database, and dangling final file symlinks refuse before SQLite open.                                                                                                      |
 | 7. Course and Course View authority | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal. | Closed. Its contract, schema, migration, implementation, focused evidence, and corrected Gate 6 runtime prerequisite are accepted.                                                                                                                                                                                 |
-| 8. Learning-command settlement      | Will bind trusted causal and invocation identity to one real Course-owned command.                                                                | Not begun; paused behind Gate 4.                                                                                                                                                                                                                                                                                   |
+| 8. Learning-command settlement      | Will bind trusted causal and invocation identity to one real Course-owned command.                                                                | Not begun; eligible for its required grill.                                                                                                                                                                                                                                                                        |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -29,8 +28,16 @@ contract or implementation.
 The database correction now proves initialization from an empty zero-page
 acquisition state rather than from sidecar presence and rejects an unresolved
 final file symlink before SQLite open. Independently, the product-surface
-correction has stabilized Gate 5, so Gate 4 can audit the final carrier set.
-Only after Gate 4 closes does Gate 8 return to grill.
+correction stabilized Gate 5, and Gate 4 has now closed its audit of the final
+released-v1 carrier set. The same independent reviewer accepted both the
+corrected contract/theory and the implementation/evidence. The result separates
+interactive Agent calls from three trusted internal stream purposes, rejects
+privileged workflow execution before an internal sample begins, preserves
+explicit hidden-Agent admission without exposing it in discovery, and makes
+profile-loss and recovered-Session failure behavior explicit. Session title
+eligibility and every full-row Session patch now share one per-Session
+serialization owner, closing both stale-snapshot overwrite paths. Gate 8 is now
+eligible for its own grill but has not begun.
 
 Gate 7 now gives the native LearnerHome database its first learning authority.
 Repa can persist several independent Courses; each Course may exist without a

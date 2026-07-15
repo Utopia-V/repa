@@ -6,6 +6,9 @@ import { InstanceState } from "@/effect/instance-state"
 import PROMPT_REPA from "./prompt/repa.txt"
 import PROMPT_TERMINAL_AGENT from "./prompt/terminal-agent.txt"
 import PROMPT_INTERNAL_OPERATION from "./prompt/internal-operation.txt"
+import PROMPT_TITLE from "@/agent/prompt/title.txt"
+import PROMPT_COMPACTION from "@/agent/prompt/compaction.txt"
+import PROMPT_PROJECT_COPY_NAME from "./prompt/project-copy-name.txt"
 import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
@@ -23,6 +26,16 @@ export function product() {
 
 export function internal() {
   return PROMPT_INTERNAL_OPERATION
+}
+
+export type InternalPurpose = "title" | "compaction" | "project-copy-name"
+
+export function internalTask(purpose: InternalPurpose) {
+  return {
+    title: PROMPT_TITLE,
+    compaction: PROMPT_COMPACTION,
+    "project-copy-name": PROMPT_PROJECT_COPY_NAME,
+  }[purpose]
 }
 
 export function provider(_model: Provider.Model) {

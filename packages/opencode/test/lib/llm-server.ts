@@ -624,6 +624,7 @@ namespace TestLLMServer {
     readonly error: (status: number, body: unknown) => Effect.Effect<void>
     readonly hang: Effect.Effect<void>
     readonly hold: (value: string, wait: PromiseLike<unknown>) => Effect.Effect<void>
+    readonly holdTitle: (value: string, wait: PromiseLike<unknown>) => Effect.Effect<void>
     readonly reset: Effect.Effect<void>
     readonly hits: Effect.Effect<Hit[]>
     readonly calls: Effect.Effect<number>
@@ -643,6 +644,7 @@ export class TestLLMServer extends Context.Service<TestLLMServer, TestLLMServer.
 
       let hits: Hit[] = []
       let list: Queue[] = []
+      let titles: Sse[] = []
       let waits: Wait[] = []
       let misses: Hit[] = []
 
@@ -676,9 +678,13 @@ export class TestLLMServer extends Context.Service<TestLLMServer, TestLLMServer.
         if (isTitleRequest(body)) {
           hits = [...hits, current]
           yield* notify()
-          const auto: Sse = { type: "sse", head: [role()], tail: [textLine("E2E Title"), finishLine("stop")] }
-          if (mode === "responses") return send(responses(auto, modelFrom(body)))
-          return send(auto)
+          const next = titles.shift() ?? {
+            type: "sse",
+            head: [role()],
+            tail: [textLine("E2E Title"), finishLine("stop")],
+          }
+          if (mode === "responses") return send(responses(next, modelFrom(body)))
+          return send(next)
         }
         const next = pull(current)
         if (!next) {
@@ -756,9 +762,14 @@ export class TestLLMServer extends Context.Service<TestLLMServer, TestLLMServer.
         hold: Effect.fn("TestLLMServer.hold")(function* (value: string, wait: PromiseLike<unknown>) {
           queue(reply().wait(wait).text(value).stop().item())
         }),
+        holdTitle: Effect.fn("TestLLMServer.holdTitle")(function* (value: string, wait: PromiseLike<unknown>) {
+          const item = reply().wait(wait).text(value).stop().item()
+          if (item.type === "sse") titles = [...titles, item]
+        }),
         reset: Effect.sync(() => {
           hits = []
           list = []
+          titles = []
           waits = []
           misses = []
         }),

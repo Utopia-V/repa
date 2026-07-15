@@ -42,6 +42,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
+import { KeyedMutex } from "@opencode-ai/core/effect/keyed-mutex"
 
 const parentTitlePrefix = "New session - "
 const childTitlePrefix = "Child session - "
@@ -425,6 +426,7 @@ export interface Interface {
   readonly touch: (sessionID: SessionID) => Effect.Effect<void>
   readonly get: (id: SessionID) => Effect.Effect<Info, NotFound>
   readonly setTitle: (input: { sessionID: SessionID; title: string }) => Effect.Effect<void>
+  readonly setTitleIfDefault: (input: { sessionID: SessionID; title: string }) => Effect.Effect<boolean>
   readonly setArchived: (input: { sessionID: SessionID; time?: number }) => Effect.Effect<void>
   readonly setMetadata: (input: typeof SetMetadataInput.Type) => Effect.Effect<void>
   readonly setAgentModel: (input: {
@@ -494,6 +496,7 @@ const layer: Layer.Layer<
     const background = yield* BackgroundJob.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
+    const patchLocks = KeyedMutex.makeUnsafe<SessionID>()
 
     const createNext = Effect.fn("Session.createNext")(function* (input: {
       id?: SessionID
@@ -730,7 +733,7 @@ const layer: Layer.Layer<
       return session
     })
 
-    const patch = (sessionID: SessionID, info: Patch) =>
+    const patchUnlocked = (sessionID: SessionID, info: Patch) =>
       Effect.gen(function* () {
         const current = yield* get(sessionID)
         const next = {
@@ -745,13 +748,26 @@ const layer: Layer.Layer<
         yield* events.publish(SessionV1.Event.Updated, { sessionID, info: next })
       })
 
+    const patch = (sessionID: SessionID, info: Patch) => patchLocks.withLock(sessionID)(patchUnlocked(sessionID, info))
+
     const touch = Effect.fn("Session.touch")(function* (sessionID: SessionID) {
       yield* patch(sessionID, { time: { updated: Date.now() } }).pipe(Effect.orDie)
     })
 
-    const setTitle = Effect.fn("Session.setTitle")(function* (input: { sessionID: SessionID; title: string }) {
-      yield* patch(input.sessionID, { title: input.title }).pipe(Effect.orDie)
-    })
+    const setTitle = Effect.fn("Session.setTitle")((input: { sessionID: SessionID; title: string }) =>
+      patch(input.sessionID, { title: input.title }).pipe(Effect.orDie),
+    )
+
+    const setTitleIfDefault = Effect.fn("Session.setTitleIfDefault")((input: { sessionID: SessionID; title: string }) =>
+      patchLocks.withLock(input.sessionID)(
+        Effect.gen(function* () {
+          const current = yield* get(input.sessionID).pipe(Effect.orDie)
+          if (!isDefaultTitle(current.title)) return false
+          yield* patchUnlocked(input.sessionID, { title: input.title }).pipe(Effect.orDie)
+          return true
+        }),
+      ),
+    )
 
     const setArchived = Effect.fn("Session.setArchived")(function* (input: { sessionID: SessionID; time?: number }) {
       yield* patch(input.sessionID, { time: { archived: input.time } }).pipe(Effect.orDie)
@@ -910,6 +926,7 @@ const layer: Layer.Layer<
       touch,
       get,
       setTitle,
+      setTitleIfDefault,
       setArchived,
       setMetadata,
       setAgentModel,
