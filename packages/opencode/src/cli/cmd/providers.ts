@@ -5,8 +5,9 @@ import { CliError, effectCmd, fail } from "../effect-cmd"
 import { UI } from "../ui"
 import * as Prompt from "../effect/prompt"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
+import { Provider } from "@/provider/provider"
 
-import { map, pipe, sortBy, values } from "remeda"
+import { sortBy } from "remeda"
 import path from "path"
 import os from "os"
 import { Config } from "@/config/config"
@@ -236,6 +237,74 @@ export function resolvePluginProviders(input: {
   return result
 }
 
+export function resolveProviderOptions(input: {
+  providers: Record<string, { id: string; name: string }>
+  pluginProviders: Array<{ id: string; name: string }>
+}) {
+  const priority: Record<string, number> = {
+    openai: 0,
+    "github-copilot": 1,
+    google: 2,
+    anthropic: 3,
+    openrouter: 4,
+    vercel: 5,
+  }
+  return [
+    ...sortBy(
+      Object.values(input.providers),
+      (item) => priority[item.id] ?? 99,
+      (item) => item.name ?? item.id,
+    ).map((item) => ({
+      label: item.name,
+      value: item.id,
+      hint: item.id === "openai" ? "ChatGPT Plus/Pro or API key" : undefined,
+    })),
+    ...input.pluginProviders.map((item) => ({
+      label: item.name,
+      value: item.id,
+      hint: "plugin",
+    })),
+  ]
+}
+
+type CredentialProvider = { name: string; env: string[] }
+
+export function resolveCredentialEntries(
+  credentials: Array<[string, Auth.Info]>,
+  providers: Record<string, CredentialProvider>,
+) {
+  return credentials.map(([id, credential]) => ({
+    id,
+    name: providers[id]?.name ?? id,
+    type: credential.type,
+  }))
+}
+
+export function resolveCredentialProvider(entries: ReturnType<typeof resolveCredentialEntries>, input: string) {
+  return (
+    entries.find((entry) => entry.id === input)?.id ??
+    entries.find((entry) => entry.name.toLowerCase() === input.toLowerCase())?.id
+  )
+}
+
+export function resolveProviderEnvironment(
+  providers: Record<string, CredentialProvider>,
+  env: Record<string, string | undefined>,
+) {
+  return Object.entries(providers).flatMap(([providerID, provider]) =>
+    provider.env.flatMap((envVar) =>
+      env[envVar]
+        ? [
+            {
+              provider: provider.name || providerID,
+              envVar,
+            },
+          ]
+        : [],
+    ),
+  )
+}
+
 export const ProvidersCommand = cmd({
   command: "providers",
   aliases: ["auth"],
@@ -249,11 +318,9 @@ export const ProvidersListCommand = effectCmd({
   command: "list",
   aliases: ["ls"],
   describe: "list providers and credentials",
-  // Lists global credentials + provider env vars; no project instance needed.
-  instance: false,
   handler: Effect.fn("Cli.providers.list")(function* (_args) {
     const authSvc = yield* Auth.Service
-    const modelsDev = yield* ModelsDev.Service
+    const providerSvc = yield* Provider.Service
 
     UI.empty()
     const authPath = path.join(Global.Path.data, "auth.json")
@@ -261,27 +328,16 @@ export const ProvidersListCommand = effectCmd({
     const displayPath = authPath.startsWith(homedir) ? authPath.replace(homedir, "~") : authPath
     yield* Prompt.intro(`Credentials ${UI.Style.TEXT_DIM}${displayPath}`)
     const results = Object.entries(yield* Effect.orDie(authSvc.all()))
-    const database = yield* modelsDev.get()
+    const providers = yield* providerSvc.listAvailable()
+    const credentials = resolveCredentialEntries(results, providers)
 
-    for (const [providerID, result] of results) {
-      const name = database[providerID]?.name || providerID
-      yield* Prompt.log.info(`${name} ${UI.Style.TEXT_DIM}${result.type}`)
+    for (const credential of credentials) {
+      yield* Prompt.log.info(`${credential.name} ${UI.Style.TEXT_DIM}${credential.type}`)
     }
 
     yield* Prompt.outro(`${results.length} credentials`)
 
-    const activeEnvVars: Array<{ provider: string; envVar: string }> = []
-
-    for (const [providerID, provider] of Object.entries(database)) {
-      for (const envVar of provider.env) {
-        if (process.env[envVar]) {
-          activeEnvVars.push({
-            provider: provider.name || providerID,
-            envVar,
-          })
-        }
-      }
-    }
+    const activeEnvVars = resolveProviderEnvironment(providers, process.env)
 
     if (activeEnvVars.length > 0) {
       UI.empty()
@@ -353,6 +409,7 @@ export const ProvidersLoginCommand = effectCmd({
 
     const cfgSvc = yield* Config.Service
     const pluginSvc = yield* Plugin.Service
+    const providerSvc = yield* Provider.Service
     const modelsDev = yield* ModelsDev.Service
     yield* Effect.ignore(modelsDev.refresh(true))
 
@@ -361,22 +418,9 @@ export const ProvidersLoginCommand = effectCmd({
     const disabled = new Set(config.disabled_providers ?? [])
     const enabled = config.enabled_providers ? new Set(config.enabled_providers) : undefined
 
-    const allProviders = yield* modelsDev.get()
-    const providers: Record<string, (typeof allProviders)[string]> = {}
-    for (const [key, value] of Object.entries(allProviders)) {
-      if ((enabled ? enabled.has(key) : true) && !disabled.has(key)) providers[key] = value
-    }
+    const providers = yield* providerSvc.listAvailable()
     const hooks = yield* pluginSvc.list()
 
-    const priority: Record<string, number> = {
-      opencode: 0,
-      openai: 1,
-      "github-copilot": 2,
-      google: 3,
-      anthropic: 4,
-      openrouter: 5,
-      vercel: 6,
-    }
     const pluginProviders = resolvePluginProviders({
       hooks,
       existingProviders: providers,
@@ -384,29 +428,7 @@ export const ProvidersLoginCommand = effectCmd({
       enabled,
       providerNames: Object.fromEntries(Object.entries(config.provider ?? {}).map(([id, p]) => [id, p.name])),
     })
-    const options = [
-      ...pipe(
-        providers,
-        values(),
-        sortBy(
-          (x) => priority[x.id] ?? 99,
-          (x) => x.name ?? x.id,
-        ),
-        map((x) => ({
-          label: x.name,
-          value: x.id,
-          hint: {
-            opencode: "recommended",
-            openai: "ChatGPT Plus/Pro or API key",
-          }[x.id],
-        })),
-      ),
-      ...pluginProviders.map((x) => ({
-        label: x.name,
-        value: x.id,
-        hint: "plugin",
-      })),
-    ]
+    const options = resolveProviderOptions({ providers, pluginProviders })
 
     let provider: string
     if (args.provider) {
@@ -463,10 +485,6 @@ export const ProvidersLoginCommand = effectCmd({
       )
     }
 
-    if (provider === "opencode") {
-      yield* Prompt.log.info("Create an api key at https://opencode.ai/auth")
-    }
-
     if (provider === "vercel") {
       yield* Prompt.log.info("You can create an api key at https://vercel.link/ai-gateway-token")
     }
@@ -496,11 +514,9 @@ export const ProvidersLogoutCommand = effectCmd({
       describe: "provider id or name to log out from",
       type: "string",
     }),
-  // Removes a global auth credential; no project instance needed.
-  instance: false,
   handler: Effect.fn("Cli.providers.logout")(function* (args) {
     const authSvc = yield* Auth.Service
-    const modelsDev = yield* ModelsDev.Service
+    const providerSvc = yield* Provider.Service
 
     UI.empty()
     const credentials: Array<[string, Auth.Info]> = Object.entries(yield* Effect.orDie(authSvc.all()))
@@ -509,17 +525,13 @@ export const ProvidersLogoutCommand = effectCmd({
       yield* Prompt.log.error("No credentials found")
       return
     }
-    const database = yield* modelsDev.get()
-    const options = credentials.map(([key, value]) => ({
-      label: (database[key]?.name || key) + UI.Style.TEXT_DIM + " (" + value.type + ")",
-      value: key,
+    const entries = resolveCredentialEntries(credentials, yield* providerSvc.listAvailable())
+    const options = entries.map((entry) => ({
+      label: entry.name + UI.Style.TEXT_DIM + " (" + entry.type + ")",
+      value: entry.id,
     }))
     const provider = args.provider
-      ? options.find(
-          (option) =>
-            option.value === args.provider ||
-            database[option.value]?.name?.toLowerCase() === args.provider?.toLowerCase(),
-        )?.value
+      ? resolveCredentialProvider(entries, args.provider)
       : yield* promptValue(
           yield* Prompt.autocomplete({
             message: "Select provider",

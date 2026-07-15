@@ -33,22 +33,6 @@ export type SessionNotFoundError = {
 export const isSessionNotFoundError = (value: unknown): value is SessionNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionNotFoundError"
 
-export type ConflictError = {
-  readonly _tag: "ConflictError"
-  readonly message: string
-  readonly resource?: string | undefined
-}
-export const isConflictError = (value: unknown): value is ConflictError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConflictError"
-
-export type ServiceUnavailableError = {
-  readonly _tag: "ServiceUnavailableError"
-  readonly message: string
-  readonly service?: string | undefined
-}
-export const isServiceUnavailableError = (value: unknown): value is ServiceUnavailableError =>
-  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ServiceUnavailableError"
-
 export type MessageNotFoundError = {
   readonly _tag: "MessageNotFoundError"
   readonly sessionID: string
@@ -65,6 +49,14 @@ export type UnknownError = {
 }
 export const isUnknownError = (value: unknown): value is UnknownError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnknownError"
+
+export type ServiceUnavailableError = {
+  readonly _tag: "ServiceUnavailableError"
+  readonly message: string
+  readonly service?: string | undefined
+}
+export const isServiceUnavailableError = (value: unknown): value is ServiceUnavailableError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ServiceUnavailableError"
 
 export type ProviderNotFoundError = {
   readonly _tag: "ProviderNotFoundError"
@@ -306,8 +298,6 @@ export type SessionsCreateOutput = {
   }
 }["data"]
 
-export type SessionsActiveOutput = { readonly data: { readonly [x: string]: { readonly type: "running" } } }["data"]
-
 export type SessionsGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
 
 export type SessionsGetOutput = {
@@ -359,115 +349,6 @@ export type SessionsSwitchModelInput = {
 }
 
 export type SessionsSwitchModelOutput = void
-
-export type SessionsPromptInput = {
-  readonly sessionID: { readonly sessionID: string }["sessionID"]
-  readonly id?: {
-    readonly id?: string | null
-    readonly prompt: {
-      readonly text: string
-      readonly files?: ReadonlyArray<{
-        readonly uri: string
-        readonly name?: string
-        readonly description?: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-      readonly agents?: ReadonlyArray<{
-        readonly name: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-    }
-    readonly delivery?: "steer" | "queue" | null
-    readonly resume?: boolean | null
-  }["id"]
-  readonly prompt: {
-    readonly id?: string | null
-    readonly prompt: {
-      readonly text: string
-      readonly files?: ReadonlyArray<{
-        readonly uri: string
-        readonly name?: string
-        readonly description?: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-      readonly agents?: ReadonlyArray<{
-        readonly name: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-    }
-    readonly delivery?: "steer" | "queue" | null
-    readonly resume?: boolean | null
-  }["prompt"]
-  readonly delivery?: {
-    readonly id?: string | null
-    readonly prompt: {
-      readonly text: string
-      readonly files?: ReadonlyArray<{
-        readonly uri: string
-        readonly name?: string
-        readonly description?: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-      readonly agents?: ReadonlyArray<{
-        readonly name: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-    }
-    readonly delivery?: "steer" | "queue" | null
-    readonly resume?: boolean | null
-  }["delivery"]
-  readonly resume?: {
-    readonly id?: string | null
-    readonly prompt: {
-      readonly text: string
-      readonly files?: ReadonlyArray<{
-        readonly uri: string
-        readonly name?: string
-        readonly description?: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-      readonly agents?: ReadonlyArray<{
-        readonly name: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-    }
-    readonly delivery?: "steer" | "queue" | null
-    readonly resume?: boolean | null
-  }["resume"]
-}
-
-export type SessionsPromptOutput = {
-  readonly data: {
-    readonly admittedSeq: number
-    readonly id: string
-    readonly sessionID: string
-    readonly prompt: {
-      readonly text: string
-      readonly files?: ReadonlyArray<{
-        readonly uri: string
-        readonly mime: string
-        readonly name?: string
-        readonly description?: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-      readonly agents?: ReadonlyArray<{
-        readonly name: string
-        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
-      }>
-    }
-    readonly delivery: "steer" | "queue"
-    readonly timeCreated: number
-    readonly promotedSeq?: number
-  }
-}["data"]
-
-export type SessionsCompactInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
-
-export type SessionsCompactOutput = void
-
-export type SessionsWaitInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
-
-export type SessionsWaitOutput = void
 
 export type SessionsStageInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
@@ -1569,10 +1450,6 @@ export type SessionsEventsOutput =
       readonly location?: { readonly directory: string; readonly workspaceID?: string }
       readonly data: { readonly timestamp: number; readonly sessionID: string; readonly messageID: string }
     }
-
-export type SessionsInterruptInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
-
-export type SessionsInterruptOutput = void
 
 export type SessionsMessageInput = {
   readonly sessionID: { readonly sessionID: string; readonly messageID: string }["sessionID"]

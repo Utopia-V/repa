@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test"
-import { resolvePluginProviders } from "../../src/cli/cmd/providers"
+import { resolvePluginProviders, resolveProviderOptions } from "../../src/cli/cmd/providers"
 import type { Hooks } from "@opencode-ai/plugin"
 
 function hookWithAuth(provider: string): Hooks {
@@ -116,5 +116,35 @@ describe("resolvePluginProviders", () => {
       providerNames: {},
     })
     expect(result).toEqual([])
+  })
+})
+
+describe("resolveProviderOptions", () => {
+  test("does not recommend or prioritize providers because their id starts with opencode", () => {
+    const result = resolveProviderOptions({
+      providers: {
+        opencode: { id: "opencode", name: "Zulu Provider" },
+        "opencode-local": { id: "opencode-local", name: "Alpha Provider" },
+        control: { id: "control", name: "Beta Provider" },
+      },
+      pluginProviders: [],
+    })
+
+    expect(result.map((item) => item.value)).toEqual(["opencode-local", "control", "opencode"])
+    expect(result.every((item) => item.hint === undefined)).toBe(true)
+  })
+
+  test("preserves independently useful provider and plugin authentication hints", () => {
+    const result = resolveProviderOptions({
+      providers: {
+        openai: { id: "openai", name: "OpenAI" },
+      },
+      pluginProviders: [{ id: "custom-plugin", name: "Custom Plugin" }],
+    })
+
+    expect(result).toEqual([
+      { label: "OpenAI", value: "openai", hint: "ChatGPT Plus/Pro or API key" },
+      { label: "Custom Plugin", value: "custom-plugin", hint: "plugin" },
+    ])
   })
 })

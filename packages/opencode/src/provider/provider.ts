@@ -1123,6 +1123,7 @@ export type Error = ModelNotFoundError | InitError | NoProvidersError | NoModels
 
 export interface Interface {
   readonly list: () => Effect.Effect<Record<ProviderV2.ID, Info>>
+  readonly listAvailable: () => Effect.Effect<Record<ProviderV2.ID, Info>>
   readonly getProvider: (providerID: ProviderV2.ID) => Effect.Effect<Info>
   readonly getModel: (providerID: ProviderV2.ID, modelID: ModelV2.ID) => Effect.Effect<Model, ModelNotFoundError>
   readonly getLanguage: (model: Model) => Effect.Effect<LanguageModelV3, ModelNotFoundError>
@@ -1640,6 +1641,18 @@ const layer = Layer.effect(
 
     const list = Effect.fn("Provider.list")(() => InstanceState.use(state, (s) => s.providers))
 
+    const listAvailable = Effect.fn("Provider.listAvailable")(function* () {
+      const cfg = yield* config.get()
+      const current = yield* InstanceState.get(state)
+      const disabled = new Set(cfg.disabled_providers ?? [])
+      const enabled = cfg.enabled_providers ? new Set(cfg.enabled_providers) : undefined
+      const catalog = pickBy(
+        current.catalog,
+        (item) => (enabled ? enabled.has(item.id) : true) && !disabled.has(item.id),
+      )
+      return { ...catalog, ...current.providers }
+    })
+
     async function resolveSDK(model: Model, s: State, envs: Record<string, string | undefined>) {
       try {
         const provider = s.providers[model.providerID]
@@ -1947,7 +1960,7 @@ const layer = Layer.effect(
       }
     })
 
-    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel })
+    return Service.of({ list, listAvailable, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel })
   }),
 )
 

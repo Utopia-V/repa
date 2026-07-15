@@ -34,6 +34,9 @@ const model: Provider.Model = {
 } as Provider.Model
 
 type Options = {
+  readonly providerID?: string
+  readonly modelHeaders?: Record<string, string>
+  readonly pluginHeaders?: Record<string, string>
   readonly oauth?: boolean
   readonly workflow?: boolean
   readonly hidden?: boolean
@@ -46,6 +49,8 @@ type Options = {
 
 function prepare(options: Options = {}) {
   const messages: ModelMessage[] = [{ role: "user", content: "Explain pointers with a diagram." }]
+  const providerID = options.providerID ?? model.providerID
+  const currentModel = { ...model, providerID, headers: options.modelHeaders ?? {} } as Provider.Model
   return Effect.runPromise(
     LLMRequestPrep.prepare({
       user: {
@@ -54,11 +59,12 @@ function prepare(options: Options = {}) {
         role: "user",
         time: { created: 0 },
         agent: options.hidden ? "title" : "repa",
-        model: { providerID: "openai", modelID: "gpt-5-mini" },
+        model: { providerID, modelID: "gpt-5-mini" },
         ...(options.userSystem ? { system: options.userSystem } : {}),
       } as any,
       sessionID: "ses_test",
-      model,
+      parentSessionID: "ses_parent-test",
+      model: currentModel,
       agent: {
         name: options.hidden ? "title" : "repa",
         mode: "primary",
@@ -71,8 +77,8 @@ function prepare(options: Options = {}) {
       messages,
       tools: {},
       provider: {
-        id: "openai",
-        name: "OpenAI",
+        id: providerID,
+        name: providerID,
         source: "config",
         env: ["OPENAI_API_KEY"],
         options: {},
@@ -85,6 +91,7 @@ function prepare(options: Options = {}) {
         trigger: (name: string, _input: unknown, output: any) => {
           if (name === "experimental.chat.system.transform") options.transform?.(output.system)
           if (name === "chat.params") options.paramsTransform?.(output)
+          if (name === "chat.headers") Object.assign(output.headers, options.pluginHeaders)
           return Effect.succeed(output)
         },
         list: () => Effect.succeed([]),
@@ -216,5 +223,37 @@ describe("session.llm.request composition", () => {
     })
 
     expect(occurrences(prepared.system.join("\n"), "<repa_product_contract>")).toBe(1)
+  })
+
+  test("treats opencode provider ids like ordinary custom providers when preparing request headers", async () => {
+    const prepared = await Promise.all(
+      ["ordinary", "opencode", "opencode-local"].map((providerID) => prepare({ providerID })),
+    )
+
+    expect(prepared.map((item) => item.headers)).toEqual([
+      prepared[0].headers,
+      prepared[0].headers,
+      prepared[0].headers,
+    ])
+    expect(prepared[0].headers).toMatchObject({
+      "x-session-affinity": "ses_test",
+      "X-Session-Id": "ses_test",
+      "x-parent-session-id": "ses_parent-test",
+    })
+    expect(Object.keys(prepared[0].headers).filter((key) => key.startsWith("x-opencode-"))).toEqual([])
+  })
+
+  test("preserves explicit provider and plugin headers for a custom provider named opencode", async () => {
+    const prepared = await prepare({
+      providerID: "opencode",
+      modelHeaders: { "x-opencode-explicit": "configured" },
+      pluginHeaders: { "x-plugin-explicit": "plugin" },
+    })
+
+    expect(prepared.headers).toMatchObject({
+      "x-opencode-explicit": "configured",
+      "x-plugin-explicit": "plugin",
+    })
+    expect(Object.keys(prepared.headers)).not.toContain("x-opencode-session")
   })
 })

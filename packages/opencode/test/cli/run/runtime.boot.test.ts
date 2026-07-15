@@ -160,7 +160,7 @@ describe("run runtime boot", () => {
     await expect(resolveDiffStyle()).resolves.toBe("auto")
   })
 
-  test("prefers configured providers for model selector data", async () => {
+  test("uses the released outward provider projection for model selector data", async () => {
     const sdk = new OpencodeClient()
     const data: {
       all: Provider[]
@@ -194,10 +194,6 @@ describe("run runtime boot", () => {
       ],
       default: {},
       connected: [],
-    }
-    const configured = {
-      providers: [data.all[0]!],
-      default: {},
     }
     const list = spyOn(sdk.provider, "list").mockImplementation(() =>
       Promise.resolve({
@@ -207,64 +203,9 @@ describe("run runtime boot", () => {
         response: new Response(),
       }),
     )
-    spyOn(sdk.config, "providers").mockImplementation(() =>
+    const configured = spyOn(sdk.config, "providers").mockImplementation(() =>
       Promise.resolve({
-        data: configured,
-        error: undefined,
-        request: new Request("https://opencode.test"),
-        response: new Response(),
-      }),
-    )
-
-    await expect(resolveModelInfo(sdk, "/workspace", { providerID: "openai", modelID: "gpt-5" })).resolves.toEqual({
-      providers: configured.providers,
-      variants: ["high", "minimal"],
-      limits: {
-        "openai/gpt-5": 128000,
-      },
-    })
-    expect(list).not.toHaveBeenCalled()
-  })
-
-  test("falls back to provider list when configured providers are unavailable", async () => {
-    const sdk = new OpencodeClient()
-    const data: {
-      all: Provider[]
-      default: Record<string, string>
-      connected: string[]
-    } = {
-      all: [
-        {
-          id: "openai",
-          name: "OpenAI",
-          source: "api",
-          env: [],
-          options: {},
-          models: {
-            "gpt-5": model("gpt-5", "openai", 128000, {
-              high: {},
-              minimal: {},
-            }),
-          },
-        },
-        {
-          id: "anthropic",
-          name: "Anthropic",
-          source: "api",
-          env: [],
-          options: {},
-          models: {
-            sonnet: model("sonnet", "anthropic", 200000),
-          },
-        },
-      ],
-      default: {},
-      connected: [],
-    }
-    spyOn(sdk.config, "providers").mockRejectedValue(new Error("boom"))
-    spyOn(sdk.provider, "list").mockImplementation(() =>
-      Promise.resolve({
-        data,
+        data: { providers: [data.all[0]!], default: {} },
         error: undefined,
         request: new Request("https://opencode.test"),
         response: new Response(),
@@ -279,5 +220,55 @@ describe("run runtime boot", () => {
         "anthropic/sonnet": 200000,
       },
     })
+    expect(list).toHaveBeenCalledTimes(1)
+    expect(configured).not.toHaveBeenCalled()
+  })
+
+  test("does not fall back to a second provider projection when released discovery is unavailable", async () => {
+    const sdk = new OpencodeClient()
+    const data: {
+      all: Provider[]
+      default: Record<string, string>
+      connected: string[]
+    } = {
+      all: [
+        {
+          id: "openai",
+          name: "OpenAI",
+          source: "api",
+          env: [],
+          options: {},
+          models: {
+            "gpt-5": model("gpt-5", "openai", 128000, {
+              high: {},
+              minimal: {},
+            }),
+          },
+        },
+        {
+          id: "anthropic",
+          name: "Anthropic",
+          source: "api",
+          env: [],
+          options: {},
+          models: {
+            sonnet: model("sonnet", "anthropic", 200000),
+          },
+        },
+      ],
+      default: {},
+      connected: [],
+    }
+    const configured = spyOn(sdk.config, "providers").mockImplementation(() =>
+      Promise.resolve({ data: { providers: data.all, default: {} }, error: undefined }) as never,
+    )
+    spyOn(sdk.provider, "list").mockRejectedValue(new Error("boom"))
+
+    await expect(resolveModelInfo(sdk, "/workspace", { providerID: "openai", modelID: "gpt-5" })).resolves.toEqual({
+      providers: [],
+      variants: [],
+      limits: {},
+    })
+    expect(configured).not.toHaveBeenCalled()
   })
 })

@@ -127,6 +127,79 @@ not another live Gate-status map.
   package provenance, integrity, failure, rollback, and release-channel
   contracts before activation.
 
+## 2026-07-15 Gate 5 correction-grill provenance
+
+Current disposition remains owned only by `docs/README.md`. This section
+records the source inspection, the maintainer's v2-preservation correction,
+and the agent-derived Gate 5 correction contract. Independent top-level
+reviewer task `019f6599-2914-7f02-849d-412862338271` first returned `Revise`,
+then accepted the corrected contract and closed the theory round. The same
+reviewer later accepted the implementation and evidence; the closing facts are
+recorded separately below.
+
+- At the audited pre-correction state, the shared v2 Session protocol exposed
+  `active`, `prompt`, `compact`, `wait`, and `interrupt`. `prompt` admitted
+  durable input and could wake the preview runner; the other operations exposed
+  the same coordinator or advertised unavailable execution behavior. Both
+  production server assemblies installed
+  the live local v2 execution layer, and the default Location service map also
+  registered `SessionRunnerModel` and `SessionRunnerLLM`. The accepted contract
+  removed this whole execution family, its process-global
+  coordinator, and its Location-scoped runner services from production
+  composition while retaining the implementation, declarations, runner-enabled
+  non-production composition, and direct tests as compile-checked hibernated
+  source for a later evidence-based OpenCode-v2 comparison.
+- Released provider discovery and CLI paths could bypass the filtered catalog,
+  while request and native-runtime branches privileged IDs beginning with
+  `opencode`. Credential list/logout also used the raw catalog for commercial
+  names, environment discovery, and name matching. The accepted correction uses
+  one outward projection that filters only the inherited exact built-ins before
+  overlaying explicit configuration; custom IDs such as `opencode` or
+  `opencode-local` remain ordinary, while no-config legacy credentials remain
+  manageable by literal ID.
+- The inherited CORS owner granted not only `https://*.opencode.ai` but also
+  Desktop and Tauri origins implicitly. The dormant Desktop sidecar already
+  supplied its required origin explicitly, so the correction removed ambient
+  client-name grants while preserving no-Origin, localhost, same-host, and
+  exact configured-origin rules. No Desktop source deletion follows.
+
+## 2026-07-15 Gate 5 correction-close provenance
+
+Current disposition remains owned only by `docs/README.md`. The same top-level
+reviewer task accepted the implementation/evidence round with no P0–P3 finding
+after reading the original working tree rather than its stale review worktree.
+
+- Production Protocol, handlers, OpenAPI, and current generated clients expose
+  none of the five preview-v2 execution operations. Both production server
+  assemblies use the non-executing Session layer, and the production Location
+  graph contains neither runner service. The declarations, handlers, runner,
+  explicit non-production runner composition, and direct tests remain as
+  compile-checked hibernated source. Released-v1 execution and retained v2
+  reads and non-executing state transitions remain.
+- One outward provider projection excludes only the exact inherited raw
+  `opencode` and `opencode-go` built-ins before overlaying explicit providers.
+  HTTP discovery and every registered provider/model/credential CLI surface
+  consume that projection. ID-derived request headers, native eligibility,
+  recommendation, ordering, and `Free` presentation are gone; explicit
+  `opencode`, `opencode-local`, and control providers remain ordinary custom
+  providers, while an orphan credential remains manageable by literal ID.
+- Ambient `*.opencode.ai`, `oc://renderer`, and Tauri CORS grants are gone.
+  No-Origin, loopback, same-host, and explicit configured origins remain; the
+  dormant Desktop owner supplies `oc://renderer` explicitly. The previously
+  accepted updater disconnection and hibernated implementation were unchanged.
+- Fresh evidence passed seven affected package typechecks, six production and
+  hibernated Location tests, the direct runner and released-v1 prompt oracles,
+  the retired-route/no-admission oracle, 24 public-OpenAPI tests, 12 current
+  client tests, two retained sdk-next behavior tests, 176 focused
+  provider/request/native/CLI tests with six existing skips, six CORS tests,
+  and four real credential-command subprocess tests. Exact production-owner
+  scans and `git diff --check` passed. Official generator success was checked
+  against the resulting artifacts and their focused tests and typechecks.
+- Broader cassette drift, the deliberate two-host/one-database owner refusal,
+  dormant-plugin asynchronous-key assertions, and pre-existing whole-file
+  formatting debt were inspected and did not contradict a Gate 5 claim. No
+  unrelated monorepo-wide suite was used as a closing ritual.
+
 ## 2026-07-15 Gate 6 runtime-owner correction provenance
 
 Current disposition remains owned only by `docs/README.md`. This section records

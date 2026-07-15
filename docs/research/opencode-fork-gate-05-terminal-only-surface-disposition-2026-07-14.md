@@ -4,6 +4,12 @@ Historical result: Passed on 2026-07-14 at
 `25e51861effbddbdb04ae8fe88c4107d34ab91b2`. Current disposition is owned by
 [the documentation index](../README.md).
 
+Current correction status: Closed on 2026-07-15. Independent top-level reviewer
+task `019f6599-2914-7f02-849d-412862338271` first returned `Revise`, then
+accepted the corrected contract and closed the theory round. The same reviewer
+subsequently accepted the implementation/evidence round with no P0–P3 finding.
+Current cross-Gate disposition remains owned by the documentation index.
+
 Date: 2026-07-14
 
 Parent plan: [Roadmap 09](../roadmap/09-one-time-opencode-fork-baseline.md)
@@ -64,30 +70,38 @@ proof. That inference is invalid. Commit `5edbd8638` implemented it,
 `0d393ec27` recorded it as success, and `04a2d91a0` extended it to providers and
 the updater. No further physical deletion is authorized by those records.
 
-A 2026-07-15 post-Gate-7 audit also invalidated the later completion claim
-without reviving that deletion policy:
+A 2026-07-15 post-Gate-7 audit and the following Gate 5 grill also invalidated
+the later completion claim without reviving that deletion policy:
 
-- production still composes the preview-v2 `POST /api/session/:sessionID/prompt`
-  admission, whose normal resume behavior can wake the second model runner;
-  Gate 5 must remove that model-executing route from the production API,
-  OpenAPI, and generated current clients while retaining independently useful
-  non-model v2 source unless separately classified;
+- production still exposes the preview-v2 execution family—`active`, `prompt`,
+  `compact`, `wait`, and `interrupt`—and installs its live local runner. Only
+  `prompt` admits durable input and normally wakes model execution; the other
+  four either expose that same coordinator or advertise unavailable execution
+  operations. Gate 5 must remove this family from the production protocol,
+  handler composition, OpenAPI, and generated current clients, and bind the
+  retained v2 data services to the non-executing layer. The v2 execution
+  implementation, declarations, runner, and direct tests remain hibernated
+  source rather than being physically deleted;
 - `opencode*` provider IDs still receive request headers and native-runtime
-  eligibility, while provider login, `models`, and the run mini picker still
+  eligibility, while released provider discovery bypasses the filtered
+  projection and provider login, `models`, and the run mini picker still
   recommend, prioritize, or label the commercial provider specially; and
-- the server still automatically trusts `https://*.opencode.ai` as a CORS
-  origin despite hosted Web being outside the baseline.
+- the server still automatically trusts inherited hosted and dormant-client
+  origins—`https://*.opencode.ai`, `oc://renderer`, and Tauri origins—despite
+  those products being outside ordinary baseline reachability.
 
 An explicitly configured provider named `opencode` may remain, but it must use
 the same generic behavior as any other custom provider. Localhost, same-host,
-and explicitly configured CORS remain independently valid.
+and explicitly configured CORS remain independently valid. A deliberately
+launched dormant Desktop client may supply its required origin explicitly; it
+does not need a global implicit grant.
 
-| Classification           | Current Gate 5 disposition                                                                                                                                                                                                                                                        | Controlling reason                                                                                                                                                                                                              |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Keep                     | Correct account/share/sync startup and network disconnection; hosted UI proxy and remote-route removal; local `pr`, Git/project-copy, directory, provider, MCP, plugin, Session, and terminal harness behavior                                                                    | These changes establish truthful runtime boundaries or retain independently useful local behavior.                                                                                                                              |
-| Repair                   | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; updater reachability; inherited workflow registration; production v2 prompt admission; remaining provider-ID request/native/CLI presentation; inherited hosted CORS | The earlier classification and scope repairs remain complete. The post-Gate-7 v2, provider, and CORS residues are the bounded open work recorded above.                                                                         |
-| Hibernate                | Web/Desktop and marketplace source; hosted GitHub Action source; the direct OpenCode provider plugin/tests; updater implementation/tests; dormant commercial retry dialog/art                                                                                                     | These are outside current runtime reachability and support promises, but their source has no demonstrated conflict or continuing cost.                                                                                          |
-| Delete or remain deleted | Share-link import; automatic/public share owners that would require restoring removed account/config/Console authority; first-party provider magic branches; updater routes/config/events and other misleading public registrations                                               | These specific branches either conflict with the accepted runtime boundary or cannot be restored without a false compatibility shell. This is evidence for those branches, not a precedent for deleting whole dormant products. |
+| Classification           | Current Gate 5 disposition                                                                                                                                                                                                                                                                                                                   | Controlling reason                                                                                                                                                                                                              |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep                     | Correct account/share/sync startup and network disconnection; hosted UI proxy and remote-route removal; retained v2 data/read transitions; local `pr`, Git/project-copy, directory, provider, MCP, plugin, Session, and terminal harness behavior                                                                                            | These changes establish truthful runtime boundaries or retain independently useful local behavior.                                                                                                                              |
+| Repair                   | Decision authority; `PrCommand` and hosted GitHub Action classification; Gate 5D5 activation/hydration scope; updater reachability; inherited workflow registration; production v2 execution registration/composition; remaining provider-ID request/native/CLI presentation and discovery projection; inherited implicit client-origin CORS | The earlier classification and scope repairs remain complete. The post-Gate-7 v2, provider, and CORS residues are the bounded open work recorded above.                                                                         |
+| Hibernate                | Preview-v2 execution implementation, declarations, runner, and direct tests; Web/Desktop and marketplace source; hosted GitHub Action source; the direct OpenCode provider plugin/tests; updater implementation/tests; dormant commercial retry dialog/art                                                                                   | These are outside current runtime reachability and support promises, but their source has no demonstrated conflict or continuing cost.                                                                                          |
+| Delete or remain deleted | Share-link import; automatic/public share owners that would require restoring removed account/config/Console authority; first-party provider magic branches; updater routes/config/events and other misleading public registrations                                                                                                          | These specific branches either conflict with the accepted runtime boundary or cannot be restored without a false compatibility shell. This is evidence for those branches, not a precedent for deleting whole dormant products. |
 
 Gate 5D5's `00061ce34` local-directory invariant is accepted after the
 `af506b635` necessity repair. The active view needs one atomic directory
@@ -426,13 +440,54 @@ local `experimental.projectCopy.generateName` and v2 project-copy operations
 must survive; Gate 5B3 converts their routing middleware to directory-only
 rather than deleting their API group.
 
+## Reopened production-composition boundary: hibernate preview-v2 execution
+
+The released-v1 Session loop remains Repa's only production model runtime.
+Preview-v2 is retained as source for future evidence-based comparison with
+OpenCode v2, not maintained as a second product path and not physically deleted
+merely because it is outside the current baseline.
+
+The public v2 `active`, `prompt`, `compact`, `wait`, and `interrupt` operations
+form one execution-facing family. Removing only `prompt` would leave public
+coordinator state and control endpoints, two operations that always report
+unavailable, and a live second runner in production composition. The stable
+boundary therefore:
+
+- excludes all five operations from the production Protocol group and Server
+  handler composition, so current OpenAPI and generated clients do not promise
+  them;
+- removes the live local v2 execution layer from both production server
+  assemblies and gives retained v2 data services the existing non-executing
+  layer;
+- treats the default Location service collection and
+  `buildLocationServiceMap()` as an independent production composition owner.
+  The Location composition used by production must omit `SessionRunnerModel`
+  and `SessionRunnerLLM` before service-map compilation. A runner-enabled
+  Location composition may remain only under a non-production owner and direct
+  tests; a successful no-op, fixed-error, or empty runner service is not
+  hibernation;
+- retains independently useful v2 reads and durable non-executing state
+  transitions when they have real consumers; and
+- retains the v2 prompt, execution, runner, protocol/handler declarations, and
+  direct tests as compile-checked hibernated source outside production
+  registration. A source declaration may move behind a non-production owner to
+  keep the production API truthful; that is not physical capability deletion.
+
+Released-v1 prompt, status, abort, and compaction behavior remain unchanged.
+No host flag, false compatibility endpoint, alternate runtime selector, or
+OpenAPI-only filter is introduced. Released-v1 production modules also retain
+no import edge to the local v2 execution or runner composition. If retained v2
+source later produces a concrete compatibility or continuing maintenance cost,
+that evidence reopens its physical disposition; hibernation alone does not
+authorize deletion.
+
 ## Resolved reachability work: provider policy and self-update
 
-The correction asked whether Repa can retain a complete generic local provider
-harness without silently carrying OpenCode's first-party Zen/Go product policy,
-and whether self-update can be absent until Repa owns a real release channel.
-It treated them as two independent behavior boundaries. Inactive source may
-hibernate, but neither behavior may remain reachable through a no-op
+The correction now covers three independent behavior boundaries: retaining a
+complete generic local provider harness without OpenCode's first-party Zen/Go
+product policy, making inherited client-origin trust explicit, and keeping
+self-update absent until Repa owns a real release channel. Inactive source may
+hibernate, but none of these behaviors may remain reachable through a no-op
 compatibility surface or false configuration.
 
 ### Make first-party provider IDs ordinary
@@ -445,7 +500,22 @@ copy. `opencode-go` is likewise excluded from the shared ModelsDev outward
 catalog. A user who explicitly configures an `opencode` endpoint, models, and
 credentials receives the same generic custom-provider path as any other ID.
 The raw models.dev cache is not a product registry and need not be rewritten;
-the shared outward projection owns the exclusion.
+the shared outward projection owns the exclusion. Released provider discovery,
+provider login, model listing, and the run picker consume that same projection:
+first filter the exact inherited built-ins `opencode` and `opencode-go`, then
+overlay explicitly connected or configured providers. This makes an explicit
+custom provider named `opencode` visible through ordinary configuration without
+restoring the inherited commercial product.
+
+Provider credential management is mixed local behavior and remains available.
+`providers list` and `providers logout` must not use raw exact built-ins to
+restore commercial names, discover their environment variables, or match a
+credential by an inherited product name. An old credential with no explicit
+provider configuration remains visible and removable under its literal stored
+provider ID. Explicitly configured `opencode`, `opencode-local`, and ordinary
+control providers use the same custom projection, including an explicit custom
+name when one exists. Raw catalog metadata does not own local credential
+identity.
 
 The active baseline therefore omits the v1 magic provider loader and v2
 built-in OpenCode provider registration, exact-ID branches in LLM
@@ -468,11 +538,28 @@ Negative evidence requires a catalog containing `opencode`, `opencode-go`,
 and an ordinary control provider to expose only the control through released
 and current discovery surfaces. An explicitly configured provider named
 `opencode` must load without any public credential or ID-only request/tool/
-selection behavior. Limit-shaped errors retain generic retry information but
+selection behavior. A custom ID such as `opencode-local` is not excluded or
+privileged merely because of its prefix. Limit-shaped errors retain generic retry information but
 produce no commercial URL or action, and current schemas/clients contain no
 retry action. Positive evidence covers generic custom providers and auth,
 explicit request headers, plugin/MCP tools, AI-SDK fallback, normal catalog
 costs, and GitHub Copilot enterprise auth.
+
+### Make client-origin trust explicit
+
+The baseline server grants no implicit origin merely because it identifies an
+inherited hosted or dormant client. Remove the automatic
+`https://*.opencode.ai`, `oc://renderer`, `tauri://localhost`,
+`http://tauri.localhost`, and `https://tauri.localhost` branches. Requests with
+no Origin, localhost and `127.0.0.1`, same-host requests, and exact origins
+supplied through the server's explicit CORS configuration retain their
+independent rules.
+
+This is a reachability correction, not Desktop source deletion. The dormant
+Desktop sidecar already supplies `oc://renderer` explicitly when deliberately
+launched, so it can continue to work in that non-baseline composition without
+granting every local server an ambient Desktop or OpenCode-hosted trust edge.
+No new origin registry, client-detection layer, or compatibility flag is added.
 
 ### Hibernate self-update by absence
 
@@ -505,7 +592,7 @@ ordinary server startup and `/global/health`, retained build/channel identity,
 and local terminal commands. Focused owner tests, affected package typechecks,
 exact dependency scans, and `git diff --check` are causal.
 
-The two behavior changes may use separate revertible commits without becoming
+The three behavior changes may use separate revertible commits without becoming
 new product Gates. Neither changes user data or adds a fallback endpoint,
 compatibility field, empty service, or alternate registry. A future Repa
 provider product or updater requires a Repa-owned product contract and release
@@ -581,54 +668,118 @@ is introduced.
 ## Post-audit closing evidence
 
 The general Gate-wide checks above previously passed while the reopened v2,
-provider, and CORS behavior remained. They are necessary but cannot close Gate
-5 again without exact oracles for the missed owners:
+provider, and CORS behavior remained. The following exact oracles therefore own
+the correction close rather than inheriting confidence from those checks:
 
-1. **Public v2 model execution:** the production protocol composition has no
-   public v2 prompt-admission operation or handler; current OpenAPI and generated
-   clients expose no such method; and a direct
-   `POST /api/session/:sessionID/prompt` receives not found without admitting an
-   input or scheduling model execution. Independently retained non-model v2
-   endpoints and dormant source are not removed merely to satisfy this oracle.
-2. **Provider-ID equivalence:** two otherwise identical explicit custom
-   providers whose IDs differ only between `opencode`/`opencode-*` and an
-   ordinary name produce the same request headers, project-lookup behavior, and
-   native-runtime eligibility. No `x-opencode-*` header or runtime selection is
-   caused by the ID alone.
+1. **Hibernated v2 execution:** the production protocol and handler
+   compositions contain none of the v2 `active`, `prompt`, `compact`, `wait`, or
+   `interrupt` operations; current OpenAPI and generated clients expose none of
+   their methods; and direct requests to their former paths receive not found.
+   The prompt path admits no input and schedules no model execution. Both
+   production server assemblies omit the live local v2 execution layer and the
+   retained v2 data services use the non-executing layer. The production
+   Location service collection and every `buildLocationServiceMap()` path omit
+   `SessionRunnerModel` and `SessionRunnerLLM` entirely; obtaining the Location
+   layer for retained v2 `get/messages` and state transitions neither registers
+   nor substitutes a no-op/error/empty runner. Released-v1 production imports
+   contain no execution-local or runner edge. Released-v1 prompt, status, abort,
+   and compaction plus retained v2 reads/state transitions still work. A
+   separately owned runner-enabled composition, the v2 execution/runner source,
+   and its direct tests remain present and compile-checked outside production
+   registration.
+2. **Provider-ID equivalence:** otherwise identical explicit custom providers
+   named `opencode`, `opencode-local`, and an ordinary control ID produce the
+   same request headers, project-lookup behavior, and native-runtime
+   eligibility. No `x-opencode-*` header or runtime selection is caused by the
+   ID alone.
 3. **Provider CLI truth:** provider login consumes the accepted filtered
    provider projection and neither injects nor recommends OpenCode by name.
    `models` and the run mini picker do not prioritize `opencode*` or label a
    model `Free` because of its provider ID. An explicitly configured custom
    provider named `opencode` remains usable and appears only through the generic
-   path.
-4. **CORS truth:** an `https://*.opencode.ai` origin is denied unless the user
-   explicitly configures that exact origin. Localhost, same-host requests, and
-   explicit user CORS entries remain accepted by their independent rules.
+   path. With raw `opencode`, `opencode-go`, and a control provider in the
+   catalog, released and current discovery omit the two exact inherited
+   built-ins. Overlaying explicit `opencode` and `opencode-local` configuration
+   makes both custom providers and the control provider visible through that
+   same projection; no prefix-wide filter may hide `opencode-local`.
+   `providers list/logout` do not recover a commercial name, environment
+   variable, or name match from either raw exact built-in. A no-config legacy
+   credential remains listable and removable by literal provider ID, while
+   explicitly configured `opencode`, `opencode-local`, and the control provider
+   use their ordinary custom-projection labels and matching rules.
+4. **CORS truth:** `https://*.opencode.ai`, `oc://renderer`, and each inherited
+   Tauri origin are denied unless that exact origin is explicitly configured.
+   No-Origin, localhost, same-host, and explicit user CORS cases remain accepted
+   by their independent rules. A deliberately composed dormant Desktop server
+   still accepts the origin it supplies explicitly.
 5. **Owning-artifact consistency:** the protocol/OpenAPI/client generation
    check, focused provider/request/native/CLI/CORS tests, affected package
    typechecks, exact owner scans, and `git diff --check` pass. No unrelated
    dormant-source test or monorepo-wide suite is required.
 
 Any result that merely hides a CLI label while retaining the request branch,
-removes a generated method without changing its protocol owner, or blocks the
-route while still admitting/scheduling the v2 prompt fails this evidence
-contract.
+removes a generated method without changing its protocol owner, blocks only the
+v2 prompt while leaving its public execution family, process-global
+coordinator, or Location-scoped runners composed, replaces a runner with a
+no-op/error/empty compatibility service, lets raw catalog identity leak through
+credential commands, or keeps an implicit client-origin grant behind
+client-name detection fails this evidence contract.
+
+### 2026-07-15 correction result
+
+The implementation/evidence round passed this contract and the same independent
+top-level reviewer accepted it with no P0–P3 finding.
+
+- Production Protocol, handlers, OpenAPI, and current generated clients contain
+  none of the five v2 execution operations or paths. Former paths return ordinary
+  not-found responses and the former prompt path admits no durable input.
+- Both production server assemblies use `SessionExecution.noopLayer`; their
+  import and composition graphs contain no local execution or runner edge. The
+  production Location owner omits both runner services before compilation. A
+  separate explicit non-production owner retains the real runner composition,
+  implementation, declarations, handlers, and direct tests.
+- Released-v1 prompt execution and retained v2 reads and non-executing state
+  transitions passed their direct oracles. The source was hibernated rather than
+  physically removed or replaced with a fake runner.
+- The shared provider projection, request preparation, native eligibility, HTTP
+  discovery, provider login/list/logout, model listing, and run picker satisfy
+  the exact-ID and explicit-custom-provider matrix. Ambient hosted/Desktop CORS
+  grants are absent while the independent local and explicit-origin rules pass.
+- Fresh verification passed typechecks for Core, Protocol, Server, OpenCode,
+  Client, sdk-js, and sdk-next; six Location tests with 15 assertions; one direct
+  runner and one released-v1 prompt oracle; the retired-route/no-admission
+  oracle; 24 public-OpenAPI, 12 current-client, two retained sdk-next, 176
+  provider/request/native/CLI, six CORS, and four real credential-command
+  subprocess tests. Six focused provider tests remained intentionally skipped.
+  Exact owner scans and `git diff --check` passed.
+
+The reviewer also inspected the broader failures that could plausibly weaken
+that evidence. Two recorded-native cassette failures track pre-existing system
+prompt drift; one broader sdk-next failure is the accepted two-host/one-database
+owner refusal; dormant-provider asynchronous-key assertions exercise
+unregistered source; and whole-file Prettier findings include existing HEAD
+debt. None contradicted a Gate 5 claim, so no unrelated monorepo-wide suite was
+promoted into the closing contract.
 
 ## Explicit exclusions
 
 This gate does not migrate or clean historical database fields, because no
 Repa user-data compatibility contract exists. It does not redesign preview-v2,
-add future Repa cloud behavior, invent Tutor slash commands, replace local
-plugin mechanics, or rewrite provider transport that has no excluded product
-branch. Preview-v2 changes only when a shared released registration otherwise
-keeps an excluded surface public.
+delete its implementation, add future Repa cloud behavior, invent Tutor slash
+commands, replace local plugin mechanics, or rewrite provider transport that
+has no excluded product branch. Preview-v2 changes only where production
+registration or composition otherwise creates a second runtime promise; its
+hibernated implementation remains available for a later evidence-based
+OpenCode-v2 comparison.
 
 ## Recorded result
 
-Gate 5 was recorded passed at
+Gate 5 was historically recorded passed at
 `25e51861effbddbdb04ae8fe88c4107d34ab91b2`. The post-Gate-7 audit invalidated
-that gate-wide close claim, while preserving the parent disposition correction
-and repository-workflow boundary recorded by these commits:
+that gate-wide close claim. The bounded correction closed again on 2026-07-15
+after the same top-level reviewer independently accepted both the revised
+contract and the final implementation/evidence. The parent disposition
+correction and repository-workflow boundary recorded by these commits remain:
 
 - `03fbb078e` repaired the decision authority and active-status chain;
 - `53b41aa0d` restored local `pr` without share-link import and restored the
@@ -651,8 +802,8 @@ against their pre-move Git blobs. No product test could add evidence to that
 registration-and-preservation claim, so none was run.
 
 The historical checks below remain evidence for the behaviors they actually
-observe, not for the post-audit closing contract. Gate 5 closes again only when
-the exact v2, provider, CLI, and CORS oracles above pass.
+observe, not for the post-audit closing contract. The exact v2, provider, CLI,
+and CORS oracles above are the accepted correction evidence.
 
 Gate 5A's earlier reachability work was recorded at
 `6503c280762a8cb2cc04e2cd0021498a8f0aa174`, but its whole-command

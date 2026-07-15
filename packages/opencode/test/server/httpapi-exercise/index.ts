@@ -901,7 +901,6 @@ const scenarios: Scenario[] = [
       headers: ctx.headers(),
     }))
     .status(400, undefined, "none"),
-  http.protected.get("/api/session/active", "v2.session.active").json(200, data(object), "none"),
   http.protected
     .post("/api/session", "v2.session.create")
     .at((ctx) => ({
@@ -1046,14 +1045,6 @@ const scenarios: Scenario[] = [
     }))
     .status(404, undefined, "status"),
   http.protected
-    .post("/api/session/{sessionID}/interrupt", "v2.session.interrupt")
-    .seeded((ctx) => ctx.session({ title: "Interrupt session" }))
-    .at((ctx) => ({
-      path: route("/api/session/{sessionID}/interrupt", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-    }))
-    .status(204, undefined, "none"),
-  http.protected
     .get("/api/session/{sessionID}/message/{messageID}", "v2.session.message.missing")
     .at((ctx) => ({
       path: route("/api/session/{sessionID}/message/{messageID}", {
@@ -1063,29 +1054,6 @@ const scenarios: Scenario[] = [
       headers: ctx.headers(),
     }))
     .json(404, object, "status"),
-  http.protected
-    .post("/api/session/{sessionID}/prompt", "v2.session.prompt.invalid")
-    .seeded((ctx) => ctx.session({ title: "Invalid prompt owner" }))
-    .at((ctx) => ({
-      path: route("/api/session/{sessionID}/prompt", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-      body: {},
-    }))
-    .status(400, undefined, "none"),
-  http.protected
-    .post("/api/session/{sessionID}/compact", "v2.session.compact")
-    .at((ctx) => ({
-      path: route("/api/session/{sessionID}/compact", { sessionID: "ses_httpapi_missing" }),
-      headers: ctx.headers(),
-    }))
-    .status(404, undefined, "status"),
-  http.protected
-    .post("/api/session/{sessionID}/wait", "v2.session.wait")
-    .at((ctx) => ({
-      path: route("/api/session/{sessionID}/wait", { sessionID: "ses_httpapi_missing" }),
-      headers: ctx.headers(),
-    }))
-    .status(404, undefined, "status"),
   http.protected
     .get("/session", "session.list")
     .seeded((ctx) => ctx.session({ title: "List me" }))

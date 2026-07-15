@@ -50,13 +50,14 @@ function command(input: { name: string; description: string; source?: "command" 
 function model(input: {
   id: string
   name: string
+  providerID?: string
   status?: "active" | "deprecated"
   cost?: number
   variants?: Record<string, Record<string, never>>
 }) {
   return {
     id: input.id,
-    providerID: "opencode",
+    providerID: input.providerID ?? "opencode",
     api: {
       id: "opencode",
       url: "https://opencode.ai",
@@ -104,17 +105,17 @@ function model(input: {
   } satisfies RunProvider["models"][string]
 }
 
-function provider() {
+function provider(id = "opencode", name = id) {
   return {
-    id: "opencode",
-    name: "opencode",
+    id,
+    name,
     source: "api",
     env: [],
     options: {},
     models: {
-      "gpt-5": model({ id: "gpt-5", name: "GPT-5", variants: { high: {}, minimal: {} } }),
-      "gpt-free": model({ id: "gpt-free", name: "GPT Free", cost: 0 }),
-      old: model({ id: "old", name: "Old Model", status: "deprecated" }),
+      "gpt-5": model({ id: "gpt-5", name: "GPT-5", providerID: id, variants: { high: {}, minimal: {} } }),
+      budget: model({ id: "budget", name: "Budget Model", providerID: id, cost: 0 }),
+      old: model({ id: "old", name: "Old Model", providerID: id, status: "deprecated" }),
     },
   } satisfies RunProvider
 }
@@ -1291,8 +1292,8 @@ test("direct permission rejection submits through keymap return binding", async 
   }
 })
 
-test("direct model panel renders current model selector", async () => {
-  const [providers] = createSignal<RunProvider[] | undefined>([provider()])
+test("direct model panel uses neutral provider presentation", async () => {
+  const [providers] = createSignal<RunProvider[] | undefined>([provider(), provider("ordinary", "Alpha Provider")])
   const [current] = createSignal<RunInput["model"]>({ providerID: "opencode", modelID: "gpt-5" })
 
   const app = await testRender(
@@ -1316,19 +1317,18 @@ test("direct model panel renders current model selector", async () => {
   try {
     await app.renderOnce()
     const frame = app.captureCharFrame()
-    const list = panelMenu(app.renderer.root)
 
     expect(frame).toContain("Select model")
     expect(frame).toContain("Search")
     expect(frame).toContain("opencode")
     expect(frame).toContain("GPT-5")
     expect(frame).toContain("current")
-    expect(frame).toContain("GPT Free")
-    expect(frame).toContain("Free")
+    expect(frame).toContain("Budget Model")
+    expect(frame).not.toContain("Free")
+    expect(frame.indexOf("Alpha Provider")).toBeLessThan(frame.indexOf("opencode"))
     expect(frame).not.toContain("┌")
     expect(frame).not.toContain("┃")
     expect(frame).not.toContain("Old Model")
-    expectPaletteList(list, 2)
   } finally {
     app.renderer.destroy()
   }

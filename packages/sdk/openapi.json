@@ -7973,66 +7973,6 @@
         ]
       }
     },
-    "/api/session/active": {
-      "get": {
-        "tags": ["sessions"],
-        "operationId": "v2.session.active",
-        "parameters": [],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "patternProperties": {
-                        "^ses": {
-                          "$ref": "#/components/schemas/SessionActive"
-                        }
-                      }
-                    }
-                  },
-                  "required": ["data"],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedError"
-                }
-              }
-            }
-          }
-        },
-        "description": "Retrieve foreground Session drains currently owned by this OpenCode process. Sessions absent from the result are inactive.",
-        "summary": "List active sessions",
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.v2.session.active({\n  ...\n})"
-          }
-        ]
-      }
-    },
     "/api/session/{sessionID}": {
       "get": {
         "tags": ["sessions"],
@@ -8281,282 +8221,6 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.v2.session.switchModel({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/api/session/{sessionID}/prompt": {
-      "post": {
-        "tags": ["sessions"],
-        "operationId": "v2.session.prompt",
-        "parameters": [
-          {
-            "name": "sessionID",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses"
-            },
-            "required": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/SessionInputAdmitted"
-                    }
-                  },
-                  "required": ["data"],
-                  "additionalProperties": false
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "SessionNotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "ConflictError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ConflictError"
-                }
-              }
-            }
-          }
-        },
-        "description": "Durably admit one session input and schedule agent-loop execution unless resume is false.",
-        "summary": "Send message",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^msg_"
-                  },
-                  "prompt": {
-                    "$ref": "#/components/schemas/PromptInput"
-                  },
-                  "delivery": {
-                    "type": "string",
-                    "enum": ["steer", "queue"]
-                  },
-                  "resume": {
-                    "type": "boolean"
-                  }
-                },
-                "required": ["prompt"],
-                "additionalProperties": false
-              }
-            }
-          },
-          "required": true
-        },
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.v2.session.prompt({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/api/session/{sessionID}/compact": {
-      "post": {
-        "tags": ["sessions"],
-        "operationId": "v2.session.compact",
-        "parameters": [
-          {
-            "name": "sessionID",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses"
-            },
-            "required": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "204": {
-            "description": "<No Content>"
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "SessionNotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "ServiceUnavailableError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServiceUnavailableError"
-                }
-              }
-            }
-          }
-        },
-        "description": "Compact a session conversation.",
-        "summary": "Compact session",
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.v2.session.compact({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/api/session/{sessionID}/wait": {
-      "post": {
-        "tags": ["sessions"],
-        "operationId": "v2.session.wait",
-        "parameters": [
-          {
-            "name": "sessionID",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses"
-            },
-            "required": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "204": {
-            "description": "<No Content>"
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "SessionNotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "ServiceUnavailableError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ServiceUnavailableError"
-                }
-              }
-            }
-          }
-        },
-        "description": "Wait for a session agent loop to become idle.",
-        "summary": "Wait for session",
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.v2.session.wait({\n  ...\n})"
           }
         ]
       }
@@ -9160,74 +8824,6 @@
           {
             "lang": "js",
             "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.v2.session.events({\n  ...\n})"
-          }
-        ]
-      }
-    },
-    "/api/session/{sessionID}/interrupt": {
-      "post": {
-        "tags": ["sessions"],
-        "operationId": "v2.session.interrupt",
-        "parameters": [
-          {
-            "name": "sessionID",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "pattern": "^ses"
-            },
-            "required": true
-          }
-        ],
-        "security": [],
-        "responses": {
-          "204": {
-            "description": "<No Content>"
-          },
-          "400": {
-            "description": "InvalidRequestError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvalidRequestError"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "UnauthorizedError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnauthorizedError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "SessionNotFoundError",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "anyOf": [
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    },
-                    {
-                      "$ref": "#/components/schemas/SessionNotFoundError"
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "description": "Interrupt active execution owned by this OpenCode process. Idle interruption is a no-op.",
-        "summary": "Interrupt session execution",
-        "x-codeSamples": [
-          {
-            "lang": "js",
-            "source": "import { createOpencodeClient } from \"@opencode-ai/sdk\n\nconst client = createOpencodeClient()\nawait client.v2.session.interrupt({\n  ...\n})"
           }
         ]
       }
@@ -20917,17 +20513,6 @@
         "required": ["_tag", "message"],
         "additionalProperties": false
       },
-      "SessionActive": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["running"]
-          }
-        },
-        "required": ["type"],
-        "additionalProperties": false
-      },
       "SessionNotFoundError": {
         "type": "object",
         "properties": {
@@ -20943,62 +20528,6 @@
           }
         },
         "required": ["_tag", "sessionID", "message"],
-        "additionalProperties": false
-      },
-      "PromptInput": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string"
-          },
-          "files": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PromptInputFileAttachment"
-            }
-          },
-          "agents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PromptAgentAttachment"
-            }
-          }
-        },
-        "required": ["text"],
-        "additionalProperties": false
-      },
-      "ConflictError": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": ["ConflictError"]
-          },
-          "message": {
-            "type": "string"
-          },
-          "resource": {
-            "type": "string"
-          }
-        },
-        "required": ["_tag", "message"],
-        "additionalProperties": false
-      },
-      "ServiceUnavailableError": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": ["ServiceUnavailableError"]
-          },
-          "message": {
-            "type": "string"
-          },
-          "service": {
-            "type": "string"
-          }
-        },
-        "required": ["_tag", "message"],
         "additionalProperties": false
       },
       "MessageNotFoundError": {
@@ -21172,6 +20701,23 @@
           }
         },
         "required": ["data", "cursor"],
+        "additionalProperties": false
+      },
+      "ServiceUnavailableError": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["ServiceUnavailableError"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "message"],
         "additionalProperties": false
       },
       "ProviderNotFoundError": {
@@ -24669,58 +24215,6 @@
           }
         },
         "required": ["id", "projectID", "cost", "tokens", "time", "title", "location"],
-        "additionalProperties": false
-      },
-      "PromptInputFileAttachment": {
-        "type": "object",
-        "properties": {
-          "uri": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "source": {
-            "$ref": "#/components/schemas/PromptSource"
-          }
-        },
-        "required": ["uri"],
-        "additionalProperties": false
-      },
-      "SessionInputAdmitted": {
-        "type": "object",
-        "properties": {
-          "admittedSeq": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "id": {
-            "type": "string",
-            "pattern": "^msg_"
-          },
-          "sessionID": {
-            "type": "string",
-            "pattern": "^ses"
-          },
-          "prompt": {
-            "$ref": "#/components/schemas/Prompt"
-          },
-          "delivery": {
-            "type": "string",
-            "enum": ["steer", "queue"]
-          },
-          "timeCreated": {
-            "type": "number"
-          },
-          "promotedSeq": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "required": ["admittedSeq", "id", "sessionID", "prompt", "delivery", "timeCreated"],
         "additionalProperties": false
       },
       "SessionMessageAgentSwitched": {

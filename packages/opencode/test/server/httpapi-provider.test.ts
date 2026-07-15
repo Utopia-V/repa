@@ -22,6 +22,23 @@ const providerID = "test-oauth-parity"
 const oauthURL = "https://example.com/oauth"
 const oauthInstructions = "Finish OAuth"
 
+function compatibleProvider(name: string) {
+  return {
+    name,
+    npm: "@ai-sdk/openai-compatible",
+    api: "http://localhost:4141/v1",
+    env: [],
+    models: {
+      "local-model": {
+        name: "Local Model",
+        tool_call: true,
+        limit: { context: 4000, output: 1000 },
+      },
+    },
+    options: { apiKey: "local-key" },
+  }
+}
+
 function providerListHasFetch(list: unknown) {
   if (!Array.isArray(list)) return false
   return list.some((item: unknown) => {
@@ -261,6 +278,55 @@ function setEnvScoped(key: string, value: string) {
 }
 
 describe("provider HttpApi", () => {
+  it.instance(
+    "keeps exact inherited built-ins out of released provider discovery",
+    Effect.gen(function* () {
+      const directory = (yield* TestInstance).directory
+      const response = yield* request("/provider", { headers: { "x-opencode-directory": directory } })
+      const body = yield* response.json
+
+      expect(response.status).toBe(200)
+      expect(providerByID(body, "all", "opencode")).toBeUndefined()
+      expect(providerByID(body, "all", "opencode-go")).toBeUndefined()
+      expect(providerByID(body, "all", "openai")).toBeDefined()
+    }),
+    projectOptions,
+  )
+
+  it.instance(
+    "projects explicit opencode, opencode-local, and control providers generically",
+    Effect.gen(function* () {
+      const directory = (yield* TestInstance).directory
+      const response = yield* request("/provider", { headers: { "x-opencode-directory": directory } })
+      const body = yield* response.json
+
+      expect(response.status).toBe(200)
+      expect(providerByID(body, "all", "opencode")).toMatchObject({
+        name: "Configured OpenCode ID",
+        source: "config",
+      })
+      expect(providerByID(body, "all", "opencode-local")).toMatchObject({
+        name: "Configured Prefix ID",
+        source: "config",
+      })
+      expect(providerByID(body, "all", "ordinary-control")).toMatchObject({
+        name: "Configured Control",
+        source: "config",
+      })
+    }),
+    {
+      config: {
+        formatter: false,
+        lsp: false,
+        provider: {
+          opencode: compatibleProvider("Configured OpenCode ID"),
+          "opencode-local": compatibleProvider("Configured Prefix ID"),
+          "ordinary-control": compatibleProvider("Configured Control"),
+        },
+      },
+    },
+  )
+
   it.instance.skip(
     "returns public v2 provider not found errors",
     Effect.gen(function* () {

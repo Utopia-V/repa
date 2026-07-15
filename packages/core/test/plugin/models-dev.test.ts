@@ -1,7 +1,9 @@
 import path from "path"
 import { describe, expect } from "bun:test"
-import { Effect, Layer } from "effect"
+import { Effect, Layer, Schema } from "effect"
 import { Catalog } from "@opencode-ai/core/catalog"
+import { Config } from "@opencode-ai/core/config"
+import { ConfigProviderPlugin } from "@opencode-ai/core/config/plugin/provider"
 import { Integration } from "@opencode-ai/core/integration"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -168,10 +170,14 @@ describe("ModelsDevPlugin", () => {
     ),
   )
 
-  it.effect("keeps inherited commercial providers out of the built-in catalog", () =>
+  it.effect("filters exact inherited built-ins before ordinary configuration overlays", () =>
     Effect.gen(function* () {
       const integrations = yield* Integration.Service
       const catalog = yield* Catalog.Service
+      const pluginHost = host({
+        catalog: catalogHost(catalog),
+        integration: integrationHost(integrations),
+      })
       const models = ModelsDev.Service.of({
         get: () =>
           Effect.succeed({
@@ -191,21 +197,67 @@ describe("ModelsDevPlugin", () => {
               api: "https://api.opencode.test/v1",
               models: {},
             },
+            "ordinary-control": {
+              id: "ordinary-control",
+              name: "Raw Control",
+              env: ["CONTROL_API_KEY"],
+              npm: "@ai-sdk/openai-compatible",
+              api: "https://api.control.test/v1",
+              models: {},
+            },
           } satisfies Record<string, ModelsDev.Provider>),
         refresh: () => Effect.void,
       })
 
-      yield* ModelsDevPlugin.effect(
-        host({
-          catalog: catalogHost(catalog),
-          integration: integrationHost(integrations),
-        }),
-      ).pipe(Effect.provideService(ModelsDev.Service, models))
+      yield* ModelsDevPlugin.effect(pluginHost).pipe(Effect.provideService(ModelsDev.Service, models))
 
       expect(yield* catalog.provider.get(ProviderV2.ID.make("opencode"))).toBeUndefined()
       expect(yield* catalog.provider.get(ProviderV2.ID.make("opencode-go"))).toBeUndefined()
       expect(yield* integrations.get(Integration.ID.make("opencode"))).toBeUndefined()
       expect(yield* integrations.get(Integration.ID.make("opencode-go"))).toBeUndefined()
+      expect((yield* catalog.provider.get(ProviderV2.ID.make("ordinary-control")))?.name).toBe("Raw Control")
+
+      const config = Config.Service.of({
+        entries: () =>
+          Effect.succeed([
+            new Config.Document({
+              type: "document",
+              info: Schema.decodeUnknownSync(Config.Info)({
+                providers: {
+                  opencode: {
+                    name: "Configured OpenCode ID",
+                    env: ["CUSTOM_OPENCODE_KEY"],
+                    api: {
+                      type: "aisdk",
+                      package: "@ai-sdk/openai-compatible",
+                      url: "https://configured-opencode.test/v1",
+                    },
+                  },
+                  "opencode-local": {
+                    name: "Configured Prefix ID",
+                    env: ["LOCAL_API_KEY"],
+                    api: {
+                      type: "aisdk",
+                      package: "@ai-sdk/openai-compatible",
+                      url: "https://configured-prefix.test/v1",
+                    },
+                  },
+                  "ordinary-control": { name: "Configured Control" },
+                },
+              }),
+            }),
+          ]),
+      })
+      yield* ConfigProviderPlugin.Plugin.effect(pluginHost).pipe(Effect.provideService(Config.Service, config))
+
+      expect((yield* catalog.provider.get(ProviderV2.ID.make("opencode")))?.name).toBe("Configured OpenCode ID")
+      expect((yield* catalog.provider.get(ProviderV2.ID.make("opencode-local")))?.name).toBe("Configured Prefix ID")
+      expect((yield* catalog.provider.get(ProviderV2.ID.make("ordinary-control")))?.name).toBe("Configured Control")
+      expect(yield* catalog.provider.get(ProviderV2.ID.make("opencode-go"))).toBeUndefined()
+      expect((yield* integrations.get(Integration.ID.make("opencode")))?.methods).toContainEqual({
+        type: "env",
+        names: ["CUSTOM_OPENCODE_KEY"],
+      })
     }),
   )
 })

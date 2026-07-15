@@ -28,8 +28,6 @@ import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
 
 const FIXTURES_DIR = path.join(import.meta.dir, "../fixtures/recordings")
 
-const zenURL = (connection: string) => `https://console.opencode.ai/proxy/connections/${connection}/v1`
-
 const replayOpenAIOAuth = {
   type: "oauth",
   refresh: "fixture-refresh-token",
@@ -156,29 +154,6 @@ const RECORDED_SCENARIOS = [
         api: "https://api.openai.com/v1",
         model,
         options: { baseURL: "https://api.openai.com/v1" },
-      }),
-  },
-  {
-    id: "opencode-proxy",
-    name: "OpenCode proxy",
-    providerID: ProviderV2.ID.opencode,
-    modelID: "gpt-5.2-codex",
-    cassette: "session/native-zen-tool-loop",
-    protocol: "openai-responses",
-    tags: ["opencode", "zen", "native", "tool-loop"],
-    canRecord: () => Boolean(process.env.REPA_RECORD_CONSOLE_TOKEN && process.env.REPA_RECORD_ZEN_ORG_ID),
-    config: (model) =>
-      providerConfig({
-        providerID: ProviderV2.ID.opencode,
-        name: "OpenCode Zen",
-        env: ["OPENCODE_CONSOLE_TOKEN"],
-        npm: "@ai-sdk/openai-compatible",
-        api: zenURL(process.env.REPA_RECORD_ZEN_CONNECTION ?? "fixture"),
-        model,
-        options: {
-          apiKey: process.env.REPA_RECORD_CONSOLE_TOKEN ?? "fixture-console-token",
-          headers: { "x-org-id": process.env.REPA_RECORD_ZEN_ORG_ID ?? "fixture-org" },
-        },
       }),
   },
   {

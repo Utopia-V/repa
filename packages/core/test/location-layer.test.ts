@@ -1,7 +1,7 @@
 import fs from "fs/promises"
 import path from "path"
 import { describe, expect } from "bun:test"
-import { DateTime, Effect, Equal, Hash, Schema } from "effect"
+import { DateTime, Effect, Equal, Hash, Option, Schema } from "effect"
 import { Tool } from "@opencode-ai/core/tool/tool"
 import { define } from "@opencode-ai/plugin/v2/effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
@@ -16,6 +16,8 @@ import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
+import { SessionRunner } from "@opencode-ai/core/session/runner"
+import { SessionRunnerLocationServiceMap } from "@opencode-ai/core/session/runner/location-service-map"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
@@ -57,6 +59,46 @@ describe("LocationServiceMap", () => {
             expect(yield* locations.contextEffect(constructed)).toBe(yield* locations.contextEffect(decoded))
           }),
         ),
+      ),
+    ),
+  )
+
+  it.live("omits preview-v2 runner services from production locations", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const locations = yield* LocationServiceMap.Service
+          const services = yield* Effect.all({
+            model: Effect.serviceOption(SessionRunnerModel.Service),
+            runner: Effect.serviceOption(SessionRunner.Service),
+          }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(dir.path) }))))
+
+          expect(Option.isNone(services.model)).toBe(true)
+          expect(Option.isNone(services.runner)).toBe(true)
+        }),
+      ),
+    ),
+  )
+
+  it.live("keeps preview-v2 runner services behind the hibernated Location owner", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.gen(function* () {
+          const locations = yield* SessionRunnerLocationServiceMap.Service
+          const services = yield* Effect.all({
+            model: Effect.serviceOption(SessionRunnerModel.Service),
+            runner: Effect.serviceOption(SessionRunner.Service),
+          }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(dir.path) }))))
+
+          expect(Option.isSome(services.model)).toBe(true)
+          expect(Option.isSome(services.runner)).toBe(true)
+        }).pipe(Effect.provide(SessionRunnerLocationServiceMap.build())),
       ),
     ),
   )
@@ -162,6 +204,9 @@ describe("LocationServiceMap", () => {
               }),
             ),
           )
+          const runnerModelLayer = AppNodeBuilder.build(SessionRunnerModel.node, [
+            [Location.node, Location.boundNode(location)],
+          ])
           const failure = yield* SessionRunnerModel.Service.use((models) =>
             models.resolve(
               SessionV2.Info.make({
@@ -178,7 +223,7 @@ describe("LocationServiceMap", () => {
                 location,
               }),
             ),
-          ).pipe(Effect.provide(LocationServiceMap.Service.get(location)), Effect.flip)
+          ).pipe(Effect.provide(runnerModelLayer), Effect.flip)
 
           expect(failure).toMatchObject({
             _tag: "SessionRunnerModel.ModelUnavailableError",

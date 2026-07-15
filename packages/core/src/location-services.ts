@@ -24,8 +24,6 @@ import { Pty } from "./pty"
 import { QuestionV2 } from "./question"
 import { Reference } from "./reference"
 import { ReferenceGuidance } from "./reference/guidance"
-import * as SessionRunnerLLM from "./session/runner/llm"
-import { SessionRunnerModel } from "./session/runner/model"
 import { SessionTodo } from "./session/todo"
 import { SkillV2 } from "./skill"
 import { SkillGuidance } from "./skill/guidance"
@@ -39,6 +37,8 @@ import { ToolOutputStore } from "./tool-output-store"
 
 export { LocationServiceMap } from "./location-service-map"
 
+// Preview-v2 runner services stay outside the production Location graph.
+// Direct runner tests compose them explicitly with their own Location.
 export const locationServices = LayerNode.group([
   Location.node,
   Policy.node,
@@ -73,9 +73,7 @@ export const locationServices = LayerNode.group([
   QuestionV2.node,
   ReadToolFileSystem.node,
   BuiltInTools.node,
-  SessionRunnerModel.node,
   Snapshot.node,
-  SessionRunnerLLM.node,
 ])
 
 export type LocationServices = LayerNode.Output<typeof locationServices>

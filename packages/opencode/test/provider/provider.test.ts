@@ -74,6 +74,7 @@ const providerLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
   )
 
 const list = Provider.use.list()
+const listAvailable = Provider.use.listAvailable()
 
 const languageBaseURL = (language: unknown) => (language as { config: { baseURL: string } }).config.baseURL
 
@@ -101,6 +102,21 @@ const alphaProviderConfig = {
     },
   },
 }
+
+const compatibleProviderConfig = (name: string) => ({
+  name,
+  npm: "@ai-sdk/openai-compatible",
+  api: "http://localhost:4141/v1",
+  env: [],
+  models: {
+    "local-model": {
+      name: "Local Model",
+      tool_call: true,
+      limit: { context: 4000, output: 1000 },
+    },
+  },
+  options: { apiKey: "local-key" },
+})
 
 it.instance("provider loaded from env variable", () =>
   Effect.gen(function* () {
@@ -1143,8 +1159,11 @@ it.instance("inherited commercial providers stay out of built-in provider state"
   Effect.gen(function* () {
     yield* remove("OPENCODE_API_KEY")
     const providers = yield* list
+    const available = yield* listAvailable
     expect(providers[ProviderV2.ID.opencode]).toBeUndefined()
     expect(providers[ProviderV2.ID.make("opencode-go")]).toBeUndefined()
+    expect(available[ProviderV2.ID.opencode]).toBeUndefined()
+    expect(available[ProviderV2.ID.make("opencode-go")]).toBeUndefined()
 
     const error = yield* Provider.use
       .getModel(ProviderV2.ID.opencode, ModelV2.ID.make("claude-haiku-fake-model"))
@@ -1154,34 +1173,28 @@ it.instance("inherited commercial providers stay out of built-in provider state"
   }),
 )
 it.instance(
-  "same-named explicit config remains an ordinary custom provider",
+  "explicit opencode, opencode-local, and control providers survive the same outward projection",
   Effect.gen(function* () {
-    const providers = yield* list
-    const provider = providers[ProviderV2.ID.opencode]
-    expect(provider).toMatchObject({
-      id: "opencode",
-      name: "Local Compatible Provider",
-      source: "config",
-    })
-    expect(Object.keys(provider.models)).toEqual(["local-model"])
+    const providers = yield* listAvailable
+    expect(
+      ["opencode", "opencode-local", "ordinary-control"].map((id) => ({
+        id: providers[ProviderV2.ID.make(id)]?.id.toString(),
+        name: providers[ProviderV2.ID.make(id)]?.name,
+        source: providers[ProviderV2.ID.make(id)]?.source,
+        models: Object.keys(providers[ProviderV2.ID.make(id)]?.models ?? {}),
+      })),
+    ).toEqual([
+      { id: "opencode", name: "Configured OpenCode ID", source: "config", models: ["local-model"] },
+      { id: "opencode-local", name: "Configured Prefix ID", source: "config", models: ["local-model"] },
+      { id: "ordinary-control", name: "Configured Control", source: "config", models: ["local-model"] },
+    ])
   }),
   {
     config: {
       provider: {
-        opencode: {
-          name: "Local Compatible Provider",
-          npm: "@ai-sdk/openai-compatible",
-          api: "http://localhost:4141/v1",
-          env: [],
-          models: {
-            "local-model": {
-              name: "Local Model",
-              tool_call: true,
-              limit: { context: 4000, output: 1000 },
-            },
-          },
-          options: { apiKey: "local-key" },
-        },
+        opencode: compatibleProviderConfig("Configured OpenCode ID"),
+        "opencode-local": compatibleProviderConfig("Configured Prefix ID"),
+        "ordinary-control": compatibleProviderConfig("Configured Control"),
       },
     },
   },

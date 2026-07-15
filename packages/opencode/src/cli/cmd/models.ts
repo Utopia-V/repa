@@ -5,6 +5,10 @@ import { effectCmd, fail } from "../effect-cmd"
 import { UI } from "../ui"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 
+export function sortProviderIDs(ids: string[]) {
+  return ids.toSorted((a, b) => a.localeCompare(b))
+}
+
 export const ModelsCommand = effectCmd({
   command: "models [provider]",
   describe: "list all available models",
@@ -31,7 +35,7 @@ export const ModelsCommand = effectCmd({
     }
 
     const provider = yield* Provider.Service
-    const providers = yield* provider.list()
+    const providers = yield* provider.listAvailable()
 
     const print = (providerID: ProviderV2.ID, verbose?: boolean) => {
       const p = providers[providerID]
@@ -53,13 +57,7 @@ export const ModelsCommand = effectCmd({
       return
     }
 
-    const ids = Object.keys(providers).sort((a, b) => {
-      const aIsOpencode = a.startsWith("opencode")
-      const bIsOpencode = b.startsWith("opencode")
-      if (aIsOpencode && !bIsOpencode) return -1
-      if (!aIsOpencode && bIsOpencode) return 1
-      return a.localeCompare(b)
-    })
+    const ids = sortProviderIDs(Object.keys(providers))
 
     for (const providerID of ids) print(ProviderV2.ID.make(providerID), args.verbose)
   }),

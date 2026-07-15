@@ -95,19 +95,11 @@ const layer = Layer.effect(
       directory: string,
       model: RunInput["model"],
     ) {
-      const connected = yield* Effect.promise(() =>
-        sdk.config
-          .providers({ directory })
-          .then((item) => item.data?.providers)
-          .catch(() => undefined),
-      )
       const providers = yield* Effect.promise(() =>
-        connected
-          ? Promise.resolve(connected)
-          : sdk.provider
-              .list()
-              .then((item) => item.data?.all ?? [])
-              .catch(() => []),
+        sdk.provider
+          .list({ directory })
+          .then((item) => item.data?.all ?? [])
+          .catch(() => []),
       )
       const limits = Object.fromEntries(
         providers.flatMap((provider) =>

@@ -360,7 +360,7 @@ describe("session.llm-native.request", () => {
     const compatible = LLMNative.model({
       model: {
         ...baseModel,
-        providerID: ProviderV2.ID.make("opencode"),
+        providerID: ProviderV2.ID.make("ordinary-compatible"),
         api: { ...baseModel.api, url: "https://ai.example.test/v1", npm: "@ai-sdk/openai-compatible" },
       },
       apiKey: "test-key",
@@ -393,36 +393,22 @@ describe("session.llm-native.request", () => {
       apiKey: "test-openai-key",
     })
     expect(
-      LLMNativeRuntime.status({
-        model: { ...baseModel, providerID: ProviderV2.ID.make("opencode") },
-        provider: { ...providerInfo, id: ProviderV2.ID.make("opencode") },
-        auth: undefined,
-      }),
-    ).toMatchObject({
-      type: "supported",
-      apiKey: "test-openai-key",
-    })
-    expect(
-      LLMNativeRuntime.status({
-        model: {
-          ...baseModel,
-          providerID: ProviderV2.ID.make("opencode"),
-          api: { ...baseModel.api, npm: "@ai-sdk/openai-compatible" },
-        },
-        provider: { ...providerInfo, id: ProviderV2.ID.make("opencode") },
-        auth: undefined,
-      }),
-    ).toMatchObject({
-      type: "supported",
-      apiKey: "test-openai-key",
-    })
-    expect(
-      LLMNativeRuntime.status({
-        model: { ...baseModel, providerID: ProviderV2.ID.make("google") },
-        provider: { ...providerInfo, id: ProviderV2.ID.make("google") },
-        auth: undefined,
-      }),
-    ).toEqual({ type: "unsupported", reason: "provider is not openai, opencode, or anthropic" })
+      ["opencode", "opencode-local", "ordinary-compatible"].map((providerID) =>
+        LLMNativeRuntime.status({
+          model: {
+            ...baseModel,
+            providerID: ProviderV2.ID.make(providerID),
+            api: { ...baseModel.api, npm: "@ai-sdk/openai-compatible" },
+          },
+          provider: { ...providerInfo, id: ProviderV2.ID.make(providerID) },
+          auth: undefined,
+        }),
+      ),
+    ).toEqual([
+      { type: "unsupported", reason: "provider is not openai or anthropic" },
+      { type: "unsupported", reason: "provider is not openai or anthropic" },
+      { type: "unsupported", reason: "provider is not openai or anthropic" },
+    ])
     expect(
       LLMNativeRuntime.status({
         model: baseModel,
@@ -475,21 +461,20 @@ describe("session.llm-native.request", () => {
     ).toMatchObject({ type: "supported", apiKey: "test-anthropic-key" })
   })
 
-  test("prefers console provider api key over stored opencode auth", () => {
+  test("prefers an explicit provider option API key over the provider key", () => {
     expect(
       LLMNativeRuntime.status({
-        model: { ...baseModel, providerID: ProviderV2.ID.make("opencode") },
+        model: baseModel,
         provider: {
           ...providerInfo,
-          id: ProviderV2.ID.make("opencode"),
-          options: { apiKey: "console-token" },
-          key: "zen-token",
+          options: { apiKey: "option-key" },
+          key: "provider-key",
         },
-        auth: { type: "api", key: "zen-token" },
+        auth: { type: "api", key: "stored-key" },
       }),
     ).toMatchObject({
       type: "supported",
-      apiKey: "console-token",
+      apiKey: "option-key",
     })
     expect(
       LLMNativeRuntime.status({

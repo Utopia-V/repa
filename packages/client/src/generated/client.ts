@@ -8,19 +8,12 @@ import type {
   SessionsListOutput,
   SessionsCreateInput,
   SessionsCreateOutput,
-  SessionsActiveOutput,
   SessionsGetInput,
   SessionsGetOutput,
   SessionsSwitchAgentInput,
   SessionsSwitchAgentOutput,
   SessionsSwitchModelInput,
   SessionsSwitchModelOutput,
-  SessionsPromptInput,
-  SessionsPromptOutput,
-  SessionsCompactInput,
-  SessionsCompactOutput,
-  SessionsWaitInput,
-  SessionsWaitOutput,
   SessionsStageInput,
   SessionsStageOutput,
   SessionsClearInput,
@@ -33,8 +26,6 @@ import type {
   SessionsHistoryOutput,
   SessionsEventsInput,
   SessionsEventsOutput,
-  SessionsInterruptInput,
-  SessionsInterruptOutput,
   SessionsMessageInput,
   SessionsMessageOutput,
   MessagesListInput,
@@ -320,17 +311,6 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
-      active: (requestOptions?: RequestOptions) =>
-        request<{ readonly data: SessionsActiveOutput }>(
-          {
-            method: "GET",
-            path: `/api/session/active`,
-            successStatus: 200,
-            declaredStatuses: [401, 400],
-            empty: false,
-          },
-          requestOptions,
-        ).then((value) => value.data),
       get: (input: SessionsGetInput, requestOptions?: RequestOptions) =>
         request<{ readonly data: SessionsGetOutput }>(
           {
@@ -362,40 +342,6 @@ export function make(options: ClientOptions) {
             body: { model: input["model"] },
             successStatus: 204,
             declaredStatuses: [404, 400, 401],
-            empty: true,
-          },
-          requestOptions,
-        ),
-      prompt: (input: SessionsPromptInput, requestOptions?: RequestOptions) =>
-        request<{ readonly data: SessionsPromptOutput }>(
-          {
-            method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/prompt`,
-            body: { id: input["id"], prompt: input["prompt"], delivery: input["delivery"], resume: input["resume"] },
-            successStatus: 200,
-            declaredStatuses: [409, 404, 400, 401],
-            empty: false,
-          },
-          requestOptions,
-        ).then((value) => value.data),
-      compact: (input: SessionsCompactInput, requestOptions?: RequestOptions) =>
-        request<SessionsCompactOutput>(
-          {
-            method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/compact`,
-            successStatus: 204,
-            declaredStatuses: [404, 503, 400, 401],
-            empty: true,
-          },
-          requestOptions,
-        ),
-      wait: (input: SessionsWaitInput, requestOptions?: RequestOptions) =>
-        request<SessionsWaitOutput>(
-          {
-            method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/wait`,
-            successStatus: 204,
-            declaredStatuses: [404, 503, 400, 401],
             empty: true,
           },
           requestOptions,
@@ -466,17 +412,6 @@ export function make(options: ClientOptions) {
             successStatus: 200,
             declaredStatuses: [404, 400, 401],
             empty: false,
-          },
-          requestOptions,
-        ),
-      interrupt: (input: SessionsInterruptInput, requestOptions?: RequestOptions) =>
-        request<SessionsInterruptOutput>(
-          {
-            method: "POST",
-            path: `/api/session/${encodeURIComponent(input.sessionID)}/interrupt`,
-            successStatus: 204,
-            declaredStatuses: [404, 400, 401],
-            empty: true,
           },
           requestOptions,
         ),

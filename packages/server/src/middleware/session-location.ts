@@ -8,14 +8,14 @@ import { eq } from "drizzle-orm"
 import { Effect, Layer, Schema } from "effect"
 import { HttpRouter } from "effect/unstable/http"
 import { HttpApiMiddleware } from "effect/unstable/httpapi"
-import { InvalidRequestError, SessionNotFoundError } from "@opencode-ai/protocol/errors"
+import { SessionNotFoundError } from "@opencode-ai/protocol/errors"
 import type { LocationServices } from "../location"
 
 export class SessionLocationMiddleware extends HttpApiMiddleware.Service<
   SessionLocationMiddleware,
   { provides: LocationServices }
 >()("@opencode/HttpApiSessionLocation", {
-  error: [InvalidRequestError, SessionNotFoundError],
+  error: SessionNotFoundError,
 }) {}
 
 const decodeSessionID = Schema.decodeUnknownEffect(SessionV2.ID)
@@ -29,12 +29,14 @@ export const sessionLocationLayer = Layer.effect(
     return SessionLocationMiddleware.of((effect) =>
       Effect.gen(function* () {
         const route = yield* HttpRouter.RouteContext
+        // A path segment that cannot identify a Session is still a missing resource,
+        // not a malformed request body or query.
         const sessionID = yield* decodeSessionID(route.params.sessionID).pipe(
           Effect.mapError(
             () =>
-              new InvalidRequestError({
-                message: "Invalid session ID",
-                field: "sessionID",
+              new SessionNotFoundError({
+                sessionID: route.params.sessionID ?? "",
+                message: `Session not found: ${route.params.sessionID ?? ""}`,
               }),
           ),
         )

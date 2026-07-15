@@ -117,7 +117,6 @@ import type {
   ProjectListResponses,
   ProjectUpdateErrors,
   ProjectUpdateResponses,
-  PromptInput,
   ProviderAuthErrors,
   ProviderAuthResponses,
   ProviderListErrors,
@@ -296,10 +295,6 @@ import type {
   V2QuestionRequestListResponses,
   V2ReferenceListErrors,
   V2ReferenceListResponses,
-  V2SessionActiveErrors,
-  V2SessionActiveResponses,
-  V2SessionCompactErrors,
-  V2SessionCompactResponses,
   V2SessionContextErrors,
   V2SessionContextResponses,
   V2SessionCreateErrors,
@@ -310,8 +305,6 @@ import type {
   V2SessionGetResponses,
   V2SessionHistoryErrors,
   V2SessionHistoryResponses,
-  V2SessionInterruptErrors,
-  V2SessionInterruptResponses,
   V2SessionListErrors,
   V2SessionListResponses,
   V2SessionMessageErrors,
@@ -326,8 +319,6 @@ import type {
   V2SessionPermissionListResponses,
   V2SessionPermissionReplyErrors,
   V2SessionPermissionReplyResponses,
-  V2SessionPromptErrors,
-  V2SessionPromptResponses,
   V2SessionQuestionListErrors,
   V2SessionQuestionListResponses,
   V2SessionQuestionRejectErrors,
@@ -344,8 +335,6 @@ import type {
   V2SessionSwitchAgentResponses,
   V2SessionSwitchModelErrors,
   V2SessionSwitchModelResponses,
-  V2SessionWaitErrors,
-  V2SessionWaitResponses,
   V2SkillListErrors,
   V2SkillListResponses,
   VcsApplyErrors,
@@ -4239,18 +4228,6 @@ export class Session3 extends HeyApiClient {
   }
 
   /**
-   * List active sessions
-   *
-   * Retrieve foreground Session drains currently owned by this OpenCode process. Sessions absent from the result are inactive.
-   */
-  public active<ThrowOnError extends boolean = false>(options?: Options<never, ThrowOnError>) {
-    return (options?.client ?? this.client).get<V2SessionActiveResponses, V2SessionActiveErrors, ThrowOnError>({
-      url: "/api/session/active",
-      ...options,
-    })
-  }
-
-  /**
    * Get session
    *
    * Retrieve a session by ID.
@@ -4348,85 +4325,6 @@ export class Session3 extends HeyApiClient {
   }
 
   /**
-   * Send message
-   *
-   * Durably admit one session input and schedule agent-loop execution unless resume is false.
-   */
-  public prompt<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      id?: string
-      prompt?: PromptInput
-      delivery?: "steer" | "queue"
-      resume?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "body", key: "id" },
-            { in: "body", key: "prompt" },
-            { in: "body", key: "delivery" },
-            { in: "body", key: "resume" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<V2SessionPromptResponses, V2SessionPromptErrors, ThrowOnError>({
-      url: "/api/session/{sessionID}/prompt",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Compact session
-   *
-   * Compact a session conversation.
-   */
-  public compact<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
-    return (options?.client ?? this.client).post<V2SessionCompactResponses, V2SessionCompactErrors, ThrowOnError>({
-      url: "/api/session/{sessionID}/compact",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Wait for session
-   *
-   * Wait for a session agent loop to become idle.
-   */
-  public wait<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
-    return (options?.client ?? this.client).post<V2SessionWaitResponses, V2SessionWaitErrors, ThrowOnError>({
-      url: "/api/session/{sessionID}/wait",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
    * Get session context
    *
    * Retrieve the active context messages for a session (all messages after the last compaction).
@@ -4502,25 +4400,6 @@ export class Session3 extends HeyApiClient {
     )
     return (options?.client ?? this.client).sse.get<V2SessionEventsResponses, V2SessionEventsErrors, ThrowOnError>({
       url: "/api/session/{sessionID}/event",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Interrupt session execution
-   *
-   * Interrupt active execution owned by this OpenCode process. Idle interruption is a no-op.
-   */
-  public interrupt<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "path", key: "sessionID" }] }])
-    return (options?.client ?? this.client).post<V2SessionInterruptResponses, V2SessionInterruptErrors, ThrowOnError>({
-      url: "/api/session/{sessionID}/interrupt",
       ...options,
       ...params,
     })

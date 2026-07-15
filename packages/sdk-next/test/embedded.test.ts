@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test"
+import { afterAll, expect, test } from "bun:test"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -6,11 +6,18 @@ import { Flag } from "@opencode-ai/core/flag/flag"
 import { Deferred, Effect, Latch, Option, Schema, Stream } from "effect"
 import type { OpenCodeEvent } from "../src"
 
+const database = Flag.REPA_DB
+const databaseDirectory = await mkdtemp(join(tmpdir(), "opencode-embedded-db-"))
+Flag.REPA_DB = join(databaseDirectory, "opencode.sqlite")
+
+afterAll(async () => {
+  Flag.REPA_DB = database
+  await rm(databaseDirectory, { recursive: true, force: true })
+})
+
 test("embedded client uses the real router and handlers", async () => {
   const directory = await mkdtemp(join(tmpdir(), "opencode-embedded-"))
-  const database = Flag.OPENCODE_DB
-  Flag.OPENCODE_DB = join(directory, "opencode.sqlite")
-  const { AbsolutePath, Agent, Location, Model, OpenCode, Prompt, Provider, Session, Tool } = await import("../src")
+  const { AbsolutePath, Agent, Location, Model, OpenCode, Provider, Session, Tool } = await import("../src")
   const sessionID = Session.ID.make(`ses_embedded_${crypto.randomUUID()}`)
   const model = Model.Ref.make({ id: Model.ID.make("embedded"), providerID: Provider.ID.make("test") })
 
@@ -34,24 +41,7 @@ test("embedded client uses the real router and handlers", async () => {
       yield* opencode.sessions.switchModel({ sessionID, model })
       const selected = yield* opencode.sessions.get({ sessionID })
       const page = yield* opencode.sessions.list({ directory: AbsolutePath.make(directory) })
-      const active = yield* opencode.sessions.active()
-      const admitted = yield* opencode.sessions.prompt({
-        sessionID,
-        prompt: Prompt.make({ text: "Do not run" }),
-        resume: false,
-      })
       const context = yield* opencode.sessions.context({ sessionID })
-      const wake = yield* opencode.sessions.prompt({
-        sessionID,
-        prompt: Prompt.make({ text: "Promote this input" }),
-      })
-      const prompted = yield* opencode.sessions.events({ sessionID }).pipe(
-        Stream.filter((event) => event.type === "session.next.prompted" && event.data.messageID === wake.id),
-        Stream.runHead,
-        Effect.timeout("10 seconds"),
-        Effect.map(Option.getOrThrow),
-      )
-      const wakeContext = yield* opencode.sessions.context({ sessionID })
       const event = yield* opencode.sessions
         .events({ sessionID })
         .pipe(Stream.take(1), Stream.runHead, Effect.map(Option.getOrUndefined))
@@ -59,7 +49,6 @@ test("embedded client uses the real router and handlers", async () => {
         Option.getOrThrow,
       )
       const message = yield* opencode.sessions.message({ sessionID, messageID: modelMessage.id })
-      yield* opencode.sessions.interrupt({ sessionID })
       const other = yield* opencode.sessions.create({
         location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
       })
@@ -67,7 +56,6 @@ test("embedded client uses the real router and handlers", async () => {
       const missing = yield* Effect.all(
         [
           opencode.sessions.events({ sessionID: missingSessionID }).pipe(Stream.runHead, Effect.flip),
-          opencode.sessions.interrupt({ sessionID: missingSessionID }).pipe(Effect.flip),
           opencode.sessions.message({ sessionID: missingSessionID, messageID: modelMessage.id }).pipe(Effect.flip),
         ],
         { concurrency: "unbounded" },
@@ -83,45 +71,34 @@ test("embedded client uses the real router and handlers", async () => {
       expect(selected.model?.id).toBe(model.id)
       expect(selected.model?.providerID).toBe(model.providerID)
       expect(page.data.some((session) => session.id === sessionID)).toBe(true)
-      expect(active).toEqual({})
-      expect(admitted.sessionID).toBe(sessionID)
-      expect(prompted.type).toBe("session.next.prompted")
-      expect(wakeContext).toContainEqual(expect.objectContaining({ id: wake.id, type: "user" }))
       expect(context.some((message) => message.type === "model-switched")).toBe(true)
       expect(event).toMatchObject({ type: "session.next.model.switched", durable: { seq: 1 } })
       expect(message).toEqual(modelMessage)
-      expect(missing.map((error) => error._tag)).toEqual([
-        "SessionNotFoundError",
-        "SessionNotFoundError",
-        "SessionNotFoundError",
-      ])
+      expect(missing.map((error) => error._tag)).toEqual(["SessionNotFoundError", "SessionNotFoundError"])
       expect(missingMessage._tag).toBe("MessageNotFoundError")
     })
     await Effect.runPromise(Effect.scoped(program))
   } finally {
-    Flag.OPENCODE_DB = database
     await rm(directory, { recursive: true, force: true })
   }
 })
 
-test("Location-owned runner events reach the ready global client", async () => {
+test("durable state-transition events reach the ready global client", async () => {
   const directory = await mkdtemp(join(tmpdir(), "opencode-embedded-events-"))
-  const database = Flag.OPENCODE_DB
-  Flag.OPENCODE_DB = join(directory, "opencode.sqlite")
-  const { AbsolutePath, Location, OpenCode, Prompt, Session } = await import("../src")
+  const { AbsolutePath, Agent, Location, OpenCode, Session } = await import("../src")
   const sessionID = Session.ID.make(`ses_embedded_${crypto.randomUUID()}`)
 
   try {
     const program = Effect.gen(function* () {
       const opencode = yield* OpenCode.create()
       const connected = yield* Latch.make(false)
-      const prompted = yield* Deferred.make<OpenCodeEvent>()
+      const transitioned = yield* Deferred.make<OpenCodeEvent>()
       yield* opencode.events.subscribe().pipe(
         Stream.runForEach((event) =>
           event.type === "server.connected"
             ? connected.open
-            : event.type === "session.next.prompted" && event.data.sessionID === sessionID
-              ? Deferred.succeed(prompted, event).pipe(Effect.asVoid)
+            : event.type === "session.next.agent.switched" && event.data.sessionID === sessionID
+              ? Deferred.succeed(transitioned, event).pipe(Effect.asVoid)
               : Effect.void,
         ),
         Effect.forkScoped,
@@ -131,22 +108,19 @@ test("Location-owned runner events reach the ready global client", async () => {
         id: sessionID,
         location: Location.Ref.make({ directory: AbsolutePath.make(directory) }),
       })
-      yield* opencode.sessions.prompt({ sessionID, prompt: Prompt.make({ text: "Observe this input" }) })
+      yield* opencode.sessions.switchAgent({ sessionID, agent: Agent.ID.make("plan") })
 
-      const event = yield* Deferred.await(prompted).pipe(Effect.timeout("4 seconds"))
+      const event = yield* Deferred.await(transitioned).pipe(Effect.timeout("4 seconds"))
       expect(event.durable).toEqual(expect.objectContaining({ aggregateID: sessionID, seq: expect.any(Number) }))
     })
     await Effect.runPromise(Effect.scoped(program))
   } finally {
-    Flag.OPENCODE_DB = database
     await rm(directory, { recursive: true, force: true })
   }
 }, 10_000)
 
 test("independent embedded hosts do not share live notifications", async () => {
   const directory = await mkdtemp(join(tmpdir(), "opencode-embedded-hosts-"))
-  const database = Flag.OPENCODE_DB
-  Flag.OPENCODE_DB = join(directory, "opencode.sqlite")
   const { AbsolutePath, Agent, Location, OpenCode, Session } = await import("../src")
   const sessionID = Session.ID.make(`ses_embedded_${crypto.randomUUID()}`)
 
@@ -181,15 +155,12 @@ test("independent embedded hosts do not share live notifications", async () => {
     })
     await Effect.runPromise(Effect.scoped(program))
   } finally {
-    Flag.OPENCODE_DB = database
     await rm(directory, { recursive: true, force: true })
   }
 }, 10_000)
 
 test("embedded client is available as a Layer service", async () => {
   const directory = await mkdtemp(join(tmpdir(), "opencode-embedded-layer-"))
-  const database = Flag.OPENCODE_DB
-  Flag.OPENCODE_DB = join(directory, "opencode.sqlite")
   const { AbsolutePath, Location, OpenCode, Session } = await import("../src")
   const sessionID = Session.ID.make(`ses_embedded_${crypto.randomUUID()}`)
 
@@ -206,7 +177,6 @@ test("embedded client is available as a Layer service", async () => {
 
     expect(created.id).toBe(sessionID)
   } finally {
-    Flag.OPENCODE_DB = database
     await rm(directory, { recursive: true, force: true })
   }
 })

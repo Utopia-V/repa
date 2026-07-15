@@ -232,7 +232,6 @@ describe("PublicApi OpenAPI v2 errors", () => {
     const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
 
     for (const path of [
-      "/api/session/{sessionID}/prompt",
       "/api/session/{sessionID}/permission/{requestID}/reply",
       "/api/session/{sessionID}/question/{requestID}/reply",
     ]) {
@@ -318,9 +317,6 @@ describe("PublicApi OpenAPI v2 errors", () => {
     const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
 
     for (const route of [
-      ["post", "/api/session/{sessionID}/prompt"],
-      ["post", "/api/session/{sessionID}/compact"],
-      ["post", "/api/session/{sessionID}/wait"],
       ["get", "/api/session/{sessionID}/context"],
       ["get", "/api/session/{sessionID}/message"],
     ] as const) {
@@ -328,16 +324,17 @@ describe("PublicApi OpenAPI v2 errors", () => {
     }
   })
 
-  test("documents v2 unfinished session mutation errors", () => {
+  test("omits preview-v2 session execution routes", () => {
     const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
 
-    for (const route of [
-      ["post", "/api/session/{sessionID}/compact"],
-      ["post", "/api/session/{sessionID}/wait"],
-    ] as const) {
-      expect(componentName(responseRef(spec.paths[route[1]]?.[route[0]]?.responses?.["503"]) ?? "")).toBe(
-        "ServiceUnavailableError",
-      )
+    for (const path of [
+      "/api/session/active",
+      "/api/session/{sessionID}/prompt",
+      "/api/session/{sessionID}/compact",
+      "/api/session/{sessionID}/wait",
+      "/api/session/{sessionID}/interrupt",
+    ]) {
+      expect(spec.paths[path], path).toBeUndefined()
     }
   })
 
