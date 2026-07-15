@@ -36,23 +36,24 @@ Do not reduce the product to a one-shot chat teacher, note generator, Anki skin,
 todo application, rigid command-line planner, or generic agent with a few
 learning tools.
 
-## Decision integrity
+## Project decision ownership
 
-- Preserve an authority chain from maintainer intent through accepted
-  decisions, agent-derived contracts, implementation, and evidence. Record the
-  source of a consequential derived decision.
-- A lower layer may make an upper decision concrete, but must not silently
-  strengthen optional, deferred, unsupported, or default-off into prohibited,
-  permanently removed, or physically deleted.
-- Classify a capability by its independently useful behavior before following
-  its dependency graph. A last reference is implementation evidence, not
-  product semantics.
-- A maintainer correction, changed effective instructions, workspace switch,
-  or newly expanded deletion/architecture scope invalidates affected derived
-  plans. Audit and repair their durable dependents before continuing code work.
-- Choose a causally complete, architecture-consistent scope for the intended
-  stable state. A smaller diff is preferable only among equally sufficient
-  designs; a wider change must not smuggle in another objective.
+- Product foundation documents, accepted ADRs, and the active roadmap own Repa
+  product meaning. Gate contracts, plans, implementation slices, tests, and
+  reviews derive from them and do not gain authority through detail or
+  completion.
+- For inherited capability disposition, separately decide baseline membership,
+  ordinary reachability, startup/build/release participation, and physical
+  source removal. Classify independently useful behavior before following the
+  dependency graph; a last reference is implementation evidence, not product
+  semantics.
+- A lower fork layer may make an accepted decision concrete but may not turn
+  optional, deferred, unsupported, or default-off behavior into prohibited,
+  permanently removed, or physically deleted behavior without new product or
+  engineering evidence.
+- Apply maintainer corrections to the owning document and all affected durable
+  dependents before resuming implementation. Choose the scope that establishes
+  the intended stable product boundary without absorbing an adjacent objective.
 
 ## Settled constraints
 
@@ -97,6 +98,16 @@ learning tools.
   is owned only by `docs/README.md`; exact passed evidence and provenance are
   indexed by `docs/fork-ledger.md`. Do not copy volatile “next Gate” state into
   this file or promote source resemblance into a working invariant.
+- Numbered Gates are the maintainer-facing engineering progress and acceptance
+  form for this project. First grill the overall engineering direction and
+  architecture, then divide the accepted direction into Gates. Before each Gate
+  begins, grill its local design and evidence boundary again.
+- A Gate may establish a database, identity, transaction, module, recovery, or
+  other structural boundary without completing a user-visible product loop.
+  Its legitimacy comes from a real owned invariant, sound integration with the
+  accepted architecture, and evidence appropriate to its claim—not from being
+  minimal, maximal, reversible, learner-visible, or end-to-end. Commits, tests,
+  and internal phases do not become extra Gates by default.
 - Treat explanation, demonstration, guided work, independent work, review, and
   planning as peer Tutor actions. No one action is the mandatory center or
   continuation of every learning interaction.
@@ -175,13 +186,16 @@ learning tools.
   larger uncertainty it resolves and the evidence that ends it. Afterward,
   return to the parent problem and choose again instead of automatically
   extending the latest local design.
-- Keep simple problems simple. Do not turn a reversible choice into a general
-  framework, ontology, state machine, or benchmark merely to make the work look
-  rigorous. A bounded, reversible task with a clear boundary can be implemented
-  and verified directly.
+- Match the mechanism to the actual invariant and uncertainty. Implement a
+  bounded local problem directly when its owning boundary is sound; rebuild the
+  relevant boundary when local patches would preserve the cause, add exceptions,
+  or create parallel paths. Do not introduce a framework, ontology, state
+  machine, benchmark, or compatibility layer merely to make work look rigorous
+  or to reduce the current diff.
 - Scope verification to the change and the claim, not to a habitual command
-  bundle. Run the smallest check that could falsify the claim and whose outcome
-  the changed files can actually affect. Pure documentation or research-record
+  bundle. Run a check when a plausible outcome can falsify the claim or change
+  the next engineering decision, and choose among equally decisive checks by
+  cost and dependency reach. Pure documentation or research-record
   changes normally need diff, link, formatting, and worktree checks—not
   typecheck, build, or product tests—unless they alter executable configuration
   or a generated contract. A focused code or test change runs its owning check
@@ -202,7 +216,10 @@ learning tools.
 - Distinguish accepted product intent, accepted architecture decisions, working hypotheses, research observations, and illustrative examples. Do not silently promote an example or research vocabulary into a production requirement.
 - Product goals, values, and acceptable trade-offs belong to the maintainer. Technical claims, source behavior, and failure properties are settled by inspectable evidence rather than by either human or model authority alone.
 - If a requested implementation conflicts with an accepted invariant or concrete engineering evidence, do not comply silently and do not override the intent silently. State the conflict, show the evidence, and identify a causally complete reconciliation proportional to the conflict.
-- Ask for maintainer input only when an unresolved choice materially changes product behavior or an expensive-to-reverse boundary. Otherwise use a reversible, documented assumption and continue.
+- Ask for maintainer input only when an unresolved choice materially changes
+  product behavior, an accepted trade-off, or an expensive boundary. Otherwise
+  make a documented engineering judgment proportional to the evidence,
+  uncertainty, and lifecycle cost.
 - Preserve meaning with behavioral examples, counterexamples, tests, recorded oracles, and decision provenance. Conversation memory and a model's confident paraphrase are not durable specifications.
 - At phase boundaries, re-read the product origin and accepted ADRs, then audit the repository for semantic drift before extending the latest local design.
 
@@ -224,7 +241,7 @@ learning tools.
 - Independent review is not a confidence ritual. Use one fresh, preferably
   read-only context only when a concrete decision, design, security,
   data-integrity, implementation, or evidence question can still change the
-  result. Give it the minimum authority chain—maintainer intent, accepted
+  result. Give it the relevant authority chain—maintainer intent, accepted
   decisions, the agent's derivation, and recent corrections—and allow it to
   reject an agent-authored contract. The main agent owns evaluation and
   integration; same-context self-checking is not independent review.
@@ -253,11 +270,13 @@ learning tools.
   time, stop when remaining uncertainty is cheap or no plausible answer changes
   the plan, and promote accepted durable decisions to the owning document.
   Situational answers do not become timeless user preferences.
-- Before extending an agent-derived consequential contract, deletion, or
-  architecture boundary, use the `decision-integrity` skill's bounded
-  `grill-yourself` pass when it can still change the design. Skip it for cheap,
-  reversible work; bring only unresolved maintainer-owned trade-offs to
-  `grill-me`.
+- Use “steer-work” only as the parent control layer for a consequential
+  contract, semantic correction, deletion, or architecture boundary. Pair it
+  with the independently triggered exploration, project-document, planning,
+  execution, debugging, testing, verification, review, delegation, or Git
+  skill that owns the actual work. Its internal challenge should try to falsify
+  the current framing and compare the stable outcomes of narrower and wider
+  scopes. Bring only unresolved maintainer-owned trade-offs to “grill-me”.
 - Treat `grill-me` as high-variance decision extraction, not exhaustive
   interviewing. A question is admissible only when repository/reference
   research cannot settle it, the maintainer can actually control the answer,
