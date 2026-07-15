@@ -155,6 +155,26 @@ the evidence that answered the audit finding above.
   generator check, formatting, and diff checks passed. The nine Gate 7
   Course/View tests passed as a dependency smoke check without reopening Gate 7.
 
+## 2026-07-15 Gate 6 second post-close audit provenance
+
+Current disposition remains owned only by `docs/README.md`. This audit
+invalidated the close claim recorded for `16fcb3177` and `0a72caf73`, while
+preserving their evidence for unaffected behavior.
+
+- An arbitrary empty or stale journal/WAL/SHM sidecar allowed a clean non-empty
+  identityless SQLite file to pass physical preflight; the no-user-table
+  migration heuristic then initialized it as Repa. Green focused tests had not
+  paired clean foreign fixtures with independently supplied sidecars.
+- A final file symlink to a missing target made the main file follow the target
+  while SQLite named WAL beside the unresolved alias. Abrupt termination could
+  therefore strand committed state. Existing alias evidence created the file
+  before the symlink and did not exercise this missing-to-existing transition.
+- The audit left retained-connection locking, resolvable aliases, hardlink,
+  remote and ordinary `:memory:` refusal, attach-only clients, Gate 6 migration
+  lineage, and Gate 7's Course/View work unchallenged. Gate 7's production
+  runtime prerequisite is nevertheless pending until the admission/identity
+  correction is proven.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

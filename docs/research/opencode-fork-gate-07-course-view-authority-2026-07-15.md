@@ -23,8 +23,11 @@ Its later runtime-ownership audit found that path aliases and configurable lock
 roots could bypass the intended single-owner lease. Gate 7 depends on the
 database and migration boundary plus the one-owner invariant, not that lease
 algorithm. The retained-SQLite-connection correction at `16fcb3177` restored
-the invariant without changing this Gate, so its production dependency is now
-satisfied. The database otherwise contained no native learning authority.
+the invariant without changing this Gate, but a later sidecar/dangling-symlink
+audit reopened that runtime completion claim. This Gate's contract, schema,
+migration, implementation, and focused evidence remain accepted; production
+consumption waits for Gate 6 to restore the one-owner/admission prerequisite.
+The database otherwise contained no native learning authority.
 Course, View, item, and working-route identities existed only in documentation,
 so later material alignment, learner continuity, Agenda, and context had no
 trustworthy target.

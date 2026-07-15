@@ -106,7 +106,9 @@ those are coverage relationships rather than shared product meaning. Gate 7
 depends on Gate 6's database identity, admission, forward lineage, migration
 generator, and one-owner invariant; it does not depend on a particular lock
 implementation. A runtime-ownership correction therefore leaves Gate 7 closed
-unless it changes those database or migration contracts.
+unless it changes those database or migration contracts. Whether that runtime
+prerequisite is currently satisfied is volatile state owned by the
+documentation index.
 
 ## Accepted architecture-grill decisions
 
@@ -209,12 +211,13 @@ tool binding. A model-issued durable write does require command/effect identity,
 causal binding, retry behavior, and atomic settlement. Tutor context consumes
 real authority projections and is not their prerequisite.
 
-The database substrate already provides transactional migrations, stable
+The database substrate provides transactional migrations, stable
 Session/Message/Part IDs, and atomic settlement of one Session event with its
 projection. Repa requires one state-owning process per LearnerHome. The Gate 6
-record contains both the audit that invalidated the old path-string lease and
-the later retained-SQLite-connection correction that re-established this
-invariant. The inherited database does not provide an atomic Turn, a durable
+record owns both the invariant and the successive evidence that may establish
+or invalidate its runtime implementation; current acceptance is linked from
+the documentation index rather than copied here. The inherited database does
+not provide an atomic Turn, a durable
 learning-command identity, exactly-once tool effects, a global revision, or a
 safe long-lived provenance reference: deleting a Session currently removes its
 messages, parts, and event aggregate.

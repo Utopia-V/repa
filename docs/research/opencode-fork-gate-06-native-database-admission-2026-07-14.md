@@ -2,7 +2,8 @@
 
 Historical result: Passed at fork implementation commit `6c0b7aa5b`; its
 runtime-owner claim was later invalidated. Corrected runtime-owner result:
-passed at `16fcb3177`. Current disposition is owned by
+passed at `16fcb3177`, then invalidated by the sidecar and dangling-symlink
+counterexamples below. Current disposition is owned by
 [the documentation index](../README.md).
 
 Date: 2026-07-14
@@ -16,6 +17,36 @@ This record owns the Gate 6 contract. It preserves the maintainer decisions,
 the source evidence that constrains their implementation, and the evidence
 that closes the Gate. The contract authorizes only the production changes named
 below.
+
+## Second post-close audit correction
+
+The next 2026-07-15 audit found two P1 counterexamples outside the evidence that
+closed `16fcb3177`:
+
+- merely placing an empty or stale `-journal`, `-wal`, or `-shm` beside a clean
+  non-empty identityless SQLite file caused physical preflight to bypass clean
+  foreign rejection. Migration then treated `application_id = 0` plus no user
+  tables as fresh and converted that foreign file into a Repa database;
+- when a final file symlink pointed to a missing target, `existsSync()` treated
+  the configured alias as absent. SQLite followed the link for the main file
+  but named WAL from the alias spelling, so an abrupt owner death could strand
+  committed frames where neither later alias nor target reopening consumed
+  them.
+
+These findings reopen only the runtime admission/identity proof. Sidecars may
+justify entry into bounded SQLite recovery, but never authorize Repa
+initialization. After recovery, initialization requires proof that the database
+has returned to the empty acquisition state; the absence of user tables is not
+that proof. A dangling final file symlink refuses before SQLite open unless its
+target already exists and can be resolved to the one main-file authority.
+Existing resolvable file symlinks remain supported aliases.
+
+Closing now additionally requires clean identityless fixtures paired in turn
+with empty or stale journal, WAL, and SHM sidecars to refuse without any
+Repa-authored write, plus a dangling-final-symlink crash oracle that proves no
+main/WAL split can occur. Gate 7's accepted Course/View contract, schema,
+migration, implementation, and focused evidence remain closed, while production
+consumption waits for this Gate 6 runtime prerequisite to be restored.
 
 ## Post-close audit correction
 
@@ -442,6 +473,10 @@ Evidence must be capable of directly falsifying the boundary:
 - OpenCode-shaped, unknown/future, inconsistent-lineage, failed-integrity, and
   foreign-key-invalid databases refuse before Repa mutation and remain at the
   configured path;
+- a clean non-empty identityless database paired in turn with an empty or stale
+  `-journal`, `-wal`, or `-shm` remains foreign after any bounded pager handling;
+  sidecar presence alone never grants initialization, and no Repa identity,
+  schema, version, or migration journal is written;
 - an injected forward migration failure leaves schema, version, journal, and
   prior rows at the previous recognized state;
 - two real owner processes targeting one clean admitted database through the
@@ -475,6 +510,11 @@ Evidence must be capable of directly falsifying the boundary:
 - stable target resolution and the opened main file agree before side effects;
   deliberately mutating the target concurrently is outside the supported
   boundary rather than a closing oracle;
+- a final file symlink whose target does not yet exist refuses before SQLite
+  open. A crash-oriented probe must demonstrate that Repa never creates a main
+  file through the target spelling while publishing journal/WAL state beside
+  the alias spelling; later alias and target opens therefore cannot observe
+  divergent committed histories;
 - the retained connection shows immediate reuse after orderly close and OS lock
   release after abrupt owner death through every supported alias spelling,
   without heartbeat expiry or stale-lock deletion. Any subsequent SQLite
@@ -521,7 +561,10 @@ but invalidated that commit's runtime-owner completion claim. Design commit
 the later crash-state audit; its claim that open-and-lock was mutation-free is
 not an accepted implementation contract. `d7855d4ce` accepted the corrected
 bounded-recovery sequence, and `16fcb3177` implemented it with the closing
-evidence below. Gate 6 is closed again as of that implementation commit.
+evidence below. Gate 6 was recorded closed again at that implementation commit,
+but the second post-close audit above invalidated the completion claim. The
+evidence remains historical support for unaffected behavior, not current Gate
+closure.
 
 The corrected implementation:
 
