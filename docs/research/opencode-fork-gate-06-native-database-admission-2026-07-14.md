@@ -3,7 +3,8 @@
 Historical result: Passed at fork implementation commit `6c0b7aa5b`; its
 runtime-owner claim was later invalidated. Corrected runtime-owner result:
 passed at `16fcb3177`, then invalidated by the sidecar and dangling-symlink
-counterexamples below. Current disposition is owned by
+counterexamples below. The second correction passed at `34588b041`. Current
+disposition is owned by
 [the documentation index](../README.md).
 
 Date: 2026-07-14
@@ -41,12 +42,22 @@ that proof. A dangling final file symlink refuses before SQLite open unless its
 target already exists and can be resolved to the one main-file authority.
 Existing resolvable file symlinks remain supported aliases.
 
-Closing now additionally requires clean identityless fixtures paired in turn
+Closure additionally required clean identityless fixtures paired in turn
 with empty or stale journal, WAL, and SHM sidecars to refuse without any
-Repa-authored write, plus a dangling-final-symlink crash oracle that proves no
-main/WAL split can occur. Gate 7's accepted Course/View contract, schema,
-migration, implementation, and focused evidence remain closed, while production
-consumption waits for this Gate 6 runtime prerequisite to be restored.
+Repa-authored write, plus real-runtime proof that a dangling final file symlink
+cannot reach SQLite and split main/WAL identity. Gate 7's accepted Course/View
+contract, schema, migration, implementation, and focused evidence remained
+closed; at that audit point, production consumption waited for this Gate 6
+runtime prerequisite to be restored.
+
+Implementation commit `34588b041` closes both counterexamples without adding a
+second lock, sidecar parser, repair framework, or compatibility path. Physical
+preflight uses `lstat` to distinguish an absent final path from a present but
+unresolvable file symlink. Migration no longer accepts a caller-supplied
+`fresh` classification: after SQLite recovery, only
+`application_id = 0`, `user_version = 0`, and `page_count = 0` constitute the
+empty acquisition state. A page-backed identityless database remains foreign
+even when it has no user tables.
 
 ## Post-close audit correction
 
@@ -510,11 +521,11 @@ Evidence must be capable of directly falsifying the boundary:
 - stable target resolution and the opened main file agree before side effects;
   deliberately mutating the target concurrently is outside the supported
   boundary rather than a closing oracle;
-- a final file symlink whose target does not yet exist refuses before SQLite
-  open. A crash-oriented probe must demonstrate that Repa never creates a main
-  file through the target spelling while publishing journal/WAL state beside
-  the alias spelling; later alias and target opens therefore cannot observe
-  divergent committed histories;
+- a real runtime launched through a final file symlink whose target does not yet
+  exist refuses before SQLite open and leaves both target and alias sidecars
+  absent. Because no owner can reach a commit through this configuration, the
+  former crash/reopen split path is structurally unreachable; resolvable file
+  symlinks continue to converge normally;
 - the retained connection shows immediate reuse after orderly close and OS lock
   release after abrupt owner death through every supported alias spelling,
   without heartbeat expiry or stale-lock deletion. Any subsequent SQLite
@@ -563,10 +574,33 @@ not an accepted implementation contract. `d7855d4ce` accepted the corrected
 bounded-recovery sequence, and `16fcb3177` implemented it with the closing
 evidence below. Gate 6 was recorded closed again at that implementation commit,
 but the second post-close audit above invalidated the completion claim. The
-evidence remains historical support for unaffected behavior, not current Gate
-closure.
+evidence remains historical support for unaffected behavior. `34588b041` then
+implemented the second correction and closes the Gate again.
 
-The corrected implementation:
+The second correction removed the preflight-to-migration initialization bit and
+the no-user-table freshness heuristic. Empty and stale journal/WAL/SHM fixtures
+paired with clean, non-empty identityless databases at user versions zero and
+seven all refuse without Repa identity, schema, version, or journal writes. A
+dangling final file symlink refuses before target creation or sidecar creation
+through both the Core runtime layer and a real OpenCode owner process. Existing
+cache-spill recovery still returns to the zero-page state and initializes
+exactly once; recognized Repa WAL, ambiguous foreign WAL, concurrent creation,
+missing-to-existing handoff, ordinary aliases, hardlink/UNC refusal, and owner
+release remain intact.
+
+Fresh causal evidence for `34588b041` was:
+
+- the two new Core counterexample tests failed before the implementation because
+  both runtime layers succeeded, then passed after the correction;
+- the Core database-authority and migration files passed 27 tests with 158
+  assertions, including the new empty/stale sidecar matrix and retained crash
+  recovery cases;
+- the real OpenCode owner-process file passed four tests with 47 assertions,
+  including the dangling-symlink refusal and the existing alias/lifecycle
+  matrix; and
+- Core and OpenCode typechecks, Prettier, and Git diff checks passed.
+
+The first runtime-owner correction at `16fcb3177`:
 
 - resolves the stable local target before SQLite open, converges supported
   filesystem aliases, and rejects hardlinks and recognized remote targets
@@ -585,7 +619,7 @@ The corrected implementation:
 - keeps `db path` as a no-open diagnostic, makes `db <query>` use the retained
   authority, and refuses the inherited no-query external `sqlite3` branch.
 
-Fresh correction evidence was limited to claims that could falsify this
+Evidence recorded for `16fcb3177` was limited to claims that could falsify that
 boundary:
 
 - Core authority and migration tests passed 25 tests with 96 assertions. They

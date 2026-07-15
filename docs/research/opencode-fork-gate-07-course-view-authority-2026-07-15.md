@@ -26,8 +26,9 @@ algorithm. The retained-SQLite-connection correction at `16fcb3177` restored
 the invariant without changing this Gate, but a later sidecar/dangling-symlink
 audit reopened that runtime completion claim. This Gate's contract, schema,
 migration, implementation, and focused evidence remain accepted; production
-consumption waits for Gate 6 to restore the one-owner/admission prerequisite.
-The database otherwise contained no native learning authority.
+consumption waited for Gate 6 to restore the one-owner/admission prerequisite.
+The sidecar/dangling-symlink correction at `34588b041` restored it without
+changing this Gate. The database otherwise contained no native learning authority.
 Course, View, item, and working-route identities existed only in documentation,
 so later material alignment, learner continuity, Agenda, and context had no
 trustworthy target.

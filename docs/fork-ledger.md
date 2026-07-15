@@ -172,8 +172,21 @@ preserving their evidence for unaffected behavior.
 - The audit left retained-connection locking, resolvable aliases, hardlink,
   remote and ordinary `:memory:` refusal, attach-only clients, Gate 6 migration
   lineage, and Gate 7's Course/View work unchallenged. Gate 7's production
-  runtime prerequisite is nevertheless pending until the admission/identity
-  correction is proven.
+  runtime prerequisite was nevertheless pending until the admission/identity
+  correction below was proven.
+
+Resolution provenance:
+
+- `34588b041` removed the caller-supplied initialization classification and the
+  no-user-table freshness heuristic. Only a post-recovery zero-page database
+  with zero application identity and user version may initialize.
+- The same commit distinguishes an absent path from a dangling final file
+  symlink and rejects the latter before SQLite open, while preserving supported
+  resolvable aliases.
+- The focused Core authority/migration evidence passed 27 tests with 158
+  assertions; the real owner-process evidence passed four tests with 47
+  assertions. Core and OpenCode typechecks, formatting, and diff checks passed.
+  Current Gate disposition remains owned by `docs/README.md`.
 
 ## Historical evidence locators
 
