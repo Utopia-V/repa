@@ -35,22 +35,34 @@ code:
    lock independently of configurable application-state roots.
 
 The 2026-07-15 runtime-ownership grill selected the single retained main SQLite
-connection as the owner. A contender may open the canonical main database only
-to configure and force SQLite exclusive locking. If it cannot acquire that
-lock, it closes before database admission, journal-mode changes, migration,
-AppRuntime materialization, or learning-state access. The winning connection is
-the connection the database layer retains for the complete owner lifetime; no
-external path-keyed lease or second SQLite lease connection may stand between
-ownership and the database actually used.
+connection as the intended owner, and design commit `9cc3fe17f` derived an exact
+open-then-lock sequence from that decision. A later crash-state audit disproved
+the sequence as a universal pre-admission mechanism. `BEGIN EXCLUSIVE` can make
+SQLite roll back a hot journal before ordinary reads, and closing the last WAL
+connection can checkpoint committed frames and remove sidecars. Constructing a
+candidate connection is therefore not a reliably non-mutating lock attempt for
+an existing non-empty database.
 
-This replaces the earlier derived requirement that a contender fail before any
-SQLite open. That requirement was not a maintainer-owned product behavior and
-would exclude the mature primitive whose lock is attached to SQLite's actual
-main file. Physical target resolution, hardlink rejection, and the exact
-authority/open identity proof are constrained by the stable-local-filesystem
-boundary and closing evidence below; a `realpath`-only or file-ID-only patch is
-still not an accepted repair. The runtime correction remains outside database
-migration and learning-domain APIs.
+That finding reopened the ordering between physical preflight, SQLite recovery,
+admission classification, and exclusive ownership. The maintainer accepted
+bounded SQLite recovery on 2026-07-15: a side-effect-free physical preflight
+rejects a clean database that is already identifiable as foreign; a crash set
+whose logical identity cannot be known without SQLite may undergo only the
+pager's standard recovery before the same retained connection obtains exclusive
+ownership and runs admission. This does not restore the old path-keyed lease,
+discard the one-retained-connection goal, or authorize a second SQLite lease
+connection. Physical target resolution, hardlink rejection, and the exact
+authority/open identity proof remain constrained by the stable-local-filesystem
+boundary and closing evidence below.
+
+The same audit closed a separate boundary: ordinary `Database.node` startup,
+including configuration through `REPA_DB`, rejects `:memory:` because separate
+processes would own separate database objects with no physical rendezvous. An
+explicitly injected `layerFromPath(":memory:")` remains valid for isolated tests;
+ambient environment configuration is not a test-only capability. `repa db path`
+remains a no-open diagnostic and may print the configured sentinel, but every
+entry point that materializes the ordinary database runtime refuses it with a
+typed unsupported-storage error.
 
 The mechanism evidence is explicit rather than resemblance-based:
 
@@ -61,6 +73,13 @@ The mechanism evidence is explicit rather than resemblance-based:
 - SQLite's [open contract](https://www.sqlite.org/c3ref/open.html) states that
   `SQLITE_OPEN_EXCLUSIVE` is a no-op for ordinary database opens, so a real
   SQLite lock cannot be acquired without first constructing a connection.
+- SQLite's [hot-journal recovery](https://www.sqlite.org/lockingv3.html) occurs
+  before a database can be read safely, and the
+  [WAL lifecycle](https://www.sqlite.org/wal.html) permits the last connection
+  to checkpoint and clean WAL state. Those are SQLite-owned physical recovery
+  effects, not Repa migration writes, but they invalidate a blanket claim that
+  every candidate connection leaves an unadmitted database byte-for-byte
+  unchanged.
 - At decision commit `e246127b6`, `packages/core/src/database/sqlite.bun.ts`
   creates one native connection, serializes its use, supplies that same object
   to the SQL and Drizzle views, and closes it with the layer. The retained main
@@ -90,7 +109,7 @@ The same grill limits this database guarantee to a stable local filesystem:
   locations and later content roots retain their separately authorized storage
   policy.
 
-Two isolated Windows/Bun probes informed the remaining implementation without
+Early isolated Windows/Bun probes informed the ownership candidate without
 becoming Gate-close evidence:
 
 - `realpathSync.native()` converged an ordinary path, directory junction, file
@@ -98,19 +117,27 @@ becoming Gate-close evidence:
   the same device/file identity through those aliases and exposed `nlink = 2`
   after a hardlink was added. The standard APIs therefore remain the first
   implementation candidate; no native adapter is pre-authorized.
-- On fresh, rollback-journal, and existing-WAL databases, one retained Bun
+- On fresh and ordinary clean rollback-journal/WAL fixtures, one retained Bun
   connection configured for exclusive locking and forced with `BEGIN
-EXCLUSIVE` rejected a real contender with `SQLITE_BUSY`. The contender did
-  not change existing database bytes or sidecars, owner close allowed immediate
-  reacquisition, and lock-only artifacts disappeared on close. A fresh attempt
-  left only a zero-byte main file after close, so interrupted pre-baseline
-  acquisition has a narrow observable state that the final recovery contract
-  can distinguish from a non-empty foreign database.
+EXCLUSIVE` rejected a real contender with `SQLITE_BUSY`. Owner close allowed
+  immediate reacquisition, and a fresh attempt left only a zero-byte main file.
+  These probes established ordinary lock behavior; they did not exercise an
+  unadmitted hot journal or committed crash WAL and therefore did not establish
+  non-destructive classification.
 - A separate forced-termination probe killed the lock holder for all three
   database states. The OS released the lock immediately; the next process
   acquired it, SQLite cleaned the abandoned empty journal/WAL artifact, and
   existing main-file hashes remained unchanged. This supports OS/SQLite crash
   recovery but does not replace the real-entrypoint closing oracle.
+- The later adversarial probe constructed both missing-to-existing and genuine
+  crash states. It observed a foreign hot journal being rolled back and removed
+  during the prescribed lock sequence, and a crash WAL being checkpointed and
+  removed when the candidate connection closed. A read-only connection could
+  observe committed identity held only in WAL but changed shared-memory state;
+  a hot journal that required rollback instead failed read-only. Bun did not
+  provide a verified immutable URI path that both interpreted those states and
+  preserved every main/sidecar byte. Gate 6 must therefore decide the recovery
+  boundary rather than hide it inside the lock implementation.
 
 The same probe showed that Bun's Windows `statfs` filesystem type is not a
 remote-volume classifier. The implementation must reject recognized remote/UNC
@@ -169,10 +196,14 @@ ADR-0014.
   an upgrade promise. Repa will compare its then-current product with the
   proven upstream mechanisms and may adopt them selectively.
 - A foreign, unsupported-old, future, partially migrated, or corrupt database
-  causes a non-destructive startup refusal before mutation. Repa preserves the
-  configured file and requires an explicit recovery or reset action; it does
-  not automatically quarantine the file and create an apparently empty
-  LearnerHome. This rare path does not justify a general repair framework.
+  causes startup refusal before any Repa-authored mutation. A clean foreign file
+  that physical preflight can identify remains byte-for-byte unchanged. An
+  ambiguous hot-journal/WAL crash set may undergo SQLite's standard physical
+  recovery before classification; this preserves its committed logical state
+  but may roll back uncommitted pages, checkpoint committed frames, rebuild SHM,
+  or clean sidecars. Repa preserves the configured path and does not
+  automatically quarantine it or create an apparently empty LearnerHome. This
+  rare path does not justify a general repair framework.
 - `repa db path` remains a no-open diagnostic, and `repa db <query>` remains an
   explicit one-shot admin command through the retained Repa connection. The
   inherited no-query branch that spawns an external interactive `sqlite3`
@@ -190,10 +221,10 @@ ADR-0014.
 ## Grill conclusion
 
 The original maintainer grill settled the product behavior—one state owner,
-clear refusal, explicit attach clients, and non-destructive invalid-database
-handling—but did not settle physical authority identity or a universal
-rendezvous. The no-compatibility boundary and implementation evidence did
-settle the independent lineage question:
+clear refusal, explicit attach clients, and no Repa-authored invalid-database
+mutation—but did not settle physical authority identity or a universal
+rendezvous. The no-compatibility boundary and implementation evidence did settle
+the independent lineage question:
 
 - `packages/core/src/database/migration.ts` imports `__drizzle_migrations` only
   to keep an existing OpenCode installation from replaying prior migrations;
@@ -208,22 +239,60 @@ foreign-database rejection, and forward-migration evidence. The post-close
 audit required the local grill recorded above; it selected retained-main-
 connection ownership without reopening that lineage decision.
 
+## Accepted recovery semantics
+
+Standard SQLite facilities cannot both interpret every hot-journal or crash-WAL
+state well enough to classify its final logical database and guarantee that the
+original main file plus all sidecars remain byte-for-byte unchanged. Raw header
+inspection can reject a plainly foreign clean file, but it cannot establish
+integrity or see identity committed only in WAL. Read-only open can require
+hot-journal rollback or shared-memory recovery; backup, copy, and ordinary query
+APIs still enter SQLite's pager and recovery machinery.
+
+Gate 6 therefore accepts one bounded recovery model:
+
+1. Physical preflight rejects, without SQLite open or side effects, a clean
+   non-empty file whose main-file identity already proves it is foreign.
+2. A hot journal, WAL, or other recognized crash set whose final logical
+   identity cannot be established by that preflight may be opened by the one
+   retained connection. SQLite alone may roll back uncommitted pages,
+   checkpoint committed frames, rebuild shared state, and clean sidecars.
+3. The same connection then obtains and retains exclusive ownership and runs
+   admission. Until admission succeeds, Repa performs no schema, migration,
+   application-identity, version, migration-journal, journal-mode, repair, or
+   replacement write. A rejected database retains the logical state produced
+   by standard SQLite crash recovery at the configured path.
+4. Fresh baseline identity, version, schema, and the baseline migration journal
+   commit atomically in rollback mode. WAL is enabled only after that commit, so
+   a successfully published Repa identity is present in the main-file header and
+   never depends solely on WAL.
+
+This preserves normal SQLite crash recovery while preventing recovery from
+becoming an implicit Repa migration or repair policy. A custom VFS, journal
+parser, filesystem snapshot system, backup manager, or manual-recovery-only
+runtime is outside this Gate.
+
 ## Accepted implementation boundary
+
+The lineage, local-storage, `:memory:`, physical-recovery, and rendezvous
+requirements below are accepted and authorize the corresponding production
+implementation.
 
 Gate 6 establishes three connected boundaries and no fourth subsystem:
 
-1. **Database admission.** Only the connection that has acquired runtime
-   ownership may classify or initialize the database. A fresh empty main file
-   created by the ownership attempt is initialized as the complete current
-   schema in one transaction, with a stable Repa application identity, a
-   baseline schema version, and exactly one Repa baseline journal entry. An
-   existing authority is classified before Repa changes journal mode,
-   checkpoints WAL, creates tables, or writes a migration row. Failed or
-   interrupted ownership attempts do not promote an empty file into an admitted
-   Repa database. After the next process reacquires ownership and SQLite cleans
-   any lock artifact, a zero-byte main file is the sole uninitialized
-   acquisition state that may proceed as fresh; every non-empty identityless
-   database remains foreign and refuses non-destructively.
+1. **Database admission.** A winning ownership attempt initializes an empty
+   acquisition state as the complete current schema in one rollback-mode
+   transaction, with a stable Repa application identity, baseline schema
+   version, and exactly one Repa baseline journal entry. SQLite may spill pages
+   before that transaction commits: abrupt termination can therefore leave a
+   non-zero main file with `application_id = 0` and a hot journal. On the next
+   launch, bounded SQLite recovery may roll that state back to the empty
+   acquisition state, which is then initialized exactly once. A clean non-empty
+   identityless file, or a recovered state that remains non-empty without a
+   valid Repa identity, is foreign and refuses. For every existing authority,
+   physical preflight, permitted pager recovery, exclusive ownership, and
+   admission follow the accepted sequence above; `9cc3fe17f`'s unconditional
+   mutation-free-open claim has no authority.
 2. **Forward lineage.** The runtime registry contains only migrations authored
    after the Repa baseline. An existing Repa database is admitted only when its
    application identity, schema version, and ordered journal form an exact
@@ -232,25 +301,27 @@ Gate 6 establishes three connected boundaries and no fourth subsystem:
    together. Inherited migration files may remain testable historical source,
    but the generator and runtime registry no longer discover them.
 3. **Runtime ownership.** Before materializing local AppRuntime, HTTP state, or
-   running database admission, a process resolves the configured target, opens
-   exactly one main SQLite connection, configures exclusive locking before
-   journal/WAL setup or application access, and forces real lock acquisition.
-   The narrow open and lock attempt are not database admission. The loser
-   closes immediately; the winner retains that same connection until owner
-   shutdown. Existing aliases to one database converge through the physical
-   main-file lock, contenders with different application-state roots still
-   meet there, and unsafe hardlink aliases refuse before journal/WAL or
+   learning-state access, a process resolves and validates the configured local
+   target and eventually acquires the physical main-file lock on the same
+   connection retained for database use. Existing aliases to one database
+   converge there, contenders with different application-state roots still
+   meet there, and unsafe hardlink aliases refuse before SQLite journal/WAL or
    application access. Concurrent creators of one missing target may create or
    open the same canonical empty main file, but only its exclusive lock winner
-   may initialize it. A later contender that observes the now-existing file
-   still meets the same live SQLite owner. For a stable target, the resolved
-   identity and the actual opened main file must agree before side effects; Repa
-   does not claim protection from unsupported concurrent external mutation.
-   The current worker and command entry points use this boundary; an explicit
-   attach client bypasses local state materialization entirely. Orderly
-   connection close releases ownership, and process death delegates lock
-   release and database recovery to SQLite and the OS rather than a heartbeat-
-   based stale-owner policy.
+   may initialize it; a later contender that observes the now-existing file
+   must meet that same live owner. The point at which an existing non-empty
+   target is physically preflighted before open. A clean foreign target refuses;
+   every eligible or ambiguous target is opened once, may undergo the bounded
+   pager recovery above, then acquires exclusive ownership and runs admission on
+   that same retained connection. For a stable target, the resolved identity and
+   actual opened main file agree before any permitted effect. An explicit attach
+   client bypasses local state materialization. Orderly connection close releases
+   ownership, and process death delegates lock release and bounded recovery to
+   SQLite and the OS rather than a heartbeat policy.
+
+Ordinary runtime materialization additionally rejects `:memory:` before SQLite
+open, admission, migration, or AppRuntime construction. Only an explicitly
+injected test database layer may opt into process-private in-memory storage.
 
 The verified authority result is consumed only by runtime composition and the
 database opener; its identity and lock mechanics do not enter migration or
@@ -267,24 +338,30 @@ transactions prevent Repa itself from producing a committed half-schema.
 
 ## Failure behavior
 
-- A busy LearnerHome may perform only target resolution, construction of one
-  main SQLite connection, exclusive-lock configuration, and the forced lock
-  attempt. It closes on contention before admission or integrity SQL,
-  journal-mode changes, migration/recovery, local AppRuntime, or learning-state
-  access. The message identifies the configured home/database and points an
-  intentional server user to explicit `repa attach`; it does not wait five
-  minutes or start a second read-only runtime.
+- A busy LearnerHome may perform physical preflight, the bounded SQLite pager
+  recovery required to reach a consistent database, and the physical lock
+  attempt. It refuses on contention before Repa admission SQL, journal-mode
+  changes, migration, local AppRuntime, or learning-state access. The message
+  identifies the configured home/database and points an intentional server user
+  to explicit `repa attach`; it does not wait five minutes or start a second
+  read-only runtime.
 - A foreign, unsupported-old, future, partial, or corrupt database fails with a
-  typed admission reason. Repa leaves the configured path in place and names
-  it so the learner can move, inspect, or remove it deliberately.
+  typed admission reason. A clean file identifiable by physical preflight stays
+  byte-for-byte unchanged. An ambiguous crash set may contain the pager's
+  recovered physical representation but no Repa-authored mutation. Repa leaves
+  the configured path in place and names it so the learner can move, inspect,
+  or remove it deliberately.
 - Permission, lock-infrastructure, and unrelated I/O failures remain distinct
   from “another owner” and from database corruption.
 - Failed fresh initialization or forward migration cannot publish a Repa
   identity/version/journal advance without the corresponding schema state.
 - Normal shutdown closes the retained connection and releases immediately.
-  Forced termination relies on OS handle cleanup and SQLite recovery without
-  breaking a live owner; Gate 6 does not add a heartbeat, stale-lock eviction,
-  daemon, PID supervisor, or repair service for this rare path.
+  Forced termination relies on OS handle cleanup and the accepted bounded SQLite
+  recovery on the next startup; Gate 6 does not add a heartbeat, stale-lock
+  eviction, daemon, PID supervisor, or repair service for this rare path.
+- An ordinary runtime configured with `:memory:` fails with a distinct typed
+  unsupported-storage reason rather than pretending to satisfy ownership or
+  being misreported as corruption. The no-open path diagnostic remains usable.
 
 ## Explicit non-goals
 
@@ -317,24 +394,32 @@ transactions prevent Repa itself from producing a committed half-schema.
   only by a remaining accepted invariant, not by the withdrawn adversarial-
   mutation threat. The current lexical filesystem-lock primitive has no
   contractual right to survive.
-- ownership and database use are one native SQLite connection. It configures
-  and forces exclusive locking before admission, then supplies that same native
-  object to the SQL/Drizzle views until layer finalization. A second lease
-  connection or external owner token would recreate the split this correction
-  removes.
+- for a target allowed to reach SQLite ownership, ownership and database use
+  converge on one native connection, which supplies the SQL/Drizzle views until
+  layer finalization. A second lease connection or external owner token would
+  recreate the split this correction removes.
 - acquisition order is explicit: resolve and validate the stable local target;
-  create one native connection without running admission or journal-mode setup;
-  set `PRAGMA main.locking_mode=EXCLUSIVE` and zero busy wait; force acquisition
-  with `BEGIN EXCLUSIVE`, then `ROLLBACK` while exclusive mode retains the
-  physical lock. `SQLITE_BUSY` closes as ordinary owner contention. Every other
-  result either yields the one retained owner connection or fails with its
-  distinct storage/admission reason.
+  reject `:memory:`, remote storage, hardlinks, and a clean non-empty main file
+  whose header already proves it is foreign; construct one native connection for
+  every remaining fresh, Repa-attributed, or crash-ambiguous target; let only
+  SQLite's pager perform any required rollback/checkpoint/SHM/sidecar recovery;
+  configure and force exclusive main-file locking; retain that same connection;
+  then classify and admit without a Repa-authored write until admission
+  succeeds. `SQLITE_BUSY` after bounded recovery is ordinary owner contention.
+- fresh initialization commits the complete baseline, application identity,
+  version, and migration journal in rollback mode before the retained connection
+  enables WAL. A cache-spill crash before commit is a recoverable acquisition
+  state, not a clean foreign database merely because its main file is non-zero.
 - cross-process rendezvous is the physical main-file lock, never a lock below a
   caller-selectable application-state root. Hardlink or target-identity failure
   closes before SQLite creates a journal/WAL or performs application access.
 - missing-path creation, the missing-to-existing transition, ordinary use, and
   final release form one SQLite ownership lifecycle. No path-state observation
   selects a second lock domain.
+- `Database.node` owns rejection of `:memory:` for ordinary runtime
+  materialization. Tests that need process-private storage inject
+  `layerFromPath(":memory:")` explicitly rather than obtaining it from
+  `REPA_DB`, preload state, or a test-process exception.
 - CLI/TUI/server entry points decide only whether they are a state owner or a
   pure attached client; they do not implement path identity or locking policy.
 - `db path` remains outside runtime materialization; `db <query>` obtains the
@@ -357,11 +442,11 @@ Evidence must be capable of directly falsifying the boundary:
   configured path;
 - an injected forward migration failure leaves schema, version, journal, and
   prior rows at the previous recognized state;
-- two real owner processes targeting one existing database through the ordinary
-  path, a directory junction, a file symlink, 8.3/long spelling, and
+- two real owner processes targeting one clean admitted database through the
+  ordinary path, a directory junction, a file symlink, 8.3/long spelling, and
   DOS/extended spelling meet at one physical SQLite lock. The loser performs
-  only the narrow main-connection lock attempt and leaves database bytes plus
-  journal/WAL/SHM sidecars unchanged;
+  only the operations permitted by the accepted acquisition boundary and does
+  not enter Repa admission, migration, or application access;
 - the same existing database reached with different `XDG_STATE_HOME` values
   still has one rendezvous, while a hardlink alias is rejected before journal,
   WAL, admission, or application access;
@@ -373,11 +458,12 @@ Evidence must be capable of directly falsifying the boundary:
   paths and different state roots publish exactly one initialized baseline;
   the loser does nothing beyond opening the same canonical main file and
   attempting its exclusive lock;
-- killing the winner after exclusive acquisition but before baseline
-  publication may leave the zero-byte main file and SQLite's transient lock
-  artifact; the next owner reacquires, lets SQLite clean that artifact, and
-  initializes the empty acquisition state exactly once, while a non-empty
-  database without Repa identity still follows foreign-database refusal;
+- killing the winner after exclusive acquisition but before baseline commit may
+  leave either a zero-byte main file or a non-zero `application_id = 0` main file
+  plus a hot journal after SQLite cache spill. The next owner performs bounded
+  recovery; if it returns to the empty acquisition state, Repa initializes the
+  baseline exactly once. A clean identityless file, or a recovered non-empty
+  state that still lacks valid Repa identity, follows foreign-database refusal;
 - a barriered missing-to-existing handoff starts owner A while the path is
   absent, pauses A only after it has created and opened SQLite while retaining
   ownership, then starts contender B after B can observe the existing file. B
@@ -387,18 +473,36 @@ Evidence must be capable of directly falsifying the boundary:
 - stable target resolution and the opened main file agree before side effects;
   deliberately mutating the target concurrently is outside the supported
   boundary rather than a closing oracle;
-- the retained connection shows immediate reuse after orderly close and OS/
-  SQLite recovery after abrupt owner death through every supported alias
-  spelling, without heartbeat expiry or stale-lock deletion;
+- the retained connection shows immediate reuse after orderly close and OS lock
+  release after abrupt owner death through every supported alias spelling,
+  without heartbeat expiry or stale-lock deletion. Any subsequent SQLite
+  recovery follows the accepted recovery contract rather than being assumed by
+  this ownership oracle;
 - full attach, mini attach, and `run --attach` remain clients while an owner is
   active and do not create or migrate the client's local database; and
 - `db path` remains usable when admission cannot run, `db <query>` uses the same
   exclusive main connection and receives the ordinary busy refusal, and the
   no-query form never spawns an external `sqlite3` behind an active Repa
   connection; and
+- with `REPA_DB=:memory:`, the real no-open `db path` command reports the
+  configured value, while two independently launched state-owning entry points
+  each fail before SQLite/AppRuntime materialization with the same typed
+  unsupported-storage reason. Focused tests that require an in-memory database
+  succeed only through explicit layer injection; no preload or inherited
+  environment variable makes ordinary `Database.node` accept it; and
 - real local TUI, command, server, and `pr` launch paths all acquire the same
   authority boundary; focused migration/admission checks and affected package
   typechecks pass.
+
+Bounded-recovery evidence proves clearly foreign clean fixtures remain
+byte-for-byte unchanged; Repa-attributed and ambiguous hot-journal/WAL fixtures
+undergo only the enumerated SQLite pager effects; recovered Repa state is then
+admitted correctly; and an ultimately rejected fixture gains no Repa-authored
+logical, identity, version, journal-mode, schema, migration, repair, or
+replacement write. A cache-spill baseline fixture with a non-zero identityless
+main file and hot journal rolls back to the empty acquisition state and
+initializes exactly once. Fresh creation proves stable identity is in the main
+file before WAL is enabled and remains unchanged thereafter.
 
 Alias fixtures must distinguish an unsupported platform feature from a passing
 oracle; silently skipping an available alias class cannot close the Gate. Tests
@@ -411,7 +515,12 @@ this evidence claim.
 Gate 6 was recorded passed on 2026-07-14 at fork implementation commit
 `6c0b7aa5b`. The later audit preserves the admission and migration results below
 but invalidates the runtime-owner completion claim until the physical-authority
-and rendezvous correction closes.
+and rendezvous correction closes. Design commit `9cc3fe17f` selected a promising
+retained-connection mechanism but did not pass the later crash-state audit; its
+claim that open-and-lock was mutation-free is not an accepted implementation
+contract. The corrected bounded-recovery sequence is now accepted and
+authorizes implementation, but Gate 6 remains open until that implementation
+and its closing evidence are integrated.
 
 The implementation now:
 
