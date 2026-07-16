@@ -23,6 +23,8 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { assertExternalToolID, learningCommandPreparation } from "@/tool/accept-course-view-revision"
+import { normalize as normalizeLearningCommandInput } from "@/learning-command/input"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -42,7 +44,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   agent: Agent.Info
   model: Provider.Model
   session: Session.Info
-  processor: Pick<SessionProcessor.Handle, "message" | "updateToolCall" | "completeToolCall">
+  processor: Pick<SessionProcessor.Handle, "message" | "updateToolCall" | "completeToolCall" | "registeredToolCall">
   bypassAgentCheck: boolean
   messages: SessionV1.WithParts[]
   promptOps: TaskPromptOps
@@ -56,38 +58,48 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   const truncate = yield* Truncate.Service
   const flags = yield* RuntimeFlags.Service
 
-  const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => ({
-    sessionID: input.session.id,
-    abort: options.abortSignal!,
-    messageID: input.processor.message.id,
-    callID: options.toolCallId,
-    extra: { model: input.model, bypassAgentCheck: input.bypassAgentCheck, promptOps: input.promptOps },
-    agent: input.agent.name,
-    messages: input.messages,
-    metadata: (val) =>
-      input.processor.updateToolCall(options.toolCallId, (match) => {
-        if (!["running", "pending"].includes(match.state.status)) return match
-        return {
-          ...match,
-          state: {
-            title: val.title,
-            metadata: val.metadata,
-            status: "running",
-            input: args,
-            time: { start: Date.now() },
-          },
-        }
-      }),
-    ask: (req) =>
-      permission
-        .ask({
-          ...req,
-          sessionID: input.session.id,
-          tool: { messageID: input.processor.message.id, callID: options.toolCallId },
-          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
-        })
-        .pipe(Effect.orDie),
-  })
+  const context = (args: Record<string, unknown>, options: ToolExecutionOptions): Tool.Context => {
+    const toolCall = input.processor.registeredToolCall(options.toolCallId)
+    if (!toolCall) throw new Error(`Local tool execution was not registered: ${options.toolCallId}`)
+    return {
+      sessionID: input.session.id,
+      abort: options.abortSignal!,
+      messageID: input.processor.message.id,
+      callID: options.toolCallId,
+      extra: {
+        model: input.model,
+        bypassAgentCheck: input.bypassAgentCheck,
+        promptOps: input.promptOps,
+        toolCall,
+        permissionRuleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+      },
+      agent: input.agent.name,
+      messages: input.messages,
+      metadata: (val) =>
+        input.processor.updateToolCall(options.toolCallId, (match) => {
+          if (!["running", "pending"].includes(match.state.status)) return match
+          return {
+            ...match,
+            state: {
+              title: val.title,
+              metadata: val.metadata,
+              status: "running",
+              input: args,
+              time: { start: Date.now() },
+            },
+          }
+        }),
+      ask: (req) =>
+        permission
+          .ask({
+            ...req,
+            sessionID: input.session.id,
+            tool: { messageID: input.processor.message.id, callID: options.toolCallId },
+            ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+          })
+          .pipe(Effect.orDie),
+    }
+  }
 
   for (const item of yield* registry.tools({
     modelID: ModelV2.ID.make(input.model.api.id),
@@ -96,19 +108,23 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     permission: input.session.permission,
   })) {
     const schema = ProviderTransform.schema(input.model, ToolJsonSchema.fromTool(item))
-    tools[item.id] = tool({
+    const prepareLearningCommand = learningCommandPreparation(item)
+    const local = tool({
       description: item.description,
       inputSchema: jsonSchema(schema),
       execute(args, options) {
         return run.promise(
           Effect.gen(function* () {
-            const ctx = context(args, options)
-            yield* plugin.trigger(
-              "tool.execute.before",
-              { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID },
-              { args },
-            )
-            const result = yield* item.execute(args, ctx)
+            const canonicalArgs = prepareLearningCommand ? normalizeLearningCommandInput(args) : args
+            const ctx = context(toRecord(canonicalArgs), options)
+            if (!prepareLearningCommand) {
+              yield* plugin.trigger(
+                "tool.execute.before",
+                { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID },
+                { args },
+              )
+            }
+            const result = yield* item.execute(canonicalArgs, ctx)
             const output = {
               ...result,
               attachments: result.attachments?.map((attachment) => ({
@@ -118,11 +134,15 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
                 messageID: input.processor.message.id,
               })),
             }
-            yield* plugin.trigger(
-              "tool.execute.after",
-              { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID, args },
-              output,
-            )
+            if (prepareLearningCommand) {
+              yield* observeLearningCommandResult(plugin, item.id, ctx.sessionID, ctx.callID, canonicalArgs, output)
+            } else {
+              yield* plugin.trigger(
+                "tool.execute.after",
+                { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID, args },
+                output,
+              )
+            }
             if (options.abortSignal?.aborted) {
               yield* input.processor.completeToolCall(options.toolCallId, output)
             }
@@ -131,6 +151,15 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
         )
       },
     })
+    if (prepareLearningCommand) {
+      const prepared = local as AITool & {
+        [SessionProcessor.ToolCallPreparation]: SessionProcessor.ToolCallPreparation
+      }
+      prepared[SessionProcessor.ToolCallPreparation] = (args, registration) => {
+        return run.promise(prepareLearningCommandCall(plugin, item.id, args, registration, prepareLearningCommand))
+      }
+    }
+    tools[item.id] = local
   }
 
   const hasMcpResourceServer = Object.values(yield* mcp.clients()).some(
@@ -385,9 +414,11 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     })
   }
 
+  const mcpTools = yield* mcp.tools()
+  for (const key of Object.keys(mcpTools)) assertExternalToolID(key, "mcp")
   if (flags.experimentalCodeMode) return tools
 
-  for (const [key, entry] of Object.entries(yield* mcp.tools())) {
+  for (const [key, entry] of Object.entries(mcpTools)) {
     const item = McpCatalog.convertTool(entry.def, entry.client, entry.timeout)
     const execute = item.execute
     if (!execute) continue
@@ -491,6 +522,51 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
 
   return tools
 })
+
+export function prepareLearningCommandCall(
+  plugin: Plugin.Interface,
+  toolID: string,
+  input: unknown,
+  registration: SessionProcessor.RegisteredToolCall,
+  prepare: NonNullable<ReturnType<typeof learningCommandPreparation>>,
+) {
+  return Effect.gen(function* () {
+    const canonical = normalizeLearningCommandInput(input)
+    yield* plugin.trigger(
+      "tool.execute.before",
+      { tool: toolID, sessionID: registration.sessionID, callID: registration.callID },
+      { args: structuredClone(canonical) },
+    )
+    yield* prepare(canonical, registration)
+  })
+}
+
+export function observeLearningCommandResult<A>(
+  plugin: Plugin.Interface,
+  toolID: string,
+  sessionID: SessionV1.ToolPart["sessionID"],
+  callID: string | undefined,
+  input: unknown,
+  output: A,
+) {
+  return plugin
+    .trigger(
+      "tool.execute.after",
+      { tool: toolID, sessionID, callID, args: structuredClone(input) },
+      structuredClone(output),
+    )
+    .pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError("Post-settlement learning-command observer failed", {
+          tool: toolID,
+          sessionID,
+          callID,
+          cause,
+        }),
+      ),
+      Effect.as(output),
+    )
+}
 
 function toRecord(value: unknown) {
   if (isRecord(value)) return value

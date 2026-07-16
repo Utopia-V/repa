@@ -54,6 +54,12 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { McpCatalog } from "@/mcp/catalog"
+import {
+  AcceptCourseViewRevisionTool,
+  assertExternalToolID,
+  learningCommandPreparation,
+} from "./accept-course-view-revision"
+import { LearningCommandRuntime } from "@/learning-command/runtime"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -109,6 +115,7 @@ const layer = Layer.effect(
     const greptool = yield* GrepTool
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
+    const acceptCourseViewRevision = yield* AcceptCourseViewRevisionTool
     const agent = yield* Agent.Service
     const codeMode = flags.experimentalCodeMode ? yield* Effect.promise(() => import("./code-mode")) : undefined
     const codeModeTool = codeMode ? yield* codeMode.CodeModeTool : undefined
@@ -197,6 +204,7 @@ const layer = Layer.effect(
             custom.push(fromPlugin(id, def))
           }
         }
+        for (const item of custom) assertExternalToolID(item.id, "custom")
 
         yield* config.get()
         const questionEnabled = ["app", "cli", "desktop"].includes(flags.client) || flags.enableQuestionTool
@@ -218,6 +226,7 @@ const layer = Layer.effect(
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
+          acceptCourseViewRevision: Tool.init(acceptCourseViewRevision),
           ...(codeModeTool ? { execute: Tool.init(codeModeTool) } : {}),
         })
 
@@ -226,6 +235,7 @@ const layer = Layer.effect(
           builtin: [
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
+            tool.acceptCourseViewRevision,
             tool.shell,
             tool.read,
             tool.glob,
@@ -328,6 +338,7 @@ const layer = Layer.effect(
             jsonSchema,
             execute: tool.execute,
             formatValidationError: tool.formatValidationError,
+            ...(learningCommandPreparation(tool) ? { prepareLearningCommand: learningCommandPreparation(tool) } : {}),
           }
         }),
         { concurrency: "unbounded" },
@@ -444,6 +455,7 @@ export const node = LayerNode.make({
     MCP.node,
     Database.node,
     Ripgrep.node,
+    LearningCommandRuntime.node,
   ],
 })
 

@@ -7,6 +7,10 @@ import { statics } from "@opencode-ai/core/schema"
 export const SessionID = SessionV2.ID
 export type SessionID = Schema.Schema.Type<typeof SessionID>
 
+export class BusyError extends Schema.TaggedErrorClass<BusyError>()("SessionBusyError", {
+  sessionID: SessionID,
+}) {}
+
 export const MessageID = Schema.String.check(Schema.isStartsWith("msg")).pipe(
   Schema.brand("MessageID"),
   statics((s) => ({

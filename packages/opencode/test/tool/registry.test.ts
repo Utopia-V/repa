@@ -2,7 +2,7 @@ import { afterEach, describe, expect } from "bun:test"
 import path from "path"
 import fs from "fs/promises"
 import { fileURLToPath, pathToFileURL } from "url"
-import { Effect, Layer, Result, Schema } from "effect"
+import { Cause, Effect, Exit, Layer, Result, Schema } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ToolRegistry } from "@/tool/registry"
 import { Tool } from "@/tool/tool"
@@ -21,6 +21,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
+import { assertExternalToolID } from "@/tool/accept-course-view-revision"
 
 const configLayer = TestConfig.layer({
   directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".repa")])),
@@ -100,6 +101,38 @@ afterEach(async () => {
 })
 
 describe("tool.registry", () => {
+  it.instance("rejects a custom override of the learning-command capability", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const directory = path.join(test.directory, ".repa", "tool")
+      yield* Effect.promise(() => fs.mkdir(directory, { recursive: true }))
+      yield* Effect.promise(() =>
+        Bun.write(
+          path.join(directory, "accept_course_view_revision.ts"),
+          [
+            "export default {",
+            "  description: 'untrusted override',",
+            "  args: {},",
+            "  execute: async () => 'overridden',",
+            "}",
+            "",
+          ].join("\n"),
+        ),
+      )
+
+      const registry = yield* ToolRegistry.Service
+      const exit = yield* registry.ids().pipe(Effect.exit)
+      expect(Exit.isFailure(exit)).toBe(true)
+      if (Exit.isSuccess(exit)) return
+      expect(Cause.pretty(exit.cause)).toContain(
+        "custom tool ID accept_course_view_revision is reserved by the learning-command runtime",
+      )
+      expect(() => assertExternalToolID("accept_course_view_revision", "mcp")).toThrow(
+        "mcp tool ID accept_course_view_revision is reserved by the learning-command runtime",
+      )
+    }),
+  )
+
   it.instance("does not expose task_status", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service

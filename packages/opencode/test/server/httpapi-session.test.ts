@@ -2,9 +2,11 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { afterEach, describe, expect } from "bun:test"
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Course } from "@opencode-ai/core/course"
+import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
-import { Cause, Config, Effect, Exit, Layer } from "effect"
+import { Cause, Config, Deferred, Effect, Exit, Fiber, Layer } from "effect"
 import { HttpClient, HttpClientRequest, HttpClientResponse, HttpRouter, HttpServer } from "effect/unstable/http"
 import { layerWebSocketConstructorGlobal } from "effect/unstable/socket/Socket"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -20,9 +22,11 @@ import * as HttpSessionError from "../../src/server/routes/instance/httpapi/hand
 import { ExperimentalPaths } from "../../src/server/routes/instance/httpapi/groups/experimental"
 import { SessionPaths } from "../../src/server/routes/instance/httpapi/groups/session"
 import { Session } from "@/session/session"
+import { SessionPrompt } from "@/session/prompt"
+import { SessionRunState } from "@/session/run-state"
 import { MessageID, PartID, SessionID, type SessionID as SessionIDType } from "../../src/session/schema"
 import { Database } from "@opencode-ai/core/database/database"
-import { SessionInputTable, SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { PartTable, SessionInputTable, SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -39,13 +43,31 @@ import {
 import { TestLLMServer } from "../lib/llm-server"
 import { testProviderConfig } from "../lib/test-provider"
 import { testEffect } from "../lib/effect"
+import { EventV2Bridge } from "@/event-v2-bridge"
+import { LearningCommandRuntime } from "@/learning-command/runtime"
+import { Permission } from "@/permission"
+import { LearnerAdmission, LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
+import { LearnerOccurrenceTombstoneTable } from "@opencode-ai/core/learning-command/occurrence.sql"
+import { LearningCommandInvocationTable } from "@opencode-ai/core/learning-command/sql"
 
 const noopBootstrapLayer = Layer.succeed(
   InstanceBootstrapService.Service,
   InstanceBootstrapService.Service.of({ run: Effect.void }),
 )
 const appLayer = AppNodeBuilder.build(
-  LayerNode.group([InstanceStore.node, Project.node, Session.node, Database.node, Ripgrep.node]),
+  LayerNode.group([
+    InstanceStore.node,
+    Project.node,
+    Session.node,
+    SessionPrompt.node,
+    SessionRunState.node,
+    Course.node,
+    LearningCommandRuntime.node,
+    Permission.node,
+    Database.node,
+    Ripgrep.node,
+    EventV2Bridge.node,
+  ]),
   [[InstanceStore.bootstrapNode, noopBootstrapLayer]],
 )
 const servedRoutes: Layer.Layer<never, Config.ConfigError, HttpServer.HttpServer> = HttpRouter.serve(
@@ -211,6 +233,225 @@ describe("session HttpApi", () => {
         })
       }
     }),
+  )
+
+  it.instance(
+    "returns declared 409 errors when Session mutation endpoints enter during closing",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const runState = yield* SessionRunState.Service
+        const sessions = yield* Session.Service
+        const headers = { "x-opencode-directory": test.directory, "content-type": "application/json" }
+        const cases = [
+          {
+            name: "update",
+            path: (sessionID: SessionIDType) => pathFor(SessionPaths.update, { sessionID }),
+            method: "PATCH",
+            body: { title: "must not publish" },
+          },
+          {
+            name: "init",
+            path: (sessionID: SessionIDType) => pathFor(SessionPaths.init, { sessionID }),
+            method: "POST",
+            body: { providerID: "test", modelID: "test", messageID: MessageID.ascending() },
+          },
+          {
+            name: "summarize",
+            path: (sessionID: SessionIDType) => pathFor(SessionPaths.summarize, { sessionID }),
+            method: "POST",
+            body: { providerID: "test", modelID: "test", auto: false },
+          },
+          {
+            name: "prompt",
+            path: (sessionID: SessionIDType) => pathFor(SessionPaths.prompt, { sessionID }),
+            method: "POST",
+            body: { agent: "repa", noReply: true, parts: [{ type: "text", text: "must not admit" }] },
+          },
+          {
+            name: "command",
+            path: (sessionID: SessionIDType) => pathFor(SessionPaths.command, { sessionID }),
+            method: "POST",
+            body: { command: "missing-during-close", arguments: "" },
+          },
+        ] as const
+
+        for (const input of cases) {
+          const session = yield* createSession({ title: `closing ${input.name}` })
+          const entered = yield* Deferred.make<void>()
+          const release = yield* Deferred.make<void>()
+          yield* Effect.addFinalizer(() => Deferred.succeed(release, undefined).pipe(Effect.asVoid))
+          const reader = yield* runState
+            .shared(session.id, Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))))
+            .pipe(Effect.forkChild)
+          yield* Deferred.await(entered).pipe(Effect.timeout("2 seconds"))
+          const deletion = yield* sessions.remove(session.id).pipe(Effect.forkChild)
+          yield* Effect.gen(function* () {
+            while ((yield* runState.phase(session.id)) !== "closing") yield* Effect.sleep("1 millis")
+          }).pipe(Effect.timeout("2 seconds"))
+
+          const response = yield* request(input.path(session.id), {
+            method: input.method,
+            headers,
+            body: JSON.stringify(input.body),
+          })
+          const body = yield* responseJson(response)
+          expect({ name: input.name, status: response.status, body }).toEqual({
+            name: input.name,
+            status: 409,
+            body: {
+              _tag: "SessionBusyError",
+              sessionID: session.id,
+              message: `Session is busy: ${session.id}`,
+            },
+          })
+
+          yield* Deferred.succeed(release, undefined)
+          yield* Fiber.join(reader)
+          yield* Fiber.join(deletion)
+        }
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+    { timeout: 30000 },
+  )
+
+  it.instance(
+    "maps summarize loop Busy to 409 when deletion starts after compaction admission",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const prompt = yield* SessionPrompt.Service
+        const runState = yield* SessionRunState.Service
+        const sessions = yield* Session.Service
+        const session = yield* createSession({ title: "summarize close race" })
+        const loopStarted = yield* Deferred.make<void>()
+        const releaseLoop = yield* Deferred.make<void>()
+        const originalLoop = prompt.loop
+        const mutablePrompt = prompt as { loop: typeof prompt.loop }
+        mutablePrompt.loop = (input) =>
+          Deferred.succeed(loopStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseLoop)),
+            Effect.andThen(originalLoop(input)),
+          )
+        yield* Effect.addFinalizer(() =>
+          Deferred.succeed(releaseLoop, undefined).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                mutablePrompt.loop = originalLoop
+              }),
+            ),
+            Effect.asVoid,
+          ),
+        )
+
+        const responseFiber = yield* request(pathFor(SessionPaths.summarize, { sessionID: session.id }), {
+          method: "POST",
+          headers: { "x-opencode-directory": test.directory, "content-type": "application/json" },
+          body: JSON.stringify({ providerID: "test", modelID: "test", auto: false }),
+        }).pipe(Effect.forkChild)
+        yield* Deferred.await(loopStarted).pipe(Effect.timeout("2 seconds"))
+        const deletion = yield* sessions.remove(session.id).pipe(Effect.forkChild)
+        yield* Effect.gen(function* () {
+          while ((yield* runState.phase(session.id)) !== "closing") yield* Effect.sleep("1 millis")
+        }).pipe(Effect.timeout("2 seconds"))
+        yield* Deferred.succeed(releaseLoop, undefined)
+
+        const response = yield* Fiber.join(responseFiber)
+        expect(response.status).toBe(409)
+        expect(yield* responseJson(response)).toEqual({
+          _tag: "SessionBusyError",
+          sessionID: session.id,
+          message: `Session is busy: ${session.id}`,
+        })
+        yield* Fiber.join(deletion)
+        mutablePrompt.loop = originalLoop
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "returns 409 instead of defecting when prompt cleanup meets closing with a stored revert",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const runState = yield* SessionRunState.Service
+        const sessions = yield* Session.Service
+        const session = yield* createSession({ title: "revert closing prompt" })
+        yield* sessions.setRevert({
+          sessionID: session.id,
+          revert: { messageID: MessageID.ascending() },
+          summary: { additions: 0, deletions: 0, files: 0 },
+        })
+        const entered = yield* Deferred.make<void>()
+        const release = yield* Deferred.make<void>()
+        yield* Effect.addFinalizer(() => Deferred.succeed(release, undefined).pipe(Effect.asVoid))
+        const reader = yield* runState
+          .shared(session.id, Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release))))
+          .pipe(Effect.forkChild)
+        yield* Deferred.await(entered)
+        const deletion = yield* sessions.remove(session.id).pipe(Effect.forkChild)
+        yield* Effect.gen(function* () {
+          while ((yield* runState.phase(session.id)) !== "closing") yield* Effect.sleep("1 millis")
+        }).pipe(Effect.timeout("2 seconds"))
+
+        const response = yield* request(pathFor(SessionPaths.prompt, { sessionID: session.id }), {
+          method: "POST",
+          headers: { "x-opencode-directory": test.directory, "content-type": "application/json" },
+          body: JSON.stringify({ agent: "repa", noReply: true, parts: [{ type: "text", text: "blocked" }] }),
+        })
+        expect(response.status).toBe(409)
+        expect(yield* responseJson(response)).toMatchObject({ _tag: "SessionBusyError", sessionID: session.id })
+
+        yield* Deferred.succeed(release, undefined)
+        yield* Fiber.join(reader)
+        yield* Fiber.join(deletion)
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "returns a typed lifecycle error when deletion wins after the HTTP prompt existence check",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const prompt = yield* SessionPrompt.Service
+        const sessions = yield* Session.Service
+        const session = yield* createSession({ title: "delete after prompt check" })
+        const serviceEntered = yield* Deferred.make<void>()
+        const releaseService = yield* Deferred.make<void>()
+        const originalPrompt = prompt.prompt
+        const mutablePrompt = prompt as { prompt: typeof prompt.prompt }
+        mutablePrompt.prompt = (input) =>
+          Deferred.succeed(serviceEntered, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseService)),
+            Effect.andThen(originalPrompt(input)),
+          )
+        yield* Effect.addFinalizer(() =>
+          Deferred.succeed(releaseService, undefined).pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                mutablePrompt.prompt = originalPrompt
+              }),
+            ),
+            Effect.asVoid,
+          ),
+        )
+
+        const responseFiber = yield* request(pathFor(SessionPaths.prompt, { sessionID: session.id }), {
+          method: "POST",
+          headers: { "x-opencode-directory": test.directory, "content-type": "application/json" },
+          body: JSON.stringify({ agent: "repa", noReply: true, parts: [{ type: "text", text: "too late" }] }),
+        }).pipe(Effect.forkChild)
+        yield* Deferred.await(serviceEntered).pipe(Effect.timeout("2 seconds"))
+        yield* sessions.remove(session.id)
+        yield* Deferred.succeed(releaseService, undefined)
+
+        const response = yield* Fiber.join(responseFiber)
+        expect(response.status).toBe(409)
+        expect(yield* responseJson(response)).toMatchObject({ _tag: "SessionBusyError", sessionID: session.id })
+        mutablePrompt.prompt = originalPrompt
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
   )
 
   it.instance(
@@ -881,6 +1122,387 @@ describe("session HttpApi", () => {
         )
 
         expect(response.status).toBe(400)
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "does not let HTTP update or Part deletion bypass admitted-presentation immutability",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const events = yield* EventV2Bridge.Service
+        const database = yield* Database.Service
+        const svc = yield* Session.Service
+        const headers = { "x-opencode-directory": test.directory, "content-type": "application/json" }
+        const session = yield* createSession({ title: "immutable presentation" })
+        const message = yield* createTextMessage(session.id, "admitted learner input")
+        const admitted = yield* events.transaction((tx) =>
+          Occurrence.admit(tx, {
+            admission: LearnerAdmission.interactive(),
+            sessionID: session.id,
+            messageID: message.info.id,
+            timeAdmitted: Date.now(),
+          }).pipe(
+            Effect.map((result) => ({ result })),
+            Effect.orDie,
+          ),
+        )
+        yield* svc.fork({ sessionID: session.id })
+        const assistant = yield* svc.updateMessage({
+          id: MessageID.ascending(),
+          role: "assistant",
+          parentID: message.info.id,
+          sessionID: session.id,
+          mode: "repa",
+          agent: "repa",
+          path: { cwd: session.directory, root: session.directory },
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelV2.ID.make("test"),
+          providerID: ProviderV2.ID.make("test"),
+          time: { created: Date.now() },
+        })
+        const learningPart = yield* svc.updatePart({
+          id: PartID.ascending(),
+          messageID: assistant.id,
+          sessionID: session.id,
+          type: "tool",
+          tool: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+          callID: "http-admitted-learning-call",
+          state: { status: "pending", input: { frozen: true }, raw: '{"frozen":true}' },
+        })
+        const learningPartRow = yield* database.db
+          .select({ timeCreated: PartTable.time_created })
+          .from(PartTable)
+          .where(eq(PartTable.id, learningPart.id))
+          .get()
+          .pipe(Effect.orDie)
+        if (!learningPartRow) return yield* Effect.die("expected admitted learning Part")
+        yield* database.db
+          .insert(LearningCommandInvocationTable)
+          .values({
+            part_id: learningPart.id,
+            session_id: session.id,
+            parent_user_message_id: message.info.id,
+            assistant_message_id: assistant.id,
+            provider_call_id: learningPart.callID,
+            occurrence_id: admitted.result.id,
+            command_name: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+            command_version: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_VERSION,
+            emission_ordinal: 0,
+            capability_identity: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+            capability_version: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_VERSION,
+            authorization_basis: "learner_acceptance",
+            input_fingerprint: "0".repeat(64),
+            status: "admitted",
+            time_admitted: learningPartRow.timeCreated,
+          })
+          .run()
+          .pipe(Effect.orDie)
+
+        const update = yield* request(
+          pathFor(SessionPaths.updatePart, {
+            sessionID: session.id,
+            messageID: message.info.id,
+            partID: message.part.id,
+          }),
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({ ...message.part, text: "changed through HTTP" }),
+          },
+        )
+        expect(update.status).toBeGreaterThanOrEqual(400)
+        const deletion = yield* request(
+          pathFor(SessionPaths.deletePart, {
+            sessionID: session.id,
+            messageID: message.info.id,
+            partID: message.part.id,
+          }),
+          { method: "DELETE", headers },
+        )
+        expect(deletion.status).toBeGreaterThanOrEqual(400)
+        const learningUpdate = yield* request(
+          pathFor(SessionPaths.updatePart, {
+            sessionID: session.id,
+            messageID: assistant.id,
+            partID: learningPart.id,
+          }),
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              ...learningPart,
+              state: { ...learningPart.state, input: { frozen: false } },
+            }),
+          },
+        )
+        expect(learningUpdate.status).toBeGreaterThanOrEqual(400)
+        expect(
+          yield* svc.getPart({
+            sessionID: session.id,
+            messageID: assistant.id,
+            partID: learningPart.id,
+          }),
+        ).toEqual(learningPart)
+        expect(
+          yield* svc.getPart({
+            sessionID: session.id,
+            messageID: message.info.id,
+            partID: message.part.id,
+          }),
+        ).toMatchObject({ type: "text", text: "admitted learner input" })
+        expect(
+          yield* requestJson<boolean>(
+            pathFor(SessionPaths.deleteMessage, { sessionID: session.id, messageID: message.info.id }),
+            { method: "DELETE", headers },
+          ),
+        ).toBe(true)
+        expect(
+          yield* database.db
+            .select()
+            .from(LearnerOccurrenceTombstoneTable)
+            .where(eq(LearnerOccurrenceTombstoneTable.occurrence_id, admitted.result.id))
+            .get()
+            .pipe(Effect.orDie),
+        ).toMatchObject({ reason: "source_unavailable" })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "rejects HTTP learning-Part mutation during a live permission wait",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const courses = yield* Course.Service
+        const database = yield* Database.Service
+        const events = yield* EventV2Bridge.Service
+        const permission = yield* Permission.Service
+        const runtime = yield* LearningCommandRuntime.Service
+        const sessions = yield* Session.Service
+        const session = yield* createSession({ title: "permission-wait mutation" })
+        const user = yield* createTextMessage(session.id, "accept this Course View Revision")
+        const admitted = yield* events.transaction((tx) =>
+          Occurrence.admit(tx, {
+            admission: LearnerAdmission.interactive(),
+            sessionID: session.id,
+            messageID: user.info.id,
+            timeAdmitted: Date.now(),
+          }).pipe(
+            Effect.map((result) => ({ result })),
+            Effect.orDie,
+          ),
+        )
+        const assistant = yield* sessions.updateMessage({
+          id: MessageID.ascending(),
+          role: "assistant",
+          parentID: user.info.id,
+          sessionID: session.id,
+          mode: "repa",
+          agent: "repa",
+          path: { cwd: session.directory, root: session.directory },
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelV2.ID.make("test"),
+          providerID: ProviderV2.ID.make("test"),
+          time: { created: Date.now() },
+        })
+        const course = yield* courses.createCourse({ title: "Permission wait" })
+        const view = yield* courses.createView({
+          courseID: course.id,
+          name: "Main",
+          expectedCourseVersion: 0,
+          authorship: Course.Authorship.learnerAuthored(),
+          revision: { items: [{ key: "root", title: "Transactions" }] },
+        })
+        const canonical = {
+          courseID: course.id,
+          revisionID: view.revision.id,
+          expectedCourseVersion: 0,
+          expectedSelectionRevisionID: null,
+          expectedSelectionVersion: 0,
+          expectedViewVersion: 0,
+          expectedRevisionVersion: 0,
+        }
+        const registration = Object.freeze({
+          partID: PartID.ascending(),
+          callID: "http-permission-wait-learning-call",
+          emissionOrdinal: 0,
+          sessionID: session.id,
+          parentUserMessageID: user.info.id,
+          assistantMessageID: assistant.id,
+        }) satisfies LearningCommandRuntime.Registration
+        yield* runtime.prepare(canonical, registration)
+        yield* Effect.addFinalizer(() => runtime.interrupt(registration).pipe(Effect.ignore))
+
+        const execution = yield* runtime
+          .execute(canonical, {
+            sessionID: session.id,
+            messageID: assistant.id,
+            callID: registration.callID,
+            abort: new AbortController().signal,
+            extra: {
+              toolCall: registration,
+              permissionRuleset: [
+                {
+                  permission: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+                  pattern: "*",
+                  action: "ask",
+                },
+              ],
+            },
+          } satisfies LearningCommandRuntime.ExecuteContext)
+          .pipe(Effect.forkChild)
+        const requestInfo = yield* Effect.gen(function* () {
+          while (true) {
+            const current = (yield* permission.list()).find((item) => item.sessionID === session.id)
+            if (current) return current
+            yield* Effect.sleep("5 millis")
+          }
+        }).pipe(Effect.timeout("2 seconds"))
+        const pending = yield* sessions.getPart({
+          sessionID: session.id,
+          messageID: assistant.id,
+          partID: registration.partID,
+        })
+        if (!pending || pending.type !== "tool" || pending.state.status !== "pending") {
+          return yield* Effect.die("Expected live permission-wait learning Part")
+        }
+        expect(admitted.result.id).toBeTruthy()
+        const beforeMutation = yield* database.db
+          .select({ seq: EventSequenceTable.seq })
+          .from(EventSequenceTable)
+          .where(eq(EventSequenceTable.aggregate_id, session.id))
+          .get()
+          .pipe(Effect.orDie)
+        const headers = { "x-opencode-directory": test.directory, "content-type": "application/json" }
+        const update = yield* request(
+          pathFor(SessionPaths.updatePart, {
+            sessionID: session.id,
+            messageID: assistant.id,
+            partID: registration.partID,
+          }),
+          {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify({
+              ...pending,
+              state: { ...pending.state, input: { ...canonical, expectedCourseVersion: 1 } },
+            }),
+          },
+        )
+        expect(update.status).toBeGreaterThanOrEqual(400)
+        expect(
+          yield* sessions.getPart({
+            sessionID: session.id,
+            messageID: assistant.id,
+            partID: registration.partID,
+          }),
+        ).toEqual(pending)
+        expect(
+          yield* database.db
+            .select({ seq: EventSequenceTable.seq })
+            .from(EventSequenceTable)
+            .where(eq(EventSequenceTable.aggregate_id, session.id))
+            .get()
+            .pipe(Effect.orDie),
+        ).toEqual(beforeMutation)
+
+        yield* permission.reply({ requestID: requestInfo.id, reply: "once" })
+        const settled = yield* Fiber.join(execution)
+        expect(JSON.parse(settled.output)).toMatchObject({ outcome: "applied", courseID: course.id })
+        expect(yield* permission.list()).toEqual([])
+        expect((yield* courses.getCourse(course.id)).selection).toEqual({
+          revisionID: view.revision.id,
+          version: 1,
+        })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
+  it.instance(
+    "does not publish a late prompt_async failure after Session deletion",
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const database = yield* Database.Service
+        const events = yield* EventV2Bridge.Service
+        const prompt = yield* SessionPrompt.Service
+        const sessions = yield* Session.Service
+        const session = yield* createSession({ title: "late prompt_async failure" })
+        const promptStarted = yield* Deferred.make<void>()
+        const releasePrompt = yield* Deferred.make<void>()
+        const errorPublished = yield* Deferred.make<void>()
+        const originalPrompt = prompt.prompt
+        const mutablePrompt = prompt as { prompt: typeof prompt.prompt }
+        mutablePrompt.prompt = (input) =>
+          Deferred.succeed(promptStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releasePrompt)),
+            Effect.andThen(Effect.fail(new Session.BusyError({ sessionID: input.sessionID }))),
+          )
+        const unsubscribe = yield* events.listen((event) => {
+          if (event.type !== Session.Event.Error.type) return Effect.void
+          const data = event.data as typeof Session.Event.Error.data.Type
+          if (data.sessionID !== session.id) return Effect.void
+          return Deferred.succeed(errorPublished, undefined).pipe(Effect.asVoid)
+        })
+        yield* Effect.addFinalizer(() =>
+          Deferred.succeed(releasePrompt, undefined).pipe(
+            Effect.andThen(unsubscribe),
+            Effect.andThen(
+              Effect.sync(() => {
+                mutablePrompt.prompt = originalPrompt
+              }),
+            ),
+            Effect.asVoid,
+          ),
+        )
+
+        const response = yield* request(pathFor(SessionPaths.promptAsync, { sessionID: session.id }), {
+          method: "POST",
+          headers: { "x-opencode-directory": test.directory, "content-type": "application/json" },
+          body: JSON.stringify({
+            agent: "repa",
+            noReply: true,
+            parts: [{ type: "text", text: "fail after deletion" }],
+          }),
+        })
+        expect(response.status).toBe(204)
+        yield* Deferred.await(promptStarted).pipe(Effect.timeout("2 seconds"))
+        yield* sessions.remove(session.id)
+        yield* Deferred.succeed(releasePrompt, undefined)
+        const published = yield* Effect.race(
+          Deferred.await(errorPublished).pipe(Effect.as(true)),
+          Effect.sleep("200 millis").pipe(Effect.as(false)),
+        )
+        mutablePrompt.prompt = originalPrompt
+        expect(published).toBe(false)
+        expect(
+          yield* database.db
+            .select()
+            .from(SessionTable)
+            .where(eq(SessionTable.id, session.id))
+            .get()
+            .pipe(Effect.orDie),
+        ).toBeUndefined()
+        expect(
+          yield* database.db
+            .select()
+            .from(EventTable)
+            .where(eq(EventTable.aggregate_id, session.id))
+            .get()
+            .pipe(Effect.orDie),
+        ).toBeUndefined()
+        expect(
+          yield* database.db
+            .select()
+            .from(EventSequenceTable)
+            .where(eq(EventSequenceTable.aggregate_id, session.id))
+            .get()
+            .pipe(Effect.orDie),
+        ).toBeUndefined()
       }),
     { git: true, config: { formatter: false, lsp: false } },
   )

@@ -427,7 +427,7 @@ const layer = Layer.effect(
       if (result === "continue" && input.auto) {
         if (replay) {
           const original = replay.info
-          const replayMsg = yield* session.updateMessage({
+          const replayMsg: SessionV1.User = {
             id: MessageID.ascending(),
             role: "user",
             sessionID: input.sessionID,
@@ -437,20 +437,27 @@ const layer = Layer.effect(
             format: original.format,
             tools: original.tools,
             system: original.system,
-          })
-          for (const part of replay.parts) {
-            if (part.type === "compaction") continue
-            const replayPart =
+          }
+          const replayParts = replay.parts.flatMap((part): SessionV1.Part[] => {
+            if (part.type === "compaction") return []
+            const value =
               part.type === "file" && MessageV2.isMedia(part.mime)
                 ? { type: "text" as const, text: `[Attached ${part.mime}: ${part.filename ?? "file"}]` }
                 : part
-            yield* session.updatePart({
-              ...replayPart,
-              id: PartID.ascending(),
-              messageID: replayMsg.id,
-              sessionID: input.sessionID,
-            })
-          }
+            return [
+              {
+                ...value,
+                id: PartID.ascending(),
+                messageID: replayMsg.id,
+                sessionID: input.sessionID,
+              },
+            ]
+          })
+          yield* session.updateMessageWithParts({
+            info: replayMsg,
+            parts: replayParts,
+            occurrenceSource: { messageID: original.id, provenance: "compaction_replay" },
+          })
         }
 
         if (!replay) {

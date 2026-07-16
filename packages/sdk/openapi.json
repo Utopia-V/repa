@@ -4799,6 +4799,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
+                }
+              }
+            }
           }
         },
         "description": "Delete a session and permanently remove all associated data, including messages and history.",
@@ -4866,6 +4876,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
                 }
               }
             }
@@ -5308,6 +5328,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
+                }
+              }
+            }
           }
         },
         "description": "Create and send a new message to a session, streaming the AI response.",
@@ -5635,6 +5665,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
+                }
+              }
+            }
           }
         },
         "description": "Create a new session by forking an existing session at a specific message point.",
@@ -5787,6 +5827,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
+                }
+              }
+            }
           }
         },
         "description": "Analyze the current application and create an AGENTS.md file with project-specific agent configurations.",
@@ -5880,6 +5930,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
                 }
               }
             }
@@ -6121,6 +6181,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
                 }
               }
             }
@@ -6701,6 +6771,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
+                }
+              }
+            }
           }
         },
         "description": "Delete a part from a message.",
@@ -6785,6 +6865,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/NotFoundError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SessionBusyError",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionBusyError"
                 }
               }
             }
@@ -20177,6 +20267,23 @@
           }
         }
       },
+      "SessionBusyError": {
+        "type": "object",
+        "properties": {
+          "_tag": {
+            "type": "string",
+            "enum": ["SessionBusyError"]
+          },
+          "sessionID": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": ["_tag", "sessionID", "message"],
+        "additionalProperties": false
+      },
       "TextPartInput": {
         "type": "object",
         "properties": {
@@ -20320,23 +20427,6 @@
           }
         },
         "required": ["type", "prompt", "description", "agent"],
-        "additionalProperties": false
-      },
-      "SessionBusyError": {
-        "type": "object",
-        "properties": {
-          "_tag": {
-            "type": "string",
-            "enum": ["SessionBusyError"]
-          },
-          "sessionID": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          }
-        },
-        "required": ["_tag", "sessionID", "message"],
         "additionalProperties": false
       },
       "EventTuiPromptAppend": {

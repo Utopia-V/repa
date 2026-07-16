@@ -1,27 +1,37 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { InstanceState } from "@/effect/instance-state"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Runner } from "@/effect/runner"
 import { BackgroundJob } from "@/background/job"
 import { Effect, Latch, Layer, Scope, Context } from "effect"
-import { Session } from "./session"
-import { SessionID } from "./schema"
+import { BusyError, SessionID } from "./schema"
 import { SessionStatus } from "./status"
+import { SessionLifecycle } from "./lifecycle"
+import { InstanceState } from "@/effect/instance-state"
+import { InstanceRef } from "@/effect/instance-ref"
 
 export interface Interface {
-  readonly assertNotBusy: (sessionID: SessionID) => Effect.Effect<void, Session.BusyError>
+  readonly assertNotBusy: (sessionID: SessionID) => Effect.Effect<void, BusyError>
   readonly cancel: (sessionID: SessionID) => Effect.Effect<void>
+  readonly shared: SessionLifecycle.Interface["shared"]
+  readonly admit: SessionLifecycle.Interface["admit"]
+  readonly mutateThenAdmit: SessionLifecycle.Interface["mutateThenAdmit"]
+  readonly idle: SessionLifecycle.Interface["idle"]
+  readonly close: <A, E, R>(
+    sessionID: SessionID,
+    effect: (markCommitted: Effect.Effect<void>) => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | BusyError, R>
+  readonly phase: SessionLifecycle.Interface["phase"]
   readonly ensureRunning: (
     sessionID: SessionID,
     onInterrupt: Effect.Effect<SessionV1.WithParts>,
     work: Effect.Effect<SessionV1.WithParts>,
-  ) => Effect.Effect<SessionV1.WithParts>
+  ) => Effect.Effect<SessionV1.WithParts, BusyError>
   readonly startShell: (
     sessionID: SessionID,
     onInterrupt: Effect.Effect<SessionV1.WithParts>,
     work: Effect.Effect<SessionV1.WithParts>,
     ready?: Latch.Latch,
-  ) => Effect.Effect<SessionV1.WithParts, Session.BusyError>
+  ) => Effect.Effect<SessionV1.WithParts, BusyError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRunState") {}
@@ -31,21 +41,22 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const background = yield* BackgroundJob.Service
     const status = yield* SessionStatus.Service
-
-    const state = yield* InstanceState.make(
-      Effect.fn("SessionRunState.state")(function* () {
-        const scope = yield* Scope.Scope
-        const runners = new Map<SessionID, Runner.Runner<SessionV1.WithParts>>()
-        yield* Effect.addFinalizer(
-          Effect.fnUntraced(function* () {
-            yield* Effect.forEach(runners.values(), (runner) => runner.cancel, {
-              concurrency: "unbounded",
-              discard: true,
-            })
-            runners.clear()
-          }),
-        )
-        return { runners, scope }
+    const scope = yield* Scope.Scope
+    const lifecycle = yield* SessionLifecycle.make()
+    const runners = new Map<
+      SessionID,
+      {
+        runner: Runner.Runner<SessionV1.WithParts>
+        context: NonNullable<typeof InstanceRef.Service>
+      }
+    >()
+    yield* Effect.addFinalizer(
+      Effect.fnUntraced(function* () {
+        yield* Effect.forEach(runners.values(), (entry) => entry.runner.cancel, {
+          concurrency: "unbounded",
+          discard: true,
+        })
+        runners.clear()
       }),
     )
 
@@ -53,36 +64,40 @@ const layer = Layer.effect(
       sessionID: SessionID,
       onInterrupt: Effect.Effect<SessionV1.WithParts>,
     ) {
-      const data = yield* InstanceState.get(state)
-      const existing = data.runners.get(sessionID)
-      if (existing) return existing
-      const next = Runner.make<SessionV1.WithParts>(data.scope, {
-        onIdle: Effect.gen(function* () {
-          data.runners.delete(sessionID)
-          yield* status.set(sessionID, { type: "idle" })
-        }),
-        onBusy: status.set(sessionID, { type: "busy" }),
+      const existing = runners.get(sessionID)
+      if (existing) return existing.runner
+      const context = yield* InstanceState.context
+      const located = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        effect.pipe(Effect.provideService(InstanceRef, context))
+      const next = Runner.make<SessionV1.WithParts>(scope, {
+        onIdle: located(status.set(sessionID, { type: "idle" })),
+        onBusy: located(status.set(sessionID, { type: "busy" })),
         onInterrupt,
       })
-      data.runners.set(sessionID, next)
+      runners.set(sessionID, { runner: next, context })
       return next
     })
 
     const assertNotBusy = Effect.fn("SessionRunState.assertNotBusy")(function* (sessionID: SessionID) {
-      const data = yield* InstanceState.get(state)
-      const existing = data.runners.get(sessionID)
-      if (existing?.busy) yield* busyError(sessionID)
+      const existing = runners.get(sessionID)
+      if (existing?.runner.busy) yield* busyError(sessionID)
     })
 
     const cancel = Effect.fn("SessionRunState.cancel")(function* (sessionID: SessionID) {
-      yield* cancelBackgroundJobs(background, sessionID)
-      const data = yield* InstanceState.get(state)
-      const existing = data.runners.get(sessionID)
+      const existing = runners.get(sessionID)
+      const current = yield* InstanceState.context.pipe(
+        Effect.map((context) => context as NonNullable<typeof InstanceRef.Service> | undefined),
+        Effect.catchCause(() => Effect.succeed(undefined)),
+      )
+      const context = existing?.context ?? current
+      if (context) {
+        yield* cancelBackgroundJobs(background, sessionID).pipe(Effect.provideService(InstanceRef, context))
+      }
       if (!existing) {
-        yield* status.set(sessionID, { type: "idle" })
+        if (context) yield* status.set(sessionID, { type: "idle" }).pipe(Effect.provideService(InstanceRef, context))
         return
       }
-      yield* existing.cancel
+      yield* existing.runner.cancel
     })
 
     const ensureRunning = Effect.fn("SessionRunState.ensureRunning")(function* (
@@ -90,7 +105,13 @@ const layer = Layer.effect(
       onInterrupt: Effect.Effect<SessionV1.WithParts>,
       work: Effect.Effect<SessionV1.WithParts>,
     ) {
-      return yield* (yield* runner(sessionID, onInterrupt)).ensureRunning(work)
+      return yield* lifecycle.handoff(
+        sessionID,
+        Effect.gen(function* () {
+          const current = yield* runner(sessionID, onInterrupt)
+          return { await: yield* current.enterRunning(work), onClosing: current.cancel }
+        }),
+      )
     })
 
     const startShell = Effect.fn("SessionRunState.startShell")(function* (
@@ -99,12 +120,42 @@ const layer = Layer.effect(
       work: Effect.Effect<SessionV1.WithParts>,
       ready?: Latch.Latch,
     ) {
-      return yield* (yield* runner(sessionID, onInterrupt))
-        .startShell(work, ready)
+      return yield* lifecycle
+        .handoff(
+          sessionID,
+          Effect.gen(function* () {
+            const current = yield* runner(sessionID, onInterrupt)
+            return { await: yield* current.enterShell(work, ready), onClosing: current.cancel }
+          }),
+        )
         .pipe(Effect.catchTag("RunnerBusy", () => Effect.fail(busyError(sessionID))))
     })
 
-    return Service.of({ assertNotBusy, cancel, ensureRunning, startShell })
+    const close: Interface["close"] = (sessionID, effect) =>
+      lifecycle.close(sessionID, cancel(sessionID), (markCommitted) =>
+        effect(
+          markCommitted.pipe(
+            Effect.tap(() =>
+              Effect.sync(() => {
+                runners.delete(sessionID)
+              }),
+            ),
+          ),
+        ),
+      )
+
+    return Service.of({
+      assertNotBusy,
+      cancel,
+      shared: lifecycle.shared,
+      admit: lifecycle.admit,
+      mutateThenAdmit: lifecycle.mutateThenAdmit,
+      idle: lifecycle.idle,
+      close,
+      phase: lifecycle.phase,
+      ensureRunning,
+      startShell,
+    })
   }),
 )
 
@@ -143,7 +194,7 @@ const cancelBackgroundJobs = Effect.fn("SessionRunState.cancelBackgroundJobs")(f
 })
 
 function busyError(sessionID: SessionID) {
-  return new Session.BusyError({ sessionID })
+  return new BusyError({ sessionID })
 }
 
 export const node = LayerNode.make({ service: Service, layer: layer, deps: [BackgroundJob.node, SessionStatus.node] })

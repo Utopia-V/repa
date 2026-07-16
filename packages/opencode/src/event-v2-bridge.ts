@@ -32,6 +32,70 @@ const layer = Layer.effect(
         })
       })
 
+    const transaction: EventV2.Interface["transaction"] = (prepare) =>
+      Effect.gen(function* () {
+        const ctx = yield* InstanceRef
+        if (!ctx) return yield* events.transaction(prepare)
+        const workspaceID = yield* WorkspaceRef
+        const location = new Location.Info({
+          directory: AbsolutePath.make(ctx.directory),
+          ...(workspaceID ? { workspaceID } : {}),
+          project: { id: Project.ID.make(ctx.project.id), directory: AbsolutePath.make(ctx.worktree) },
+        })
+        return yield* events.transaction((tx) =>
+          prepare(tx).pipe(
+            Effect.map((prepared) => {
+              const route = <D extends EventV2.Definition>(event: EventV2.PreparedEvent<D>) =>
+                event.options?.location
+                  ? event
+                  : { ...event, options: { ...event.options, location } satisfies EventV2.PublishOptions }
+              if (prepared.events) return { result: prepared.result, events: prepared.events.map(route) }
+              if (prepared.event) return { result: prepared.result, event: route(prepared.event) }
+              return prepared
+            }),
+          ),
+        )
+      })
+
+    function remove(aggregateID: string): Effect.Effect<void>
+    function remove<A>(aggregateID: string, cleanup: (tx: EventV2.Transaction) => Effect.Effect<A>): Effect.Effect<A>
+    function remove<A, D extends EventV2.Definition>(
+      aggregateID: string,
+      cleanup: (tx: EventV2.Transaction) => Effect.Effect<A>,
+      notification: EventV2.PreparedEvent<D>,
+      options?: EventV2.RemoveOptions,
+    ): Effect.Effect<A>
+    function remove<A, D extends EventV2.Definition>(
+      aggregateID: string,
+      cleanup?: (tx: EventV2.Transaction) => Effect.Effect<A>,
+      notification?: EventV2.PreparedEvent<D>,
+      options?: EventV2.RemoveOptions,
+    ) {
+      if (!notification) return cleanup ? events.remove(aggregateID, cleanup) : events.remove(aggregateID)
+      if (notification.options?.location) return events.remove(aggregateID, cleanup!, notification, options)
+      return Effect.gen(function* () {
+        const ctx = yield* InstanceRef
+        if (!ctx) return yield* events.remove(aggregateID, cleanup!, notification, options)
+        const workspaceID = yield* WorkspaceRef
+        return yield* events.remove(
+          aggregateID,
+          cleanup!,
+          {
+            ...notification,
+            options: {
+              ...notification.options,
+              location: new Location.Info({
+                directory: AbsolutePath.make(ctx.directory),
+                ...(workspaceID ? { workspaceID } : {}),
+                project: { id: Project.ID.make(ctx.project.id), directory: AbsolutePath.make(ctx.worktree) },
+              }),
+            },
+          },
+          options,
+        )
+      })
+    }
+
     const unsubscribe = yield* events.listen((event) =>
       Effect.gen(function* () {
         const ctx = yield* InstanceRef
@@ -62,7 +126,7 @@ const layer = Layer.effect(
     )
     yield* Effect.addFinalizer(() => unsubscribe)
 
-    return Service.of({ ...events, publish })
+    return Service.of({ ...events, publish, transaction, remove })
   }),
 )
 

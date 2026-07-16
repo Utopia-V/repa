@@ -2491,6 +2491,12 @@ export type NotFoundError = {
   }
 }
 
+export type SessionBusyError = {
+  _tag: "SessionBusyError"
+  sessionID: string
+  message: string
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -2537,12 +2543,6 @@ export type SubtaskPartInput = {
     modelID: string
   }
   command?: string
-}
-
-export type SessionBusyError = {
-  _tag: "SessionBusyError"
-  sessionID: string
-  message: string
 }
 
 export type EventTuiPromptAppend = {
@@ -9153,6 +9153,10 @@ export type SessionDeleteErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type SessionDeleteError = SessionDeleteErrors[keyof SessionDeleteErrors]
@@ -9228,6 +9232,10 @@ export type SessionUpdateErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type SessionUpdateError = SessionUpdateErrors[keyof SessionUpdateErrors]
@@ -9410,6 +9418,10 @@ export type SessionPromptErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type SessionPromptError = SessionPromptErrors[keyof SessionPromptErrors]
@@ -9523,6 +9535,10 @@ export type SessionForkErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type SessionForkError = SessionForkErrors[keyof SessionForkErrors]
@@ -9589,6 +9605,10 @@ export type SessionInitErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type SessionInitError = SessionInitErrors[keyof SessionInitErrors]
@@ -9626,6 +9646,10 @@ export type SessionSummarizeErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type SessionSummarizeError = SessionSummarizeErrors[keyof SessionSummarizeErrors]
@@ -9722,6 +9746,10 @@ export type SessionCommandErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type SessionCommandError = SessionCommandErrors[keyof SessionCommandErrors]
@@ -9921,6 +9949,10 @@ export type PartDeleteErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type PartDeleteError = PartDeleteErrors[keyof PartDeleteErrors]
@@ -9956,6 +9988,10 @@ export type PartUpdateErrors = {
    * NotFoundError
    */
   404: NotFoundError
+  /**
+   * SessionBusyError
+   */
+  409: SessionBusyError
 }
 
 export type PartUpdateError = PartUpdateErrors[keyof PartUpdateErrors]

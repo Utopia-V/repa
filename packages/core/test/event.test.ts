@@ -213,6 +213,159 @@ describe("EventV2", () => {
     }),
   )
 
+  it.effect("publishes a transaction-derived durable payload after caller writes commit", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      const observed = new Array<{ value: string }>()
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_prepared_probe (value text NOT NULL)")
+      yield* db.run("DELETE FROM event_prepared_probe")
+      yield* events.listen((event) =>
+        event.type !== SyncMessage.type
+          ? Effect.void
+          : db.all<{ value: string }>("SELECT value FROM event_prepared_probe").pipe(
+              Effect.orDie,
+              Effect.tap((rows) => Effect.sync(() => observed.push(...rows))),
+              Effect.asVoid,
+            ),
+      )
+
+      const committed = yield* events.transaction((tx) =>
+        Effect.gen(function* () {
+          yield* tx.run("INSERT INTO event_prepared_probe (value) VALUES ('derived')").pipe(Effect.orDie)
+          const row = yield* tx.get<{ value: string }>("SELECT value FROM event_prepared_probe").pipe(Effect.orDie)
+          if (!row) return yield* Effect.die("Expected prepared value")
+          return {
+            result: row.value,
+            event: {
+              definition: SyncMessage,
+              data: { id: aggregateID, text: row.value },
+            },
+          }
+        }),
+      )
+
+      expect(committed.result).toBe("derived")
+      expect(committed.event?.data).toEqual({ id: aggregateID, text: "derived" })
+      expect(committed.event?.location).toEqual({
+        directory: AbsolutePath.make("project"),
+        workspaceID: WorkspaceV2.ID.make("wrk_test"),
+      })
+      expect(observed).toEqual([{ value: "derived" }])
+    }),
+  )
+
+  it.effect("commits a no-event prepared transaction without advancing the aggregate sequence", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      const received = new Array<EventV2.Payload>()
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_prepared_probe (value text NOT NULL)")
+      yield* db.run("DELETE FROM event_prepared_probe")
+      yield* events.publish(SyncMessage, { id: aggregateID, text: "seed" })
+      yield* events.listen((event) => Effect.sync(() => received.push(event)))
+
+      const committed = yield* events.transaction((tx) =>
+        tx
+          .run("INSERT INTO event_prepared_probe (value) VALUES ('admitted')")
+          .pipe(Effect.orDie, Effect.as({ result: "admitted" as const })),
+      )
+      const sequence = yield* EventV2.latestSequence(db, aggregateID)
+
+      expect(committed).toEqual({ result: "admitted" })
+      expect(sequence).toBe(0)
+      expect(yield* db.all("SELECT value FROM event_prepared_probe")).toEqual([{ value: "admitted" }])
+      expect(received).toEqual([])
+    }),
+  )
+
+  it.effect("commits and publishes multiple prepared events in aggregate order", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      const projected: string[] = []
+      const received: string[] = []
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_prepared_probe (value text NOT NULL)")
+      yield* db.run("DELETE FROM event_prepared_probe")
+      yield* events.project(SyncMessage, (event) =>
+        Effect.sync(() => {
+          projected.push(event.data.text)
+        }),
+      )
+      yield* events.listen((event) =>
+        event.type === SyncMessage.type
+          ? Effect.sync(() => {
+              received.push((event.data as { text: string }).text)
+            })
+          : Effect.void,
+      )
+
+      const committed = yield* events.transaction((tx) =>
+        tx.run("INSERT INTO event_prepared_probe (value) VALUES ('batch')").pipe(
+          Effect.orDie,
+          Effect.as({
+            result: "batch" as const,
+            events: [
+              { definition: SyncMessage, data: { id: aggregateID, text: "first" } },
+              { definition: SyncMessage, data: { id: aggregateID, text: "second" } },
+            ],
+          }),
+        ),
+      )
+
+      expect(committed.result).toBe("batch")
+      expect(committed.events?.map((event) => event.durable?.seq)).toEqual([0, 1])
+      expect(projected).toEqual(["first", "second"])
+      expect(received).toEqual(["first", "second"])
+      expect(yield* db.all("SELECT value FROM event_prepared_probe")).toEqual([{ value: "batch" }])
+    }),
+  )
+
+  it.effect("rolls back caller writes and projectors when prepared event insertion fails", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      const received = new Array<EventV2.Payload>()
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_prepared_probe (value text NOT NULL)")
+      yield* db.run("DELETE FROM event_prepared_probe")
+      yield* db.run(
+        `CREATE TRIGGER event_prepared_fail BEFORE INSERT ON event WHEN NEW.aggregate_id = '${aggregateID}' BEGIN SELECT RAISE(ABORT, 'prepared event failed'); END`,
+      )
+      yield* events.project(SyncMessage, () =>
+        db.run("INSERT INTO event_prepared_probe (value) VALUES ('projector')").pipe(Effect.orDie, Effect.asVoid),
+      )
+      yield* events.listen((event) => Effect.sync(() => received.push(event)))
+
+      const exit = yield* events
+        .transaction((tx) =>
+          tx.run("INSERT INTO event_prepared_probe (value) VALUES ('callback')").pipe(
+            Effect.orDie,
+            Effect.as({
+              result: "uncommitted",
+              event: {
+                definition: SyncMessage,
+                data: { id: aggregateID, text: "derived" },
+              },
+            }),
+          ),
+        )
+        .pipe(Effect.exit)
+      yield* db.run("DROP TRIGGER event_prepared_fail")
+
+      expect(String(exit)).toContain("prepared event failed")
+      expect(yield* db.all("SELECT value FROM event_prepared_probe")).toEqual([])
+      expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toEqual([])
+      expect(
+        yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
+      ).toEqual([])
+      expect(received).toEqual([])
+    }),
+  )
+
   it.effect("rejects local commit hooks on live-only events", () =>
     Effect.gen(function* () {
       const events = yield* EventV2.Service
@@ -1119,6 +1272,193 @@ describe("EventV2", () => {
       })
 
       expect(received[0]?.data).toEqual(durableData(aggregateID, "replayed"))
+    }),
+  )
+
+  it.effect("removes an aggregate and caller-owned state in one prepared transaction", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_remove_probe (aggregate_id text PRIMARY KEY)")
+      yield* db.run("DELETE FROM event_remove_probe")
+      yield* db.run(`INSERT INTO event_remove_probe (aggregate_id) VALUES ('${aggregateID}')`)
+      yield* events.publish(SyncMessage, { id: aggregateID, text: "seed" })
+
+      const result = yield* events.remove(aggregateID, (tx) =>
+        tx
+          .run(`DELETE FROM event_remove_probe WHERE aggregate_id = '${aggregateID}'`)
+          .pipe(Effect.orDie, Effect.as("removed" as const)),
+      )
+
+      expect(result).toBe("removed")
+      expect(yield* db.all("SELECT aggregate_id FROM event_remove_probe")).toEqual([])
+      expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toEqual([])
+      expect(
+        yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
+      ).toEqual([])
+    }),
+  )
+
+  it.effect("publishes removal visibility only after commit without recreating the aggregate", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      const received = new Array<{ event: EventV2.Payload; committed: boolean }>()
+      let projected = 0
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_remove_visibility_probe (aggregate_id text PRIMARY KEY)")
+      yield* db.run("DELETE FROM event_remove_visibility_probe")
+      yield* db.run(`INSERT INTO event_remove_visibility_probe (aggregate_id) VALUES ('${aggregateID}')`)
+      yield* events.project(SyncMessage, () =>
+        Effect.sync(() => {
+          projected++
+        }),
+      )
+      yield* events.listen((event) =>
+        Effect.gen(function* () {
+          received.push({
+            event,
+            committed:
+              (yield* db.all("SELECT aggregate_id FROM event_remove_visibility_probe")).length === 0 &&
+              (yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).length ===
+                0 &&
+              (yield* db
+                .select()
+                .from(EventSequenceTable)
+                .where(eq(EventSequenceTable.aggregate_id, aggregateID))
+                .all()).length === 0,
+          })
+        }).pipe(Effect.orDie),
+      )
+      yield* events.publish(SyncMessage, { id: aggregateID, text: "seed" })
+      received.length = 0
+
+      yield* events.remove(
+        aggregateID,
+        (tx) =>
+          tx.run(`DELETE FROM event_remove_visibility_probe WHERE aggregate_id = '${aggregateID}'`).pipe(Effect.orDie),
+        { definition: SyncMessage, data: { id: aggregateID, text: "deleted" } },
+      )
+
+      expect(projected).toBe(1)
+      expect(received).toHaveLength(1)
+      expect(received[0]).toMatchObject({
+        event: { data: { id: aggregateID, text: "deleted" } },
+        committed: true,
+      })
+      expect(received[0]?.event.durable).toBeUndefined()
+    }),
+  )
+
+  it.effect("keeps committed removal visibility alive after caller interruption", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      const committed = yield* Deferred.make<void>()
+      const visibilityEntered = yield* Deferred.make<void>()
+      const releaseVisibility = yield* Deferred.make<void>()
+      const visibilityFinished = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() => Deferred.succeed(releaseVisibility, undefined).pipe(Effect.asVoid))
+      yield* events.listen((event) => {
+        if (event.type !== SyncMessage.type || (event.data as { text?: string }).text !== "deleted") return Effect.void
+        return Deferred.succeed(visibilityEntered, undefined).pipe(Effect.andThen(Deferred.await(releaseVisibility)))
+      })
+      yield* events.listen((event) => {
+        if (event.type !== SyncMessage.type || (event.data as { text?: string }).text !== "deleted") return Effect.void
+        return Deferred.succeed(visibilityFinished, undefined).pipe(Effect.asVoid)
+      })
+      yield* events.publish(SyncMessage, { id: aggregateID, text: "seed" })
+
+      const removal = yield* events
+        .remove(
+          aggregateID,
+          () => Effect.void,
+          { definition: SyncMessage, data: { id: aggregateID, text: "deleted" } },
+          {
+            onCommitted: Deferred.succeed(committed, undefined).pipe(Effect.asVoid),
+            continueVisibilityOnInterrupt: true,
+          },
+        )
+        .pipe(Effect.forkChild)
+      yield* Deferred.await(visibilityEntered)
+      expect(yield* Deferred.isDone(committed)).toBe(true)
+      yield* Fiber.interrupt(removal)
+      expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toEqual([])
+      expect(
+        yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
+      ).toEqual([])
+
+      yield* Deferred.succeed(releaseVisibility, undefined)
+      yield* Deferred.await(visibilityFinished)
+    }),
+  )
+
+  itWithoutLocation.effect("wakes aggregate readers only after prepared removal commits", () =>
+    Effect.gen(function* () {
+      const visible = yield* Deferred.make<boolean>()
+      let reads = 0
+      const databaseLayer = LayerNode.compile(Database.node)
+      const eventLayer = Layer.unwrap(
+        Effect.gen(function* () {
+          const { db } = yield* Database.Service
+          return EventV2.layerWith({
+            beforeAggregateRead: () =>
+              Effect.gen(function* () {
+                reads++
+                if (reads !== 2) return
+                const row = yield* db
+                  .get<{ value: string }>("SELECT value FROM event_remove_visibility")
+                  .pipe(Effect.orDie)
+                yield* Deferred.succeed(visible, row?.value === "committed")
+              }),
+          })
+        }),
+      ).pipe(Layer.provideMerge(databaseLayer))
+
+      yield* Effect.gen(function* () {
+        const events = yield* EventV2.Service
+        const { db } = yield* Database.Service
+        const aggregateID = EventV2.ID.create()
+        yield* db.run("CREATE TABLE event_remove_visibility (value text NOT NULL)")
+        yield* events.publish(SyncMessage, { id: aggregateID, text: "seed" })
+        yield* events.durable({ aggregateID, after: 0 }).pipe(Stream.runDrain, Effect.forkScoped)
+        yield* Effect.yieldNow
+
+        yield* events.remove(aggregateID, (tx) =>
+          tx.run("INSERT INTO event_remove_visibility (value) VALUES ('committed')").pipe(Effect.orDie, Effect.asVoid),
+        )
+
+        expect(yield* Deferred.await(visible)).toBeTrue()
+      }).pipe(Effect.provide(eventLayer))
+    }),
+  )
+
+  it.effect("rolls back prepared aggregate removal when caller cleanup fails", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateID = EventV2.ID.create()
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_remove_probe (aggregate_id text PRIMARY KEY)")
+      yield* db.run("DELETE FROM event_remove_probe")
+      yield* db.run(`INSERT INTO event_remove_probe (aggregate_id) VALUES ('${aggregateID}')`)
+      yield* events.publish(SyncMessage, { id: aggregateID, text: "seed" })
+
+      const exit = yield* events
+        .remove(aggregateID, (tx) =>
+          tx
+            .run(`DELETE FROM event_remove_probe WHERE aggregate_id = '${aggregateID}'`)
+            .pipe(Effect.orDie, Effect.andThen(Effect.die("cleanup failed"))),
+        )
+        .pipe(Effect.exit)
+
+      expect(String(exit)).toContain("cleanup failed")
+      expect(yield* db.all("SELECT aggregate_id FROM event_remove_probe")).toEqual([{ aggregate_id: aggregateID }])
+      expect(yield* db.select().from(EventTable).where(eq(EventTable.aggregate_id, aggregateID)).all()).toHaveLength(1)
+      expect(
+        yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
+      ).toHaveLength(1)
     }),
   )
 })

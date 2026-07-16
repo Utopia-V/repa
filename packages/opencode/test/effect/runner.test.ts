@@ -204,11 +204,12 @@ describe("Runner", () => {
   )
 
   it.live(
-    "cancel does not deadlock when replacement work starts before interrupted run exits",
+    "cancel keeps ownership stopping until interrupted work exits",
     Effect.gen(function* () {
       const s = yield* Scope.Scope
       const hit = yield* Deferred.make<void>()
       const hold = yield* Deferred.make<void>()
+      const secondStarted = yield* Deferred.make<void>()
       const done = yield* Deferred.make<void>()
 
       yield* Effect.gen(function* () {
@@ -225,14 +226,21 @@ describe("Runner", () => {
         const stop = yield* runner.cancel.pipe(Effect.forkChild)
         yield* Deferred.await(hit).pipe(Effect.timeout("250 millis"))
 
-        const b = yield* runner.ensureRunning(Deferred.await(done).pipe(Effect.as("second"))).pipe(Effect.forkChild)
+        const b = yield* runner
+          .ensureRunning(
+            Deferred.succeed(secondStarted, undefined).pipe(Effect.andThen(Deferred.await(done)), Effect.as("second")),
+          )
+          .pipe(Effect.forkChild)
         yield* Effect.yieldNow
+        expect(runner.state._tag).toBe("Stopping")
         expect(runner.busy).toBe(true)
+        expect(yield* Deferred.isDone(secondStarted)).toBe(false)
 
         yield* Deferred.succeed(hold, undefined)
         const stopExit = yield* Fiber.await(stop).pipe(Effect.timeout("250 millis"))
         expect(Exit.isSuccess(stopExit)).toBe(true)
 
+        yield* Deferred.await(secondStarted).pipe(Effect.timeout("250 millis"))
         expect(runner.busy).toBe(true)
         yield* Deferred.succeed(done, undefined)
         expect(yield* Fiber.join(b).pipe(Effect.timeout("250 millis"))).toBe("second")

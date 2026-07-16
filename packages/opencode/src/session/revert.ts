@@ -20,7 +20,11 @@ export type RevertInput = Schema.Schema.Type<typeof RevertInput>
 export interface Interface {
   readonly revert: (input: RevertInput) => Effect.Effect<Session.Info, Session.BusyError>
   readonly unrevert: (input: { sessionID: SessionID }) => Effect.Effect<Session.Info, Session.BusyError>
-  readonly cleanup: (session: Session.Info) => Effect.Effect<void>
+  readonly cleanup: (session: Session.Info) => Effect.Effect<void, Session.BusyError>
+  readonly withCleanAdmission: <A, E, R>(
+    sessionID: SessionID,
+    use: (session: Session.Info) => Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | Session.NotFound | Session.BusyError, R>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRevert") {}
@@ -35,8 +39,7 @@ const layer = Layer.effect(
     const summary = yield* SessionSummary.Service
     const state = yield* SessionRunState.Service
 
-    const revert = Effect.fn("SessionRevert.revert")(function* (input: RevertInput) {
-      yield* state.assertNotBusy(input.sessionID)
+    const revertUnlocked = Effect.fn("SessionRevert.revertUnlocked")(function* (input: RevertInput) {
       const all = yield* sessions.messages({ sessionID: input.sessionID }).pipe(Effect.orDie)
       let lastUser: SessionV1.User | undefined
       const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
@@ -87,9 +90,12 @@ const layer = Layer.effect(
       return yield* sessions.get(input.sessionID).pipe(Effect.orDie)
     })
 
-    const unrevert = Effect.fn("SessionRevert.unrevert")(function* (input: { sessionID: SessionID }) {
+    const revert: Interface["revert"] = Effect.fn("SessionRevert.revert")((input: RevertInput) =>
+      state.idle(input.sessionID, revertUnlocked(input)),
+    )
+
+    const unrevertUnlocked = Effect.fn("SessionRevert.unrevertUnlocked")(function* (input: { sessionID: SessionID }) {
       yield* Effect.logInfo("unreverting", { sessionID: input.sessionID })
-      yield* state.assertNotBusy(input.sessionID)
       const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
       if (!session.revert) return session
       if (session.revert.snapshot) yield* snap.restore(session.revert.snapshot)
@@ -97,11 +103,16 @@ const layer = Layer.effect(
       return yield* sessions.get(input.sessionID).pipe(Effect.orDie)
     })
 
-    const cleanup = Effect.fn("SessionRevert.cleanup")(function* (session: Session.Info) {
-      if (!session.revert) return
+    const unrevert: Interface["unrevert"] = Effect.fn("SessionRevert.unrevert")((input: { sessionID: SessionID }) =>
+      state.idle(input.sessionID, unrevertUnlocked(input)),
+    )
+
+    const cleanupUnlocked = Effect.fn("SessionRevert.cleanupUnlocked")(function* (session: Session.Info) {
+      const revert = session.revert
+      if (!revert) return
       const sessionID = session.id
       const msgs = yield* sessions.messages({ sessionID }).pipe(Effect.orDie)
-      const messageID = session.revert.messageID
+      const messageID = revert.messageID
       const remove = [] as SessionV1.WithParts[]
       let target: SessionV1.WithParts | undefined
       for (const msg of msgs) {
@@ -110,30 +121,55 @@ const layer = Layer.effect(
           remove.push(msg)
           continue
         }
-        if (session.revert.partID) {
+        if (revert.partID) {
           target = msg
           continue
         }
         remove.push(msg)
       }
-      for (const msg of remove) {
-        yield* sessions.removeMessage({ sessionID, messageID: msg.info.id })
-      }
-      if (session.revert.partID && target) {
-        const partID = session.revert.partID
+      const parts: { messageID: MessageID; partID: PartID }[] = []
+      if (revert.partID && target) {
+        const partID = revert.partID
         const idx = target.parts.findIndex((part) => part.id === partID)
         if (idx >= 0) {
-          const removeParts = target.parts.slice(idx)
-          target.parts = target.parts.slice(0, idx)
-          for (const part of removeParts) {
-            yield* sessions.removePart({ sessionID, messageID: target.info.id, partID: part.id })
-          }
+          parts.push(...target.parts.slice(idx).map((part) => ({ messageID: target.info.id, partID: part.id })))
         }
       }
-      yield* sessions.clearRevert(sessionID)
+      yield* sessions.removeTranscript({
+        sessionID,
+        messageIDs: remove.map((message) => message.info.id),
+        parts,
+        clearRevert: { timeUpdated: Date.now() },
+      })
     })
 
-    return Service.of({ revert, unrevert, cleanup })
+    const cleanup: Interface["cleanup"] = Effect.fn("SessionRevert.cleanup")((session: Session.Info) =>
+      session.revert ? state.idle(session.id, cleanupUnlocked(session)) : Effect.void,
+    )
+
+    const withCleanAdmission: Interface["withCleanAdmission"] = (sessionID, use) =>
+      Effect.gen(function* () {
+        const inspected = yield* state.admit(
+          sessionID,
+          Effect.gen(function* () {
+            const session = yield* sessions.get(sessionID)
+            if (session.revert) return { type: "cleanup" as const }
+            return { type: "complete" as const, value: yield* use(session) }
+          }),
+        )
+        if (inspected.type === "complete") return inspected.value
+        return yield* state.mutateThenAdmit(
+          sessionID,
+          Effect.gen(function* () {
+            const current = yield* sessions.get(sessionID)
+            if (current.revert) yield* cleanupUnlocked(current)
+            const session = yield* sessions.get(sessionID)
+            return use(session)
+          }),
+        )
+      })
+
+    return Service.of({ revert, unrevert, cleanup, withCleanAdmission })
   }),
 )
 

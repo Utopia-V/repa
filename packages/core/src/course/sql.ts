@@ -19,8 +19,11 @@ import type {
   MappingKind,
   RevisionID,
   RevisionWithdrawalReason,
+  SelectionAcceptanceEffectID,
   ViewID,
 } from "./schema"
+import type { OccurrenceID } from "../learning-command/occurrence-schema"
+import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.sql"
 
 export const CourseTable = sqliteTable(
   "course",
@@ -345,6 +348,45 @@ export const CourseViewRevisionReuseCitationTable = sqliteTable(
       table.target_revision_id,
       table.source_revision_id,
       table.item_id,
+      table.id,
+    ),
+  ],
+)
+
+export const CourseSelectionAcceptanceEffectTable = sqliteTable(
+  "course_selection_acceptance_effect",
+  {
+    id: text().$type<SelectionAcceptanceEffectID>().primaryKey(),
+    occurrence_id: text().$type<OccurrenceID>().notNull(),
+    course_id: text().$type<CourseID>().notNull(),
+    accepted_revision_id: text().$type<RevisionID>().notNull(),
+    previous_revision_id: text().$type<RevisionID>(),
+    previous_selection_version: integer().notNull(),
+    committed_selection_version: integer().notNull(),
+    time_committed: integer().notNull(),
+  },
+  (table) => [
+    foreignKey({ columns: [table.occurrence_id], foreignColumns: [AdmittedLearnerOccurrenceTable.id] }).onDelete(
+      "restrict",
+    ),
+    foreignKey({ columns: [table.course_id], foreignColumns: [CourseTable.id] }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.course_id, table.accepted_revision_id],
+      foreignColumns: [CourseViewRevisionTable.course_id, CourseViewRevisionTable.id],
+    }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.course_id, table.previous_revision_id],
+      foreignColumns: [CourseViewRevisionTable.course_id, CourseViewRevisionTable.id],
+    }).onDelete("restrict"),
+    unique("course_selection_acceptance_effect_address_unique").on(table.occurrence_id, table.course_id),
+    check(
+      "course_selection_acceptance_effect_versions",
+      sql`${table.previous_selection_version} >= 0 AND ${table.committed_selection_version} = ${table.previous_selection_version} + 1`,
+    ),
+    check("course_selection_acceptance_effect_time_nonnegative", sql`${table.time_committed} >= 0`),
+    index("course_selection_acceptance_effect_course_idx").on(
+      table.course_id,
+      table.committed_selection_version,
       table.id,
     ),
   ],

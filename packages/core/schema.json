@@ -1,10 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "62da5553-1b3e-4aa5-909f-984611328819",
-  "prevIds": [
-    "f14a9b18-8207-487e-a3d3-227e629ba9ad"
-  ],
+  "id": "ab1edce6-53b8-4b02-8825-e4b638f60fc5",
+  "prevIds": ["62da5553-1b3e-4aa5-909f-984611328819"],
   "ddl": [
     {
       "name": "workspace",
@@ -12,6 +10,22 @@
     },
     {
       "name": "data_migration",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_admitted_occurrence",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_historical_tool_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_occurrence_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_occurrence_tombstone",
       "entityType": "tables"
     },
     {
@@ -28,6 +42,10 @@
     },
     {
       "name": "course_item",
+      "entityType": "tables"
+    },
+    {
+      "name": "course_selection_acceptance_effect",
       "entityType": "tables"
     },
     {
@@ -80,6 +98,14 @@
     },
     {
       "name": "event",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_command_invocation",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_command_receipt",
       "entityType": "tables"
     },
     {
@@ -225,6 +251,226 @@
       "name": "time_completed",
       "entityType": "columns",
       "table": "data_migration"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "origin_session_id",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "origin_message_id",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_session_id",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_assistant_message_id",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_part_id",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provenance",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provenance",
+      "entityType": "columns",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_message_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_fingerprint",
+      "entityType": "columns",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_tombstone"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "learning_occurrence_tombstone"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_deleted",
+      "entityType": "columns",
+      "table": "learning_occurrence_tombstone"
     },
     {
       "type": "integer",
@@ -445,6 +691,86 @@
       "name": "time_created",
       "entityType": "columns",
       "table": "course_item"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "accepted_revision_id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "previous_revision_id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "previous_selection_version",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "committed_selection_version",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_effect"
     },
     {
       "type": "text",
@@ -1265,6 +1591,316 @@
       "name": "data",
       "entityType": "columns",
       "table": "event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_user_message_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider_call_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_name",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_version",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "emission_ordinal",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_identity",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_version",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_basis",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input_fingerprint",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "status",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_order",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "origin_session_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "origin_message_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_identity",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_version",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_basis",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
     },
     {
       "type": "text",
@@ -2207,13 +2843,9 @@
       "table": "session_share"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2222,13 +2854,53 @@
       "table": "workspace"
     },
     {
-      "columns": [
-        "active_account_id"
-      ],
+      "columns": ["part_id"],
+      "tableTo": "part",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learning_historical_tool_presentation_part_id_part_id_fk",
+      "entityType": "fks",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "columns": ["message_id"],
+      "tableTo": "message",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learning_occurrence_presentation_message_id_message_id_fk",
+      "entityType": "fks",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "columns": ["occurrence_id"],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_occurrence_presentation_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "columns": ["occurrence_id"],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learning_occurrence_tombstone_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learning_occurrence_tombstone"
+    },
+    {
+      "columns": ["active_account_id"],
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -2237,13 +2909,9 @@
       "table": "account_state"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2252,17 +2920,53 @@
       "table": "course_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id"
-      ],
+      "columns": ["occurrence_id"],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_selection_acceptance_effect_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "columns": ["course_id"],
+      "tableTo": "course",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_selection_acceptance_effect_course_id_course_id_fk",
+      "entityType": "fks",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "columns": ["course_id", "accepted_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_selection_acceptance_effect_course_id_accepted_revision_id_course_view_revision_course_id_id_fk",
+      "entityType": "fks",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "columns": ["course_id", "previous_revision_id"],
+      "tableTo": "course_view_revision",
+      "columnsTo": ["course_id", "id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_selection_acceptance_effect_course_id_previous_revision_id_course_view_revision_course_id_id_fk",
+      "entityType": "fks",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "columns": ["course_id", "view_id", "revision_id"],
+      "tableTo": "course_view_revision",
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2271,15 +2975,9 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "item_id"],
       "tableTo": "course_item",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2288,19 +2986,9 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "parent_item_id"
-      ],
+      "columns": ["course_id", "view_id", "revision_id", "parent_item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2309,17 +2997,9 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2328,17 +3008,9 @@
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "target_revision_id"
-      ],
+      "columns": ["course_id", "view_id", "target_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2347,21 +3019,9 @@
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "group_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "group_id"],
       "tableTo": "course_view_revision_mapping_group",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2370,19 +3030,9 @@
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2391,21 +3041,9 @@
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "group_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "group_id"],
       "tableTo": "course_view_revision_mapping_group",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2414,19 +3052,9 @@
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "target_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "view_id", "target_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2435,19 +3063,9 @@
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": [
-        "course_id",
-        "source_view_id",
-        "source_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "source_view_id", "source_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2456,19 +3074,9 @@
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": [
-        "course_id",
-        "target_view_id",
-        "target_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "target_view_id", "target_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2477,17 +3085,9 @@
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id"
-      ],
+      "columns": ["course_id", "view_id", "revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2496,15 +3096,9 @@
       "table": "course_view_revision_state"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id"
-      ],
+      "columns": ["course_id", "view_id"],
       "tableTo": "course_view",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2513,17 +3107,9 @@
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "predecessor_revision_id"
-      ],
+      "columns": ["course_id", "view_id", "predecessor_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2532,13 +3118,9 @@
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2547,13 +3129,9 @@
       "table": "course_view"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2562,15 +3140,9 @@
       "table": "course_working_selection"
     },
     {
-      "columns": [
-        "course_id",
-        "revision_id"
-      ],
+      "columns": ["course_id", "revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2579,13 +3151,9 @@
       "table": "course_working_selection"
     },
     {
-      "columns": [
-        "aggregate_id"
-      ],
+      "columns": ["aggregate_id"],
       "tableTo": "event_sequence",
-      "columnsTo": [
-        "aggregate_id"
-      ],
+      "columnsTo": ["aggregate_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2594,13 +3162,64 @@
       "table": "event"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["occurrence_id"],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_invocation_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": ["effect_id"],
+      "tableTo": "course_selection_acceptance_effect",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_invocation_effect_id_course_selection_acceptance_effect_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": ["occurrence_id"],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_receipt_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": ["invocation_part_id"],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": ["part_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_receipt_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": ["effect_id"],
+      "tableTo": "course_selection_acceptance_effect",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_receipt_effect_id_course_selection_acceptance_effect_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2609,13 +3228,9 @@
       "table": "permission"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2624,13 +3239,9 @@
       "table": "project_directory"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2639,13 +3250,9 @@
       "table": "message"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2654,13 +3261,9 @@
       "table": "part"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2669,13 +3272,9 @@
       "table": "session_context_epoch"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2684,13 +3283,9 @@
       "table": "session_input"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2699,13 +3294,9 @@
       "table": "session_message"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2714,13 +3305,9 @@
       "table": "session"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2729,13 +3316,9 @@
       "table": "todo"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2744,280 +3327,313 @@
       "table": "session_share"
     },
     {
-      "columns": [
-        "email",
-        "url"
-      ],
+      "columns": ["email", "url"],
       "nameExplicit": false,
       "name": "control_account_pk",
       "entityType": "pks",
       "table": "control_account"
     },
     {
-      "columns": [
-        "revision_id",
-        "item_id"
-      ],
+      "columns": ["revision_id", "item_id"],
       "nameExplicit": false,
       "name": "course_view_revision_item_pk",
       "entityType": "pks",
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "group_id",
-        "item_id"
-      ],
+      "columns": ["group_id", "item_id"],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_source_pk",
       "entityType": "pks",
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": [
-        "group_id",
-        "item_id"
-      ],
+      "columns": ["group_id", "item_id"],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_target_pk",
       "entityType": "pks",
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": [
-        "project_id",
-        "directory"
-      ],
+      "columns": ["project_id", "directory"],
       "nameExplicit": false,
       "name": "project_directory_pk",
       "entityType": "pks",
       "table": "project_directory"
     },
     {
-      "columns": [
-        "session_id",
-        "position"
-      ],
+      "columns": ["session_id", "position"],
       "nameExplicit": false,
       "name": "todo_pk",
       "entityType": "pks",
       "table": "todo"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "workspace_pk",
       "table": "workspace",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "name"
-      ],
+      "columns": ["name"],
       "nameExplicit": false,
       "name": "data_migration_pk",
       "table": "data_migration",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "learning_admitted_occurrence_pk",
+      "table": "learning_admitted_occurrence",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["part_id"],
+      "nameExplicit": false,
+      "name": "learning_historical_tool_presentation_pk",
+      "table": "learning_historical_tool_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["message_id"],
+      "nameExplicit": false,
+      "name": "learning_occurrence_presentation_pk",
+      "table": "learning_occurrence_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["occurrence_id"],
+      "nameExplicit": false,
+      "name": "learning_occurrence_tombstone_pk",
+      "table": "learning_occurrence_tombstone",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_state_pk",
       "table": "account_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_pk",
       "table": "account",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_item_pk",
       "table": "course_item",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "course_selection_acceptance_effect_pk",
+      "table": "course_selection_acceptance_effect",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_pk",
       "table": "course",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_group_pk",
       "table": "course_view_revision_mapping_group",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_revision_reuse_citation_pk",
       "table": "course_view_revision_reuse_citation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "nameExplicit": false,
       "name": "course_view_revision_state_pk",
       "table": "course_view_revision_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_revision_pk",
       "table": "course_view_revision",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_pk",
       "table": "course_view",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "nameExplicit": false,
       "name": "course_working_selection_pk",
       "table": "course_working_selection",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "credential_pk",
       "table": "credential",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "aggregate_id"
-      ],
+      "columns": ["aggregate_id"],
       "nameExplicit": false,
       "name": "event_sequence_pk",
       "table": "event_sequence",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["part_id"],
+      "nameExplicit": false,
+      "name": "learning_command_invocation_pk",
+      "table": "learning_command_invocation",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "learning_command_receipt_pk",
+      "table": "learning_command_receipt",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "permission_pk",
       "table": "permission",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "project_pk",
       "table": "project",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "message_pk",
       "table": "message",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "part_pk",
       "table": "part",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "nameExplicit": false,
       "name": "session_context_epoch_pk",
       "table": "session_context_epoch",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_input_pk",
       "table": "session_input",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_message_pk",
       "table": "session_message",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_pk",
       "table": "session",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "nameExplicit": false,
       "name": "session_share_pk",
       "table": "session_share",
       "entityType": "pks"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_session_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learning_historical_tool_presentation_source_idx",
+      "entityType": "indexes",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "columns": [
+        {
+          "value": "occurrence_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"learning_occurrence_presentation\".\"provenance\" = 'origin'",
+      "origin": "manual",
+      "name": "learning_occurrence_origin_once_idx",
+      "entityType": "indexes",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "columns": [
+        {
+          "value": "occurrence_id",
+          "isExpression": false
+        },
+        {
+          "value": "message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learning_occurrence_presentation_occurrence_idx",
+      "entityType": "indexes",
+      "table": "learning_occurrence_presentation"
     },
     {
       "columns": [
@@ -3036,6 +3652,28 @@
       "name": "course_item_course_idx",
       "entityType": "indexes",
       "table": "course_item"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "committed_selection_version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_selection_acceptance_effect_course_idx",
+      "entityType": "indexes",
+      "table": "course_selection_acceptance_effect"
     },
     {
       "columns": [
@@ -3322,6 +3960,100 @@
     {
       "columns": [
         {
+          "value": "assistant_message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"learning_command_invocation\".\"status\" = 'applied'",
+      "origin": "manual",
+      "name": "learning_command_invocation_one_mutation_idx",
+      "entityType": "indexes",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "assistant_message_id",
+          "isExpression": false
+        },
+        {
+          "value": "part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learning_command_invocation_session_owner_idx",
+      "entityType": "indexes",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
+        {
+          "value": "occurrence_id",
+          "isExpression": false
+        },
+        {
+          "value": "part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learning_command_invocation_occurrence_idx",
+      "entityType": "indexes",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
+        {
+          "value": "status",
+          "isExpression": false
+        },
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_admitted",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learning_command_invocation_admitted_idx",
+      "entityType": "indexes",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
+        {
+          "value": "occurrence_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learning_command_receipt_occurrence_idx",
+      "entityType": "indexes",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
+        {
           "value": "project_id",
           "isExpression": false
         },
@@ -3590,111 +4322,182 @@
       "table": "todo"
     },
     {
-      "columns": [
-        "course_id",
-        "id"
-      ],
+      "columns": ["origin_session_id", "origin_message_id"],
+      "nameExplicit": true,
+      "name": "learning_admitted_occurrence_origin_unique",
+      "entityType": "uniques",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "columns": ["course_id", "id"],
       "nameExplicit": true,
       "name": "course_item_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columns": ["occurrence_id", "course_id"],
+      "nameExplicit": true,
+      "name": "course_selection_acceptance_effect_address_unique",
+      "entityType": "uniques",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "columns": ["course_id", "view_id", "revision_id", "item_id"],
       "nameExplicit": true,
       "name": "course_view_revision_item_owner_unique",
       "entityType": "uniques",
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "revision_id",
-        "preorder_position"
-      ],
+      "columns": ["revision_id", "preorder_position"],
       "nameExplicit": true,
       "name": "course_view_revision_item_position_unique",
       "entityType": "uniques",
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
       "nameExplicit": true,
       "name": "course_view_revision_mapping_group_owner_unique",
       "entityType": "uniques",
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": [
-        "target_revision_id",
-        "item_id"
-      ],
+      "columns": ["target_revision_id", "item_id"],
       "nameExplicit": true,
       "name": "course_view_revision_reuse_citation_target_unique",
       "entityType": "uniques",
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": [
-        "course_id",
-        "revision_id"
-      ],
+      "columns": ["course_id", "revision_id"],
       "nameExplicit": true,
       "name": "course_view_revision_state_course_id_revision_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision_state"
     },
     {
-      "columns": [
-        "course_id",
-        "id"
-      ],
+      "columns": ["course_id", "id"],
       "nameExplicit": true,
       "name": "course_view_revision_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columns": ["course_id", "view_id", "id"],
       "nameExplicit": true,
       "name": "course_view_revision_course_view_id_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_number"
-      ],
+      "columns": ["course_id", "view_id", "revision_number"],
       "nameExplicit": true,
       "name": "course_view_revision_number_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "id"
-      ],
+      "columns": ["course_id", "id"],
       "nameExplicit": true,
       "name": "course_view_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_view"
+    },
+    {
+      "columns": ["assistant_message_id", "provider_call_id"],
+      "nameExplicit": true,
+      "name": "learning_command_invocation_assistant_call_unique",
+      "entityType": "uniques",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": ["assistant_message_id", "emission_ordinal"],
+      "nameExplicit": true,
+      "name": "learning_command_invocation_assistant_ordinal_unique",
+      "entityType": "uniques",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": ["effect_id"],
+      "nameExplicit": true,
+      "name": "learning_command_receipt_effect_unique",
+      "entityType": "uniques",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": ["invocation_part_id"],
+      "nameExplicit": true,
+      "name": "learning_command_receipt_invocation_unique",
+      "entityType": "uniques",
+      "table": "learning_command_receipt"
+    },
+    {
+      "value": "\"time_admitted\" >= 0",
+      "name": "learning_admitted_occurrence_time_nonnegative",
+      "entityType": "checks",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "value": "\"provenance\" = 'fork_clone'",
+      "name": "learning_historical_tool_presentation_provenance",
+      "entityType": "checks",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "learning_historical_tool_presentation_time_nonnegative",
+      "entityType": "checks",
+      "table": "learning_historical_tool_presentation"
+    },
+    {
+      "value": "\"provenance\" IN ('origin', 'compaction_replay', 'fork_clone')",
+      "name": "learning_occurrence_presentation_provenance",
+      "entityType": "checks",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "value": "(\"provenance\" = 'origin' AND \"source_message_id\" IS NULL) OR (\"provenance\" <> 'origin' AND \"source_message_id\" IS NOT NULL)",
+      "name": "learning_occurrence_presentation_source_shape",
+      "entityType": "checks",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "value": "length(\"content_fingerprint\") = 64",
+      "name": "learning_occurrence_presentation_fingerprint",
+      "entityType": "checks",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "learning_occurrence_presentation_time_nonnegative",
+      "entityType": "checks",
+      "table": "learning_occurrence_presentation"
+    },
+    {
+      "value": "\"reason\" = 'source_unavailable'",
+      "name": "learning_occurrence_tombstone_reason",
+      "entityType": "checks",
+      "table": "learning_occurrence_tombstone"
+    },
+    {
+      "value": "\"time_deleted\" >= 0",
+      "name": "learning_occurrence_tombstone_time_nonnegative",
+      "entityType": "checks",
+      "table": "learning_occurrence_tombstone"
+    },
+    {
+      "value": "\"previous_selection_version\" >= 0 AND \"committed_selection_version\" = \"previous_selection_version\" + 1",
+      "name": "course_selection_acceptance_effect_versions",
+      "entityType": "checks",
+      "table": "course_selection_acceptance_effect"
+    },
+    {
+      "value": "\"time_committed\" >= 0",
+      "name": "course_selection_acceptance_effect_time_nonnegative",
+      "entityType": "checks",
+      "table": "course_selection_acceptance_effect"
     },
     {
       "value": "length(trim(\"title\")) BETWEEN 1 AND 200",
@@ -3791,6 +4594,102 @@
       "name": "course_working_selection_version_nonnegative",
       "entityType": "checks",
       "table": "course_working_selection"
+    },
+    {
+      "value": "length(\"provider_call_id\") > 0",
+      "name": "learning_command_invocation_call_nonempty",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "\"command_name\" = 'accept_course_view_revision'",
+      "name": "learning_command_invocation_command",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "\"command_version\" = 1",
+      "name": "learning_command_invocation_command_version",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "\"emission_ordinal\" >= 0",
+      "name": "learning_command_invocation_emission_ordinal",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "length(\"capability_identity\") > 0",
+      "name": "learning_command_invocation_capability",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "\"capability_version\" >= 1",
+      "name": "learning_command_invocation_capability_version",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "\"authorization_basis\" IN ('learner_request', 'learner_acceptance')",
+      "name": "learning_command_invocation_authorization_basis",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "length(\"input_fingerprint\") = 64",
+      "name": "learning_command_invocation_fingerprint",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "\"status\" IN ('admitted', 'applied', 'already_applied', 'error')",
+      "name": "learning_command_invocation_status",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
+      "name": "learning_command_invocation_settlement_shape",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "(\"status\" IN ('applied', 'already_applied') AND \"effect_id\" IS NOT NULL) OR (\"status\" IN ('admitted', 'error') AND \"effect_id\" IS NULL)",
+      "name": "learning_command_invocation_effect_shape",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "\"time_admitted\" >= 0 AND (\"time_settled\" IS NULL OR \"time_settled\" >= \"time_admitted\") AND (\"settlement_order\" IS NULL OR \"settlement_order\" >= 0)",
+      "name": "learning_command_invocation_time_order",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "length(\"capability_identity\") > 0",
+      "name": "learning_command_receipt_capability",
+      "entityType": "checks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "value": "\"capability_version\" >= 1",
+      "name": "learning_command_receipt_capability_version",
+      "entityType": "checks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "value": "\"authorization_basis\" IN ('learner_request', 'learner_acceptance')",
+      "name": "learning_command_receipt_authorization_basis",
+      "entityType": "checks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "value": "\"time_committed\" >= 0 AND \"commit_order\" >= 0",
+      "name": "learning_command_receipt_time_order",
+      "entityType": "checks",
+      "table": "learning_command_receipt"
     }
   ],
   "renames": []

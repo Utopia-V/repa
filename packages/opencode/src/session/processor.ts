@@ -25,9 +25,26 @@ import { isRecord } from "@/util/record"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Database } from "@opencode-ai/core/database/database"
 import { Usage, type LLMEvent } from "@opencode-ai/llm"
+import { EffectBridge } from "@/effect/bridge"
+import { LearningCommandRuntime } from "@/learning-command/runtime"
+import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { isDeepStrictEqual } from "node:util"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
+
+export type RegisteredToolCall = Readonly<{
+  partID: SessionV1.ToolPart["id"]
+  callID: string
+  emissionOrdinal: number
+  sessionID: SessionID
+  parentUserMessageID: SessionV1.Assistant["parentID"]
+  assistantMessageID: SessionV1.Assistant["id"]
+}>
+
+export const ToolCallPreparation = Symbol("SessionProcessor.ToolCallPreparation")
+
+export type ToolCallPreparation = (input: unknown, registration: RegisteredToolCall) => void | PromiseLike<void>
 
 export interface Handle {
   readonly message: SessionV1.Assistant
@@ -44,6 +61,8 @@ export interface Handle {
       attachments?: SessionV1.FilePart[]
     },
   ) => Effect.Effect<void>
+  readonly failToolCall?: (toolCallID: string, error: unknown) => Effect.Effect<boolean>
+  readonly registeredToolCall: (toolCallID: string) => RegisteredToolCall | undefined
   readonly process: (streamInput: LLM.StreamInput) => Effect.Effect<Result>
 }
 
@@ -61,7 +80,17 @@ type ToolCall = {
   partID: SessionV1.ToolPart["id"]
   messageID: SessionV1.ToolPart["messageID"]
   sessionID: SessionV1.ToolPart["sessionID"]
+  name: string
   done: Deferred.Deferred<void>
+  ready: Deferred.Deferred<void>
+  entered: Deferred.Deferred<void>
+  preparing: boolean
+  prepared: boolean
+  registration?: RegisteredToolCall
+}
+
+type LocalTool = LLM.StreamInput["tools"][string] & {
+  [ToolCallPreparation]?: ToolCallPreparation
 }
 
 interface ProcessorContext extends Input {
@@ -113,6 +142,11 @@ const layer = Layer.effect(
         reasoningMap: {},
       }
       let aborted = false
+      let acceptingToolCalls = false
+      let emissionOrdinal = 0
+      let toolLane = Promise.resolve()
+      let activeTools: LLM.StreamInput["tools"] = {}
+      const run = yield* EffectBridge.make()
 
       const parse = (e: unknown) =>
         MessageV2.fromError(e, {
@@ -135,11 +169,51 @@ const layer = Layer.effect(
           sessionID: call.sessionID,
         })
         if (!part || part.type !== "tool") {
-          delete ctx.toolcalls[toolCallID]
+          if (call.prepared) delete ctx.toolcalls[toolCallID]
           return undefined
         }
         return { call, part }
       })
+
+      const reserveToolCall = (input: { id: string; name: string }) => {
+        if (!input.id.trim()) throw new Error("Tool call ID is required")
+        const existing = ctx.toolcalls[input.id]
+        if (existing) {
+          if (existing.name !== input.name) {
+            throw new Error(`Tool call ${input.id} changed tool from ${existing.name} to ${input.name}`)
+          }
+          return existing
+        }
+        const call: ToolCall = {
+          partID: PartID.ascending(),
+          messageID: ctx.assistantMessage.id,
+          sessionID: ctx.assistantMessage.sessionID,
+          name: input.name,
+          done: Deferred.makeUnsafe<void>(),
+          ready: Deferred.makeUnsafe<void>(),
+          entered: Deferred.makeUnsafe<void>(),
+          preparing: false,
+          prepared: false,
+        }
+        ctx.toolcalls[input.id] = call
+        return call
+      }
+
+      const registerToolCall = (input: { id: string; name: string }) => {
+        const call = reserveToolCall(input)
+        if (call.registration) return call.registration
+        call.registration = Object.freeze({
+          partID: call.partID,
+          callID: input.id,
+          emissionOrdinal: emissionOrdinal++,
+          sessionID: call.sessionID,
+          parentUserMessageID: ctx.assistantMessage.parentID,
+          assistantMessageID: ctx.assistantMessage.id,
+        } satisfies RegisteredToolCall)
+        return call.registration
+      }
+
+      const registeredToolCall = (toolCallID: string) => ctx.toolcalls[toolCallID]?.registration
 
       const updateToolCall = Effect.fn("SessionProcessor.updateToolCall")(function* (
         toolCallID: string,
@@ -147,7 +221,9 @@ const layer = Layer.effect(
       ) {
         const match = yield* readToolCall(toolCallID)
         if (!match) return undefined
-        const part = yield* session.updatePart(update(match.part))
+        const next = update(match.part)
+        if (next === match.part) return match.part
+        const part = yield* session.updatePart(next)
         ctx.toolcalls[toolCallID] = {
           ...match.call,
           partID: part.id,
@@ -167,7 +243,29 @@ const layer = Layer.effect(
         },
       ) {
         const match = yield* readToolCall(toolCallID)
-        if (!match || match.part.state.status !== "running") return
+        if (!match) return
+        if (
+          match.part.tool === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY &&
+          (match.part.state.status === "completed" || match.part.state.status === "error")
+        ) {
+          if (
+            match.part.state.status === "completed" &&
+            isDeepStrictEqual(
+              {
+                title: match.part.state.title,
+                metadata: match.part.state.metadata,
+                output: match.part.state.output,
+                attachments: match.part.state.attachments,
+              },
+              output,
+            )
+          ) {
+            yield* settleToolCall(toolCallID)
+            return
+          }
+          return yield* learningInvocationConflict(match.part)
+        }
+        if (match.part.state.status !== "running") return
         yield* session.updatePart({
           ...match.part,
           state: {
@@ -185,7 +283,20 @@ const layer = Layer.effect(
 
       const failToolCall = Effect.fn("SessionProcessor.failToolCall")(function* (toolCallID: string, error: unknown) {
         const match = yield* readToolCall(toolCallID)
-        if (!match || match.part.state.status !== "running") return false
+        if (!match) return false
+        if (match.part.tool === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
+          if (match.part.state.status === "completed" || match.part.state.status === "error") {
+            return yield* learningInvocationConflict(match.part)
+          }
+          if (!match.call.registration) return false
+          const interrupted = yield* LearningCommandRuntime.interruptInvocation(events, match.call.registration).pipe(
+            Effect.orDie,
+          )
+          if (!interrupted) return false
+          yield* settleToolCall(toolCallID)
+          return true
+        }
+        if (match.part.state.status !== "running") return false
         yield* session.updatePart({
           ...match.part,
           state: {
@@ -218,8 +329,11 @@ const layer = Layer.effect(
         name: string
         providerExecuted?: boolean
       }) {
-        const existing = yield* readToolCall(input.id)
-        if (existing) {
+        const call = reserveToolCall(input)
+        if (call.preparing && !call.prepared) yield* Deferred.await(call.ready)
+        if (call.prepared) {
+          const existing = yield* readToolCall(input.id)
+          if (!existing) throw new Error(`Prepared tool call is missing its Part: ${input.id}`)
           if (!input.providerExecuted || existing.part.metadata?.providerExecuted) return existing
           const part = yield* session.updatePart({
             ...existing.part,
@@ -233,24 +347,126 @@ const layer = Layer.effect(
           }
           return { call: ctx.toolcalls[input.id], part }
         }
-        const part = yield* session.updatePart({
-          id: PartID.ascending(),
-          messageID: ctx.assistantMessage.id,
-          sessionID: ctx.assistantMessage.sessionID,
-          type: "tool",
-          tool: input.name,
-          callID: input.id,
-          state: { status: "pending", input: {}, raw: "" },
-          metadata: input.providerExecuted ? { providerExecuted: true } : undefined,
-        } satisfies SessionV1.ToolPart)
-        ctx.toolcalls[input.id] = {
-          done: yield* Deferred.make<void>(),
-          partID: part.id,
-          messageID: part.messageID,
-          sessionID: part.sessionID,
+        call.preparing = true
+        const result = yield* session
+          .updatePart({
+            id: call.partID,
+            messageID: call.messageID,
+            sessionID: call.sessionID,
+            type: "tool",
+            tool: input.name,
+            callID: input.id,
+            state: { status: "pending", input: {}, raw: "" },
+            metadata: input.providerExecuted ? { providerExecuted: true } : undefined,
+          } satisfies SessionV1.ToolPart)
+          .pipe(Effect.exit)
+        call.preparing = false
+        if (Exit.isFailure(result)) {
+          yield* Deferred.failCause(call.ready, result.cause).pipe(Effect.ignore)
+          return yield* Effect.failCause(result.cause)
         }
-        return { call: ctx.toolcalls[input.id], part }
+        call.prepared = true
+        yield* Deferred.succeed(call.ready, undefined).pipe(Effect.ignore)
+        return { call, part: result.value }
       })
+
+      const confirmPreparedToolCall = Effect.fn("SessionProcessor.confirmPreparedToolCall")(function* (
+        toolCallID: string,
+      ) {
+        const call = ctx.toolcalls[toolCallID]
+        if (!call) throw new Error(`Unregistered tool call: ${toolCallID}`)
+        const part = yield* session.getPart({
+          partID: call.partID,
+          messageID: call.messageID,
+          sessionID: call.sessionID,
+        })
+        if (!part || part.type !== "tool" || part.callID !== toolCallID || part.tool !== call.name) {
+          throw new Error(`Tool call preparation did not persist the reserved Part: ${toolCallID}`)
+        }
+        call.preparing = false
+        call.prepared = true
+        yield* Deferred.succeed(call.ready, undefined).pipe(Effect.ignore)
+      })
+
+      const failToolCallPreparation = Effect.fn("SessionProcessor.failToolCallPreparation")(function* (
+        toolCallID: string,
+        error: unknown,
+      ) {
+        const call = ctx.toolcalls[toolCallID]
+        if (!call) return
+        call.preparing = false
+        yield* Deferred.die(call.ready, error).pipe(Effect.ignore)
+      })
+
+      const enterToolCall = Effect.fn("SessionProcessor.enterToolCall")(function* (toolCallID: string) {
+        const call = ctx.toolcalls[toolCallID]
+        if (!call) throw new Error(`Unregistered tool call: ${toolCallID}`)
+        yield* Deferred.succeed(call.entered, undefined).pipe(Effect.ignore)
+      })
+
+      const failToolCallEntry = Effect.fn("SessionProcessor.failToolCallEntry")(function* (
+        toolCallID: string,
+        error: unknown,
+      ) {
+        const call = ctx.toolcalls[toolCallID]
+        if (!call) return
+        yield* Deferred.die(call.entered, error).pipe(Effect.ignore)
+      })
+
+      const preparation = (tool: LLM.StreamInput["tools"][string]) => (tool as LocalTool)[ToolCallPreparation]
+
+      const hasPreparation = (name: string) => {
+        const item = activeTools[name]
+        return !!item && !!preparation(item)
+      }
+
+      const wrapTools = (tools: LLM.StreamInput["tools"]): LLM.StreamInput["tools"] =>
+        Object.fromEntries(
+          Object.entries(tools).map(([name, item]) => {
+            if (!item.execute) return [name, item]
+            const execute = item.execute.bind(item)
+            const prepare = preparation(item)
+            return [
+              name,
+              {
+                ...item,
+                execute(args, options) {
+                  const registration = registerToolCall({ id: options.toolCallId, name })
+                  const result = toolLane.then(async () => {
+                    try {
+                      if (!acceptingToolCalls || options.abortSignal?.aborted) {
+                        throw new DOMException("Tool execution aborted", "AbortError")
+                      }
+                      if (prepare) {
+                        const call = ctx.toolcalls[options.toolCallId]
+                        call.preparing = true
+                        try {
+                          await prepare(args, registration)
+                          await run.promise(confirmPreparedToolCall(options.toolCallId))
+                        } catch (error) {
+                          await run.promise(failToolCallPreparation(options.toolCallId, error))
+                          throw error
+                        }
+                      } else {
+                        await run.promise(ensureToolCall({ id: options.toolCallId, name }))
+                      }
+                      await run.promise(enterToolCall(options.toolCallId))
+                      return execute(args, options)
+                    } catch (error) {
+                      await run.promise(failToolCallEntry(options.toolCallId, error))
+                      throw error
+                    }
+                  })
+                  toolLane = result.then(
+                    () => undefined,
+                    () => undefined,
+                  )
+                  return result
+                },
+              },
+            ]
+          }),
+        )
 
       const isFilePart = (value: unknown): value is SessionV1.FilePart => Schema.is(SessionV1.FilePart)(value)
 
@@ -316,14 +532,26 @@ const layer = Layer.effect(
             if (ctx.assistantMessage.summary) {
               throw new Error(`Tool call not allowed while generating summary: ${value.name}`)
             }
+            if (hasPreparation(value.name)) {
+              reserveToolCall(value)
+              return
+            }
             yield* ensureToolCall(value)
             return
 
           case "tool-input-delta":
+            if (hasPreparation(value.name)) {
+              reserveToolCall(value)
+              return
+            }
             yield* ensureToolCall(value)
             return
 
           case "tool-input-end": {
+            if (hasPreparation(value.name)) {
+              reserveToolCall(value)
+              return
+            }
             yield* ensureToolCall(value)
             return
           }
@@ -332,23 +560,51 @@ const layer = Layer.effect(
             if (ctx.assistantMessage.summary) {
               throw new Error(`Tool call not allowed while generating summary: ${value.name}`)
             }
-            yield* ensureToolCall(value)
+            if (activeTools[value.name]?.execute && !value.providerExecuted) {
+              const call = reserveToolCall(value)
+              if (!call.registration) throw new Error(`Local tool execution was not registered: ${value.id}`)
+              yield* Deferred.await(call.entered)
+            } else {
+              yield* ensureToolCall(value)
+            }
             const input = isRecord(value.input) ? value.input : { value: value.input }
-            yield* updateToolCall(value.id, (match) => ({
-              ...match,
-              tool: value.name,
-              state:
-                match.state.status === "running"
-                  ? { ...match.state, input }
-                  : {
-                      status: "running",
-                      input,
-                      time: { start: Date.now() },
-                    },
-              metadata: match.metadata?.providerExecuted
-                ? { ...value.providerMetadata, providerExecuted: true }
-                : value.providerMetadata,
-            }))
+            if (value.name === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
+              const match = yield* readToolCall(value.id)
+              if (
+                match?.part.tool === value.name &&
+                (match.part.state.status === "completed" || match.part.state.status === "error")
+              ) {
+                return
+              }
+              if (
+                !match ||
+                match.part.tool !== value.name ||
+                match.part.state.status !== "pending" ||
+                !isDeepStrictEqual(match.part.state.input, input)
+              ) {
+                if (match) return yield* learningInvocationConflict(match.part)
+                throw new Error(`Prepared learning tool call is missing its Part: ${value.id}`)
+              }
+              return
+            }
+            yield* updateToolCall(value.id, (match) => {
+              if (match.state.status === "completed" || match.state.status === "error") return match
+              return {
+                ...match,
+                tool: value.name,
+                state:
+                  match.state.status === "running"
+                    ? { ...match.state, input }
+                    : {
+                        status: "running",
+                        input,
+                        time: { start: Date.now() },
+                      },
+                metadata: match.metadata?.providerExecuted
+                  ? { ...value.providerMetadata, providerExecuted: true }
+                  : value.providerMetadata,
+              }
+            })
 
             const parts = yield* MessageV2.parts(ctx.assistantMessage.id).pipe(
               Effect.provideService(Database.Service, database),
@@ -538,6 +794,7 @@ const layer = Layer.effect(
       })
 
       const cleanup = Effect.fn("SessionProcessor.cleanup")(function* () {
+        acceptingToolCalls = false
         if (ctx.snapshot) {
           const patch = yield* snapshot.patch(ctx.snapshot)
           if (patch.files.length) {
@@ -576,9 +833,30 @@ const layer = Layer.effect(
         )
 
         for (const toolCallID of Object.keys(ctx.toolcalls)) {
-          const match = yield* readToolCall(toolCallID)
+          const call = ctx.toolcalls[toolCallID]
+          const match =
+            (yield* readToolCall(toolCallID)) ??
+            (!call.preparing
+              ? yield* ensureToolCall({
+                  id: toolCallID,
+                  name: call.name,
+                })
+              : undefined)
           if (!match) continue
           const part = match.part
+          if (part.state.status === "completed" || part.state.status === "error") {
+            yield* settleToolCall(toolCallID)
+            continue
+          }
+          if (part.tool === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY && match.call.registration) {
+            const interrupted = yield* LearningCommandRuntime.interruptInvocation(events, match.call.registration).pipe(
+              Effect.orDie,
+            )
+            if (interrupted) {
+              yield* settleToolCall(toolCallID)
+              continue
+            }
+          }
           const end = Date.now()
           const metadata = "metadata" in part.state && isRecord(part.state.metadata) ? part.state.metadata : {}
           yield* session.updatePart({
@@ -638,7 +916,9 @@ const layer = Layer.effect(
             ctx.currentText = undefined
             ctx.reasoningMap = {}
             yield* status.set(ctx.sessionID, { type: "busy" })
-            const stream = llm.stream(streamInput)
+            acceptingToolCalls = true
+            activeTools = wrapTools(streamInput.tools)
+            const stream = llm.stream({ ...streamInput, tools: activeTools })
 
             yield* stream.pipe(
               Stream.tap((event) => handleEvent(event)),
@@ -688,6 +968,8 @@ const layer = Layer.effect(
         },
         updateToolCall,
         completeToolCall,
+        failToolCall,
+        registeredToolCall,
         process,
       } satisfies Handle
     })
@@ -712,7 +994,18 @@ export const node = LayerNode.make({
     Image.node,
     EventV2Bridge.node,
     Database.node,
+    LearningCommandRuntime.node,
   ],
 })
+
+function learningInvocationConflict(part: SessionV1.ToolPart) {
+  return Effect.die(
+    new LearningCommand.InvocationConflictError({
+      partID: part.id,
+      assistantMessageID: part.messageID,
+      providerCallID: part.callID,
+    }),
+  )
+}
 
 export * as SessionProcessor from "./processor"

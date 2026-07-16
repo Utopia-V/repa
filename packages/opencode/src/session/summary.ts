@@ -6,6 +6,7 @@ import { Snapshot } from "@/snapshot"
 import { Session } from "./session"
 import { SessionID, MessageID } from "./schema"
 import { Config } from "@/config/config"
+import { SessionRunState } from "./run-state"
 
 function unquoteGitPath(input: string) {
   if (!input.startsWith('"')) return input
@@ -64,7 +65,7 @@ function unquoteGitPath(input: string) {
 }
 
 export interface Interface {
-  readonly summarize: (input: { sessionID: SessionID; messageID: MessageID }) => Effect.Effect<void>
+  readonly summarize: (input: { sessionID: SessionID; messageID: MessageID }) => Effect.Effect<void, Session.BusyError>
   readonly diff: (input: { sessionID: SessionID; messageID?: MessageID }) => Effect.Effect<Snapshot.FileDiff[]>
   readonly computeDiff: (input: { messages: SessionV1.WithParts[] }) => Effect.Effect<Snapshot.FileDiff[]>
 }
@@ -78,6 +79,7 @@ const layer = Layer.effect(
     const snapshot = yield* Snapshot.Service
     const events = yield* EventV2Bridge.Service
     const config = yield* Config.Service
+    const runState = yield* SessionRunState.Service
 
     const computeDiff = Effect.fn("SessionSummary.computeDiff")(function* (input: { messages: SessionV1.WithParts[] }) {
       let from: string | undefined
@@ -99,7 +101,7 @@ const layer = Layer.effect(
       return []
     })
 
-    const summarize = Effect.fn("SessionSummary.summarize")(function* (input: {
+    const summarizeUnlocked = Effect.fn("SessionSummary.summarizeUnlocked")(function* (input: {
       sessionID: SessionID
       messageID: MessageID
     }) {
@@ -125,6 +127,8 @@ const layer = Layer.effect(
       target.info.summary = { ...target.info.summary, diffs: msgDiffs }
       yield* sessions.updateMessage(target.info)
     })
+
+    const summarize: Interface["summarize"] = (input) => runState.shared(input.sessionID, summarizeUnlocked(input))
 
     const diff = Effect.fn("SessionSummary.diff")(function* (input: { sessionID: SessionID; messageID?: MessageID }) {
       if (!input.messageID) return []
@@ -154,7 +158,7 @@ export type DiffInput = Schema.Schema.Type<typeof DiffInput>
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [Session.node, Snapshot.node, EventV2Bridge.node, Config.node],
+  deps: [Session.node, Snapshot.node, EventV2Bridge.node, Config.node, SessionRunState.node],
 })
 
 export * as SessionSummary from "./summary"

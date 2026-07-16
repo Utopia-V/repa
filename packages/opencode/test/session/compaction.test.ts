@@ -33,6 +33,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LearnerAdmission, Occurrence } from "@opencode-ai/core/learning-command"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -109,6 +110,39 @@ function createUserMessage(sessionID: SessionID, text: string) {
     return msg
   })
 }
+
+const admitOccurrence = Effect.fn("test.admitOccurrence")(function* (sessionID: SessionID, messageID: MessageID) {
+  const events = yield* EventV2Bridge.Service
+  const admitted = yield* events.transaction((tx) =>
+    Occurrence.admit(tx, {
+      admission: LearnerAdmission.interactive(),
+      sessionID,
+      messageID,
+      timeAdmitted: Date.now(),
+    }).pipe(
+      Effect.map((result) => ({ result })),
+      Effect.orDie,
+    ),
+  )
+  return admitted.result
+})
+
+const occurrencePresentation = Effect.fn("test.occurrencePresentation")(function* (
+  sessionID: SessionID,
+  messageID: MessageID,
+) {
+  const events = yield* EventV2Bridge.Service
+  const resolved = yield* events.transaction((tx) =>
+    Occurrence.resolvePresentation(tx, { sessionID, messageID }).pipe(
+      Effect.map((result) => ({ result })),
+      Effect.catchTag("LearningCommand.InvalidCausalSourceError", (error) =>
+        error.reason === "missing_presentation" ? Effect.succeed({ result: undefined }) : Effect.fail(error),
+      ),
+      Effect.orDie,
+    ),
+  )
+  return resolved.result
+})
 
 function createAssistantMessage(sessionID: SessionID, parentID: MessageID, root: string) {
   return SessionNs.Service.use((ssn) =>
@@ -204,6 +238,7 @@ function fake(
     },
     updateToolCall: Effect.fn("TestSessionProcessor.updateToolCall")(() => Effect.succeed(undefined)),
     completeToolCall: Effect.fn("TestSessionProcessor.completeToolCall")(() => Effect.void),
+    registeredToolCall: () => undefined,
     process: Effect.fn("TestSessionProcessor.process")(() => Effect.succeed(result)),
   } satisfies SessionProcessorModule.SessionProcessor.Handle
 }
@@ -1261,6 +1296,7 @@ describe("session.compaction.process", () => {
         filename: "cat.png",
         url: "https://example.com/cat.png",
       })
+      const admitted = yield* admitOccurrence(session.id, replay.id)
       const msg = yield* createUserMessage(session.id, "current")
       const msgs = yield* ssn.messages({ sessionID: session.id })
 
@@ -1280,6 +1316,13 @@ describe("session.compaction.process", () => {
       expect(
         last?.parts.some((part) => part.type === "text" && part.text.includes("Attached image/png: cat.png")),
       ).toBe(true)
+      if (!last || last.info.role !== "user") return
+      const presentation = yield* occurrencePresentation(session.id, last.info.id)
+      expect(presentation).toBeDefined()
+      if (!presentation) return
+      expect(presentation.occurrenceID).toBe(admitted.id)
+      expect(presentation.provenance).toBe("compaction_replay")
+      expect(presentation.sourceMessageID).toBe(replay.id)
     }),
   )
 
@@ -1307,6 +1350,31 @@ describe("session.compaction.process", () => {
       if (last?.parts[0]?.type === "text") {
         expect(last.parts[0].text).toContain("previous request exceeded the provider's size limit")
       }
+    }),
+  )
+
+  it.instance(
+    "does not infer occurrence lineage for a legacy overflow replay",
+    Effect.gen(function* () {
+      const ssn = yield* SessionNs.Service
+      const session = yield* ssn.create({})
+      yield* createUserMessage(session.id, "root")
+      yield* createUserMessage(session.id, "legacy replay")
+      const current = yield* createUserMessage(session.id, "current")
+
+      const result = yield* SessionCompaction.use.process({
+        parentID: current.id,
+        messages: yield* ssn.messages({ sessionID: session.id }),
+        sessionID: session.id,
+        auto: true,
+        overflow: true,
+      })
+
+      const last = (yield* ssn.messages({ sessionID: session.id })).at(-1)
+      expect(result).toBe("continue")
+      expect(last?.info.role).toBe("user")
+      if (!last || last.info.role !== "user") return
+      expect(yield* occurrencePresentation(session.id, last.info.id)).toBeUndefined()
     }),
   )
 

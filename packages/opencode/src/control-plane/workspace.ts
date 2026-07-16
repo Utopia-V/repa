@@ -125,6 +125,7 @@ type SessionWarpError =
   | SessionWarpHttpError
   | Vcs.PatchApplyError
   | HttpClientError.HttpClientError
+  | Session.BusyError
 type WaitForSyncError = SyncTimeoutError | SyncAbortedError
 type SyncLoopError = SyncHttpError | HttpClientError.HttpClientError
 
@@ -134,7 +135,7 @@ export interface Interface {
   readonly list: (project: Project.Info) => Effect.Effect<Info[]>
   readonly syncList: (project: Project.Info) => Effect.Effect<void>
   readonly get: (id: WorkspaceV2.ID) => Effect.Effect<Info | undefined>
-  readonly remove: (id: WorkspaceV2.ID) => Effect.Effect<Info | undefined>
+  readonly remove: (id: WorkspaceV2.ID) => Effect.Effect<Info | undefined, Session.BusyError>
   readonly status: () => Effect.Effect<ConnectionStatus[]>
   readonly isSyncing: (workspaceID: WorkspaceV2.ID) => Effect.Effect<boolean>
   readonly waitForSync: (

@@ -101,10 +101,14 @@ function isOrphanedInterruptedTool(part: SessionV1.ToolPart) {
 
 export interface Interface {
   readonly cancel: (sessionID: SessionID) => Effect.Effect<void>
-  readonly prompt: (input: PromptInput) => Effect.Effect<SessionV1.WithParts, Image.Error>
-  readonly loop: (input: LoopInput) => Effect.Effect<SessionV1.WithParts>
-  readonly shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.BusyError>
-  readonly command: (input: CommandInput) => Effect.Effect<SessionV1.WithParts, Image.Error>
+  readonly prompt: (
+    input: PromptInput,
+  ) => Effect.Effect<SessionV1.WithParts, Image.Error | Session.NotFound | Session.BusyError>
+  readonly loop: (input: LoopInput) => Effect.Effect<SessionV1.WithParts, Session.BusyError>
+  readonly shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.NotFound | Session.BusyError>
+  readonly command: (
+    input: CommandInput,
+  ) => Effect.Effect<SessionV1.WithParts, Image.Error | Session.NotFound | Session.BusyError>
   readonly resolvePromptParts: (template: string) => Effect.Effect<PromptInput["parts"]>
 }
 
@@ -146,7 +150,7 @@ const layer = Layer.effect(
       return {
         cancel: (sessionID: SessionID) => cancel(sessionID),
         resolvePromptParts: (template: string) => resolvePromptParts(template),
-        prompt: (input: PromptInput) => prompt(input).pipe(Effect.catch(Effect.die)),
+        prompt: (input: PromptInput) => internalPrompt(input).pipe(Effect.catch(Effect.die)),
       } satisfies TaskPromptOps
     })
 
@@ -489,9 +493,6 @@ const layer = Layer.effect(
           const { msg, part, cwd } = yield* Effect.gen(function* () {
             const ctx = yield* InstanceState.context
             const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
-            if (session.revert) {
-              yield* revert.cleanup(session)
-            }
             const agent = yield* agents.get(input.agent)
             if (!agent) {
               const available = (yield* agents.list()).filter((a) => !a.hidden).map((a) => a.name)
@@ -666,14 +667,20 @@ const layer = Layer.effect(
       return yield* provider.defaultModel().pipe(Effect.orDie)
     })
 
-    const createUserMessage = Effect.fn("SessionPrompt.createUserMessage")(function* (input: PromptInput) {
+    const createUserMessage = Effect.fn("SessionPrompt.createUserMessage")(function* (
+      input: PromptInput,
+      admission: "interactive" | "internal",
+    ) {
       const agentName = input.agent
       const ag = agentName ? yield* agents.get(agentName) : yield* agents.defaultInfo()
       if (!ag) {
         const available = (yield* agents.list()).filter((a) => !a.hidden).map((a) => a.name)
         const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
         const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
-        yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+        yield* state.shared(
+          input.sessionID,
+          events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() }),
+        )
         throw error
       }
 
@@ -1077,18 +1084,21 @@ const layer = Layer.effect(
         })
       }
 
-      yield* sessions.updateMessage(info)
-      for (const part of parts) yield* sessions.updatePart(part)
-
-      return { info, parts }
+      return yield* sessions.updateMessageWithParts({
+        info,
+        parts,
+        ...(admission === "interactive" && parts.some((part) => part.type === "text" && part.synthetic !== true)
+          ? { admission: "interactive" as const }
+          : {}),
+      })
     }, Effect.scoped)
 
-    const prompt: (input: PromptInput) => Effect.Effect<SessionV1.WithParts, Image.Error> = Effect.fn(
-      "SessionPrompt.prompt",
-    )(function* (input: PromptInput) {
-      const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
-      yield* revert.cleanup(session)
-      const message = yield* createUserMessage(input)
+    const runPromptAdmitted = Effect.fn("SessionPrompt.runPromptAdmitted")(function* (
+      input: PromptInput,
+      admission: "interactive" | "internal",
+      session: Session.Info,
+    ) {
+      const message = yield* createUserMessage(input, admission)
       yield* sessions.touch(input.sessionID)
 
       const permissions: PermissionV1.Rule[] = []
@@ -1103,6 +1113,14 @@ const layer = Layer.effect(
       if (input.noReply === true) return message
       return yield* loop({ sessionID: input.sessionID })
     })
+
+    const runPrompt = (input: PromptInput, admission: "interactive" | "internal") =>
+      revert.withCleanAdmission(input.sessionID, (session) => runPromptAdmitted(input, admission, session))
+
+    const internalPrompt = (input: PromptInput) => runPrompt(input, "internal")
+    const prompt: Interface["prompt"] = Effect.fn("SessionPrompt.prompt")((input: PromptInput) =>
+      runPrompt(input, "interactive"),
+    )
 
     const lastAssistant = Effect.fnUntraced(function* (sessionID: SessionID) {
       const match = yield* sessions.findMessage(sessionID, (m) => m.info.role !== "user").pipe(Effect.orDie)
@@ -1371,25 +1389,36 @@ const layer = Layer.effect(
           continue
         }
 
-        yield* compaction.prune({ sessionID }).pipe(Effect.ignore, Effect.forkIn(scope))
+        yield* state.shared(sessionID, compaction.prune({ sessionID })).pipe(Effect.ignore, Effect.forkIn(scope))
         return yield* lastAssistant(sessionID)
       },
     )
 
-    const loop: (input: LoopInput) => Effect.Effect<SessionV1.WithParts> = Effect.fn("SessionPrompt.loop")(function* (
-      input: LoopInput,
+    const loop: Interface["loop"] = Effect.fn("SessionPrompt.loop")((input: LoopInput) =>
+      state.shared(
+        input.sessionID,
+        state.ensureRunning(input.sessionID, lastAssistant(input.sessionID), runLoop(input.sessionID)),
+      ),
+    )
+
+    const shell: Interface["shell"] = Effect.fn("SessionPrompt.shell")((input: ShellInput) =>
+      revert.withCleanAdmission(input.sessionID, () =>
+        Effect.gen(function* () {
+          const ready = yield* Latch.make()
+          return yield* state.startShell(
+            input.sessionID,
+            lastAssistant(input.sessionID),
+            shellImpl(input, ready),
+            ready,
+          )
+        }),
+      ),
+    )
+
+    const commandAdmitted = Effect.fn("SessionPrompt.commandAdmitted")(function* (
+      input: CommandInput,
+      session: Session.Info,
     ) {
-      return yield* state.ensureRunning(input.sessionID, lastAssistant(input.sessionID), runLoop(input.sessionID))
-    })
-
-    const shell: (input: ShellInput) => Effect.Effect<SessionV1.WithParts, Session.BusyError> = Effect.fn(
-      "SessionPrompt.shell",
-    )(function* (input: ShellInput) {
-      const ready = yield* Latch.make()
-      return yield* state.startShell(input.sessionID, lastAssistant(input.sessionID), shellImpl(input, ready), ready)
-    })
-
-    const command = Effect.fn("SessionPrompt.command")(function* (input: CommandInput) {
       yield* Effect.logInfo("command", {
         "session.id": input.sessionID,
         command: input.command,
@@ -1400,7 +1429,10 @@ const layer = Layer.effect(
         const available = (yield* commands.list()).map((c) => c.name)
         const hint = available.length ? ` Available commands: ${available.join(", ")}` : ""
         const error = new NamedError.Unknown({ message: `Command not found: "${input.command}".${hint}` })
-        yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+        yield* state.shared(
+          input.sessionID,
+          events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() }),
+        )
         throw error
       }
       const agentName = cmd.agent ?? input.agent
@@ -1461,7 +1493,10 @@ const layer = Layer.effect(
         const available = (yield* agents.list()).filter((a) => !a.hidden).map((a) => a.name)
         const hint = available.length ? ` Available agents: ${available.join(", ")}` : ""
         const error = new NamedError.Unknown({ message: `Agent not found: "${agentName}".${hint}` })
-        yield* events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() })
+        yield* state.shared(
+          input.sessionID,
+          events.publish(Session.Event.Error, { sessionID: input.sessionID, error: error.toObject() }),
+        )
         throw error
       }
 
@@ -1499,14 +1534,18 @@ const layer = Layer.effect(
         { parts },
       )
 
-      const result = yield* prompt({
-        sessionID: input.sessionID,
-        messageID: input.messageID,
-        model: userModel,
-        agent: userAgent,
-        parts,
-        variant: input.variant,
-      })
+      const result = yield* runPromptAdmitted(
+        {
+          sessionID: input.sessionID,
+          messageID: input.messageID,
+          model: userModel,
+          agent: userAgent,
+          parts,
+          variant: input.variant,
+        },
+        "interactive",
+        session,
+      )
       yield* events.publish(Command.Event.Executed, {
         name: input.command,
         sessionID: input.sessionID,
@@ -1515,6 +1554,10 @@ const layer = Layer.effect(
       })
       return result
     })
+
+    const command: Interface["command"] = Effect.fn("SessionPrompt.command")((input: CommandInput) =>
+      revert.withCleanAdmission(input.sessionID, (session) => commandAdmitted(input, session)),
+    )
 
     return Service.of({
       cancel,

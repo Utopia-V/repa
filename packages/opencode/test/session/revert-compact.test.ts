@@ -5,7 +5,7 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import fs from "fs/promises"
 import path from "path"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
-import { Effect } from "effect"
+import { Cause, Effect, Exit } from "effect"
 import { Session } from "@/session/session"
 
 import { SessionRevert } from "../../src/session/revert"
@@ -16,10 +16,21 @@ import { provideTmpdirInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { EventV2Bridge } from "@/event-v2-bridge"
+import { LearnerAdmission, Occurrence } from "@opencode-ai/core/learning-command"
+import { LearnerOccurrenceTombstoneTable } from "@opencode-ai/core/learning-command/occurrence.sql"
+import { eq } from "drizzle-orm"
 
 const it = testEffect(
   LayerNode.compile(
-    LayerNode.group([Session.node, SessionRevert.node, Snapshot.node, SessionProjector.node, CrossSpawnSpawner.node]),
+    LayerNode.group([
+      Session.node,
+      SessionRevert.node,
+      Snapshot.node,
+      SessionProjector.node,
+      CrossSpawnSpawner.node,
+      EventV2Bridge.node,
+    ]),
   ),
 )
 
@@ -421,6 +432,100 @@ describe("revert + compact workflow", () => {
           expect(ids).toContain(a1.id)
           expect(ids).not.toContain(u2.id)
           expect(ids).not.toContain(a2.id)
+        }),
+      { git: true },
+    ),
+  )
+
+  it.live(
+    "cleanup prevalidates the full set before rejecting a linked presentation part",
+    provideTmpdirInstance(
+      (dir) =>
+        Effect.gen(function* () {
+          const session = yield* Session.Service
+          const revert = yield* SessionRevert.Service
+          const events = yield* EventV2Bridge.Service
+          const info = yield* session.create({})
+          const linked = yield* user(info.id)
+          const protectedPart = yield* text(info.id, linked.id, "immutable learner input")
+          yield* events.transaction((tx) =>
+            Occurrence.admit(tx, {
+              admission: LearnerAdmission.interactive(),
+              sessionID: info.id,
+              messageID: linked.id,
+              timeAdmitted: Date.now(),
+            }).pipe(
+              Effect.map((result) => ({ result })),
+              Effect.orDie,
+            ),
+          )
+          const later = yield* assistant(info.id, linked.id, dir)
+          yield* text(info.id, later.id, "must survive failed cleanup")
+          yield* session.setRevert({
+            sessionID: info.id,
+            revert: { messageID: linked.id, partID: protectedPart.id },
+            summary: { additions: 0, deletions: 0, files: 0 },
+          })
+
+          const cleanup = yield* revert.cleanup(yield* session.get(info.id)).pipe(Effect.exit)
+          expect(Exit.isFailure(cleanup)).toBe(true)
+          if (Exit.isFailure(cleanup)) {
+            expect(Cause.pretty(cleanup.cause)).toContain("LearningCommand.InvalidCausalSourceError")
+          }
+          const remaining = yield* session.messages({ sessionID: info.id })
+          expect(remaining.flatMap((message) => message.parts).some((part) => part.id === protectedPart.id)).toBe(true)
+          expect(remaining.some((message) => message.info.id === later.id)).toBe(true)
+          expect((yield* session.get(info.id)).revert).toBeDefined()
+        }),
+      { git: true },
+    ),
+  )
+
+  it.live(
+    "cleanup tombstones a reverted origin while a fork presentation survives",
+    provideTmpdirInstance(
+      () =>
+        Effect.gen(function* () {
+          const session = yield* Session.Service
+          const revert = yield* SessionRevert.Service
+          const events = yield* EventV2Bridge.Service
+          const info = yield* session.create({})
+          const linked = yield* user(info.id)
+          yield* text(info.id, linked.id, "reverted learner input")
+          const admitted = yield* events.transaction((tx) =>
+            Occurrence.admit(tx, {
+              admission: LearnerAdmission.interactive(),
+              sessionID: info.id,
+              messageID: linked.id,
+              timeAdmitted: Date.now(),
+            }).pipe(
+              Effect.map((result) => ({ result })),
+              Effect.orDie,
+            ),
+          )
+          yield* session.fork({ sessionID: info.id })
+          yield* session.setRevert({
+            sessionID: info.id,
+            revert: { messageID: linked.id },
+            summary: { additions: 0, deletions: 0, files: 0 },
+          })
+
+          yield* revert.cleanup(yield* session.get(info.id))
+
+          expect(yield* session.messages({ sessionID: info.id })).toHaveLength(0)
+          expect((yield* session.get(info.id)).revert).toBeUndefined()
+          const tombstone = yield* events.transaction((tx) =>
+            tx
+              .select()
+              .from(LearnerOccurrenceTombstoneTable)
+              .where(eq(LearnerOccurrenceTombstoneTable.occurrence_id, admitted.result.id))
+              .get()
+              .pipe(
+                Effect.map((result) => ({ result })),
+                Effect.orDie,
+              ),
+          )
+          expect(tombstone.result).toMatchObject({ reason: "source_unavailable" })
         }),
       { git: true },
     ),

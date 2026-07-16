@@ -27,12 +27,18 @@ export const CitationID = Schema.String.check(Schema.isPattern(/^crc_[0-9A-Za-z]
 )
 export type CitationID = typeof CitationID.Type
 
+export const SelectionAcceptanceEffectID = Schema.String.check(Schema.isPattern(/^cse_[0-9A-Za-z]{26}$/)).pipe(
+  Schema.brand("Course.SelectionAcceptanceEffectID"),
+)
+export type SelectionAcceptanceEffectID = typeof SelectionAcceptanceEffectID.Type
+
 const decodeCourseID = Schema.decodeUnknownSync(CourseID)
 const decodeViewID = Schema.decodeUnknownSync(ViewID)
 const decodeRevisionID = Schema.decodeUnknownSync(RevisionID)
 const decodeItemID = Schema.decodeUnknownSync(ItemID)
 const decodeMappingGroupID = Schema.decodeUnknownSync(MappingGroupID)
 const decodeCitationID = Schema.decodeUnknownSync(CitationID)
+const decodeSelectionAcceptanceEffectID = Schema.decodeUnknownSync(SelectionAcceptanceEffectID)
 
 export const createCourseID = () => decodeCourseID(Identifier.create("crs", "ascending"))
 export const createViewID = () => decodeViewID(Identifier.create("cvw", "ascending"))
@@ -40,6 +46,8 @@ export const createRevisionID = () => decodeRevisionID(Identifier.create("cvr", 
 export const createItemID = () => decodeItemID(Identifier.create("cit", "ascending"))
 export const createMappingGroupID = () => decodeMappingGroupID(Identifier.create("cmg", "ascending"))
 export const createCitationID = () => decodeCitationID(Identifier.create("crc", "ascending"))
+export const createSelectionAcceptanceEffectID = () =>
+  decodeSelectionAcceptanceEffectID(Identifier.create("cse", "ascending"))
 
 export const AuthorshipBasis = Schema.Union([
   Schema.Literal("learner_authored"),
@@ -169,6 +177,13 @@ export class InvalidCursorError extends Schema.TaggedErrorClass<InvalidCursorErr
   detail: Schema.String,
 }) {}
 
+export class AcceptanceEffectExistsError extends Schema.TaggedErrorClass<AcceptanceEffectExistsError>()(
+  "Course.AcceptanceEffectExistsError",
+  {
+    effectID: SelectionAcceptanceEffectID,
+  },
+) {}
+
 export type Error =
   | NotFoundError
   | ConflictError
@@ -177,3 +192,4 @@ export type Error =
   | InvalidHierarchyError
   | InvalidMappingError
   | InvalidCursorError
+  | AcceptanceEffectExistsError

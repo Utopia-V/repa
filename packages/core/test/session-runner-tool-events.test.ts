@@ -31,6 +31,22 @@ const capture = () => {
     durable: () => Stream.empty,
     listen: () => Effect.succeed(Effect.void),
     project: () => Effect.void,
+    transaction: (prepare) =>
+      prepare(undefined as never).pipe(
+        Effect.map((prepared) => {
+          if (!prepared.event) return { result: prepared.result }
+          const event = {
+            id: EventV2.ID.create(),
+            type: prepared.event.definition.type,
+            data: prepared.event.data,
+          } as EventV2.Payload<typeof prepared.event.definition>
+          published.push({
+            type: EventV2.versionedType(prepared.event.definition.type, prepared.event.definition.durable!.version),
+            data: prepared.event.data,
+          })
+          return { result: prepared.result, event }
+        }),
+      ),
     replay: () => Effect.void,
     replayAll: () => Effect.succeed(undefined),
     remove: () => Effect.void,

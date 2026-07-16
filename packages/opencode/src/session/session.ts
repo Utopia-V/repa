@@ -4,12 +4,12 @@ import { Slug } from "@opencode-ai/core/util/slug"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
 import path from "path"
-import { BackgroundJob } from "@/background/job"
 import { Decimal } from "decimal.js"
 import type { ProviderMetadata, Usage } from "@opencode-ai/llm"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Database } from "@opencode-ai/core/database/database"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import { EventV2 } from "@opencode-ai/core/event"
 import { locationServiceMapLayer } from "@opencode-ai/core/location-services"
 
 import { NotFoundError } from "@/storage/storage"
@@ -24,7 +24,8 @@ import { inArray } from "drizzle-orm"
 import { lt } from "drizzle-orm"
 import { or } from "drizzle-orm"
 import type { SQL } from "drizzle-orm"
-import { PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { MessageV2 } from "./message-v2"
 import type { InstanceContext } from "../project/instance-context"
@@ -32,7 +33,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { Snapshot } from "@/snapshot"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { WorkspaceV2 } from "@opencode-ai/core/workspace"
-import { SessionID, MessageID, PartID } from "./schema"
+import { BusyError, SessionID, MessageID, PartID } from "./schema"
 
 import type { Provider } from "@/provider/provider"
 import { Global } from "@opencode-ai/core/global"
@@ -43,6 +44,26 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { KeyedMutex } from "@opencode-ai/core/effect/keyed-mutex"
+import {
+  HistoricalPresentationConflictError,
+  InvalidCausalSourceError,
+  LearnerAdmission,
+  SettledPartImmutableError,
+  assertAssistantDeletable,
+  assertPartDeletable,
+  exactSettlement,
+  lookupPhysicalInvocationByPart,
+  Occurrence,
+  removeNoEffectInvocationsForAssistant,
+  removeNoEffectInvocationsForSession,
+  removeOccurrencePresentation,
+} from "@opencode-ai/core/learning-command"
+import {
+  HistoricalLearningToolPresentationTable,
+  LearnerOccurrencePresentationTable,
+} from "@opencode-ai/core/learning-command/occurrence.sql"
+import { isDeepStrictEqual } from "node:util"
+import { SessionRunState } from "./run-state"
 
 const parentTitlePrefix = "New session - "
 const childTitlePrefix = "Child session - "
@@ -404,9 +425,7 @@ export const getUsage = (input: { model: Provider.Model; usage: Usage; metadata?
   }
 }
 
-export class BusyError extends Schema.TaggedErrorClass<BusyError>()("SessionBusyError", {
-  sessionID: SessionID,
-}) {}
+export { BusyError } from "./schema"
 
 export type NotFound = NotFoundError
 
@@ -422,36 +441,68 @@ export interface Interface {
     permission?: PermissionV1.Ruleset
     workspaceID?: WorkspaceV2.ID
   }) => Effect.Effect<Info>
-  readonly fork: (input: { sessionID: SessionID; messageID?: MessageID }) => Effect.Effect<Info, NotFound>
-  readonly touch: (sessionID: SessionID) => Effect.Effect<void>
+  readonly fork: (input: { sessionID: SessionID; messageID?: MessageID }) => Effect.Effect<Info, NotFound | BusyError>
+  readonly touch: (sessionID: SessionID) => Effect.Effect<void, BusyError>
   readonly get: (id: SessionID) => Effect.Effect<Info, NotFound>
-  readonly setTitle: (input: { sessionID: SessionID; title: string }) => Effect.Effect<void>
-  readonly setTitleIfDefault: (input: { sessionID: SessionID; title: string }) => Effect.Effect<boolean>
-  readonly setArchived: (input: { sessionID: SessionID; time?: number }) => Effect.Effect<void>
-  readonly setMetadata: (input: typeof SetMetadataInput.Type) => Effect.Effect<void>
+  readonly setTitle: (input: { sessionID: SessionID; title: string }) => Effect.Effect<void, BusyError>
+  readonly setTitleIfDefault: (input: { sessionID: SessionID; title: string }) => Effect.Effect<boolean, BusyError>
+  readonly setArchived: (input: { sessionID: SessionID; time?: number }) => Effect.Effect<void, BusyError>
+  readonly setMetadata: (input: typeof SetMetadataInput.Type) => Effect.Effect<void, BusyError>
   readonly setAgentModel: (input: {
     sessionID: SessionID
     agent: string
     model: NonNullable<Info["model"]>
     time: number
-  }) => Effect.Effect<void>
-  readonly setPermission: (input: { sessionID: SessionID; permission: PermissionV1.Ruleset }) => Effect.Effect<void>
+  }) => Effect.Effect<void, BusyError>
+  readonly setPermission: (input: {
+    sessionID: SessionID
+    permission: PermissionV1.Ruleset
+  }) => Effect.Effect<void, BusyError>
   readonly setRevert: (input: {
     sessionID: SessionID
     revert: Info["revert"]
     summary: Info["summary"]
-  }) => Effect.Effect<void>
-  readonly clearRevert: (sessionID: SessionID) => Effect.Effect<void>
-  readonly setSummary: (input: { sessionID: SessionID; summary: Info["summary"] }) => Effect.Effect<void>
-  readonly setShare: (input: { sessionID: SessionID; share: Info["share"] }) => Effect.Effect<void>
-  readonly setWorkspace: (input: { sessionID: SessionID; workspaceID: Info["workspaceID"] }) => Effect.Effect<void>
+  }) => Effect.Effect<void, BusyError>
+  readonly clearRevert: (sessionID: SessionID) => Effect.Effect<void, BusyError>
+  readonly setSummary: (input: { sessionID: SessionID; summary: Info["summary"] }) => Effect.Effect<void, BusyError>
+  readonly setShare: (input: { sessionID: SessionID; share: Info["share"] }) => Effect.Effect<void, BusyError>
+  readonly setWorkspace: (input: {
+    sessionID: SessionID
+    workspaceID: Info["workspaceID"]
+  }) => Effect.Effect<void, BusyError>
   readonly diff: (sessionID: SessionID) => Effect.Effect<Snapshot.FileDiff[]>
   readonly messages: (input: { sessionID: SessionID; limit?: number }) => Effect.Effect<SessionV1.WithParts[], NotFound>
   readonly children: (parentID: SessionID) => Effect.Effect<Info[]>
-  readonly remove: (sessionID: SessionID) => Effect.Effect<void, NotFound>
+  readonly remove: (sessionID: SessionID) => Effect.Effect<void, NotFound | BusyError>
   readonly updateMessage: <T extends SessionV1.Info>(msg: T) => Effect.Effect<T>
-  readonly removeMessage: (input: { sessionID: SessionID; messageID: MessageID }) => Effect.Effect<MessageID>
-  readonly removePart: (input: { sessionID: SessionID; messageID: MessageID; partID: PartID }) => Effect.Effect<PartID>
+  readonly updateMessageWithParts: (input: {
+    info: SessionV1.Info
+    parts: readonly SessionV1.Part[]
+    admission?: "interactive"
+    occurrenceSource?: {
+      messageID: MessageID
+      provenance: "compaction_replay" | "fork_clone"
+      required?: boolean
+    }
+    historicalSources?: readonly {
+      partID: PartID
+      sourceSessionID: SessionID
+      sourceAssistantMessageID: MessageID
+      sourcePartID: PartID
+    }[]
+  }) => Effect.Effect<SessionV1.WithParts>
+  readonly removeMessage: (input: { sessionID: SessionID; messageID: MessageID }) => Effect.Effect<MessageID, BusyError>
+  readonly removePart: (input: {
+    sessionID: SessionID
+    messageID: MessageID
+    partID: PartID
+  }) => Effect.Effect<PartID, BusyError>
+  readonly removeTranscript: (input: {
+    sessionID: SessionID
+    messageIDs: readonly MessageID[]
+    parts: readonly { messageID: MessageID; partID: PartID }[]
+    clearRevert?: { timeUpdated: number }
+  }) => Effect.Effect<void, BusyError>
   readonly getPart: (input: {
     sessionID: SessionID
     messageID: MessageID
@@ -487,14 +538,14 @@ export type Patch = Omit<Partial<Info>, "time" | "share" | "summary" | "revert" 
 const layer: Layer.Layer<
   Service,
   never,
-  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service
+  RuntimeFlags.Service | Database.Service | EventV2Bridge.Service | SessionRunState.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
     const { db } = yield* Database.Service
     const database = yield* Database.Service
-    const background = yield* BackgroundJob.Service
     const events = yield* EventV2Bridge.Service
+    const runState = yield* SessionRunState.Service
     const flags = yield* RuntimeFlags.Service
     const patchLocks = KeyedMutex.makeUnsafe<SessionID>()
 
@@ -605,44 +656,269 @@ const layer: Layer.Layer<
       return rows.map(fromRow)
     })
 
-    const remove: Interface["remove"] = Effect.fnUntraced(function* (sessionID: SessionID) {
+    const removeUnlocked = Effect.fnUntraced(function* (sessionID: SessionID, markCommitted: Effect.Effect<void>) {
       const session = yield* get(sessionID)
-      try {
-        // `remove` needs to work in all cases, such as broken sessions that
-        // run cleanup without instance state.
-        const hasInstance = yield* InstanceState.directory.pipe(
-          Effect.as(true),
-          Effect.catchCause(() => Effect.succeed(false)),
-        )
-
-        if (hasInstance) yield* cancelBackgroundJobs(background, sessionID)
-        const kids = yield* children(sessionID)
-        for (const child of kids) {
-          yield* remove(child.id)
-        }
-
-        yield* events.publish(SessionV1.Event.Deleted, { sessionID, info: session })
-        yield* events.remove(sessionID)
-      } catch (error) {
-        yield* Effect.logError("failed to remove session", { sessionID, error })
+      const kids = yield* children(sessionID)
+      for (const child of kids) {
+        yield* remove(child.id)
       }
+
+      const timeDeleted = Date.now()
+      yield* events.remove(
+        sessionID,
+        (tx) =>
+          Effect.gen(function* () {
+            const presentations = yield* tx
+              .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+              .from(LearnerOccurrencePresentationTable)
+              .where(eq(LearnerOccurrencePresentationTable.session_id, sessionID))
+              .all()
+              .pipe(Effect.orDie)
+            yield* removeNoEffectInvocationsForSession(tx, sessionID).pipe(Effect.orDie)
+            yield* Effect.forEach(
+              presentations,
+              (presentation) =>
+                removeOccurrencePresentation(tx, {
+                  messageID: presentation.messageID,
+                  timeDeleted,
+                }).pipe(Effect.orDie),
+              { discard: true },
+            )
+            yield* SessionProjector.removeSession(tx, sessionID)
+          }),
+        {
+          definition: SessionV1.Event.Deleted,
+          data: { sessionID, info: session },
+        },
+        { onCommitted: markCommitted, continueVisibilityOnInterrupt: true },
+      )
     })
 
-    const updateMessage = <T extends SessionV1.Info>(msg: T): Effect.Effect<T> =>
-      Effect.gen(function* () {
-        yield* events.publish(SessionV1.Event.MessageUpdated, { sessionID: msg.sessionID, info: msg })
-        return msg
-      }).pipe(Effect.withSpan("Session.updateMessage"))
+    const remove: Interface["remove"] = Effect.fn("Session.remove")((sessionID: SessionID) =>
+      runState.close(sessionID, (markCommitted) => removeUnlocked(sessionID, markCommitted)),
+    )
 
-    const updatePart = <T extends SessionV1.Part>(part: T): Effect.Effect<T> =>
-      Effect.gen(function* () {
-        yield* events.publish(SessionV1.Event.PartUpdated, {
-          sessionID: part.sessionID,
-          part: structuredClone(part),
-          time: Date.now(),
-        })
-        return part
-      }).pipe(Effect.withSpan("Session.updatePart"))
+    const updateMessageUnlocked = <T extends SessionV1.Info>(msg: T): Effect.Effect<T> =>
+      events
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            const row = yield* tx
+              .select()
+              .from(MessageTable)
+              .where(eq(MessageTable.id, msg.id))
+              .get()
+              .pipe(Effect.orDie)
+            if (row && row.session_id !== msg.sessionID) {
+              return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+            }
+            const presentation = yield* tx
+              .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+              .from(LearnerOccurrencePresentationTable)
+              .where(eq(LearnerOccurrencePresentationTable.message_id, msg.id))
+              .get()
+              .pipe(Effect.orDie)
+            if (presentation) {
+              yield* Occurrence.assertPresentationUnchanged(tx, {
+                sessionID: msg.sessionID,
+                messageID: msg.id,
+              }).pipe(Effect.orDie)
+              if (row && exactStored(row, msg)) return { result: msg }
+              return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+            }
+            return {
+              result: msg,
+              event: {
+                definition: SessionV1.Event.MessageUpdated,
+                data: { sessionID: msg.sessionID, info: msg },
+              },
+            }
+          }),
+        )
+        .pipe(
+          Effect.map((result) => result.result),
+          Effect.withSpan("Session.updateMessage"),
+        )
+
+    const updateMessage: Interface["updateMessage"] = (msg) =>
+      runState.shared(msg.sessionID, updateMessageUnlocked(msg)).pipe(Effect.orDie)
+
+    const updatePartUnlocked = <T extends SessionV1.Part>(part: T): Effect.Effect<T> =>
+      events
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            const row = yield* tx.select().from(PartTable).where(eq(PartTable.id, part.id)).get().pipe(Effect.orDie)
+            if (row && (row.session_id !== part.sessionID || row.message_id !== part.messageID)) {
+              return yield* Effect.die(new SettledPartImmutableError({ partID: part.id }))
+            }
+            const exact = row ? exactStored(row, part) : false
+            const invocation = yield* lookupPhysicalInvocationByPart(tx, part.id)
+            if (invocation) {
+              if (exact) return { result: part }
+              return yield* Effect.die(new SettledPartImmutableError({ partID: part.id }))
+            }
+            const presentation = yield* tx
+              .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+              .from(LearnerOccurrencePresentationTable)
+              .where(eq(LearnerOccurrencePresentationTable.message_id, part.messageID))
+              .get()
+              .pipe(Effect.orDie)
+            if (presentation) {
+              yield* Occurrence.assertPresentationUnchanged(tx, {
+                sessionID: part.sessionID,
+                messageID: part.messageID,
+              }).pipe(Effect.orDie)
+              if (exact) return { result: part }
+              return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+            }
+            const historical = yield* tx
+              .select({ partID: HistoricalLearningToolPresentationTable.part_id })
+              .from(HistoricalLearningToolPresentationTable)
+              .where(eq(HistoricalLearningToolPresentationTable.part_id, part.id))
+              .get()
+              .pipe(Effect.orDie)
+            if (historical) {
+              if (exact) return { result: part }
+              return yield* Effect.die(new HistoricalPresentationConflictError({ partID: part.id }))
+            }
+            return {
+              result: part,
+              event: {
+                definition: SessionV1.Event.PartUpdated,
+                data: { sessionID: part.sessionID, part: structuredClone(part), time: Date.now() },
+              },
+            }
+          }),
+        )
+        .pipe(
+          Effect.map((result) => result.result),
+          Effect.withSpan("Session.updatePart"),
+        )
+
+    const updatePart: Interface["updatePart"] = (part) =>
+      runState.shared(part.sessionID, updatePartUnlocked(part)).pipe(Effect.orDie)
+
+    const updateMessageWithPartsUnlocked = Effect.fn("Session.updateMessageWithPartsUnlocked")(function* (
+      input: Parameters<Interface["updateMessageWithParts"]>[0],
+    ) {
+      if (input.admission && input.occurrenceSource) {
+        return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_occurrence" }))
+      }
+      if (input.parts.some((part) => part.sessionID !== input.info.sessionID || part.messageID !== input.info.id)) {
+        return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+      }
+      const time = Date.now()
+      const committed = yield* events.transaction<SessionV1.WithParts, EventV2.Definition>((tx) =>
+        Effect.gen(function* () {
+          const storedMessage = yield* tx
+            .select()
+            .from(MessageTable)
+            .where(eq(MessageTable.id, input.info.id))
+            .get()
+            .pipe(Effect.orDie)
+          if (storedMessage && !exactStored(storedMessage, input.info)) {
+            return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+          }
+          const storedParts = yield* Effect.forEach(input.parts, (part) =>
+            tx.select().from(PartTable).where(eq(PartTable.id, part.id)).get().pipe(Effect.orDie),
+          )
+          const invocations = yield* Effect.forEach(input.parts, (part) => lookupPhysicalInvocationByPart(tx, part.id))
+          if (invocations.some((invocation, index) => invocation && !storedParts[index])) {
+            return yield* Effect.die(new SettledPartImmutableError({ partID: input.parts[0]?.id ?? "unknown" }))
+          }
+          if (storedParts.some((part, index) => part && !exactStored(part, input.parts[index]))) {
+            return yield* Effect.die(new SettledPartImmutableError({ partID: input.parts[0]?.id ?? "unknown" }))
+          }
+
+          const recordProvenance = () =>
+            Effect.gen(function* () {
+              if (input.admission) {
+                yield* Occurrence.admit(tx, {
+                  admission: LearnerAdmission.interactive(),
+                  sessionID: input.info.sessionID,
+                  messageID: input.info.id,
+                  timeAdmitted: time,
+                }).pipe(Effect.orDie)
+              }
+              if (input.occurrenceSource) {
+                yield* Occurrence.copyPresentation(tx, {
+                  sourceMessageID: input.occurrenceSource.messageID,
+                  sessionID: input.info.sessionID,
+                  messageID: input.info.id,
+                  provenance: input.occurrenceSource.provenance,
+                }).pipe(
+                  Effect.catchTag("LearningCommand.InvalidCausalSourceError", (error) =>
+                    error.reason === "missing_presentation" && !input.occurrenceSource?.required
+                      ? Effect.void
+                      : Effect.fail(error),
+                  ),
+                  Effect.orDie,
+                )
+              }
+              yield* Effect.forEach(
+                input.historicalSources ?? [],
+                (source) =>
+                  Effect.gen(function* () {
+                    const [invocation, settlement, historical] = yield* Effect.all([
+                      lookupPhysicalInvocationByPart(tx, source.sourcePartID),
+                      exactSettlement(tx, source.sourcePartID),
+                      tx
+                        .select()
+                        .from(HistoricalLearningToolPresentationTable)
+                        .where(eq(HistoricalLearningToolPresentationTable.part_id, source.sourcePartID))
+                        .get()
+                        .pipe(Effect.orDie),
+                    ])
+                    if (invocation && historical) {
+                      return yield* new HistoricalPresentationConflictError({ partID: source.partID })
+                    }
+                    if (!settlement && !historical) return
+                    if (
+                      invocation &&
+                      (invocation.session_id !== source.sourceSessionID ||
+                        invocation.assistant_message_id !== source.sourceAssistantMessageID)
+                    ) {
+                      return yield* new HistoricalPresentationConflictError({ partID: source.partID })
+                    }
+                    if (
+                      historical &&
+                      (historical.session_id !== source.sourceSessionID ||
+                        historical.assistant_message_id !== source.sourceAssistantMessageID)
+                    ) {
+                      return yield* new HistoricalPresentationConflictError({ partID: source.partID })
+                    }
+                    yield* Occurrence.recordHistoricalToolPresentation(tx, {
+                      sessionID: input.info.sessionID,
+                      assistantMessageID: input.info.id,
+                      partID: source.partID,
+                      sourceSessionID: historical?.source_session_id ?? source.sourceSessionID,
+                      sourceAssistantMessageID:
+                        historical?.source_assistant_message_id ?? source.sourceAssistantMessageID,
+                      sourcePartID: historical?.source_part_id ?? source.sourcePartID,
+                      timeCreated: time,
+                    })
+                  }).pipe(Effect.orDie),
+                { discard: true },
+              )
+            })
+
+          const message = {
+            definition: SessionV1.Event.MessageUpdated,
+            data: { sessionID: input.info.sessionID, info: input.info },
+            ...(input.parts.length === 0 ? { options: { commit: () => recordProvenance() } } : {}),
+          }
+          const parts = input.parts.map((part, index) => ({
+            definition: SessionV1.Event.PartUpdated,
+            data: { sessionID: input.info.sessionID, part: structuredClone(part), time },
+            ...(index === input.parts.length - 1 ? { options: { commit: () => recordProvenance() } } : {}),
+          }))
+          return { result: { info: input.info, parts: [...input.parts] }, events: [message, ...parts] }
+        }),
+      )
+      return committed.result
+    })
+
+    const updateMessageWithParts: Interface["updateMessageWithParts"] = (input) =>
+      runState.shared(input.info.sessionID, updateMessageWithPartsUnlocked(input)).pipe(Effect.orDie)
 
     const getPart: Interface["getPart"] = Effect.fn("Session.getPart")(function* (input) {
       const row = yield* db
@@ -690,10 +966,22 @@ const layer: Layer.Layer<
       })
     })
 
-    const fork = Effect.fn("Session.fork")(function* (input: { sessionID: SessionID; messageID?: MessageID }) {
+    const forkUnlocked = Effect.fn("Session.forkUnlocked")(function* (input: {
+      sessionID: SessionID
+      messageID?: MessageID
+    }) {
       const ctx = yield* InstanceState.context
       const original = yield* get(input.sessionID)
       const title = getForkedTitle(original.title)
+      const msgs = yield* messages({ sessionID: input.sessionID })
+      const linked = new Set(
+        (yield* db
+          .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+          .from(LearnerOccurrencePresentationTable)
+          .where(eq(LearnerOccurrencePresentationTable.session_id, input.sessionID))
+          .all()
+          .pipe(Effect.orDie)).map((presentation) => presentation.messageID),
+      )
       const session = yield* createNext({
         directory: ctx.directory,
         path: sessionPath(ctx.worktree, ctx.directory),
@@ -701,37 +989,66 @@ const layer: Layer.Layer<
         title,
         metadata: structuredClone(original.metadata),
       })
-      const msgs = yield* messages({ sessionID: input.sessionID })
       const idMap = new Map<string, MessageID>()
 
-      for (const msg of msgs) {
-        if (input.messageID && msg.info.id >= input.messageID) break
-        const newID = MessageID.ascending()
-        idMap.set(msg.info.id, newID)
+      return yield* Effect.gen(function* () {
+        for (const msg of msgs) {
+          if (input.messageID && msg.info.id >= input.messageID) break
+          const newID = MessageID.ascending()
+          idMap.set(msg.info.id, newID)
 
-        const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
-        const cloned = yield* updateMessage({
-          ...msg.info,
-          sessionID: session.id,
-          id: newID,
-          ...(parentID && { parentID }),
-        })
-
-        for (const part of msg.parts) {
-          const p: SessionV1.Part = {
-            ...part,
-            id: PartID.ascending(),
-            messageID: cloned.id,
+          const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
+          const clonedInfo: SessionV1.Info = {
+            ...msg.info,
             sessionID: session.id,
+            id: newID,
+            ...(parentID && { parentID }),
           }
-          if (p.type === "compaction" && p.tail_start_id) {
-            p.tail_start_id = idMap.get(p.tail_start_id)
-          }
-          yield* updatePart(p)
+          const clonedParts = msg.parts.map((part) => {
+            const p: SessionV1.Part = {
+              ...part,
+              id: PartID.ascending(),
+              messageID: clonedInfo.id,
+              sessionID: session.id,
+            }
+            if (p.type === "compaction" && p.tail_start_id) {
+              p.tail_start_id = idMap.get(p.tail_start_id)
+            }
+            return p
+          })
+          yield* updateMessageWithParts({
+            info: clonedInfo,
+            parts: clonedParts,
+            ...(msg.info.role === "user" && linked.has(msg.info.id)
+              ? {
+                  occurrenceSource: {
+                    messageID: msg.info.id,
+                    provenance: "fork_clone" as const,
+                    required: true,
+                  },
+                }
+              : {}),
+            historicalSources: msg.parts.flatMap((part, index) => {
+              const clonedPart = clonedParts[index]
+              if (part.type !== "tool" || !clonedPart) return []
+              return [
+                {
+                  partID: clonedPart.id,
+                  sourceSessionID: input.sessionID,
+                  sourceAssistantMessageID: msg.info.id,
+                  sourcePartID: part.id,
+                },
+              ]
+            }),
+          })
         }
-      }
-      return session
+        return session
+      }).pipe(Effect.onError(() => remove(session.id).pipe(Effect.ignore)))
     })
+
+    const fork: Interface["fork"] = Effect.fn("Session.fork")((input) =>
+      runState.idle(input.sessionID, forkUnlocked(input)),
+    )
 
     const patchUnlocked = (sessionID: SessionID, info: Patch) =>
       Effect.gen(function* () {
@@ -748,33 +1065,37 @@ const layer: Layer.Layer<
         yield* events.publish(SessionV1.Event.Updated, { sessionID, info: next })
       })
 
-    const patch = (sessionID: SessionID, info: Patch) => patchLocks.withLock(sessionID)(patchUnlocked(sessionID, info))
+    const patch = (sessionID: SessionID, info: Patch) =>
+      patchLocks.withLock(sessionID)(runState.shared(sessionID, patchUnlocked(sessionID, info).pipe(Effect.orDie)))
 
     const touch = Effect.fn("Session.touch")(function* (sessionID: SessionID) {
-      yield* patch(sessionID, { time: { updated: Date.now() } }).pipe(Effect.orDie)
+      yield* patch(sessionID, { time: { updated: Date.now() } })
     })
 
     const setTitle = Effect.fn("Session.setTitle")((input: { sessionID: SessionID; title: string }) =>
-      patch(input.sessionID, { title: input.title }).pipe(Effect.orDie),
+      patch(input.sessionID, { title: input.title }),
     )
 
     const setTitleIfDefault = Effect.fn("Session.setTitleIfDefault")((input: { sessionID: SessionID; title: string }) =>
       patchLocks.withLock(input.sessionID)(
-        Effect.gen(function* () {
-          const current = yield* get(input.sessionID).pipe(Effect.orDie)
-          if (!isDefaultTitle(current.title)) return false
-          yield* patchUnlocked(input.sessionID, { title: input.title }).pipe(Effect.orDie)
-          return true
-        }),
+        runState.shared(
+          input.sessionID,
+          Effect.gen(function* () {
+            const current = yield* get(input.sessionID).pipe(Effect.orDie)
+            if (!isDefaultTitle(current.title)) return false
+            yield* patchUnlocked(input.sessionID, { title: input.title }).pipe(Effect.orDie)
+            return true
+          }),
+        ),
       ),
     )
 
     const setArchived = Effect.fn("Session.setArchived")(function* (input: { sessionID: SessionID; time?: number }) {
-      yield* patch(input.sessionID, { time: { archived: input.time } }).pipe(Effect.orDie)
+      yield* patch(input.sessionID, { time: { archived: input.time } })
     })
 
     const setMetadata = Effect.fn("Session.setMetadata")(function* (input: typeof SetMetadataInput.Type) {
-      yield* patch(input.sessionID, { metadata: input.metadata, time: { updated: Date.now() } }).pipe(Effect.orDie)
+      yield* patch(input.sessionID, { metadata: input.metadata, time: { updated: Date.now() } })
     })
 
     const setAgentModel = Effect.fn("Session.setAgentModel")(function* (input: {
@@ -787,16 +1108,14 @@ const layer: Layer.Layer<
         agent: input.agent,
         model: input.model,
         time: { updated: input.time },
-      }).pipe(Effect.orDie)
+      })
     })
 
     const setPermission = Effect.fn("Session.setPermission")(function* (input: {
       sessionID: SessionID
       permission: PermissionV1.Ruleset
     }) {
-      yield* patch(input.sessionID, { permission: [...input.permission], time: { updated: Date.now() } }).pipe(
-        Effect.orDie,
-      )
+      yield* patch(input.sessionID, { permission: [...input.permission], time: { updated: Date.now() } })
     })
 
     const setRevert = Effect.fn("Session.setRevert")(function* (input: {
@@ -808,31 +1127,29 @@ const layer: Layer.Layer<
         summary: input.summary,
         time: { updated: Date.now() },
         revert: input.revert,
-      }).pipe(Effect.orDie)
+      })
     })
 
     const clearRevert = Effect.fn("Session.clearRevert")(function* (sessionID: SessionID) {
-      yield* patch(sessionID, { time: { updated: Date.now() }, revert: null }).pipe(Effect.orDie)
+      yield* patch(sessionID, { time: { updated: Date.now() }, revert: null })
     })
 
     const setSummary = Effect.fn("Session.setSummary")(function* (input: {
       sessionID: SessionID
       summary: Info["summary"]
     }) {
-      yield* patch(input.sessionID, { time: { updated: Date.now() }, summary: input.summary }).pipe(Effect.orDie)
+      yield* patch(input.sessionID, { time: { updated: Date.now() }, summary: input.summary })
     })
 
     const setShare = Effect.fn("Session.setShare")(function* (input: { sessionID: SessionID; share: Info["share"] }) {
-      yield* patch(input.sessionID, { share: input.share ?? null, time: { updated: Date.now() } }).pipe(Effect.orDie)
+      yield* patch(input.sessionID, { share: input.share ?? null, time: { updated: Date.now() } })
     })
 
     const setWorkspace = Effect.fn("Session.setWorkspace")(function* (input: {
       sessionID: SessionID
       workspaceID: Info["workspaceID"]
     }) {
-      yield* patch(input.sessionID, { workspaceID: input.workspaceID, time: { updated: Date.now() } }).pipe(
-        Effect.orDie,
-      )
+      yield* patch(input.sessionID, { workspaceID: input.workspaceID, time: { updated: Date.now() } })
     })
 
     const diff = Effect.fn("Session.diff")(function* (sessionID: SessionID) {
@@ -865,14 +1182,125 @@ const layer: Layer.Layer<
       return result.reverse()
     })
 
+    const removeTranscriptUnlocked = Effect.fn("Session.removeTranscriptUnlocked")(function* (
+      input: Parameters<Interface["removeTranscript"]>[0],
+    ) {
+      const current = input.clearRevert ? yield* get(input.sessionID).pipe(Effect.orDie) : undefined
+      const sessionUpdate = current
+        ? {
+            ...current,
+            revert: undefined,
+            time: {
+              ...current.time,
+              updated: input.clearRevert?.timeUpdated ?? current.time.updated,
+            },
+          }
+        : undefined
+      const messageIDs = input.messageIDs
+      const parts = input.parts
+      yield* events.transaction<void, EventV2.Definition>((tx) =>
+        Effect.gen(function* () {
+          const messages = yield* Effect.forEach(messageIDs, (messageID) =>
+            tx.select().from(MessageTable).where(eq(MessageTable.id, messageID)).get().pipe(Effect.orDie),
+          )
+          const selectedMessages = messages.filter((message) => message !== undefined)
+          if (selectedMessages.some((message) => message.session_id !== input.sessionID)) {
+            return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+          }
+          const selectedParts = yield* Effect.forEach(parts, (part) =>
+            tx.select().from(PartTable).where(eq(PartTable.id, part.partID)).get().pipe(Effect.orDie),
+          )
+          if (
+            selectedParts.some(
+              (part, index) =>
+                part && (part.session_id !== input.sessionID || part.message_id !== parts[index]?.messageID),
+            )
+          ) {
+            return yield* Effect.die(new SettledPartImmutableError({ partID: parts[0]?.partID ?? "unknown" }))
+          }
+
+          yield* Effect.forEach(
+            selectedMessages.filter((message) => message.data.role === "assistant"),
+            (message) => assertAssistantDeletable(tx, message.id).pipe(Effect.orDie),
+            { discard: true },
+          )
+          yield* Effect.forEach(
+            selectedParts.filter((part) => part !== undefined),
+            (part) => assertPartDeletable(tx, part.id).pipe(Effect.orDie),
+            { discard: true },
+          )
+          const partMessageIDs = [...new Set(selectedParts.flatMap((part) => (part ? [part.message_id] : [])))]
+          const linkedPartMessage = partMessageIDs.length
+            ? yield* tx
+                .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+                .from(LearnerOccurrencePresentationTable)
+                .where(inArray(LearnerOccurrencePresentationTable.message_id, partMessageIDs))
+                .get()
+                .pipe(Effect.orDie)
+            : undefined
+          if (linkedPartMessage) {
+            return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+          }
+
+          yield* Effect.forEach(
+            selectedMessages.filter((message) => message.data.role === "assistant"),
+            (message) => removeNoEffectInvocationsForAssistant(tx, message.id).pipe(Effect.orDie),
+            { discard: true },
+          )
+          yield* Effect.forEach(
+            selectedMessages,
+            (message) =>
+              removeOccurrencePresentation(tx, { messageID: message.id, timeDeleted: Date.now() }).pipe(Effect.orDie),
+            { discard: true },
+          )
+
+          const removed = new Set(selectedMessages.map((message) => message.id))
+          const existingParts = new Set(selectedParts.flatMap((part) => (part ? [part.id] : [])))
+          const prepared = [
+            ...messageIDs
+              .filter((messageID) => removed.has(messageID))
+              .map((messageID) => ({
+                definition: SessionV1.Event.MessageRemoved,
+                data: { sessionID: input.sessionID, messageID },
+              })),
+            ...parts
+              .filter((part) => existingParts.has(part.partID))
+              .map((part) => ({
+                definition: SessionV1.Event.PartRemoved,
+                data: { sessionID: input.sessionID, messageID: part.messageID, partID: part.partID },
+              })),
+            ...(sessionUpdate
+              ? [
+                  {
+                    definition: SessionV1.Event.Updated,
+                    data: { sessionID: input.sessionID, info: sessionUpdate },
+                  },
+                ]
+              : []),
+          ]
+          return { result: undefined, events: prepared }
+        }),
+      )
+    })
+
+    const removeTranscript: Interface["removeTranscript"] = Effect.fn("Session.removeTranscript")(function* (input) {
+      yield* runState.idle(
+        input.sessionID,
+        Effect.gen(function* () {
+          const messageIDs = [...new Set(input.messageIDs)]
+          const removedMessages = new Set(messageIDs)
+          const parts = input.parts.filter((part) => !removedMessages.has(part.messageID))
+          const mutation = removeTranscriptUnlocked({ ...input, messageIDs, parts })
+          yield* input.clearRevert ? patchLocks.withLock(input.sessionID)(mutation) : mutation
+        }),
+      )
+    })
+
     const removeMessage = Effect.fn("Session.removeMessage")(function* (input: {
       sessionID: SessionID
       messageID: MessageID
     }) {
-      yield* events.publish(SessionV1.Event.MessageRemoved, {
-        sessionID: input.sessionID,
-        messageID: input.messageID,
-      })
+      yield* removeTranscript({ sessionID: input.sessionID, messageIDs: [input.messageID], parts: [] })
       return input.messageID
     })
 
@@ -881,10 +1309,10 @@ const layer: Layer.Layer<
       messageID: MessageID
       partID: PartID
     }) {
-      yield* events.publish(SessionV1.Event.PartRemoved, {
+      yield* removeTranscript({
         sessionID: input.sessionID,
-        messageID: input.messageID,
-        partID: input.partID,
+        messageIDs: [],
+        parts: [{ messageID: input.messageID, partID: input.partID }],
       })
       return input.partID
     })
@@ -896,6 +1324,29 @@ const layer: Layer.Layer<
       field: string
       delta: string
     }) {
+      yield* events.transaction((tx) =>
+        Effect.gen(function* () {
+          const protectedPart = yield* Effect.all([
+            lookupPhysicalInvocationByPart(tx, input.partID).pipe(Effect.map(Boolean)),
+            tx
+              .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+              .from(LearnerOccurrencePresentationTable)
+              .where(eq(LearnerOccurrencePresentationTable.message_id, input.messageID))
+              .get()
+              .pipe(Effect.orDie, Effect.map(Boolean)),
+            tx
+              .select({ partID: HistoricalLearningToolPresentationTable.part_id })
+              .from(HistoricalLearningToolPresentationTable)
+              .where(eq(HistoricalLearningToolPresentationTable.part_id, input.partID))
+              .get()
+              .pipe(Effect.orDie, Effect.map(Boolean)),
+          ])
+          if (protectedPart.some(Boolean)) {
+            return yield* Effect.die(new SettledPartImmutableError({ partID: input.partID }))
+          }
+          return { result: undefined }
+        }),
+      )
       yield* events.publish(MessageV2.Event.PartDelta, input)
     })
 
@@ -943,7 +1394,9 @@ const layer: Layer.Layer<
       updateMessage,
       removeMessage,
       removePart,
+      removeTranscript,
       updatePart,
+      updateMessageWithParts,
       getPart,
       updatePartDelta,
       findMessage,
@@ -951,22 +1404,20 @@ const layer: Layer.Layer<
   }),
 )
 
-const cancelBackgroundJobs = Effect.fn("Session.cancelBackgroundJobs")(function* (
-  background: BackgroundJob.Interface,
-  sessionID: SessionID,
+function exactStored(
+  row: { readonly id: string; readonly session_id: string; readonly message_id?: string; readonly data: unknown },
+  value: unknown,
 ) {
-  const jobs = yield* background.list()
-  yield* Effect.forEach(
-    jobs.filter((job) => {
-      if (job.status !== "running") return false
-      if (job.id === sessionID) return true
-      if (job.metadata?.sessionId === sessionID) return true
-      return job.metadata?.parentSessionId === sessionID
-    }),
-    (job) => background.cancel(job.id),
-    { concurrency: "unbounded", discard: true },
-  )
-})
+  const data = typeof row.data === "object" && row.data !== null ? row.data : {}
+  const stored = row.message_id
+    ? { ...data, id: row.id, sessionID: row.session_id, messageID: row.message_id }
+    : { ...data, id: row.id, sessionID: row.session_id }
+  return isDeepStrictEqual(normalizeJson(stored), normalizeJson(value))
+}
+
+function normalizeJson(value: unknown) {
+  return JSON.parse(JSON.stringify(value)) as unknown
+}
 
 function listByProject(
   db: Database.Interface["db"],
@@ -1026,7 +1477,7 @@ function listByProject(
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node],
+  deps: [RuntimeFlags.node, Database.node, EventV2Bridge.node, SessionRunState.node],
 })
 
 export * as Session from "./session"

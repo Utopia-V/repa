@@ -1,6 +1,7 @@
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Database } from "@opencode-ai/core/database/database"
+import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { eq } from "drizzle-orm"
@@ -26,7 +27,7 @@ import { Image } from "../../src/image/image"
 import { Question } from "../../src/question"
 import { Todo } from "../../src/session/todo"
 import { Session } from "@/session/session"
-import { SessionMessageTable } from "@opencode-ai/core/session/sql"
+import { SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -50,7 +51,7 @@ import { Truncate } from "@/tool/truncate"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { Format } from "../../src/format"
-import { TestInstance } from "../fixture/fixture"
+import { TestInstance, tmpdirScoped } from "../fixture/fixture"
 import { awaitWithTimeout, pollWithTimeout, testEffect } from "../lib/effect"
 import { reply, TestLLMServer } from "../lib/llm-server"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -59,6 +60,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
 import { InstanceStore } from "@/project/instance-store"
 import { TestConsole } from "effect/testing"
+import { Occurrence } from "@opencode-ai/core/learning-command"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -390,6 +392,23 @@ const user = Effect.fn("test.user")(function* (sessionID: SessionID, text: strin
   return msg
 })
 
+const occurrencePresentation = Effect.fn("test.occurrencePresentation")(function* (
+  sessionID: SessionID,
+  messageID: MessageID,
+) {
+  const events = yield* EventV2Bridge.Service
+  const result = yield* events.transaction((tx) =>
+    Occurrence.resolvePresentation(tx, { sessionID, messageID }).pipe(
+      Effect.map((presentation) => ({ result: presentation })),
+      Effect.catchTag("LearningCommand.InvalidCausalSourceError", (error) =>
+        error.reason === "missing_presentation" ? Effect.succeed({ result: undefined }) : Effect.fail(error),
+      ),
+      Effect.orDie,
+    ),
+  )
+  return result.result
+})
+
 const seed = Effect.fn("test.seed")(function* (sessionID: SessionID, opts?: { finish?: string }) {
   const session = yield* Session.Service
   const msg = yield* user(sessionID, "hello")
@@ -443,6 +462,279 @@ const boot = Effect.fn("test.boot")(function* (input?: { title?: string }) {
   const chat = yield* sessions.create(input ?? { title: "Pinned" })
   return { prompt, run, sessions, chat }
 })
+
+noLLMServer.instance(
+  "public learner prompts admit distinct occurrences before any provider sample",
+  () =>
+    Effect.gen(function* () {
+      const { prompt, chat } = yield* boot()
+      const first = yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "repa",
+        noReply: true,
+        parts: [{ type: "text", text: "accept this course view" }],
+      })
+      const second = yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "repa",
+        noReply: true,
+        parts: [{ type: "text", text: "accept this course view" }],
+      })
+
+      const firstPresentation = yield* occurrencePresentation(chat.id, first.info.id)
+      const secondPresentation = yield* occurrencePresentation(chat.id, second.info.id)
+      expect(firstPresentation?.provenance).toBe("origin")
+      expect(secondPresentation?.provenance).toBe("origin")
+      expect(secondPresentation?.occurrenceID).not.toBe(firstPresentation?.occurrenceID)
+    }),
+  { config: cfg },
+)
+
+noLLMServer.instance(
+  "hands revert cleanup directly into prompt admission",
+  () =>
+    Effect.gen(function* () {
+      const { prompt, sessions, chat } = yield* boot()
+      const reverted = yield* user(chat.id, "remove this reverted tail")
+      yield* sessions.setRevert({
+        sessionID: chat.id,
+        revert: { messageID: reverted.id },
+        summary: { additions: 0, deletions: 0, files: 0 },
+      })
+
+      const admitted = yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "repa",
+        noReply: true,
+        parts: [{ type: "text", text: "continue after cleanup" }],
+      })
+      const messages = yield* sessions.messages({ sessionID: chat.id })
+
+      expect((yield* sessions.get(chat.id)).revert).toBeUndefined()
+      expect(messages.some((message) => message.info.id === reverted.id)).toBe(false)
+      expect(messages.some((message) => message.info.id === admitted.info.id)).toBe(true)
+    }),
+  { config: cfg },
+)
+
+noLLMServer.instance(
+  "whole Session deletion waits for admitted no-reply persistence",
+  () =>
+    Effect.gen(function* () {
+      const { prompt, run, sessions, chat } = yield* boot()
+      const admitted = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      const originalTouch = sessions.touch
+      const mutableSessions = sessions as { touch: typeof sessions.touch }
+
+      mutableSessions.touch = (sessionID) =>
+        sessionID === chat.id
+          ? Deferred.succeed(admitted, undefined).pipe(
+              Effect.andThen(Deferred.await(release)),
+              Effect.andThen(originalTouch(sessionID)),
+            )
+          : originalTouch(sessionID)
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          mutableSessions.touch = originalTouch
+        }),
+      )
+
+      const promptFiber = yield* prompt
+        .prompt({
+          sessionID: chat.id,
+          agent: "repa",
+          noReply: true,
+          parts: [{ type: "text", text: "admit before deletion" }],
+        })
+        .pipe(Effect.forkChild)
+      yield* awaitWithTimeout(Deferred.await(admitted), "prompt did not reach the post-admission handoff")
+
+      const deleteFiber = yield* sessions.remove(chat.id).pipe(Effect.forkChild)
+      yield* pollWithTimeout(
+        run.phase(chat.id).pipe(Effect.map((phase) => (phase === "closing" ? true : undefined))),
+        "Session deletion did not enter closing",
+      )
+      const latePromptRejected = yield* prompt
+        .prompt({
+          sessionID: chat.id,
+          agent: "repa",
+          noReply: true,
+          parts: [{ type: "text", text: "must not enter after close starts" }],
+        })
+        .pipe(
+          Effect.as(false),
+          Effect.catchTag("SessionBusyError", () => Effect.succeed(true)),
+        )
+      const deletedBeforeHandoff = yield* Effect.race(
+        Fiber.await(deleteFiber).pipe(Effect.as(true)),
+        Effect.sleep("150 millis").pipe(Effect.as(false)),
+      )
+
+      yield* Deferred.succeed(release, undefined)
+      const promptExit = yield* Fiber.await(promptFiber)
+      const deleteExit = yield* Fiber.await(deleteFiber)
+      mutableSessions.touch = originalTouch
+
+      expect(latePromptRejected).toBe(true)
+      expect(deletedBeforeHandoff).toBe(false)
+      expect(Exit.isSuccess(promptExit)).toBe(true)
+      expect(Exit.isSuccess(deleteExit)).toBe(true)
+      expect(Exit.isFailure(yield* sessions.get(chat.id).pipe(Effect.exit))).toBe(true)
+    }),
+  { config: cfg },
+)
+
+raceNoLLMServer.instance(
+  "cancels an admitted blocking runner registered after Session closing begins",
+  () =>
+    Effect.gen(function* () {
+      processorCreateStarted.length = 0
+      const prompt = yield* SessionPrompt.Service
+      const run = yield* SessionRunState.Service
+      const sessions = yield* Session.Service
+      const status = yield* SessionStatus.Service
+      const events = yield* EventV2Bridge.Service
+      const database = yield* Database.Service
+      const chat = yield* sessions.create({ title: "Pinned" })
+      const admitted = yield* Deferred.make<void>()
+      const releaseAdmission = yield* Deferred.make<void>()
+      const firstCancelCompleted = yield* Deferred.make<void>()
+      const originalTouch = sessions.touch
+      const mutableSessions = sessions as { touch: typeof sessions.touch }
+      const originalStatusSet = status.set
+      const mutableStatus = status as { set: typeof status.set }
+      let deleted = false
+      let latePublish = false
+
+      mutableSessions.touch = (sessionID) =>
+        sessionID === chat.id
+          ? Deferred.succeed(admitted, undefined).pipe(
+              Effect.andThen(Deferred.await(releaseAdmission)),
+              Effect.andThen(originalTouch(sessionID)),
+            )
+          : originalTouch(sessionID)
+      mutableStatus.set = (sessionID, value) =>
+        originalStatusSet(sessionID, value).pipe(
+          Effect.tap(() =>
+            sessionID === chat.id && value.type === "idle"
+              ? Deferred.succeed(firstCancelCompleted, undefined).pipe(Effect.asVoid)
+              : Effect.void,
+          ),
+        )
+      const unsubscribe = yield* events.listen((event) => {
+        const data = event.data as { sessionID?: SessionID }
+        if (data.sessionID !== chat.id) return Effect.void
+        if (event.type === Session.Event.Deleted.type) {
+          deleted = true
+          return Effect.void
+        }
+        if (deleted) latePublish = true
+        return Effect.void
+      })
+      yield* Effect.addFinalizer(() =>
+        Deferred.succeed(releaseAdmission, undefined).pipe(
+          Effect.andThen(prompt.cancel(chat.id).pipe(Effect.ignore)),
+          Effect.andThen(unsubscribe),
+          Effect.andThen(
+            Effect.sync(() => {
+              mutableSessions.touch = originalTouch
+              mutableStatus.set = originalStatusSet
+              processorCreateStarted.length = 0
+            }),
+          ),
+        ),
+      )
+
+      const promptFiber = yield* prompt
+        .prompt({
+          sessionID: chat.id,
+          agent: "repa",
+          model: ref,
+          parts: [{ type: "text", text: "admit before runner registration" }],
+        })
+        .pipe(Effect.forkChild)
+      yield* awaitWithTimeout(Deferred.await(admitted), "prompt did not pause after durable admission")
+      const deletion = yield* sessions.remove(chat.id).pipe(Effect.forkChild)
+      yield* pollWithTimeout(
+        run.phase(chat.id).pipe(Effect.map((phase) => (phase === "closing" ? true : undefined))),
+        "Session deletion did not enter closing",
+      )
+      yield* awaitWithTimeout(Deferred.await(firstCancelCompleted), "Session deletion did not finish its first cancel")
+
+      yield* Deferred.succeed(releaseAdmission, undefined)
+      const deleteExit = yield* awaitWithTimeout(
+        Fiber.await(deletion),
+        "Session deletion did not cancel the runner registered after its first cancel",
+      )
+      expect(Exit.isSuccess(yield* Fiber.await(promptFiber))).toBe(true)
+      expect(Exit.isSuccess(deleteExit)).toBe(true)
+      expect(yield* run.phase(chat.id)).toBe("closed")
+      expect(
+        yield* database.db.select().from(SessionTable).where(eq(SessionTable.id, chat.id)).get().pipe(Effect.orDie),
+      ).toBeUndefined()
+      expect(
+        yield* database.db
+          .select()
+          .from(EventTable)
+          .where(eq(EventTable.aggregate_id, chat.id))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+      expect(
+        yield* database.db
+          .select()
+          .from(EventSequenceTable)
+          .where(eq(EventSequenceTable.aggregate_id, chat.id))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+      yield* Effect.sleep("50 millis")
+      expect(latePublish).toBe(false)
+      mutableSessions.touch = originalTouch
+      mutableStatus.set = originalStatusSet
+    }),
+  { config: cfg },
+  30_000,
+)
+
+it.instance("Task child input remains internal and cannot mint a learner occurrence", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({
+      title: "Pinned",
+      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+    })
+    yield* llm.tool("task", {
+      description: "inspect the selection",
+      prompt: "check the current course selection",
+      subagent_type: "general",
+    })
+    yield* llm.text("child result")
+    yield* llm.text("parent result")
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "repa",
+      parts: [{ type: "text", text: "please inspect this" }],
+    })
+
+    const parentUser = (yield* sessions.messages({ sessionID: chat.id })).find(
+      (message) => message.info.role === "user",
+    )
+    const child = (yield* sessions.children(chat.id))[0]
+    const childUser = child
+      ? (yield* sessions.messages({ sessionID: child.id })).find((message) => message.info.role === "user")
+      : undefined
+    expect(parentUser).toBeDefined()
+    expect(childUser).toBeDefined()
+    if (!parentUser || !child || !childUser) return
+    expect(yield* occurrencePresentation(chat.id, parentUser.info.id)).toBeDefined()
+    expect(yield* occurrencePresentation(child.id, childUser.info.id)).toBeUndefined()
+  }),
+)
 
 // Loop semantics
 
@@ -1723,6 +2015,51 @@ noLLMServer.instance("assertNotBusy succeeds when idle", () =>
   }),
 )
 
+noLLMServer.instance("runner ownership is process-global across Instance directories", () =>
+  Effect.gen(function* () {
+    const run = yield* SessionRunState.Service
+    const sessions = yield* Session.Service
+    const store = yield* InstanceStore.Service
+    const chat = yield* sessions.create({})
+    const seeded = yield* seed(chat.id)
+    const result = { info: seeded.assistant, parts: [] } satisfies SessionV1.WithParts
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    const secondStarted = yield* Deferred.make<void>()
+    const otherDirectory = yield* tmpdirScoped()
+
+    const first = yield* run
+      .ensureRunning(
+        chat.id,
+        Effect.succeed(result),
+        Deferred.succeed(entered, undefined).pipe(Effect.andThen(Deferred.await(release)), Effect.as(result)),
+      )
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+
+    const second = yield* store
+      .provide(
+        { directory: otherDirectory },
+        run.ensureRunning(
+          chat.id,
+          Effect.succeed(result),
+          Deferred.succeed(secondStarted, undefined).pipe(Effect.as(result)),
+        ),
+      )
+      .pipe(Effect.forkChild)
+    const duplicateStarted = yield* Effect.race(
+      Deferred.await(secondStarted).pipe(Effect.as(true)),
+      Effect.sleep("200 millis").pipe(Effect.as(false)),
+    )
+
+    yield* Deferred.succeed(release, undefined)
+    expect(yield* Fiber.join(first)).toEqual(result)
+    expect(yield* Fiber.join(second)).toEqual(result)
+    expect(duplicateStarted).toBe(false)
+    expect(yield* Deferred.isDone(secondStarted)).toBe(false)
+  }),
+)
+
 // Shell semantics
 
 it.instance("shell rejects with BusyError when loop running", () =>
@@ -2691,5 +3028,61 @@ noLLMServer.instance(
         }
       }
     }),
+  30_000,
+)
+
+it.instance(
+  "keeps the final command publisher ordered before Session deletion",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig((url) => ({
+        ...providerCfg(url),
+        command: { probe: { template: "Answer briefly." } },
+      }))
+      const { prompt, run, sessions, chat } = yield* boot()
+      const events = yield* EventV2Bridge.Service
+      const publisherEntered = yield* Deferred.make<void>()
+      const releasePublisher = yield* Deferred.make<void>()
+      const order: string[] = []
+      yield* llm.text("done")
+      yield* Effect.addFinalizer(() => Deferred.succeed(releasePublisher, undefined).pipe(Effect.asVoid))
+      const unsubscribe = yield* events.listen((event) => {
+        const data = event.data as { sessionID?: SessionID }
+        if (data.sessionID !== chat.id) return Effect.void
+        if (event.type === Command.Event.Executed.type) {
+          return Deferred.succeed(publisherEntered, undefined).pipe(
+            Effect.andThen(Deferred.await(releasePublisher)),
+            Effect.andThen(Effect.sync(() => order.push("command"))),
+            Effect.asVoid,
+          )
+        }
+        if (event.type === Session.Event.Deleted.type) {
+          return Effect.sync(() => order.push("deleted")).pipe(Effect.asVoid)
+        }
+        return Effect.void
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      const command = yield* prompt
+        .command({ sessionID: chat.id, command: "probe", arguments: "" })
+        .pipe(Effect.exit, Effect.forkChild)
+      yield* Deferred.await(publisherEntered).pipe(Effect.timeout("10 seconds"))
+      const deletion = yield* sessions.remove(chat.id).pipe(Effect.exit, Effect.forkChild)
+      yield* Effect.gen(function* () {
+        while ((yield* run.phase(chat.id)) !== "closing") yield* Effect.sleep("1 millis")
+      }).pipe(Effect.timeout("2 seconds"))
+      expect(
+        yield* Effect.race(
+          Fiber.await(deletion).pipe(Effect.as(true)),
+          Effect.sleep("100 millis").pipe(Effect.as(false)),
+        ),
+      ).toBe(false)
+
+      yield* Deferred.succeed(releasePublisher, undefined)
+      expect(Exit.isSuccess(yield* Fiber.await(command))).toBe(true)
+      expect(Exit.isSuccess(yield* Fiber.await(deletion))).toBe(true)
+      expect(order).toEqual(["command", "deleted"])
+    }),
+  { git: true },
   30_000,
 )

@@ -16,6 +16,7 @@ import contextEpochAgentMigration from "@opencode-ai/core/database/migration/202
 import simplifyIntegrationCredentialsMigration from "@opencode-ai/core/database/migration/20260611192811_lush_chimera"
 import simplifySessionInputMigration from "@opencode-ai/core/database/migration/20260622202450_simplify_session_input"
 import courseViewAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260714191244_course_view_authority"
+import learningCommandSettlementMigration from "@opencode-ai/core/database/migration/repa/20260716045209_learning_command_settlement"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -50,6 +51,15 @@ const courseTables = [
   "course_view",
   "course",
 ] as const
+const learningCommandTables = [
+  "learning_command_receipt",
+  "learning_command_invocation",
+  "course_selection_acceptance_effect",
+  "learning_occurrence_tombstone",
+  "learning_occurrence_presentation",
+  "learning_historical_tool_presentation",
+  "learning_admitted_occurrence",
+] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
   return Effect.forEach(input, (migration) => db.transaction((tx) => migration.up(tx)), { discard: true })
@@ -62,6 +72,27 @@ function courseSchema(db: TestDatabase) {
       SELECT type, name, tbl_name AS tableName, sql AS definition
       FROM sqlite_master
       WHERE tbl_name LIKE 'course%' AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+        })),
+      ),
+    )
+}
+
+function learningCommandSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE (tbl_name LIKE 'learning%' OR tbl_name = 'course_selection_acceptance_effect')
+        AND name NOT LIKE 'sqlite_autoindex_%'
       ORDER BY type, name
     `,
     )
@@ -127,10 +158,11 @@ describe("DatabaseMigration", () => {
         expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
           { version: BASELINE_VERSION, id: BASELINE_ID },
           { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
+          { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
-        ).toHaveLength(11)
+        ).toHaveLength(12)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('event_aggregate_seq_idx', 'event_aggregate_type_seq_idx', 'session_input_session_pending_seq_idx', 'session_input_session_pending_delivery_seq_idx', 'session_input_session_admitted_seq_idx', 'session_input_session_promoted_seq_idx', 'session_message_session_idx', 'session_message_session_type_idx', 'session_message_session_seq_idx', 'session_message_session_type_seq_idx', 'session_message_session_time_created_id_idx') ORDER BY name`,
@@ -154,6 +186,9 @@ describe("DatabaseMigration", () => {
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db, { migrations: [] })
+        yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
         yield* Effect.forEach(courseTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -197,6 +232,37 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => courseViewAuthorityMigration.up(tx))
 
         expect(yield* courseSchema(db)).toEqual(fresh)
+      }),
+    )
+  })
+
+  test("builds the same Gate 8 schema from Gate 7 without fabricating legacy occurrence lineage", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* learningCommandSchema(db)
+
+        yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.run(
+          sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('gate7-project', '/learning', 1, 1, '[]')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES ('gate7-session', 'gate7-project', 'gate7', '/learning', 'Gate 7', 'test', 1, 1)`,
+        )
+        yield* db.run(
+          sql`INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES ('msg_gate7_legacy', 'gate7-session', 1, 1, '{"role":"user"}')`,
+        )
+        yield* db.transaction((tx) => learningCommandSettlementMigration.up(tx))
+
+        expect(yield* learningCommandSchema(db)).toEqual(fresh)
+        expect(yield* db.all(sql`SELECT * FROM learning_admitted_occurrence`)).toEqual([])
+        expect(yield* db.get(sql`SELECT id, data FROM message WHERE id = 'msg_gate7_legacy'`)).toEqual({
+          id: "msg_gate7_legacy",
+          data: '{"role":"user"}',
+        })
       }),
     )
   })
@@ -703,6 +769,7 @@ describe("DatabaseMigration", () => {
         expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
           { version: BASELINE_VERSION, id: BASELINE_ID },
           { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
+          { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
         ])
       }),
     )

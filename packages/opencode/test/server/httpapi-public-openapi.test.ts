@@ -355,15 +355,25 @@ describe("PublicApi OpenAPI v2 errors", () => {
     const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
 
     for (const route of [
+      ["delete", "/session/{sessionID}"],
+      ["patch", "/session/{sessionID}"],
+      ["post", "/session/{sessionID}/fork"],
+      ["post", "/session/{sessionID}/init"],
+      ["post", "/session/{sessionID}/summarize"],
+      ["post", "/session/{sessionID}/message"],
+      ["post", "/session/{sessionID}/command"],
       ["post", "/session/{sessionID}/shell"],
       ["post", "/session/{sessionID}/revert"],
       ["post", "/session/{sessionID}/unrevert"],
       ["delete", "/session/{sessionID}/message/{messageID}"],
+      ["delete", "/session/{sessionID}/message/{messageID}/part/{partID}"],
+      ["patch", "/session/{sessionID}/message/{messageID}/part/{partID}"],
     ] as const) {
       expect(componentName(responseRef(spec.paths[route[1]]?.[route[0]]?.responses?.["409"]) ?? "")).toBe(
         "SessionBusyError",
       )
     }
+    expect(spec.paths["/session/{sessionID}/prompt_async"]?.post?.responses?.["409"]).toBeUndefined()
   })
 
   test("documents permission and question not-found errors", () => {

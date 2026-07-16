@@ -9,11 +9,13 @@ import { CourseCursor } from "./course/cursor"
 import { CourseRevision } from "./course/revision"
 import {
   Authorship,
+  AcceptanceEffectExistsError,
   ConflictError,
   InactiveError,
   InvalidCursorError,
   InvalidTransitionError,
   NotFoundError,
+  createSelectionAcceptanceEffectID,
   createCourseID,
   createRevisionID,
   createViewID,
@@ -30,11 +32,13 @@ import {
   type RevisionID,
   type RevisionProposal,
   type RevisionWithdrawalReason,
+  type SelectionAcceptanceEffectID,
   type ViewID,
   type WithdrawalSelection,
 } from "./course/schema"
 import {
   CourseItemTable,
+  CourseSelectionAcceptanceEffectTable,
   CourseTable,
   CourseViewRevisionItemTable,
   CourseViewRevisionMappingGroupTable,
@@ -46,9 +50,11 @@ import {
   CourseViewTable,
   CourseWorkingSelectionTable,
 } from "./course/sql"
+import type { OccurrenceID } from "./learning-command/occurrence-schema"
 
 export {
   Authorship,
+  AcceptanceEffectExistsError,
   ConflictError,
   InactiveError,
   InvalidCursorError,
@@ -62,6 +68,7 @@ export {
   ItemID,
   MappingGroupID,
   CitationID,
+  SelectionAcceptanceEffectID,
 } from "./course/schema"
 export type {
   AuthorshipBasis,
@@ -76,7 +83,7 @@ export type {
 } from "./course/schema"
 
 type DatabaseShape = EffectDrizzleSqlite.EffectSQLiteDatabase
-type Transaction = Parameters<Parameters<DatabaseShape["transaction"]>[0]>[0]
+export type Transaction = Parameters<Parameters<DatabaseShape["transaction"]>[0]>[0]
 type Queryable = DatabaseShape | Transaction
 
 function snapshot<A, E, R>(database: DatabaseShape, read: (tx: Transaction) => Effect.Effect<A, E, R>) {
@@ -87,6 +94,37 @@ export type Selection = {
   readonly revisionID?: RevisionID
   readonly version: number
 }
+
+export type SelectionAcceptanceInput = {
+  readonly courseID: CourseID
+  readonly revisionID: RevisionID
+  readonly expectedCourseVersion: number
+  readonly expectedSelectionRevisionID?: RevisionID
+  readonly expectedSelectionVersion: number
+  readonly expectedViewVersion: number
+  readonly expectedRevisionVersion: number
+}
+
+export type SelectionAcceptanceEffect = {
+  readonly id: SelectionAcceptanceEffectID
+  readonly occurrenceID: OccurrenceID
+  readonly courseID: CourseID
+  readonly revisionID: RevisionID
+  readonly previousSelection: Selection
+  readonly committedSelection: Selection
+  readonly timeCommitted: number
+}
+
+export type SelectionAcceptanceResolution =
+  | { readonly type: "new" }
+  | {
+      readonly type: "already_applied"
+      readonly effect: SelectionAcceptanceEffect
+      readonly currentSelection: Selection
+      readonly currentSelectionTime: number
+      readonly relation: "active" | "superseded"
+    }
+  | { readonly type: "semantic_conflict"; readonly effect: SelectionAcceptanceEffect }
 
 export type CourseInfo = {
   readonly id: CourseID
@@ -735,6 +773,7 @@ const layer = Layer.effect(
               input.expectedSelectionRevisionID,
               input.expectedSelectionVersion,
               input.revisionID,
+              Date.now(),
             )
           }),
         )
@@ -937,6 +976,7 @@ const layer = Layer.effect(
               input.expectedSelectionRevisionID,
               input.expectedSelectionVersion,
               undefined,
+              Date.now(),
             )
             const updated = yield* tx
               .update(CourseTable)
@@ -1172,6 +1212,7 @@ const layer = Layer.effect(
                 time_created: CourseViewRevisionTable.time_created,
                 state_version: CourseViewRevisionStateTable.state_version,
                 withdrawal_reason: CourseViewRevisionStateTable.withdrawal_reason,
+                time_updated: CourseViewRevisionStateTable.time_updated,
               })
               .from(CourseViewRevisionTable)
               .innerJoin(
@@ -1480,6 +1521,7 @@ type RevisionRow = {
   readonly time_created: number
   readonly state_version: number
   readonly withdrawal_reason: RevisionWithdrawalReason | null
+  readonly time_updated: number
 }
 
 function requireCourse(source: Queryable, courseID: CourseID, expectedVersion?: number, active = false) {
@@ -1529,6 +1571,7 @@ function requireRevision(
         time_created: CourseViewRevisionTable.time_created,
         state_version: CourseViewRevisionStateTable.state_version,
         withdrawal_reason: CourseViewRevisionStateTable.withdrawal_reason,
+        time_updated: CourseViewRevisionStateTable.time_updated,
       })
       .from(CourseViewRevisionTable)
       .innerJoin(CourseViewRevisionStateTable, eq(CourseViewRevisionStateTable.revision_id, CourseViewRevisionTable.id))
@@ -1617,12 +1660,130 @@ function requireReadableRevision(
   })
 }
 
+export function resolveSelectionAcceptance(
+  tx: Transaction,
+  input: { readonly occurrenceID: OccurrenceID; readonly courseID: CourseID; readonly revisionID: RevisionID },
+): Effect.Effect<SelectionAcceptanceResolution, Error> {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select()
+      .from(CourseSelectionAcceptanceEffectTable)
+      .where(
+        and(
+          eq(CourseSelectionAcceptanceEffectTable.occurrence_id, input.occurrenceID),
+          eq(CourseSelectionAcceptanceEffectTable.course_id, input.courseID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!row) return { type: "new" as const }
+    const effect = selectionAcceptanceEffect(row)
+    if (row.accepted_revision_id !== input.revisionID) {
+      return { type: "semantic_conflict" as const, effect }
+    }
+    const current = yield* requireSelection(tx, input.courseID)
+    const currentSelection = selection(current)
+    return {
+      type: "already_applied" as const,
+      effect,
+      currentSelection,
+      currentSelectionTime: current.time_updated,
+      relation:
+        current.revision_id === row.accepted_revision_id && current.version === row.committed_selection_version
+          ? ("active" as const)
+          : ("superseded" as const),
+    }
+  })
+}
+
+export function applySelectionAcceptance(
+  tx: Transaction,
+  input: {
+    readonly occurrenceID: OccurrenceID
+    readonly command: SelectionAcceptanceInput
+    readonly trustedTime: number
+  },
+): Effect.Effect<SelectionAcceptanceEffect, Error> {
+  return Effect.gen(function* () {
+    const resolution = yield* resolveSelectionAcceptance(tx, {
+      occurrenceID: input.occurrenceID,
+      courseID: input.command.courseID,
+      revisionID: input.command.revisionID,
+    })
+    if (resolution.type !== "new") {
+      return yield* new AcceptanceEffectExistsError({ effectID: resolution.effect.id })
+    }
+
+    const course = yield* requireCourse(tx, input.command.courseID, input.command.expectedCourseVersion, true)
+    const previous = yield* requireSelection(
+      tx,
+      input.command.courseID,
+      input.command.expectedSelectionRevisionID,
+      input.command.expectedSelectionVersion,
+    )
+    if (previous.revision_id === input.command.revisionID) {
+      return yield* new InvalidTransitionError({ detail: "The target Revision is already the working selection" })
+    }
+    const revision = yield* requireEligibleTarget(
+      tx,
+      input.command.courseID,
+      input.command.revisionID,
+      input.command.expectedViewVersion,
+      input.command.expectedRevisionVersion,
+    )
+    const view = yield* requireView(tx, input.command.courseID, revision.view_id)
+    if (
+      input.trustedTime < 0 ||
+      input.trustedTime < course.time_updated ||
+      input.trustedTime < previous.time_updated ||
+      input.trustedTime < view.time_updated ||
+      input.trustedTime < revision.time_updated
+    ) {
+      return yield* new InvalidTransitionError({ detail: "Trusted settlement time precedes consumed Course state" })
+    }
+
+    const committed = yield* updateSelection(
+      tx,
+      input.command.courseID,
+      previous.revision_id ?? undefined,
+      previous.version,
+      revision.id,
+      input.trustedTime,
+    )
+    const effectID = createSelectionAcceptanceEffectID()
+    yield* tx
+      .insert(CourseSelectionAcceptanceEffectTable)
+      .values({
+        id: effectID,
+        occurrence_id: input.occurrenceID,
+        course_id: input.command.courseID,
+        accepted_revision_id: revision.id,
+        previous_revision_id: previous.revision_id,
+        previous_selection_version: previous.version,
+        committed_selection_version: committed.version,
+        time_committed: input.trustedTime,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    return {
+      id: effectID,
+      occurrenceID: input.occurrenceID,
+      courseID: input.command.courseID,
+      revisionID: revision.id,
+      previousSelection: selection(previous),
+      committedSelection: committed,
+      timeCommitted: input.trustedTime,
+    }
+  })
+}
+
 function updateSelection(
   tx: Transaction,
   courseID: CourseID,
   expectedRevisionID: RevisionID | undefined,
   expectedVersion: number,
   revisionID: RevisionID | undefined,
+  time: number,
 ) {
   return Effect.gen(function* () {
     const updated = yield* tx
@@ -1630,7 +1791,7 @@ function updateSelection(
       .set({
         revision_id: revisionID ?? null,
         version: sql`${CourseWorkingSelectionTable.version} + 1`,
-        time_updated: Date.now(),
+        time_updated: time,
       })
       .where(
         and(
@@ -1647,6 +1808,24 @@ function updateSelection(
     if (!updated) return yield* conflict("selection", courseID)
     return { revisionID: updated.revisionID ?? undefined, version: updated.version }
   })
+}
+
+function selection(row: SelectionRow): Selection {
+  return { revisionID: row.revision_id ?? undefined, version: row.version }
+}
+
+function selectionAcceptanceEffect(
+  row: typeof CourseSelectionAcceptanceEffectTable.$inferSelect,
+): SelectionAcceptanceEffect {
+  return {
+    id: row.id,
+    occurrenceID: row.occurrence_id,
+    courseID: row.course_id,
+    revisionID: row.accepted_revision_id,
+    previousSelection: { revisionID: row.previous_revision_id ?? undefined, version: row.previous_selection_version },
+    committedSelection: { revisionID: row.accepted_revision_id, version: row.committed_selection_version },
+    timeCommitted: row.time_committed,
+  }
 }
 
 function assertSelectionUnchanged(tx: Transaction, selection: SelectionRow) {
@@ -1702,6 +1881,7 @@ function applyWithdrawalSelection(
         input.selection.revision_id ?? undefined,
         input.selection.version,
         undefined,
+        Date.now(),
       )
     }
 
@@ -1721,6 +1901,7 @@ function applyWithdrawalSelection(
       input.selection.revision_id ?? undefined,
       input.selection.version,
       replacement.id,
+      Date.now(),
     )
   })
 }
