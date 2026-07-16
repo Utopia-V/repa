@@ -491,6 +491,7 @@ contract/theory and implementation/evidence layers of review run
 returned to that same reviewer and closed. The accepted contract/theory snapshot
 had SHA-256
 `ffff7b05196e6e167383aa937b525969d7a81e593de805aa5094fa50ddeb5be0`.
+Implementation provenance is fixed by commit `41db7c292`.
 
 - The review closed `G9-C01`–`G9-C08`: exact point and suffix correction,
   non-byte Observation correction, source availability versus exact-Revision
@@ -516,9 +517,9 @@ had SHA-256
   production Artifact lint, source ownership, and diff checks passed. The
   optional broad Core campaign remained explicitly non-green and was neither
   required nor promoted into Gate evidence.
-- Review acceptance did not authorize staging or a commit. No Gate 9 integration
-  commit exists yet, so `docs/README.md` keeps the Gate open pending that
-  separately governed provenance step.
+- The maintainer separately authorized integration after review acceptance.
+  Commit `41db7c292` fixes the accepted implementation provenance;
+  `docs/README.md` therefore closes Gate 9 without starting Gate 10.
 
 ## Historical evidence locators
 

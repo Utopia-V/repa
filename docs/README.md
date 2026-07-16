@@ -1,12 +1,8 @@
 # Repa documentation
 
-Status: Gates 0–8 are closed. Gate 8 learning-command settlement passed at
-implementation commit `293ff6892` after independent top-level reviews accepted
-both its contract/theory and implementation/evidence. Gate 9 source and artifact
-authority has now passed both review layers after the original reviewer closed
-all contract and implementation findings. Its accepted implementation candidate
-is present in the working tree, but no integration commit has been authorized;
-Gate 9 remains open pending that separately governed step.
+Status: Gates 0–9 are closed. Gate 9 source and artifact authority passed at
+implementation commit `41db7c292` after the original independent top-level
+reviewer accepted both its contract/theory and implementation/evidence.
 
 ## Active Gate map
 
@@ -21,7 +17,7 @@ Gate 9 remains open pending that separately governed step.
 | 6. Native database admission        | Owns Repa database admission, forward migration lineage, and the single state-owner boundary.                                                     | Closed again. Only a recovered zero-page acquisition state may initialize; arbitrary sidecars cannot promote a page-backed identityless database, and dangling final file symlinks refuse before SQLite open.                                                                                                      |
 | 7. Course and Course View authority | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal. | Closed. Its contract, schema, migration, implementation, focused evidence, and corrected Gate 6 runtime prerequisite are accepted.                                                                                                                                                                                 |
 | 8. Learning-command settlement      | Binds trusted causal and invocation identity to one real Course-owned command.                                                                    | Closed. Its [contract and implementation record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md), migration, settlement substrate, Session lifecycle integration, and focused evidence are independently accepted.                                                                       |
-| 9. [Source and artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md) | Gives logical sources stable identity, exact observed content revisions, location history, availability, and provenance without making them Course-owned. | Contract/theory and implementation/evidence accepted after the original reviewer closed `G9-C01`–`G9-C08`, `G9-E01`–`G9-E04`, and `G9-I01`–`G9-I03`. The working tree is ready for a separately authorized integration commit; Gate 9 remains open until that provenance is fixed. |
+| 9. [Source and artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md) | Gives logical sources stable identity, exact observed content revisions, location history, availability, and provenance without making them Course-owned. | Closed. Its contract, Core authority, schema, migration, exact correction/read behavior, and focused evidence are independently accepted at implementation commit `41db7c292`.                                                                 |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -109,7 +105,7 @@ legacy labs.
 - [Gate 6 native database-admission record](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
 - [Passed Gate 7 Course and Course View authority record](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md)
 - [Passed Gate 8 learning-command settlement record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md)
-- [Active Gate 9 source and artifact authority record](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md)
+- [Passed Gate 9 source and artifact authority record](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

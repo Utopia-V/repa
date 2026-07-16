@@ -1,10 +1,9 @@
 # OpenCode fork Gate 9: source and artifact authority
 
-Status: Contract/theory and implementation/evidence were accepted on 2026-07-16
-by original top-level reviewer task `019f6ae7-fff2-7800-9d7b-023cf918e201`
-under review run `gate9-contract-406beb29cd4e4ec4bb24725fb4d103f8`.
-The accepted implementation candidate remains uncommitted; Gate 9 stays open
-pending separately authorized integration, and current disposition remains
+Status: Passed at implementation commit `41db7c292`. Original top-level reviewer
+task `019f6ae7-fff2-7800-9d7b-023cf918e201` accepted contract/theory and
+implementation/evidence under review run
+`gate9-contract-406beb29cd4e4ec4bb24725fb4d103f8`. Current disposition remains
 owned by [the documentation index](../README.md).
 
 Date: 2026-07-16
@@ -964,6 +963,6 @@ The explicitly invoked `independent-review-loop` preserved that reviewer through
 the implementation/evidence closure pass. It independently closed `G9-I01`–
 `G9-I03` and `G9-E03`–`G9-E04`, then returned `Accept` with no new
 acceptance-changing finding. Both review layers are closed. The working tree is
-ready for a separately authorized integration commit; until that provenance is
-fixed, [the documentation index](../README.md) keeps Gate 9 open. A later
-material contract revision reopens contract/theory review.
+integrated at implementation commit `41db7c292`; this closes Gate 9 without
+authorizing or starting Gate 10. A later material contract revision reopens
+contract/theory review.
