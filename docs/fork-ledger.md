@@ -381,11 +381,11 @@ generic confidence claim:
   sites (`title`, `compaction`, and `project-copy-name`), one ordinary
   interactive processor call, no `summary` purpose, and no public composition
   selector.
-- A broader `session/llm.test.ts` probe is not recorded green: 24 tests passed,
-  including the new Gate 4 Copilot failure oracle, while four existing nested
-  runtime cases stopped on Gate 6 database ownership before their LLM
-  assertions. That result is preserved as a verification-boundary observation,
-  not hidden or promoted into Gate 4 evidence.
+- At implementation review, a broader `session/llm.test.ts` probe passed 24
+  tests while four custom nested-runtime cases stopped on Gate 6 database
+  ownership before their LLM assertions. That result was preserved as a
+  verification-boundary observation rather than promoted into Gate 4 evidence;
+  the post-close fixture correction below later resolved it.
 
 ## 2026-07-16 Gate 4 correction-close provenance
 
@@ -416,10 +416,32 @@ No new P0–P3 finding remained.
   accepted unchanged focused evidence covers Workflow and Copilot refusal,
   ACP/TUI carriers, compaction, composition authority, and affected package
   typechecks.
-- A broader `session/llm.test.ts` observation remains explicitly non-green: 24
-  tests passed and four existing nested-runtime cases stopped at the Gate 6
-  database-owner boundary before their LLM assertions. No unrelated monorepo
-  suite or live external-provider traffic was promoted into Gate 4 evidence.
+- At closing review, the broader `session/llm.test.ts` observation was still
+  explicitly non-green: 24 tests passed and four custom nested-runtime cases
+  stopped at the Gate 6 database-owner boundary before their LLM assertions.
+  It was not required for acceptance, and no unrelated monorepo suite or live
+  external-provider traffic was promoted into Gate 4 evidence. The following
+  test-only correction supersedes that evidence state without changing either
+  Gate contract.
+
+## 2026-07-16 post-close LLM test-fixture correction
+
+Current Gate disposition remains owned only by `docs/README.md`; neither Gate 4
+nor Gate 6 reopened. Four `drainWith` cases intentionally created a second LLM
+runtime but inherited the ordinary outer runtime's `REPA_DB`, so Gate 6
+correctly rejected their second physical owner before the intended LLM
+assertions.
+
+- The nested custom LLM layers now explicitly replace `Database.node` with
+  `Database.layerFromPath(":memory:")`, the process-private injection reserved
+  for tests. The ordinary outer test runtime still exercises the real file
+  database and Gate 6 ownership behavior.
+- The four formerly blocked AI SDK/native cases pass directly. The complete
+  `session/llm.test.ts` file passes 28 tests with 81 assertions; OpenCode
+  typecheck, formatting, and diff checks pass.
+- No `DatabaseBusyError` is caught or ignored, and no production database or
+  admission code changed. The correction makes the test topology truthful
+  rather than weakening the single-owner invariant.
 
 ## Historical evidence locators
 

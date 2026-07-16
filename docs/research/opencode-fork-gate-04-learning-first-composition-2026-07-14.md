@@ -473,11 +473,15 @@ neither samples again nor overwrites the learner title. Its second controlled
 barrier stops `touch` after it has built a default-title snapshot, proves the
 conditional writer cannot escape the common patch lock, then releases both and
 confirms the non-default title survives without a later title sample. A
-deterministic production-source audit confirms the closed carrier set. A broader
-`session/llm.test.ts` run passed 24 tests,
-including the new Gate 4 Copilot oracle, but four existing nested-runtime cases
-hit Gate 6 database ownership before their LLM assertions; the suite is not
-claimed green and that observation remains part of the reviewer handoff.
+deterministic production-source audit confirms the closed carrier set. At review
+time, a broader `session/llm.test.ts` run passed 24 tests while four custom
+nested-runtime cases competed with the outer fixture for its Gate 6-owned
+database and stopped before their LLM assertions; that run was not claimed
+green. A 2026-07-16 post-close test-only correction made those four nested
+runtimes use the explicit process-private `Database.layerFromPath(":memory:")`
+injection while the ordinary outer runtime retained the real file database. The
+complete file then passed 28 tests with 81 assertions. This corrected test
+ownership only and did not reopen Gate 4 or change Gate 6 runtime behavior.
 
 The retained reviewer re-read the whole Gate 4 horizon after the common Session
 patch repair, found no new P0–P3 issue, and accepted the implementation/evidence

@@ -27,6 +27,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
+import { Database } from "@opencode-ai/core/database/database"
 
 type ConfigModel = NonNullable<NonNullable<ConfigV1.Info["provider"]>[string]["models"]>[string]
 
@@ -77,6 +78,12 @@ const copilotReplayConfig = (model: ModelsDev.Provider["models"][string], baseUR
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([LLM.node, Provider.node])))
 
+// Gate 6 gives the ordinary test runtime one physical database owner. These
+// custom LLM layers intentionally build a second runtime, so they use the
+// explicit process-private database injection reserved for tests instead of
+// competing for the outer runtime's REPA_DB.
+const nestedRuntimeDatabase = Database.layerFromPath(":memory:").pipe(Layer.orDie)
+
 // LLM.stream returns a Stream, not an Effect, so we can't use the serviceUse proxy.
 const drain = (input: LLM.StreamInput) => LLM.Service.use((svc) => svc.stream(input).pipe(Stream.runDrain))
 
@@ -103,6 +110,7 @@ function llmLayerWithExecutor(
   } = {},
 ) {
   return AppNodeBuilder.build(LLM.node, [
+    [Database.node, nestedRuntimeDatabase],
     [RuntimeFlags.node, RuntimeFlags.layer(options.flags)],
     ...(options.executor ? ([[LayerNodePlatform.requestExecutor, options.executor]] as const) : []),
   ])
@@ -1231,6 +1239,7 @@ describe("session.llm.stream", () => {
 
         yield* drainWith(
           AppNodeBuilder.build(LLM.node, [
+            [Database.node, nestedRuntimeDatabase],
             [LayerNodePlatform.llmClient, failingNativeClient],
             [RuntimeFlags.node, RuntimeFlags.layer({ experimentalNativeLlm: false })],
           ]),
