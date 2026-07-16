@@ -30,6 +30,7 @@ implementation evidence while reopening one bounded completion claim.
 | 5. Inherited product-surface disposition | Recorded terminal-only close; later audit preserved valid disconnections but invalidated v2/provider/CORS completion                              | `25e51861effbddbdb04ae8fe88c4107d34ab91b2`                                              | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
 | 6. Native database admission             | Native Repa database identity and forward lineage; the concrete single-owner implementation claim was later audit-invalidated                     | `6c0b7aa5b`                                                                             | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`         |
 | 7. Course and Course View authority      | LearnerHome-owned Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal | `3bd6eb9d4`                                                                             | `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`             |
+| 8. Learning-command settlement           | Stable admitted occurrence, physical replay, causal receipt, exact Course acceptance settlement, and Session lifecycle closure                    | `293ff6892`                                                                             | `docs/research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md`       |
 
 Read a historical record with:
 
@@ -442,6 +443,44 @@ assertions.
 - No `DatabaseBusyError` is caught or ignored, and no production database or
   admission code changed. The correction makes the test topology truthful
   rather than weakening the single-owner invariant.
+
+## 2026-07-16 Gate 8 close provenance
+
+Current disposition remains owned only by `docs/README.md`. Original top-level
+reviewer task `019f68d9-5853-7e23-8592-dc41b90ac9bb` accepted both the
+contract/theory and implementation/evidence rounds after every requested change
+was returned to that same reviewer and closed. Implementation provenance is
+fixed by commit `293ff6892`.
+
+- The Core learning-command authority persists immutable admitted learner
+  occurrence lineage, physical invocation identity, Course-owned semantic
+  effect identity, exact results and receipts, source-unavailable tombstones,
+  replay/conflict order, and the first non-null Course View Revision acceptance
+  in one domain/result settlement.
+- The released-v1 runtime binds trusted model operation, Part/call identity,
+  canonical input, permission, time, and causal source before mutation. Its
+  common local-tool FIFO, two-transaction permission flow, durable recovery,
+  and post-commit reconciliation return one exact stored outcome without a
+  second runner or event system.
+- Session occurrence admission, transcript mutation, compaction, fork, revert,
+  provider completion, and deletion now share the lifecycle boundaries needed
+  to keep durable invocation and presentation truth consistent. Whole-Session
+  deletion closes before late publishers, while admitted Runner cleanup may
+  re-enter the same Session under a retained read lease and still drain to a
+  permanently closed phase.
+- Focused reviewer evidence exercised migration and fresh-schema equivalence,
+  Course CAS/ABA, Event commit/rollback/visibility, exact replay and conflict,
+  permission and crash recovery, processor interruption, HTTP and generated
+  protocol behavior, transcript mutation, compaction/fork/revert/deletion, and
+  deterministic lifecycle races. Core and OpenCode typechecks, the migration
+  generator, formatting, link, and diff checks passed. The final reopened
+  lifecycle boundary passed 31 Lifecycle/Runner tests with 90 assertions plus
+  the real prompt interleaving with seven assertions.
+- Windows-only real shell execution remained platform-skipped and was not
+  reported as green. Both shell and ordinary runner entry use the same handoff,
+  while direct Runner shell cancellation/Stopping evidence and the real Runner
+  cleanup oracle covered the relevant invariant. No unrelated monorepo-wide
+  suite or later Gate work was required for acceptance.
 
 ## Historical evidence locators
 

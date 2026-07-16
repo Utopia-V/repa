@@ -1,9 +1,8 @@
 # OpenCode fork Gate 8: learning-command settlement
 
-Status: Accepted for implementation. A fresh independent top-level
-contract/theory review closed with `Accept` on 2026-07-16 after all findings
-were resolved. This contract is implementation authority for Gate 8, not a
-claim that its implementation or evidence is complete.
+Status: Passed at implementation commit `293ff6892`. Fresh independent
+top-level contract/theory and implementation/evidence reviews both closed with
+`Accept` on 2026-07-16 after all findings were resolved.
 
 Date: 2026-07-16
 
@@ -20,10 +19,10 @@ Decisions: [ADR-0005](../decisions/0005-durable-turn-and-interaction-hierarchy.m
 [ADR-0012](../decisions/0012-learning-centered-modular-monolith.md), and
 [ADR-0014](../decisions/0014-one-time-opencode-fork.md)
 
-This record is the accepted Gate 8 engineering contract. It establishes the
-narrow shared settlement substrate required by later model-issued learning
-commands and proves it with one real Course-owned transition. Its acceptance
-authorizes implementation only within this boundary.
+This record is the accepted Gate 8 engineering contract and closing
+implementation record. It establishes the narrow shared settlement substrate
+required by later model-issued learning commands and proves it with one real
+Course-owned transition.
 
 ## Why this Gate exists
 
@@ -725,7 +724,55 @@ inserted:
 The evidence does not require a monorepo-wide suite, an unrelated provider
 campaign, a full learner-facing Course UI, or later learning-authority tests.
 
-## Review closure and implementation stop rule
+## Implementation result
+
+Implementation commit `293ff6892` realizes this contract across the existing
+Core, Event, released-v1 Session, permission, tool, and public protocol owners:
+
+- `packages/core/src/learning-command` owns immutable admitted learner
+  occurrence lineage, physical invocation and semantic-effect identity,
+  receipts, exact settlement, replay/conflict order, source-unavailable
+  tombstones, and the Course-owned acceptance transaction;
+- the Gate 8 migration and generated schema add the corresponding constrained
+  record families while preserving Gate 7 upgrade and fresh-schema equivalence;
+- the existing Event transaction authority now commits settlement-linked Part
+  and Event visibility without allowing a post-commit observer failure to
+  rewrite the caller-visible committed result;
+- `packages/opencode/src/learning-command` and
+  `accept-course-view-revision.ts` bind the trusted released-v1 invocation
+  envelope, permission state machine, single-flight reconciliation, exact tool
+  input, and model-visible result to the Core settlement;
+- the common local-tool binding fixes FIFO registration before asynchronous
+  hooks, while Session lifecycle, transcript mutation, compaction, fork,
+  revert, and deletion paths preserve occurrence, invocation, historical
+  presentation, and immutable terminal-Part truth; and
+- both ordinary runner entry and shell entry use the same Session lifecycle
+  handoff. Registration and cancellation run outside its non-reentrant control
+  section while a read lease prevents whole-Session deletion from committing
+  before admitted cleanup completes.
+
+The original independent reviewer task
+`019f68d9-5853-7e23-8592-dc41b90ac9bb` accepted the implementation/evidence
+after iterative counterexamples closed runtime-before-presentation replay,
+admitted-Part immutability, Session deletion and fork races, post-commit result
+reconciliation, public Busy/NotFound behavior, and the final late-runner cleanup
+deadlock. Its final direct replay observed the interrupt cleanup re-enter the
+same Session, the admitted call return `interrupted`, deletion return `deleted`,
+and lifecycle phase become `closed`.
+
+Focused closure evidence covered Core settlement and migration behavior; exact
+Course CAS/ABA; Event commit, rollback, and visibility; runtime replay,
+permission, hooks, processor interruption, and recovery; HTTP and generated
+protocol behavior; Session mutation, compaction, fork, revert, and deletion;
+and deterministic lifecycle races. The final reopened lifecycle boundary passed
+31 Lifecycle/Runner tests with 90 assertions plus the real prompt interleaving
+with seven assertions. Core and OpenCode typechecks, the migration generator,
+formatting, link, and diff checks passed. Windows-only real shell execution
+remained platform-skipped; the shared handoff seam and direct Runner shell
+cancel/Stopping evidence closed the relevant invariant without promoting that
+skip into a green result. No unrelated monorepo-wide suite was required.
+
+## Review closure
 
 Before any production implementation, a fresh top-level reviewer must inspect
 this contract against the product origin, ADRs 0005–0009/0012/0014, Roadmap 09,
@@ -751,9 +798,11 @@ The review should try to falsify at least these claims:
   path without importing learning deep deletion.
 
 Same-context author preflight and child investigations do not satisfy this
-transition. The original top-level reviewer closed every finding and returned
-`Accept` on 2026-07-16; `docs/README.md` records the corresponding active-state
-transition. A later material contract revision reopens this review obligation.
+transition. The original top-level reviewer closed every contract/theory
+finding and returned `Accept` on 2026-07-16, then closed every
+implementation/evidence finding and returned final `Accept` after the
+implementation was corrected. `docs/README.md` records the resulting Gate
+closure. A later material contract revision reopens this review obligation.
 
 ## Design evidence provenance
 

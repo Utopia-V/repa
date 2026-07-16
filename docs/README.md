@@ -1,8 +1,8 @@
 # Repa documentation
 
-Status: Gates 0–7 are closed. Gate 8's local design and independent top-level
-contract/theory review are accepted. Implementation is authorized and active;
-Gate 8 remains open until its implementation and focused evidence are accepted.
+Status: Gates 0–8 are closed. Gate 8 learning-command settlement passed at
+implementation commit `293ff6892` after independent top-level reviews accepted
+both its contract/theory and implementation/evidence. Gate 9 has not begun.
 
 ## Active Gate map
 
@@ -16,7 +16,7 @@ Gate 8 remains open until its implementation and focused evidence are accepted.
 | 5. Local product surface            | Makes the current terminal product truthful while retaining useful local capabilities and harmless hibernated source.                             | Closed again. Public preview-v2 execution and its runners are absent from production while their implementation remains hibernated; registered provider and credential surfaces use the truthful outward projection; ambient hosted/Desktop CORS grants are gone; the existing updater hibernation remains intact. |
 | 6. Native database admission        | Owns Repa database admission, forward migration lineage, and the single state-owner boundary.                                                     | Closed again. Only a recovered zero-page acquisition state may initialize; arbitrary sidecars cannot promote a page-backed identityless database, and dangling final file symlinks refuse before SQLite open.                                                                                                      |
 | 7. Course and Course View authority | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal. | Closed. Its contract, schema, migration, implementation, focused evidence, and corrected Gate 6 runtime prerequisite are accepted.                                                                                                                                                                                 |
-| 8. Learning-command settlement      | Will bind trusted causal and invocation identity to one real Course-owned command.                                                                | [Contract/theory accepted](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md) after independent review closed all findings. Implementation is authorized and active; Gate 8 remains open pending implementation and focused evidence.                                                       |
+| 8. Learning-command settlement      | Binds trusted causal and invocation identity to one real Course-owned command.                                                                    | Closed. Its [contract and implementation record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md), migration, settlement substrate, Session lifecycle integration, and focused evidence are independently accepted.                                                                       |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -37,13 +37,14 @@ privileged workflow execution before an internal sample begins, preserves
 explicit hidden-Agent admission without exposing it in discovery, and makes
 profile-loss and recovered-Session failure behavior explicit. Session title
 eligibility and every full-row Session patch now share one per-Session
-serialization owner, closing both stale-snapshot overwrite paths. Gate 8's
-accepted contract selects one non-null exact Course View Revision acceptance
-command, stable admitted-occurrence lineage, a common local-tool FIFO, a
-two-transaction permission/settlement state machine, and a settlement-aware
-transcript mutation boundary. Independent review closed every finding;
-implementation is now active but no implementation or evidence claim has yet
-been accepted.
+serialization owner, closing both stale-snapshot overwrite paths. Gate 8 now
+binds one trusted interactive model invocation and stable admitted learner
+occurrence to an exact Course-owned Revision acceptance. Its shared substrate
+separates physical replay from semantic effect identity, settles exact
+transaction-first Parts, events, and results, preserves truthful
+compaction/fork/deletion lineage, and closes Session lifecycle races without a
+second runner. Independent top-level reviews accepted both its contract/theory
+and implementation/evidence.
 
 Gate 7 now gives the native LearnerHome database its first learning authority.
 Repa can persist several independent Courses; each Course may exist without a
@@ -77,7 +78,8 @@ preserve/split/merge algebra and exact source membership when another View
 reuses an item. Ordinary removal is reversible withdrawal; every rejection or
 withdrawal that can race with working selection checks the exact target and its
 independent version in the same transaction. Gate 7 records only
-application-bound authorship basis; causal learner/model proof remains Gate 8.
+application-bound authorship basis. Gate 8 adds a durable causal receipt for one
+exact non-null acceptance command without changing that creation provenance.
 Non-null withdrawal replacements satisfy the same target-version checks as
 ordinary selection, closing the remaining ABA path. Collection reads are
 cursor-bounded and stably ordered, and multi-query domain reads observe one
@@ -100,8 +102,8 @@ legacy labs.
 - [Gate 4 learning-first composition record](research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md)
 - [Gate 5 terminal-only surface record](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
 - [Gate 6 native database-admission record](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
-- [Accepted Gate 7 Course and Course View authority contract](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md)
-- [Accepted Gate 8 learning-command settlement contract](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md)
+- [Passed Gate 7 Course and Course View authority record](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md)
+- [Passed Gate 8 learning-command settlement record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions
