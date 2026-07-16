@@ -1,8 +1,10 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "ab1edce6-53b8-4b02-8825-e4b638f60fc5",
-  "prevIds": ["62da5553-1b3e-4aa5-909f-984611328819"],
+  "id": "9704bea2-8b07-4c93-87db-f9b9460e46a8",
+  "prevIds": [
+    "ab1edce6-53b8-4b02-8825-e4b638f60fc5"
+  ],
   "ddl": [
     {
       "name": "workspace",
@@ -38,6 +40,38 @@
     },
     {
       "name": "control_account",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact_current_source",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact_lineage_correction_member",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact_lineage_correction_set",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact_observation_correction",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact_revision",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact_source_binding",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact_source_observation",
+      "entityType": "tables"
+    },
+    {
+      "name": "artifact",
       "entityType": "tables"
     },
     {
@@ -661,6 +695,886 @@
       "name": "time_updated",
       "entityType": "columns",
       "table": "control_account"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "artifact_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "source_version",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "active_binding_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_revision_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_attribution_member_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_state_observation_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_state_member_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "descriptor_observation_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "descriptor_correction_id",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effective_media_type",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "availability",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "artifact_current_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "set_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recorded_artifact_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "lineage_version",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "start_after_ordinal",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "end_at_ordinal",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_effective",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "expected_winning_member_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_binding_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_observation_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_source_member_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_revision_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_revision_attribution_member_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_descriptor_observation_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_descriptor_correction_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_media_type",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_availability",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome_kind",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome_artifact_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admission_root_artifact_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_identity",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_version",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "new_artifact_id",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observation_id",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "correction_sequence",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_correction_id",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "corrected_time_observed",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_identity",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "capability_version",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "artifact_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recorded_artifact_id",
+      "entityType": "columns",
+      "table": "artifact_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fingerprint_algorithm",
+      "entityType": "columns",
+      "table": "artifact_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fingerprint_digest",
+      "entityType": "columns",
+      "table": "artifact_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "table": "artifact_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_first_observed",
+      "entityType": "columns",
+      "table": "artifact_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recorded_artifact_id",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "binding_ordinal",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_location",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_kind",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_capability_identity",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_capability_version",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_lineage_member_id",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_started",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_ended",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "end_reason",
+      "entityType": "columns",
+      "table": "artifact_source_binding"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "recorded_artifact_id",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "binding_id",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_ordinal",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "result",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_attribution_member_id",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observer_capability_identity",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observer_capability_version",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_observed",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "artifact_source_observation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admission_root_artifact_id",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "creation_basis",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "creation_capability_identity",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "creation_capability_version",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "disposition_version",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "lineage_version",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "withdrawal_reason",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "correction_hidden",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "artifact"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "artifact"
     },
     {
       "type": "text",
@@ -2843,9 +3757,13 @@
       "table": "session_share"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2854,9 +3772,13 @@
       "table": "workspace"
     },
     {
-      "columns": ["part_id"],
+      "columns": [
+        "part_id"
+      ],
       "tableTo": "part",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2865,9 +3787,13 @@
       "table": "learning_historical_tool_presentation"
     },
     {
-      "columns": ["message_id"],
+      "columns": [
+        "message_id"
+      ],
       "tableTo": "message",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2876,9 +3802,13 @@
       "table": "learning_occurrence_presentation"
     },
     {
-      "columns": ["occurrence_id"],
+      "columns": [
+        "occurrence_id"
+      ],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2887,9 +3817,13 @@
       "table": "learning_occurrence_presentation"
     },
     {
-      "columns": ["occurrence_id"],
+      "columns": [
+        "occurrence_id"
+      ],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -2898,9 +3832,13 @@
       "table": "learning_occurrence_tombstone"
     },
     {
-      "columns": ["active_account_id"],
+      "columns": [
+        "active_account_id"
+      ],
       "tableTo": "account",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -2909,9 +3847,488 @@
       "table": "account_state"
     },
     {
-      "columns": ["course_id"],
+      "columns": [
+        "artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "artifact_id",
+        "active_binding_id"
+      ],
+      "tableTo": "artifact_source_binding",
+      "columnsTo": [
+        "recorded_artifact_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_artifact_id_active_binding_id_artifact_source_binding_recorded_artifact_id_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "current_revision_id"
+      ],
+      "tableTo": "artifact_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_current_revision_id_artifact_revision_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "revision_attribution_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_revision_attribution_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "artifact_id",
+        "source_state_observation_id"
+      ],
+      "tableTo": "artifact_source_observation",
+      "columnsTo": [
+        "recorded_artifact_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_artifact_id_source_state_observation_id_artifact_source_observation_recorded_artifact_id_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "source_state_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_source_state_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "descriptor_observation_id"
+      ],
+      "tableTo": "artifact_source_observation",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_descriptor_observation_id_artifact_source_observation_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "descriptor_observation_id",
+        "descriptor_correction_id"
+      ],
+      "tableTo": "artifact_observation_correction",
+      "columnsTo": [
+        "observation_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_current_source_descriptor_observation_id_descriptor_correction_id_artifact_observation_correction_observation_id_id_fk",
+      "entityType": "fks",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        "boundary_binding_id"
+      ],
+      "tableTo": "artifact_source_binding",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_boundary_binding_id_artifact_source_binding_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "boundary_observation_id"
+      ],
+      "tableTo": "artifact_source_observation",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_boundary_observation_id_artifact_source_observation_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "boundary_descriptor_observation_id"
+      ],
+      "tableTo": "artifact_source_observation",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_boundary_descriptor_observation_id_artifact_source_observation_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "boundary_descriptor_correction_id"
+      ],
+      "tableTo": "artifact_observation_correction",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_boundary_descriptor_correction_id_artifact_observation_correction_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "set_id"
+      ],
+      "tableTo": "artifact_lineage_correction_set",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_set_id_artifact_lineage_correction_set_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_recorded_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "boundary_revision_id"
+      ],
+      "tableTo": "artifact_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_boundary_revision_id_artifact_revision_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "outcome_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_outcome_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "expected_winning_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_expected_winning_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "boundary_source_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_boundary_source_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "boundary_revision_attribution_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_member_boundary_revision_attribution_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "admission_root_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_set_admission_root_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "columns": [
+        "new_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_lineage_correction_set_new_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "columns": [
+        "observation_id"
+      ],
+      "tableTo": "artifact_source_observation",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_observation_correction_observation_id_artifact_source_observation_id_fk",
+      "entityType": "fks",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "columns": [
+        "observation_id",
+        "predecessor_correction_id"
+      ],
+      "tableTo": "artifact_observation_correction",
+      "columnsTo": [
+        "observation_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_observation_correction_observation_id_predecessor_correction_id_artifact_observation_correction_observation_id_id_fk",
+      "entityType": "fks",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_revision_recorded_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_revision"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_source_binding_recorded_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_source_binding"
+    },
+    {
+      "columns": [
+        "basis_lineage_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_source_binding_basis_lineage_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "artifact_source_binding"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_source_observation_recorded_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id",
+        "binding_id"
+      ],
+      "tableTo": "artifact_source_binding",
+      "columnsTo": [
+        "recorded_artifact_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_source_observation_recorded_artifact_id_binding_id_artifact_source_binding_recorded_artifact_id_id_fk",
+      "entityType": "fks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "tableTo": "artifact_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_source_observation_revision_id_artifact_revision_id_fk",
+      "entityType": "fks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        "revision_attribution_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_source_observation_revision_attribution_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        "admission_root_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_artifact_admission_root_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "artifact"
+    },
+    {
+      "columns": [
+        "course_id"
+      ],
       "tableTo": "course",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2920,9 +4337,13 @@
       "table": "course_item"
     },
     {
-      "columns": ["occurrence_id"],
+      "columns": [
+        "occurrence_id"
+      ],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2931,9 +4352,13 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": ["course_id"],
+      "columns": [
+        "course_id"
+      ],
       "tableTo": "course",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2942,9 +4367,15 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": ["course_id", "accepted_revision_id"],
+      "columns": [
+        "course_id",
+        "accepted_revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2953,9 +4384,15 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": ["course_id", "previous_revision_id"],
+      "columns": [
+        "course_id",
+        "previous_revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2964,9 +4401,17 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": ["course_id", "view_id", "revision_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "view_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2975,9 +4420,15 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": ["course_id", "item_id"],
+      "columns": [
+        "course_id",
+        "item_id"
+      ],
       "tableTo": "course_item",
-      "columnsTo": ["course_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2986,9 +4437,19 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": ["course_id", "view_id", "revision_id", "parent_item_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "parent_item_id"
+      ],
       "tableTo": "course_view_revision_item",
-      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -2997,9 +4458,17 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": ["course_id", "view_id", "source_revision_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "view_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3008,9 +4477,17 @@
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": ["course_id", "view_id", "target_revision_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "target_revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "view_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3019,9 +4496,21 @@
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "group_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "group_id"
+      ],
       "tableTo": "course_view_revision_mapping_group",
-      "columnsTo": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3030,9 +4519,19 @@
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": ["course_id", "view_id", "source_revision_id", "item_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "item_id"
+      ],
       "tableTo": "course_view_revision_item",
-      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3041,9 +4540,21 @@
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "group_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "group_id"
+      ],
       "tableTo": "course_view_revision_mapping_group",
-      "columnsTo": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3052,9 +4563,19 @@
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": ["course_id", "view_id", "target_revision_id", "item_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "target_revision_id",
+        "item_id"
+      ],
       "tableTo": "course_view_revision_item",
-      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3063,9 +4584,19 @@
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": ["course_id", "source_view_id", "source_revision_id", "item_id"],
+      "columns": [
+        "course_id",
+        "source_view_id",
+        "source_revision_id",
+        "item_id"
+      ],
       "tableTo": "course_view_revision_item",
-      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3074,9 +4605,19 @@
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": ["course_id", "target_view_id", "target_revision_id", "item_id"],
+      "columns": [
+        "course_id",
+        "target_view_id",
+        "target_revision_id",
+        "item_id"
+      ],
       "tableTo": "course_view_revision_item",
-      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3085,9 +4626,17 @@
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": ["course_id", "view_id", "revision_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "view_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3096,9 +4645,15 @@
       "table": "course_view_revision_state"
     },
     {
-      "columns": ["course_id", "view_id"],
+      "columns": [
+        "course_id",
+        "view_id"
+      ],
       "tableTo": "course_view",
-      "columnsTo": ["course_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3107,9 +4662,17 @@
       "table": "course_view_revision"
     },
     {
-      "columns": ["course_id", "view_id", "predecessor_revision_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "predecessor_revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "view_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3118,9 +4681,13 @@
       "table": "course_view_revision"
     },
     {
-      "columns": ["course_id"],
+      "columns": [
+        "course_id"
+      ],
       "tableTo": "course",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3129,9 +4696,13 @@
       "table": "course_view"
     },
     {
-      "columns": ["course_id"],
+      "columns": [
+        "course_id"
+      ],
       "tableTo": "course",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3140,9 +4711,15 @@
       "table": "course_working_selection"
     },
     {
-      "columns": ["course_id", "revision_id"],
+      "columns": [
+        "course_id",
+        "revision_id"
+      ],
       "tableTo": "course_view_revision",
-      "columnsTo": ["course_id", "id"],
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3151,9 +4728,13 @@
       "table": "course_working_selection"
     },
     {
-      "columns": ["aggregate_id"],
+      "columns": [
+        "aggregate_id"
+      ],
       "tableTo": "event_sequence",
-      "columnsTo": ["aggregate_id"],
+      "columnsTo": [
+        "aggregate_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3162,9 +4743,13 @@
       "table": "event"
     },
     {
-      "columns": ["occurrence_id"],
+      "columns": [
+        "occurrence_id"
+      ],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3173,9 +4758,13 @@
       "table": "learning_command_invocation"
     },
     {
-      "columns": ["effect_id"],
+      "columns": [
+        "effect_id"
+      ],
       "tableTo": "course_selection_acceptance_effect",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3184,9 +4773,13 @@
       "table": "learning_command_invocation"
     },
     {
-      "columns": ["occurrence_id"],
+      "columns": [
+        "occurrence_id"
+      ],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3195,9 +4788,13 @@
       "table": "learning_command_receipt"
     },
     {
-      "columns": ["invocation_part_id"],
+      "columns": [
+        "invocation_part_id"
+      ],
       "tableTo": "learning_command_invocation",
-      "columnsTo": ["part_id"],
+      "columnsTo": [
+        "part_id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3206,9 +4803,13 @@
       "table": "learning_command_receipt"
     },
     {
-      "columns": ["effect_id"],
+      "columns": [
+        "effect_id"
+      ],
       "tableTo": "course_selection_acceptance_effect",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -3217,9 +4818,13 @@
       "table": "learning_command_receipt"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3228,9 +4833,13 @@
       "table": "permission"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3239,9 +4848,13 @@
       "table": "project_directory"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3250,9 +4863,13 @@
       "table": "message"
     },
     {
-      "columns": ["message_id"],
+      "columns": [
+        "message_id"
+      ],
       "tableTo": "message",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3261,9 +4878,13 @@
       "table": "part"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3272,9 +4893,13 @@
       "table": "session_context_epoch"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3283,9 +4908,13 @@
       "table": "session_input"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3294,9 +4923,13 @@
       "table": "session_message"
     },
     {
-      "columns": ["project_id"],
+      "columns": [
+        "project_id"
+      ],
       "tableTo": "project",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3305,9 +4938,13 @@
       "table": "session"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3316,9 +4953,13 @@
       "table": "todo"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "tableTo": "session",
-      "columnsTo": ["id"],
+      "columnsTo": [
+        "id"
+      ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -3327,259 +4968,411 @@
       "table": "session_share"
     },
     {
-      "columns": ["email", "url"],
+      "columns": [
+        "email",
+        "url"
+      ],
       "nameExplicit": false,
       "name": "control_account_pk",
       "entityType": "pks",
       "table": "control_account"
     },
     {
-      "columns": ["revision_id", "item_id"],
+      "columns": [
+        "revision_id",
+        "item_id"
+      ],
       "nameExplicit": false,
       "name": "course_view_revision_item_pk",
       "entityType": "pks",
       "table": "course_view_revision_item"
     },
     {
-      "columns": ["group_id", "item_id"],
+      "columns": [
+        "group_id",
+        "item_id"
+      ],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_source_pk",
       "entityType": "pks",
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": ["group_id", "item_id"],
+      "columns": [
+        "group_id",
+        "item_id"
+      ],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_target_pk",
       "entityType": "pks",
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": ["project_id", "directory"],
+      "columns": [
+        "project_id",
+        "directory"
+      ],
       "nameExplicit": false,
       "name": "project_directory_pk",
       "entityType": "pks",
       "table": "project_directory"
     },
     {
-      "columns": ["session_id", "position"],
+      "columns": [
+        "session_id",
+        "position"
+      ],
       "nameExplicit": false,
       "name": "todo_pk",
       "entityType": "pks",
       "table": "todo"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "workspace_pk",
       "table": "workspace",
       "entityType": "pks"
     },
     {
-      "columns": ["name"],
+      "columns": [
+        "name"
+      ],
       "nameExplicit": false,
       "name": "data_migration_pk",
       "table": "data_migration",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "learning_admitted_occurrence_pk",
       "table": "learning_admitted_occurrence",
       "entityType": "pks"
     },
     {
-      "columns": ["part_id"],
+      "columns": [
+        "part_id"
+      ],
       "nameExplicit": false,
       "name": "learning_historical_tool_presentation_pk",
       "table": "learning_historical_tool_presentation",
       "entityType": "pks"
     },
     {
-      "columns": ["message_id"],
+      "columns": [
+        "message_id"
+      ],
       "nameExplicit": false,
       "name": "learning_occurrence_presentation_pk",
       "table": "learning_occurrence_presentation",
       "entityType": "pks"
     },
     {
-      "columns": ["occurrence_id"],
+      "columns": [
+        "occurrence_id"
+      ],
       "nameExplicit": false,
       "name": "learning_occurrence_tombstone_pk",
       "table": "learning_occurrence_tombstone",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "account_state_pk",
       "table": "account_state",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "account_pk",
       "table": "account",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "artifact_id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_current_source_pk",
+      "table": "artifact_current_source",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_lineage_correction_member_pk",
+      "table": "artifact_lineage_correction_member",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_lineage_correction_set_pk",
+      "table": "artifact_lineage_correction_set",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_observation_correction_pk",
+      "table": "artifact_observation_correction",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_revision_pk",
+      "table": "artifact_revision",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_source_binding_pk",
+      "table": "artifact_source_binding",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_source_observation_pk",
+      "table": "artifact_source_observation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "artifact_pk",
+      "table": "artifact",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "course_item_pk",
       "table": "course_item",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "course_selection_acceptance_effect_pk",
       "table": "course_selection_acceptance_effect",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "course_pk",
       "table": "course",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_group_pk",
       "table": "course_view_revision_mapping_group",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "course_view_revision_reuse_citation_pk",
       "table": "course_view_revision_reuse_citation",
       "entityType": "pks"
     },
     {
-      "columns": ["revision_id"],
+      "columns": [
+        "revision_id"
+      ],
       "nameExplicit": false,
       "name": "course_view_revision_state_pk",
       "table": "course_view_revision_state",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "course_view_revision_pk",
       "table": "course_view_revision",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "course_view_pk",
       "table": "course_view",
       "entityType": "pks"
     },
     {
-      "columns": ["course_id"],
+      "columns": [
+        "course_id"
+      ],
       "nameExplicit": false,
       "name": "course_working_selection_pk",
       "table": "course_working_selection",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "credential_pk",
       "table": "credential",
       "entityType": "pks"
     },
     {
-      "columns": ["aggregate_id"],
+      "columns": [
+        "aggregate_id"
+      ],
       "nameExplicit": false,
       "name": "event_sequence_pk",
       "table": "event_sequence",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
       "entityType": "pks"
     },
     {
-      "columns": ["part_id"],
+      "columns": [
+        "part_id"
+      ],
       "nameExplicit": false,
       "name": "learning_command_invocation_pk",
       "table": "learning_command_invocation",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "learning_command_receipt_pk",
       "table": "learning_command_receipt",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "permission_pk",
       "table": "permission",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "project_pk",
       "table": "project",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "message_pk",
       "table": "message",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "part_pk",
       "table": "part",
       "entityType": "pks"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "nameExplicit": false,
       "name": "session_context_epoch_pk",
       "table": "session_context_epoch",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "session_input_pk",
       "table": "session_input",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "session_message_pk",
       "table": "session_message",
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
+      "columns": [
+        "id"
+      ],
       "nameExplicit": false,
       "name": "session_pk",
       "table": "session",
       "entityType": "pks"
     },
     {
-      "columns": ["session_id"],
+      "columns": [
+        "session_id"
+      ],
       "nameExplicit": false,
       "name": "session_share_pk",
       "table": "session_share",
@@ -3634,6 +5427,294 @@
       "name": "learning_occurrence_presentation_occurrence_idx",
       "entityType": "indexes",
       "table": "learning_occurrence_presentation"
+    },
+    {
+      "columns": [
+        {
+          "value": "availability",
+          "isExpression": false
+        },
+        {
+          "value": "artifact_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_current_source_availability_idx",
+      "entityType": "indexes",
+      "table": "artifact_current_source"
+    },
+    {
+      "columns": [
+        {
+          "value": "recorded_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "start_after_ordinal",
+          "isExpression": false
+        },
+        {
+          "value": "end_at_ordinal",
+          "isExpression": false
+        },
+        {
+          "value": "lineage_version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_lineage_correction_member_history_idx",
+      "entityType": "indexes",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        {
+          "value": "outcome_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "lineage_version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_lineage_correction_member_outcome_idx",
+      "entityType": "indexes",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        {
+          "value": "set_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_lineage_correction_member_set_idx",
+      "entityType": "indexes",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        {
+          "value": "admission_root_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_committed",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_lineage_correction_set_root_idx",
+      "entityType": "indexes",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "columns": [
+        {
+          "value": "observation_id",
+          "isExpression": false
+        },
+        {
+          "value": "correction_sequence",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_observation_correction_page_idx",
+      "entityType": "indexes",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "columns": [
+        {
+          "value": "recorded_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_first_observed",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_revision_page_idx",
+      "entityType": "indexes",
+      "table": "artifact_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "recorded_artifact_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"artifact_source_binding\".\"time_ended\" IS NULL",
+      "origin": "manual",
+      "name": "artifact_source_binding_active_artifact_idx",
+      "entityType": "indexes",
+      "table": "artifact_source_binding"
+    },
+    {
+      "columns": [
+        {
+          "value": "canonical_location",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"artifact_source_binding\".\"time_ended\" IS NULL",
+      "origin": "manual",
+      "name": "artifact_source_binding_active_location_idx",
+      "entityType": "indexes",
+      "table": "artifact_source_binding"
+    },
+    {
+      "columns": [
+        {
+          "value": "recorded_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "binding_ordinal",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_source_binding_history_idx",
+      "entityType": "indexes",
+      "table": "artifact_source_binding"
+    },
+    {
+      "columns": [
+        {
+          "value": "recorded_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "occurrence_ordinal",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_source_observation_history_idx",
+      "entityType": "indexes",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        {
+          "value": "revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "recorded_artifact_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_source_observation_revision_idx",
+      "entityType": "indexes",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        {
+          "value": "admission_root_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_admission_root_idx",
+      "entityType": "indexes",
+      "table": "artifact"
+    },
+    {
+      "columns": [
+        {
+          "value": "withdrawal_reason",
+          "isExpression": false
+        },
+        {
+          "value": "correction_hidden",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "artifact_discovery_idx",
+      "entityType": "indexes",
+      "table": "artifact"
     },
     {
       "columns": [
@@ -4322,112 +6403,266 @@
       "table": "todo"
     },
     {
-      "columns": ["origin_session_id", "origin_message_id"],
+      "columns": [
+        "origin_session_id",
+        "origin_message_id"
+      ],
       "nameExplicit": true,
       "name": "learning_admitted_occurrence_origin_unique",
       "entityType": "uniques",
       "table": "learning_admitted_occurrence"
     },
     {
-      "columns": ["course_id", "id"],
+      "columns": [
+        "set_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_lineage_correction_member_set_id_unique",
+      "entityType": "uniques",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "columns": [
+        "new_artifact_id"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_lineage_correction_set_new_artifact_unique",
+      "entityType": "uniques",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "columns": [
+        "observation_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_observation_correction_observation_id_unique",
+      "entityType": "uniques",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "columns": [
+        "observation_id",
+        "correction_sequence"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_observation_correction_sequence_unique",
+      "entityType": "uniques",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_revision_recorded_id_unique",
+      "entityType": "uniques",
+      "table": "artifact_revision"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id",
+        "fingerprint_algorithm",
+        "fingerprint_digest",
+        "byte_length"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_revision_fingerprint_unique",
+      "entityType": "uniques",
+      "table": "artifact_revision"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_source_binding_recorded_id_unique",
+      "entityType": "uniques",
+      "table": "artifact_source_binding"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id",
+        "binding_ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_source_binding_ordinal_unique",
+      "entityType": "uniques",
+      "table": "artifact_source_binding"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_source_observation_recorded_id_unique",
+      "entityType": "uniques",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        "recorded_artifact_id",
+        "occurrence_ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "artifact_source_observation_ordinal_unique",
+      "entityType": "uniques",
+      "table": "artifact_source_observation"
+    },
+    {
+      "columns": [
+        "course_id",
+        "id"
+      ],
       "nameExplicit": true,
       "name": "course_item_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_item"
     },
     {
-      "columns": ["occurrence_id", "course_id"],
+      "columns": [
+        "occurrence_id",
+        "course_id"
+      ],
       "nameExplicit": true,
       "name": "course_selection_acceptance_effect_address_unique",
       "entityType": "uniques",
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": ["course_id", "view_id", "revision_id", "item_id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_item_owner_unique",
       "entityType": "uniques",
       "table": "course_view_revision_item"
     },
     {
-      "columns": ["revision_id", "preorder_position"],
+      "columns": [
+        "revision_id",
+        "preorder_position"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_item_position_unique",
       "entityType": "uniques",
       "table": "course_view_revision_item"
     },
     {
-      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "source_revision_id",
+        "target_revision_id",
+        "id"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_mapping_group_owner_unique",
       "entityType": "uniques",
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": ["target_revision_id", "item_id"],
+      "columns": [
+        "target_revision_id",
+        "item_id"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_reuse_citation_target_unique",
       "entityType": "uniques",
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": ["course_id", "revision_id"],
+      "columns": [
+        "course_id",
+        "revision_id"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_state_course_id_revision_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision_state"
     },
     {
-      "columns": ["course_id", "id"],
+      "columns": [
+        "course_id",
+        "id"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": ["course_id", "view_id", "id"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "id"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_course_view_id_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": ["course_id", "view_id", "revision_number"],
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_number"
+      ],
       "nameExplicit": true,
       "name": "course_view_revision_number_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": ["course_id", "id"],
+      "columns": [
+        "course_id",
+        "id"
+      ],
       "nameExplicit": true,
       "name": "course_view_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_view"
     },
     {
-      "columns": ["assistant_message_id", "provider_call_id"],
+      "columns": [
+        "assistant_message_id",
+        "provider_call_id"
+      ],
       "nameExplicit": true,
       "name": "learning_command_invocation_assistant_call_unique",
       "entityType": "uniques",
       "table": "learning_command_invocation"
     },
     {
-      "columns": ["assistant_message_id", "emission_ordinal"],
+      "columns": [
+        "assistant_message_id",
+        "emission_ordinal"
+      ],
       "nameExplicit": true,
       "name": "learning_command_invocation_assistant_ordinal_unique",
       "entityType": "uniques",
       "table": "learning_command_invocation"
     },
     {
-      "columns": ["effect_id"],
+      "columns": [
+        "effect_id"
+      ],
       "nameExplicit": true,
       "name": "learning_command_receipt_effect_unique",
       "entityType": "uniques",
       "table": "learning_command_receipt"
     },
     {
-      "columns": ["invocation_part_id"],
+      "columns": [
+        "invocation_part_id"
+      ],
       "nameExplicit": true,
       "name": "learning_command_receipt_invocation_unique",
       "entityType": "uniques",
@@ -4486,6 +6721,216 @@
       "name": "learning_occurrence_tombstone_time_nonnegative",
       "entityType": "checks",
       "table": "learning_occurrence_tombstone"
+    },
+    {
+      "value": "\"source_version\" >= 0",
+      "name": "artifact_current_source_version_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_current_source"
+    },
+    {
+      "value": "(\"current_revision_id\" IS NULL AND \"availability\" = 'unbound' AND \"active_binding_id\" IS NULL AND \"revision_attribution_member_id\" IS NULL AND \"source_state_observation_id\" IS NULL AND \"source_state_member_id\" IS NULL AND \"descriptor_observation_id\" IS NULL AND \"descriptor_correction_id\" IS NULL AND \"effective_media_type\" IS NULL) OR (\"current_revision_id\" IS NOT NULL AND ((\"source_state_observation_id\" IS NOT NULL AND \"source_state_member_id\" IS NULL) OR (\"source_state_observation_id\" IS NULL AND \"source_state_member_id\" IS NOT NULL)) AND \"descriptor_observation_id\" IS NOT NULL AND \"effective_media_type\" IS NOT NULL AND length(\"effective_media_type\") > 0 AND ((\"availability\" IN ('available', 'missing')) AND \"active_binding_id\" IS NOT NULL OR (\"availability\" = 'unbound' AND \"active_binding_id\" IS NULL)))",
+      "name": "artifact_current_source_state_shape",
+      "entityType": "checks",
+      "table": "artifact_current_source"
+    },
+    {
+      "value": "\"descriptor_correction_id\" IS NULL OR \"descriptor_observation_id\" IS NOT NULL",
+      "name": "artifact_current_source_descriptor_shape",
+      "entityType": "checks",
+      "table": "artifact_current_source"
+    },
+    {
+      "value": "\"time_updated\" >= 0",
+      "name": "artifact_current_source_time_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_current_source"
+    },
+    {
+      "value": "\"start_after_ordinal\" >= 0 AND \"end_at_ordinal\" >= \"start_after_ordinal\"",
+      "name": "artifact_lineage_correction_member_interval",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "value": "\"lineage_version\" >= 1",
+      "name": "artifact_lineage_correction_member_version",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "value": "\"time_effective\" >= 0",
+      "name": "artifact_lineage_correction_member_time_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "value": "(\"boundary_revision_id\" IS NULL AND \"boundary_availability\" = 'unbound' AND \"boundary_binding_id\" IS NULL AND \"boundary_observation_id\" IS NULL AND \"boundary_source_member_id\" IS NULL AND \"boundary_revision_attribution_member_id\" IS NULL AND \"boundary_descriptor_observation_id\" IS NULL AND \"boundary_descriptor_correction_id\" IS NULL AND \"boundary_media_type\" IS NULL) OR (\"boundary_revision_id\" IS NOT NULL AND ((\"boundary_observation_id\" IS NOT NULL AND \"boundary_source_member_id\" IS NULL) OR (\"boundary_observation_id\" IS NULL AND \"boundary_source_member_id\" IS NOT NULL)) AND \"boundary_descriptor_observation_id\" IS NOT NULL AND \"boundary_media_type\" IS NOT NULL AND length(\"boundary_media_type\") > 0 AND ((\"boundary_availability\" IN ('available', 'missing')) AND \"boundary_binding_id\" IS NOT NULL OR (\"boundary_availability\" = 'unbound' AND \"boundary_binding_id\" IS NULL)))",
+      "name": "artifact_lineage_correction_member_boundary_shape",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "value": "\"boundary_descriptor_correction_id\" IS NULL OR \"boundary_descriptor_observation_id\" IS NOT NULL",
+      "name": "artifact_lineage_correction_member_descriptor_shape",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "value": "(\"outcome_kind\" = 'recorded' AND \"outcome_artifact_id\" IS NULL) OR (\"outcome_kind\" = 'artifact' AND \"outcome_artifact_id\" IS NOT NULL)",
+      "name": "artifact_lineage_correction_member_outcome_shape",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_member"
+    },
+    {
+      "value": "\"basis\" IN ('learner_statement', 'trusted_non_model_discontinuity')",
+      "name": "artifact_lineage_correction_set_basis",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "value": "length(\"capability_identity\") > 0 AND \"capability_version\" >= 1",
+      "name": "artifact_lineage_correction_set_capability",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "value": "\"time_committed\" >= 0",
+      "name": "artifact_lineage_correction_set_time_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_lineage_correction_set"
+    },
+    {
+      "value": "(\"correction_sequence\" = 1 AND \"predecessor_correction_id\" IS NULL) OR (\"correction_sequence\" > 1 AND \"predecessor_correction_id\" IS NOT NULL)",
+      "name": "artifact_observation_correction_sequence_shape",
+      "entityType": "checks",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "value": "length(\"media_type\") > 0",
+      "name": "artifact_observation_correction_media",
+      "entityType": "checks",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "value": "\"basis\" IN ('learner_correction', 'trusted_observer')",
+      "name": "artifact_observation_correction_basis",
+      "entityType": "checks",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "value": "length(\"capability_identity\") > 0 AND \"capability_version\" >= 1",
+      "name": "artifact_observation_correction_capability",
+      "entityType": "checks",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "value": "(\"corrected_time_observed\" IS NULL OR \"corrected_time_observed\" >= 0) AND \"time_committed\" >= 0",
+      "name": "artifact_observation_correction_time_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_observation_correction"
+    },
+    {
+      "value": "\"fingerprint_algorithm\" = 'sha256'",
+      "name": "artifact_revision_algorithm",
+      "entityType": "checks",
+      "table": "artifact_revision"
+    },
+    {
+      "value": "length(\"fingerprint_digest\") = 64 AND \"fingerprint_digest\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "artifact_revision_digest",
+      "entityType": "checks",
+      "table": "artifact_revision"
+    },
+    {
+      "value": "\"byte_length\" >= 0",
+      "name": "artifact_revision_byte_length",
+      "entityType": "checks",
+      "table": "artifact_revision"
+    },
+    {
+      "value": "\"time_first_observed\" >= 0",
+      "name": "artifact_revision_time_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_revision"
+    },
+    {
+      "value": "\"binding_ordinal\" >= 1",
+      "name": "artifact_source_binding_ordinal_positive",
+      "entityType": "checks",
+      "table": "artifact_source_binding"
+    },
+    {
+      "value": "length(\"canonical_location\") > 0",
+      "name": "artifact_source_binding_location_nonempty",
+      "entityType": "checks",
+      "table": "artifact_source_binding"
+    },
+    {
+      "value": "(\"basis_kind\" IN ('admission', 'explicit_rebind') AND \"basis_capability_identity\" IS NOT NULL AND length(\"basis_capability_identity\") > 0 AND \"basis_capability_version\" >= 1 AND \"basis_lineage_member_id\" IS NULL) OR (\"basis_kind\" = 'lineage_correction' AND \"basis_capability_identity\" IS NULL AND \"basis_capability_version\" IS NULL AND \"basis_lineage_member_id\" IS NOT NULL)",
+      "name": "artifact_source_binding_basis_shape",
+      "entityType": "checks",
+      "table": "artifact_source_binding"
+    },
+    {
+      "value": "(\"time_ended\" IS NULL AND \"end_reason\" IS NULL) OR (\"time_ended\" IS NOT NULL AND \"time_ended\" >= \"time_started\" AND \"end_reason\" IN ('explicit_rebind', 'lineage_correction'))",
+      "name": "artifact_source_binding_end_shape",
+      "entityType": "checks",
+      "table": "artifact_source_binding"
+    },
+    {
+      "value": "\"time_started\" >= 0",
+      "name": "artifact_source_binding_time_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_source_binding"
+    },
+    {
+      "value": "\"occurrence_ordinal\" >= 1",
+      "name": "artifact_source_observation_ordinal_positive",
+      "entityType": "checks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "value": "(\"result\" = 'present' AND \"revision_id\" IS NOT NULL AND \"media_type\" IS NOT NULL AND length(\"media_type\") > 0) OR (\"result\" = 'missing' AND \"revision_id\" IS NULL AND \"revision_attribution_member_id\" IS NULL AND \"media_type\" IS NULL)",
+      "name": "artifact_source_observation_result_shape",
+      "entityType": "checks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "value": "length(\"observer_capability_identity\") > 0 AND \"observer_capability_version\" >= 1",
+      "name": "artifact_source_observation_observer",
+      "entityType": "checks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "value": "\"time_observed\" >= 0 AND \"time_committed\" >= 0",
+      "name": "artifact_source_observation_time_nonnegative",
+      "entityType": "checks",
+      "table": "artifact_source_observation"
+    },
+    {
+      "value": "(\"creation_basis\" IN ('learner_instruction', 'initialization_import') AND \"admission_root_artifact_id\" = \"id\" AND \"creation_capability_identity\" IS NOT NULL AND length(\"creation_capability_identity\") > 0 AND \"creation_capability_version\" >= 1) OR (\"creation_basis\" = 'lineage_correction' AND \"creation_capability_identity\" IS NULL AND \"creation_capability_version\" IS NULL)",
+      "name": "artifact_creation_shape",
+      "entityType": "checks",
+      "table": "artifact"
+    },
+    {
+      "value": "\"disposition_version\" >= 0 AND \"lineage_version\" >= 0",
+      "name": "artifact_versions_nonnegative",
+      "entityType": "checks",
+      "table": "artifact"
+    },
+    {
+      "value": "\"withdrawal_reason\" IS NULL OR \"withdrawal_reason\" = 'removed'",
+      "name": "artifact_withdrawal_reason",
+      "entityType": "checks",
+      "table": "artifact"
+    },
+    {
+      "value": "\"time_created\" >= 0 AND \"time_updated\" >= \"time_created\"",
+      "name": "artifact_time_order",
+      "entityType": "checks",
+      "table": "artifact"
     },
     {
       "value": "\"previous_selection_version\" >= 0 AND \"committed_selection_version\" = \"previous_selection_version\" + 1",

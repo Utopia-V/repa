@@ -319,10 +319,28 @@ all prerequisite, alternative, and joint-choice semantics in the first schema.
 
 ### Material and representation
 
-A material artifact is a logical source whose locations may change. An
-artifact revision identifies exact observed content. A location inside an
-approved root is a capability and provenance fact, not the artifact's learning
-identity and not a Course owner.
+A material artifact is a logical source with at most one active source location;
+that location may change through an explicit learner move or rebind while prior
+locations remain history. Exact backups and Repa-owned retained bytes are not
+additional active locations. An artifact revision identifies exact observed
+content. A location inside an approved root is a capability and provenance fact,
+not the artifact's learning identity and not a Course owner. Root approval,
+generic reads, and search results do not admit an Artifact: admission requires
+an explicit learner instruction or selection from a bounded initialization
+manifest.
+
+Same-path byte change has rebuttable continuity within the current Artifact. A
+trusted source-identity break appends an exact lineage boundary or interval over
+the immutable observation history. Observation order spans location-binding
+episodes, so one correction interval may cover an unnoticed replacement across
+a later move/rebind; later deltas override only changed intervals. Each
+independent admission starts an immutable correction-ancestry root, and every
+correction-created Artifact inherits the one root shared by all member histories.
+No correction can combine separately admitted histories through either an
+existing or a fresh target. The same boundary can exist when replacement bytes
+are identical, and no correction mutates recorded revisions or retargets old
+references. Corrections to non-byte observation provenance are likewise
+append-only and do not impersonate an Artifact identity change.
 
 A model-readable derived representation, when needed, has its own immutable
 revision and records:
@@ -339,6 +357,15 @@ uniform pipeline. Selectors and alignments state whether they bind the original
 or a derived representation. The physical schema may share content-revision
 primitives when that removes duplication without erasing the derivation
 relation.
+
+For a non-model-friendly source that will be consumed repeatedly across later
+Turns or Sessions, long-term model use requires such a representation. The
+learner may decline derivation, in which case the Artifact remains system-known
+but the limitation on long-term model use remains explicit. Withdrawing the
+Artifact, deleting Repa-owned retained bytes, and deleting the learner's source
+file are separate operations; none retargets historical references. A missing
+active source and an exact Revision still resolvable from explicit retained
+backing are compatible states; backing does not become another source location.
 
 A Material Map owns the outline/selectors of one exact material or
 representation revision. Alignment from material ranges to Course items is

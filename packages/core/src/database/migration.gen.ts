@@ -4,5 +4,6 @@ export const migrations = (
   await Promise.all([
     import("./migration/repa/20260714191244_course_view_authority"),
     import("./migration/repa/20260716045209_learning_command_settlement"),
+    import("./migration/repa/20260716152016_source_artifact_authority"),
   ])
 ).map((module) => module.default) satisfies DatabaseMigration.Migration[]

@@ -437,23 +437,31 @@ subjects without pretending that every field has a Math-Academy-quality graph.
 
 ### Materials remain separate
 
-A material artifact has an origin and current revision. Its outline and exact
-selectors belong to a Material Map. Alignment can be many-to-many in both
-directions. A material change creates a new artifact revision; it never
-silently changes what an old selector meant.
+A material artifact is logical material with an origin, at most one active
+source location, and a current revision; it is not the identity of one physical
+file. A move or explicit rebind replaces the active location and retains the
+prior location as history. An exact backup and Repa-owned retained bytes are not
+additional active source locations. Its outline and exact selectors belong to a
+Material Map. Alignment can be many-to-many in both directions. A material
+change creates a new artifact revision; it never silently changes what an old
+selector meant.
 
-When a source is not conveniently model-readable, an ordinary capability may
-offer to derive a readable representation. Translation is optional: the
-learner may decline it and continue with whatever bounded use of the original
-is possible. An accepted representation is stored canonically in the fixed
-Repa-owned artifact area rather than as a sidecar in the learner's content
+When a source is not conveniently model-readable and will be used repeatedly
+across later Turns or Sessions, long-term model use requires an accepted
+readable representation. An ordinary capability may offer to derive it lazily.
+Translation remains learner-optional: declining leaves the Artifact known to
+Repa but limits long-term model use to whatever bounded reading of the original
+is honestly possible. An accepted representation is stored canonically in the
+fixed Repa-owned artifact area rather than as a sidecar in the learner's content
 tree. Source/artifact authority records the exact original revision,
 representation path and revision, producing tool and translator revision, and
-their derivation relation. The original remains available; later Material Map
-selectors bind the representation revision. The learner may explicitly export
-a copy, but that user-owned copy is a new artifact rather than the canonical
-generated representation. This is a general source reduction, not a PDF
-entity or conversion-pipeline subsystem.
+their derivation relation. Later bounded retrieval uses that representation
+instead of repeatedly sending the original media, so the path remains usable
+with a non-multimodal configured model and avoids unnecessary repeated
+multimodal token cost. The learner may explicitly export a copy, but that
+user-owned copy is a new artifact rather than the canonical generated
+representation. This is a general source reduction, not a PDF entity or
+conversion-pipeline subsystem.
 
 Source drift never rewrites or deletes an accepted representation. It makes
 that representation stale relative to the new source revision. The learner
@@ -463,15 +471,32 @@ bound to the old original and representation revisions; confirmation records
 the exact drift pair and does not relabel old bytes as a representation of the
 new source. Regeneration is lazy and never an automatic consequence of drift.
 
-Repa does not automatically evict accepted representations or retained source
-snapshots. Their bytes are removed only by an explicit learner deletion. The
+Local source admission does not copy the whole source into Repa-owned storage
+by default. Repa does not automatically evict an accepted representation or an
+explicitly retained source snapshot; deleting those managed bytes is separate
+from withdrawing the Artifact and from deleting the learner's source file. The
 database preserves identity, lineage, receipts, and a deleted-or-missing state
 so historical context cuts never retarget silently. Because the learner can
 also edit Repa's local directories directly, artifact access verifies the
 expected path and revision: missing bytes become unavailable, not nonexistent.
-Relocating exact bytes with the same digest may restore availability; different
-bytes are admitted as a new artifact revision. Temporary staging files that
-were never accepted remain crash debris rather than durable artifacts.
+Active-source availability remains separate from exact-Revision resolvability:
+an explicitly retained exact backing may still resolve that Revision without
+making a missing source location available.
+
+Only an explicit learner rebind may make exact bytes at another path the active
+source; discovery, digest equality, or model suggestion cannot. Different bytes
+at the existing active location are admitted as a new Artifact revision unless
+a trusted source-lineage correction establishes a different edition, format, or
+work. That correction records an exact boundary over the immutable observation
+timeline, whose order continues across source-location moves/rebinds. It can
+apply when two concrete sources contain identical bytes. Later correction
+deltas override only named intervals rather than copying all prior assignments;
+none rewrites old revisions or references. Every correction stays within one
+immutable independent-admission ancestry. A correction-created Artifact inherits
+that root; no correction can combine separately admitted histories, including by
+routing them into a fresh target. The root is correction-scope provenance, not an
+identity-equivalence or merge relation. Temporary staging files that were never
+accepted remain crash debris rather than durable artifacts.
 
 Repa imposes no universal quality-versus-cost policy for a lossy or uncertain
 representation. At the point the distinction matters, the learner may spend

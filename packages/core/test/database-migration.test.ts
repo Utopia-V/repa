@@ -17,6 +17,7 @@ import simplifyIntegrationCredentialsMigration from "@opencode-ai/core/database/
 import simplifySessionInputMigration from "@opencode-ai/core/database/migration/20260622202450_simplify_session_input"
 import courseViewAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260714191244_course_view_authority"
 import learningCommandSettlementMigration from "@opencode-ai/core/database/migration/repa/20260716045209_learning_command_settlement"
+import sourceArtifactAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716152016_source_artifact_authority"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -60,6 +61,16 @@ const learningCommandTables = [
   "learning_historical_tool_presentation",
   "learning_admitted_occurrence",
 ] as const
+const artifactTables = [
+  "artifact_current_source",
+  "artifact_observation_correction",
+  "artifact_source_observation",
+  "artifact_source_binding",
+  "artifact_lineage_correction_member",
+  "artifact_lineage_correction_set",
+  "artifact_revision",
+  "artifact",
+] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
   return Effect.forEach(input, (migration) => db.transaction((tx) => migration.up(tx)), { discard: true })
@@ -93,6 +104,26 @@ function learningCommandSchema(db: TestDatabase) {
       FROM sqlite_master
       WHERE (tbl_name LIKE 'learning%' OR tbl_name = 'course_selection_acceptance_effect')
         AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+        })),
+      ),
+    )
+}
+
+function artifactSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE tbl_name LIKE 'artifact%' AND name NOT LIKE 'sqlite_autoindex_%'
       ORDER BY type, name
     `,
     )
@@ -159,10 +190,16 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION, id: BASELINE_ID },
           { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
           { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
+          { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
         ).toHaveLength(12)
+        expect(
+          yield* db.all(
+            sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'artifact%' ORDER BY name`,
+          ),
+        ).toHaveLength(8)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('event_aggregate_seq_idx', 'event_aggregate_type_seq_idx', 'session_input_session_pending_seq_idx', 'session_input_session_pending_delivery_seq_idx', 'session_input_session_admitted_seq_idx', 'session_input_session_promoted_seq_idx', 'session_message_session_idx', 'session_message_session_type_idx', 'session_message_session_seq_idx', 'session_message_session_type_seq_idx', 'session_message_session_time_created_id_idx') ORDER BY name`,
@@ -263,6 +300,129 @@ describe("DatabaseMigration", () => {
           id: "msg_gate7_legacy",
           data: '{"role":"user"}',
         })
+      }),
+    )
+  })
+
+  test("builds the same Gate 9 schema from Gate 8 without fabricating Artifact authority", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* artifactSchema(db)
+
+        yield* Effect.forEach(artifactTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 3}`)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 2}`))
+        yield* db.run(
+          sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('gate8-project', '/learning', 1, 1, '[]')`,
+        )
+        yield* db.run(
+          sql`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES ('gate8-session', 'gate8-project', 'gate8', '/learning', 'Gate 8', 'test', 1, 1)`,
+        )
+        yield* db.run(
+          sql`INSERT INTO course (id, title, state_version, time_created, time_updated) VALUES ('crs_gate8', 'Gate 8 course', 0, 1, 1)`,
+        )
+        yield* db.run(
+          sql`INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted) VALUES ('loc_gate8', 'gate8-session', 'msg_gate8', 1)`,
+        )
+
+        yield* DatabaseMigration.apply(db)
+
+        expect(yield* artifactSchema(db)).toEqual(fresh)
+        expect(yield* db.all(sql`SELECT id FROM artifact`)).toEqual([])
+        const memberForeignKeys = new Set(
+          (yield* db.all<{ from: string }>(sql`PRAGMA foreign_key_list('artifact_lineage_correction_member')`)).map(
+            (row) => row.from,
+          ),
+        )
+        for (const column of [
+          "boundary_binding_id",
+          "boundary_observation_id",
+          "boundary_descriptor_observation_id",
+          "boundary_descriptor_correction_id",
+        ]) {
+          expect(memberForeignKeys).toContain(column)
+        }
+        expect(yield* db.get(sql`SELECT id, title FROM session WHERE id = 'gate8-session'`)).toEqual({
+          id: "gate8-session",
+          title: "Gate 8",
+        })
+        expect(yield* db.get(sql`SELECT id, title FROM course WHERE id = 'crs_gate8'`)).toEqual({
+          id: "crs_gate8",
+          title: "Gate 8 course",
+        })
+        expect(yield* db.get(sql`SELECT id FROM learning_admitted_occurrence WHERE id = 'loc_gate8'`)).toEqual({
+          id: "loc_gate8",
+        })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + 3,
+        })
+
+        yield* db.run(sql`PRAGMA foreign_keys = ON`)
+        yield* db.run(sql`
+          INSERT INTO artifact (
+            id, admission_root_artifact_id, creation_basis, creation_capability_identity,
+            creation_capability_version, disposition_version, lineage_version, correction_hidden,
+            time_created, time_updated
+          ) VALUES ('artifact-fk', 'artifact-fk', 'learner_instruction', 'test', 1, 0, 0, 0, 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO artifact_revision (
+            id, recorded_artifact_id, fingerprint_algorithm, fingerprint_digest,
+            byte_length, time_first_observed
+          ) VALUES ('revision-fk', 'artifact-fk', 'sha256', ${"a".repeat(64)}, 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO artifact_source_binding (
+            id, recorded_artifact_id, binding_ordinal, canonical_location, basis_kind,
+            basis_capability_identity, basis_capability_version, time_started
+          ) VALUES ('binding-fk', 'artifact-fk', 1, '/fk.pdf', 'admission', 'test', 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO artifact_source_observation (
+            id, recorded_artifact_id, binding_id, occurrence_ordinal, result, revision_id,
+            media_type, observer_capability_identity, observer_capability_version,
+            time_observed, time_committed
+          ) VALUES (
+            'observation-fk', 'artifact-fk', 'binding-fk', 1, 'present', 'revision-fk',
+            'application/pdf', 'test', 1, 1, 1
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO artifact_lineage_correction_set (
+            id, admission_root_artifact_id, basis, capability_identity, capability_version,
+            time_committed
+          ) VALUES ('set-fk', 'artifact-fk', 'learner_statement', 'test', 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO artifact_lineage_correction_member (
+            id, set_id, recorded_artifact_id, lineage_version, start_after_ordinal,
+            end_at_ordinal, time_effective, boundary_binding_id, boundary_observation_id,
+            boundary_revision_id, boundary_descriptor_observation_id, boundary_media_type,
+            boundary_availability, outcome_kind
+          ) VALUES (
+            'member-fk', 'set-fk', 'artifact-fk', 1, 0, 1, 1, 'binding-fk',
+            'observation-fk', 'revision-fk', 'observation-fk', 'application/pdf',
+            'available', 'recorded'
+          )
+        `)
+        for (const column of [
+          "boundary_binding_id",
+          "boundary_observation_id",
+          "boundary_descriptor_observation_id",
+          "boundary_descriptor_correction_id",
+        ]) {
+          const dangling = yield* Effect.exit(
+            db.run(
+              sql`UPDATE artifact_lineage_correction_member SET ${sql.identifier(column)} = ${"missing"} WHERE id = 'member-fk'`,
+            ),
+          )
+          expect(dangling._tag).toBe("Failure")
+        }
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
       }),
     )
   })
@@ -770,6 +930,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION, id: BASELINE_ID },
           { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
           { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
+          { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
         ])
       }),
     )

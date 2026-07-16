@@ -482,6 +482,44 @@ fixed by commit `293ff6892`.
   cleanup oracle covered the relevant invariant. No unrelated monorepo-wide
   suite or later Gate work was required for acceptance.
 
+## 2026-07-16 Gate 9 review acceptance provenance
+
+Current disposition remains owned only by `docs/README.md`. Original top-level
+reviewer task `019f6ae7-fff2-7800-9d7b-023cf918e201` accepted both the
+contract/theory and implementation/evidence layers of review run
+`gate9-contract-406beb29cd4e4ec4bb24725fb4d103f8` after every requested change
+returned to that same reviewer and closed. The accepted contract/theory snapshot
+had SHA-256
+`ffff7b05196e6e167383aa937b525969d7a81e593de805aa5094fa50ddeb5be0`.
+
+- The review closed `G9-C01`–`G9-C08`: exact point and suffix correction,
+  non-byte Observation correction, source availability versus exact-Revision
+  resolvability, truthful startup-corruption scope, bounded active-location
+  lookup, atomic correction across binding episodes, unbounded finite correction
+  histories, and rejection of cross-admission merging through a fresh target.
+- It closed `G9-E01`–`G9-E02` by recording exact source provenance and expanding
+  the implementation evidence contract around the accepted counterexamples.
+- The final reviewer pass found no open acceptance-changing issue, reran document
+  integrity checks against frozen bytes, and left production and Git state
+  unmodified.
+- Contract acceptance did not authorize implementation. The maintainer
+  separately authorized that layer on 2026-07-16, after which the same
+  reviewer's first implementation pass returned `Revise` for `G9-I01`–`G9-I03`
+  and coupled gaps `G9-E03`–`G9-E04`.
+- The repair closure independently replayed superseded exact references,
+  cross-recorded Revision attribution through history and fallback, and all four
+  dangling lineage-boundary foreign-key failures. It closed every finding and
+  accepted implementation/evidence with no replacement issue.
+- Fresh closure evidence passed 13 Artifact tests with 133 assertions, 21
+  migration tests with 86 assertions, and 11 adjacent learning-domain tests
+  with 167 assertions. Core typecheck, migration-generation equivalence,
+  production Artifact lint, source ownership, and diff checks passed. The
+  optional broad Core campaign remained explicitly non-green and was neither
+  required nor promoted into Gate evidence.
+- Review acceptance did not authorize staging or a commit. No Gate 9 integration
+  commit exists yet, so `docs/README.md` keeps the Gate open pending that
+  separately governed provenance step.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit
