@@ -51,12 +51,16 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilderV1 } from "./app-node-builder-v1"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { ContentRoot } from "@opencode-ai/core/content-root"
+import { Artifact } from "@opencode-ai/core/artifact"
 
 export const AppLayer = AppNodeBuilderV1.build(
   LayerNode.group([
     Npm.node,
     FSUtil.node,
     Database.node,
+    ContentRoot.node,
+    Artifact.node,
     Auth.node,
     Account.node,
     Config.node,

@@ -11,8 +11,16 @@ import { Flag } from "@opencode-ai/core/flag/flag"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 import { Global } from "@opencode-ai/core/global"
+import { ContentRootNTFS } from "@opencode-ai/core/content-root/ntfs"
 import type { MessageV2 } from "./message-v2"
 import type { MessageID } from "./schema"
+
+const PROJECT_INSTRUCTION_MAX_BYTES = 256 * 1024
+
+type InstructionSource = {
+  path: string
+  origin: "machine" | "project"
+}
 
 function extract(messages: SessionV1.WithParts[]) {
   const paths = new Set<string>()
@@ -88,8 +96,18 @@ const layer: Layer.Layer<
         .pipe(Effect.catch(() => Effect.succeed([] as string[])))
     })
 
-    const read = Effect.fnUntraced(function* (filepath: string) {
+    const readMachine = Effect.fnUntraced(function* (filepath: string) {
       return yield* fs.readFileString(filepath).pipe(Effect.catch(() => Effect.succeed("")))
+    })
+
+    const readProject = Effect.fnUntraced(function* (filepath: string) {
+      return yield* Effect.tryPromise({
+        try: async () => {
+          const bytes = await ContentRootNTFS.readAbsoluteFile(filepath, PROJECT_INSTRUCTION_MAX_BYTES)
+          return new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+        },
+        catch: (error) => error,
+      }).pipe(Effect.catch(() => Effect.succeed("")))
     })
 
     const fetch = Effect.fnUntraced(function* (url: string) {
@@ -107,14 +125,14 @@ const layer: Layer.Layer<
       s.claims.delete(messageID)
     })
 
-    const systemPaths = Effect.fn("Instruction.systemPaths")(function* () {
+    const systemSources = Effect.fnUntraced(function* () {
       const config = yield* cfg.get()
       const ctx = yield* InstanceState.context
-      const paths = new Set<string>()
+      const sources = new Map<string, InstructionSource["origin"]>()
 
       for (const file of globalFiles) {
         if (yield* fs.existsSafe(file)) {
-          paths.add(path.resolve(file))
+          sources.set(path.resolve(file), "machine")
           break
         }
       }
@@ -126,7 +144,7 @@ const layer: Layer.Layer<
             .findUp(file, ctx.directory, ctx.worktree)
             .pipe(Effect.catch(() => Effect.succeed([])))
           if (matches.length > 0) {
-            matches.forEach((item) => paths.add(path.resolve(item)))
+            matches.forEach((item) => sources.set(path.resolve(item), "project"))
             break
           }
         }
@@ -145,25 +163,39 @@ const layer: Layer.Layer<
                 })
               : relative(instruction)
           ).pipe(Effect.catch(() => Effect.succeed([] as string[])))
-          matches.forEach((item) => paths.add(path.resolve(item)))
+          matches.forEach((item) => sources.set(path.resolve(item), "machine"))
         }
       }
 
-      return paths
+      return Array.from(sources, ([path, origin]) => ({ path, origin }))
+    })
+
+    const systemPaths = Effect.fn("Instruction.systemPaths")(function* () {
+      return new Set((yield* systemSources()).map((source) => source.path))
     })
 
     const system = Effect.fn("Instruction.system")(function* () {
       const config = yield* cfg.get()
-      const paths = yield* systemPaths()
+      const sources = yield* systemSources()
       const urls = (config.instructions ?? []).filter(
         (item) => item.startsWith("https://") || item.startsWith("http://"),
       )
 
-      const files = yield* Effect.forEach(Array.from(paths), read, { concurrency: 8 })
+      const files = yield* Effect.forEach(
+        sources,
+        (source) => (source.origin === "project" ? readProject(source.path) : readMachine(source.path)),
+        { concurrency: 8 },
+      )
       const remote = yield* Effect.forEach(urls, fetch, { concurrency: 4 })
 
       return [
-        ...Array.from(paths).flatMap((item, i) => (files[i] ? [`Instructions from: ${item}\n${files[i]}`] : [])),
+        ...sources.flatMap((source, i) =>
+          files[i]
+            ? [
+                `${source.origin === "project" ? "Untrusted project instructions from" : "Instructions from"}: ${source.path}\n${files[i]}`,
+              ]
+            : [],
+        ),
         ...urls.flatMap((item, i) => (remote[i] ? [`Instructions from: ${item}\n${remote[i]}`] : [])),
       ]
     })
@@ -209,9 +241,12 @@ const layer: Layer.Layer<
         }
 
         set.add(found)
-        const content = yield* read(found)
+        const content = yield* readProject(found)
         if (content) {
-          results.push({ filepath: found, content: `Instructions from: ${found}\n${content}` })
+          results.push({
+            filepath: found,
+            content: `Untrusted project instructions from: ${found}\n${content}`,
+          })
         }
 
         current = path.dirname(current)

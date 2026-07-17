@@ -116,6 +116,7 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
   const pathFormatter = usePathFormatter()
 
   const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
+  const onceOnly = createMemo(() => props.request.metadata.onceOnly === true)
 
   const input = createMemo(() => {
     const tool = props.request.tool
@@ -398,7 +399,11 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
               title="Permission required"
               header={header()}
               body={current.body}
-              options={{ once: "Allow once", always: "Allow always", reject: "Reject" }}
+              options={
+                onceOnly()
+                  ? { once: "Allow once", reject: "Reject" }
+                  : { once: "Allow once", always: "Allow always", reject: "Reject" }
+              }
               escapeKey="reject"
               fullscreen
               onSelect={(option) => {

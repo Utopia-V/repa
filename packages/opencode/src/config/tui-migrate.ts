@@ -17,7 +17,6 @@ const decodeScrollAcceleration = Schema.decodeUnknownOption(TuiConfig.ScrollAcce
 const decodeDiffStyle = Schema.decodeUnknownOption(TuiConfig.DiffStyle)
 
 interface MigrateInput {
-  cwd: string
   directories: string[]
 }
 
@@ -112,10 +111,9 @@ async function backupAndStripLegacy(file: string, source: string) {
     .catch(() => false)
 }
 
-async function configFiles(input: { directories: string[]; cwd: string }) {
+async function configFiles(input: { directories: string[] }) {
   const files = [
     ...ConfigPaths.fileInDirectory(Global.Path.config, "repa"),
-    ...(await Filesystem.findUp(["repa.json", "repa.jsonc"], input.cwd, undefined, { rootFirst: true })),
   ]
   for (const dir of unique(input.directories)) {
     files.push(...ConfigPaths.fileInDirectory(dir, "repa"))

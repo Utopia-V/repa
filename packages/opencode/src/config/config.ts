@@ -20,6 +20,7 @@ import { containsPath, type InstanceContext } from "../project/instance-context"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { RemoteAuthError } from "@opencode-ai/core/v1/config/error"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { ConfigPluginV1 } from "@opencode-ai/core/v1/config/plugin"
 import { ConfigAgent } from "./agent"
 import { ConfigCommand } from "./command"
@@ -28,8 +29,12 @@ import { ConfigParse } from "./parse"
 import { ConfigPaths } from "./paths"
 import { ConfigPlugin } from "./plugin"
 import { ConfigVariable } from "./variable"
+import { ConfigProjectLayer } from "./project-layer"
 import { Npm } from "@opencode-ai/core/npm"
 import { withTransientReadRetry } from "@/util/effect-http-client"
+import { ContentRootNTFS } from "@opencode-ai/core/content-root/ntfs"
+
+const PROJECT_CONFIG_MAX_BYTES = 1024 * 1024
 
 // Custom merge function that concatenates array fields instead of replacing them
 // Keep remeda's deep conditional merge type out of hot config-loading paths; TS profiling showed it dominates here.
@@ -63,30 +68,20 @@ async function substituteWellKnownRemoteConfig(input: {
   env: Record<string, string>
 }) {
   if (!isRecord(input.value) || typeof input.value.url !== "string") return undefined
+  if (/\{file:/i.test(input.value.url)) throw new Error(`delegated config URL cannot read a local file: ${input.source}`)
 
-  const url = await ConfigVariable.substitute({
-    text: input.value.url,
-    type: "virtual",
-    dir: input.dir,
-    source: input.source,
-    env: input.env,
-  })
+  const substitute = (text: string) => text.replace(/\{env:([^}]+)\}/g, (_, name) => input.env[name] ?? "")
+  const url = substitute(input.value.url)
   const headers = isRecord(input.value.headers)
     ? Object.fromEntries(
-        await Promise.all(
-          Object.entries(input.value.headers)
-            .filter((entry): entry is [string, string] => typeof entry[1] === "string")
-            .map(async ([key, value]) => [
-              key,
-              await ConfigVariable.substitute({
-                text: value,
-                type: "virtual",
-                dir: input.dir,
-                source: input.source,
-                env: input.env,
-              }),
-            ]),
-        ),
+        Object.entries(input.value.headers)
+          .filter((entry): entry is [string, string] => typeof entry[1] === "string")
+          .map(([key, value]) => {
+            if (/\{file:/i.test(value)) {
+              throw new Error(`delegated config header cannot read a local file: ${input.source}`)
+            }
+            return [key, substitute(value)]
+          }),
       )
     : undefined
 
@@ -107,10 +102,12 @@ type Info = ConfigV1.Info & {
   // plugin_origins is derived state, not a persisted config field. It keeps each winning plugin spec together
   // with the file and scope it came from so later runtime code can make location-sensitive decisions.
   plugin_origins?: ConfigPlugin.Origin[]
+  project_permission_denies?: PermissionV1.Rule[]
 }
 
 type State = {
   config: Info
+  diagnostics: ConfigProjectLayer.Diagnostic[]
   directories: string[]
   deps: Fiber.Fiber<void>[]
 }
@@ -122,6 +119,7 @@ export interface Interface {
   readonly updateGlobal: (config: Info) => Effect.Effect<{ info: Info; changed: boolean }>
   readonly invalidate: () => Effect.Effect<void>
   readonly directories: () => Effect.Effect<string[]>
+  readonly originDiagnostics: () => Effect.Effect<ConfigProjectLayer.Diagnostic[]>
   readonly waitForDependencies: () => Effect.Effect<void>
 }
 
@@ -152,8 +150,19 @@ function patchJsonc(input: string, patch: unknown, path: string[] = []): string 
 }
 
 function writable(info: Info) {
-  const { plugin_origins: _plugin_origins, ...next } = info
+  const {
+    plugin_origins: _plugin_origins,
+    project_permission_denies: _project_permission_denies,
+    ...next
+  } = info
   return next
+}
+
+function delegatedProviderConfig(input: unknown, namespace: string): Info {
+  if (!isRecord(input)) return {}
+  if (!isRecord(input.provider)) return {}
+  if (!(namespace in input.provider)) return {}
+  return { provider: { [namespace]: input.provider[namespace] } } as Info
 }
 
 function writableGlobal(info: Info) {
@@ -232,6 +241,29 @@ const layer = Layer.effect(
       return yield* loadConfig(text, { path: filepath }, env)
     })
 
+    const loadProjectFile = Effect.fnUntraced(function* (filepath: string) {
+      yield* Effect.logInfo("loading project config authority", { path: filepath })
+      const read = yield* Effect.tryPromise({
+        try: () => ContentRootNTFS.readAbsoluteFile(filepath, PROJECT_CONFIG_MAX_BYTES),
+        catch: (cause) => cause,
+      }).pipe(Effect.exit)
+      if (Exit.isFailure(read)) return ConfigProjectLayer.sourceRejected("main", filepath)
+      const decoded = yield* Effect.try({
+        try: () => new TextDecoder("utf-8", { fatal: true }).decode(read.value),
+        catch: () => undefined,
+      })
+      if (!decoded) return ConfigProjectLayer.sourceRejected("main", filepath)
+      const text = decoded
+      const parsed = yield* Effect.sync(() => ConfigParse.jsonc(text, filepath)).pipe(
+        Effect.catchCause(() => Effect.succeed(undefined)),
+      )
+      const compiled = ConfigProjectLayer.compileMain(parsed, filepath)
+      if (ConfigProjectLayer.containsSubstitution(text)) {
+        compiled.diagnostics.unshift(...ConfigProjectLayer.substitutionRejected(filepath).diagnostics)
+      }
+      return compiled
+    })
+
     const loadGlobal = Effect.fnUntraced(function* (env?: Record<string, string>) {
       let result: Info = {}
       // Seed the default global config with the schema for editor completion, but avoid writing when the user
@@ -288,6 +320,8 @@ const layer = Layer.effect(
         const auth = yield* authSvc.all().pipe(Effect.orDie)
 
         let result: Info = {}
+        const projectPermissionDenies: PermissionV1.Rule[] = []
+        const diagnostics: ConfigProjectLayer.Diagnostic[] = []
         const authEnv: Record<string, string> = {}
 
         const pluginScopeForSource = Effect.fnUntraced(function* (source: string) {
@@ -349,17 +383,12 @@ const layer = Layer.effect(
                   )
                 })
               : {}
-            const remoteConfig = mergeConfig(isRecord(wellknown.config) ? wellknown.config : {}, fetchedConfig)
-            if (!remoteConfig.$schema) remoteConfig.$schema = "https://opencode.ai/config.json"
             const source = wellknownURL
-            const next = yield* loadConfig(
-              JSON.stringify(remoteConfig),
-              {
-                dir: path.dirname(source),
-                source,
-              },
-              authEnv,
+            const remoteConfig = delegatedProviderConfig(
+              mergeConfig(isRecord(wellknown.config) ? wellknown.config : {}, fetchedConfig),
+              url,
             )
+            const next = ConfigParse.schema(ConfigV1.Info, remoteConfig, source)
             yield* merge(source, next, "global")
             yield* Effect.logDebug("loaded remote config from well-known", { url })
           }
@@ -369,13 +398,15 @@ const layer = Layer.effect(
         yield* merge(Global.Path.config, global, "global")
 
         if (Flag.REPA_CONFIG) {
-          yield* merge(Flag.REPA_CONFIG, yield* loadFile(Flag.REPA_CONFIG, authEnv))
+          yield* merge(Flag.REPA_CONFIG, yield* loadFile(Flag.REPA_CONFIG, authEnv), "global")
           yield* Effect.logDebug("loaded custom config", { path: Flag.REPA_CONFIG })
         }
 
         if (!Flag.REPA_DISABLE_PROJECT_CONFIG) {
           for (const file of yield* ConfigPaths.files("repa", ctx.directory, ctx.worktree).pipe(Effect.orDie)) {
-            yield* merge(file, yield* loadFile(file, authEnv), "local")
+            const compiled = yield* loadProjectFile(file)
+            projectPermissionDenies.push(...compiled.permissionDenies)
+            diagnostics.push(...compiled.diagnostics)
           }
         }
 
@@ -384,6 +415,19 @@ const layer = Layer.effect(
         result.plugin = result.plugin || []
 
         const directories = yield* ConfigPaths.directories(ctx.directory, ctx.worktree)
+        const projectDirectories = yield* ConfigPaths.projectDirectories(ctx.directory, ctx.worktree)
+        for (const dir of projectDirectories) {
+          diagnostics.push(ConfigProjectLayer.quarantinedDirectory(dir))
+          for (const file of ConfigPaths.fileInDirectory(dir, "repa")) {
+            if (!(yield* fs.existsSafe(file))) continue
+            const compiled = yield* loadProjectFile(file)
+            projectPermissionDenies.push(...compiled.permissionDenies)
+            diagnostics.push(...compiled.diagnostics)
+          }
+        }
+        for (const owner of yield* ConfigPaths.projectDiscoveryOwners(ctx.directory, ctx.worktree)) {
+          diagnostics.push(ConfigProjectLayer.quarantinedDiscovery(owner.source, owner.owner))
+        }
 
         if (Flag.REPA_CONFIG_DIR) {
           yield* Effect.logDebug("loading config from REPA_CONFIG_DIR", { path: Flag.REPA_CONFIG_DIR })
@@ -396,7 +440,7 @@ const layer = Layer.effect(
             for (const file of ["repa.json", "repa.jsonc"]) {
               const source = path.join(dir, file)
               yield* Effect.logDebug(`loading config from ${source}`)
-              yield* merge(source, yield* loadFile(source, authEnv))
+              yield* merge(source, yield* loadFile(source, authEnv), "global")
               result.agent ??= {}
               result.mode ??= {}
               result.plugin ??= []
@@ -432,7 +476,7 @@ const layer = Layer.effect(
           // Auto-discovered plugins under `.repa/plugin(s)` are already local files, so ConfigPlugin.load
           // returns normalized Specs and we only need to attach origin metadata here.
           const list = yield* Effect.promise(() => ConfigPlugin.load(dir))
-          yield* mergePluginOrigins(dir, list)
+          yield* mergePluginOrigins(dir, list, "global")
         }
 
         if (process.env.REPA_CONFIG_CONTENT) {
@@ -441,7 +485,7 @@ const layer = Layer.effect(
             dir: ctx.directory,
             source,
           })
-          yield* merge(source, next, "local")
+          yield* merge(source, next, "global")
           yield* Effect.logDebug("loaded custom config from REPA_CONFIG_CONTENT")
         }
 
@@ -511,8 +555,14 @@ const layer = Layer.effect(
           result.compaction = { ...result.compaction, prune: false }
         }
 
+        result.project_permission_denies = projectPermissionDenies
+
         return {
           config: result,
+          diagnostics: ConfigProjectLayer.withEffectiveState(
+            diagnostics,
+            result as Record<string, unknown>,
+          ),
           directories,
           deps,
         }
@@ -532,6 +582,10 @@ const layer = Layer.effect(
 
     const directories = Effect.fn("Config.directories")(function* () {
       return yield* InstanceState.use(state, (s) => s.directories)
+    })
+
+    const originDiagnostics = Effect.fn("Config.originDiagnostics")(function* () {
+      return yield* InstanceState.use(state, (s) => s.diagnostics)
     })
 
     const waitForDependencies = Effect.fn("Config.waitForDependencies")(function* () {
@@ -585,6 +639,7 @@ const layer = Layer.effect(
       updateGlobal,
       invalidate,
       directories,
+      originDiagnostics,
       waitForDependencies,
     })
   }),

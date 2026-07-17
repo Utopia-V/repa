@@ -18,6 +18,7 @@ import simplifySessionInputMigration from "@opencode-ai/core/database/migration/
 import courseViewAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260714191244_course_view_authority"
 import learningCommandSettlementMigration from "@opencode-ai/core/database/migration/repa/20260716045209_learning_command_settlement"
 import sourceArtifactAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716152016_source_artifact_authority"
+import contentRootAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716191911_content_root_authority"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -70,6 +71,14 @@ const artifactTables = [
   "artifact_lineage_correction_set",
   "artifact_revision",
   "artifact",
+] as const
+const contentRootTables = [
+  "content_root_current",
+  "content_mutation_grant",
+  "content_root_grant_episode",
+  "content_root_binding_episode",
+  "content_root_binding",
+  "content_root",
 ] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
@@ -137,6 +146,27 @@ function artifactSchema(db: TestDatabase) {
     )
 }
 
+function contentRootSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE (tbl_name LIKE 'content_root%' OR tbl_name = 'content_mutation_grant')
+        AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+        })),
+      ),
+    )
+}
+
 describe("DatabaseMigration", () => {
   test("serializes concurrent embedded initialization for one database path", async () => {
     await using tmp = await tmpdir()
@@ -191,6 +221,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
           { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
           { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
+          { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -200,6 +231,11 @@ describe("DatabaseMigration", () => {
             sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'artifact%' ORDER BY name`,
           ),
         ).toHaveLength(8)
+        expect(
+          yield* db.all(
+            sql`SELECT name FROM sqlite_master WHERE type = 'table' AND (name LIKE 'content_root%' OR name = 'content_mutation_grant') ORDER BY name`,
+          ),
+        ).toHaveLength(6)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('event_aggregate_seq_idx', 'event_aggregate_type_seq_idx', 'session_input_session_pending_seq_idx', 'session_input_session_pending_delivery_seq_idx', 'session_input_session_admitted_seq_idx', 'session_input_session_promoted_seq_idx', 'session_message_session_idx', 'session_message_session_type_idx', 'session_message_session_seq_idx', 'session_message_session_type_seq_idx', 'session_message_session_time_created_id_idx') ORDER BY name`,
@@ -311,10 +347,15 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* artifactSchema(db)
 
+        yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
         yield* Effect.forEach(artifactTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
-        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 3}`)
+        yield* db.run(
+          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 3}, ${BASELINE_VERSION + 4})`,
+        )
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 2}`))
         yield* db.run(
           sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('gate8-project', '/learning', 1, 1, '[]')`,
@@ -358,7 +399,7 @@ describe("DatabaseMigration", () => {
           id: "loc_gate8",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 3,
+          user_version: BASELINE_VERSION + 4,
         })
 
         yield* db.run(sql`PRAGMA foreign_keys = ON`)
@@ -422,6 +463,42 @@ describe("DatabaseMigration", () => {
           )
           expect(dangling._tag).toBe("Failure")
         }
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+      }),
+    )
+  })
+
+  test("builds the same Gate 10 schema from Gate 9 without fabricating filesystem authority", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* contentRootSchema(db)
+
+        yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 4}`)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 3}`))
+        yield* db.run(sql`
+          INSERT INTO artifact (
+            id, admission_root_artifact_id, creation_basis, creation_capability_identity,
+            creation_capability_version, disposition_version, lineage_version, correction_hidden,
+            time_created, time_updated
+          ) VALUES ('gate9-artifact', 'gate9-artifact', 'learner_instruction', 'test', 1, 0, 0, 0, 1, 1)
+        `)
+
+        yield* DatabaseMigration.apply(db)
+
+        expect(yield* contentRootSchema(db)).toEqual(fresh)
+        expect(yield* db.all(sql`SELECT id FROM content_root`)).toEqual([])
+        expect(yield* db.all(sql`SELECT id FROM content_mutation_grant`)).toEqual([])
+        expect(yield* db.get(sql`SELECT id FROM artifact WHERE id = 'gate9-artifact'`)).toEqual({
+          id: "gate9-artifact",
+        })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + 4,
+        })
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
       }),
     )
@@ -931,6 +1008,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 1, id: courseViewAuthorityMigration.id },
           { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
           { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
+          { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
         ])
       }),
     )

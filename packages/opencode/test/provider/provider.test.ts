@@ -8,7 +8,7 @@ import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { Global } from "@opencode-ai/core/global"
-import { disposeAllInstances, provideInstanceEffect, tmpdirScoped, TestInstance } from "../fixture/fixture"
+import { disposeAllInstances, provideInstanceEffect, tmpdirScoped } from "../fixture/fixture"
 import { markPluginDependenciesReady } from "../fixture/plugin"
 import { Auth } from "@/auth"
 import { Config } from "@/config/config"
@@ -1840,11 +1840,12 @@ const provideMultiInstance = <A, E, R>(eff: Effect.Effect<A, E, R>) =>
 it.effect("plugin config providers persist after instance dispose", () =>
   Effect.gen(function* () {
     const dir = yield* tmpdirScoped()
-    const configDir = path.join(dir, ".repa")
+    const configDir = path.join(dir, "machine-config")
     const root = path.join(configDir, "plugin")
     yield* Effect.promise(() => mkdir(root, { recursive: true }))
     yield* Effect.promise(() => markPluginDependenciesReady(configDir))
     yield* Effect.promise(() => markPluginDependenciesReady(Global.Path.config))
+    yield* setProcessEnv("REPA_CONFIG_DIR", configDir)
     yield* Effect.promise(() =>
       Bun.write(
         path.join(root, "demo-provider.ts"),
@@ -1896,33 +1897,38 @@ it.effect("plugin config providers persist after instance dispose", () =>
 it.instance(
   "plugin config enabled and disabled providers are honored",
   Effect.gen(function* () {
-    const instance = yield* TestInstance
-    const configDir = path.join(instance.directory, ".repa")
-    const root = path.join(configDir, "plugin")
-    yield* Effect.promise(() => mkdir(root, { recursive: true }))
-    yield* Effect.promise(() => markPluginDependenciesReady(configDir))
-    yield* Effect.promise(() =>
-      Bun.write(
-        path.join(root, "provider-filter.ts"),
-        [
-          "export default {",
-          '  id: "demo.provider-filter",',
-          "  server: async () => ({",
-          "    async config(cfg) {",
-          '      cfg.enabled_providers = ["anthropic", "openai"]',
-          '      cfg.disabled_providers = ["openai"]',
-          "    },",
-          "  }),",
-          "}",
-          "",
-        ].join("\n"),
-      ),
-    )
-
     yield* set("ANTHROPIC_API_KEY", "test-anthropic-key")
     yield* set("OPENAI_API_KEY", "test-openai-key")
     const providers = yield* list
     expect(providers[ProviderV2.ID.anthropic]).toBeDefined()
     expect(providers[ProviderV2.ID.openai]).toBeUndefined()
   }),
+  {
+    init: (directory) =>
+      Effect.gen(function* () {
+        const configDir = path.join(directory, "machine-config")
+        const root = path.join(configDir, "plugin")
+        yield* Effect.promise(() => mkdir(root, { recursive: true }))
+        yield* Effect.promise(() => markPluginDependenciesReady(configDir))
+        yield* Effect.promise(() => markPluginDependenciesReady(Global.Path.config))
+        yield* setProcessEnv("REPA_CONFIG_DIR", configDir)
+        yield* Effect.promise(() =>
+          Bun.write(
+            path.join(root, "provider-filter.ts"),
+            [
+              "export default {",
+              '  id: "demo.provider-filter",',
+              "  server: async () => ({",
+              "    async config(cfg) {",
+              '      cfg.enabled_providers = ["anthropic", "openai"]',
+              '      cfg.disabled_providers = ["openai"]',
+              "    },",
+              "  }),",
+              "}",
+              "",
+            ].join("\n"),
+          ),
+        )
+      }),
+  },
 )

@@ -156,38 +156,12 @@ const layer = Layer.effect(
     })
 
     const globalDirectory = AbsolutePath.make(global.config)
-    const locationIsGlobal = path.resolve(location.directory) === path.resolve(global.config)
-    // Read configuration once when this location opens. Later calls reuse these
-    // values until the location is reopened.
-    const discovered = locationIsGlobal
-      ? []
-      : yield* fs
-          .up({
-            targets: [".repa", ...names.toReversed()],
-            start: location.directory,
-            stop: location.project.directory,
-          })
-          .pipe(Effect.orDie)
-    const directories = [
-      globalDirectory,
-      ...discovered
-        .filter((item) => path.basename(item) === ".repa")
-        .toReversed()
-        .map((directory) => AbsolutePath.make(directory)),
-    ]
-    // A config closer to the opened directory should win over one higher up.
-    // Search starts nearby, so reverse the results before applying them.
-    const directPaths = discovered.filter((item) => path.basename(item) !== ".repa").toReversed()
-    const direct = yield* Effect.forEach(directPaths, loadFile).pipe(
-      Effect.orDie,
-      Effect.map((configs) => configs.filter((config): config is Document => config !== undefined)),
-    )
-    const supplementary = yield* Effect.forEach(directories, loadDirectory).pipe(Effect.orDie)
-    // Apply general settings first and more specific settings last:
-    // global config, project files, then `.repa` files.
-    const configs = [...(supplementary[0] ?? []), ...direct, ...supplementary.slice(1).flat()]
-    // Rules use the opposite order so a user-global rule can override a
-    // repository rule. Statement order inside each file stays unchanged.
+    void location
+    // Automatically discovered project configuration and `.repa` directories
+    // are intentionally absent from the Location graph. Released-v1 may still
+    // materialize these services for machine-owned references, so filtering in
+    // the outer v1 loader would be too late for plugin and policy side effects.
+    const configs = yield* loadDirectory(globalDirectory).pipe(Effect.orDie)
     yield* policy.load(
       configs
         .filter((config): config is Document => config.type === "document")

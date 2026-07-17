@@ -521,6 +521,49 @@ Implementation provenance is fixed by commit `41db7c292`.
   Commit `41db7c292` fixes the accepted implementation provenance;
   `docs/README.md` therefore closes Gate 9 without starting Gate 10.
 
+## 2026-07-17 Gate 10 review acceptance provenance
+
+Current disposition remains owned only by `docs/README.md`. Original top-level
+reviewer task `019f6be4-ee6d-7722-b75f-a2426b6f9e36` accepted both the
+contract/theory and implementation/evidence layers of review run
+`gate10-whole-7d33ad2f934d4a01a459e0f7c741de4f`. Contract/theory required four
+`Revise` passes before the fifth-pass `Accept`; implementation/evidence required
+an initial `Revise`, one closure `Revise`, and the final `Accept`.
+
+- Contract review closed `G10-C01`–`G10-C04`: machine-user trust origin before
+  every project-controlled effect, Gate 8-compatible manifest application,
+  independently anchored mutation-grant lifecycle, and globally unique exact
+  root binding/reapproval history.
+- Implementation review closed `G10-I01`–`G10-I04` and `G10-E01`: one bounded
+  search/inventory clock and cancellation path, non-bypassable exact one-shot
+  confirmation, one durable approval per revocable mutation authority, faithful
+  persisted verifier versions, and the six required real config/TUI consumer
+  chains.
+- The final closure independently replayed pre-aborted durable and one-shot
+  writes, cancellation while confirmation was pending, cancellation after
+  confirmation but before admission, and cancellation after admitted durable
+  and one-shot writes. Pre-admission cancellation performed no write; admitted
+  native mutation returned its real terminal result instead of detaching behind
+  a cancelled result.
+- Fresh reviewer closure evidence passed the four focused cancellation tests,
+  all eight ContentRoot tool tests with 27 assertions, OpenCode typecheck, diff
+  checks, and document integrity checks. The accepted author evidence also
+  includes the 273-test Gate-scoped OpenCode suite, Core authority/migration
+  evidence, all three affected package typechecks, migration equivalence, and
+  the compiled Windows x64 ContentRoot native smoke recorded in the Gate record.
+- The accepted implementation snapshot remained on
+  `81b0b169ef746ea18bf3859e853307188e8f5e71` with working-tree changes. Key
+  accepted SHA-256 values were
+  `B075A1661397228DAF07316BAFE15A8A5ACDBF2DAD1AF2AC7BDB1BE04396DE85`
+  for `packages/opencode/src/tool/content-root.ts` and
+  `F9123AA300F9B18E7E1121927BCAE1F1C697F2F2310E3B29171266AD0A701E13`
+  for its direct tool evidence. The reviewer left production and Git state
+  unmodified.
+- Review acceptance does not authorize integration. No Gate 10 implementation
+  commit exists yet, so `docs/README.md` records the working tree as review-
+  accepted and ready for separately authorized integration rather than formally
+  closed. Gate 11 was neither inspected nor authorized.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

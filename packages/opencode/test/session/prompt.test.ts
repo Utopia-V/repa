@@ -9,7 +9,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import path from "path"
-import { fileURLToPath } from "url"
+import { fileURLToPath, pathToFileURL } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { Agent as AgentSvc } from "../../src/agent/agent"
 import { BackgroundJob } from "@/background/job"
@@ -259,6 +259,9 @@ const withMcpInstructions = testEffect(
 )
 const unix = process.platform !== "win32" ? it.instance : it.instance.skip
 const unixNoLLMServer = process.platform !== "win32" ? noLLMServer.instance : noLLMServer.instance.skip
+const projectOriginIt = process.platform === "win32" ? it.instance : it.instance.skip
+const projectOriginNoLLMServer =
+  process.platform === "win32" ? noLLMServer.instance : noLLMServer.instance.skip
 
 // Config that registers a custom "test" provider with a "test-model" model
 // so provider model lookup succeeds inside the loop.
@@ -319,10 +322,24 @@ const writeConfig = Effect.fn("test.writeConfig")(function* (dir: string, config
   )
 })
 
+const useMachineConfig = Effect.fn("test.useMachineConfig")(function* (config: Partial<ConfigV1.Info>) {
+  const previous = process.env.REPA_CONFIG_CONTENT
+  process.env.REPA_CONFIG_CONTENT = JSON.stringify({
+    $schema: "https://opencode.ai/config.json",
+    ...config,
+  })
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => {
+      if (previous === undefined) delete process.env.REPA_CONFIG_CONTENT
+      else process.env.REPA_CONFIG_CONTENT = previous
+    }),
+  )
+})
+
 const useServerConfig = Effect.fn("test.useServerConfig")(function* (config: (url: string) => Partial<ConfigV1.Info>) {
   const { directory: dir } = yield* TestInstance
   const llm = yield* TestLLMServer
-  yield* writeConfig(dir, config(llm.url))
+  yield* useMachineConfig(config(llm.url))
   return { dir, llm }
 })
 
@@ -3028,6 +3045,108 @@ noLLMServer.instance(
         }
       }
     }),
+  30_000,
+)
+
+projectOriginIt(
+  "ordinary samples cannot select or import a project-defined provider",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const fs = yield* FSUtil.Service
+      const marker = path.join(dir, "project-provider-imported")
+      const module = path.join(dir, "project-provider.ts")
+      yield* writeText(
+        module,
+        [
+          `await Bun.write(${JSON.stringify(marker)}, "imported")`,
+          "export function createProjectCanary() { throw new Error('project provider executed') }",
+        ].join("\n"),
+      )
+      yield* writeConfig(dir, {
+        model: "project-canary/project-model",
+        provider: {
+          "project-canary": {
+            name: "Project Canary",
+            npm: pathToFileURL(module).href,
+            env: [],
+            models: {
+              "project-model": {
+                name: "Project Model",
+                tool_call: true,
+                limit: { context: 10_000, output: 1_000 },
+              },
+            },
+            options: { apiKey: "project-key" },
+          },
+        },
+      })
+      yield* llm.text("machine-owned response")
+      const { prompt, sessions, chat } = yield* boot()
+
+      yield* prompt.prompt({
+        sessionID: chat.id,
+        parts: [{ type: "text", text: "explain the next idea" }],
+      })
+
+      const user = (yield* sessions.messages({ sessionID: chat.id })).find((message) => message.info.role === "user")
+      expect(user?.info.role).toBe("user")
+      if (user?.info.role === "user") {
+        expect(String(user.info.model.providerID)).toBe("test")
+        expect(String(user.info.model.modelID)).toBe("test-model")
+      }
+      expect(yield* llm.calls).toBe(1)
+      expect(yield* fs.existsSafe(marker)).toBe(false)
+    }),
+  30_000,
+)
+
+projectOriginNoLLMServer(
+  "project commands cannot reach shell or file expansion consumers",
+  () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const fs = yield* FSUtil.Service
+      const marker = path.join(test.directory, "project-command-started")
+      const secret = path.join(test.directory, "secret.g10canary")
+      const template = [
+        "!`bun -e \"await Bun.write('project-command-started', 'started')\"`",
+        "@secret.g10canary",
+      ].join("\n")
+      yield* writeText(secret, "PROJECT FILE EXPANSION RAN")
+      yield* writeConfig(test.directory, {
+        command: {
+          "project-canary": {
+            template,
+          },
+        },
+      })
+      yield* writeText(
+        path.join(test.directory, ".repa", "command", "project-canary.md"),
+        `---\ndescription: project canary\n---\n${template}`,
+      )
+      const { prompt, sessions, chat } = yield* boot()
+
+      const exit = yield* prompt
+        .command({
+          sessionID: chat.id,
+          command: "project-canary",
+          arguments: "",
+        })
+        .pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBe(true)
+      if (Exit.isFailure(exit)) {
+        const error = Cause.squash(exit.cause)
+        expect(NamedError.Unknown.isInstance(error)).toBe(true)
+        if (NamedError.Unknown.isInstance(error)) {
+          expect(error.data.message).toContain('Command not found: "project-canary"')
+        }
+      }
+      expect(yield* fs.existsSafe(marker)).toBe(false)
+      expect(JSON.stringify(yield* sessions.messages({ sessionID: chat.id }))).not.toContain("PROJECT FILE EXPANSION RAN")
+    }),
+  { config: cfg },
   30_000,
 )
 

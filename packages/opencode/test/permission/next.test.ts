@@ -805,6 +805,66 @@ it.instance(
 )
 
 it.instance(
+  "ask - exact one-shot confirmation stays pending despite a preconfigured allow",
+  () =>
+    Effect.gen(function* () {
+      const fiber = yield* ask({
+        sessionID: SessionID.make("session_content_mutation"),
+        permission: "content_mutation",
+        patterns: ["modify:C:/materials/note.md"],
+        metadata: { onceOnly: true },
+        always: [],
+        requirePrompt: true,
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+      }).pipe(Effect.forkScoped)
+
+      const pending = yield* waitForPending(1)
+      expect(pending[0]).toMatchObject({
+        permission: "content_mutation",
+        patterns: ["modify:C:/materials/note.md"],
+        metadata: { onceOnly: true },
+      })
+      yield* reply({ requestID: pending[0]!.id, reply: "once" })
+      yield* Fiber.join(fiber)
+    }),
+  { git: true },
+)
+
+it.instance(
+  "reply - one-shot requests cannot persist even if an external client replies always",
+  () =>
+    Effect.gen(function* () {
+      const first = yield* ask({
+        id: PermissionV1.ID.make("per_once_only"),
+        sessionID: SessionID.make("session_once_only"),
+        permission: "content_mutation",
+        patterns: ["modify:C:/materials/note.md"],
+        metadata: { onceOnly: true },
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+
+      yield* waitForPending(1)
+      yield* reply({ requestID: PermissionV1.ID.make("per_once_only"), reply: "always" })
+      yield* Fiber.join(first)
+
+      const second = yield* ask({
+        id: PermissionV1.ID.make("per_once_only_again"),
+        sessionID: SessionID.make("session_once_only_again"),
+        permission: "content_mutation",
+        patterns: ["modify:C:/materials/note.md"],
+        metadata: { onceOnly: true },
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+      expect(yield* waitForPending(1)).toHaveLength(1)
+      yield* rejectAll()
+      yield* Fiber.await(second)
+    }),
+  { git: true },
+)
+
+it.instance(
   "reply - reject cancels all pending for same session",
   () =>
     Effect.gen(function* () {

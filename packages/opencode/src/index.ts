@@ -24,6 +24,7 @@ import { errorMessage } from "./util/error"
 import { PluginCommand } from "./cli/cmd/plug"
 import { PrCommand } from "./cli/cmd/pr"
 import { Heap } from "./cli/heap"
+import { ContentCommand } from "./cli/cmd/content"
 
 const args = hideBin(process.argv)
 
@@ -91,6 +92,7 @@ const cli = yargs(args)
   .command(PluginCommand)
   .command(PrCommand)
   .command(DbCommand)
+  .command(ContentCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||

@@ -1,8 +1,20 @@
 # Repa documentation
 
-Status: Gates 0–9 are closed. Gate 9 source and artifact authority passed at
-implementation commit `41db7c292` after the original independent top-level
-reviewer accepted both its contract/theory and implementation/evidence.
+Status: Gates 0–9 are closed. Gate 10 owner-led grill is complete and its
+content-root authority contract is accepted by the required whole-Gate
+independent reviewer. Four revision passes repaired the binding, batch,
+mutation-anchor, project-origin, fallback, and TUI input-routing boundaries; the
+fifth pass closed all contract findings. The first implementation/evidence pass
+returned four implementation findings and one evidence finding. Its first
+closure pass closed four of them but kept `G10-I01` open because model-mediated
+writes still ignored provider cancellation. The second closure pass accepted
+that final repair and the implementation/evidence layer. All Gate 10 findings
+are closed and the working tree is ready for separately authorized integration;
+without that integration commit Gate 10 is not yet formally closed. Gate 11
+remains unauthorized.
+Gate 9 source and artifact authority passed at implementation commit
+`41db7c292` after the original independent top-level reviewer accepted both its
+contract/theory and implementation/evidence.
 
 ## Active Gate map
 
@@ -18,6 +30,7 @@ reviewer accepted both its contract/theory and implementation/evidence.
 | 7. Course and Course View authority | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal. | Closed. Its contract, schema, migration, implementation, focused evidence, and corrected Gate 6 runtime prerequisite are accepted.                                                                                                                                                                                 |
 | 8. Learning-command settlement      | Binds trusted causal and invocation identity to one real Course-owned command.                                                                    | Closed. Its [contract and implementation record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md), migration, settlement substrate, Session lifecycle integration, and focused evidence are independently accepted.                                                                       |
 | 9. [Source and artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md) | Gives logical sources stable identity, exact observed content revisions, location history, availability, and provenance without making them Course-owned. | Closed. Its contract, Core authority, schema, migration, exact correction/read behavior, and focused evidence are independently accepted at implementation commit `41db7c292`.                                                                 |
+| 10. [Content-root authority and bounded observation](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md) | Gives real local-file discovery and observation an explicitly approved path/object authority before exact bytes enter Gate 9 records. | Contract/theory and implementation/evidence are accepted by the same whole-Gate reviewer; `G10-C01`–`G10-C04`, `G10-I01`–`G10-I04`, and `G10-E01` are closed. The working tree awaits separately authorized integration, so Gate 10 is not yet formally closed and Gate 11 remains unauthorized. |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -106,6 +119,7 @@ legacy labs.
 - [Passed Gate 7 Course and Course View authority record](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md)
 - [Passed Gate 8 learning-command settlement record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md)
 - [Passed Gate 9 source and artifact authority record](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md)
+- [Review-accepted Gate 10 contract and implementation/evidence](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

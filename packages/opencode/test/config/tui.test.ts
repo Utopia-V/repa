@@ -13,18 +13,32 @@ import { TuiConfig } from "../../src/config/tui"
 import { TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
-const it = testEffect(LayerNode.compile(LayerNode.group([Config.node, FSUtil.node])))
-const winIt = process.platform === "win32" ? it.instance : it.instance.skip
+const projectIt = testEffect(LayerNode.compile(LayerNode.group([Config.node, FSUtil.node])))
+const machineInstance = ((...args: Parameters<typeof projectIt.instance>) => {
+  const [name, value, options, testOptions] = args
+  return projectIt.instance(
+    name,
+    () =>
+      Effect.gen(function* () {
+        const test = yield* TestInstance
+        const effect = typeof value === "function" ? value() : value
+        return yield* withGlobalConfigDir(test.directory, effect)
+      }),
+    options,
+    testOptions,
+  )
+}) as typeof projectIt.instance
+const it = { ...projectIt, instance: machineInstance }
+const winIt = process.platform === "win32" ? projectIt.instance : projectIt.instance.skip
 
-const globalConfigFiles = ["repa.json", "repa.jsonc", "tui.json", "tui.jsonc"].map((file) =>
-  path.join(Global.Path.config, file),
-)
+const globalConfigFiles = () =>
+  ["repa.json", "repa.jsonc", "tui.json", "tui.jsonc"].map((file) => path.join(Global.Path.config, file))
 
 const cleanState = Effect.gen(function* () {
   const fs = yield* FSUtil.Service
   delete process.env.REPA_CONFIG
   delete process.env.REPA_TUI_CONFIG
-  yield* Effect.forEach(globalConfigFiles, (file) => fs.remove(file, { force: true }).pipe(Effect.ignore), {
+  yield* Effect.forEach(globalConfigFiles(), (file) => fs.remove(file, { force: true }).pipe(Effect.ignore), {
     discard: true,
   })
 })
@@ -83,7 +97,83 @@ const getTuiPluginOrigins = (directory: string) =>
     ),
   )
 
-it.instance("keeps server and tui plugin merge semantics aligned", () =>
+const withGlobalConfigDir = <A, E, R>(directory: string, self: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = Global.Path.config
+      ;(Global.Path as { config: string }).config = directory
+      return previous
+    }),
+    () => self,
+    (previous) =>
+      Effect.sync(() => {
+        ;(Global.Path as { config: string }).config = previous
+      }),
+  )
+
+const getTuiDiagnostics = (directory: string) =>
+  TuiConfig.Service.use((svc) => svc.originDiagnostics()).pipe(
+    Effect.provide(
+      AppNodeBuilder.build(TuiConfig.node).pipe(Layer.provide(Layer.succeed(CurrentWorkingDirectory, directory))),
+    ),
+  )
+
+winIt("keeps every automatically discovered project TUI value inert without migration", () =>
+  withCleanState(
+    Effect.gen(function* () {
+      const fs = yield* FSUtil.Service
+      const test = yield* TestInstance
+      const projectTui = {
+        $schema: "project-schema",
+        theme: "project-theme",
+        keybinds: { messages_undo: "<leader>u" },
+        plugin: ["project-plugin"],
+        plugin_enabled: { project: true },
+        leader_timeout: 10_000,
+        attention: { enabled: true, notifications: true, sound: true },
+        prompt: { submit: "enter" },
+        scroll_speed: 9,
+        scroll_acceleration: { enabled: true },
+        diff_style: "stacked",
+        mouse: true,
+      }
+      yield* fs.writeJson(path.join(Global.Path.config, "tui.json"), {
+        theme: "machine-theme",
+        leader_timeout: 2_000,
+        mouse: false,
+      })
+      yield* fs.writeJson(path.join(test.directory, "tui.json"), projectTui)
+      yield* fs.writeJson(path.join(test.directory, "repa.json"), {
+        theme: "legacy-project-theme",
+        keybinds: { messages_undo: "<leader>x" },
+        tui: projectTui,
+      })
+      yield* fs.writeWithDirs(path.join(test.directory, ".repa", "tui.json"), JSON.stringify(projectTui))
+
+      const config = yield* getTuiConfig(test.directory)
+      const diagnostics = yield* getTuiDiagnostics(test.directory)
+
+      expect(config.theme).toBe("machine-theme")
+      expect(config.leader_timeout).toBe(2_000)
+      expect(config.mouse).toBe(false)
+      expect(config.plugin).toBeUndefined()
+      expect(config.keybinds.get("messages.undo")?.[0]?.key).not.toBe("<leader>u")
+      expect(diagnostics.filter((item) => item.channel === "tui").some((item) => item.path === "mouse")).toBe(true)
+      expect(diagnostics.filter((item) => item.channel === "tui").some((item) => item.path === "leader_timeout")).toBe(
+        true,
+      )
+      expect(diagnostics.filter((item) => item.channel === "tui").every((item) => !item.denyApplied)).toBe(true)
+      expect(yield* fs.existsSafe(path.join(test.directory, "tui.json.tui-migration.bak"))).toBe(false)
+      expect(yield* fs.existsSafe(path.join(test.directory, "repa.json.tui-migration.bak"))).toBe(false)
+      expect(JSON.parse(yield* fs.readFileString(path.join(test.directory, "repa.json")))).toHaveProperty(
+        "theme",
+        "legacy-project-theme",
+      )
+    }),
+  ),
+)
+
+projectIt.instance("keeps server and tui project-plugin quarantine aligned", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -111,8 +201,8 @@ it.instance("keeps server and tui plugin merge semantics aligned", () =>
       const tuiPlugins = (tui.plugin ?? []).map((item) => ConfigPlugin.pluginSpecifier(item))
 
       expect(serverPlugins).toEqual(tuiPlugins)
-      expect(serverPlugins).toContain("shared-plugin@2.0.0")
-      expect(serverPlugins).not.toContain("shared-plugin@1.0.0")
+      expect(serverPlugins).not.toContain("shared-plugin@2.0.0")
+      expect(serverPlugins).toContain("shared-plugin@1.0.0")
 
       const serverOrigins = server.plugin_origins ?? []
       expect(serverOrigins.map((item) => ConfigPlugin.pluginSpecifier(item.spec))).toEqual(serverPlugins)
@@ -122,7 +212,7 @@ it.instance("keeps server and tui plugin merge semantics aligned", () =>
   ),
 )
 
-it.instance("loads tui config with the same precedence order as server config paths", () =>
+projectIt.instance("keeps project TUI files below the machine-owned config boundary", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -135,8 +225,8 @@ it.instance("loads tui config with the same precedence order as server config pa
       )
 
       const config = yield* getTuiConfig(test.directory)
-      expect(config.theme).toBe("local")
-      expect(config.diff_style).toBe("stacked")
+      expect(config.theme).toBe("global")
+      expect(config.diff_style).toBeUndefined()
     }),
   ),
 )
@@ -219,7 +309,7 @@ it.instance("migrates tui-specific keys from repa.json when tui.json does not ex
   ),
 )
 
-it.instance("migrates project legacy tui keys even when global tui.json already exists", () =>
+projectIt.instance("does not migrate project legacy tui keys when global tui config exists", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -231,13 +321,13 @@ it.instance("migrates project legacy tui keys even when global tui.json already 
       })
 
       const config = yield* getTuiConfig(test.directory)
-      expect(config.theme).toBe("project-migrated")
-      expect(config.scroll_speed).toBe(2)
-      expect(yield* fs.existsSafe(path.join(test.directory, "tui.json"))).toBe(true)
+      expect(config.theme).toBe("global")
+      expect(config.scroll_speed).toBeUndefined()
+      expect(yield* fs.existsSafe(path.join(test.directory, "tui.json"))).toBe(false)
 
       const server = JSON.parse(yield* fs.readFileString(path.join(test.directory, "repa.json")))
-      expect(server.theme).toBeUndefined()
-      expect(server.tui).toBeUndefined()
+      expect(server.theme).toBe("project-migrated")
+      expect(server.tui).toEqual({ scroll_speed: 2 })
     }),
   ),
 )
@@ -360,7 +450,7 @@ it.instance("migration backup preserves JSONC comments", () =>
   ),
 )
 
-it.instance("migrates legacy tui keys across multiple repa.json levels", () =>
+it.instance("migrates machine legacy tui keys without migrating nested project levels", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -371,9 +461,9 @@ it.instance("migrates legacy tui keys across multiple repa.json levels", () =>
       yield* fs.writeJson(path.join(nested, "repa.json"), { theme: "nested-theme" })
 
       const config = yield* getTuiConfig(nested)
-      expect(config.theme).toBe("nested-theme")
+      expect(config.theme).toBe("root-theme")
       expect(yield* fs.existsSafe(path.join(test.directory, "tui.json"))).toBe(true)
-      expect(yield* fs.existsSafe(path.join(nested, "tui.json"))).toBe(true)
+      expect(yield* fs.existsSafe(path.join(nested, "tui.json"))).toBe(false)
     }),
   ),
 )
@@ -413,7 +503,7 @@ it.instance("top-level keys in tui.json take precedence over nested tui key", ()
   ),
 )
 
-it.instance("project config takes precedence over REPA_TUI_CONFIG (matches REPA_CONFIG)", () =>
+it.instance("explicit REPA_TUI_CONFIG takes precedence over machine global config", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -427,15 +517,15 @@ it.instance("project config takes precedence over REPA_TUI_CONFIG (matches REPA_
         custom,
         Effect.gen(function* () {
           const config = yield* getTuiConfig(test.directory)
-          expect(config.theme).toBe("project")
-          expect(config.diff_style).toBe("auto")
+          expect(config.theme).toBe("custom")
+          expect(config.diff_style).toBe("stacked")
         }),
       )
     }),
   ),
 )
 
-it.instance("merges keybind overrides across precedence layers", () =>
+projectIt.instance("does not merge project keybind overrides into machine keybinds", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -445,7 +535,7 @@ it.instance("merges keybind overrides across precedence layers", () =>
 
       const config = yield* getTuiConfig(test.directory)
       expect(config.keybinds.get("app.exit")?.[0]?.key).toBe("ctrl+q")
-      expect(config.keybinds.get("theme.switch")?.[0]?.key).toBe("ctrl+k")
+      expect(config.keybinds.get("theme.switch")?.[0]?.key).not.toBe("ctrl+k")
     }),
   ),
 )
@@ -556,7 +646,7 @@ winIt("defaults Ctrl+Z to input undo on Windows", () =>
   ),
 )
 
-winIt("keeps explicit input undo overrides on Windows", () =>
+winIt("keeps project input undo overrides inert on Windows", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -565,7 +655,7 @@ winIt("keeps explicit input undo overrides on Windows", () =>
 
       const config = yield* getTuiConfig(test.directory)
       expect(config.keybinds.get("terminal.suspend")).toEqual([])
-      expect(config.keybinds.get("input.undo")?.[0]?.key).toBe("ctrl+y")
+      expect(config.keybinds.get("input.undo")?.[0]?.key).toBe("ctrl+z,ctrl+-,super+z")
     }),
   ),
 )
@@ -723,7 +813,7 @@ it.instance("applies file substitutions when first identical token is in a comme
   ),
 )
 
-it.instance("loads .repa/tui.json", () =>
+projectIt.instance("keeps project .repa/tui.json inert", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -734,7 +824,7 @@ it.instance("loads .repa/tui.json", () =>
       )
 
       const config = yield* getTuiConfig(test.directory)
-      expect(config.diff_style).toBe("stacked")
+      expect(config.diff_style).toBeUndefined()
     }),
   ),
 )
@@ -754,7 +844,7 @@ it.instance("supports tuple plugin specs with options in tui.json", () =>
       expect(origins).toEqual([
         {
           spec: ["acme-plugin@1.2.3", { enabled: true, label: "demo" }],
-          scope: "local",
+          scope: "global",
           source: path.join(test.directory, "tui.json"),
         },
       ])
@@ -770,36 +860,43 @@ it.instance("deduplicates tuple plugin specs by name with higher precedence winn
       yield* fs.writeJson(path.join(Global.Path.config, "tui.json"), {
         plugin: [["acme-plugin@1.0.0", { source: "global" }]],
       })
-      yield* fs.writeJson(path.join(test.directory, "tui.json"), {
+      const explicit = path.join(test.directory, "explicit-tui.json")
+      yield* fs.writeJson(explicit, {
         plugin: [
-          ["acme-plugin@2.0.0", { source: "project" }],
-          ["second-plugin@3.0.0", { source: "project" }],
+          ["acme-plugin@2.0.0", { source: "explicit" }],
+          ["second-plugin@3.0.0", { source: "explicit" }],
         ],
       })
 
-      const config = yield* getTuiConfig(test.directory)
-      const origins = yield* getTuiPluginOrigins(test.directory)
-      expect(config.plugin).toEqual([
-        ["acme-plugin@2.0.0", { source: "project" }],
-        ["second-plugin@3.0.0", { source: "project" }],
-      ])
-      expect(origins).toEqual([
-        {
-          spec: ["acme-plugin@2.0.0", { source: "project" }],
-          scope: "local",
-          source: path.join(test.directory, "tui.json"),
-        },
-        {
-          spec: ["second-plugin@3.0.0", { source: "project" }],
-          scope: "local",
-          source: path.join(test.directory, "tui.json"),
-        },
-      ])
+      yield* withEnv(
+        "REPA_TUI_CONFIG",
+        explicit,
+        Effect.gen(function* () {
+          const config = yield* getTuiConfig(test.directory)
+          const origins = yield* getTuiPluginOrigins(test.directory)
+          expect(config.plugin).toEqual([
+            ["acme-plugin@2.0.0", { source: "explicit" }],
+            ["second-plugin@3.0.0", { source: "explicit" }],
+          ])
+          expect(origins).toEqual([
+            {
+              spec: ["acme-plugin@2.0.0", { source: "explicit" }],
+              scope: "global",
+              source: explicit,
+            },
+            {
+              spec: ["second-plugin@3.0.0", { source: "explicit" }],
+              scope: "global",
+              source: explicit,
+            },
+          ])
+        }),
+      )
     }),
   ),
 )
 
-it.instance("tracks global and local plugin metadata in merged tui config", () =>
+projectIt.instance("tracks global plugin metadata while project plugins remain inert", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -809,24 +906,19 @@ it.instance("tracks global and local plugin metadata in merged tui config", () =
 
       const config = yield* getTuiConfig(test.directory)
       const origins = yield* getTuiPluginOrigins(test.directory)
-      expect(config.plugin).toEqual(["global-plugin@1.0.0", "local-plugin@2.0.0"])
+      expect(config.plugin).toEqual(["global-plugin@1.0.0"])
       expect(origins).toEqual([
         {
           spec: "global-plugin@1.0.0",
           scope: "global",
           source: path.join(Global.Path.config, "tui.json"),
         },
-        {
-          spec: "local-plugin@2.0.0",
-          scope: "local",
-          source: path.join(test.directory, "tui.json"),
-        },
       ])
     }),
   ),
 )
 
-it.instance("merges plugin_enabled flags across config layers", () =>
+projectIt.instance("keeps project plugin_enabled flags inert", () =>
   withCleanState(
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
@@ -847,8 +939,7 @@ it.instance("merges plugin_enabled flags across config layers", () =>
       const config = yield* getTuiConfig(test.directory)
       expect(config.plugin_enabled).toEqual({
         "internal:sidebar-context": false,
-        "demo.plugin": false,
-        "local.plugin": true,
+        "demo.plugin": true,
       })
     }),
   ),
@@ -860,7 +951,7 @@ it.instance("silently skips malformed tui.json - load failures degrade to {}", (
       const fs = yield* FSUtil.Service
       const test = yield* TestInstance
       yield* fs.writeFileString(path.join(test.directory, "tui.json"), '{ "theme": "broken",')
-      yield* fs.writeWithDirs(path.join(test.directory, ".repa", "tui.json"), JSON.stringify({ theme: "fallback" }))
+      yield* fs.writeJson(path.join(test.directory, "tui.jsonc"), { theme: "fallback" })
 
       const config = yield* getTuiConfig(test.directory)
       expect(config.theme).toBe("fallback")
@@ -874,7 +965,7 @@ it.instance("silently skips non-ENOENT read failures (e.g. tui.json is a directo
       const fs = yield* FSUtil.Service
       const test = yield* TestInstance
       yield* fs.makeDirectory(path.join(test.directory, "tui.json"), { recursive: true })
-      yield* fs.writeWithDirs(path.join(test.directory, ".repa", "tui.json"), JSON.stringify({ theme: "fallback" }))
+      yield* fs.writeJson(path.join(test.directory, "tui.jsonc"), { theme: "fallback" })
 
       const config = yield* getTuiConfig(test.directory)
       expect(config.theme).toBe("fallback")

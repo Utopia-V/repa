@@ -148,6 +148,35 @@ const asks = () => {
   }
 }
 
+const projectOriginIt = process.platform === "win32" ? it.instance : it.instance.skip
+
+projectOriginIt("ordinary reads cannot activate a project-defined LSP command", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const fs = yield* FSUtil.Service
+    const marker = path.join(test.directory, "project-lsp-started")
+    const file = path.join(test.directory, "lesson.g10lsp")
+    yield* put(
+      path.join(test.directory, "repa.json"),
+      JSON.stringify({
+        lsp: {
+          "project-canary": {
+            command: [process.execPath, "-e", `await Bun.write(${JSON.stringify(marker)}, "started")`],
+            extensions: [".g10lsp"],
+          },
+        },
+      }),
+    )
+    yield* put(file, "trusted lesson text")
+
+    const result = yield* run({ filePath: file })
+    yield* Effect.sleep("500 millis")
+
+    expect(result.output).toContain("trusted lesson text")
+    expect(yield* fs.existsSafe(marker)).toBe(false)
+  }),
+)
+
 describe("tool.read external_directory permission", () => {
   it.live("allows reading absolute path inside project directory", () =>
     Effect.gen(function* () {

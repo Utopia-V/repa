@@ -138,10 +138,11 @@ export function RunPermissionBody(props: {
 }) {
   const dims = useTerminalDimensions()
   const [state, setState] = createSignal(createPermissionBodyState(props.request.id))
+  const onceOnly = createMemo(() => props.request.metadata.onceOnly === true)
   const info = createMemo(() => permissionInfo(props.request))
   const ft = createMemo(() => toolFiletype(info().file))
   const narrow = createMemo(() => footerWidthPolicy(dims().width).dialog.narrow)
-  const opts = createMemo(() => permissionOptions(state().stage))
+  const opts = createMemo(() => permissionOptions(state().stage, onceOnly()))
   const busy = createMemo(() => state().submitting)
   const title = createMemo(() => {
     if (state().stage === "always") {
@@ -165,7 +166,7 @@ export function RunPermissionBody(props: {
   })
 
   const shift = (dir: -1 | 1) => {
-    setState((prev) => permissionShift(prev, dir))
+    setState((prev) => permissionShift(prev, dir, onceOnly()))
   }
 
   const submit = async (next: PermissionReply) => {
@@ -186,7 +187,7 @@ export function RunPermissionBody(props: {
 
   const run = (option: PermissionOption) => {
     const cur = state()
-    const next = permissionRun(cur, props.request.id, option)
+    const next = permissionRun(cur, props.request.id, option, onceOnly())
     if (next.state !== cur) {
       setState(next.state)
     }

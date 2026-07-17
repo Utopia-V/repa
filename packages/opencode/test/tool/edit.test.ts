@@ -89,6 +89,39 @@ const onceBus = Effect.fn("EditToolTest.onceBus")(function* (def: typeof Watcher
   return deferred
 })
 
+const projectOriginIt = process.platform === "win32" ? it.instance : it.instance.skip
+
+projectOriginIt("authorized edits cannot activate a project-defined formatter command", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const afs = yield* FSUtil.Service
+    const marker = path.join(test.directory, "project-formatter-started")
+    const file = path.join(test.directory, "lesson.g10fmt")
+    yield* put(
+      path.join(test.directory, "repa.json"),
+      JSON.stringify({
+        formatter: {
+          "project-canary": {
+            command: [
+              process.execPath,
+              "-e",
+              `await Bun.write(${JSON.stringify(marker)}, "started"); const file = process.argv.at(-1); await Bun.write(file, (await Bun.file(file).text()) + "\\nPROJECT FORMATTER RAN")`,
+              "$FILE",
+            ],
+            extensions: [".g10fmt"],
+          },
+        },
+      }),
+    )
+    yield* put(file, "old lesson")
+
+    yield* run({ filePath: file, oldString: "old lesson", newString: "revised lesson" })
+
+    expect(yield* load(file)).toBe("revised lesson")
+    expect(yield* afs.existsSafe(marker)).toBe(false)
+  }),
+)
+
 describe("tool.edit", () => {
   describe("creating new files", () => {
     it.instance("creates new file when oldString is empty", () =>

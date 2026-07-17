@@ -25,6 +25,7 @@ import { createSimpleContext } from "./helper"
 import { useKV } from "./kv"
 import { useTuiConfig } from "../config"
 import { Global } from "@opencode-ai/core/global"
+import { Flag } from "@opencode-ai/core/flag/flag"
 import { Glob } from "@opencode-ai/core/util/glob"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
@@ -36,17 +37,22 @@ export type ThemeSource = Readonly<{
 
 const themeSource: ThemeSource = {
   async discover() {
-    const directories = [Global.Path.config]
-    for (let current = process.cwd(); ; current = path.dirname(current)) {
-      directories.push(path.join(current, ".repa"))
-      if (path.dirname(current) === current) break
-    }
-    return discoverThemes(directories)
+    return discoverThemes(machineThemeDirectories())
   },
   subscribeRefresh(refresh) {
     process.on("SIGUSR2", refresh)
     return () => process.off("SIGUSR2", refresh)
   },
+}
+
+export function machineThemeDirectories() {
+  return Array.from(
+    new Set([
+      Global.Path.config,
+      path.join(Global.Path.home, ".repa"),
+      ...(Flag.REPA_CONFIG_DIR ? [Flag.REPA_CONFIG_DIR] : []),
+    ]),
+  )
 }
 
 export async function discoverThemes(directories: string[]) {

@@ -188,9 +188,30 @@ export function provideTmpdirInstance<A, E, R>(
   options?: { git?: boolean; config?: Partial<ConfigV1.Info> | (() => Partial<ConfigV1.Info>) },
 ) {
   return Effect.gen(function* () {
-    const path = yield* tmpdirScoped(options)
-    return yield* self(path).pipe(provideInstance(path))
+    const config = typeof options?.config === "function" ? options.config() : options?.config
+    const path = yield* tmpdirScoped({ git: options?.git })
+    return yield* provideMachineConfig(config, self(path).pipe(provideInstance(path)))
   }).pipe(Effect.provide(testInstanceStoreLayer))
+}
+
+function provideMachineConfig<A, E, R>(config: Partial<ConfigV1.Info> | undefined, self: Effect.Effect<A, E, R>) {
+  if (!config) return self
+  return Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = process.env.REPA_CONFIG_CONTENT
+      process.env.REPA_CONFIG_CONTENT = JSON.stringify({
+        $schema: "https://opencode.ai/config.json",
+        ...config,
+      })
+      return previous
+    }),
+    () => self,
+    (previous) =>
+      Effect.sync(() => {
+        if (previous === undefined) delete process.env.REPA_CONFIG_CONTENT
+        else process.env.REPA_CONFIG_CONTENT = previous
+      }),
+  )
 }
 
 export class TestInstance extends Context.Service<TestInstance, { readonly directory: string }>()("@test/Instance") {}
@@ -209,8 +230,18 @@ export const withTmpdirInstance =
   }) =>
   <A, E, R>(self: Effect.Effect<A, E, R>) =>
     Effect.gen(function* () {
-      const directory = yield* tmpdirScoped(options)
-      return yield* self.pipe(Effect.provideService(TestInstance, { directory }), provideInstanceEffect(directory))
+      const config = typeof options?.config === "function" ? options.config() : options?.config
+      const directory = yield* tmpdirScoped({
+        git: options?.git,
+        init: options?.init,
+      })
+      const run = self.pipe(Effect.provideService(TestInstance, { directory }), provideInstanceEffect(directory))
+      if (!config) return yield* run
+
+      // The test runner's `config` option represents an explicit machine invocation,
+      // not automatically discovered project content. Project-origin tests write a
+      // repa.json themselves so the two trust paths cannot be confused.
+      return yield* provideMachineConfig(config, run)
     }).pipe(Effect.provide(testInstanceStoreLayer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node)))
 
 export function provideTmpdirServer<A, E, R>(

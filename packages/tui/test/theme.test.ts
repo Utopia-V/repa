@@ -3,7 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises"
 import path from "node:path"
 import type { TerminalColors } from "@opentui/core"
 import { DEFAULT_THEMES, addTheme, allThemes, hasTheme, resolveTheme, terminalMode } from "../src/theme"
-import { discoverThemes } from "../src/context/theme"
+import { discoverThemes, machineThemeDirectories } from "../src/context/theme"
+import { Global } from "@opencode-ai/core/global"
 import { tmpdir } from "./fixture/fixture"
 
 test("addTheme writes into module theme store", () => {
@@ -78,4 +79,11 @@ test("custom theme precedence follows directory order", async () => {
   await writeFile(path.join(project, "themes", "custom.json"), JSON.stringify({ source: "project" }))
 
   await expect(discoverThemes([global, project])).resolves.toEqual({ custom: { source: "project" } })
+})
+
+test("default theme discovery uses only machine-owned directories", () => {
+  const directories = machineThemeDirectories()
+  expect(directories).toContain(Global.Path.config)
+  expect(directories).toContain(path.join(Global.Path.home, ".repa"))
+  expect(directories.every((directory) => !directory.startsWith(path.join(process.cwd(), ".repa")))).toBe(true)
 })

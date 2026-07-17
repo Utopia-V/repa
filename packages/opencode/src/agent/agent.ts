@@ -352,6 +352,10 @@ const layer = Layer.effect(
           )
         }
 
+        for (const agent of Object.values(agents)) {
+          agent.permission = Permission.merge(agent.permission, cfg.project_permission_denies ?? [])
+        }
+
         const get = Effect.fnUntraced(function* (agent: string) {
           return agents[agent]
         })

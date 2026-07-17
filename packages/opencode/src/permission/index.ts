@@ -9,15 +9,36 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 
 export const Event = PermissionV1.Event
 
+const projectDenyMark: unique symbol = Symbol("project-deny")
+type ProjectDenyRule = PermissionV1.Rule & { [projectDenyMark]: true }
+
+export function projectDeny(rule: Omit<PermissionV1.Rule, "action">): PermissionV1.Rule {
+  const result = { ...rule, action: "deny" } as ProjectDenyRule
+  result[projectDenyMark] = true
+  return result
+}
+
+export function isProjectDeny(rule: PermissionV1.Rule): rule is ProjectDenyRule {
+  return projectDenyMark in rule
+}
+
+function orderedRules(...rulesets: PermissionV1.Ruleset[]) {
+  const rules = rulesets.flat()
+  return [...rules.filter((rule) => !isProjectDeny(rule)), ...rules.filter(isProjectDeny)]
+}
+
 export interface Interface {
-  readonly ask: (input: PermissionV1.AskInput) => Effect.Effect<void, PermissionV1.Error>
+  readonly ask: (input: AskInput) => Effect.Effect<void, PermissionV1.Error>
   readonly reply: (input: PermissionV1.ReplyInput) => Effect.Effect<void, PermissionV1.NotFoundError>
   readonly list: () => Effect.Effect<ReadonlyArray<PermissionV1.Request>>
 }
 
+export type AskInput = PermissionV1.AskInput & { readonly requirePrompt?: boolean }
+
 interface PendingEntry {
   info: PermissionV1.Request
   deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
+  requirePrompt: boolean
 }
 
 interface State {
@@ -27,8 +48,7 @@ interface State {
 
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
   return (
-    rulesets
-      .flat()
+    orderedRules(...rulesets)
       .findLast((rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern)) ?? {
       action: "ask",
       permission,
@@ -64,10 +84,10 @@ const layer = Layer.effect(
       }),
     )
 
-    const ask = Effect.fn("Permission.ask")(function* (input: PermissionV1.AskInput) {
+    const ask = Effect.fn("Permission.ask")(function* (input: AskInput) {
       const { approved, pending } = yield* InstanceState.get(state)
-      const { ruleset, ...request } = input
-      let needsAsk = false
+      const { ruleset, requirePrompt = false, ...request } = input
+      let needsAsk = requirePrompt
 
       for (const pattern of request.patterns) {
         const rule = evaluate(request.permission, pattern, ruleset, approved)
@@ -96,7 +116,7 @@ const layer = Layer.effect(
       yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
 
       const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
-      pending.set(id, { info, deferred })
+      pending.set(id, { info, deferred, requirePrompt })
       yield* events.publish(Event.Asked, info)
       return yield* Effect.ensuring(
         Deferred.await(deferred),
@@ -140,7 +160,7 @@ const layer = Layer.effect(
       }
 
       yield* Deferred.succeed(existing.deferred, undefined)
-      if (input.reply === "once") return
+      if (input.reply === "once" || existing.requirePrompt || existing.info.metadata.onceOnly === true) return
 
       for (const pattern of existing.info.always) {
         approved.push({
@@ -152,6 +172,7 @@ const layer = Layer.effect(
 
       for (const [id, item] of pending.entries()) {
         if (item.info.sessionID !== existing.info.sessionID) continue
+        if (item.requirePrompt || item.info.metadata.onceOnly === true) continue
         const ok = item.info.patterns.every(
           (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
         )
@@ -198,16 +219,17 @@ export function fromConfig(permission: ConfigPermissionV1.Info) {
 }
 
 export function merge(...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule[] {
-  return rulesets.flat()
+  return orderedRules(...rulesets)
 }
 
 export function disabled(tools: string[], ruleset: PermissionV1.Ruleset): Set<string> {
   const edits = ["edit", "write", "apply_patch"]
   const reads = ["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"]
+  const rules = orderedRules(ruleset)
   return new Set(
     tools.filter((tool) => {
       const permission = edits.includes(tool) ? "edit" : reads.includes(tool) ? "read" : tool
-      const rule = ruleset.findLast((rule) => Wildcard.match(permission, rule.permission))
+      const rule = rules.findLast((rule) => Wildcard.match(permission, rule.permission))
       return rule?.pattern === "*" && rule.action === "deny"
     }),
   )

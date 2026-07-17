@@ -24,6 +24,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { assertExternalToolID, learningCommandPreparation } from "@/tool/accept-course-view-revision"
+import { assertExternalContentToolID } from "@/tool/content-root"
 import { normalize as normalizeLearningCommandInput } from "@/learning-command/input"
 
 const MCP_RESOURCE_TOOLS = {
@@ -415,7 +416,10 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   }
 
   const mcpTools = yield* mcp.tools()
-  for (const key of Object.keys(mcpTools)) assertExternalToolID(key, "mcp")
+  for (const key of Object.keys(mcpTools)) {
+    assertExternalToolID(key, "mcp")
+    assertExternalContentToolID(key, "mcp")
+  }
   if (flags.experimentalCodeMode) return tools
 
   for (const [key, entry] of Object.entries(mcpTools)) {

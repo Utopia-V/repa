@@ -20,6 +20,10 @@ export const fallbackSanitization = ConfigMarkdownCore.sanitize
 export async function parse(filePath: string) {
   const template = await Filesystem.readText(filePath)
 
+  return parseText(template, filePath)
+}
+
+export function parseText(template: string, filePath: string) {
   try {
     return ConfigMarkdownCore.parse(template)
   } catch (err) {

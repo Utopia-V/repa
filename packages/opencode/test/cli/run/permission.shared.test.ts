@@ -6,6 +6,7 @@ import {
   permissionCancel,
   permissionEscape,
   permissionInfo,
+  permissionOptions,
   permissionReject,
   permissionRun,
 } from "@/cli/cmd/run/permission.shared"
@@ -46,6 +47,16 @@ describe("run permission shared", () => {
     expect(permissionRun(next.state, "perm-1", "cancel").state).toMatchObject({
       stage: "permission",
       selected: "always",
+    })
+  })
+
+  test("removes persistent approval from one-shot mutation controls", () => {
+    expect(permissionOptions("permission", true)).toEqual(["once", "reject"])
+    const state = createPermissionBodyState("perm-1")
+    expect(permissionRun(state, "perm-1", "always", true)).toEqual({ state })
+    expect(permissionRun(state, "perm-1", "once", true).reply).toEqual({
+      requestID: "perm-1",
+      reply: "once",
     })
   })
 

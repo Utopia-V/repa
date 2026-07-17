@@ -4,7 +4,7 @@ import path from "path"
 import { mergeDeep, unique } from "remeda"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Cause, Context, Effect, Fiber, Layer } from "effect"
+import { Cause, Context, Effect, Exit, Fiber, Layer } from "effect"
 import { ConfigParse } from "@/config/parse"
 import * as ConfigPaths from "@/config/paths"
 import { migrateTuiConfig } from "./tui-migrate"
@@ -15,14 +15,17 @@ import { Global } from "@opencode-ai/core/global"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { CurrentWorkingDirectory } from "./tui-cwd"
 import { ConfigPlugin } from "@/config/plugin"
+import { ConfigProjectLayer } from "./project-layer"
 import { TuiKeybind } from "@opencode-ai/tui/config/keybind"
 import { InstallationLocal, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
-import { Filesystem } from "@/util/filesystem"
 import { ConfigVariable } from "@/config/variable"
 import { Npm } from "@opencode-ai/core/npm"
 import { FormatError, FormatUnknownError } from "@/cli/error"
+import { ContentRootNTFS } from "@opencode-ai/core/content-root/ntfs"
 import { TuiConfig } from "@opencode-ai/tui/config"
+
+const PROJECT_TUI_MAX_BYTES = 1024 * 1024
 
 export const Info = TuiConfig.Info
 export type Info = TuiConfig.Info
@@ -35,22 +38,18 @@ type Acc = {
 export type Resolved = TuiConfig.Resolved
 
 export type HostMetadata = {
+  diagnostics?: ConfigProjectLayer.Diagnostic[]
   plugin_origins?: ConfigPlugin.Origin[]
 }
 
 export interface Interface {
   readonly get: () => Effect.Effect<Resolved>
   readonly pluginOrigins: () => Effect.Effect<ConfigPlugin.Origin[]>
+  readonly originDiagnostics: () => Effect.Effect<ConfigProjectLayer.Diagnostic[]>
   readonly waitForDependencies: () => Effect.Effect<void>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/TuiConfig") {}
-
-function pluginScope(file: string, ctx: { directory: string }): ConfigPlugin.Scope {
-  if (Filesystem.contains(ctx.directory, file)) return "local"
-  // if (ctx.worktree !== "/" && Filesystem.contains(ctx.worktree, file)) return "local"
-  return "global"
-}
 
 function normalize(raw: Record<string, unknown>) {
   const data = { ...raw }
@@ -146,6 +145,37 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
       return yield* load(text, filepath)
     })
 
+  const diagnoseProjectFile = Effect.fnUntraced(function* (filepath: string, embedded = false) {
+    const read = yield* Effect.tryPromise({
+      try: () => ContentRootNTFS.readAbsoluteFile(filepath, PROJECT_TUI_MAX_BYTES),
+      catch: (cause) => cause,
+    }).pipe(Effect.exit)
+    if (Exit.isFailure(read)) return ConfigProjectLayer.sourceRejected("tui", filepath).diagnostics
+    const decoded = yield* Effect.try({
+      try: () => new TextDecoder("utf-8", { fatal: true }).decode(read.value),
+      catch: () => undefined,
+    })
+    if (!decoded) return ConfigProjectLayer.sourceRejected("tui", filepath).diagnostics
+    const text = decoded
+    const parsed = yield* Effect.sync(() => ConfigParse.jsonc(text, filepath)).pipe(
+      Effect.catchCause(() => Effect.succeed(undefined)),
+    )
+    const value = (() => {
+      if (!embedded || !isRecord(parsed)) return parsed
+      const nested = isRecord(parsed.tui) ? parsed.tui : {}
+      return {
+        ...nested,
+        ...("theme" in parsed ? { theme: parsed.theme } : {}),
+        ...("keybinds" in parsed ? { keybinds: parsed.keybinds } : {}),
+      }
+    })()
+    const diagnostics = ConfigProjectLayer.compileTui(value, filepath).diagnostics
+    if (ConfigProjectLayer.containsSubstitution(text)) {
+      diagnostics.unshift(...ConfigProjectLayer.substitutionRejected(filepath, "tui").diagnostics)
+    }
+    return diagnostics
+  })
+
   const mergeFile = (acc: Acc, file: string) =>
     Effect.gen(function* () {
       const data = yield* loadFile(file)
@@ -156,10 +186,9 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
       acc.result = mergeDeep(acc.result, data)
       if (!data.plugin?.length) return
 
-      const scope = pluginScope(file, ctx)
       const plugins = ConfigPlugin.deduplicatePluginOrigins([
         ...acc.plugin_origins,
-        ...data.plugin.map((spec) => ({ spec: spec as ConfigPlugin.Origin["spec"], scope, source: file })),
+        ...data.plugin.map((spec) => ({ spec: spec as ConfigPlugin.Origin["spec"], scope: "global" as const, source: file })),
       ])
       acc.result = {
         ...acc.result,
@@ -169,11 +198,30 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
     })
 
   // Every config dir we may read from: global config dir, any `.repa`
-  // folders between cwd and home, and REPA_CONFIG_DIR.
+  // folder under the machine home, and REPA_CONFIG_DIR.
   const directories = yield* ConfigPaths.directories(ctx.directory)
-  yield* Effect.promise(() => migrateTuiConfig({ directories, cwd: ctx.directory }))
+  yield* Effect.promise(() => migrateTuiConfig({ directories }))
 
-  const projectFiles = Flag.REPA_DISABLE_PROJECT_CONFIG ? [] : yield* ConfigPaths.files("tui", ctx.directory)
+  const diagnostics: ConfigProjectLayer.Diagnostic[] = []
+  if (!Flag.REPA_DISABLE_PROJECT_CONFIG) {
+    for (const file of yield* ConfigPaths.files("tui", ctx.directory)) {
+      diagnostics.push(...(yield* diagnoseProjectFile(file)))
+    }
+    for (const file of yield* ConfigPaths.files("repa", ctx.directory)) {
+      diagnostics.push(...(yield* diagnoseProjectFile(file, true)))
+    }
+    for (const dir of yield* ConfigPaths.projectDirectories(ctx.directory)) {
+      diagnostics.push(ConfigProjectLayer.quarantinedDirectory(dir))
+      for (const file of ConfigPaths.fileInDirectory(dir, "tui")) {
+        if (!(yield* afs.existsSafe(file))) continue
+        diagnostics.push(...(yield* diagnoseProjectFile(file)))
+      }
+      for (const file of ConfigPaths.fileInDirectory(dir, "repa")) {
+        if (!(yield* afs.existsSafe(file))) continue
+        diagnostics.push(...(yield* diagnoseProjectFile(file, true)))
+      }
+    }
+  }
 
   const acc: Acc = {
     result: {},
@@ -192,14 +240,7 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
     yield* Effect.logDebug("loaded custom tui config", { path: configFile })
   }
 
-  // 3. Project tui files, applied root-first so the closest file wins.
-  for (const file of projectFiles) {
-    yield* mergeFile(acc, file)
-  }
-
-  // 4. `.repa` directories (and REPA_CONFIG_DIR) discovered while
-  // walking up the tree. Also returned below so callers can install plugin
-  // dependencies from each location.
+  // 3. Machine-global `.repa` directories and explicit REPA_CONFIG_DIR.
   const dirs = unique(directories).filter((dir) => dir.endsWith(".repa") || dir === Flag.REPA_CONFIG_DIR)
 
   for (const dir of dirs) {
@@ -220,6 +261,7 @@ const loadState = Effect.fn("TuiConfig.loadState")(function* (ctx: { directory: 
 
   return {
     config: result,
+    diagnostics: ConfigProjectLayer.withEffectiveState(diagnostics, {}, result as Record<string, unknown>),
     pluginOrigins: acc.plugin_origins,
     dirs: result.plugin?.length ? dirs : [],
   }
@@ -251,11 +293,12 @@ const layer = Layer.effect(
 
     const get = Effect.fn("TuiConfig.get")(() => Effect.succeed(data.config))
     const pluginOrigins = Effect.fn("TuiConfig.pluginOrigins")(() => Effect.succeed(data.pluginOrigins))
+    const originDiagnostics = Effect.fn("TuiConfig.originDiagnostics")(() => Effect.succeed(data.diagnostics))
 
     const waitForDependencies = Effect.fn("TuiConfig.waitForDependencies")(() =>
       Effect.forEach(deps, Fiber.join, { concurrency: "unbounded" }).pipe(Effect.ignore(), Effect.asVoid),
     )
-    return Service.of({ get, pluginOrigins, waitForDependencies })
+    return Service.of({ get, pluginOrigins, originDiagnostics, waitForDependencies })
   }).pipe(Effect.withSpan("TuiConfig.layer")),
 )
 
@@ -273,4 +316,8 @@ export async function get() {
 
 export async function pluginOrigins() {
   return runPromise((svc) => svc.pluginOrigins())
+}
+
+export async function originDiagnostics() {
+  return runPromise((svc) => svc.originDiagnostics())
 }

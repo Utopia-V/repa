@@ -2,6 +2,8 @@
 
 Date: 2026-07-13
 
+Filesystem authorization semantics clarified: 2026-07-17
+
 Status: Accepted architecture baseline under ADR-0012, with runtime lineage and
 native persistence amended by ADR-0014. This document is normative for
 ownership, dependency direction, state authority, and failure boundaries.
@@ -295,8 +297,173 @@ a content root or narrower working subtree is evaluated separately and may be
 allowed once, rejected, or permanently allowed for a canonical path scope.
 Permanent path rules are durable, inspectable, and revocable; revocation
 changes future authority and does not pretend to undo earlier writes. A broad
-content-root write grant and a narrow working-subtree grant use the same
-permission mechanism rather than different learning-domain types.
+mutation grant independently anchored at the same directory as a ContentRoot
+and a narrow working-subtree mutation grant use the same permission mechanism
+rather than different learning-domain types.
+
+### Filesystem scope, rights, and approval are separate
+
+An execution workspace, an approved content root, and a filesystem permission
+profile are different authorities even when they name the same directory:
+
+- The **execution workspace** is the current directory/worktree root set used by
+  the inherited local Agent harness for routing and ordinary permission
+  evaluation. Launching Repa there or finding a Repa marker identifies a
+  candidate scope; neither act grants broader rights by itself.
+- An **approved content root** is a durable LearnerHome capability for bounded
+  inventory, search, read, and exact source observation. It does not grant file
+  mutation, local command execution, MCP/connector use, network access, Artifact
+  admission, or learning meaning.
+- **Workspace full control** is a separate local-runtime profile over exact
+  displayed workspace roots. It may authorize reading, creating, modifying, and
+  deleting files plus local command execution inside those roots. It does not
+  make the workspace a ContentRoot, LearningSpace, Course, or automatic import
+  scope.
+- **Computer full access** is a separate high-risk local-runtime profile that
+  removes the Repa filesystem scope for paths and local commands available to
+  the current operating-system account. It does not authorize network access,
+  MCP/connectors, browser actions, remote services, or other external writes;
+  those remain independent capability axes.
+
+Scope, right, duration, approval behavior, and external-effect access therefore
+must not be compressed into one `full_access` boolean. In particular, a broad
+local filesystem grant never implies computer-wide indexing or hidden search.
+Learner-facing surfaces never use an unqualified “full access” label: they name
+workspace full control or computer full access, show the exact root set where
+one exists, and state the grant lifetime.
+More specific deny rules remain effective under narrower profiles, and a
+ContentRoot is exposed to models and subagents only through runtime-mediated,
+bounded capabilities rather than by exporting ambient shell or permission
+tokens.
+
+A ContentRoot approval binds both the displayed canonical path and the actual
+directory object. A marker, path string, directory name, model proposal, or
+project-local configuration cannot establish that identity or grant authority.
+If the bound object moves, the path is replaced, or either side of the binding
+can no longer be verified, use is suspended and fails closed until an explicit
+learner rebind or reapproval. Restoration of the same verifiable object may
+restore usability; a different object at the same spelling never inherits the
+old grant.
+
+The first concrete verifier is a narrow local-Windows-NTFS adapter. It uses the
+stable Node-API Koffi dependency to hold Win32 handles across every opened path
+component and byte stream, positively identify the NTFS volume and 128-bit file
+object, inspect stable metadata, and reject all reparse transitions. UNC and
+non-NTFS storage, unsupported platforms, ambiguous paths, and any unavailable
+primitive return typed refusal rather than falling back to lexical containment.
+Windows release packages carry the matching machine-owned native sidecar next
+to the executable; it is not project-discovered code or a second runtime.
+
+One exact canonical-path/directory-object binding belongs to at most one
+ContentRoot identity across its history. Concurrent approval of the same exact
+binding resolves to that one identity rather than creating revocation-bypassing
+duplicates. The identity retains stable exact-binding registry rows plus
+append-only binding and observation-grant episodes: revocation closes the
+active grant episode, same-binding reapproval appends a new grant episode to the
+same root, and explicit rebind appends a new binding episode plus a grant
+episode. Returning to an older exact binding reuses its stable root-owned
+binding identity through a new episode; a binding owned by another root
+conflicts. Legitimate nested roots remain distinct because they bind different
+directory objects and paths.
+
+The model may initiate a root or permission request through natural language,
+but the runtime owns candidate resolution and an explicit learner confirmation.
+A deterministic terminal command or equivalent control surface must provide
+the same operation without depending on model interpretation. The confirmation
+shows the exact path/root set, granted rights, duration, configured-model use,
+and material consequences. If model-initiated entry cannot be made reliable
+without materially weakening this boundary, Repa disables that entry while
+retaining the deterministic control and underlying authority.
+
+ContentRoot observation grants persist in LearnerHome until revoked. Workspace
+full control and computer full access are temporary by default; a learner may
+make either durable only through machine-user-owned global configuration or a
+global permission store. Project-local `repa.json`/`repa.jsonc`, `.repa`
+content, markers, plugins, source material, and model output may request but
+cannot grant or widen these capabilities. A durable global choice is itself an
+explicit authorization, while every startup still makes an active computer
+full-access profile conspicuous and revocation remains directly reachable.
+
+That trust-origin rule applies before any project-origin side effect, not only
+before plugin/tool/MCP loading or after permission merge. Automatically
+discovered main/TUI config and `.repa` content is tagged as project-origin before
+variable/file substitution, directory bootstrap, migration, dependency
+installation, package/provider resolution, dynamic import, command/formatter/
+LSP/MCP spawn, network connection, model/provider selection, or external UI
+effect. Reading the bounded no-link config candidate is not authority to read a
+substituted file or perform the declared effect.
+
+Origin follows the acquisition channel, not a later path-containment guess:
+global/managed config and explicit process-launch overrides are machine-owned;
+automatically walked worktree/current-directory files remain project-origin;
+and authenticated remote metadata is delegated only within an already
+machine-authorized provider namespace, never as generic host-effect config.
+
+The runtime compiles each project layer through an exhaustive deny-by-default
+disposition before ordinary merge. Only top-level `permission` leaves equal to
+`deny` or legacy top-level `tools: false` may survive. They are normalized to
+added deny rules in the same permission evaluator after machine-owned candidate
+identity, order, and defaults are fixed. Executable/loader declarations,
+shell/server/LSP/formatter/MCP commands, provider packages/endpoints/model
+selection, path/URL/reference expansion, project command/agent defaults,
+permission/tool allow or ask values, telemetry, TUI plugins/effectful keybindings/
+attention, resource policy, presentation, input routing, and unknown fields
+remain inert. The entire automatically discovered project TUI layer is inert,
+including a nested TUI projection normalized from project `repa.json[c]`, theme,
+timed-leader, prompt/scroll/layout, and mouse controls. Every project `disable`,
+ignore, snapshot, deletion, reorder, or candidate filter is also inert: negative
+spelling is not semantic narrowing when it can cause fallback or select another
+agent, model, provider, tool, or effect. A same-named global value is active
+because its machine-owned layer supplied it, not because project content matched
+it. For every exact permission query, the project projection may only leave the
+machine result unchanged or turn it into `deny`; it cannot change any selected
+agent, model, provider, extension, transport, default, fallback, terminal
+input-to-operation mapping, or permission-control activation. A denied tool may
+disappear from the permission-visible tool set, but the result must be an
+order-preserving subset of machine-registered tools with no added or substituted
+tool.
+
+Project `.repa` discovery itself performs no project write, migration,
+dependency installation, or auto command/agent/skill/tool/plugin loading in the
+first Gate 10 baseline. Current main/TUI schema fields and non-schema discovery
+owners have one explicit disposition; adding an unclassified field/path fails
+closed. Retaining the inherited mechanisms and visibly untrusted project
+`AGENTS.md`, `.agents`/`.claude` skill text, and source content does not make
+checked-in content config authority or auto-run referenced scripts, and Gate 10
+adds no broad trusted-project profile.
+
+Revocation ends future authority and does not pretend to retract bytes already
+sent to a model, undo completed writes, erase Interaction history, or delete
+Artifact/Observation/provenance records. Artifact withdrawal governs future
+ordinary material discovery and use; deletion of Repa-owned retained or
+representation bytes and deletion of the learner's source file remain separate
+operations. In-flight calls retain the authorization snapshot under which they
+were issued unless cancellation wins before the operation's admission point; no
+pending process-local approval is recovered after restart.
+
+Direct mediated file mutation uses a separate once-only or durable grant. A
+durable mutation grant owns its own verified directory path/object anchor and
+relative path/subtree rights; a ContentRoot binding may be provenance but is not
+the verifier anchor. ContentRoot revoke or rebind therefore neither revokes nor
+transfers write authority. Anchor replacement suspends the mutation grant and
+requires new explicit approval. Rename and move evaluate source and destination
+paths/rights independently, even when one sufficiently broad grant satisfies
+both checks.
+
+For model-issued direct mutation, provider cancellation wins before the exact
+mutation-admission check. One-shot proposal resolution and permission waiting
+remain cancellable and perform a second check after confirmation. Once the
+check admits the native write, Repa waits for its real outcome without
+interrupting it; a later abort cannot report cancellation while irreversible
+filesystem work continues in the background.
+
+The current inherited `allow`/`ask`/`deny` events, directory/worktree routing,
+tool rules, and layered Repa configuration are reusable mechanics. Their
+present semantics are not the Repa authority: `external_directory`, an
+in-memory “always” answer, automatic approval, or enabling every tool is not a
+ContentRoot grant, workspace full control, or computer full access. Repa must
+not claim a workspace or computer containment boundary until its execution
+backend actually enforces that claim on the supported platform.
 
 Directory discovery and semantic interpretation have different owners. The
 program enumerates only authorized paths, applies ignore and size bounds,
@@ -309,6 +476,15 @@ domain command then validates sources, revisions, structure and authority
 before accepting a provisional or source-grounded revision. The model cannot
 expand its own root access, perform an unbounded hidden scan, or turn a folder
 name directly into learning truth.
+
+Applying a selected multi-file initialization manifest is a deterministic
+system/terminal operation, not one model-visible durable command. It prepares
+and applies each member through Gate 9 independently, so a crash may leave only
+already truthful committed members and no reconstructed batch. A model-visible
+state-changing source command remains governed by Gate 8 and may introduce at
+most one new Artifact mutation with its terminal Tool Part in the same
+transaction. Repeated model-owned admissions require fresh model operations;
+no durable batch coordinator or synthetic model result bridges partial commits.
 
 Discovery is lazy. Approving a root may build or refresh only a cheap,
 deterministic, bounded inventory; it does not cause the LLM to read and classify

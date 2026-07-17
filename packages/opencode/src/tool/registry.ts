@@ -60,6 +60,15 @@ import {
   learningCommandPreparation,
 } from "./accept-course-view-revision"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
+import {
+  ContentInventoryTool,
+  ContentReadTool,
+  ContentRootsTool,
+  ContentSearchTool,
+  ContentWriteTool,
+  assertExternalContentToolID,
+} from "./content-root"
+import { ContentRoot } from "@opencode-ai/core/content-root"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -116,6 +125,11 @@ const layer = Layer.effect(
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
     const acceptCourseViewRevision = yield* AcceptCourseViewRevisionTool
+    const contentRoots = yield* ContentRootsTool
+    const contentInventory = yield* ContentInventoryTool
+    const contentSearch = yield* ContentSearchTool
+    const contentRead = yield* ContentReadTool
+    const contentWrite = yield* ContentWriteTool
     const agent = yield* Agent.Service
     const codeMode = flags.experimentalCodeMode ? yield* Effect.promise(() => import("./code-mode")) : undefined
     const codeModeTool = codeMode ? yield* codeMode.CodeModeTool : undefined
@@ -204,7 +218,10 @@ const layer = Layer.effect(
             custom.push(fromPlugin(id, def))
           }
         }
-        for (const item of custom) assertExternalToolID(item.id, "custom")
+        for (const item of custom) {
+          assertExternalToolID(item.id, "custom")
+          assertExternalContentToolID(item.id, "custom")
+        }
 
         yield* config.get()
         const questionEnabled = ["app", "cli", "desktop"].includes(flags.client) || flags.enableQuestionTool
@@ -227,6 +244,11 @@ const layer = Layer.effect(
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
           acceptCourseViewRevision: Tool.init(acceptCourseViewRevision),
+          contentRoots: Tool.init(contentRoots),
+          contentInventory: Tool.init(contentInventory),
+          contentSearch: Tool.init(contentSearch),
+          contentRead: Tool.init(contentRead),
+          contentWrite: Tool.init(contentWrite),
           ...(codeModeTool ? { execute: Tool.init(codeModeTool) } : {}),
         })
 
@@ -236,6 +258,11 @@ const layer = Layer.effect(
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
             tool.acceptCourseViewRevision,
+            tool.contentRoots,
+            tool.contentInventory,
+            tool.contentSearch,
+            tool.contentRead,
+            tool.contentWrite,
             tool.shell,
             tool.read,
             tool.glob,
@@ -456,6 +483,7 @@ export const node = LayerNode.make({
     Database.node,
     Ripgrep.node,
     LearningCommandRuntime.node,
+    ContentRoot.node,
   ],
 })
 

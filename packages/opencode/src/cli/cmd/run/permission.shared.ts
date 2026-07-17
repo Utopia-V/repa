@@ -77,9 +77,9 @@ export function createPermissionBodyState(requestID: string): PermissionBodyStat
   }
 }
 
-export function permissionOptions(stage: PermissionStage): PermissionOption[] {
+export function permissionOptions(stage: PermissionStage, onceOnly = false): PermissionOption[] {
   if (stage === "permission") {
-    return ["once", "always", "reject"]
+    return onceOnly ? ["once", "reject"] : ["once", "always", "reject"]
   }
 
   if (stage === "always") {
@@ -150,8 +150,8 @@ export function permissionReply(requestID: string, reply: PermissionReply["reply
   }
 }
 
-export function permissionShift(state: PermissionBodyState, dir: -1 | 1): PermissionBodyState {
-  const list = permissionOptions(state.stage)
+export function permissionShift(state: PermissionBodyState, dir: -1 | 1, onceOnly = false): PermissionBodyState {
+  const list = permissionOptions(state.stage, onceOnly)
   if (list.length === 0) {
     return state
   }
@@ -171,13 +171,19 @@ export function permissionHover(state: PermissionBodyState, option: PermissionOp
   }
 }
 
-export function permissionRun(state: PermissionBodyState, requestID: string, option: PermissionOption): PermissionStep {
+export function permissionRun(
+  state: PermissionBodyState,
+  requestID: string,
+  option: PermissionOption,
+  onceOnly = false,
+): PermissionStep {
   if (state.submitting) {
     return { state }
   }
 
   if (state.stage === "permission") {
     if (option === "always") {
+      if (onceOnly) return { state }
       return {
         state: {
           ...state,

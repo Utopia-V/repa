@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import path from "path"
+import { symlink } from "fs/promises"
 import { Effect, FileSystem, Layer } from "effect"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 
@@ -224,7 +225,9 @@ describe("Instruction.system", () => {
         const rules = yield* svc.system()
         expect(rules).toHaveLength(2)
         expect(rules[0]).toBe(`Instructions from: ${path.join(globalTmp, "AGENTS.md")}\n# Global Instructions`)
-        expect(rules[1]).toBe(`Instructions from: ${path.join(projectTmp, "AGENTS.md")}\n# Project Instructions`)
+        expect(rules[1]).toBe(
+          `Untrusted project instructions from: ${path.join(projectTmp, "AGENTS.md")}\n# Project Instructions`,
+        )
       }).pipe(provideInstance(projectTmp), provideInstruction({ home: globalTmp, config: globalTmp }))
     }),
   )
@@ -259,6 +262,28 @@ describe("Instruction.systemPaths global config", () => {
         const paths = yield* svc.systemPaths()
         expect(paths.has(path.join(globalTmp, "AGENTS.md"))).toBe(true)
       }).pipe(provideInstance(projectTmp), provideInstruction({ home: globalTmp, config: globalTmp }))
+    }),
+  )
+})
+
+describe("Instruction project trust boundary", () => {
+  const winIt = process.platform === "win32" ? it.live : it.live.skip
+
+  winIt("does not follow a project junction to load outside instructions", () =>
+    Effect.gen(function* () {
+      const outside = yield* tmpWithFiles({ "AGENTS.md": "# Outside Instructions", "file.ts": "outside" })
+      const project = yield* tmpdirScoped()
+      yield* Effect.promise(() => symlink(outside, path.join(project, "linked"), "junction"))
+
+      yield* Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        const result = yield* svc.resolve(
+          [],
+          path.join(project, "linked", "file.ts"),
+          MessageID.make("msg_instruction-junction-1"),
+        )
+        expect(result).toEqual([])
+      }).pipe(provideInstance(project), provideInstruction({ home: project, config: project }))
     }),
   )
 })

@@ -16,18 +16,23 @@ import { Glob } from "@opencode-ai/core/util/glob"
 import { Discovery } from "./discovery"
 import { isRecord } from "@/util/record"
 import { escapeHtml } from "@/util/html"
+import { ContentRootNTFS } from "@opencode-ai/core/content-root/ntfs"
 
 const CLAUDE_EXTERNAL_DIR = ".claude"
 const AGENTS_EXTERNAL_DIR = ".agents"
 const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
 const REPA_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
 const SKILL_PATTERN = "**/SKILL.md"
+const PROJECT_SKILL_MAX_BYTES = 256 * 1024
+const PROJECT_SKILL_MAX_ENTRIES = 512
+const PROJECT_SKILL_MAX_DEPTH = 8
 
 export const Info = Schema.Struct({
   name: Schema.String,
   description: Schema.optional(Schema.String),
   location: Schema.String,
   content: Schema.String,
+  origin: Schema.optional(Schema.Literals(["machine", "project"])),
 })
 export type Info = Schema.Schema.Type<typeof Info>
 
@@ -73,13 +78,18 @@ type State = {
   dirs: Set<string>
 }
 
+type Candidate = {
+  path: string
+  origin: "machine" | "project"
+}
+
 type DiscoveryState = {
-  matches: string[]
+  matches: Candidate[]
   dirs: string[]
 }
 
 type ScanState = {
-  matches: Set<string>
+  matches: Map<string, Candidate["origin"]>
   dirs: Set<string>
 }
 
@@ -91,9 +101,19 @@ export interface Interface {
   readonly available: (agent?: Agent.Info) => Effect.Effect<Info[]>
 }
 
-const add = Effect.fnUntraced(function* (state: State, match: string, events: EventV2Bridge.Service["Service"]) {
+const add = Effect.fnUntraced(function* (
+  state: State,
+  candidate: Candidate,
+  events: EventV2Bridge.Service["Service"],
+) {
+  const match = candidate.path
   const md = yield* Effect.tryPromise({
-    try: () => ConfigMarkdown.parse(match),
+    try: async () => {
+      if (candidate.origin === "machine") return ConfigMarkdown.parse(match)
+      const bytes = await ContentRootNTFS.readAbsoluteFile(match, PROJECT_SKILL_MAX_BYTES)
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes)
+      return ConfigMarkdown.parseText(text, match)
+    },
     catch: (err) => err,
   }).pipe(
     Effect.catch(
@@ -117,6 +137,7 @@ const add = Effect.fnUntraced(function* (state: State, match: string, events: Ev
       existing: state.skills[md.data.name].location,
       duplicate: match,
     })
+    if (candidate.origin === "project") return
   }
 
   state.dirs.add(path.dirname(match))
@@ -125,6 +146,7 @@ const add = Effect.fnUntraced(function* (state: State, match: string, events: Ev
     description: md.data.description,
     location: match,
     content: md.content,
+    origin: candidate.origin,
   }
 })
 
@@ -132,7 +154,7 @@ const scan = Effect.fnUntraced(function* (
   state: ScanState,
   root: string,
   pattern: string,
-  opts?: { dot?: boolean; scope?: string },
+  opts?: { dot?: boolean; scope?: string; origin?: Candidate["origin"] },
 ) {
   const matches = yield* Effect.tryPromise({
     try: () =>
@@ -154,10 +176,56 @@ const scan = Effect.fnUntraced(function* (
   )
 
   for (const match of matches) {
-    state.matches.add(match)
+    const origin = opts?.origin ?? "machine"
+    if (state.matches.get(match) === "machine" && origin === "project") continue
+    state.matches.set(match, origin)
     state.dirs.add(path.dirname(match))
   }
 })
+
+const scanProjectExternal = Effect.fnUntraced(function* (state: ScanState, root: string) {
+  const matches = yield* Effect.tryPromise({
+    try: () => projectSkillFiles(root),
+    catch: (error) => error,
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning("failed to scan untrusted project skills", { dir: root, error }).pipe(
+        Effect.as([] as string[]),
+      ),
+    ),
+  )
+  for (const match of matches) {
+    if (state.matches.get(match) === "machine") continue
+    state.matches.set(match, "project")
+  }
+})
+
+async function projectSkillFiles(root: string) {
+  const descriptor = await ContentRootNTFS.inspectDirectory(root)
+  const skills = await ContentRootNTFS.inspectRelative(descriptor, "skills").catch(() => undefined)
+  if (skills?.kind !== "directory") return []
+
+  const matches: string[] = []
+  const pending = [{ relative: "skills", depth: 0 }]
+  let visited = 0
+  while (pending.length) {
+    const current = pending.shift()!
+    const entries = await ContentRootNTFS.listDirectory(descriptor, current.relative)
+    for (const name of entries) {
+      visited += 1
+      if (visited > PROJECT_SKILL_MAX_ENTRIES) return matches.toSorted()
+      const relative = path.win32.join(current.relative, name)
+      const entry = await ContentRootNTFS.inspectRelative(descriptor, relative).catch(() => undefined)
+      if (!entry) continue
+      if (entry.kind === "directory") {
+        if (current.depth < PROJECT_SKILL_MAX_DEPTH) pending.push({ relative, depth: current.depth + 1 })
+        continue
+      }
+      if (name.toLowerCase() === "skill.md") matches.push(entry.canonicalPath)
+    }
+  }
+  return matches.toSorted()
+}
 
 const discoverSkills = Effect.fnUntraced(function* (
   config: Config.Interface,
@@ -169,7 +237,7 @@ const discoverSkills = Effect.fnUntraced(function* (
   directory: string,
   worktree: string,
 ) {
-  const state: ScanState = { matches: new Set(), dirs: new Set() }
+  const state: ScanState = { matches: new Map(), dirs: new Set() }
 
   const externalDirs: string[] = []
   if (!disableExternalSkills) {
@@ -187,7 +255,7 @@ const discoverSkills = Effect.fnUntraced(function* (
       .pipe(Effect.catch(() => Effect.succeed([] as string[])))
 
     for (const root of upDirs) {
-      yield* scan(state, root, EXTERNAL_SKILL_PATTERN, { dot: true, scope: "project" })
+      yield* scanProjectExternal(state, root)
     }
   }
 
@@ -216,7 +284,10 @@ const discoverSkills = Effect.fnUntraced(function* (
   }
 
   return {
-    matches: Array.from(state.matches),
+    matches: Array.from(state.matches, ([path, origin]) => ({ path, origin })).toSorted((a, b) => {
+      if (a.origin !== b.origin) return a.origin === "machine" ? -1 : 1
+      return a.path.localeCompare(b.path)
+    }),
     dirs: Array.from(state.dirs),
   }
 })
@@ -226,8 +297,8 @@ const loadSkills = Effect.fnUntraced(function* (
   discovered: DiscoveryState,
   events: EventV2Bridge.Service["Service"],
 ) {
-  yield* Effect.forEach(discovered.matches, (match) => add(state, match, events), {
-    concurrency: "unbounded",
+  yield* Effect.forEach(discovered.matches, (candidate) => add(state, candidate, events), {
+    concurrency: 1,
     discard: true,
   })
 
@@ -312,6 +383,7 @@ export function fmt(list: Info[], opts: { verbose: boolean }) {
           `    <name>${skill.name}</name>`,
           `    <description>${skill.description}</description>`,
           `    <location>${escapeHtml(skill.location)}</location>`,
+          ...(skill.origin === "project" ? ["    <trust>untrusted project content</trust>"] : []),
           "  </skill>",
         ]),
       "</available_skills>",
@@ -322,7 +394,10 @@ export function fmt(list: Info[], opts: { verbose: boolean }) {
     "## Available Skills",
     ...described
       .toSorted((a, b) => a.name.localeCompare(b.name))
-      .map((skill) => `- **${skill.name}**: ${skill.description}`),
+      .map(
+        (skill) =>
+          `- **${skill.name}**${skill.origin === "project" ? " (untrusted project content)" : ""}: ${skill.description}`,
+      ),
   ].join("\n")
 }
 

@@ -3,6 +3,7 @@
 import { $ } from "bun"
 import fs from "fs"
 import path from "path"
+import { tmpdir } from "os"
 import { fileURLToPath } from "url"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 
@@ -16,6 +17,7 @@ const generated = await import("./generate.ts")
 
 import { Script } from "@opencode-ai/script"
 import pkg from "../package.json"
+import corePkg from "../../core/package.json"
 
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
@@ -141,6 +143,11 @@ if (!skipInstall) {
   await $`bun install --os="*" --cpu="*" @opentui/core@${pkg.dependencies["@opentui/core"]}`
   await $`bun install --os="*" --cpu="*" @parcel/watcher@${pkg.dependencies["@parcel/watcher"]}`
   await $`bun install --os="*" --cpu="*" @ff-labs/fff-bun@${pkg.dependencies["@ff-labs/fff-bun"]}`
+  for (const arch of [...new Set(targets.filter((item) => item.os === "win32").map((item) => item.arch))]) {
+    await $`bun install --no-save --os=win32 --cpu=${arch} @koromix/koffi-win32-${arch}@${corePkg.dependencies.koffi}`.cwd(
+      path.resolve(dir, "../core"),
+    )
+  }
 }
 for (const item of targets) {
   const name = [
@@ -198,6 +205,8 @@ for (const item of targets) {
     },
   })
 
+  if (item.os === "win32") packageKoffi(item.arch, path.resolve(`dist/${name}/bin`))
+
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
     const binaryPath = `dist/${name}/bin/repa`
@@ -205,6 +214,10 @@ for (const item of targets) {
     try {
       const versionOutput = await $`${binaryPath} --version`.text()
       console.log(`Smoke test passed: ${versionOutput.trim()}`)
+      if (item.os === "win32") {
+        await smokeContentRoot(path.resolve(binaryPath))
+        console.log(`ContentRoot native smoke test passed`)
+      }
     } catch (e) {
       console.error(`Smoke test failed for ${name}:`, e)
       process.exit(1)
@@ -238,6 +251,53 @@ if (Script.release) {
     }
   }
   await $`gh release upload v${Script.version} ./dist/*.zip ./dist/*.tar.gz --clobber --repo ${process.env.GH_REPO}`
+}
+
+function packageKoffi(arch: "arm64" | "x64", output: string) {
+  const entry = fs.realpathSync(Bun.resolveSync("koffi", path.resolve(dir, "../core")))
+  const nodeModules = path.dirname(path.dirname(entry))
+  const roots = [
+    path.resolve(dir, `../core/node_modules/@koromix/koffi-win32-${arch}`),
+    path.join(nodeModules, "@koromix", `koffi-win32-${arch}`),
+  ]
+  const packageRoot = roots.find((root) => fs.existsSync(root))
+  if (!packageRoot) {
+    throw new Error(`Missing Koffi package for win32-${arch}; run the build without --skip-install`)
+  }
+  const source = path.join(packageRoot, `win32_${arch}`, "koffi.node")
+  if (!fs.existsSync(source)) {
+    throw new Error(`Missing Koffi native module for win32-${arch}; run the build without --skip-install`)
+  }
+  const target = path.join(output, "koffi", `win32_${arch}`, "koffi.node")
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.copyFileSync(source, target)
+  fs.copyFileSync(path.join(path.dirname(entry), "LICENSE.txt"), path.join(output, "koffi", "LICENSE.txt"))
+}
+
+async function smokeContentRoot(binaryPath: string) {
+  const base = fs.mkdtempSync(path.join(tmpdir(), "repa-content-root-smoke-"))
+  const content = path.join(base, "content")
+  const xdg = path.join(base, "xdg")
+  fs.mkdirSync(content, { recursive: true })
+  fs.writeFileSync(path.join(content, "lesson.txt"), "Gate 10 compiled NTFS stable read smoke.\n")
+  try {
+    const root = JSON.parse(
+      await $`REPA_DB=${path.join(base, "repa.db")} XDG_CONFIG_HOME=${path.join(xdg, "config")} XDG_DATA_HOME=${path.join(xdg, "data")} XDG_CACHE_HOME=${path.join(xdg, "cache")} XDG_STATE_HOME=${path.join(xdg, "state")} REPA_TEST_HOME=${path.join(base, "home")} NO_COLOR=1 ${binaryPath} content root add ${content} --yes --pure`
+        .cwd(content)
+        .text(),
+    ) as { id?: unknown }
+    if (typeof root.id !== "string") throw new Error(`ContentRoot smoke did not return a root identity`)
+    const inventory = JSON.parse(
+      await $`REPA_DB=${path.join(base, "repa.db")} XDG_CONFIG_HOME=${path.join(xdg, "config")} XDG_DATA_HOME=${path.join(xdg, "data")} XDG_CACHE_HOME=${path.join(xdg, "cache")} XDG_STATE_HOME=${path.join(xdg, "state")} REPA_TEST_HOME=${path.join(base, "home")} NO_COLOR=1 ${binaryPath} content root inventory ${root.id} --pure`
+        .cwd(content)
+        .text(),
+    ) as { entries?: { relativePath?: unknown }[] }
+    if (!inventory.entries?.some((entry) => entry.relativePath === "lesson.txt")) {
+      throw new Error(`ContentRoot smoke could not inventory the stable test file`)
+    }
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true })
+  }
 }
 
 export { binaries }
