@@ -1,12 +1,11 @@
 # OpenCode fork Gate 10: content-root authority and bounded observation
 
-Status: Contract/theory accepted by the required whole-Gate independent reviewer
-on the fifth pass after four `Revise` rounds. The first implementation/evidence
-round returned `Revise`; its first closure pass kept `G10-I01` open because
-`content_write` still ignored provider cancellation. The second closure pass
-accepted that bounded repair and the implementation/evidence layer. All Gate 10
-review findings are closed. The accepted working tree awaits separately
-authorized integration; Gate 11 remains unauthorized.
+Status: Closed at implementation commit `fb6ed5763`. Contract/theory was
+accepted by the required whole-Gate independent reviewer on the fifth pass
+after four `Revise` rounds. The implementation/evidence layer was accepted
+after two closure passes, and all Gate 10 review findings were closed before
+the maintainer separately authorized integration. Gate 11 remains outside this
+record.
 
 Date: 2026-07-17
 
@@ -30,8 +29,10 @@ decisions recorded below are product authority and have been promoted to the
 architecture owner. The identity, transition, implementation, and evidence
 sections remain reviewable against production behavior. Contract acceptance
 authorized Gate 10 implementation under the maintainer's explicit instruction;
-implementation/evidence acceptance establishes review readiness but does not
-authorize an integration commit, Gate 11 work, or a broader permission rewrite.
+implementation/evidence acceptance established review readiness. The maintainer
+then separately authorized integration, fixed at commit `fb6ed5763`, which
+closes Gate 10 but does not authorize Gate 11 work or a broader permission
+rewrite.
 
 ## Why this Gate exists
 
@@ -1268,8 +1269,8 @@ identity behavior rather than inferring Windows safety from POSIX symlink tests.
 ## Accepted implementation/evidence
 
 This section records the production snapshot accepted by the required
-implementation/evidence review. It is evidence, not an integration commit or
-authority to begin Gate 11.
+implementation/evidence review. Its implementation provenance is fixed by
+commit `fb6ed5763`; that commit is not authority to begin Gate 11.
 
 | Contract boundary | Production owner | Accepted evidence |
 | --- | --- | --- |
@@ -1398,6 +1399,7 @@ regressions and typecheck. It closed `G10-I01` and accepted the layer with no ne
 finding. The whole-run matrix is therefore closed for `G10-C01`–`G10-C04`,
 `G10-I01`–`G10-I04`, and `G10-E01`.
 
-Both required Gate 10 review layers are accepted. The working tree is ready for
-a separately governed integration step; no integration commit is implied by
-review acceptance, and Gate 11 remains outside this record and unauthorized.
+Both required Gate 10 review layers are accepted. The maintainer separately
+authorized integration, commit `fb6ed5763` fixes the accepted implementation
+provenance, and Gate 10 is closed. Gate 11 remains outside this record and was
+not begun here.

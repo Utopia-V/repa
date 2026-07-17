@@ -529,6 +529,7 @@ contract/theory and implementation/evidence layers of review run
 `gate10-whole-7d33ad2f934d4a01a459e0f7c741de4f`. Contract/theory required four
 `Revise` passes before the fifth-pass `Accept`; implementation/evidence required
 an initial `Revise`, one closure `Revise`, and the final `Accept`.
+Implementation provenance is fixed by commit `fb6ed5763`.
 
 - Contract review closed `G10-C01`–`G10-C04`: machine-user trust origin before
   every project-controlled effect, Gate 8-compatible manifest application,
@@ -559,10 +560,9 @@ an initial `Revise`, one closure `Revise`, and the final `Accept`.
   `F9123AA300F9B18E7E1121927BCAE1F1C697F2F2310E3B29171266AD0A701E13`
   for its direct tool evidence. The reviewer left production and Git state
   unmodified.
-- Review acceptance does not authorize integration. No Gate 10 implementation
-  commit exists yet, so `docs/README.md` records the working tree as review-
-  accepted and ready for separately authorized integration rather than formally
-  closed. Gate 11 was neither inspected nor authorized.
+- The maintainer separately authorized integration after review acceptance.
+  Commit `fb6ed5763` fixes the accepted implementation provenance;
+  `docs/README.md` therefore closes Gate 10 without starting Gate 11.
 
 ## Historical evidence locators
 
