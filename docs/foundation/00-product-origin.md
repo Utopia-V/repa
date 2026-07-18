@@ -188,22 +188,28 @@ The following decisions remain open because source research and focused experime
 
 - The exact native mapping from inherited Session/message/part records to an
   admitted learner Turn, model operation, physical tool invocation, immutable
-  context cut, and terminal outcome. Their distinct meanings are settled; the
-  fork gate decides the least duplicate representation.
-- Richer production shapes beyond the first implemented Course/material/route
-  and Agenda consumers: broader Material Map and search, learner history,
-  goals, assignments, and review authorities. Ownership and separation are
-  settled; future consumers still decide these unproved local shapes.
+  context cut, and terminal outcome. Their distinct meanings and roadmap owner
+  are settled; the Durable Turn Gate decides the least duplicate
+  representation.
+- Richer shapes whose first-boundary consumer has not earned them: broader
+  material acquisition and search, richer learner history and evidence,
+  additional Agenda meanings, and long-horizon review authorities. Ownership
+  and separation are settled; future consumers still decide these unproved
+  local shapes.
 - The exact selection rules and budgets within the accepted compact-current-
   view plus lazy-detail context architecture.
 - Learner-state representation when a demonstrated future action needs more
   than simple progress, task results, and revisits.
 - The task-selection policy and its explanation contract.
 - The domain-specific persistence layout for learning authorities not yet
-  implemented and their corrections. SQLite authority, revision distinctions,
-  and the first Course/Agenda tables are already settled by working consumers.
-- The learning-native projection and interaction design over the inherited
-  terminal mechanics. The TUI framework itself is no longer a blank-page
+  implemented and their corrections. SQLite and Course authority are native;
+  the first Agenda consumer semantics are accepted, while its production
+  persistence remains consumer-earned.
+- The exact learning-native projection and interaction design over inherited
+  terminal mechanics. The roadmap now has an explicit terminal
+  inspect/correct owner; the TUI framework itself is no longer a blank-page
   choice.
 
-Unresolved does not mean "let AI choose during implementation." These are explicit design decisions to settle with evidence.
+Unresolved does not mean "let AI choose during implementation" or "omit this
+from the record." These are explicit, owned future decisions whose first real
+consumer and evidence determine their shape.

@@ -34,7 +34,8 @@ corrected.
 
 This Gate establishes the domain and database boundary before Gate 10 grants
 content-root authority or performs real bounded filesystem observation. Gate 11
-owns readable derived representations, and Gate 12 owns Material Maps and
+owns readable derived representations, and the post-Gate-10 roadmap revision's
+Gate 13 owns Material Maps and
 Course alignment. Gate 9 therefore does not make a root own a Course, scan or
 classify a learner's files, translate content, or infer material/Course meaning.
 

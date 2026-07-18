@@ -6,6 +6,9 @@ table, command, or learner ontology.
 
 Date: 2026-07-14
 
+Roadmap ownership and post-baseline data-lifecycle disposition clarified:
+2026-07-17
+
 Authority: [Product origin](../foundation/00-product-origin.md),
 [ADR-0012](../decisions/0012-learning-centered-modular-monolith.md),
 [ADR-0014](../decisions/0014-one-time-opencode-fork.md), and the
@@ -21,11 +24,11 @@ migration target.
 
 Gate 6 established one native `repa.db` and a Repa-only forward migration
 lineage, and accepted one state-owning process per LearnerHome as the runtime
-invariant. A later audit found that path aliases and configurable lock roots can
-bypass the current lease implementation; that bounded runtime correction does
-not change this logical data design. Gate 6 deliberately added no learning
-tables. Before the fork extends Interaction in isolation, this document fixes
-the learning data relationships that the native runtime must eventually serve.
+invariant. A later audit found and corrected alias and acquisition gaps in that
+runtime boundary without changing this logical data design. Gate 6 deliberately
+added no learning tables. Before the fork extends Interaction in isolation,
+this document fixes the learning data relationships that the native runtime
+must eventually serve.
 
 The design is intentionally between two bad extremes:
 
@@ -178,9 +181,10 @@ and policy records are not cascade children of those inherited tables. Their
 causal relationship uses a Repa-owned durable receipt that may retain the
 original Interaction identifiers but does not require transcript content to
 survive. Ordinary Session deletion removes the transcript and marks that source
-unavailable while preserving independently owned learning state. A later
-explicit deep-delete operation may remove or supersede affected learning state
-after showing its domain impact.
+unavailable while preserving independently owned learning state. The
+post-baseline Data Lifecycle capability may later remove or supersede affected
+learning state only after showing its exact domain impact and receiving
+explicit learner authorization.
 
 Truly Session-scoped projections, temporary runtime focus, streamed Parts, and
 tool presentation remain Interaction-owned and may follow Session deletion.
@@ -222,11 +226,11 @@ adds no single Course lifecycle column whose value implies that all other
 Courses are inactive. Archiving, completion, abandonment, and institutional
 enrolment become durable meanings only when a visible consumer requires them.
 
-An optional default Course preference belongs to LearnerHome context selection,
-not to Course lifecycle. It changes only through an explicit learner-controlled
-operation. A Turn may load one or several other relevant Courses without
-changing that preference. Current directory, material discovery, Agenda
-pressure, and model preference cannot mutate it implicitly.
+An optional default Course preference belongs to learner navigation continuity,
+not to Course lifecycle or Context authority. It changes only through an
+explicit learner-controlled operation. A Turn may load one or several other
+relevant Courses without changing that preference. Current directory, material
+discovery, Agenda pressure, and model preference cannot mutate it implicitly.
 
 ### Course View
 
@@ -308,10 +312,10 @@ cannot be restored while its parent remains withdrawn. The exact Gate contract
 owns the transition matrix and bounded hierarchy constants; these rules are
 stable data meaning rather than UI convention.
 
-Gate 7 defines no physical deep-delete command. Once later authorities can
-refer to Course and item identities, deep deletion requires an explicit scope
-calculation and learner authorization across those owners. Raw absence and
-ordinary withdrawal must not masquerade as one another.
+Gate 7 defines no physical deep-delete command. The post-baseline Data
+Lifecycle capability waits until every referring authority can calculate and
+present an exact affected scope for explicit learner authorization. Raw
+absence and ordinary withdrawal must not masquerade as physical deletion.
 
 Only a demonstrated query admits a typed cross-relation. There is no generic
 `related_to` edge table, open-ended relation registry, or requirement to model
@@ -348,7 +352,8 @@ revision and records:
 - the exact original artifact revision;
 - translator/tool identity and revision;
 - media type, digest, and canonical Repa-owned location;
-- acceptance time and physical tool settlement; and
+- acceptance time and trusted creation/operation identity, plus physical tool
+  settlement when the derivation is model-issued; and
 - availability, explicit deletion, or externally missing bytes without
   retargeting history.
 
@@ -374,16 +379,20 @@ implication, and a Course may use material from several LearningSpaces.
 
 ### Learner continuity and record
 
-The first learner-owned durable meaning is a broad route anchor per Course: the
-default place from which an underspecified continuation can resume. It is not
-the current Turn's exclusive focus and does not imply that the learner mastered,
-understood, or even completed the referenced item.
+The first navigation-continuity slice owns two distinct learner-controlled
+defaults: an optional LearnerHome-wide default Course preference and one broad
+route anchor per Course. The preference biases underspecified Course selection;
+the anchor is the default place from which that Course can resume. Neither is
+the current Turn's exclusive focus or implies mastery, understanding, or
+completion.
 
-A temporary detour or selected current task belongs to the current request or
-Agenda. When durable, it may name an intended rejoin point. Context composition
-derives the current focus from the request and live Agenda meaning, falling
-back to the route anchor only when no better target exists. The system never
-stores two competing generic `current_item` fields.
+A temporary detour or selected current task normally belongs to the current
+request. A future, demonstrated cross-Turn consumer may earn an Agenda-owned
+detour and intended rejoin point; the first planned product boundary does not
+pre-authorize that generic lifecycle. Context composition derives current focus
+from the request and any live accepted Agenda meaning, falling back to the
+route anchor only when no better target exists. The system never stores two
+competing generic `current_item` fields.
 
 Other learner records enter as separate source-linked meanings only when a
 future Tutor action consumes them. Reading, receiving an explanation, watching
@@ -401,18 +410,21 @@ actually uses and retain correction provenance.
 
 Agenda is an ownership area, not one universal `agenda_item` aggregate. Goals,
 future-attention concerns, assignments, commitments, deferrals, and temporary
-focus have different sources and legal completion meanings. They may share
-small identity, time, and target primitives while retaining separate lifecycle
-contracts.
+focus have different sources and legal completion meanings. The first planned
+product boundary admits separate Goal, source-linked future-attention/return,
+and Assignment consumers. Generic commitment, deferral, and durable
+detour/rejoin remain recorded, consumer-earned future meanings rather than
+empty baseline record families.
 
 Goals may be LearnerHome-wide, Course-scoped, or span several Courses. A Course
 therefore has no mandatory single `goal` field. Immediate Turn intent remains
 Interaction meaning unless it must survive the Session and alter later action.
 
-The first accepted Agenda consumer remains source-linked future attention:
-eligible does not mean mandatory, begun, served, correct, or mastered. Native
-Agenda tables are admitted with the later teach-adapt-return path, not as empty
-companions to the first Course migration.
+The source-linked future-attention loop remains the first experimentally
+settled Agenda topology: eligible does not mean mandatory, begun, served,
+correct, or mastered. Its native lifecycle is admitted together with
+conditional Tutor purpose and truthful service through the teach-adapt-return
+path, not as an empty storage Gate.
 
 Assignment planning waits for representative multi-day workload, capacity,
 allocation, correction, and recomputation behavior. The withdrawn minute-scale
@@ -444,7 +456,7 @@ but each family first appears only with a demonstrated consumer:
 | Consumer pressure               | Record family                              | Required relation or behavior                                                                                                                                               |
 | ------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | native Course use               | Course identity                            | LearnerHome-owned; no LearningSpace owner and no global active status                                                                                                       |
-| native Course use               | default Course preference                  | optional, versioned learner-controlled retrieval bias                                                                                                                       |
+| durable navigation              | default Course preference                  | optional, versioned learner-controlled retrieval bias; Context reads but does not own it                                                                                    |
 | native Course use               | Course View identity                       | one stable identity per continuing route strategy; alternatives remain distinct within a Course                                                                             |
 | native Course use               | Course View revision and working selection | immutable revisions per View, zero or one exact working selection per Course; a Course without a View is valid and selection does not follow a newer revision automatically |
 | native Course use               | Course item identity and View membership   | Course-owned stable identity where justified; revision-bound title, parent, and order                                                                                       |
@@ -455,6 +467,10 @@ but each family first appears only with a demonstrated consumer:
 | durable continuation            | route anchor                               | learner-record-owned Course/View/item reference, distinct from current focus and mastery                                                                                    |
 | first durable command           | causal source and command receipt          | trusted Interaction/source identity and atomic domain/tool settlement                                                                                                       |
 | exact continuation, if required | context cut                                | exact bounded manifest when existing Interaction records cannot express it honestly                                                                                         |
+| cross-Session learner intent    | Goal identity and revision                 | learner-owned source, scope, correction, and supersession; no automatic attainment inference                                                                                |
+| retained learner direction      | scoped steering policy                     | source-linked applicability and correction projected through an exact policy revision                                                                                       |
+| future return                   | future-attention concern and service       | eligibility, conditional purpose, and complete source-aligned service remain distinct                                                                                       |
+| substantial real work           | Assignment and allocation                  | obligation, workload, capacity, infeasibility, and recomputation without model-owned arithmetic                                                                             |
 
 An accepted Gate may establish any causally sound subset whose invariants and
 integration boundary are real. This document neither authorizes empty future
@@ -522,7 +538,14 @@ does not select one answer yet:
 - which modest activity occurrence first changes Tutor adaptation beyond route
   continuity; and
 - retention, evidence aggregation, review scheduling, and long-horizon planning
-  algorithms.
+  algorithms;
+- exact Goal lifecycle fields beyond source, scope, revision, correction, and
+  supersession;
+- additional steering scopes and multiple-candidate Agenda arbitration;
+- whether a future consumer earns generic commitment, deferral, or durable
+  detour/rejoin records; and
+- the post-baseline Data Lifecycle representation for selective
+  cross-authority deep deletion and impact preview.
 
 These choices are resolved by the product Gate that consumes them, without
 reopening the ownership and non-implication decisions above.

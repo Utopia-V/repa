@@ -2,12 +2,14 @@
 
 Status: Stable engineering roadmap. The original unstarted Gate 7–19 contracts
 were superseded on 2026-07-14, and the replacement Gate 7–17 sequence was
-accepted on 2026-07-15. Current Gate disposition lives only in
-`docs/README.md`; this roadmap does not duplicate volatile close/reopen state.
+accepted on 2026-07-15. The 2026-07-17 post-Gate-10 global audit preserved
+Gates 7–11 and replaced the unstarted route after Gate 11 with Gates 12–23.
+Current Gate disposition lives only in `docs/README.md`; this roadmap does not
+duplicate volatile close/reopen state.
 
 Original date: 2026-07-13
 
-Recalibrated: 2026-07-14
+Recalibrated: 2026-07-14 and 2026-07-17
 
 Decision: [ADR-0014](../decisions/0014-one-time-opencode-fork.md)
 
@@ -75,6 +77,21 @@ checks. A schema or state transition receives migration, invariant, failure,
 and recovery evidence. Integration tests are used when integration is what the
 Gate claims. A full suite or real-provider run is not an automatic ritual.
 
+Before freezing a Gate contract, classify its consequential claims:
+
+- deterministic authority or mechanics use state, transaction, migration,
+  fault, cancellation, and restart evidence;
+- accepted model-mediated behavior transferred into the fork receives bounded
+  native-provider qualification; and
+- a new behavior whose result could change ownership, representation, or
+  control policy receives a bounded experiment before the contract fixes that
+  choice.
+
+Engineering benchmarks answer engineering questions such as context budgets or
+conversion cost; they are not relabeled as learning experiments. A real
+provider is evidence for a behavioral or integration claim, not an independent
+Gate.
+
 Volatile current status is owned only by [the documentation index](../README.md).
 
 ## Fork foundation boundaries
@@ -138,10 +155,13 @@ Repa-owned causal receipt survives without transcript content and records that
 the source is unavailable. Course, material, learner, Agenda, route, and policy
 state remain under their own deletion and correction lifecycles.
 
-An explicit deep-delete operation may later remove or supersede learning state
-derived from a Session after presenting the affected domain scope. Ephemeral
-Interaction projections and runtime-only focus may continue to follow Session
-deletion.
+Selective cross-authority deep deletion has an explicit post-baseline Data
+Lifecycle owner. It waits until every referring authority can compute the exact
+affected scope, presents that scope before commit, and requires explicit
+learner authorization. It does not block the first planned product boundary.
+Ephemeral Interaction projections and runtime-only focus may continue to follow
+ordinary Session deletion; withdrawal, correction, and whole-home removal do
+not masquerade as selective deep deletion.
 
 ### Narrow shared command-settlement substrate
 
@@ -165,7 +185,8 @@ These facts constrain the route but do not determine its Gate order:
   Sessions, learner records, Agenda meaning, and Tutor policy;
 - several Courses may be ongoing simultaneously;
 - Course belongs to LearnerHome rather than a directory or LearningSpace;
-- an optional default Course preference is only a context-selection bias;
+- an optional default Course preference and each Course's route anchor are
+  learner navigation-continuity state, not Context-owned writes;
 - a Course may exist before any Course View, retain multiple View strategies and
   revisions, derive candidate/historical/working relations per exact eligible
   revision, and select zero or one working revision without inventing a
@@ -179,6 +200,14 @@ These facts constrain the route but do not determine its Gate order:
 - models may initiate durable learning commands, while the runtime binds trusted
   identity, source, revision, permission, transaction, correction, and tool
   settlement;
+- one admitted learner request belongs to a durable finite Turn with an honest
+  terminal outcome; first ordinary input atomically admits its Session and Turn
+  rather than leaving an orphan Session;
+- natural-language bootstrap reaches Course and source/material authorities
+  through their own commands and shared settlement rather than through fixtures
+  or a universal CRUD layer;
+- retained steering, Goal, future attention, and Assignment keep separate
+  ownership and lifecycle meaning;
 - the baseline has no background daemon; time-dependent meaning is derived when
   Repa wakes; and
 - the pre-fork oracle and pinned references remain read-only evidence, not
@@ -191,25 +220,36 @@ linear implementation chain:
 
 ```text
 native database admission and migrations (already complete)
-├─ independent domain identities and revision rules
-│  ├─ Course / Course View
-│  └─ source / artifact / representation
-└─ Interaction causal reference, retention, and command idempotency
+├─ Course / Course View
+├─ source / Artifact / ContentRoot / representation
+├─ learning-command settlement
+└─ inherited Interaction -> durable Turn
 
-stable identities from both sides
-├─ Material Map and optional revision-bound Course alignment
-├─ learner and Agenda records with typed causal sources or targets
-└─ model-issued commands with trusted atomic settlement
+Course + source/representation -> Material Map and Course alignment
+Course + Turn/settlement -> navigation continuity, retained steering, Goal
 
-real authority reads
-└─ Tutor context projections and lazy continuation
+the authorities above -> natural-language learning bootstrap
+the authorities above -> bounded learning context and Session continuation
+
+bounded context + exact occurrences
+├─ first learner-record adaptation
+├─ source-linked future attention and Tutor return
+└─ Assignment and cross-day planning
+
+all product-domain reads and correction paths
+-> learning-native terminal inspect/correct
+-> integrated Learning-System product loop
 ```
 
 Course View and source/artifact can be established independently; alignment
-needs both. A domain schema or program-owned transition need not wait for model
-tool binding. A model-issued durable write does require command/effect identity,
-causal binding, retry behavior, and atomic settlement. Tutor context consumes
-real authority projections and is not their prerequisite.
+needs both. Durable Turn is independent of representation but is a high-fan-out
+prerequisite for later context, steering, and truthful service. Navigation,
+steering, and Goal do not depend on one another. Learner adaptation, future
+attention, and Assignment may each arise from existing trusted sources; their
+linear numbering does not create semantic foreign-key dependencies. A
+model-issued durable write still requires command/effect identity, causal
+binding, retry behavior, and atomic settlement. Tutor context consumes real
+authority projections and is not their storage prerequisite.
 
 The database substrate provides transactional migrations, stable
 Session/Message/Part IDs, and atomic settlement of one Session event with its
@@ -222,67 +262,73 @@ learning-command identity, exactly-once tool effects, a global revision, or a
 safe long-lived provenance reference: deleting a Session currently removes its
 messages, parts, and event aggregate.
 
-## Remaining physical and Gate-local questions
+## Closed answers and recorded Gate-local questions
 
-The logical direction is settled far enough to derive an engineering order.
-These questions remain for the Gate that owns the affected boundary:
+Gates 7–10 have already answered the original Course identity,
+command-settlement, source/Artifact, ContentRoot, and bounded-observation
+questions. Their accepted records own those answers; this roadmap does not keep
+presenting them as open work.
 
-### Native learning storage
+The following implementation questions remain recorded under the future Gate
+that can answer them. Recording them preserves engineering context without
+promoting them into prewritten contracts:
 
-- Which physical records and modules first realize the accepted Course and
-  Course View model?
-- Which identities are stable across revisions, and which records are immutable
-  observations or selections?
-- Which constraints belong in SQLite, in domain transition code, or in both?
+- **Gate 11 — readable representation:** converter/library choice, staging and
+  cleanup layout, timeout/cancellation, availability, explicit deletion,
+  external missing truth, and the exact old/new drift pair used for decline,
+  retranslation, or explicit old-version use.
+- **Gate 12 — durable Turn:** whether existing occurrence/message identities can
+  carry Turn and model-operation meaning, the narrow additional record if not,
+  independent model/tool budgets, exhaustion receipt, cancellation, and crash
+  orphan settlement without blind replay.
+- **Gate 13 — Material Map/alignment:** selector representation, physical Map
+  schema, CAS boundaries, and the first source-grounded typed relations. Model
+  generation or automatic acceptance is outside the Gate unless separately
+  earned.
+- **Gate 14 — navigation continuity:** preference confirmation/correction,
+  route-anchor shape, stale-target handling, and bounded exact Interaction
+  references without a general learner ontology.
+- **Gate 15 — retained steering:** the first stored scope and expiry shape,
+  correction/supersession, policy revision, and how execution-layer overlays
+  share the same immutable cut when needed.
+- **Gate 16 — Goal:** exact lifecycle fields beyond learner source, scope,
+  revision, correction, and supersession; completion must not be inferred from
+  Tutor or Agent execution.
+- **Gate 17 — natural-language bootstrap:** the exact Course and Artifact
+  command surfaces, provisional route construction, same-Turn teaching, and
+  correction while preserving separate domain ownership. Goal and
+  LearningSpace remain optional.
+- **Gate 18 — learning context:** projection manifest, selection/budget rules,
+  lazy-detail query shape, compaction threshold, and fresh/resumed Session
+  presentation.
+- **Gate 19 — learner adaptation:** the first source-linked distinction is
+  admitted only after a bounded experiment demonstrates a later-action
+  collision that current state cannot recover honestly; exact inference and
+  aggregation remain consumer-earned.
+- **Gate 20 — future attention/return:** time and target representation,
+  multiple-candidate handling, the narrow source-bound learner-role constraint,
+  and atomic service after one complete source-aligned occurrence.
+- **Gate 21 — Assignment/planning:** representative multi-day pressure must
+  precede the contract; exact estimate, capacity, allocation, infeasibility,
+  override, and recomputation algorithms remain local.
+- **Gate 22 — terminal inspect/correct:** commands, navigation, and rendering
+  over existing domain queries/correction paths. It does not invent missing
+  domain lifecycles.
+- **Gate 23 — integrated product loop:** the smallest orthogonal product traces,
+  failure campaign, real-provider qualification, and proof that the sole
+  production entrypoint has no shadow learning path.
 
-### Interaction and command identity
-
-- Which existing Session, message, part, and event identities are already
-  sufficient for learner occurrence, model operation, tool invocation, and
-  terminal outcome?
-- What narrow additional identity or receipt is genuinely missing?
-- Which atomicity and replay guarantees must exist before the first model-issued
-  learning write?
-
-### Source, material, and filesystem authority
-
-- How do approved roots, artifact locations, exact revisions, representations,
-  selectors, and Course alignment depend on one another?
-- Which inherited read, search, permission, and tool-settlement mechanisms can
-  be used directly?
-- Where does external conversion end and Repa's atomic acceptance begin?
-
-### Learning context and continuity
-
-- Which durable state is authoritative, which state is a bounded projection,
-  and which detail remains lazy?
-- How do default Course preference, request-specific Course context, working
-  Course View, route continuity, Session transcript, and compaction remain
-  distinct?
-
-### Learner, Agenda, and planning authorities
-
-- Which learner occurrences or evidence distinctions deserve durable records
-  before richer adaptation exists?
-- Which future-attention, goal, Assignment, capacity, and allocation meanings
-  have independent lifecycle requirements?
-- What dependency order avoids both one universal table and a collection of
-  disconnected special cases?
-
-### Package and dependency direction
-
-- Which current OpenCode modules can remain domain-independent?
-- Where do Repa learning authorities live so the Agent runner composes them
-  without owning them?
-- Which boundary should be implemented first because later boundaries truly
-  depend on it, rather than because it is easiest to see or inherited from the
-  old route?
+Exact table/column/package names, prompt wording, converter executables,
+temporary directory layout, TUI widgets, token thresholds, test file counts,
+and commit slices remain implementation details. They stay recorded here by
+category and are decided only by the owning Gate's current evidence.
 
 ## Gate sequence
 
-Accepted on 2026-07-15 from the settled logical skeleton and dependency
-evidence. No Gate below authorizes implementation until its own
-pre-implementation grill closes.
+Gates 7–10 and the original future skeleton were accepted on 2026-07-15. The
+2026-07-17 global audit preserved Gate 11 and accepted the revised future
+sequence through Gate 23. No Gate below authorizes implementation until its own
+pre-implementation grill closes and any required contract review is accepted.
 
 The accepted Gate 7, Gate 8, Gate 9, and Gate 10 contracts are recorded in
 [Course and Course View authority](../research/opencode-fork-gate-07-course-view-authority-2026-07-15.md),
@@ -297,19 +343,64 @@ and
 | 8. [Learning-command settlement](../research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md) | Narrow causal receipt and physical invocation substrate, proven through one Course-owned command.                                                                                                                                                          | A real domain authority prevents the shared seam from becoming speculative; later model-issued writes reuse it.                             | Universal events, global revision, or domain-generic semantic effects.                                                                                                                                                                            | Exact replay, conflicting reuse, Session deletion tombstone, crash boundaries, and atomic domain/result settlement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 9. [Source and Artifact authority](../research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md) | Logical artifact identity, locations, exact observed revisions, availability, and provenance.                                                                                                                                                              | Source is independent of Course but precedes Material Map, translation, and evidence grounded in exact content.                             | A root owning a Course, automatic classification, or material/Course alignment.                                                                                                                                                                   | Same-path new bytes, move, missing source, immutable old revisions, and correction without retargeting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 10. [Content-root authority and bounded observation](../research/opencode-fork-gate-10-content-root-authority-2026-07-17.md) | Approved roots, separate read/write grants, revoke semantics, bounded inventory/search, and exact file observation into Gate 9 records.                                                                                                                    | Real filesystem use needs authority and source identity; inherited tools can be reused only after this boundary is explicit.                | Computer-wide indexing, a LearningSpace owner, or automatic semantic import.                                                                                                                                                                      | Allow/revoke/restart, symlink or junction escape, mutation during read, cancellation, and bounded widening.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 11. Readable representation lineage                                                                           | External conversion followed by short atomic acceptance of an immutable representation revision.                                                                                                                                                           | Depends on exact artifact revisions and content authority; Course is unnecessary.                                                           | A universal RAG pipeline, mandatory conversion, or rewriting old selectors.                                                                                                                                                                       | Decline, unsupported input, timeout, malformed output, missing bytes, retranslation, cleanup, and no accepted dangling path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| 12. Material Map and Course alignment                                                                         | Revision-bound material outline/selectors plus optional many-to-many alignment to exact Course View revisions/items.                                                                                                                                       | Material Map needs source revisions; alignment needs both independent identity branches.                                                    | Material outline equaling Course route or alignment being required for every source.                                                                                                                                                              | Drift fails closed, unaligned maps remain valid, many-to-many relations, and working-view replacement preserves history.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| 13. Learner continuity foundation                                                                             | Learner-owned route anchor and narrowly required progress references, distinct from focus, completion, evidence, and mastery.                                                                                                                              | Depends on Course/View identities and, for model-issued writes, Gate 8 settlement; it need not wait for a general learner ontology.         | One global current item, one active Course, or mastery inference.                                                                                                                                                                                 | Independent Courses, stale anchors, correction, deleted source transcript, and no false semantic promotion.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 14. Learning context and Session continuation                                                                 | Default Course preference, request-specific Course selection, bounded authority projections, lazy detail, context cuts when needed, and truthful fresh/resumed Session behavior.                                                                           | Consumes real Course, material, policy, and continuity records; it is not their storage prerequisite.                                       | A second context database, eager transcript import, or a new runtime.                                                                                                                                                                             | Cross-Course requests without preference mutation, restart, compaction, missing detail, and exact projection revisions.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| 15. Learner record and Tutor adaptation                                                                       | Source-linked occurrences, evidence, and correctable hypotheses only where they alter later Tutor behavior.                                                                                                                                                | Requires causal receipts and typed Course/material targets where relevant; context already has a projection seam to consume them.           | A universal activity table, mastery score, or mandatory structured write per interaction.                                                                                                                                                         | Report/evidence/inference separation, correction, duplicate occurrence handling, zero-write teaching, and attributable adaptation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| 16. Agenda authority                                                                                          | Separate goal, future-attention, commitment, deferral, and temporary-detour lifecycles with trusted-time derivation.                                                                                                                                       | Uses existing causal, target, learner, and context boundaries without forcing all Agenda meanings into one shape.                           | A generic todo system, background daemon, or service implying correctness/mastery.                                                                                                                                                                | Eligibility over time, dismissal/supersession/reopen, incompatible current intent, restart, and source preservation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| 17. Assignment and planning authority                                                                         | Substantial Assignment obligations, workload/capacity inputs, progress, allocation, infeasibility, and recomputation.                                                                                                                                      | Builds on Agenda and trusted time; begins only after its Gate grill has a representative multi-day planning pressure.                       | Minute-scale rescue, model-owned arithmetic, or every task becoming an Assignment.                                                                                                                                                                | Reproducible allocation, corrected estimates/availability, infeasibility, learner override, and recomputation from accepted inputs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 11. [Readable representation lineage](../research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md) | External conversion followed by short atomic acceptance of an immutable representation revision.                                                                                                                                                           | Depends on exact Artifact revisions and content authority; Course and Turn are unnecessary.                                                  | A universal RAG pipeline, mandatory conversion, rewriting old selectors, or silently following source drift.                                                                                                                                       | Decline, unsupported input, timeout, malformed output, missing bytes, availability/deletion truth, exact drift pairs, retranslation, explicit old-version use, cleanup, and no accepted dangling path.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| 12. Durable Turn lifecycle                                                                                     | One admitted learner request owns a durable finite Turn that groups model operations and tools, has one terminal outcome, enforces independent budgets, and atomically admits the first Session+Turn.                                                     | Gate 8 supplies occurrence/invocation settlement; later steering, Context, service, and product-loop claims need whole-Turn truth.          | A second runner, durable provider-work replay, a universal event store, or replacing typed Session items.                                                                                                                                          | Atomic first admission with no orphan Session; unique complete/failed/interrupted/exhausted outcomes; model/tool budgets and exhaustion receipt; cancellation, provider failure, owner loss, crash orphan settlement, restart, and exact reuse of existing identities where honest.                                                                                                                                                                                                                                                                                                                |
+| 13. Material Map and Course alignment                                                                         | Revision-bound material outline/selectors plus optional many-to-many alignment to exact Course View revisions/items.                                                                                                                                       | Material Map needs source or representation revisions; alignment needs both independent identity branches.                                 | Material outline equaling Course route, alignment being required for every source, automatic generation/acceptance, or RAG/indexing.                                                                                                              | Drift fails closed, unaligned maps remain valid, many-to-many relations, exact selectors, stale working-view targets, and working-view replacement preserving history.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 14. Learner navigation continuity                                                                             | Optional learner-controlled default Course preference plus one independent route anchor per Course, both versioned and distinct from current focus, completion, evidence, and mastery.                                                                     | Depends on Course/View identity; model-issued writes reuse Gate 8 and the durable Turn source.                                               | One active Course, a global current item, implicit directory/model preference mutation, or mastery inference.                                                                                                                                     | Independent Courses, explicit preference confirmation/correction, request-specific Course use without preference mutation, stale anchors, deleted source transcript, restart, and no false semantic promotion.                                                                                                                                                                                                                                                                                                                                                                                    |
+| 15. Retained scoped steering                                                                                   | Only learner instructions with a real future sampling consumer become source-linked, scoped, versioned, correctable policy state.                                                                                                                        | Requires durable Turn/source identity, Gate 8 settlement, trusted time where relevant, and a later Context projection consumer.             | A permanent preference database, Agenda future attention, a second runtime/mode, or a taxonomy of all Tutor actions.                                                                                                                              | Current-request exception without erasure, expiry without evidence mutation, correction/supersession, restart, exact policy revision, and native-provider qualification that the contribution affects the intended sample.                                                                                                                                                                                                                                                                                                                                                                        |
+| 16. Learner Goal authority                                                                                     | Learner-owned intended outcomes persist across Sessions with source, scope, revision, correction, and supersession; Course scope is optional and may span Courses.                                                                                        | Durable learner intent must exist before Context and planning consume it; model-issued writes reuse Turn and Gate 8.                        | An OpenCode todo, Codex execution Goal, mandatory Course lifecycle, mastery evidence, goal decomposition, scheduler, score, or automatic attainment.                                                                                               | LearnerHome/Course/multi-Course scope, correction and supersession, fresh Session projection, conflicting reuse, and no completion inferred from Tutor prose or Agent execution.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 17. Natural-language learning bootstrap                                                                       | An ordinary released-v1 learner request can create or revise real provisional Course state, and when local material is adopted can separately admit exact source/material state and align it, then teach immediately.                                    | Both paths need Course authority, command settlement, and durable Turn; the material path uses Artifact and, when needed, Representation and Map/alignment authorities.                                     | A universal CRUD/command bus, shelling into deterministic CLI, hidden import from read/search, or mandatory Goal/LearningSpace.                                                                                                                    | Fresh LearnerHome traces with and without local material; exact causal/domain settlement; visible provisional status; immediate explanation/demonstration; correction preserving history/provenance; generic read/search remains zero-write.                                                                                                                                                                                                                                                                                                                                                         |
+| 18. Learning context and Session continuation                                                                 | Every model sample receives a bounded, immutable, revision-exact projection with lazy detail; fresh/resumed Sessions reuse relevant learning state without transcript import.                                                                             | Consumes real material, navigation, steering, Goal, Turn, and policy records; it performs no domain writes.                                 | A second context database, eager full-state/transcript import, durable summary as truth, or a new runtime.                                                                                                                                          | Cross-Course request selection, exact policy/authority revisions, preference non-mutation, missing/truncated detail, non-mutating continuation, restart, compaction, and fresh Session behavior.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 19. First learner-record adaptation                                                                           | The first experimentally justified source-linked occurrence/evidence/hypothesis distinction is correctable and changes a later Tutor action; valuable zero-write teaching remains legal.                                                                | Begins only after a bounded later-action collision shows Context cannot recover the needed distinction from existing state.                 | A universal activity table, mastery score, mandatory write per interaction, or importing ALS schemas.                                                                                                                                             | Experiment result can shrink or defer the Gate; native evidence then covers report/evidence/inference separation, source/condition attribution, correction, duplicate occurrence, fresh Session adaptation, and zero-write teaching.                                                                                                                                                                                                                                                                                                                                                                |
+| 20. Source-linked future attention and Tutor return                                                            | A future-attention concern, its eligibility, conditional current-purpose projection, and eventual truthful service form one vertical loop while remaining distinct facts.                                                                                | Uses Context, durable Turn, Gate 8, trusted time, retained steering, and exact targets; it does not require learner adaptation.               | A reminder/todo system, universal selector/scheduler, durable active engagement, generic pedagogy enum, correctness, retention, or mastery.                                                                                                       | Due without selection; one legal concern as conditional default; exact current request override; multiple-candidate truthful fallback; source-bound operative constraint where demonstrated; only one complete source-aligned occurrence can serve; failure/interruption/cancellation/restart cannot invent service.                                                                                                                                                                                                                                                                                 |
+| 21. Assignment and cross-day planning authority                                                                | Substantial Assignment obligation, remaining-work/capacity inputs, progress, allocation, infeasibility, learner override, and recomputation use program-owned arithmetic with source-bearing open judgments.                                            | Requires an admitted Assignment obligation, accepted workload/capacity inputs, trusted time, Context, and representative multi-day pressure; Goal may inform it but is not a prerequisite.                  | Minute-scale rescue, model-owned arithmetic, every task becoming an Assignment, or a universal priority scalar.                                                                                                                                   | Bounded experiment before contract; reproducible allocation, corrected estimates/availability, infeasibility, deadline/capacity changes, learner override, progress feedback, restart, and recomputation from accepted inputs.                                                                                                                                                                                                                                                                                                                                                                    |
+| 22. Learning-native terminal inspect/correct                                                                   | The terminal composes existing domain reads and correction paths so the learner can inspect what was recorded, its source and epistemic status, and which future behavior changed.                                                                       | Follows all first-boundary domain authorities; each still owns its own query and correction semantics.                                       | A second domain owner, a full-screen UI requirement, routine audit after every explanation, or post-baseline selective deep deletion.                                                                                                             | Deterministic inspection of report/evidence/inference and source/revision; correction/supersession through owning commands; missing-source and stale-state truth; bounded navigation; no mutation from rendering; restart.                                                                                                                                                                                                                                                                                                                                                                          |
+| 23. Integrated Learning-System Product Loop                                                                    | The sole production entrypoint composes the planned authorities into the full learning loop with no shadow/fallback learning path; this Gate adds no new domain schema.                                                                                   | Requires every still-admitted first-boundary product Gate and terminal projection; an experiment-driven deferral must revise this roadmap before product-boundary acceptance.                              | Broad release readiness, educational efficacy, a cutover Gate, a second runtime, or post-baseline capabilities.                                                                                                                                    | Orthogonal natural-language traces through teaching, optional durable writes, revised context/plan, later Turn/fresh Session, future return, Assignment replanning, and learner correction; real provider plus cancellation, failure, restart, compaction, and no-shadow-path evidence.                                                                                                                                                                                                                                                                                                                 |
 
 The sequence establishes dependency-guided engineering order rather than
 claiming that later Gate details are already designed. A Gate may be revised or
 the later sequence reordered when its grill exposes contradictory evidence,
 but a local implementation shape does not silently rewrite the accepted
 skeleton.
+
+Independent nodes may change linear position before their contracts begin when
+new dependency evidence warrants it. Gate 11 keeps its accepted number and
+representation boundary; the 2026-07-17 additions begin after it.
+
+A required pre-contract experiment may shrink, reorder, or explicitly defer
+its candidate Gate. That result revises the accepted first-boundary set before
+later contracts proceed; it does not make an absent authority count as closed
+or force Gate 23 to prove an obsolete route mechanically.
+
+## Recorded post-baseline capabilities
+
+The following meanings remain recorded rather than prohibited or forgotten.
+They do not block Gate 23 and do not receive a numbered Gate until a real
+consumer or release promise requires one:
+
+- **Data Lifecycle / selective deep deletion:** cross-authority impact preview,
+  explicit learner authorization, atomic removal or supersession, and truthful
+  treatment of retained provenance. This is the explicit home for the
+  previously vague `later` deep-delete references.
+- **Richer Agenda and policy:** generic commitment, generic deferral, durable
+  multi-Turn detour/rejoin, additional steering scopes, stable learner defaults,
+  and broader task-selection/explanation policies.
+- **Additional learning structures:** durable LearningSpace, reusable Domain
+  Foundation, Course completion/abandonment/enrolment meanings, richer learner
+  history/evidence, and long-horizon review algorithms.
+- **Material acquisition and retrieval:** mutable remote-source acquisition,
+  broader retained raw-source backing, semantic/vector indexing, and larger
+  search/ranking systems. Ordinary bounded exact reads remain the baseline.
+- **Operations and distribution:** background notifications, Repa-owned
+  updater/CI/release channels, additional platform qualification, and any
+  future evidence-based OpenCode-v2 comparison.
+- **Human outcome research:** educational efficacy and longer-term learner
+  outcomes require separate human evidence; engineering Gates do not claim
+  them.
+
+Each item retains its named product area and admission trigger. It may later
+earn a Gate, experiment, or release condition; absence from the first numbered
+route is not a permanent rejection.
 
 ## Oracle and reference use
 
@@ -322,14 +413,28 @@ streaming, cancellation, tool, terminal, and storage mechanisms. Reuse a
 mechanism only when the same engineering problem exists in Repa. Reference
 package topology does not choose Repa's domain boundaries.
 
-## Release and cutover meaning
+## Product-boundary, release, and cutover meaning
 
-The fork is already the sole active production line. The pre-fork tree is an
-immutable oracle, not a second runtime awaiting deletion.
+The fork is already the sole active source/runtime lineage. The pre-fork tree
+is an immutable oracle, not a second runtime awaiting deletion. Source/runtime
+cutover is complete and no new Cutover Gate is planned.
 
-Individual engineering Gates may close before Repa has a broadly usable
-learning release. Release claims are made separately from Gate claims and need
-evidence matching the behavior actually promised.
+Gate 23 may close when the first planned engineering product boundary and its
+integrated learning loop are established. That does not by itself claim broad
+release readiness or educational efficacy. Release claims use a separate,
+recurring checklist matched to the promised artifact, including applicable
+build/package/startup, migration, configuration/permission, supported-platform,
+real-provider, failure/recovery, documentation, and—before the first release
+candidate—owner-dogfood evidence.
+
+Before Gate 23 closes, perform one proportionate cross-Gate audit of active
+production owners and call paths. Check whether two reachable implementations
+own the same invariant, a new function or mechanism bypasses an applicable
+inherited or earlier-Gate owner, or correction work left a shadow or fallback
+path. This is not exhaustive function deduplication or a line-count target;
+intentional separation remains valid when ownership, identity, lifecycle,
+correction, or failure semantics differ. Findings reopen only the affected
+owner and evidence rather than every closed Gate.
 
 ## Correction and stop rules
 
@@ -343,6 +448,8 @@ evidence matching the behavior actually promised.
   migration obligation.
 - Do not create speculative universal managers, graphs, event tables, state
   machines, or recovery frameworks merely to make later work appear prepared.
+- Do not turn a recorded post-baseline capability into either a silent baseline
+  obligation or a permanent prohibition without revising its owning decision.
 - Do not require a structural Gate to impersonate a finished product, and do
   not call an arbitrary partial change a Gate merely because it is small.
 - Keep the oracle tag immutable and never dual-run or dual-write the pre-fork

@@ -4,6 +4,12 @@ Status: Accepted
 
 Date: 2026-07-13
 
+Amendment (2026-07-17): the pre-fork experiments settled the ownership and
+control topology, not a production Agenda schema in the fork. The active
+roadmap therefore admits the source-linked future-attention lifecycle together
+with its Tutor composition and truthful service consumer rather than creating
+an empty Agenda authority first.
+
 ## Plain-language decision
 
 Repa will not ask a separate classifier model to decide what the Tutor should
@@ -23,7 +29,8 @@ came from, how long the default lasts, and what durable effects are allowed.
 
 ## Context
 
-Roadmap 07 established an Agenda-owned, source-linked future-attention concern.
+Pre-fork Roadmap 07 established an Agenda-owned, source-linked
+future-attention concern in the behavioral oracle.
 ALS-021 then showed that durable visibility is not control: the exact reason
 survived a fresh Session, but all eight independent-prediction returns revealed
 the answer before the learner predicted.
@@ -185,8 +192,9 @@ decision.
 
 ## Consequences
 
-- The next production contract, if admitted, extends structured Tutor context
-  rather than Agenda lifecycle or the Agent runtime.
+- The production fork admits the narrow Agenda lifecycle and its structured
+  context/service consumer as one vertical product boundary. It does not add a
+  second Agent runtime or a storage-only Agenda Gate.
 - A one-candidate default adds no extra provider round trip.
 - Exact current-request override remains available without cancelling future
   attention.

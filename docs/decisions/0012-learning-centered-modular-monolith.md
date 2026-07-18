@@ -5,6 +5,11 @@ Status: Accepted; runtime and persistence composition amended by
 
 Date: 2026-07-12
 
+Amendment (2026-07-17): the production fork does not carry the pre-fork
+`system_state` or `durable_effect` schema. Their demonstrated behavior remains
+oracle evidence; native retained steering and other authorities earn their own
+revisions and records through the active roadmap.
+
 ## Context
 
 The initial ADR-0011 runner established a real single-process Tutor loop and
@@ -188,9 +193,9 @@ rewriting the old route or progress.
 The system distinguishes Session order, local commit order, mutable entity
 versions, immutable course-view revisions, artifact content revisions, policy
 revisions, and model context cuts. One global revision is not a universal
-stale-write guard. It may remain as a temporary commit watermark for the
-existing steering slice, while new commands validate only their actual entity
-and source preconditions.
+stale-write guard. A context cut may record a database commit watermark for
+audit, while each command validates only the entity, source, and policy
+preconditions that make its own transition legal.
 
 Large source/material content may remain in files or a content cache. SQLite
 stores authoritative metadata, identity, revisions, selectors, domain state,
@@ -214,15 +219,16 @@ The complete ownership and failure model is recorded in
 
 ## Consequences
 
-- The pre-fork `runTutorTurn` remains a behavioral oracle until cutover, not a
-  compatibility API. The forked Agent runtime likewise cannot become the owner
-  of every prompt contribution, tool, and learning transition.
+- The pre-fork `runTutorTurn` remains behavioral evidence in the immutable
+  oracle, not a compatibility API. Source/runtime lineage cutover is complete;
+  the forked Agent runtime still cannot become the owner of every prompt
+  contribution, tool, and learning transition.
 - The next course/material consumers earn structured context contributions,
   capability composition, and migration separation; these are not built as an
   unused framework first.
-- `system_state.state_revision` and `durable_effect` are proven mechanisms for
-  the current steering slice, not mandatory universal schemas for future
-  domains.
+- Pre-fork `system_state.state_revision` and `durable_effect` behavior informs
+  native steering and settlement design, but neither is a current production
+  schema or a mandatory universal shape for future domains.
 - Inspection and correction remain part of each domain slice even before a
   full-screen TUI exists.
 - A global state machine, universal ontology, event-sourced learning

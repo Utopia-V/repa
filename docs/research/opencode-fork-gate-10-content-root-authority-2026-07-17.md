@@ -1132,7 +1132,8 @@ daemon, or capability framework beyond the concrete root/operation consumers.
 - no automatic Artifact import, Course/LearningSpace creation, classification,
   grouping, Material Map, alignment, learner record, or Tutor-policy inference;
 - no readable representation, converter, OCR, model translation, canonical
-  derived bytes, or selector work (Gate 11 and Gate 12);
+  derived bytes, or selector work (Gate 11 and, after the post-Gate-10 roadmap
+  revision, Gate 13);
 - no retained source snapshot writer, blob store, garbage collector, or
   learning-semantic source-file deletion/move workflow; a representative direct
   file tool may consume the separate mediated-mutation grant only to prove that

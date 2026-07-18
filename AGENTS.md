@@ -104,6 +104,18 @@ learning tools.
   form for this project. First grill the overall engineering direction and
   architecture, then divide the accepted direction into Gates. Before each Gate
   begins, grill its local design and evidence boundary again.
+- Gate contracts preserve, for material decisions only, enough provenance to
+  recover the owning authority or evidentiary basis, the reason when
+  alternatives affect interpretation, and who or what may revise the decision.
+  Do not reproduce grill transcripts or annotate every sentence.
+- A newly derived or materially revised Gate contract is not implementation
+  authority until its contract/theory review closes in a fresh, separate
+  top-level reviewer task. Same-context author preflight and executor child
+  subagents may improve the draft but do not satisfy this review. If the
+  maintainer has not explicitly invoked review automation, stop at the review
+  handoff instead of skipping it or substituting a child review. Repair valid
+  findings in the executor context and let the original reviewer close them
+  before implementation begins.
 - A Gate may establish a database, identity, transaction, module, recovery, or
   other structural boundary without completing a user-visible product loop.
   Its legitimacy comes from a real owned invariant, sound integration with the

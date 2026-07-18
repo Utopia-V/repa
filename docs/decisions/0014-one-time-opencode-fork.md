@@ -23,6 +23,11 @@ internal-call authority. Every admitted Agent-driven sample is interactive;
 narrow auxiliary composition is selected only by a trusted program call
 origin. This propagates the Gate 4 authority correction into the owning ADR.
 
+Amendment (2026-07-17): source/runtime lineage and the immutable-oracle
+boundary have completed cutover. The integrated learning-product trace below
+now gates product-boundary and release claims, not whether the fork is the sole
+active source/runtime lineage.
+
 ## Context
 
 The first Repa-owned Tutor loop proved several learning invariants: relevant
@@ -168,7 +173,7 @@ JSON, Session metadata, OpenCode `todo`, or a universal event table.
 
 A real learner input, synthetic/compaction input, model sample, tool
 invocation, context cut, and terminal Turn outcome keep distinct durable
-identities. The exact replacement schema is earned by the fork verification;
+identities. The exact replacement schema is earned by the owning native Gates;
 the old Repa interaction tables are behavioral oracles, not compatibility
 tables to preserve in parallel.
 
@@ -201,10 +206,13 @@ No current Repa or OpenCode user-data compatibility contract exists. The new
 fork starts with a new Repa home, database identity, and forward-only Repa
 migration history. The pre-fork runner, schema, and labs now exist only in the
 immutable oracle; any pre-fork database remains external development evidence.
-None is imported or admitted into the fork. Once the fork satisfies its
-verification gate, it becomes the sole product line and any transitional
-compatibility code that actually exists inside the fork is removed rather than
-wrapped. Cutover does not rewrite or delete the oracle.
+None is imported or admitted into the fork. Once the fork satisfied its
+lineage, identity, and runtime-baseline Gates, it became the sole active
+source/runtime lineage. That cutover is complete. Any actual transitional
+compatibility code inside the fork is removed rather than wrapped, and cutover
+does not rewrite or delete the oracle. Claims that the planned learning product
+boundary or a release is ready remain gated separately by the integrated
+verification below.
 
 ## Consequences
 
@@ -221,17 +229,21 @@ wrapped. Cutover does not rewrite or delete the oracle.
 - ADR-0006's atomic local learning transaction, ADR-0008's model-write
   authority, ADR-0009's invocation/effect separation, ADR-0010's policy state,
   and ADR-0013's conditional-purpose topology remain in force.
-- The repository stops extending ALS-024, the one-shot runner, or other
-  learning-state candidates before the fork baseline is established.
+- The repository does not import ALS-024, the one-shot runner, or another
+  pre-fork learning-state candidate as production shape. A native learner
+  record first requires a demonstrated later-action consumer and proportionate
+  experiment.
 - Complete local harness capability is an explicit product destination, but
   learning semantics determine defaults, context, durable meaning, and the
   acceptance traces used to admit inherited capabilities.
 
-## Verification gate
+## Product-boundary and release verification
 
-The fork direction is accepted; its first implementation still has a hard
-gate. A pinned Windows build must demonstrate one coherent trace through the
-native Repa database:
+The fork direction and source/runtime cutover are accepted. Closing the planned
+learning-product boundary still requires the active roadmap's final integrated
+product-loop Gate to demonstrate coherent traces through the native Repa
+database. A release claim additionally requires the release-readiness checks
+appropriate to the promised artifact. At least one pinned Windows trace covers:
 
 ```text
 scripted learner input
@@ -243,8 +255,10 @@ scripted learner input
 -> cancellation, injected failure, restart, and compaction remain truthful
 ```
 
-Failure to build the v1 baseline on supported Windows, inability to commit a
-learning transition and tool result atomically in the inherited SQLite path,
-or a need to maintain two production runners invalidates the implementation
-shape and requires returning to this decision. It does not revive the old
-selective-reimplementation default automatically.
+Failure to build the supported v1 product, inability to commit a learning
+transition and tool result atomically in the inherited SQLite path, or a need
+to maintain two production runners invalidates the implementation or release
+claim and requires returning to this decision. It does not undo the historical
+lineage cutover or revive the old selective-reimplementation default
+automatically. Engineering evidence does not by itself prove educational
+efficacy.

@@ -4,6 +4,8 @@ Date: 2026-07-13
 
 Filesystem authorization semantics clarified: 2026-07-17
 
+Roadmap completeness and cutover semantics clarified: 2026-07-17
+
 Status: Accepted architecture baseline under ADR-0012, with runtime lineage and
 native persistence amended by ADR-0014. This document is normative for
 ownership, dependency direction, state authority, and failure boundaries.
@@ -232,10 +234,11 @@ to LearnerHome rather than to one directory or LearningSpace, and it may use
 material from several approved roots or LearningSpaces. The same material may
 support several Courses.
 
-An optional durable default Course preference is learner-controlled context
-state, not the identity of the only active subject. Invocation directory,
-folder layout, discovered material, Agenda pressure, and model judgment may
-surface information or a proposed target, but none may change that preference.
+An optional durable default Course preference is learner-controlled navigation
+continuity state, not the identity of the only active subject. Invocation
+directory, folder layout, discovered material, Agenda pressure, and model
+judgment may surface information or a proposed target, but none may change that
+preference.
 Changing it requires an explicit learner request followed by a visible
 confirmation bound to the exact target Course/View and current preference
 revision; only then may a validated command commit the transition. The learner
@@ -718,13 +721,20 @@ capabilities; they are not a separate course-builder runtime.
 
 ```text
 learner: "I want to learn X"
--> establish or select a goal and LearningSpace
--> inspect local sources and/or research with ordinary read tools
+-> use the admitted request as the immediate learning intent
+-> optionally inspect local sources and/or research with ordinary read tools
+-> if local material is adopted, admit exact Artifact state
+-> when needed, derive or admit exact Representation and Material Map state
 -> model proposes a coarse Course View revision
--> course command validates structure, source references, scope, and identity
--> commit it as a working provisional route
+-> the owning domain commands validate source, structure, scope, and identity
+-> commit a visibly provisional, correctable working route
 -> teach immediately or refine local detail as the route is used
 ```
+
+A durable Goal or LearningSpace may be created when independently warranted,
+but neither is a bootstrap prerequisite. Artifact admission and Course/View
+formation retain separate domain ownership while sharing the learning-command
+settlement seam.
 
 The current learner request authorizes a routine, local, reversible working
 route. It does not authorize the model to create verified learner ability or a
@@ -780,10 +790,11 @@ The architecture deliberately rejects one overloaded `revision` number.
 | policy profile revision | identity of selected Tutor defaults and enforced overlays | domain evidence |
 | context cut | immutable manifest of the exact revisions, references, time, and capabilities shown to one model sample | durable authority after the sample finishes |
 
-The current `system_state.state_revision` may remain temporarily as a coarse
-commit watermark for the existing steering slice. New domains must not use it
-as a universal stale-write guard. A domain command checks only the entity and
-source preconditions that make its own transition legal.
+The production fork does not retain the pre-fork
+`system_state.state_revision`. A context cut may record the native database
+commit watermark for audit, but no domain uses it as a universal stale-write
+guard. A domain command checks only the entity, source, and policy
+preconditions that make its own transition legal.
 
 One context cut records a commit watermark for audit plus the typed
 dependencies/versions it actually consumed. The next model sample recompiles;
@@ -1273,9 +1284,11 @@ layer, or treated as the final package topology.
 | pre-fork one-string assistant history | replace with inherited typed items; never preserve flattened output for compatibility |
 | pre-fork production tests | classify as invariant or old API; port invariant assertions and leave old-API-only tests as historical oracle evidence |
 
-This is a deliberate substrate replacement. The cutover remains gated so the
-fork is not declared the sole product line before its native path proves
-equivalent or better behavior; the oracle itself remains immutable afterward.
+This is a deliberate substrate replacement. Source/runtime lineage cutover is
+complete: the fork is the sole active source/runtime line and the oracle remains
+immutable evidence. The final integrated product-loop Gate and recurring
+release-readiness checks separately govern claims that the planned learning
+product boundary or a release is ready.
 
 ## Rejected centers of gravity
 
@@ -1348,10 +1361,19 @@ Architecture-level behavioral checks must continue to cover:
 - full event sourcing and deterministic replay of model work;
 - a universal scheduler score or global mastery scalar;
 - a fixed workflow for teaching; and
-- detailed production types whose first consumer has not arrived.
+- detailed production types whose first consumer has not arrived;
+- generic commitment, deferral, or durable detour/rejoin records before a
+  distinct cross-Turn consumer earns them; and
+- selective cross-authority physical deletion in the first planned product
+  boundary.
 
 These omissions do not make the architecture a disposable MVP. The durable
 boundaries that prevent future pile-up—authority separation, dependency
 direction, version semantics, context stratification, correction, and command
 ownership—are fixed now. Feature-specific shapes remain deliberately earned by
 their first real behavior.
+
+Selective deep deletion has an explicit post-baseline home: a Data Lifecycle
+capability computes the exact affected domain scope, presents it before commit,
+and requires explicit learner authorization. It is recorded rather than
+forbidden, but it does not block the first integrated learning-product boundary.
