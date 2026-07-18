@@ -767,7 +767,10 @@ describe("Session", () => {
         settlement: {
           outcome: "applied",
           effectID: settled.result.outcome === "applied" ? settled.result.effectID : undefined,
-          committedSelection: settled.result.outcome === "applied" ? settled.result.committedSelection : undefined,
+          committedSelection:
+            settled.result.outcome === "applied" && "committedSelection" in settled.result
+              ? settled.result.committedSelection
+              : undefined,
         },
       })
       expect(

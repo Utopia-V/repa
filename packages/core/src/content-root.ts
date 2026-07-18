@@ -3,7 +3,7 @@ export * as ContentRoot from "./content-root"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors"
 import { and, asc, desc, eq, max, or } from "drizzle-orm"
-import { Context, Effect, Layer, Semaphore } from "effect"
+import { Context, Effect, Layer, Scope, Semaphore } from "effect"
 import { win32 } from "path"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
@@ -236,6 +236,20 @@ export type RootInfo = {
   readonly verification: ContentRootNTFS.Verification
 }
 
+export type ReadAuthorizationReceipt = {
+  readonly contentRootID: ContentRootID
+  readonly bindingID: BindingID
+  readonly bindingEpisodeID: BindingEpisodeID
+  readonly bindingEpisodeOrdinal: number
+  readonly grantEpisodeID: GrantEpisodeID
+  readonly grantVersion: number
+}
+
+export type ReadResult = {
+  readonly authorization: ReadAuthorizationReceipt
+  readonly observation: ContentRootNTFS.PreparedFile | ContentRootNTFS.PreparedMissing
+}
+
 export type MutationGrantInfo = {
   readonly id: MutationGrantID
   readonly anchor: ContentRootNTFS.Descriptor
@@ -359,7 +373,10 @@ export interface Interface {
     readonly contentRootID: ContentRootID
     readonly relativePath: string
     readonly maxBytes?: number
-  }) => Effect.Effect<ContentRootNTFS.PreparedFile | ContentRootNTFS.PreparedMissing, Error>
+  }) => Effect.Effect<ReadResult, Error>
+  readonly subscribeInvalidation: (
+    contentRootID: ContentRootID,
+  ) => Effect.Effect<AbortSignal, never, Scope.Scope>
   readonly proposeMutationGrant: (input: {
     readonly anchorPath: string
     readonly relativeScope: string
@@ -437,6 +454,35 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const db = database.db
+    const invalidationSubscribers = new Map<ContentRootID, Set<AbortController>>()
+
+    const requestInvalidation = (contentRootID: ContentRootID) =>
+      Effect.sync(() => {
+        for (const controller of invalidationSubscribers.get(contentRootID) ?? []) controller.abort()
+      })
+
+    const subscribeInvalidation: Interface["subscribeInvalidation"] = Effect.fn(
+      "ContentRoot.subscribeInvalidation",
+    )(function* (contentRootID) {
+      const controller = yield* Effect.acquireRelease(
+        serialize.withPermit(
+          Effect.sync(() => {
+            const controller = new AbortController()
+            const subscribers = invalidationSubscribers.get(contentRootID) ?? new Set<AbortController>()
+            subscribers.add(controller)
+            invalidationSubscribers.set(contentRootID, subscribers)
+            return controller
+          }),
+        ),
+        (controller) =>
+          Effect.sync(() => {
+            const subscribers = invalidationSubscribers.get(contentRootID)
+            subscribers?.delete(controller)
+            if (subscribers?.size === 0) invalidationSubscribers.delete(contentRootID)
+          }),
+      )
+      return controller.signal
+    })
 
     const propose: Interface["propose"] = Effect.fn("ContentRoot.propose")(function* (path) {
       return Proposal.inspected(yield* native(() => ContentRootNTFS.inspectDirectory(path)))
@@ -478,12 +524,16 @@ const layer = Layer.effect(
     const revoke: Interface["revoke"] = Effect.fn("ContentRoot.revoke")(function* (input) {
       const basis = requireBasis(input.basis)
       const stored = yield* serialize.withPermit(
-        db
-          .transaction((tx) => revokeStored(tx, input.contentRootID, input.expectedGrantVersion, basis))
-          .pipe(
-            Effect.catchTag("EffectDrizzleQueryError", Effect.die),
-            Effect.catchTag("SqlError", Effect.die),
-          ),
+        Effect.gen(function* () {
+          const transition = yield* db
+            .transaction((tx) => revokeStored(tx, input.contentRootID, input.expectedGrantVersion, basis))
+            .pipe(
+              Effect.catchTag("EffectDrizzleQueryError", Effect.die),
+              Effect.catchTag("SqlError", Effect.die),
+            )
+          if (transition.invalidated) yield* requestInvalidation(input.contentRootID)
+          return transition.stored
+        }),
       )
       return yield* materialize(stored)
     })
@@ -506,20 +556,24 @@ const layer = Layer.effect(
         })
       }
       const stored = yield* serialize.withPermit(
-        db
-          .transaction((tx) =>
-            rebindStored(tx, {
-              contentRootID: input.contentRootID,
-              expectedBindingVersion: input.expectedBindingVersion,
-              expectedGrantVersion: input.expectedGrantVersion,
-              descriptor: current,
-              basis: approval.basis,
-            }),
-          )
-          .pipe(
-            Effect.catchTag("EffectDrizzleQueryError", Effect.die),
-            Effect.catchTag("SqlError", Effect.die),
-          ),
+        Effect.gen(function* () {
+          const transition = yield* db
+            .transaction((tx) =>
+              rebindStored(tx, {
+                contentRootID: input.contentRootID,
+                expectedBindingVersion: input.expectedBindingVersion,
+                expectedGrantVersion: input.expectedGrantVersion,
+                descriptor: current,
+                basis: approval.basis,
+              }),
+            )
+            .pipe(
+              Effect.catchTag("EffectDrizzleQueryError", Effect.die),
+              Effect.catchTag("SqlError", Effect.die),
+            )
+          if (transition.invalidated) yield* requestInvalidation(input.contentRootID)
+          return transition.stored
+        }),
       )
       return yield* materialize(stored)
     })
@@ -549,13 +603,24 @@ const layer = Layer.effect(
 
     const read: Interface["read"] = Effect.fn("ContentRoot.read")(function* (input) {
       const authorized = yield* authorize(input.contentRootID)
-      return yield* native(() =>
+      const observation = yield* native(() =>
         ContentRootNTFS.prepareFile(
           authorized.stored.binding.descriptor,
           input.relativePath,
           input.maxBytes ?? DEFAULT_BUDGETS.maxFileBytes,
         ),
       )
+      return {
+        authorization: {
+          contentRootID: authorized.stored.id,
+          bindingID: authorized.stored.binding.id,
+          bindingEpisodeID: authorized.stored.bindingEpisode.id,
+          bindingEpisodeOrdinal: authorized.stored.bindingEpisode.ordinal,
+          grantEpisodeID: authorized.grant.id,
+          grantVersion: authorized.stored.grantVersion,
+        },
+        observation,
+      }
     })
 
     const search: Interface["search"] = Effect.fn("ContentRoot.search")(function* (input) {
@@ -883,6 +948,7 @@ const layer = Layer.effect(
       inventory,
       search,
       read,
+      subscribeInvalidation,
       proposeMutationGrant,
       approveMutationGrant,
       listMutationGrants,
@@ -1157,7 +1223,7 @@ const revokeStored = Effect.fn("ContentRoot.revokeStored")(function* (
       currentVersion: current.grantVersion,
     })
   }
-  if (!current.grant) return current
+  if (!current.grant) return { stored: current, invalidated: false }
   const time = Date.now()
   const closed = yield* tx
     .update(ContentRootGrantEpisodeTable)
@@ -1187,7 +1253,7 @@ const revokeStored = Effect.fn("ContentRoot.revokeStored")(function* (
         eq(ContentRootCurrentTable.grant_episode_id, current.grant.id),
       ),
     )
-  return yield* requireStoredRoot(tx, contentRootID)
+  return { stored: yield* requireStoredRoot(tx, contentRootID), invalidated: true }
 })
 
 const rebindStored = Effect.fn("ContentRoot.rebindStored")(function* (
@@ -1230,8 +1296,8 @@ const rebindStored = Effect.fn("ContentRoot.rebindStored")(function* (
     })
   }
   if (exact?.id === current.binding.id) {
-    if (current.grant) return current
-    return yield* appendGrant(tx, current, input.basis)
+    if (current.grant) return { stored: current, invalidated: false }
+    return { stored: yield* appendGrant(tx, current, input.basis), invalidated: false }
   }
 
   const ambiguous = yield* bindingsSharingPathOrObject(tx, input.descriptor)
@@ -1290,7 +1356,7 @@ const rebindStored = Effect.fn("ContentRoot.rebindStored")(function* (
       time_updated: time,
     })
     .where(eq(ContentRootCurrentTable.content_root_id, current.id))
-  return yield* requireStoredRoot(tx, current.id)
+  return { stored: yield* requireStoredRoot(tx, current.id), invalidated: true }
 })
 
 function bindingValues(

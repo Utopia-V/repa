@@ -1,6 +1,8 @@
 import { Schema } from "effect"
+import { ArtifactSchema } from "../artifact/schema"
 import type { CourseID, RevisionID, Selection, SelectionAcceptanceEffectID, SelectionAcceptanceInput } from "../course"
 import { Identifier } from "../id/id"
+import { RepresentationSchema } from "../representation/schema"
 import { SessionSchema } from "../session/schema"
 import type { MessageID, PartID } from "../v1/session"
 import type { OccurrenceID } from "./occurrence-schema"
@@ -39,6 +41,18 @@ export type AcceptCourseViewRevisionInvocation = {
   readonly command: SelectionAcceptanceInput
 }
 
+export type RepresentationConvertCommand = {
+  readonly effectiveArtifactID: ArtifactSchema.ArtifactID
+  readonly sourceRevisionID: ArtifactSchema.RevisionID
+}
+
+export type RepresentationConvertInvocation = {
+  readonly envelope: InvocationEnvelope
+  readonly command: RepresentationConvertCommand
+  /** Selected by trusted Repa code, never by the initiating model payload. */
+  readonly producerKind: RepresentationSchema.ProducerKind
+}
+
 export type SettlementMetadata = {
   readonly time: number
   readonly order: number
@@ -70,6 +84,30 @@ export type AlreadyAppliedSettlement = {
   readonly settlementOrder: number
 }
 
+export type RepresentationAppliedSettlement = {
+  readonly outcome: "applied"
+  readonly receiptID: ReceiptID
+  readonly effectID: RepresentationSchema.EffectID
+  readonly representationRevisionID: RepresentationSchema.RevisionID
+  readonly effectiveArtifactID: ArtifactSchema.ArtifactID
+  readonly sourceRevisionID: ArtifactSchema.RevisionID
+  readonly producerKind: RepresentationSchema.ProducerKind
+  readonly settlementTime: number
+  readonly settlementOrder: number
+}
+
+export type RepresentationAlreadyAppliedSettlement = {
+  readonly outcome: "already_applied"
+  readonly receiptID: ReceiptID
+  readonly effectID: RepresentationSchema.EffectID
+  readonly representationRevisionID: RepresentationSchema.RevisionID
+  readonly effectiveArtifactID: ArtifactSchema.ArtifactID
+  readonly sourceRevisionID: ArtifactSchema.RevisionID
+  readonly producerKind: RepresentationSchema.ProducerKind
+  readonly settlementTime: number
+  readonly settlementOrder: number
+}
+
 export type ErrorCode =
   | "semantic_conflict"
   | "context_refresh_required"
@@ -78,6 +116,14 @@ export type ErrorCode =
   | "cancelled"
   | "interrupted"
   | "source_unavailable"
+  | "ambiguous_content_root"
+  | "unsupported_source"
+  | "source_too_large"
+  | "producer_unavailable"
+  | "producer_failed"
+  | "producer_timeout"
+  | "invalid_producer_output"
+  | "publication_failed"
   | "stale"
   | "inactive"
   | "validation_error"
@@ -95,7 +141,12 @@ export type ErrorSettlement = {
   }
 }
 
-export type Settlement = AppliedSettlement | AlreadyAppliedSettlement | ErrorSettlement
+export type Settlement =
+  | AppliedSettlement
+  | AlreadyAppliedSettlement
+  | RepresentationAppliedSettlement
+  | RepresentationAlreadyAppliedSettlement
+  | ErrorSettlement
 
 export type PermissionOutcome =
   | { readonly type: "allow" }

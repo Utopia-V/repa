@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm"
 import { Database } from "@opencode-ai/core/database/database"
 import { DatabaseBusyError, DatabaseStorageError } from "@opencode-ai/core/database/authority"
 import { APPLICATION_ID } from "@opencode-ai/core/database/admission"
+import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { tmpdir } from "./fixture/tmpdir"
 
 const crashFixture = path.join(import.meta.dir, "fixture/database-crash.ts")
@@ -136,6 +137,7 @@ describe("Database runtime authority", () => {
     const second = ManagedRuntime.make(Database.runtimeLayerFromPath(filename))
     try {
       const database = await first.runPromise(Database.Service)
+      expect(database.filename).toBe(path.resolve(filename))
       expect((await fs.readFile(filename)).readUInt32BE(68)).toBe(APPLICATION_ID)
       expect(await Effect.runPromise(database.db.get<{ journal_mode: string }>(sql`PRAGMA journal_mode`))).toEqual({
         journal_mode: "wal",
@@ -171,14 +173,14 @@ describe("Database runtime authority", () => {
       })
       expect(
         await Effect.runPromise(db.get<{ count: number }>(sql`SELECT COUNT(*) AS count FROM repa_migration`)),
-      ).toEqual({ count: 2 })
+      ).toEqual({ count: DatabaseMigration.version })
       expect(await Effect.runPromise(db.get(sql`SELECT name FROM sqlite_master WHERE name = 'spill'`))).toBeUndefined()
     })
 
     await withRuntime(filename, async ({ db }) => {
       expect(
         await Effect.runPromise(db.get<{ count: number }>(sql`SELECT COUNT(*) AS count FROM repa_migration`)),
-      ).toEqual({ count: 2 })
+      ).toEqual({ count: DatabaseMigration.version })
     })
   })
 

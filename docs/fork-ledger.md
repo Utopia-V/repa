@@ -31,12 +31,56 @@ implementation evidence while reopening one bounded completion claim.
 | 6. Native database admission             | Native Repa database identity and forward lineage; the concrete single-owner implementation claim was later audit-invalidated                     | `6c0b7aa5b`                                                                             | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`         |
 | 7. Course and Course View authority      | LearnerHome-owned Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal | `3bd6eb9d4`                                                                             | `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`             |
 | 8. Learning-command settlement           | Stable admitted occurrence, physical replay, causal receipt, exact Course acceptance settlement, and Session lifecycle closure                    | `293ff6892`                                                                             | `docs/research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md`       |
+| 9. Source and Artifact authority         | Stable Artifact identity, exact observed revisions, location/availability history, provenance, and correction without retargeting                 | `41db7c292aaeb83abfafea9236480d006ccabe0f`                                              | `docs/research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md`         |
+| 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                              | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
 
 Read a historical record with:
 
 ```powershell
 git show repa-prefork-oracle:<historical-record-path>
 ```
+
+## 2026-07-17 post-Gate-10 global roadmap audit provenance
+
+Current Gate disposition remains owned only by `docs/README.md`. Read-only
+top-level audit task `019f6e92-ec9f-71a2-80d8-3a0d887ca6aa` re-read the product
+foundation, accepted ADRs, both architectures, roadmap, ledger, Gates 0–10
+evidence, current implementation, and working tree. It did not read or judge a
+Gate 11 draft.
+
+The maintainer accepted these durable roadmap corrections:
+
+- Gates 0–10 remain closed, and Gate 11 keeps its readable-representation
+  number and boundary. Its owner-led grill may proceed to contract writing.
+- The unstarted route after Gate 11 is replaced by Gates 12–23: durable Turn,
+  Material Map/alignment, navigation continuity, retained steering, Learner
+  Goal, natural-language bootstrap, learning Context/continuation, first
+  learner adaptation, source-linked future attention/Tutor return, Assignment
+  planning, terminal inspect/correct, and the integrated product loop.
+- First ordinary learner input atomically admits Session+Turn through the
+  Durable Turn boundary; OpenCode's inherited sessionless navigation does not
+  become a duplicate Gate.
+- Default Course preference belongs with route-anchor navigation continuity;
+  Context only reads it. Goal, future attention, and Assignment remain separate
+  meanings. Future-attention lifecycle and Tutor service form one vertical
+  Gate; generic commitment, deferral, and durable detour/rejoin remain
+  consumer-earned future details.
+- Evidence is routed by claim: deterministic/fault evidence for authorities,
+  native-provider qualification for accepted model behavior, and a bounded
+  pre-contract experiment only when its result can change ownership,
+  representation, or control policy. Learner adaptation and multi-day
+  Assignment planning retain explicit experiment admission conditions.
+- Source/runtime lineage cutover is complete. Final product-loop acceptance and
+  recurring release readiness are separate; no new Cutover Gate or standalone
+  real-provider Gate is introduced.
+- Selective cross-authority deep deletion has a named post-baseline Data
+  Lifecycle owner. It remains recorded, requires exact impact preview and
+  explicit learner authorization, and does not block the first planned product
+  boundary.
+
+Historical Gate numbers and evidence are not renumbered. `2A` remains the
+honest corrective insertion after Gate 2 rather than a reason to relabel the
+old route by an inferred Gate count.
 
 ## 2026-07-15 post-Gate-7 audit provenance
 
@@ -563,6 +607,57 @@ Implementation provenance is fixed by commit `fb6ed5763`.
 - The maintainer separately authorized integration after review acceptance.
   Commit `fb6ed5763` fixes the accepted implementation provenance;
   `docs/README.md` therefore closes Gate 10 without starting Gate 11.
+
+## 2026-07-18 Gate 11 review acceptance provenance
+
+Current disposition remains owned only by `docs/README.md`. Retained top-level
+reviewer task `019f6fbc-6afb-7b50-a0dd-53058fecf778` accepted both the
+contract/theory and implementation/evidence layers of review run
+`gate11-20260717-whole-01`. Contract/theory required three `Revise` repair
+rounds before `Accept`; implementation/evidence required one `Revise` and one
+closure `Accept`.
+
+- Contract review closed `G11-CT-001`–`G11-CT-012`, including the Gate 4
+  representation-purpose correction, exact Gate 9 attribution and Gate 10 read
+  receipt, current-use admission, nonretroactive root revocation, secret-free
+  provenance, independent read budgets, deletion recovery, packaged-child
+  evidence, ordinary-use eligibility, bound producer output, and separation of
+  source availability from semantic eligibility.
+- Implementation review closed `G11-IE-001`–`G11-IE-003`: populated Gate 10
+  migration under production foreign-key enforcement, typed producer
+  cancellation/timeout/output failure through durable Gate 8 settlement, and
+  exact-current packaged parent-to-child cancellation and cleanup.
+- Fresh closure evidence passed 121/121 Core tests with 751 assertions across
+  14 files, 180/180 OpenCode tests with 702 assertions across 10 files, both
+  package typechecks, migration/schema equivalence, and `git diff --check`.
+  The reviewer independently exercised both retained Windows mains through
+  ContentRoot admission, exact PDF conversion, current-use read, and compiled
+  main-to-worker cancellation with no surviving worker.
+- The accepted x64 main/worker SHA-256 values are
+  `8BA7D29E549B47475F7424A85F62931488E5C8B8966D7CC3D3EDC1799826AECC` and
+  `1D2ADCCA72A034A8CC564E87FC80CCE5EE9903B5627B929344D5CDC59D933EBF`;
+  baseline values are
+  `A8F1B243D63769DE23144145BB15061DB4E182F0EB768FF8B7AD1F7A109B9234` and
+  `D65C5385DF255E27A4911D50017E946260E0BD490BDD12367F81E14A5091730F`.
+  Both package trees carry the same 207 non-executable asset/license files.
+- The accepted closure snapshot remained at HEAD
+  `8121d1d098914da947cb20b3e3f39b3afdac7121` on branch
+  `codex/opencode-v1.17.18-baseline`. Its changed-file manifest SHA-256 was
+  `197142CDD3741B5DF611B48BA8D935F69BBA23AB288CABF86777753C412EE80F`;
+  the Gate record was
+  `1E0677A608EF71D2BFE74F8CDCE03C2614869402E2636C19181022B1A20572F3`
+  and Roadmap 09 was
+  `8359C89FE4F24C0D3EEF8644BBFAB71A256FC9FF9D06C7C5D31CB4F5073A8703`.
+  The latter preserved Gate 11 and the Gate 12/13 boundary.
+- The unchanged secret-free real-provider projection remains
+  `E8AFCAA8BF38FFF67C47BA3EFEDA2A21E3278497968C88509CFF07FC93B33C31`.
+  Closure made no new provider, paid, or cloud call and did not inspect or rerun
+  the external CS189 material. The reviewer left production, dist, and Git
+  state unmodified and cleaned all reviewer-owned temporary state.
+- Integration is not authorized by review acceptance. Until a separately
+  authorized commit fixes implementation provenance, Gate 11 remains open and
+  no Gate 11 row is added to the historical close-commit table above. Gate 12
+  has not started.
 
 ## Historical evidence locators
 

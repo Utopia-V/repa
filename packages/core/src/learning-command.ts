@@ -16,8 +16,11 @@ export type { Error as OccurrenceError } from "./learning-command/occurrence-sch
 export {
   ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
   ACCEPT_COURSE_VIEW_REVISION_VERSION,
+  REPRESENTATION_CONVERT_CAPABILITY,
+  REPRESENTATION_CONVERT_VERSION,
   assertAssistantDeletable,
   assertPartDeletable,
+  decideRepresentationCandidate,
   exactSettlement,
   garbageCollectOccurrences,
   listAdmitted,
@@ -27,7 +30,12 @@ export {
   removeNoEffectInvocationsForAssistant,
   removeNoEffectInvocationsForSession,
   removeOccurrencePresentation,
+  representationConversionOperationIdentity,
+  reserveRepresentationConversion,
   reserveAcceptance,
+  settleRepresentationCandidate,
+  settleRepresentationFailure,
+  settleRepresentationSuccess,
   settleAcceptance,
   settleReservation,
 } from "./learning-command/settlement"
@@ -35,6 +43,7 @@ export type {
   AdmittedInvocation,
   PhysicalInvocation,
   PhysicalInvocationIdentity,
+  RepresentationCandidateDecision,
   Reservation,
   SettlementResult,
 } from "./learning-command/settlement"
@@ -59,6 +68,10 @@ export type {
   ErrorSettlement,
   InvocationEnvelope,
   PermissionOutcome,
+  RepresentationAlreadyAppliedSettlement,
+  RepresentationAppliedSettlement,
+  RepresentationConvertCommand,
+  RepresentationConvertInvocation,
   Settlement,
   SettlementMetadata,
 } from "./learning-command/schema"

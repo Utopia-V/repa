@@ -19,6 +19,7 @@ import courseViewAuthorityMigration from "@opencode-ai/core/database/migration/r
 import learningCommandSettlementMigration from "@opencode-ai/core/database/migration/repa/20260716045209_learning_command_settlement"
 import sourceArtifactAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716152016_source_artifact_authority"
 import contentRootAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716191911_content_root_authority"
+import readableRepresentationLineageMigration from "@opencode-ai/core/database/migration/repa/20260717141402_readable_representation_lineage"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -80,9 +81,25 @@ const contentRootTables = [
   "content_root_binding",
   "content_root",
 ] as const
+const representationTables = [
+  "representation_availability_current",
+  "representation_availability_event",
+  "representation_continued_use_grant",
+  "representation_revision",
+  "representation_effect",
+] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
   return Effect.forEach(input, (migration) => db.transaction((tx) => migration.up(tx)), { discard: true })
+}
+
+function normalizeSchemaDefinition(definition: string | null) {
+  return (
+    definition
+      ?.replace(/\s+/g, " ")
+      .trim()
+      .replace(/^CREATE TABLE [`"]([^`"]+)[`"] /, "CREATE TABLE $1 ") ?? null
+  )
 }
 
 function courseSchema(db: TestDatabase) {
@@ -99,7 +116,7 @@ function courseSchema(db: TestDatabase) {
       Effect.map((rows) =>
         rows.map((row) => ({
           ...row,
-          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+          definition: normalizeSchemaDefinition(row.definition),
         })),
       ),
     )
@@ -120,7 +137,7 @@ function learningCommandSchema(db: TestDatabase) {
       Effect.map((rows) =>
         rows.map((row) => ({
           ...row,
-          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+          definition: normalizeSchemaDefinition(row.definition),
         })),
       ),
     )
@@ -140,7 +157,7 @@ function artifactSchema(db: TestDatabase) {
       Effect.map((rows) =>
         rows.map((row) => ({
           ...row,
-          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+          definition: normalizeSchemaDefinition(row.definition),
         })),
       ),
     )
@@ -161,10 +178,42 @@ function contentRootSchema(db: TestDatabase) {
       Effect.map((rows) =>
         rows.map((row) => ({
           ...row,
-          definition: row.definition?.replace(/\s+/g, " ").trim() ?? null,
+          definition: normalizeSchemaDefinition(row.definition),
         })),
       ),
     )
+}
+
+function representationSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE tbl_name LIKE 'representation%' AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: normalizeSchemaDefinition(row.definition),
+        })),
+      ),
+    )
+}
+
+function restoreGate8LearningSchema(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+      discard: true,
+    })
+    yield* Effect.forEach(representationTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+      discard: true,
+    })
+    yield* db.transaction((tx) => learningCommandSettlementMigration.up(tx))
+  })
 }
 
 describe("DatabaseMigration", () => {
@@ -222,6 +271,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
           { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
           { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
+          { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -236,6 +286,11 @@ describe("DatabaseMigration", () => {
             sql`SELECT name FROM sqlite_master WHERE type = 'table' AND (name LIKE 'content_root%' OR name = 'content_mutation_grant') ORDER BY name`,
           ),
         ).toHaveLength(6)
+        expect(
+          yield* db.all(
+            sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'representation%' ORDER BY name`,
+          ),
+        ).toHaveLength(5)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('event_aggregate_seq_idx', 'event_aggregate_type_seq_idx', 'session_input_session_pending_seq_idx', 'session_input_session_pending_delivery_seq_idx', 'session_input_session_admitted_seq_idx', 'session_input_session_promoted_seq_idx', 'session_message_session_idx', 'session_message_session_type_idx', 'session_message_session_seq_idx', 'session_message_session_type_seq_idx', 'session_message_session_time_created_id_idx') ORDER BY name`,
@@ -314,7 +369,6 @@ describe("DatabaseMigration", () => {
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db)
-        const fresh = yield* learningCommandSchema(db)
 
         yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
@@ -330,7 +384,16 @@ describe("DatabaseMigration", () => {
         )
         yield* db.transaction((tx) => learningCommandSettlementMigration.up(tx))
 
-        expect(yield* learningCommandSchema(db)).toEqual(fresh)
+        expect(
+          (yield* db.all<{ name: string }>(sql`PRAGMA table_info('learning_command_invocation')`)).map(
+            (column) => column.name,
+          ),
+        ).not.toContain("representation_effect_id")
+        expect(
+          (yield* db.all<{ name: string }>(sql`PRAGMA table_info('learning_command_receipt')`)).map(
+            (column) => column.name,
+          ),
+        ).not.toContain("representation_effect_id")
         expect(yield* db.all(sql`SELECT * FROM learning_admitted_occurrence`)).toEqual([])
         expect(yield* db.get(sql`SELECT id, data FROM message WHERE id = 'msg_gate7_legacy'`)).toEqual({
           id: "msg_gate7_legacy",
@@ -347,6 +410,7 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* artifactSchema(db)
 
+        yield* restoreGate8LearningSchema(db)
         yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -354,7 +418,7 @@ describe("DatabaseMigration", () => {
           discard: true,
         })
         yield* db.run(
-          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 3}, ${BASELINE_VERSION + 4})`,
+          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 3}, ${BASELINE_VERSION + 4}, ${BASELINE_VERSION + 5})`,
         )
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 2}`))
         yield* db.run(
@@ -399,7 +463,7 @@ describe("DatabaseMigration", () => {
           id: "loc_gate8",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 4,
+          user_version: BASELINE_VERSION + 5,
         })
 
         yield* db.run(sql`PRAGMA foreign_keys = ON`)
@@ -475,10 +539,13 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* contentRootSchema(db)
 
+        yield* restoreGate8LearningSchema(db)
         yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
-        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 4}`)
+        yield* db.run(
+          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 4}, ${BASELINE_VERSION + 5})`,
+        )
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 3}`))
         yield* db.run(sql`
           INSERT INTO artifact (
@@ -497,8 +564,162 @@ describe("DatabaseMigration", () => {
           id: "gate9-artifact",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 4,
+          user_version: BASELINE_VERSION + 5,
         })
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+      }),
+    )
+  })
+
+  test("builds the same Gate 11 schema from Gate 10 without fabricating Representation authority", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const freshLearning = yield* learningCommandSchema(db)
+        const freshContentRoot = yield* contentRootSchema(db)
+        const freshRepresentation = yield* representationSchema(db)
+
+        yield* restoreGate8LearningSchema(db)
+        yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.transaction((tx) => contentRootAuthorityMigration.up(tx))
+        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 5}`)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 4}`))
+        yield* db.run(
+          sql`INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted) VALUES ('loc_gate10', 'gate10-session', 'gate10-message', 1)`,
+        )
+        yield* db.run(sql`
+          INSERT INTO learning_command_invocation (
+            part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+            occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+            capability_version, authorization_basis, input_fingerprint, status, time_admitted
+          ) VALUES (
+            'part_gate10', 'gate10-session', 'user_gate10', 'assistant_gate10', 'call_gate10',
+            'loc_gate10', 'accept_course_view_revision', 1, 0, 'accept_course_view_revision',
+            1, 'learner_request', ${"a".repeat(64)}, 'admitted', 1
+          )
+        `)
+        yield* db.run(sql`PRAGMA foreign_keys = ON`)
+        yield* db.run(
+          sql`INSERT INTO course (id, title, state_version, time_created, time_updated) VALUES ('crs_gate10', 'Gate 10 course', 0, 1, 1)`,
+        )
+        yield* db.run(sql`
+          INSERT INTO course_view (id, course_id, name, state_version, time_created, time_updated)
+          VALUES ('view_gate10', 'crs_gate10', 'Gate 10 view', 0, 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO course_view_revision (
+            id, course_id, view_id, revision_number, authorship_basis, time_created
+          ) VALUES ('revision_gate10', 'crs_gate10', 'view_gate10', 1, 'learner_directed', 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO course_view_revision_state (course_id, view_id, revision_id, state_version, time_updated)
+          VALUES ('crs_gate10', 'view_gate10', 'revision_gate10', 0, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted)
+          VALUES ('loc_gate10_applied', 'gate10-session', 'gate10-message-applied', 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO course_selection_acceptance_effect (
+            id, occurrence_id, course_id, accepted_revision_id, previous_selection_version,
+            committed_selection_version, time_committed
+          ) VALUES ('effect_gate10', 'loc_gate10_applied', 'crs_gate10', 'revision_gate10', 0, 1, 2)
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_invocation (
+            part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+            occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+            capability_version, authorization_basis, input_fingerprint, status, effect_id, settlement,
+            time_admitted, time_settled, settlement_order
+          ) VALUES (
+            'part_gate10_applied', 'gate10-session', 'user_gate10_applied', 'assistant_gate10_applied',
+            'call_gate10_applied', 'loc_gate10_applied', 'accept_course_view_revision', 1, 0,
+            'accept_course_view_revision', 1, 'learner_request', ${"b".repeat(64)}, 'applied',
+            'effect_gate10', '{"outcome":"applied"}', 1, 2, 1
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_receipt (
+            id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+            invocation_part_id, capability_identity, capability_version, authorization_basis,
+            effect_id, time_committed, commit_order
+          ) VALUES (
+            'receipt_gate10', 'loc_gate10_applied', 'gate10-session', 'gate10-message-applied',
+            'assistant_gate10_applied', 'part_gate10_applied', 'accept_course_view_revision', 1,
+            'learner_request', 'effect_gate10', 2, 1
+          )
+        `)
+        yield* db.run(sql`INSERT INTO content_root (id, time_created) VALUES ('root_gate10', 1)`)
+        yield* db.run(sql`
+          INSERT INTO content_root_binding (
+            id, content_root_id, canonical_path, canonical_path_key, platform, volume_serial,
+            object_id, creation_time, initial_change_time, verifier_version, time_created
+          ) VALUES (
+            'binding_gate10', 'root_gate10', 'C:\\gate10', 'c:\\gate10', 'windows_ntfs', 'volume',
+            '0123456789abcdef0123456789abcdef', 'creation', 'change', 1, 1
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO content_root_binding_episode (
+            id, content_root_id, binding_id, ordinal, approval_basis, time_started
+          ) VALUES ('binding_episode_gate10', 'root_gate10', 'binding_gate10', 1, 'learner approval', 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO content_root_grant_episode (
+            id, content_root_id, binding_id, binding_episode_id, ordinal, approval_basis,
+            time_approved, time_updated
+          ) VALUES (
+            'grant_episode_gate10', 'root_gate10', 'binding_gate10', 'binding_episode_gate10', 1,
+            'learner approval', 1, 1
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO content_root_current (
+            content_root_id, binding_id, binding_episode_id, grant_episode_id, disposition, time_updated
+          ) VALUES (
+            'root_gate10', 'binding_gate10', 'binding_episode_gate10', 'grant_episode_gate10', 'active', 1
+          )
+        `)
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+
+        yield* DatabaseMigration.apply(db)
+
+        expect(yield* learningCommandSchema(db)).toEqual(freshLearning)
+        expect(yield* contentRootSchema(db)).toEqual(freshContentRoot)
+        expect(yield* representationSchema(db)).toEqual(freshRepresentation)
+        expect(yield* db.all(sql`SELECT id FROM representation_revision`)).toEqual([])
+        expect(
+          yield* db.get(
+            sql`SELECT part_id, status, representation_effect_id FROM learning_command_invocation WHERE part_id = 'part_gate10'`,
+          ),
+        ).toEqual({ part_id: "part_gate10", status: "admitted", representation_effect_id: null })
+        expect(
+          yield* db.get(sql`
+            SELECT id, invocation_part_id, effect_id
+            FROM learning_command_receipt
+            WHERE id = 'receipt_gate10'
+          `),
+        ).toEqual({ id: "receipt_gate10", invocation_part_id: "part_gate10_applied", effect_id: "effect_gate10" })
+        expect(
+          yield* db.get(sql`
+            SELECT content_root_id, binding_id, binding_episode_id, grant_episode_id, disposition
+            FROM content_root_current
+            WHERE content_root_id = 'root_gate10'
+          `),
+        ).toEqual({
+          content_root_id: "root_gate10",
+          binding_id: "binding_gate10",
+          binding_episode_id: "binding_episode_gate10",
+          grant_episode_id: "grant_episode_gate10",
+          disposition: "active",
+        })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + 5,
+        })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA foreign_keys"))).toEqual({ foreign_keys: 1 })
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
       }),
     )
@@ -673,7 +894,7 @@ describe("DatabaseMigration", () => {
         )
         yield* applyHistorical(db, [simplifySessionInputMigration])
 
-        const database = Layer.succeed(Database.Service, { db })
+        const database = Layer.succeed(Database.Service, { db, filename: ":memory:" })
         yield* EventV2.Service.use((service) =>
           service.publish(SessionV1.Event.Updated, {
             sessionID: SessionSchema.ID.make("session"),
@@ -1009,6 +1230,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 2, id: learningCommandSettlementMigration.id },
           { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
           { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
+          { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
         ])
       }),
     )
@@ -1056,6 +1278,40 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION, id: BASELINE_ID },
         ])
         expect(yield* db.get(sql`SELECT name FROM sqlite_master WHERE name = 'should_rollback'`)).toBeUndefined()
+      }),
+    )
+  })
+
+  test("restores foreign-key enforcement after a failed graph-rebuild migration", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db, { migrations: [] })
+        yield* db.run(sql`PRAGMA foreign_keys = ON`)
+        const failing = {
+          id: "repa_test_graph_rebuild_failure",
+          foreignKeyMode: "rebuild_graph",
+          up(tx) {
+            return Effect.gen(function* () {
+              yield* tx.run(sql`CREATE TABLE graph_rebuild_should_rollback (id text PRIMARY KEY)`)
+              return yield* Effect.fail(new Error("injected graph-rebuild failure"))
+            })
+          },
+        } satisfies DatabaseMigration.Migration
+
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "graph.db", migrations: [failing] }))
+
+        expect(error).toMatchObject({ _tag: "DatabaseMigrationError" })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA foreign_keys"))).toEqual({ foreign_keys: 1 })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION,
+        })
+        expect(yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)).toEqual([
+          { version: BASELINE_VERSION, id: BASELINE_ID },
+        ])
+        expect(
+          yield* db.get(sql`SELECT name FROM sqlite_master WHERE name = 'graph_rebuild_should_rollback'`),
+        ).toBeUndefined()
       }),
     )
   })

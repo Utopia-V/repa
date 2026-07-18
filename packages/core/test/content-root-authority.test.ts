@@ -46,6 +46,15 @@ function captureFailure(use: () => unknown) {
 }
 
 describe("ContentRoot authority", () => {
+  test("classifies the closed native-image set used by Representation conversion", () => {
+    expect(ContentRootNTFS.detectMediaType("C:\\materials\\diagram.PNG")).toBe("image/png")
+    expect(ContentRootNTFS.detectMediaType("C:\\materials\\scan.jpg")).toBe("image/jpeg")
+    expect(ContentRootNTFS.detectMediaType("C:\\materials\\scan.JPEG")).toBe("image/jpeg")
+    expect(ContentRootNTFS.detectMediaType("C:\\materials\\animation.gif")).toBe("image/gif")
+    expect(ContentRootNTFS.detectMediaType("C:\\materials\\figure.webp")).toBe("image/webp")
+    expect(ContentRootNTFS.detectMediaType("C:\\materials\\unknown.bin")).toBe("application/octet-stream")
+  })
+
   test("returns a typed unsupported result outside the Windows verifier", async () => {
     const platform = process.platform
     Object.defineProperty(process, "platform", { value: "linux" })
@@ -157,6 +166,65 @@ describe("ContentRoot authority", () => {
     }
   })
 
+  windowsTest("returns an immutable read receipt and requests scoped cancellation on revoke", async () => {
+    const directory = await temporaryDirectory()
+    await writeFile(path.join(directory, "source.md"), "exact source")
+    try {
+      await withRuntime(async ({ service, runtime }) => {
+        const proposal = await runtime.runPromise(service.propose(directory))
+        const root = await runtime.runPromise(
+          service.approve({
+            proposal,
+            approval: ContentRoot.LearnerApproval.contentRoot(proposal, "receipt source root"),
+          }),
+        )
+        const outcome = await runtime.runPromise(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const invalidation = yield* service.subscribeInvalidation(root.id)
+              const read = yield* service.read({
+                contentRootID: root.id,
+                relativePath: "source.md",
+                maxBytes: 1000,
+              })
+              const revoked = yield* service.revoke({
+                contentRootID: root.id,
+                expectedGrantVersion: root.grantVersion,
+                basis: "cancel admitted conversion",
+              })
+              return { invalidated: invalidation.aborted, read, revoked }
+            }),
+          ),
+        )
+
+        expect(outcome.invalidated).toBeTrue()
+        expect(outcome.read.authorization).toEqual({
+          contentRootID: root.id,
+          bindingID: root.binding.id,
+          bindingEpisodeID: root.bindingEpisode.id,
+          bindingEpisodeOrdinal: root.bindingEpisode.ordinal,
+          grantEpisodeID: root.grant!.id,
+          grantVersion: root.grantVersion,
+        })
+        expect(outcome.read.observation).toMatchObject({
+          result: "present",
+          relativePath: "source.md",
+          mediaType: "text/markdown",
+        })
+        expect(outcome.revoked).toMatchObject({ disposition: "revoked", grantVersion: root.grantVersion })
+        expect(
+          await runtime.runPromise(
+            Effect.flip(
+              service.read({ contentRootID: root.id, relativePath: "source.md", maxBytes: 1000 }),
+            ),
+          ),
+        ).toMatchObject({ _tag: "ContentRoot.InvalidTransitionError" })
+      })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   windowsTest("suspends replacement and movement until an exact versioned rebind", async () => {
     const parent = await temporaryDirectory()
     const original = path.join(parent, "root")
@@ -188,23 +256,31 @@ describe("ContentRoot authority", () => {
         )
         expect(generic).toMatchObject({ _tag: "ContentRoot.ConflictError", entity: "binding" })
 
-        const rebound = await runtime.runPromise(
-          service.rebind({
-            contentRootID: approved.id,
-            expectedBindingVersion: 1,
-            expectedGrantVersion: 1,
-            proposal: replacement,
-            approval: ContentRoot.LearnerApproval.contentRootRebind(
-              {
-                proposal: replacement,
+        const rebindOutcome = await runtime.runPromise(
+          Effect.scoped(
+            Effect.gen(function* () {
+              const invalidation = yield* service.subscribeInvalidation(approved.id)
+              const rebound = yield* service.rebind({
                 contentRootID: approved.id,
                 expectedBindingVersion: 1,
                 expectedGrantVersion: 1,
-              },
-              "explicit replacement rebind",
-            ),
-          }),
+                proposal: replacement,
+                approval: ContentRoot.LearnerApproval.contentRootRebind(
+                  {
+                    proposal: replacement,
+                    contentRootID: approved.id,
+                    expectedBindingVersion: 1,
+                    expectedGrantVersion: 1,
+                  },
+                  "explicit replacement rebind",
+                ),
+              })
+              return { invalidated: invalidation.aborted, rebound }
+            }),
+          ),
         )
+        expect(rebindOutcome.invalidated).toBeTrue()
+        const rebound = rebindOutcome.rebound
         expect(rebound.id).toBe(approved.id)
         expect(rebound.binding.id).not.toBe(approved.binding.id)
         expect(rebound.bindingEpisode.ordinal).toBe(2)
@@ -660,13 +736,23 @@ describe("ContentRoot authority", () => {
         const present = await runtime.runPromise(
           service.read({ contentRootID: root.id, relativePath: "a/one.md", maxBytes: 1000 }),
         )
-        expect(present).toMatchObject({ result: "present", mediaType: "text/markdown" })
-        if (present.result === "present") expect(new TextDecoder().decode(present.bytes)).toBe("first needle\nnext")
+        expect(present.authorization).toEqual({
+          contentRootID: root.id,
+          bindingID: root.binding.id,
+          bindingEpisodeID: root.bindingEpisode.id,
+          bindingEpisodeOrdinal: root.bindingEpisode.ordinal,
+          grantEpisodeID: root.grant!.id,
+          grantVersion: root.grantVersion,
+        })
+        expect(present.observation).toMatchObject({ result: "present", mediaType: "text/markdown" })
+        if (present.observation.result === "present") {
+          expect(new TextDecoder().decode(present.observation.bytes)).toBe("first needle\nnext")
+        }
         expect(
           await runtime.runPromise(
             service.read({ contentRootID: root.id, relativePath: "a/missing.md", maxBytes: 1000 }),
           ),
-        ).toMatchObject({ result: "missing" })
+        ).toMatchObject({ observation: { result: "missing" } })
         expect(
           await runtime.runPromise(
             Effect.flip(service.read({ contentRootID: root.id, relativePath: "../outside/x", maxBytes: 1000 })),

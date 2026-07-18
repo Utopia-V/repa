@@ -4,17 +4,28 @@ import { Artifact } from "@opencode-ai/core/artifact"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { waitForAbort } from "@opencode-ai/core/process"
 import { Cause, Effect, Exit, Schema } from "effect"
-import path from "path"
 
 export type MemberOutcome =
-  | { readonly status: "admitted"; readonly key: string; readonly relativePath: string; readonly artifactID: Artifact.ArtifactID }
+  | {
+      readonly status: "admitted"
+      readonly key: string
+      readonly relativePath: string
+      readonly artifactID: Artifact.ArtifactID
+      readonly sourceRevisionID: Artifact.RevisionID
+    }
   | {
       readonly status: "observed" | "unchanged"
       readonly key: string
       readonly relativePath: string
       readonly artifactID: Artifact.ArtifactID
+      readonly sourceRevisionID: Artifact.RevisionID
     }
-  | { readonly status: "stale" | "failed"; readonly key: string; readonly relativePath: string; readonly detail: string }
+  | {
+      readonly status: "stale" | "failed"
+      readonly key: string
+      readonly relativePath: string
+      readonly detail: string
+    }
 
 export type Result = {
   readonly inventory: ContentRoot.InventoryResult
@@ -62,7 +73,9 @@ export function apply(input: {
 
     for (const [index, member] of selected.entries()) {
       if (input.signal?.aborted) {
-        unattempted.push(...selected.slice(index).map((entry) => ({ key: entry.key, relativePath: entry.relativePath })))
+        unattempted.push(
+          ...selected.slice(index).map((entry) => ({ key: entry.key, relativePath: entry.relativePath })),
+        )
         break
       }
       const exit = yield* applyMember(roots, artifacts, inventory, member).pipe(Effect.exit)
@@ -107,7 +120,9 @@ function select(
     for (const requested of input.files ?? []) {
       const entry = files.find((candidate) => candidate.key === requested || candidate.relativePath === requested)
       if (!entry) {
-        return yield* new SelectionError({ detail: `Selected file was not a supported member of this manifest: ${requested}` })
+        return yield* new SelectionError({
+          detail: `Selected file was not a supported member of this manifest: ${requested}`,
+        })
       }
       selected.set(entry.key, entry)
     }
@@ -123,7 +138,9 @@ function select(
       }
     }
     if (selected.size === 0) {
-      return yield* new SelectionError({ detail: "Select an exact returned file, returned subtree, or all returned files" })
+      return yield* new SelectionError({
+        detail: "Select an exact returned file, returned subtree, or all returned files",
+      })
     }
     return [...selected.values()].sort((left, right) => comparePath(left.relativePath, right.relativePath))
   })
@@ -136,11 +153,24 @@ function applyMember(
   member: ContentRoot.InventoryEntry,
 ) {
   return Effect.gen(function* () {
-    const prepared = yield* roots.read({
+    const read = yield* roots.read({
       contentRootID: inventory.contentRootID,
       relativePath: member.relativePath,
       maxBytes: inventory.budgets.maxFileBytes,
     })
+    if (
+      read.authorization.bindingID !== inventory.bindingID ||
+      read.authorization.grantEpisodeID !== inventory.grantEpisodeID ||
+      read.authorization.grantVersion !== inventory.grantVersion
+    ) {
+      return {
+        status: "stale",
+        key: member.key,
+        relativePath: member.relativePath,
+        detail: "The ContentRoot authorization changed after inventory",
+      } satisfies MemberOutcome
+    }
+    const prepared = read.observation
     if (prepared.result === "missing") {
       return {
         status: "stale",
@@ -151,9 +181,9 @@ function applyMember(
     }
     if (
       ContentRoot.candidateKey({
-        contentRootID: inventory.contentRootID,
-        bindingID: inventory.bindingID,
-        grantEpisodeID: inventory.grantEpisodeID,
+        contentRootID: read.authorization.contentRootID,
+        bindingID: read.authorization.bindingID,
+        grantEpisodeID: read.authorization.grantEpisodeID,
         relativePath: member.relativePath,
         descriptor: prepared.descriptor,
       }) !== member.key
@@ -165,19 +195,10 @@ function applyMember(
         detail: "The selected manifest member was replaced after inventory; no Artifact was created",
       } satisfies MemberOutcome
     }
-    const root = yield* roots.get(inventory.contentRootID)
-    if (root.binding.id !== inventory.bindingID || root.grant?.id !== inventory.grantEpisodeID) {
-      return {
-        status: "stale",
-        key: member.key,
-        relativePath: member.relativePath,
-        detail: "The ContentRoot authorization changed after inventory",
-      } satisfies MemberOutcome
-    }
-    const location = Artifact.CanonicalLocation.trusted(path.join(root.binding.descriptor.canonicalPath, member.relativePath))
+    const location = Artifact.CanonicalLocation.trusted(prepared.descriptor.canonicalPath)
     const observer = Artifact.Observer.trusted(
-      `content-root:${root.id}:${root.binding.id}:${inventory.grantEpisodeID}`,
-      inventory.grantVersion,
+      `content-root:${read.authorization.contentRootID}:${read.authorization.bindingID}:${read.authorization.grantEpisodeID}`,
+      read.authorization.grantVersion,
     )
     const observation = {
       result: "present" as const,
@@ -192,23 +213,29 @@ function applyMember(
         location,
         observation,
         authority: Artifact.Admission.initializationImport(
-          `content-root:${root.id}:${inventory.grantEpisodeID}`,
-          inventory.grantVersion,
+          `content-root:${read.authorization.contentRootID}:${read.authorization.grantEpisodeID}`,
+          read.authorization.grantVersion,
         ),
       })
+      const sourceRevisionID = artifact.source.currentRevisionID
+      if (!sourceRevisionID) return yield* Effect.die("A present Artifact admission has no current Revision")
       return {
         status: "admitted",
         key: member.key,
         relativePath: member.relativePath,
         artifactID: artifact.id,
+        sourceRevisionID,
       } satisfies MemberOutcome
     }
     const observed = yield* artifacts.observe({ expected: Artifact.expectedSource(owner.artifact), observation })
+    const sourceRevisionID = observed.artifact.source.currentRevisionID
+    if (!sourceRevisionID) return yield* Effect.die("A present Artifact observation has no current Revision")
     return {
       status: observed.changed ? "observed" : "unchanged",
       key: member.key,
       relativePath: member.relativePath,
       artifactID: observed.artifact.id,
+      sourceRevisionID,
     } satisfies MemberOutcome
   })
 }

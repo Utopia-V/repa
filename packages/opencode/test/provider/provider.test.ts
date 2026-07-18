@@ -316,6 +316,9 @@ it.instance("getModel returns model for valid provider/model", () =>
     expect(String(model.id)).toBe("claude-sonnet-4-20250514")
     const language = yield* provider.getLanguage(model)
     expect(language).toBeDefined()
+    const representation = yield* provider.getRepresentationLanguage(model)
+    expect(representation).toBeDefined()
+    expect(yield* provider.getRepresentationLanguage(model)).toBe(representation)
   }),
 )
 

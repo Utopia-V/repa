@@ -19,6 +19,7 @@ const lock = Semaphore.makeUnsafe(1)
 
 export type Migration = {
   id: string
+  foreignKeyMode?: "rebuild_graph"
   up: (tx: Transaction) => Effect.Effect<void, unknown>
 }
 
@@ -156,31 +157,46 @@ function applyRecognized(db: Database, path: string, observedVersion: number, in
     for (const migration of input.slice(observedVersion - BASELINE_VERSION)) {
       const fromVersion = version
       const toVersion = fromVersion + 1
-      yield* db
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            yield* migration.up(tx)
-            yield* tx.run(sql`
-              INSERT INTO ${sql.identifier("repa_migration")} (version, id, time_completed)
-              VALUES (${toVersion}, ${migration.id}, ${Date.now()})
-            `)
-            yield* tx.run(pragma("user_version", toVersion))
-            yield* checks(tx, path, toVersion)
-          }),
-        )
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new DatabaseMigrationError({
-                path,
-                migrationID: migration.id,
-                fromVersion,
-                toVersion,
-                cause,
-              }),
-          ),
-        )
+      const apply = db.transaction((tx) =>
+        Effect.gen(function* () {
+          yield* migration.up(tx)
+          yield* tx.run(sql`
+            INSERT INTO ${sql.identifier("repa_migration")} (version, id, time_completed)
+            VALUES (${toVersion}, ${migration.id}, ${Date.now()})
+          `)
+          yield* tx.run(pragma("user_version", toVersion))
+          yield* checks(tx, path, toVersion)
+        }),
+      )
+      yield* (migration.foreignKeyMode === "rebuild_graph"
+        ? Effect.gen(function* () {
+            yield* setForeignKeys(db, false)
+            return yield* apply
+          }).pipe(Effect.ensuring(setForeignKeys(db, true).pipe(Effect.orDie)))
+        : apply
+      ).pipe(
+        Effect.mapError(
+          (cause) =>
+            new DatabaseMigrationError({
+              path,
+              migrationID: migration.id,
+              fromVersion,
+              toVersion,
+              cause,
+            }),
+        ),
+      )
       version = toVersion
+    }
+  })
+}
+
+function setForeignKeys(db: Database, enabled: boolean) {
+  return Effect.gen(function* () {
+    yield* db.run(`PRAGMA foreign_keys = ${enabled ? "ON" : "OFF"}`)
+    const observed = yield* db.get<Record<string, unknown>>(sql.raw("PRAGMA foreign_keys"))
+    if (Number(observed ? Object.values(observed)[0] : Number.NaN) !== Number(enabled)) {
+      return yield* Effect.fail(new Error(`SQLite foreign-key enforcement could not be ${enabled ? "enabled" : "disabled"}`))
     }
   })
 }

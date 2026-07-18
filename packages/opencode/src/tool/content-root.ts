@@ -148,32 +148,36 @@ export const ContentReadTool = Tool.define<typeof ReadParameters, Record<string,
       execute: (input: Schema.Schema.Type<typeof ReadParameters>, context) =>
         abortable(roots.read(input), context.abort).pipe(
           Effect.map((result) => {
-            if (result.result === "missing") {
+            const observation = result.observation
+            if (observation.result === "missing") {
               return {
                 title: input.relativePath,
                 metadata: result,
                 output: JSON.stringify(result, null, 2),
               }
             }
-            const textual = result.mediaType.startsWith("text/") || result.mediaType === "application/json"
+            const textual =
+              observation.mediaType.startsWith("text/") || observation.mediaType === "application/json"
             return {
-              title: result.relativePath,
+              title: observation.relativePath,
               metadata: {
-                result: result.result,
-                relativePath: result.relativePath,
-                descriptor: result.descriptor,
-                fingerprint: result.fingerprint,
-                mediaType: result.mediaType,
-                timeObserved: result.timeObserved,
+                authorization: result.authorization,
+                result: observation.result,
+                relativePath: observation.relativePath,
+                descriptor: observation.descriptor,
+                fingerprint: observation.fingerprint,
+                mediaType: observation.mediaType,
+                timeObserved: observation.timeObserved,
               },
               output: textual
-                ? new TextDecoder("utf-8").decode(result.bytes)
+                ? new TextDecoder("utf-8").decode(observation.bytes)
                 : JSON.stringify(
                     {
-                      result: result.result,
-                      relativePath: result.relativePath,
-                      fingerprint: result.fingerprint,
-                      mediaType: result.mediaType,
+                      authorization: result.authorization,
+                      result: observation.result,
+                      relativePath: observation.relativePath,
+                      fingerprint: observation.fingerprint,
+                      mediaType: observation.mediaType,
                       note: "Exact bytes were verified but no readable representation is created in Gate 10.",
                     },
                     null,

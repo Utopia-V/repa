@@ -113,6 +113,24 @@ const text = (message: ModelMessage) => (typeof message.content === "string" ? m
 const occurrences = (value: string, marker: string) => value.split(marker).length - 1
 
 describe("session.llm.request composition", () => {
+  test("rejects representation before generic request hooks can inherit caller state", async () => {
+    let transformed = false
+    let parameterized = false
+    await expect(
+      prepare({
+        composition: { type: "internal", purpose: "representation" },
+        transform() {
+          transformed = true
+        },
+        paramsTransform() {
+          parameterized = true
+        },
+      }),
+    ).rejects.toThrow("dedicated Gate 11 carrier")
+    expect(transformed).toBe(false)
+    expect(parameterized).toBe(false)
+  })
+
   test("keeps Repa core and program context when a plugin replaces extensions", async () => {
     const prepared = await prepare({
       agentPrompt: "CUSTOM_AGENT_POLICY",

@@ -183,6 +183,19 @@ export type ExpectedSource = {
   readonly availability: Availability
 }
 
+export type OrdinaryUseSnapshot = {
+  readonly effectiveArtifactID: ArtifactID
+  readonly dispositionVersion: number
+  readonly currentRevisionID: RevisionID
+  readonly attribution: AttributionBasis
+  readonly lineageVersion: number
+}
+
+export type OrdinaryUseRevisionSnapshot = OrdinaryUseSnapshot & {
+  readonly fingerprint: Fingerprint
+  readonly mediaType: string
+}
+
 export type RevisionInfo = {
   readonly id: RevisionID
   readonly recordedArtifactID: ArtifactID
@@ -366,6 +379,7 @@ export interface Interface {
     artifactID: ArtifactID,
     options?: PageOptions,
   ) => Effect.Effect<Page<ObservationInfo>, Error>
+  readonly getObservation: (observationID: ObservationID) => Effect.Effect<ObservationInfo, Error>
   readonly listObservationCorrections: (
     artifactID: ArtifactID,
     options?: PageOptions,
@@ -394,6 +408,37 @@ export function expectedSource(info: ArtifactInfo): ExpectedSource {
     mediaType: info.source.descriptor?.mediaType,
     availability: info.source.availability,
   }
+}
+
+export function readOrdinaryUseSnapshot(tx: Transaction, artifactID: ArtifactID) {
+  return Effect.gen(function* () {
+    return yield* makeOrdinaryUseSnapshot(yield* getArtifactInfo(tx, artifactID))
+  })
+}
+
+export function requireOrdinaryUseSnapshot(tx: Transaction, expected: OrdinaryUseSnapshot) {
+  return Effect.gen(function* () {
+    const current = yield* getArtifactInfo(tx, expected.effectiveArtifactID)
+    const actual = yield* makeOrdinaryUseSnapshot(current)
+    if (!equalOrdinaryUseSnapshot(expected, actual)) return yield* sourceConflict(current)
+    return actual
+  })
+}
+
+export function readOrdinaryUseRevisionSnapshot(tx: Transaction, artifactID: ArtifactID) {
+  return Effect.gen(function* () {
+    const current = yield* getArtifactInfo(tx, artifactID)
+    return yield* makeOrdinaryUseRevisionSnapshot(tx, current)
+  })
+}
+
+export function requireOrdinaryUseRevisionSnapshot(tx: Transaction, expected: OrdinaryUseRevisionSnapshot) {
+  return Effect.gen(function* () {
+    const current = yield* getArtifactInfo(tx, expected.effectiveArtifactID)
+    const actual = yield* makeOrdinaryUseRevisionSnapshot(tx, current)
+    if (!equalOrdinaryUseRevisionSnapshot(expected, actual)) return yield* sourceConflict(current)
+    return actual
+  })
 }
 
 function snapshot<A, E, R>(database: DatabaseShape, read: (tx: Transaction) => Effect.Effect<A, E, R>) {
@@ -1167,6 +1212,21 @@ const layer = Layer.effect(
       },
     )
 
+    const getObservation: Interface["getObservation"] = Effect.fn("Artifact.getObservation")(function* (observationID) {
+      return yield* snapshot(db, (tx) =>
+        Effect.gen(function* () {
+          const row = yield* tx
+            .select()
+            .from(ArtifactSourceObservationTable)
+            .where(eq(ArtifactSourceObservationTable.id, observationID))
+            .get()
+            .pipe(Effect.orDie)
+          if (!row) return yield* new NotFoundError({ entity: "observation", id: observationID })
+          return yield* observationInfo(tx, row)
+        }),
+      )
+    })
+
     return Service.of({
       admit,
       observe,
@@ -1182,6 +1242,7 @@ const layer = Layer.effect(
       getRevision,
       listBindings,
       listObservations,
+      getObservation,
       listObservationCorrections,
       listLineageCorrections,
     })
@@ -1570,6 +1631,48 @@ function requireExpectedSource(source: Queryable, expected: ExpectedSource, acti
   })
 }
 
+function makeOrdinaryUseSnapshot(current: ArtifactInfo) {
+  if (current.withdrawalReason) {
+    return Effect.fail(new InactiveError({ artifactID: current.id, reason: "removed" }))
+  }
+  if (current.correctionHidden) {
+    return Effect.fail(new InactiveError({ artifactID: current.id, reason: "lineage_correction" }))
+  }
+  if (!current.source.currentRevisionID || !current.source.revisionAttribution) {
+    return Effect.fail(
+      new InvalidTransitionError({ detail: `Artifact ${current.id} has no current Revision attribution` }),
+    )
+  }
+  return Effect.succeed({
+    effectiveArtifactID: current.id,
+    dispositionVersion: current.dispositionVersion,
+    currentRevisionID: current.source.currentRevisionID,
+    attribution: current.source.revisionAttribution,
+    lineageVersion: current.lineageVersion,
+  } satisfies OrdinaryUseSnapshot)
+}
+
+function makeOrdinaryUseRevisionSnapshot(tx: Transaction, current: ArtifactInfo) {
+  return Effect.gen(function* () {
+    const ordinary = yield* makeOrdinaryUseSnapshot(current)
+    if (!current.source.descriptor) {
+      return yield* new InvalidTransitionError({
+        detail: `Artifact ${current.id} has no current source descriptor`,
+      })
+    }
+    const revision = yield* requireRevisionRow(tx, ordinary.currentRevisionID)
+    return {
+      ...ordinary,
+      fingerprint: {
+        algorithm: revision.fingerprint_algorithm,
+        digest: revision.fingerprint_digest,
+        byteLength: revision.byte_length,
+      },
+      mediaType: current.source.descriptor.mediaType,
+    } satisfies OrdinaryUseRevisionSnapshot
+  })
+}
+
 function updateCurrentSource(
   tx: Transaction,
   current: ArtifactInfo,
@@ -1814,6 +1917,26 @@ function equalExpected(expected: ExpectedSource, current: ArtifactInfo) {
     expected.descriptorCorrectionID === actual.descriptorCorrectionID &&
     expected.mediaType === actual.mediaType &&
     expected.availability === actual.availability
+  )
+}
+
+function equalOrdinaryUseSnapshot(left: OrdinaryUseSnapshot, right: OrdinaryUseSnapshot) {
+  return (
+    left.effectiveArtifactID === right.effectiveArtifactID &&
+    left.dispositionVersion === right.dispositionVersion &&
+    left.currentRevisionID === right.currentRevisionID &&
+    equalAttribution(left.attribution, right.attribution) &&
+    left.lineageVersion === right.lineageVersion
+  )
+}
+
+function equalOrdinaryUseRevisionSnapshot(left: OrdinaryUseRevisionSnapshot, right: OrdinaryUseRevisionSnapshot) {
+  return (
+    equalOrdinaryUseSnapshot(left, right) &&
+    left.fingerprint.algorithm === right.fingerprint.algorithm &&
+    left.fingerprint.digest === right.fingerprint.digest &&
+    left.fingerprint.byteLength === right.fingerprint.byteLength &&
+    left.mediaType === right.mediaType
   )
 }
 

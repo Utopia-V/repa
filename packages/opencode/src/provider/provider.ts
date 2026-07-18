@@ -1127,6 +1127,7 @@ export interface Interface {
   readonly getProvider: (providerID: ProviderV2.ID) => Effect.Effect<Info>
   readonly getModel: (providerID: ProviderV2.ID, modelID: ModelV2.ID) => Effect.Effect<Model, ModelNotFoundError>
   readonly getLanguage: (model: Model) => Effect.Effect<LanguageModelV3, ModelNotFoundError>
+  readonly getRepresentationLanguage: (model: Model) => Effect.Effect<LanguageModelV3, ModelNotFoundError>
   readonly closest: (
     providerID: ProviderV2.ID,
     query: string[],
@@ -1137,6 +1138,7 @@ export interface Interface {
 
 interface State {
   models: Map<string, LanguageModelV3>
+  representationModels: Map<string, LanguageModelV3>
   providers: Record<ProviderV2.ID, Info>
   catalog: Record<ProviderV2.ID, Info>
   sdk: Map<string, BundledSDK>
@@ -1320,6 +1322,7 @@ const layer = Layer.effect(
 
         const providers: Record<ProviderV2.ID, Info> = {} as Record<ProviderV2.ID, Info>
         const languages = new Map<string, LanguageModelV3>()
+        const representationLanguages = new Map<string, LanguageModelV3>()
         const modelLoaders: {
           [providerID: string]: CustomModelLoader
         } = {}
@@ -1630,6 +1633,7 @@ const layer = Layer.effect(
 
         return {
           models: languages,
+          representationModels: representationLanguages,
           providers,
           catalog,
           sdk,
@@ -1846,6 +1850,30 @@ const layer = Layer.effect(
       )
     })
 
+    const getRepresentationLanguage = Effect.fn("Provider.getRepresentationLanguage")(function* (model: Model) {
+      const s = yield* InstanceState.get(state)
+      const envs = yield* env.all()
+      const key = `${model.providerID}/${model.id}`
+      if (s.representationModels.has(key)) return s.representationModels.get(key)!
+
+      const provider = s.providers[model.providerID]
+      const profileModel = { ...model, options: {}, variants: undefined }
+      return yield* EffectPromise.refineRejection(
+        async () => {
+          const sdk = await resolveSDK(profileModel, s, envs)
+          const language = s.modelLoaders[model.providerID]
+            ? await s.modelLoaders[model.providerID](sdk, model.api.id, { ...provider.options }, profileModel)
+            : sdk.languageModel(model.api.id)
+          s.representationModels.set(key, language)
+          return language
+        },
+        (cause) =>
+          cause instanceof NoSuchModelError
+            ? new ModelNotFoundError({ modelID: model.id, providerID: model.providerID, cause })
+            : undefined,
+      )
+    })
+
     const closest = Effect.fn("Provider.closest")(function* (providerID: ProviderV2.ID, query: string[]) {
       const s = yield* InstanceState.get(state)
       const provider = s.providers[providerID]
@@ -1960,7 +1988,17 @@ const layer = Layer.effect(
       }
     })
 
-    return Service.of({ list, listAvailable, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel })
+    return Service.of({
+      list,
+      listAvailable,
+      getProvider,
+      getModel,
+      getLanguage,
+      getRepresentationLanguage,
+      closest,
+      getSmallModel,
+      defaultModel,
+    })
   }),
 )
 

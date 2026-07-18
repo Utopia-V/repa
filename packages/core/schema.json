@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "2bf4b743-d996-4049-8e99-6a42f3b38cce",
+  "id": "04e19ccc-392b-4304-9e8c-178c59141b24",
   "prevIds": [
-    "9704bea2-8b07-4c93-87db-f9b9460e46a8"
+    "2bf4b743-d996-4049-8e99-6a42f3b38cce"
   ],
   "ddl": [
     {
@@ -176,6 +176,26 @@
     },
     {
       "name": "project",
+      "entityType": "tables"
+    },
+    {
+      "name": "representation_availability_current",
+      "entityType": "tables"
+    },
+    {
+      "name": "representation_availability_event",
+      "entityType": "tables"
+    },
+    {
+      "name": "representation_continued_use_grant",
+      "entityType": "tables"
+    },
+    {
+      "name": "representation_effect",
+      "entityType": "tables"
+    },
+    {
+      "name": "representation_revision",
       "entityType": "tables"
     },
     {
@@ -3306,6 +3326,16 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "representation_effect_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "settlement",
       "entityType": "columns",
       "table": "learning_command_invocation"
@@ -3432,11 +3462,21 @@
     },
     {
       "type": "text",
-      "notNull": true,
+      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "effect_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "representation_effect_id",
       "entityType": "columns",
       "table": "learning_command_receipt"
     },
@@ -3689,6 +3729,1016 @@
       "name": "commands",
       "entityType": "columns",
       "table": "project"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "representation_revision_id",
+      "entityType": "columns",
+      "table": "representation_availability_current"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "representation_availability_current"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "representation_availability_current"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "representation_availability_current"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "representation_revision_id",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_storage_key",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_digest",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_byte_length",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_identity",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_observed",
+      "entityType": "columns",
+      "table": "representation_availability_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effective_artifact_id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "representation_revision_id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "old_source_revision_id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_source_revision_id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_attribution_type",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_attribution_member_id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_lineage_version",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_basis",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_operation_identity",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_fingerprint",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_occurrence_id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_invocation_part_id",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revocation_basis",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revocation_operation_identity",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_authorized",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_revoked",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "representation_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_identity",
+      "entityType": "columns",
+      "table": "representation_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_fingerprint",
+      "entityType": "columns",
+      "table": "representation_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "representation_effect"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_revision_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effective_artifact_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attribution_type",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attribution_member_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "accepted_disposition_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "accepted_lineage_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_media_type",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_digest",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_byte_length",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_binding_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_binding_episode_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_binding_episode_ordinal",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_grant_episode_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_grant_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_relative_path",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_platform",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_verifier_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_canonical_path",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_canonical_path_key",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_volume_serial",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_creation_time",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_change_time",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_last_write_time",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_size",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_kind",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_observed_time",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "presented_input_digest",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "presented_input_byte_length",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "producer_kind",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "producer_identity",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "producer_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provider_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "profile_variant",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "task_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "profile",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonicalizer_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provenance_version",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "provenance",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "run_identity",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "result_boundary",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "terminal_status",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "diagnostics",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "usage",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "output_media_type",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "storage_key",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "output_digest",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "output_byte_length",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "profile_record_count",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "acceptance_basis",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "creation_basis",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "creation_identity",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_intent",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_basis",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "delivery_mode",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_occurrence_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_invocation_part_id",
+      "entityType": "columns",
+      "table": "representation_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_accepted",
+      "entityType": "columns",
+      "table": "representation_revision"
     },
     {
       "type": "text",
@@ -5612,6 +6662,21 @@
     },
     {
       "columns": [
+        "representation_effect_id"
+      ],
+      "tableTo": "representation_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_invocation_representation_effect_id_representation_effect_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
         "occurrence_id"
       ],
       "tableTo": "learning_admitted_occurrence",
@@ -5657,6 +6722,21 @@
     },
     {
       "columns": [
+        "representation_effect_id"
+      ],
+      "tableTo": "representation_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_receipt_representation_effect_id_representation_effect_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
         "project_id"
       ],
       "tableTo": "project",
@@ -5684,6 +6764,247 @@
       "name": "fk_project_directory_project_id_project_id_fk",
       "entityType": "fks",
       "table": "project_directory"
+    },
+    {
+      "columns": [
+        "representation_revision_id"
+      ],
+      "tableTo": "representation_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_availability_current_representation_revision_id_representation_revision_id_fk",
+      "entityType": "fks",
+      "table": "representation_availability_current"
+    },
+    {
+      "columns": [
+        "representation_revision_id"
+      ],
+      "tableTo": "representation_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_availability_event_representation_revision_id_representation_revision_id_fk",
+      "entityType": "fks",
+      "table": "representation_availability_event"
+    },
+    {
+      "columns": [
+        "effective_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_continued_use_grant_effective_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        "representation_revision_id"
+      ],
+      "tableTo": "representation_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_continued_use_grant_representation_revision_id_representation_revision_id_fk",
+      "entityType": "fks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        "old_source_revision_id"
+      ],
+      "tableTo": "artifact_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_continued_use_grant_old_source_revision_id_artifact_revision_id_fk",
+      "entityType": "fks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        "current_source_revision_id"
+      ],
+      "tableTo": "artifact_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_continued_use_grant_current_source_revision_id_artifact_revision_id_fk",
+      "entityType": "fks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        "current_attribution_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_continued_use_grant_current_attribution_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "representation_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_effect_id_representation_effect_id_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "source_revision_id"
+      ],
+      "tableTo": "artifact_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_source_revision_id_artifact_revision_id_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "effective_artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_effective_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "attribution_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_attribution_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "content_root_id"
+      ],
+      "tableTo": "content_root",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_content_root_id_content_root_id_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "content_root_id",
+        "content_root_binding_id"
+      ],
+      "tableTo": "content_root_binding",
+      "columnsTo": [
+        "content_root_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_content_root_id_content_root_binding_id_content_root_binding_content_root_id_id_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "content_root_id",
+        "content_root_binding_episode_id",
+        "content_root_binding_id",
+        "content_root_binding_episode_ordinal"
+      ],
+      "tableTo": "content_root_binding_episode",
+      "columnsTo": [
+        "content_root_id",
+        "id",
+        "binding_id",
+        "ordinal"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_content_root_id_content_root_binding_episode_id_content_root_binding_id_content_root_binding_episode_ordinal_content_root_binding_episode_content_root_id_id_binding_id_ordinal_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "content_root_id",
+        "content_root_grant_episode_id",
+        "content_root_binding_id",
+        "content_root_binding_episode_id",
+        "content_root_grant_version"
+      ],
+      "tableTo": "content_root_grant_episode",
+      "columnsTo": [
+        "content_root_id",
+        "id",
+        "binding_id",
+        "binding_episode_id",
+        "ordinal"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_revision_content_root_id_content_root_grant_episode_id_content_root_binding_id_content_root_binding_episode_id_content_root_grant_version_content_root_grant_episode_content_root_id_id_binding_id_binding_episode_id_ordinal_fk",
+      "entityType": "fks",
+      "table": "representation_revision"
     },
     {
       "columns": [
@@ -6205,6 +7526,51 @@
       "nameExplicit": false,
       "name": "project_pk",
       "table": "project",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "representation_revision_id"
+      ],
+      "nameExplicit": false,
+      "name": "representation_availability_current_pk",
+      "table": "representation_availability_current",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "representation_availability_event_pk",
+      "table": "representation_availability_event",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "representation_continued_use_grant_pk",
+      "table": "representation_continued_use_grant",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "representation_effect_pk",
+      "table": "representation_effect",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "representation_revision_pk",
+      "table": "representation_revision",
       "entityType": "pks"
     },
     {
@@ -7205,6 +8571,142 @@
     {
       "columns": [
         {
+          "value": "disposition",
+          "isExpression": false
+        },
+        {
+          "value": "representation_revision_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "representation_availability_current_disposition_idx",
+      "entityType": "indexes",
+      "table": "representation_availability_current"
+    },
+    {
+      "columns": [
+        {
+          "value": "representation_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "representation_availability_history_idx",
+      "entityType": "indexes",
+      "table": "representation_availability_event"
+    },
+    {
+      "columns": [
+        {
+          "value": "effective_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "representation_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "old_source_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "current_source_revision_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"representation_continued_use_grant\".\"disposition\" = 'active'",
+      "origin": "manual",
+      "name": "representation_continued_use_active_idx",
+      "entityType": "indexes",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        {
+          "value": "effective_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "representation_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_authorized",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "representation_continued_use_history_idx",
+      "entityType": "indexes",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_accepted",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "representation_revision_source_idx",
+      "entityType": "indexes",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "effective_artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_accepted",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "representation_revision_artifact_idx",
+      "entityType": "indexes",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        {
           "value": "session_id",
           "isExpression": false
         },
@@ -7574,6 +9076,18 @@
     {
       "columns": [
         "content_root_id",
+        "id",
+        "binding_id",
+        "ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "content_root_binding_episode_receipt_unique",
+      "entityType": "uniques",
+      "table": "content_root_binding_episode"
+    },
+    {
+      "columns": [
+        "content_root_id",
         "ordinal"
       ],
       "nameExplicit": true,
@@ -7611,6 +9125,19 @@
       ],
       "nameExplicit": true,
       "name": "content_root_grant_episode_root_id_unique",
+      "entityType": "uniques",
+      "table": "content_root_grant_episode"
+    },
+    {
+      "columns": [
+        "content_root_id",
+        "id",
+        "binding_id",
+        "binding_episode_id",
+        "ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "content_root_grant_episode_receipt_unique",
       "entityType": "uniques",
       "table": "content_root_grant_episode"
     },
@@ -7772,12 +9299,85 @@
     },
     {
       "columns": [
+        "representation_effect_id"
+      ],
+      "nameExplicit": true,
+      "name": "learning_command_receipt_representation_effect_unique",
+      "entityType": "uniques",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
         "invocation_part_id"
       ],
       "nameExplicit": true,
       "name": "learning_command_receipt_invocation_unique",
       "entityType": "uniques",
       "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
+        "representation_revision_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "representation_availability_version_unique",
+      "entityType": "uniques",
+      "table": "representation_availability_event"
+    },
+    {
+      "columns": [
+        "operation_identity"
+      ],
+      "nameExplicit": true,
+      "name": "representation_availability_operation_unique",
+      "entityType": "uniques",
+      "table": "representation_availability_event"
+    },
+    {
+      "columns": [
+        "authorization_operation_identity"
+      ],
+      "nameExplicit": true,
+      "name": "representation_continued_use_authorization_operation_unique",
+      "entityType": "uniques",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        "revocation_operation_identity"
+      ],
+      "nameExplicit": true,
+      "name": "representation_continued_use_revocation_operation_unique",
+      "entityType": "uniques",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "columns": [
+        "operation_identity"
+      ],
+      "nameExplicit": true,
+      "name": "representation_effect_operation_unique",
+      "entityType": "uniques",
+      "table": "representation_effect"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": true,
+      "name": "representation_revision_effect_unique",
+      "entityType": "uniques",
+      "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "storage_key"
+      ],
+      "nameExplicit": true,
+      "name": "representation_revision_storage_key_unique",
+      "entityType": "uniques",
+      "table": "representation_revision"
     },
     {
       "value": "\"time_admitted\" >= 0",
@@ -8278,7 +9878,7 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "\"command_name\" = 'accept_course_view_revision'",
+      "value": "\"command_name\" IN ('accept_course_view_revision', 'representation.convert')",
       "name": "learning_command_invocation_command",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -8308,6 +9908,12 @@
       "table": "learning_command_invocation"
     },
     {
+      "value": "(\"command_name\" = 'accept_course_view_revision' AND \"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1) OR (\"command_name\" = 'representation.convert' AND \"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1)",
+      "name": "learning_command_invocation_capability_match",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
       "value": "\"authorization_basis\" IN ('learner_request', 'learner_acceptance')",
       "name": "learning_command_invocation_authorization_basis",
       "entityType": "checks",
@@ -8326,13 +9932,13 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
+      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
       "name": "learning_command_invocation_settlement_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"status\" IN ('applied', 'already_applied') AND \"effect_id\" IS NOT NULL) OR (\"status\" IN ('admitted', 'error') AND \"effect_id\" IS NULL)",
+      "value": "(\"status\" IN ('applied', 'already_applied') AND ((\"command_name\" = 'accept_course_view_revision' AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL) OR (\"command_name\" = 'representation.convert' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL))) OR (\"status\" IN ('admitted', 'error') AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL)",
       "name": "learning_command_invocation_effect_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -8362,10 +9968,148 @@
       "table": "learning_command_receipt"
     },
     {
+      "value": "(\"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1 AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL) OR (\"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL)",
+      "name": "learning_command_receipt_effect_shape",
+      "entityType": "checks",
+      "table": "learning_command_receipt"
+    },
+    {
       "value": "\"time_committed\" >= 0 AND \"commit_order\" >= 0",
       "name": "learning_command_receipt_time_order",
       "entityType": "checks",
       "table": "learning_command_receipt"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "representation_availability_current_version_positive",
+      "entityType": "checks",
+      "table": "representation_availability_current"
+    },
+    {
+      "value": "\"disposition\" IN ('available', 'externally_missing', 'integrity_mismatch', 'explicitly_deleted')",
+      "name": "representation_availability_current_disposition",
+      "entityType": "checks",
+      "table": "representation_availability_current"
+    },
+    {
+      "value": "\"time_updated\" >= 0",
+      "name": "representation_availability_current_time_nonnegative",
+      "entityType": "checks",
+      "table": "representation_availability_current"
+    },
+    {
+      "value": "\"version\" >= 1",
+      "name": "representation_availability_version_positive",
+      "entityType": "checks",
+      "table": "representation_availability_event"
+    },
+    {
+      "value": "\"basis\" IN ('acceptance', 'verified_read', 'missing_observation', 'integrity_observation', 'exact_restoration', 'explicit_deletion', 'deletion_recovery')",
+      "name": "representation_availability_basis",
+      "entityType": "checks",
+      "table": "representation_availability_event"
+    },
+    {
+      "value": "(\"observed_storage_key\" IS NOT NULL AND length(\"observed_storage_key\") > 0) AND ((\"disposition\" = 'available' AND \"observed_digest\" IS NOT NULL AND length(\"observed_digest\") = 64 AND \"observed_digest\" NOT GLOB '*[^0-9a-f]*' AND \"observed_byte_length\" IS NOT NULL AND \"observed_byte_length\" >= 0) OR (\"disposition\" = 'integrity_mismatch' AND ((\"observed_digest\" IS NULL AND \"observed_byte_length\" IS NULL) OR (\"observed_digest\" IS NOT NULL AND length(\"observed_digest\") = 64 AND \"observed_digest\" NOT GLOB '*[^0-9a-f]*' AND \"observed_byte_length\" IS NOT NULL AND \"observed_byte_length\" >= 0))) OR (\"disposition\" IN ('externally_missing', 'explicitly_deleted') AND \"observed_digest\" IS NULL AND \"observed_byte_length\" IS NULL))",
+      "name": "representation_availability_observation_shape",
+      "entityType": "checks",
+      "table": "representation_availability_event"
+    },
+    {
+      "value": "\"time_observed\" >= 0",
+      "name": "representation_availability_time_nonnegative",
+      "entityType": "checks",
+      "table": "representation_availability_event"
+    },
+    {
+      "value": "(\"current_attribution_type\" = 'recorded' AND \"current_attribution_member_id\" IS NULL) OR (\"current_attribution_type\" = 'lineage_correction' AND \"current_attribution_member_id\" IS NOT NULL)",
+      "name": "representation_continued_use_attribution_shape",
+      "entityType": "checks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "value": "\"current_lineage_version\" >= 0 AND \"version\" >= 1",
+      "name": "representation_continued_use_versions",
+      "entityType": "checks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "value": "length(\"authorization_basis\") > 0 AND length(\"authorization_operation_identity\") > 0 AND length(\"authorization_fingerprint\") = 64 AND \"authorization_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND ((\"causal_occurrence_id\" IS NULL AND \"causal_invocation_part_id\" IS NULL) OR (\"causal_occurrence_id\" IS NOT NULL AND length(\"causal_occurrence_id\") > 0 AND \"causal_invocation_part_id\" IS NOT NULL AND length(\"causal_invocation_part_id\") > 0))",
+      "name": "representation_continued_use_basis",
+      "entityType": "checks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "value": "(\"disposition\" = 'active' AND \"revocation_basis\" IS NULL AND \"revocation_operation_identity\" IS NULL AND \"time_revoked\" IS NULL) OR (\"disposition\" = 'revoked' AND \"revocation_basis\" IS NOT NULL AND length(\"revocation_basis\") > 0 AND \"revocation_operation_identity\" IS NOT NULL AND length(\"revocation_operation_identity\") > 0 AND \"time_revoked\" >= \"time_authorized\")",
+      "name": "representation_continued_use_disposition_shape",
+      "entityType": "checks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "value": "\"time_authorized\" >= 0 AND \"time_updated\" >= \"time_authorized\"",
+      "name": "representation_continued_use_time_order",
+      "entityType": "checks",
+      "table": "representation_continued_use_grant"
+    },
+    {
+      "value": "length(\"operation_identity\") > 0",
+      "name": "representation_effect_operation_nonempty",
+      "entityType": "checks",
+      "table": "representation_effect"
+    },
+    {
+      "value": "length(\"semantic_fingerprint\") = 64 AND \"semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "representation_effect_fingerprint",
+      "entityType": "checks",
+      "table": "representation_effect"
+    },
+    {
+      "value": "\"time_committed\" >= 0",
+      "name": "representation_effect_time_nonnegative",
+      "entityType": "checks",
+      "table": "representation_effect"
+    },
+    {
+      "value": "(\"attribution_type\" = 'recorded' AND \"attribution_member_id\" IS NULL) OR (\"attribution_type\" = 'lineage_correction' AND \"attribution_member_id\" IS NOT NULL)",
+      "name": "representation_revision_attribution_shape",
+      "entityType": "checks",
+      "table": "representation_revision"
+    },
+    {
+      "value": "\"accepted_disposition_version\" >= 0 AND \"accepted_lineage_version\" >= 0 AND \"source_version\" >= 0 AND \"content_root_binding_episode_ordinal\" >= 1 AND \"content_root_grant_version\" >= 1",
+      "name": "representation_revision_versions",
+      "entityType": "checks",
+      "table": "representation_revision"
+    },
+    {
+      "value": "length(\"source_media_type\") > 0 AND length(\"source_digest\") = 64 AND \"source_digest\" NOT GLOB '*[^0-9a-f]*' AND \"source_byte_length\" >= 0 AND length(\"normalized_relative_path\") > 0 AND \"source_object_platform\" = 'windows_ntfs' AND \"source_object_verifier_version\" >= 1 AND length(\"source_object_canonical_path\") > 0 AND length(\"source_object_canonical_path_key\") > 0 AND lower(\"source_object_canonical_path\") = \"source_object_canonical_path_key\" AND length(\"source_object_volume_serial\") > 0 AND length(\"source_object_id\") = 32 AND length(\"source_object_creation_time\") > 0 AND length(\"source_object_change_time\") > 0 AND length(\"source_object_last_write_time\") > 0 AND \"source_object_size\" >= 0 AND \"source_object_size\" = \"source_byte_length\" AND \"source_object_kind\" = 'file' AND \"source_observed_time\" >= 0",
+      "name": "representation_revision_source_shape",
+      "entityType": "checks",
+      "table": "representation_revision"
+    },
+    {
+      "value": "length(\"presented_input_digest\") = 64 AND \"presented_input_digest\" NOT GLOB '*[^0-9a-f]*' AND \"presented_input_byte_length\" >= 0 AND \"presented_input_digest\" = \"source_digest\" AND \"presented_input_byte_length\" = \"source_byte_length\"",
+      "name": "representation_revision_input_shape",
+      "entityType": "checks",
+      "table": "representation_revision"
+    },
+    {
+      "value": "length(\"producer_identity\") > 0 AND length(\"producer_version\") > 0 AND \"task_version\" >= 1 AND \"canonicalizer_version\" >= 1 AND \"provenance_version\" >= 1 AND length(\"run_identity\") > 0 AND json_valid(\"provenance\") AND json_type(\"provenance\") = 'object' AND json_valid(\"diagnostics\") AND json_type(\"diagnostics\") = 'array' AND json_valid(\"usage\") AND json_type(\"usage\") = 'object' AND ((\"producer_kind\" = 'local_pdf' AND \"provider_id\" IS NULL AND \"model_id\" IS NULL AND \"profile_variant\" IS NULL AND \"profile\" = 'repa.pdf-text.v1' AND \"result_boundary\" = 'framed_stdout_v1' AND \"terminal_status\" = 'completed' AND \"acceptance_basis\" = 'mechanical_profile') OR (\"producer_kind\" = 'configured_model' AND \"provider_id\" IS NOT NULL AND length(\"provider_id\") > 0 AND \"model_id\" IS NOT NULL AND length(\"model_id\") > 0 AND \"profile\" = 'repa.model-rendition.v1' AND \"result_boundary\" = 'model_schema_v1' AND \"terminal_status\" = 'stop' AND \"acceptance_basis\" = 'model_claimed_rendition'))",
+      "name": "representation_revision_producer_shape",
+      "entityType": "checks",
+      "table": "representation_revision"
+    },
+    {
+      "value": "length(\"output_media_type\") > 0 AND length(\"storage_key\") > 0 AND length(\"output_digest\") = 64 AND \"output_digest\" NOT GLOB '*[^0-9a-f]*' AND \"output_byte_length\" > 0 AND \"profile_record_count\" >= 1",
+      "name": "representation_revision_output_shape",
+      "entityType": "checks",
+      "table": "representation_revision"
+    },
+    {
+      "value": "\"creation_basis\" IN ('deterministic_operation', 'learning_command') AND length(\"creation_identity\") > 0 AND \"authorization_intent\" = 'persistent_readable_access' AND length(\"authorization_basis\") > 0 AND ((\"creation_basis\" = 'deterministic_operation' AND \"delivery_mode\" = 'deterministic' AND \"causal_occurrence_id\" IS NULL AND \"causal_invocation_part_id\" IS NULL) OR (\"creation_basis\" = 'learning_command' AND \"delivery_mode\" = 'model_tool' AND \"causal_occurrence_id\" IS NOT NULL AND length(\"causal_occurrence_id\") > 0 AND \"causal_invocation_part_id\" IS NOT NULL AND length(\"causal_invocation_part_id\") > 0)) AND \"time_accepted\" >= 0",
+      "name": "representation_revision_creation_shape",
+      "entityType": "checks",
+      "table": "representation_revision"
     }
   ],
   "renames": []

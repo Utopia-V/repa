@@ -3,6 +3,7 @@ import { attach } from "./run-service"
 import * as Observability from "@opencode-ai/core/observability"
 
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { AppProcess } from "@opencode-ai/core/process"
 import { Database } from "@opencode-ai/core/database/database"
 import { Auth } from "@/auth"
 import { Account } from "@/account/account"
@@ -53,14 +54,19 @@ import { AppNodeBuilderV1 } from "./app-node-builder-v1"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Artifact } from "@opencode-ai/core/artifact"
+import { Representation } from "@opencode-ai/core/representation"
 
 export const AppLayer = AppNodeBuilderV1.build(
   LayerNode.group([
     Npm.node,
     FSUtil.node,
+    AppProcess.node,
     Database.node,
     ContentRoot.node,
     Artifact.node,
+    Representation.node,
+    Representation.historicalReaderNode,
+    Representation.currentUseReaderNode,
     Auth.node,
     Account.node,
     Config.node,

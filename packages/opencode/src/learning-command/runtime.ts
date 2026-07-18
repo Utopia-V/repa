@@ -358,7 +358,9 @@ export function recoverAdmitted(events: EventV2.Interface) {
   return Effect.gen(function* () {
     const admitted = yield* events.transaction((tx) =>
       LearningCommand.listAdmitted(tx).pipe(
-        Effect.map((rows) => noEvent(rows)),
+        Effect.map((rows) =>
+          noEvent(rows.filter((row) => row.command_name === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY)),
+        ),
         Effect.orDie,
       ),
     )

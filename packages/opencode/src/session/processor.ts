@@ -23,12 +23,15 @@ import { Question } from "@/question"
 import { errorMessage } from "@/util/error"
 import { isRecord } from "@/util/record"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import { EventV2 } from "@opencode-ai/core/event"
 import { Database } from "@opencode-ai/core/database/database"
 import { Usage, type LLMEvent } from "@opencode-ai/llm"
 import { EffectBridge } from "@/effect/bridge"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
+import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { isDeepStrictEqual } from "node:util"
+import { isLearningCommandToolID } from "@/tool/accept-course-view-revision"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
@@ -245,7 +248,7 @@ const layer = Layer.effect(
         const match = yield* readToolCall(toolCallID)
         if (!match) return
         if (
-          match.part.tool === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY &&
+          isLearningCommandToolID(match.part.tool) &&
           (match.part.state.status === "completed" || match.part.state.status === "error")
         ) {
           if (
@@ -284,14 +287,12 @@ const layer = Layer.effect(
       const failToolCall = Effect.fn("SessionProcessor.failToolCall")(function* (toolCallID: string, error: unknown) {
         const match = yield* readToolCall(toolCallID)
         if (!match) return false
-        if (match.part.tool === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
+        if (isLearningCommandToolID(match.part.tool)) {
           if (match.part.state.status === "completed" || match.part.state.status === "error") {
             return yield* learningInvocationConflict(match.part)
           }
           if (!match.call.registration) return false
-          const interrupted = yield* LearningCommandRuntime.interruptInvocation(events, match.call.registration).pipe(
-            Effect.orDie,
-          )
+          const interrupted = yield* interruptLearningInvocation(events, match.part.tool, match.call.registration)
           if (!interrupted) return false
           yield* settleToolCall(toolCallID)
           return true
@@ -568,7 +569,7 @@ const layer = Layer.effect(
               yield* ensureToolCall(value)
             }
             const input = isRecord(value.input) ? value.input : { value: value.input }
-            if (value.name === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
+            if (isLearningCommandToolID(value.name)) {
               const match = yield* readToolCall(value.id)
               if (
                 match?.part.tool === value.name &&
@@ -848,10 +849,8 @@ const layer = Layer.effect(
             yield* settleToolCall(toolCallID)
             continue
           }
-          if (part.tool === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY && match.call.registration) {
-            const interrupted = yield* LearningCommandRuntime.interruptInvocation(events, match.call.registration).pipe(
-              Effect.orDie,
-            )
+          if (isLearningCommandToolID(part.tool) && match.call.registration) {
+            const interrupted = yield* interruptLearningInvocation(events, part.tool, match.call.registration)
             if (interrupted) {
               yield* settleToolCall(toolCallID)
               continue
@@ -995,6 +994,7 @@ export const node = LayerNode.make({
     EventV2Bridge.node,
     Database.node,
     LearningCommandRuntime.node,
+    RepresentationCommandRuntime.node,
   ],
 })
 
@@ -1006,6 +1006,18 @@ function learningInvocationConflict(part: SessionV1.ToolPart) {
       providerCallID: part.callID,
     }),
   )
+}
+
+function interruptLearningInvocation(
+  events: EventV2.Interface,
+  tool: string,
+  registration: LearningCommandRuntime.Registration,
+) {
+  const interrupt =
+    tool === LearningCommand.REPRESENTATION_CONVERT_CAPABILITY
+      ? RepresentationCommandRuntime.interruptInvocation
+      : LearningCommandRuntime.interruptInvocation
+  return interrupt(events, registration).pipe(Effect.orDie)
 }
 
 export * as SessionProcessor from "./processor"

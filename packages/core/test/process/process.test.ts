@@ -151,6 +151,17 @@ describe("AppProcess", () => {
       }),
     )
 
+    it.effect(
+      "settles a real spawn failure as a non-success result",
+      Effect.gen(function* () {
+        const svc = yield* AppProcess.Service
+        const missing = path.join(tmpdir(), "repa-app-process-command-that-does-not-exist")
+        const result = yield* svc.run(ChildProcess.make(missing, []))
+        expect(result.exitCode).not.toBe(0)
+        expect(result.stdout.byteLength).toBe(0)
+      }),
+    )
+
     if (process.platform !== "win32") {
       it.live(
         "timeout cleans up the scoped child process",

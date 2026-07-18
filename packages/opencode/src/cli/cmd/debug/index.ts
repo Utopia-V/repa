@@ -2,8 +2,8 @@ import { Global } from "@opencode-ai/core/global"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import os from "os"
-import { Duration, Effect } from "effect"
-import { effectCmd } from "../../effect-cmd"
+import { Duration, Effect, Exit, Fiber } from "effect"
+import { effectCmd, fail } from "../../effect-cmd"
 import { cmd } from "../cmd"
 import { ConfigCommand } from "./config"
 import { FileCommand } from "./file"
@@ -34,6 +34,7 @@ export const DebugCommand = cmd({
       .command(InfoCommand)
       .command(PathsCommand)
       .command(WaitCommand)
+      .command(PackagedPDFCancellationCommand)
       .demandCommand(),
   async handler() {},
 })
@@ -43,6 +44,38 @@ const WaitCommand = effectCmd({
   describe: "wait indefinitely (for debugging)",
   handler: Effect.fn("Cli.debug.wait")(function* () {
     yield* Effect.sleep(Duration.days(1))
+  }),
+})
+
+const PackagedPDFCancellationCommand = effectCmd({
+  command: "pdf-worker-cancellation",
+  describe: false,
+  instance: false,
+  handler: Effect.fn("Cli.debug.pdf-worker-cancellation")(function* () {
+    const { LocalPDFProducer } = yield* Effect.promise(() => import("@/representation/pdf-producer"))
+    const controller = new AbortController()
+    const probe = yield* LocalPDFProducer.probePackagedCancellation(controller.signal).pipe(
+      Effect.exit,
+      Effect.forkChild,
+    )
+    const control = yield* Effect.promise(() => Bun.stdin.text())
+    controller.abort()
+    const exit = yield* Fiber.await(probe).pipe(
+      Effect.timeoutOrElse({
+        duration: "10 seconds",
+        orElse: () => Fiber.interrupt(probe).pipe(Effect.andThen(fail("Packaged PDF worker did not cancel"))),
+      }),
+    )
+    if (control.trim() !== "cancel") return yield* fail("Invalid packaged PDF cancellation control")
+    if (!Exit.isSuccess(exit) || !Exit.isFailure(exit.value)) {
+      return yield* fail("Packaged PDF worker did not terminate through the parent")
+    }
+    const reason = exit.value.cause.reasons[0]
+    if (reason?._tag !== "Fail" || !(reason.error instanceof LocalPDFProducer.PDFProducerError)) {
+      return yield* fail("Packaged PDF worker returned an unrecognized cancellation result")
+    }
+    if (reason.error.code !== "cancelled") return yield* fail("Packaged PDF worker returned the wrong terminal cause")
+    process.stdout.write(`${JSON.stringify({ status: "cancelled" })}\n`)
   }),
 })
 

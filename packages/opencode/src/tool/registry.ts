@@ -60,6 +60,8 @@ import {
   learningCommandPreparation,
 } from "./accept-course-view-revision"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
+import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
+import { RepresentationConvertTool } from "./representation-convert"
 import {
   ContentInventoryTool,
   ContentReadTool,
@@ -125,6 +127,7 @@ const layer = Layer.effect(
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
     const acceptCourseViewRevision = yield* AcceptCourseViewRevisionTool
+    const representationConvert = yield* RepresentationConvertTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
     const contentSearch = yield* ContentSearchTool
@@ -244,6 +247,7 @@ const layer = Layer.effect(
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
           acceptCourseViewRevision: Tool.init(acceptCourseViewRevision),
+          representationConvert: Tool.init(representationConvert),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
           contentSearch: Tool.init(contentSearch),
@@ -258,6 +262,7 @@ const layer = Layer.effect(
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
             tool.acceptCourseViewRevision,
+            tool.representationConvert,
             tool.contentRoots,
             tool.contentInventory,
             tool.contentSearch,
@@ -483,6 +488,7 @@ export const node = LayerNode.make({
     Database.node,
     Ripgrep.node,
     LearningCommandRuntime.node,
+    RepresentationCommandRuntime.node,
     ContentRoot.node,
   ],
 })

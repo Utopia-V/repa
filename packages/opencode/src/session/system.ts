@@ -9,6 +9,7 @@ import PROMPT_INTERNAL_OPERATION from "./prompt/internal-operation.txt"
 import PROMPT_TITLE from "@/agent/prompt/title.txt"
 import PROMPT_COMPACTION from "@/agent/prompt/compaction.txt"
 import PROMPT_PROJECT_COPY_NAME from "./prompt/project-copy-name.txt"
+import PROMPT_REPRESENTATION from "./prompt/representation.txt"
 import type { Provider } from "@/provider/provider"
 import type { Agent } from "@/agent/agent"
 import { Permission } from "@/permission"
@@ -28,13 +29,14 @@ export function internal() {
   return PROMPT_INTERNAL_OPERATION
 }
 
-export type InternalPurpose = "title" | "compaction" | "project-copy-name"
+export type InternalPurpose = "title" | "compaction" | "project-copy-name" | "representation"
 
 export function internalTask(purpose: InternalPurpose) {
   return {
     title: PROMPT_TITLE,
     compaction: PROMPT_COMPACTION,
     "project-copy-name": PROMPT_PROJECT_COPY_NAME,
+    representation: PROMPT_REPRESENTATION,
   }[purpose]
 }
 

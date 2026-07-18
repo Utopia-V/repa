@@ -25,7 +25,7 @@ import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { assertExternalToolID, learningCommandPreparation } from "@/tool/accept-course-view-revision"
 import { assertExternalContentToolID } from "@/tool/content-root"
-import { normalize as normalizeLearningCommandInput } from "@/learning-command/input"
+import { normalizeCommand as normalizeLearningCommandInput } from "@/learning-command/input"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -116,7 +116,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
       execute(args, options) {
         return run.promise(
           Effect.gen(function* () {
-            const canonicalArgs = prepareLearningCommand ? normalizeLearningCommandInput(args) : args
+            const canonicalArgs = prepareLearningCommand ? normalizeLearningCommandInput(item.id, args) : args
             const ctx = context(toRecord(canonicalArgs), options)
             if (!prepareLearningCommand) {
               yield* plugin.trigger(
@@ -535,7 +535,7 @@ export function prepareLearningCommandCall(
   prepare: NonNullable<ReturnType<typeof learningCommandPreparation>>,
 ) {
   return Effect.gen(function* () {
-    const canonical = normalizeLearningCommandInput(input)
+    const canonical = normalizeLearningCommandInput(toolID, input)
     yield* plugin.trigger(
       "tool.execute.before",
       { tool: toolID, sessionID: registration.sessionID, callID: registration.callID },

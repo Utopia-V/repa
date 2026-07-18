@@ -2,6 +2,8 @@ import { and, asc, eq, ne, or } from "drizzle-orm"
 import { Effect } from "effect"
 import { Course } from "../course"
 import { CourseSelectionAcceptanceEffectTable } from "../course/sql"
+import { RepresentationSchema } from "../representation/schema"
+import { RepresentationEffectTable, RepresentationRevisionTable } from "../representation/sql"
 import { SessionSchema } from "../session/schema"
 import { MessageTable, PartTable } from "../session/sql"
 import type { MessageID, PartID, SessionV1 } from "../v1/session"
@@ -23,6 +25,10 @@ import {
   type ErrorCode,
   type ErrorSettlement,
   type PermissionOutcome,
+  type RepresentationAlreadyAppliedSettlement,
+  type RepresentationAppliedSettlement,
+  type RepresentationConvertInvocation,
+  type ReceiptID,
   type Settlement,
   type SettlementMetadata,
 } from "./schema"
@@ -31,6 +37,8 @@ import type { Transaction } from "./transaction"
 
 export const ACCEPT_COURSE_VIEW_REVISION_CAPABILITY = "accept_course_view_revision"
 export const ACCEPT_COURSE_VIEW_REVISION_VERSION = 1
+export const REPRESENTATION_CONVERT_CAPABILITY = "representation.convert"
+export const REPRESENTATION_CONVERT_VERSION = 1
 
 type StoredAssistant = Omit<SessionV1.Assistant, "id" | "sessionID">
 type StoredToolPart = Omit<SessionV1.ToolPart, "id" | "sessionID" | "messageID">
@@ -44,6 +52,11 @@ export type Reservation =
 export type SettlementResult =
   | { readonly type: "candidate" }
   | { readonly type: "settled"; readonly settlement: Settlement }
+  | { readonly type: "replay"; readonly settlement: Settlement }
+
+export type RepresentationCandidateDecision =
+  | { readonly type: "candidate" }
+  | { readonly type: "terminal"; readonly reason: "context_refresh_required" }
   | { readonly type: "replay"; readonly settlement: Settlement }
 
 export type PhysicalInvocation = typeof LearningCommandInvocationTable.$inferSelect
@@ -96,13 +109,16 @@ export function lookupPhysicalInvocationByPart(tx: Transaction, partID: PartID) 
 export function reserveAcceptance(tx: Transaction, input: AcceptCourseViewRevisionInvocation) {
   return Effect.gen(function* () {
     const fingerprint = invocationFingerprint(input)
-    const physical = yield* findPhysical(tx, input, fingerprint)
+    const physical = yield* findPhysical(tx, input, fingerprint, ACCEPT_COURSE_VIEW_REVISION_CAPABILITY)
     if (physical) {
       if (physical.status === "admitted") return { type: "admitted" as const }
       return { type: "replay" as const, settlement: requireSettlement(physical) }
     }
 
-    yield* validateNewEnvelope(tx, input)
+    yield* validateNewEnvelope(tx, input.envelope, {
+      capability: ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+      version: ACCEPT_COURSE_VIEW_REVISION_VERSION,
+    })
     yield* tx
       .insert(LearningCommandInvocationTable)
       .values({
@@ -125,6 +141,214 @@ export function reserveAcceptance(tx: Transaction, input: AcceptCourseViewRevisi
       .run()
       .pipe(Effect.orDie)
     return yield* reservationDecision(tx, input)
+  })
+}
+
+/**
+ * The Representation semantic address is command-owned and excludes physical
+ * invocation identity, exact source payload, recipe details, and operational
+ * source-read provenance. Representation.resolveConversion owns payload and
+ * recipe equality for this address.
+ */
+export function representationConversionOperationIdentity(input: RepresentationConvertInvocation) {
+  return `learning-command:${REPRESENTATION_CONVERT_CAPABILITY}:v${REPRESENTATION_CONVERT_VERSION}:${new Bun.CryptoHasher(
+    "sha256",
+  )
+    .update(
+      JSON.stringify({
+        occurrenceID: input.envelope.occurrenceID,
+        effectiveArtifactID: input.command.effectiveArtifactID,
+        producerKind: input.producerKind,
+      }),
+    )
+    .digest("hex")}`
+}
+
+export function reserveRepresentationConversion(tx: Transaction, input: RepresentationConvertInvocation) {
+  return Effect.gen(function* () {
+    const fingerprint = representationInvocationFingerprint(input)
+    const physical = yield* findPhysical(tx, input, fingerprint, REPRESENTATION_CONVERT_CAPABILITY)
+    if (physical) {
+      if (physical.status === "admitted") return { type: "admitted" as const }
+      return { type: "replay" as const, settlement: requireSettlement(physical) }
+    }
+
+    yield* validateNewEnvelope(tx, input.envelope, {
+      capability: REPRESENTATION_CONVERT_CAPABILITY,
+      version: REPRESENTATION_CONVERT_VERSION,
+    })
+    yield* tx
+      .insert(LearningCommandInvocationTable)
+      .values({
+        part_id: input.envelope.partID,
+        session_id: input.envelope.sessionID,
+        parent_user_message_id: input.envelope.parentUserMessageID,
+        assistant_message_id: input.envelope.assistantMessageID,
+        provider_call_id: input.envelope.providerCallID,
+        occurrence_id: input.envelope.occurrenceID,
+        command_name: REPRESENTATION_CONVERT_CAPABILITY,
+        command_version: REPRESENTATION_CONVERT_VERSION,
+        emission_ordinal: input.envelope.emissionOrdinal,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        input_fingerprint: fingerprint,
+        status: "admitted",
+        time_admitted: input.envelope.timeAdmitted,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    return { type: "candidate" as const }
+  })
+}
+
+/** Call only after Representation.resolveConversion has established a new effect candidate. */
+export function decideRepresentationCandidate(
+  tx: Transaction,
+  input: RepresentationConvertInvocation,
+): Effect.Effect<RepresentationCandidateDecision, InvocationConflictError | InvocationNotFoundError> {
+  return Effect.gen(function* () {
+    const invocation = yield* requireRepresentationPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    const occupied = yield* appliedMutation(tx, input.envelope.assistantMessageID)
+    if (occupied) return { type: "terminal" as const, reason: "context_refresh_required" as const }
+    return { type: "candidate" as const }
+  })
+}
+
+/**
+ * Rechecks the new-effect execution slot in the final transaction and consumes
+ * permission/source availability without creating Representation state.
+ */
+export function settleRepresentationCandidate(
+  tx: Transaction,
+  input: RepresentationConvertInvocation & {
+    readonly permission: PermissionOutcome
+    readonly settlement: SettlementMetadata
+  },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireRepresentationPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    if (yield* appliedMutation(tx, input.envelope.assistantMessageID)) {
+      const settlement = errorSettlement("context_refresh_required", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const permissionError = permissionErrorCode(input.permission)
+    if (permissionError) {
+      const settlement = errorSettlement(permissionError, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const available = yield* occurrenceAvailable(tx, input)
+    if (!available) {
+      const settlement = errorSettlement("source_unavailable", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    return { type: "candidate" as const }
+  })
+}
+
+/**
+ * Settles one bounded, secret-free no-effect result after the domain owner has
+ * established that no exact accepted Representation effect takes precedence.
+ */
+export function settleRepresentationFailure(
+  tx: Transaction,
+  input: RepresentationConvertInvocation & {
+    readonly code: ErrorCode
+    readonly settlement: SettlementMetadata
+  },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireRepresentationPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    const settlement = errorSettlement(input.code, input.settlement)
+    yield* settleInvocation(tx, invocation.part_id, settlement)
+    return { type: "settled" as const, settlement }
+  })
+}
+
+/** Call after a same-transaction Representation candidate commit or exact domain replay. */
+export function settleRepresentationSuccess(
+  tx: Transaction,
+  input: RepresentationConvertInvocation & {
+    readonly representationRevisionID: RepresentationSchema.RevisionID
+    readonly domainResult: "new" | "already_accepted"
+    readonly settlement: SettlementMetadata
+  },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireRepresentationPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    const representation = yield* requireRepresentationResult(tx, input)
+    const receipt = yield* tx
+      .select()
+      .from(LearningCommandReceiptTable)
+      .where(eq(LearningCommandReceiptTable.representation_effect_id, representation.effectID))
+      .get()
+      .pipe(Effect.orDie)
+
+    if (input.domainResult === "already_accepted") {
+      if (!receipt) return yield* Effect.die("Accepted Representation learning effect has no immutable receipt")
+      yield* requireRepresentationReceipt(receipt, input, representation.causalInvocationPartID)
+      yield* requireMetadataFloor(input.settlement, representation.timeAccepted)
+      const settlement = representationSettlement("already_applied", receipt.id, representation, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+
+    if (receipt) return yield* Effect.die("New Representation learning effect already has an immutable receipt")
+    yield* requireMetadataFloor(input.settlement, representation.timeAccepted)
+    if (yield* appliedMutation(tx, input.envelope.assistantMessageID)) {
+      return yield* Effect.die("Representation committed after its model-operation mutation slot was occupied")
+    }
+    if (!(yield* occurrenceAvailable(tx, input))) {
+      return yield* Effect.die("Representation committed after its causal learner occurrence became unavailable")
+    }
+    const occurrence = yield* tx
+      .select()
+      .from(AdmittedLearnerOccurrenceTable)
+      .where(eq(AdmittedLearnerOccurrenceTable.id, input.envelope.occurrenceID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!occurrence) return yield* Effect.die("Applied learning command has no admitted occurrence")
+    const receiptID = createReceiptID()
+    yield* tx
+      .insert(LearningCommandReceiptTable)
+      .values({
+        id: receiptID,
+        occurrence_id: occurrence.id,
+        origin_session_id: occurrence.origin_session_id,
+        origin_message_id: occurrence.origin_message_id,
+        assistant_message_id: input.envelope.assistantMessageID,
+        invocation_part_id: input.envelope.partID,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        effect_id: null,
+        representation_effect_id: representation.effectID,
+        time_committed: input.settlement.time,
+        commit_order: input.settlement.order,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    const settlement = representationSettlement("applied", receiptID, representation, input.settlement)
+    yield* settleInvocation(tx, invocation.part_id, settlement)
+    return { type: "settled" as const, settlement }
   })
 }
 
@@ -539,55 +763,74 @@ function settlementForDecision(
   })
 }
 
-function findPhysical(tx: Transaction, input: AcceptCourseViewRevisionInvocation, fingerprint: string) {
+function findPhysical(
+  tx: Transaction,
+  input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation,
+  fingerprint: string,
+  commandName: typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY | typeof REPRESENTATION_CONVERT_CAPABILITY,
+) {
   return Effect.gen(function* () {
     const row = yield* lookupPhysicalInvocation(tx, input.envelope)
     if (!row) return undefined
-    if (row.input_fingerprint !== fingerprint) return yield* invocationConflict(input.envelope)
+    if (row.command_name !== commandName || row.input_fingerprint !== fingerprint) {
+      return yield* invocationConflict(input.envelope)
+    }
     return row
   })
 }
 
 function requirePhysical(tx: Transaction, input: AcceptCourseViewRevisionInvocation) {
   return Effect.gen(function* () {
-    const row = yield* findPhysical(tx, input, invocationFingerprint(input))
+    const row = yield* findPhysical(tx, input, invocationFingerprint(input), ACCEPT_COURSE_VIEW_REVISION_CAPABILITY)
     if (!row) return yield* new InvocationNotFoundError({ partID: input.envelope.partID })
     return row
   })
 }
 
-function validateNewEnvelope(tx: Transaction, input: AcceptCourseViewRevisionInvocation) {
+function requireRepresentationPhysical(tx: Transaction, input: RepresentationConvertInvocation) {
   return Effect.gen(function* () {
-    if (input.envelope.providerCallID.trim().length === 0) return yield* invalidEnvelope("missing_call_id")
-    if (!Number.isSafeInteger(input.envelope.emissionOrdinal) || input.envelope.emissionOrdinal < 0) {
+    const row = yield* findPhysical(
+      tx,
+      input,
+      representationInvocationFingerprint(input),
+      REPRESENTATION_CONVERT_CAPABILITY,
+    )
+    if (!row) return yield* new InvocationNotFoundError({ partID: input.envelope.partID })
+    return row
+  })
+}
+
+function validateNewEnvelope(
+  tx: Transaction,
+  envelope: AcceptCourseViewRevisionInvocation["envelope"],
+  command: {
+    readonly capability: typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY | typeof REPRESENTATION_CONVERT_CAPABILITY
+    readonly version: number
+  },
+) {
+  return Effect.gen(function* () {
+    if (envelope.providerCallID.trim().length === 0) return yield* invalidEnvelope("missing_call_id")
+    if (!Number.isSafeInteger(envelope.emissionOrdinal) || envelope.emissionOrdinal < 0) {
       return yield* invalidEnvelope("invalid_ordinal")
     }
-    if (
-      input.envelope.capabilityIdentity !== ACCEPT_COURSE_VIEW_REVISION_CAPABILITY ||
-      input.envelope.capabilityVersion !== ACCEPT_COURSE_VIEW_REVISION_VERSION
-    ) {
+    if (envelope.capabilityIdentity !== command.capability || envelope.capabilityVersion !== command.version) {
       return yield* invalidEnvelope("invalid_capability")
     }
     const presentation = yield* Occurrence.resolvePresentation(tx, {
-      sessionID: input.envelope.sessionID,
-      messageID: input.envelope.parentUserMessageID,
-      occurrenceID: input.envelope.occurrenceID,
+      sessionID: envelope.sessionID,
+      messageID: envelope.parentUserMessageID,
+      occurrenceID: envelope.occurrenceID,
     }).pipe(Effect.mapError(() => new InvalidInvocationEnvelopeError({ reason: "wrong_parent" })))
     const occurrence = yield* tx
       .select()
       .from(AdmittedLearnerOccurrenceTable)
-      .where(eq(AdmittedLearnerOccurrenceTable.id, input.envelope.occurrenceID))
+      .where(eq(AdmittedLearnerOccurrenceTable.id, envelope.occurrenceID))
       .get()
       .pipe(Effect.orDie)
     const assistant = yield* tx
       .select()
       .from(MessageTable)
-      .where(
-        and(
-          eq(MessageTable.id, input.envelope.assistantMessageID),
-          eq(MessageTable.session_id, input.envelope.sessionID),
-        ),
-      )
+      .where(and(eq(MessageTable.id, envelope.assistantMessageID), eq(MessageTable.session_id, envelope.sessionID)))
       .get()
       .pipe(Effect.orDie)
     const assistantData = assistant?.data as StoredAssistant | undefined
@@ -595,25 +838,20 @@ function validateNewEnvelope(tx: Transaction, input: AcceptCourseViewRevisionInv
       !assistant ||
       !assistantData ||
       assistantData.role !== "assistant" ||
-      assistantData.parentID !== input.envelope.parentUserMessageID
+      assistantData.parentID !== envelope.parentUserMessageID
     ) {
       return yield* invalidEnvelope("wrong_assistant")
     }
-    const part = yield* tx
-      .select()
-      .from(PartTable)
-      .where(eq(PartTable.id, input.envelope.partID))
-      .get()
-      .pipe(Effect.orDie)
+    const part = yield* tx.select().from(PartTable).where(eq(PartTable.id, envelope.partID)).get().pipe(Effect.orDie)
     const partData = part?.data as StoredToolPart | undefined
     if (
       !part ||
       !partData ||
-      part.session_id !== input.envelope.sessionID ||
-      part.message_id !== input.envelope.assistantMessageID ||
+      part.session_id !== envelope.sessionID ||
+      part.message_id !== envelope.assistantMessageID ||
       partData.type !== "tool" ||
-      partData.tool !== ACCEPT_COURSE_VIEW_REVISION_CAPABILITY ||
-      partData.callID !== input.envelope.providerCallID ||
+      partData.tool !== command.capability ||
+      partData.callID !== envelope.providerCallID ||
       !["pending", "running"].includes(partData.state.status)
     ) {
       return yield* invalidEnvelope("unreserved_part")
@@ -621,17 +859,17 @@ function validateNewEnvelope(tx: Transaction, input: AcceptCourseViewRevisionInv
     const historical = yield* tx
       .select({ partID: HistoricalLearningToolPresentationTable.part_id })
       .from(HistoricalLearningToolPresentationTable)
-      .where(eq(HistoricalLearningToolPresentationTable.part_id, input.envelope.partID))
+      .where(eq(HistoricalLearningToolPresentationTable.part_id, envelope.partID))
       .get()
       .pipe(Effect.orDie)
     if (historical) return yield* invalidEnvelope("historical_part")
     if (
       !occurrence ||
-      input.envelope.timeAdmitted < 0 ||
-      input.envelope.timeAdmitted < occurrence.time_admitted ||
-      input.envelope.timeAdmitted < presentation.timeCreated ||
-      input.envelope.timeAdmitted < assistant.time_created ||
-      input.envelope.timeAdmitted < part.time_created
+      envelope.timeAdmitted < 0 ||
+      envelope.timeAdmitted < occurrence.time_admitted ||
+      envelope.timeAdmitted < presentation.timeCreated ||
+      envelope.timeAdmitted < assistant.time_created ||
+      envelope.timeAdmitted < part.time_created
     ) {
       return yield* invalidEnvelope("invalid_time")
     }
@@ -669,14 +907,162 @@ function invocationFingerprint(input: AcceptCourseViewRevisionInvocation) {
     .digest("hex")
 }
 
+function representationInvocationFingerprint(input: RepresentationConvertInvocation) {
+  return new Bun.CryptoHasher("sha256")
+    .update(
+      JSON.stringify({
+        command: REPRESENTATION_CONVERT_CAPABILITY,
+        commandVersion: REPRESENTATION_CONVERT_VERSION,
+        occurrenceID: input.envelope.occurrenceID,
+        sessionID: input.envelope.sessionID,
+        parentUserMessageID: input.envelope.parentUserMessageID,
+        assistantMessageID: input.envelope.assistantMessageID,
+        partID: input.envelope.partID,
+        providerCallID: input.envelope.providerCallID,
+        emissionOrdinal: input.envelope.emissionOrdinal,
+        capabilityIdentity: input.envelope.capabilityIdentity,
+        capabilityVersion: input.envelope.capabilityVersion,
+        authorizationBasis: input.envelope.authorizationBasis,
+        timeAdmitted: input.envelope.timeAdmitted,
+        input: {
+          effectiveArtifactID: input.command.effectiveArtifactID,
+          sourceRevisionID: input.command.sourceRevisionID,
+        },
+        trusted: { producerKind: input.producerKind },
+      }),
+    )
+    .digest("hex")
+}
+
+function appliedMutation(tx: Transaction, assistantMessageID: MessageID) {
+  return tx
+    .select({
+      partID: LearningCommandInvocationTable.part_id,
+      timeSettled: LearningCommandInvocationTable.time_settled,
+    })
+    .from(LearningCommandInvocationTable)
+    .where(
+      and(
+        eq(LearningCommandInvocationTable.assistant_message_id, assistantMessageID),
+        eq(LearningCommandInvocationTable.status, "applied"),
+      ),
+    )
+    .get()
+    .pipe(Effect.orDie)
+}
+
+function occurrenceAvailable(
+  tx: Transaction,
+  input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation,
+) {
+  return Occurrence.requireAvailableSource(tx, {
+    occurrenceID: input.envelope.occurrenceID,
+    sessionID: input.envelope.sessionID,
+    messageID: input.envelope.parentUserMessageID,
+  }).pipe(
+    Effect.map(() => true),
+    Effect.catch(() => Effect.succeed(false)),
+  )
+}
+
+function requireRepresentationResult(
+  tx: Transaction,
+  input: RepresentationConvertInvocation & {
+    readonly representationRevisionID: RepresentationSchema.RevisionID
+    readonly domainResult: "new" | "already_accepted"
+  },
+) {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select({
+        representationRevisionID: RepresentationRevisionTable.id,
+        effectID: RepresentationRevisionTable.effect_id,
+        effectiveArtifactID: RepresentationRevisionTable.effective_artifact_id,
+        sourceRevisionID: RepresentationRevisionTable.source_revision_id,
+        producerKind: RepresentationRevisionTable.producer_kind,
+        creationBasis: RepresentationRevisionTable.creation_basis,
+        creationIdentity: RepresentationRevisionTable.creation_identity,
+        authorizationBasis: RepresentationRevisionTable.authorization_basis,
+        deliveryMode: RepresentationRevisionTable.delivery_mode,
+        causalOccurrenceID: RepresentationRevisionTable.causal_occurrence_id,
+        causalInvocationPartID: RepresentationRevisionTable.causal_invocation_part_id,
+        timeAccepted: RepresentationRevisionTable.time_accepted,
+        effectOperationIdentity: RepresentationEffectTable.operation_identity,
+      })
+      .from(RepresentationRevisionTable)
+      .innerJoin(RepresentationEffectTable, eq(RepresentationEffectTable.id, RepresentationRevisionTable.effect_id))
+      .where(eq(RepresentationRevisionTable.id, input.representationRevisionID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!row) return yield* Effect.die("Representation settlement names no accepted Revision")
+    if (
+      row.effectiveArtifactID !== input.command.effectiveArtifactID ||
+      row.sourceRevisionID !== input.command.sourceRevisionID ||
+      row.producerKind !== input.producerKind ||
+      row.creationBasis !== "learning_command" ||
+      row.deliveryMode !== "model_tool" ||
+      row.creationIdentity !== representationConversionOperationIdentity(input) ||
+      row.effectOperationIdentity !== row.creationIdentity ||
+      row.authorizationBasis !== input.envelope.authorizationBasis ||
+      row.causalOccurrenceID !== input.envelope.occurrenceID ||
+      (input.domainResult === "new" && row.causalInvocationPartID !== input.envelope.partID) ||
+      (input.domainResult === "already_accepted" && row.causalInvocationPartID === null)
+    ) {
+      return yield* Effect.die("Accepted Representation does not match its learning-command authority")
+    }
+    return row
+  })
+}
+
+function requireRepresentationReceipt(
+  receipt: typeof LearningCommandReceiptTable.$inferSelect,
+  input: RepresentationConvertInvocation,
+  causalInvocationPartID: string | null,
+) {
+  if (
+    receipt.occurrence_id !== input.envelope.occurrenceID ||
+    receipt.capability_identity !== REPRESENTATION_CONVERT_CAPABILITY ||
+    receipt.capability_version !== REPRESENTATION_CONVERT_VERSION ||
+    receipt.authorization_basis !== input.envelope.authorizationBasis ||
+    receipt.effect_id !== null ||
+    receipt.representation_effect_id === null ||
+    receipt.invocation_part_id !== causalInvocationPartID
+  ) {
+    return Effect.die("Representation effect receipt does not match its semantic address")
+  }
+  return Effect.void
+}
+
+function representationSettlement(
+  outcome: "applied" | "already_applied",
+  receiptID: ReceiptID,
+  representation: Effect.Success<ReturnType<typeof requireRepresentationResult>>,
+  metadata: SettlementMetadata,
+): RepresentationAppliedSettlement | RepresentationAlreadyAppliedSettlement {
+  const settlement = {
+    receiptID,
+    effectID: representation.effectID,
+    representationRevisionID: representation.representationRevisionID,
+    effectiveArtifactID: representation.effectiveArtifactID,
+    sourceRevisionID: representation.sourceRevisionID,
+    producerKind: representation.producerKind,
+    settlementTime: metadata.time,
+    settlementOrder: metadata.order,
+  }
+  if (outcome === "applied") return { outcome, ...settlement }
+  return { outcome, ...settlement }
+}
+
 function settleInvocation(tx: Transaction, partID: PartID, settlement: Settlement) {
   return Effect.gen(function* () {
     const status = settlement.outcome === "error" ? "error" : settlement.outcome
+    const representation = settlement.outcome !== "error" && "representationRevisionID" in settlement
     const updated = yield* tx
       .update(LearningCommandInvocationTable)
       .set({
         status,
-        effect_id: settlement.outcome === "error" ? null : settlement.effectID,
+        effect_id: settlement.outcome === "error" || representation ? null : settlement.effectID,
+        representation_effect_id: representation ? settlement.effectID : null,
         settlement,
         time_settled: settlement.settlementTime,
         settlement_order: settlement.settlementOrder,

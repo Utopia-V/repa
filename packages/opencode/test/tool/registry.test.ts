@@ -130,6 +130,19 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("accept_course_view_revision", "mcp")).toThrow(
         "mcp tool ID accept_course_view_revision is reserved by the learning-command runtime",
       )
+      expect(() => assertExternalToolID("representation.convert", "mcp")).toThrow(
+        "mcp tool ID representation.convert is reserved by the learning-command runtime",
+      )
+    }),
+  )
+
+  it.instance("exposes both closed learning-command capabilities", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const ids = yield* registry.ids()
+
+      expect(ids).toContain("accept_course_view_revision")
+      expect(ids).toContain("representation.convert")
     }),
   )
 

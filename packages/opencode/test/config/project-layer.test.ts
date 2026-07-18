@@ -8,7 +8,7 @@ describe("project config authority compiler", () => {
   test("classifies every current main and TUI top-level field", () => {
     expect(Object.keys(ConfigProjectLayer.MainDisposition).sort()).toEqual(Object.keys(ConfigV1.Info.fields).sort())
     expect(Object.keys(ConfigProjectLayer.TuiDisposition).sort()).toEqual(Object.keys(TuiConfig.Info.fields).sort())
-    expect(Object.keys(ConfigProjectLayer.MainDisposition)).toHaveLength(31)
+    expect(Object.keys(ConfigProjectLayer.MainDisposition)).toHaveLength(32)
     expect(Object.keys(ConfigProjectLayer.TuiDisposition)).toHaveLength(12)
     expect(Object.keys(ConfigProjectLayer.NonSchemaDisposition)).toEqual([
       "repa_directory_bootstrap",
@@ -51,6 +51,30 @@ describe("project config authority compiler", () => {
     expect([...compiledMain.diagnostics, ...compiledTui.diagnostics].every((item) => item.disposition === "quarantined")).toBe(
       true,
     )
+  })
+
+  test("quarantines a project representation producer without exposing its nested model authority", () => {
+    const result = ConfigProjectLayer.compileMain(
+      {
+        representation: {
+          model: {
+            provider_id: "project-provider",
+            model_id: "project-model",
+            variant: "project-variant",
+          },
+        },
+      },
+      "project/repa.json",
+    )
+
+    expect(result.permissionDenies).toEqual([])
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        path: "representation",
+        disposition: "quarantined",
+        reason: "project_value",
+      }),
+    ])
   })
 
   test("extracts only literal top-level permission denies and legacy tools false", () => {

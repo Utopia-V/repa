@@ -17,6 +17,7 @@ type DatabaseShape = Effect.Success<typeof makeDatabase>
 
 export interface Interface {
   db: DatabaseShape
+  readonly filename: string
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/storage/Database") {}
@@ -36,7 +37,7 @@ function databaseLayer(filename: string) {
       yield* db.run("PRAGMA synchronous = NORMAL")
       yield* db.run("PRAGMA cache_size = -64000")
 
-      return { db }
+      return { db, filename }
     }).pipe(
       Effect.catchCause((cause) => {
         const error = Cause.squash(cause)

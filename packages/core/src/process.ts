@@ -5,6 +5,10 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 import { CrossSpawnSpawner } from "./cross-spawn-spawner"
 import { makeGlobalNode } from "./effect/app-node"
 
+export class AppProcessTimeoutError extends Error {
+  override readonly name = "AppProcessTimeoutError"
+}
+
 export class AppProcessError extends Schema.TaggedErrorClass<AppProcessError>()("AppProcessError", {
   command: Schema.String,
   exitCode: Schema.optional(Schema.Number),
@@ -183,7 +187,8 @@ const layer = Layer.effect(
       const timed = options?.timeout
         ? Effect.timeoutOrElse(collect, {
             duration: options.timeout,
-            orElse: () => Effect.fail(new AppProcessError({ command: description, cause: new Error("Timed out") })),
+            orElse: () =>
+              Effect.fail(new AppProcessError({ command: description, cause: new AppProcessTimeoutError("Timed out") })),
           })
         : collect
       const aborted = options?.signal

@@ -64,6 +64,9 @@ export function renderSystem(system: readonly string[]) {
 }
 
 export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: PrepareInput) {
+  if (input.composition.type === "internal" && input.composition.purpose === "representation") {
+    return yield* Effect.fail(new Error("Representation sampling requires the dedicated Gate 11 carrier"))
+  }
   const isOpenaiOauth = input.provider.id === "openai" && input.auth?.type === "oauth"
   const interactive = input.composition.type === "interactive"
   const core = interactive ? SystemPrompt.product() : SystemPrompt.internal()

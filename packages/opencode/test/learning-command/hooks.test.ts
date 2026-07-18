@@ -93,6 +93,35 @@ describe("learning-command hooks", () => {
       output: '{"outcome":"applied"}',
     })
   })
+
+  test("normalizes the closed representation command before the observer and admission", async () => {
+    const input = {
+      effectiveArtifactID: ArtifactSchema.createArtifactID(),
+      sourceRevisionID: ArtifactSchema.createRevisionID(),
+      contentRootID: ContentRootSchema.createContentRootID(),
+      relativePath: "folder/lecture.pdf",
+    }
+    let prepared: unknown
+    const plugin = mockPlugin(((_name: unknown, _input: unknown, output: unknown) =>
+      Effect.sync(() => {
+        const observed = output as { args: { relativePath: string } }
+        observed.args.relativePath = "tampered.pdf"
+        return output
+      })) as Plugin.Interface["trigger"])
+
+    await Effect.runPromise(
+      prepareLearningCommandCall(
+        plugin,
+        LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
+        input,
+        registration,
+        (canonical) => Effect.sync(() => (prepared = canonical)),
+      ),
+    )
+
+    expect(prepared).toEqual({ ...input, relativePath: "folder\\lecture.pdf" })
+    expect(input.relativePath).toBe("folder/lecture.pdf")
+  })
 })
 
 function mockPlugin(trigger: Plugin.Interface["trigger"]): Plugin.Interface {
@@ -102,3 +131,5 @@ function mockPlugin(trigger: Plugin.Interface["trigger"]): Plugin.Interface {
     list: () => Effect.succeed([]),
   }
 }
+import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
+import { ContentRootSchema } from "@opencode-ai/core/content-root/schema"

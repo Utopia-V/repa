@@ -9,6 +9,14 @@ findings were closed, including propagation into owning ADR-0014, and accepted
 the implementation/evidence layer after five implementation findings were
 closed.
 
+Gate 11 extension status: owner correction accepted in independent
+contract/theory review run `gate11-20260717-whole-01` after findings
+`G11-CT-001` through `G11-CT-012` closed. The correction below and the Gate 11
+contract were one review horizon. It is implemented in Gate 11's current
+working-tree candidate under separate maintainer authorization; its
+implementation/evidence review has not yet been dispatched. This does not alter
+the truth of the historical three-purpose Gate 4 implementation evidence.
+
 Date: 2026-07-14
 
 Correction closed: 2026-07-16
@@ -60,8 +68,79 @@ Gate 4 was therefore reopened only to establish the real trust boundary:
 The public preview-v2 prompt path is not another carrier to make learning-first.
 ADR-0014 denies it production authority. Its public admission and the model
 execution it scheduled were Gate 5 product-reachability defects. Gate 5 has now
-removed them from production, so the matrix below is the final Gate 4 carrier
-set rather than a provisional inventory.
+removed them from production, so the matrix below was the final Gate 4 carrier
+set at that close rather than a provisional inventory. The Gate 11 correction
+below adds one target carrier without reviving preview v2 or any removed owner.
+
+## Accepted Gate 11 `representation` carrier correction
+
+Gate 11 is the first later product consumer that needs another released-v1
+stream purpose. Its independently accepted contract extends the owned target
+union to `title | compaction | project-copy-name | representation`. This owner
+correction was established before Gate 11 implementation authority; it is not a
+permission for an executor to extend the union later. The accepted Gate 4
+checkpoint contains only the first three members; the current Gate 11
+working-tree candidate implements the fourth under its own authorization and
+still requires independent implementation/evidence acceptance.
+
+The sole `representation` origin is the Gate 11 provider adapter after a trusted
+conversion envelope and exact source-proof snapshot have been admitted. It must
+reuse a genuine initiating Session when the released-v1 provider carrier needs
+one. A sessionless request may use only Gate 11's local producer; it may not
+invent a Session, Message, or Tool Part. Public prompts, Agent names (including
+hidden Agents), commands, Tasks, persisted Messages, source content, provider
+responses, and plugins cannot select this origin.
+
+The representation call has a stricter input disposition than the three
+historical auxiliary purposes:
+
+| Inherited input                                                                                  | `representation` disposition                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dedicated machine-user profile                                                                   | Admits the exact `providerID`, `modelID`, optional profile-owned variant, and an explicit allowlist of Gate 11 sampling/resource controls. Missing, disabled, unresolved, or incapable fails before sampling.                                                                                                                                                                                          |
+| Initiating `user.model.providerID`, `modelID`, and `variant`                                     | Carrier history only; none selects or tunes the representation call. In particular, request preparation must not look up `input.user.model.variant`; a profile variant travels through a distinct trusted field.                                                                                                                                                                                       |
+| Caller-selected Agent prompt, model, options, temperature/top-p, permissions, or tools           | Not admitted. The fixed representation task and empty logical tool set come from the purpose owner, not from an Agent profile.                                                                                                                                                                                                                                                                         |
+| Caller system text, Session history, command/Task model override, or source-authored instruction | Not admitted. The model input contains only the fixed task/profile framing and the exact Gate 11 attachment.                                                                                                                                                                                                                                                                                           |
+| `experimental.chat.system.transform` and arbitrary `chat.params` output                          | Not admitted to representation semantics or sampling policy. The hooks are not a second configuration path.                                                                                                                                                                                                                                                                                            |
+| Raw `provider.options`, `model.options`, model variant maps, and provider-transform output       | Never merged wholesale. Only the dedicated profile's selected variant and closed purpose-option schema may affect semantic sampling; every admitted value appears in the secret-free provenance projection. Unknown semantic keys fail configuration or are ignored before the call. Machine-owned provider-transform values may remain only when classified as transport rather than sampling policy. |
+| Provider auth, model headers, and `chat.headers`                                                 | May operate only as machine-user-configured provider transport. They cannot alter task/profile/tool authority and are never copied into Representation provenance or diagnostics.                                                                                                                                                                                                                      |
+
+The logical tool set is empty and `toolChoice: none`; any provider replay
+declaration remains the same non-executable transport exception already owned by
+Gate 4. The purpose runs one fixed rendition task, with no interactive Repa core
+or generic Agent guidance, and cannot issue another learning command. A missing
+profile, caller-controlled variant attempt, plugin parameter injection, provider
+tool call, or terminal failure is a truthful Gate 11 producer failure; it never
+falls back to the Tutor model or another producer under the same run identity.
+
+Closing Gate 11 later requires source and carrier tests that trace the exact
+program origin through every real provider lowering; prove the initiating
+Message variant and every caller/Agent/plugin field above are rejected, ignored,
+or clamped as specified; preserve only a profile-owned variant; and observe no
+executable tool, default-model fallback, synthetic Session identity, or forged
+purpose. Those tests extend Gate 4 evidence but do not rewrite the historical
+checkpoint described under **Accepted correction implementation and evidence**.
+
+### Gate 11 carrier implementation candidate
+
+The maintainer later authorized Gate 11 implementation. The current
+working-tree candidate makes the accepted correction concrete without routing
+`representation` through generic `LLMRequestPrep.prepare`: the generic carrier
+rejects that purpose, while `session/representation-model.ts` is its sole
+origin after the trusted Gate 11 conversion envelope and genuine initiating
+Session/user Message resolve. `session/system.ts` owns the fixed task text;
+the dedicated carrier constructs a clean transport model, applies only the
+closed machine profile's provider/model/variant and sampling controls, sends no
+logical tools, disables retries and telemetry, and retains only the secret-free
+projection.
+
+Focused author evidence proves that public/caller purpose injection is rejected;
+the initiating Message provider/model/variant, Agent/system/history, raw model
+options and variant map, plugin parameter mutations, provider metadata, raw
+errors, and tool attempts cannot become representation semantics or durable
+provenance. The complete Gate-scoped OpenCode combination passes 186/186 tests
+with 766 assertions and package typecheck passes. This is current candidate
+evidence, not an amendment to Gate 4's historical checkpoints and not an
+independent Gate 11 implementation acceptance.
 
 ## Evidence that fixes the owning seam
 
@@ -90,19 +169,20 @@ of its prepared result.
 Gate 5 removed preview-v2 model admission and stabilized the production set.
 The remaining released-v1 owners and their required composition are:
 
-| Model-call owner                         | Current authority input                                          | Required Gate 4 disposition                                                                                               |
-| ---------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Public HTTP prompt and async prompt      | Caller-supplied Agent name, then `hidden` in request preparation | Always interactive after the Agent resolves; public payload has no internal-purpose field.                                |
-| `repa run`, attach, TUI, and ACP         | CLI/UI selection or recovered Agent name                         | Discovery and default selection may omit hidden Agents; any admitted or recovered call is interactive.                    |
-| Command execution                        | Command or caller Agent name                                     | Interactive when it produces an ordinary Session turn; a name cannot select internal composition.                         |
-| Task and subtask execution               | Delegated Agent name                                             | Interactive Repa composition even for a legitimately hidden subagent.                                                     |
-| Session continuation and ACP resume/fork | Agent name persisted on a user message                           | Interactive when the Agent still resolves; explicit failure rather than silent replacement when it does not.              |
-| Automatic title generation               | Program-owned title call site                                    | Exact `title` purpose and fixed title contract; no executable Agent/domain tools.                                         |
-| Context compaction                       | Program-owned compaction transition and marker                   | Exact `compaction` purpose and fixed continuation contract; no executable Agent/domain tools.                             |
-| Project-copy naming                      | Dedicated naming handler                                         | Exact `project-copy-name` purpose and fixed naming contract; no executable Agent/domain tools.                            |
-| Agent/profile generation                 | Dedicated `Agent.generate` structured-output method              | Preserve its fixed generation system and schema as the call-origin owner; it is not a member of the stream-purpose union. |
-| Explicitly named `summary` profile       | Caller-selected registered hidden primary Agent                  | Ordinary interactive composition. There is no automatic/program-owned internal summary caller or `summary` purpose.       |
-| Preview v2 and hosted GitHub source      | Hibernated and absent from production composition                | Outside the Gate 4 carrier set.                                                                                           |
+| Model-call owner                         | Current authority input                                                | Required Gate 4 disposition                                                                                                                                                                             |
+| ---------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Public HTTP prompt and async prompt      | Caller-supplied Agent name, then `hidden` in request preparation       | Always interactive after the Agent resolves; public payload has no internal-purpose field.                                                                                                              |
+| `repa run`, attach, TUI, and ACP         | CLI/UI selection or recovered Agent name                               | Discovery and default selection may omit hidden Agents; any admitted or recovered call is interactive.                                                                                                  |
+| Command execution                        | Command or caller Agent name                                           | Interactive when it produces an ordinary Session turn; a name cannot select internal composition.                                                                                                       |
+| Task and subtask execution               | Delegated Agent name                                                   | Interactive Repa composition even for a legitimately hidden subagent.                                                                                                                                   |
+| Session continuation and ACP resume/fork | Agent name persisted on a user message                                 | Interactive when the Agent still resolves; explicit failure rather than silent replacement when it does not.                                                                                            |
+| Automatic title generation               | Program-owned title call site                                          | Exact `title` purpose and fixed title contract; no executable Agent/domain tools.                                                                                                                       |
+| Context compaction                       | Program-owned compaction transition and marker                         | Exact `compaction` purpose and fixed continuation contract; no executable Agent/domain tools.                                                                                                           |
+| Project-copy naming                      | Dedicated naming handler                                               | Exact `project-copy-name` purpose and fixed naming contract; no executable Agent/domain tools.                                                                                                          |
+| Gate 11 model rendition                  | Gate 11 trusted conversion/source-proof admission and provider adapter | Exact `representation` purpose, fixed rendition task/profile, profile-owned provider/model/variant controls, and no executable Agent/domain tools; implemented in the pending Gate 11 review candidate. |
+| Agent/profile generation                 | Dedicated `Agent.generate` structured-output method                    | Preserve its fixed generation system and schema as the call-origin owner; it is not a member of the stream-purpose union.                                                                               |
+| Explicitly named `summary` profile       | Caller-selected registered hidden primary Agent                        | Ordinary interactive composition. There is no automatic/program-owned internal summary caller or `summary` purpose.                                                                                     |
+| Preview v2 and hosted GitHub source      | Hibernated and absent from production composition                      | Outside the Gate 4 carrier set.                                                                                                                                                                         |
 
 Shell operations may persist messages containing an Agent name, but do not
 sample a model themselves. Their only relevant edge is later Session recovery,
@@ -187,20 +267,24 @@ inconsistencies is not required to close this trust boundary.
 
 A released-v1 stream sample is internal only when a named program owner invokes
 the model with one member of the closed `title | compaction |
-project-copy-name` operation-purpose union. The purpose is a call-origin fact,
-not a second runner: it is absent from public payloads and cannot be inferred
-from an Agent name, mode, prompt, `hidden`, or persisted message. It selects one
-non-replaceable internal-operation boundary plus the exact fixed semantic task
-contract and carries no generic interactive operation guide.
+project-copy-name | representation` operation-purpose union. The
+`representation` member is implemented only by the pending Gate 11 candidate;
+the other three remain the accepted historical Gate 4 production state. Every purpose is a
+call-origin fact, not a second runner: it is absent from public payloads and
+cannot be inferred from an Agent name, mode, prompt, `hidden`, or persisted
+message. It selects one non-replaceable internal-operation boundary plus the
+exact fixed semantic task contract and carries no generic interactive operation
+guide.
 
-An existing Agent profile may still supply operational choices such as model,
-temperature, or provider options for an internal call. Those choices do not
-select the purpose and its configurable prompt does not replace the fixed task
-contract. Plugin hooks may contribute bounded context or operational options,
-but cannot erase or substitute that contract. Internal prompts state the exact
-artifact they produce and must not answer the conversation, call tools, infer
-durable learning truth, or turn a learning Session into a pull-request
-description.
+The three historical auxiliary purposes may still use their accepted profile
+operational choices such as model, temperature, or provider options. Those
+choices do not select the purpose and a configurable prompt does not replace its
+fixed task contract. `representation` instead follows the stricter disposition
+table above: no initiating Message variant, caller-selected Agent option, caller
+system text, Session history, or arbitrary plugin parameter reaches its task or
+sampling policy. Internal prompts state the exact artifact they produce and
+must not answer the conversation, call tools, infer durable learning truth, or
+turn a learning Session into a pull-request description.
 
 The logical tool authority is structurally empty: no Agent, learning, MCP,
 plugin, or other executable domain tool is admitted, and no Agent permission,
@@ -212,7 +296,8 @@ as an Agent capability, and must fail truthfully if a provider nevertheless
 tries to call it. It does not turn a transport compatibility declaration into
 model authority.
 
-The three stream-purpose owners have explicit operational failure semantics:
+The four contracted stream-purpose owners have explicit operational failure
+semantics; the fourth is implemented in Gate 11's pending review candidate:
 
 - **Title:** the automatic title owner resolves the optional `title` profile.
   Missing or disabled means skip before provider sampling, preserve the default
@@ -227,8 +312,13 @@ The three stream-purpose owners have explicit operational failure semantics:
   profile rather than resolving a user-configurable Agent. If no provider model
   is available or sampling fails, it returns the existing local slug fallback;
   no durable marker or alternate model purpose is created.
+- **Representation:** only Gate 11's trusted provider adapter may resolve the
+  dedicated machine-user profile. Missing/disabled profile, absent genuine
+  Session, incapable model, caller-variant or plugin-option injection, and
+  sampling failure produce no Representation Revision and never substitute the
+  Tutor/default model or the local producer under the same run identity.
 
-`Agent.generate` is a fourth internal model operation but not a stream-purpose
+`Agent.generate` is another internal model operation but not a stream-purpose
 member. The dedicated method plus its fixed generation system and structured
 schema are its call-origin owner. Public fields and Agent configuration cannot
 select or replace that owner; plugin additions remain additive; no Agent tools
@@ -254,6 +344,13 @@ cannot replace the purpose-owned semantic task. A plugin that empties its
 output therefore cannot erase the Repa identity, a selected Learning-System
 contribution, or the internal operation contract. No compatibility fallback
 restores the former whole-system replacement behavior.
+
+`representation` is the explicit exception to the general additive internal
+hook rule: generic system-transform context and arbitrary `chat.params` output
+are not admitted because they would change the dedicated rendition contract or
+machine-owned sampling profile. Provider transport/auth headers may still be
+supplied at the transport boundary, remain nonsemantic, and are never durable
+Representation provenance.
 
 For compaction specifically, `experimental.session.compacting` may still add
 context or operational guidance, but its `prompt` output is additive beneath
@@ -501,6 +598,13 @@ released-v1 stream purposes; `Agent.generate` retains its dedicated structured
 owner; and internal operations have no executable Agent/domain tool authority.
 Carrier admission, missing-profile and recovery behavior, provider lowering,
 and Session-title concurrency now follow that boundary.
+
+“Only” in the preceding paragraph is the verified implementation snapshot at
+the Gate 4 checkpoints, not a timeless prohibition. The Gate 11 owner correction
+above establishes `representation` as the closed fourth stream purpose with a
+stricter caller-option boundary. It changes no historical evidence. The current
+working-tree candidate implements that member; its carrier evidence remains
+Gate 11 work pending the retained independent implementation/evidence review.
 
 Gate 4 was previously recorded passed at two code checkpoints:
 

@@ -186,6 +186,79 @@ describe("Artifact authority", () => {
     }),
   )
 
+  it.effect("guards ordinary use by semantic Artifact state without coupling source availability", () =>
+    Effect.gen(function* () {
+      const artifacts = yield* Artifact.Service
+      const storage = yield* Database.Service
+      const admitted = yield* artifacts.admit({
+        location: location("ordinary-use-guard.pdf"),
+        observation: present("a", 10),
+        authority: admission,
+      })
+      const ordinary = yield* storage.db.transaction((tx) => Artifact.readOrdinaryUseSnapshot(tx, admitted.id))
+      expect(Object.keys(ordinary).sort()).toEqual([
+        "attribution",
+        "currentRevisionID",
+        "dispositionVersion",
+        "effectiveArtifactID",
+        "lineageVersion",
+      ])
+      const expected = yield* storage.db.transaction((tx) => Artifact.readOrdinaryUseRevisionSnapshot(tx, admitted.id))
+      expect(Object.keys(expected).sort()).toEqual([
+        "attribution",
+        "currentRevisionID",
+        "dispositionVersion",
+        "effectiveArtifactID",
+        "fingerprint",
+        "lineageVersion",
+        "mediaType",
+      ])
+
+      const unavailable = yield* artifacts.observe({
+        expected: Artifact.expectedSource(admitted),
+        observation: missing(20),
+      })
+      expect(unavailable.artifact.source.sourceVersion).toBeGreaterThan(admitted.source.sourceVersion)
+      expect(yield* storage.db.transaction((tx) => Artifact.requireOrdinaryUseRevisionSnapshot(tx, expected))).toEqual(
+        expected,
+      )
+
+      const restored = yield* artifacts.observe({
+        expected: Artifact.expectedSource(unavailable.artifact),
+        observation: present("a", 30),
+      })
+      expect(restored.artifact.source.sourceVersion).toBeGreaterThan(unavailable.artifact.source.sourceVersion)
+      expect(yield* storage.db.transaction((tx) => Artifact.requireOrdinaryUseRevisionSnapshot(tx, expected))).toEqual(
+        expected,
+      )
+
+      const corrected = yield* artifacts.correctObservation({
+        observationID: restored.observationID!,
+        mediaType: "application/x-pdf",
+        authority: Artifact.ObservationCorrectionAuthority.trustedObserver("media-detector", 1),
+        expectedArtifacts: [Artifact.expectedSource(restored.artifact)],
+      })
+      expect(
+        yield* Effect.flip(storage.db.transaction((tx) => Artifact.requireOrdinaryUseRevisionSnapshot(tx, expected))),
+      ).toMatchObject({ _tag: "Artifact.ConflictError", id: admitted.id })
+      const correctedExpected = yield* storage.db.transaction((tx) =>
+        Artifact.readOrdinaryUseRevisionSnapshot(tx, admitted.id),
+      )
+      expect(correctedExpected).toMatchObject({ mediaType: "application/x-pdf", fingerprint: fingerprint("a") })
+
+      const drifted = yield* artifacts.observe({
+        expected: Artifact.expectedSource(corrected.affectedArtifacts[0]!),
+        observation: present("b", 40, "application/x-pdf"),
+      })
+      expect(drifted.artifact.source.currentRevisionID).not.toBe(correctedExpected.currentRevisionID)
+      expect(
+        yield* Effect.flip(
+          storage.db.transaction((tx) => Artifact.requireOrdinaryUseRevisionSnapshot(tx, correctedExpected)),
+        ),
+      ).toMatchObject({ _tag: "Artifact.ConflictError", id: admitted.id })
+    }),
+  )
+
   it.effect("rebinds only by explicit choice and rolls a failed source transition back atomically", () =>
     Effect.gen(function* () {
       const artifacts = yield* Artifact.Service
@@ -826,6 +899,12 @@ describe("Artifact authority", () => {
         effectiveMediaType: "application/final-pdf",
         effectiveTimeObserved: 11,
         latestCorrectionID: successor.correction.id,
+      })
+      expect(yield* artifacts.getObservation(observation.id)).toMatchObject({
+        id: observation.id,
+        effectiveArtifactID: y.id,
+        observer: { capabilityIdentity: "gate-10-observer", capabilityVersion: 1 },
+        effectiveMediaType: "application/final-pdf",
       })
       expect((yield* artifacts.listObservationCorrections(x.id)).items.map((item) => item.id)).toEqual([
         corrected.correction.id,

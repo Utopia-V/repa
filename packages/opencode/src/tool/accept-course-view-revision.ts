@@ -11,14 +11,19 @@ type PreparedDefinition = Tool.Def & {
 }
 
 export function learningCommandPreparation(tool: Tool.Def): Preparation | undefined {
-  if (tool.id !== LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) return undefined
+  if (!isLearningCommandToolID(tool.id)) return undefined
   return (tool as PreparedDefinition).prepareLearningCommand
 }
 
 export function assertExternalToolID(id: string, source: "custom" | "mcp") {
-  if (id !== LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) return
-  throw new Error(
-    `${source} tool ID ${LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY} is reserved by the learning-command runtime`,
+  if (!isLearningCommandToolID(id)) return
+  throw new Error(`${source} tool ID ${id} is reserved by the learning-command runtime`)
+}
+
+export function isLearningCommandToolID(id: string) {
+  return (
+    id === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY ||
+    id === LearningCommand.REPRESENTATION_CONVERT_CAPABILITY
   )
 }
 
