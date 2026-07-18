@@ -1,15 +1,14 @@
 # OpenCode fork Gate 11: readable representation lineage
 
-Status: Contract/theory and implementation/evidence are independently accepted.
+Status: Closed at implementation commit `bdbfa0c05`. Contract/theory and
+implementation/evidence are independently accepted.
 Whole-Gate review run `gate11-20260717-whole-01` closed findings `G11-CT-001`
 through `G11-CT-012` and `G11-IE-001` through `G11-IE-003`. Deterministic/local
 evidence, both packaged Windows families, and the maintainer-authorized real
-configured-multimodal-provider run pass. The accepted working tree awaits a
-separately authorized integration commit that fixes implementation provenance;
-until then Gate 11 is not formally closed. The closure reviewer included the
+configured-multimodal-provider run pass. The closure reviewer included the
 current Roadmap 09 and confirmed that it preserves Gate 11's number,
-representation boundary, and Gate 12/13 separation. No Gate 12 or Gate 13 work
-is authorized by this record.
+representation boundary, and Gate 12/13 separation. Gate 12 and Gate 13 remain
+outside this record.
 
 Date: 2026-07-17
 
@@ -1289,8 +1288,8 @@ justified by actual dependency reach.
 
 The maintainer separately authorized implementation after contract/theory
 acceptance. The retained reviewer independently accepted the current
-working-tree implementation and evidence. A separate integration commit must
-still fix its durable provenance before formal Gate closure.
+working-tree implementation and evidence. Maintainer-authorized commit
+`bdbfa0c05` fixes its durable provenance and formally closes Gate 11.
 
 ### Implemented ownership boundary
 
@@ -1358,8 +1357,8 @@ preflight.
 | Repa foundation, accepted ADRs, architecture, and audited Roadmap 09 | Current maintainer working tree on 2026-07-17; active status remains `docs/README.md`                                               | Optional exact representation, separate authorities, bounded retrieval, truthful uncertainty, no RAG                                                                                                                                            | Gate 11 makes the accepted semantics concrete without prewriting Gate 13 or later product integration                                                                                                                                                                                                             |
 | Gate 9                                                               | Passed implementation `41db7c292`                                                                                                   | Stable Artifact identity, immutable exact Revisions, AttributionBasis, ordinary-use withdrawal/correction-hidden disposition, independent disposition/source/lineage versions, availability, and no representation folded into source revisions | Gate 11 persists the complete observation snapshot, but later semantic admission revalidates only ordinary disposition/version, exact current Revision/AttributionBasis, and lineage version; sourceVersion remains provenance. Historical reads remain separate while Gate 11 adds only derived managed content. |
 | Gate 10                                                              | Passed implementation `fb6ed5763`                                                                                                   | Active ContentRoot authority, immutable admitted-operation snapshots, nonretroactive revocation, and mutation-safe bounded local-NTFS reads                                                                                                     | The first path uses the actual `contentRootID` interface, records the exact binding/grant/read receipt, rejects ambiguous overlapping roots, requests cancellation on later revoke/rebind without retracting disclosed bytes, and makes no unsupported workspace/one-off claim                                    |
-| Gate 4                                                               | Closed historical three-purpose implementation plus the Gate 11 owner correction accepted in this whole-Gate horizon                 | Program-owned internal purpose is a call-origin fact; caller-controlled model/variant/options do not replace the fixed task; internal calls have no domain tools                                                                                | `representation` is a strict fourth target owned only by Gate 11, with a distinct profile variant and no caller/Agent/plugin parameter inheritance; the reviewed implementation awaits only separately authorized integration provenance                                                                         |
-| Current Repa fork                                                    | HEAD `8121d1d09` plus current maintainer documentation changes                                                                      | TypeScript/Bun modular monolith, native database, Effect services, child-process cancellation, multiple configured providers/models, explicit image/PDF capabilities and attachment transport                                                   | Session/tool/cache bytes are rejected as representation authority; the inherited provider runtime is reused without creating a second runtime or provider owner in Core; no inherited sandbox claim                                                                                                               |
+| Gate 4                                                               | Closed historical three-purpose implementation plus the Gate 11 owner correction accepted in this whole-Gate horizon                 | Program-owned internal purpose is a call-origin fact; caller-controlled model/variant/options do not replace the fixed task; internal calls have no domain tools                                                                                | `representation` is a strict fourth target owned only by Gate 11, with a distinct profile variant and no caller/Agent/plugin parameter inheritance; implementation provenance is fixed by `bdbfa0c05`                                                                                                               |
+| Current Repa fork                                                    | Gate 11 implementation commit `bdbfa0c05`                                                                                           | TypeScript/Bun modular monolith, native database, Effect services, child-process cancellation, multiple configured providers/models, explicit image/PDF capabilities and attachment transport                                                   | Session/tool/cache bytes are rejected as representation authority; the inherited provider runtime is reused without creating a second runtime or provider owner in Core; no inherited sandbox claim                                                                                                               |
 | W3C PROV, SLSA provenance, RFC 9110                                  | Published standards/specifications linked above                                                                                     | Direct source/activity/output lineage, recipe/run separation, multiple typed representations                                                                                                                                                    | No universal provenance graph, software-build ontology, or HTTP resource model is copied                                                                                                                                                                                                                          |
 | PDF.js                                                               | Official Apache-2.0 project; isolated probe used `pdfjs-dist@5.7.284`                                                               | Mature page parsing, text-item and mechanical page/operator access                                                                                                                                                                              | Repa owns canonicalization, limitations, process/resource boundary, storage, identity, and acceptance                                                                                                                                                                                                             |
 | Authorized CS189 Lecture 16 PDF                                      | External read-only local evidence; exact source digest recorded above; never copied into Git or authorized here for provider upload | Representative text-only, formula/layout, non-text, warning, and metadata-mismatch pressures                                                                                                                                                    | It informs only the local PDF profile and evidence matrix; model-producer qualification uses repository-owned or separately authorized media and treats output as uncertain rendition, not semantic truth                                                                                                         |
@@ -1426,6 +1425,6 @@ unchanged. It did not broaden this Gate.
 
 The independent reviewer supplied both required review-layer closures; no
 same-context preflight or child review substitutes for those results. The
-reviewed working tree is ready for a separately authorized integration commit.
-That commit remains outside this review authorization and is required to fix
-implementation provenance before `docs/README.md` may formally close Gate 11.
+maintainer separately authorized integration. Commit `bdbfa0c05` fixes
+implementation provenance, and `docs/README.md` formally closes Gate 11 without
+starting Gate 12.

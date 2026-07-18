@@ -33,6 +33,7 @@ implementation evidence while reopening one bounded completion claim.
 | 8. Learning-command settlement           | Stable admitted occurrence, physical replay, causal receipt, exact Course acceptance settlement, and Session lifecycle closure                    | `293ff6892`                                                                             | `docs/research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md`       |
 | 9. Source and Artifact authority         | Stable Artifact identity, exact observed revisions, location/availability history, provenance, and correction without retargeting                 | `41db7c292aaeb83abfafea9236480d006ccabe0f`                                              | `docs/research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md`         |
 | 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                              | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
+| 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                              | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
 
 Read a historical record with:
 
@@ -654,10 +655,9 @@ closure `Accept`.
   Closure made no new provider, paid, or cloud call and did not inspect or rerun
   the external CS189 material. The reviewer left production, dist, and Git
   state unmodified and cleaned all reviewer-owned temporary state.
-- Integration is not authorized by review acceptance. Until a separately
-  authorized commit fixes implementation provenance, Gate 11 remains open and
-  no Gate 11 row is added to the historical close-commit table above. Gate 12
-  has not started.
+- The maintainer separately authorized integration after review acceptance.
+  Commit `bdbfa0c05` fixes the accepted implementation provenance;
+  `docs/README.md` therefore closes Gate 11 without starting Gate 12.
 
 ## Historical evidence locators
 
