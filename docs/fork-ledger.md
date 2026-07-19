@@ -36,7 +36,7 @@ reopening one bounded completion claim.
 | 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                              | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
 | 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                              | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
 | 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`                                              | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
-| 13. Material Map and Course alignment    | Immutable revision-bound material outlines and exact selectors plus optional neutral alignment to exact Course membership                         | frozen at base `461a1acc28b41550539496f58a5cedcb2339a583`; commit pending               | `docs/research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md`            |
+| 13. Material Map and Course alignment    | Immutable revision-bound material outlines and exact selectors plus optional neutral alignment to exact Course membership                         | `5e762f8336b33d7d8365c9bc9204b52f52eba114`                                              | `docs/research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md`            |
 
 Read a historical record with:
 
@@ -761,10 +761,9 @@ and no new acceptance-changing implementation defect remained.
   `61DB6157E8625A3F34E9A8A69FE5B825E1B1993D29C8438EAFC7A74CF5270944`.
   The reviewer observed identical start/end bindings and made no repository,
   Git, credential, or external durable-system mutation.
-- No integration commit has been made. The accepted executable candidate is
-  unchanged by the producer's post-verdict status and ledger transcription;
-  Gate 13 remains open until the maintainer-authorized integration commit fixes
-  that provenance.
+- The maintainer separately authorized integration after review acceptance.
+  Commit `5e762f833` fixes the accepted implementation provenance;
+  `docs/README.md` therefore closes Gate 13 without starting Gate 14.
 
 ## Historical evidence locators
 
