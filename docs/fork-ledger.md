@@ -35,7 +35,7 @@ reopening one bounded completion claim.
 | 9. Source and Artifact authority         | Stable Artifact identity, exact observed revisions, location/availability history, provenance, and correction without retargeting                 | `41db7c292aaeb83abfafea9236480d006ccabe0f`                                              | `docs/research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md`         |
 | 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                              | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
 | 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                              | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
-| 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | frozen at base `64a77fd3a6a3d13747f1312f029b9d4c48682752`; commit pending               | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
+| 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`                                              | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
 
 Read a historical record with:
 
@@ -723,9 +723,9 @@ implementation/evidence. It closed `G12-CT-001`–`G12-CT-006` and
   and `1EA13FE10FAE0A6AA44AB16DB52621BDA7B2D84A7065A3582D8BB3F35A7C50FB`.
   The reviewer made no repository, retained-artifact, Git, credential, or
   external durable-system mutation.
-- No integration commit has been made. The accepted implementation remains the
-  frozen working-tree snapshot; the status-only closure edits to this ledger,
-  `docs/README.md`, and the Gate record do not start Gate 13.
+- The maintainer separately authorized integration after review acceptance.
+  Commit `80f5fa30a` fixes the accepted implementation provenance;
+  `docs/README.md` therefore closes Gate 12 without starting Gate 13.
 
 ## Historical evidence locators
 

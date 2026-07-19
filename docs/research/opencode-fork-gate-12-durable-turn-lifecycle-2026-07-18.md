@@ -3,8 +3,8 @@
 Status: Closed. Independent review run `gate12-20260718-whole-01` accepted both
 contract/theory and implementation/evidence. Findings `G12-CT-001` through
 `G12-CT-006` and `G12-IE-001` through `G12-IE-008` are closed. The accepted
-implementation remains a frozen working-tree snapshot; no integration commit
-has been made and Gate 13 has not begun.
+implementation is fixed by maintainer-authorized commit
+`80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`; Gate 13 has not begun.
 
 Date: 2026-07-18
 
@@ -1965,5 +1965,5 @@ also reran the intended falsification targets:
 5. whether the required evidence can actually falsify production-path and
    restart claims.
 
-Both review layers are accepted. Gate 12 is formally closed at the reviewed
-working-tree snapshot; integration remains a separate, unperformed Git action.
+Both review layers are accepted. Gate 12 is formally closed and its reviewed
+implementation is integrated at commit `80f5fa30a`.
