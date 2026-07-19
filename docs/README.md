@@ -1,6 +1,6 @@
 # Repa documentation
 
-Status: Gates 0–13 are closed. Gate 12's maintainer grill, contract/theory, and
+Status: Gates 0–14 are closed. Gate 12's maintainer grill, contract/theory, and
 implementation/evidence are accepted by the retained independent reviewer;
 all six contract findings and all eight implementation findings are closed.
 Maintainer-authorized implementation commit
@@ -30,9 +30,9 @@ turn ended in external `systemError` without a verdict or closure authority.
 Independent replacement review run `gate14-replacement-20260720-01` reviewed
 the complete current candidate, independently confirmed `G14-IE-001` through
 `G14-IE-005` resolved,
-and returned `Accept` with no acceptance-changing finding. Gate 14 is ready for
-its separately governed integration step but remains uncommitted and not
-formally closed.
+and returned `Accept` with no acceptance-changing finding. Maintainer-authorized
+implementation commit `a6b542d59879f0a4b1111eaef4ad23e446b473d0` fixes the
+accepted snapshot and formally closes Gate 14. Gate 15 has not begun.
 Gate 11 remains independently accepted at implementation commit `bdbfa0c05`;
 Gate 12 realizes the existing Roadmap 09 boundary without changing roadmap
 topology.
@@ -55,7 +55,7 @@ topology.
 | 11. [Readable representation lineage](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md)       | Gives one exact Artifact Revision an optional immutable readable derivation with truthful conversion, drift, availability, exact bounded reads, and cleanup semantics.                   | Closed at implementation commit `bdbfa0c05`. Contract/theory and implementation/evidence are independently accepted; all twelve contract findings and all three implementation findings are closed. Accepted evidence includes the inherited OpenAI OAuth configured-model path and both packaged Windows families. The boundary includes one local PDF text-layer producer plus one optional user-configured multimodal-model producer and no baseline Repa-owned OCR. Current Roadmap 09 preserves its number and boundary. |
 | 12. [Durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)                         | Makes one admitted learner or synchronous delegated request a durable finite Turn with exact model/tool membership, frozen budgets, child lineage, and one terminal outcome.             | Closed at implementation commit `80f5fa30a`. The same reviewer accepted contract/theory and implementation/evidence after closing `G12-CT-001`–`G12-CT-006` and `G12-IE-001`–`G12-IE-008`. Accepted evidence includes direct-SQL authority attacks, root/child handoff races, non-escalating nested delegation, exact visible-Turn routing, destructive-lifecycle rollback/retention, fork chronology, and the reconciled Windows packaged lifecycle oracle.                                                                  |
 | 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)              | Adds independent immutable material outlines/selectors bound to exact revisions, plus optional neutral many-to-many alignment to exact Course membership.                                | Closed at implementation commit `5e762f833`. Contract/theory and implementation/evidence were accepted by independent review run `gate13-whole-20260719-01`; `G13-CT-001` through `G13-CT-006` and `G13-IE-001` through `G13-IE-003` are closed, with no new acceptance-changing implementation finding.                                                                                                                                                                                                                      |
-| 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)           | Adds an optional learner-controlled default Course preference and one independent route anchor per Course without promoting either into current focus, completion, evidence, or mastery. | Contract/theory accepted by `gate14-whole-20260719-01`. After the retained implementation reviewer closed `G14-IE-001`–`G14-IE-004`, raised `G14-IE-005`, and later ended in `systemError` without a closure verdict, independent replacement review `gate14-replacement-20260720-01` accepted the complete implementation/evidence candidate and independently confirmed all five findings resolved. Ready for integration; not yet committed or formally closed.                                                       |
+| 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)           | Adds an optional learner-controlled default Course preference and one independent route anchor per Course without promoting either into current focus, completion, evidence, or mastery. | Closed at implementation commit `a6b542d59`. Contract/theory was accepted by `gate14-whole-20260719-01`. After the retained implementation reviewer closed `G14-IE-001`–`G14-IE-004`, raised `G14-IE-005`, and later ended in `systemError` without a closure verdict, independent replacement review `gate14-replacement-20260720-01` accepted the complete implementation/evidence candidate and independently confirmed all five findings resolved.                                                                  |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -109,7 +109,7 @@ settlement substrate, while every learning authority retains ownership of its
 semantic effect identity and state transitions.
 
 The dependency-guided Gate 7–23 decomposition in Roadmap 09 is accepted. Gates
-7–13 are closed. Gate 14's maintainer grill is complete and its proposed
+7–14 are closed. Gate 14's maintainer grill is complete and its proposed
 contract was accepted by independent whole-Gate review run
 `gate14-whole-20260719-01` after all five acceptance-changing findings and both
 nonblocking strengthenings were closed. The first implementation/evidence
@@ -124,8 +124,8 @@ implementation/evidence review under replacement run
 `gate14-replacement-20260720-01`, which returned `Accept`, independently
 confirmed `G14-IE-001` through `G14-IE-005` resolved, and found no
 acceptance-changing defect. The failed retained review task returned no verdict
-or closure authority. Gate 14 is ready for its separately governed integration
-step but remains uncommitted and not formally closed.
+or closure authority. Commit `a6b542d59` fixes the independently accepted
+snapshot and formally closes Gate 14 without starting Gate 15.
 Gate 12's grill, contract/theory, implementation, and evidence
 are independently accepted after closing all contract and implementation
 findings. Gate 13's maintainer grill is complete; its first independent
@@ -133,8 +133,8 @@ contract/theory review returned `Accept` after closing all six findings. The
 accepted contract is implementation authority. A maintainer-authorized
 implementation/evidence candidate received three valid localized findings; the
 retained reviewer accepted their repairs and the complete implementation/evidence
-layer. Commit `5e762f833` fixes that accepted snapshot and formally closes Gate
-13 without starting Gate 14.
+layer. Commit `5e762f833` fixed that accepted Gate 13 snapshot before Gate 14
+began.
 The 2026-07-17 global audit preserved Gate 11 and replaced the
 then-unstarted route after it with Gates 12–23. The revised route adds durable Turn truth,
 natural-language bootstrap, retained steering, Learner Goal, learning-native

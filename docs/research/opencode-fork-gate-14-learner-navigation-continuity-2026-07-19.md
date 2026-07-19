@@ -1,7 +1,7 @@
 # OpenCode fork Gate 14: learner navigation continuity
 
-Status: Contract/theory accepted. Independent review run
-`gate14-whole-20260719-01` returned `Accept` after closing `G14-CT-001`
+Status: Closed. Independent review run `gate14-whole-20260719-01` accepted
+contract/theory after closing `G14-CT-001`
 through `G14-CT-005` and both nonblocking strengthenings. The contract is
 implementation authority. The maintainer authorized implementation and the
 whole-Gate review loop. The first implementation/evidence review returned
@@ -18,9 +18,9 @@ external `systemError` and returned no verdict. Independent replacement review
 run `gate14-replacement-20260720-01` then reviewed the complete current
 implementation/evidence candidate, independently confirmed `G14-IE-001`
 through `G14-IE-005` resolved, and returned `Accept` with no
-acceptance-changing finding. Implementation/evidence is accepted and the tree
-is ready for its separately governed integration step. Gate 14 remains
-uncommitted and not formally closed.
+acceptance-changing finding. Implementation/evidence is accepted. The accepted
+implementation is fixed by maintainer-authorized commit
+`a6b542d59879f0a4b1111eaef4ad23e446b473d0`; Gate 15 has not begun.
 
 Date: 2026-07-19
 
@@ -1022,7 +1022,8 @@ Independent replacement reviewer task
 `019f7bcb-a5b1-7612-a094-f093389a38cf` returned `Accept` for the complete
 implementation/evidence layer under run `gate14-replacement-20260720-01`; its
 only finding, `G14-RR-001`, was low-severity status/provenance bookkeeping and
-is addressed by this reconciliation. The implementation tree is ready for its
-separately governed integration step, but this acceptance does not authorize
-commit, push, merge, publication, cleanup, or Gate 15, and Gate 14 is not
-formally closed until that integration transition occurs.
+was addressed by the pre-integration status reconciliation. The maintainer then
+separately authorized integration. Commit `a6b542d59` fixes the independently
+accepted implementation provenance and formally closes Gate 14. This local
+integration does not authorize push, merge, publication, cleanup, or Gate 15;
+Gate 15 has not begun.

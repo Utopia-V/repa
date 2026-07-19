@@ -37,6 +37,7 @@ reopening one bounded completion claim.
 | 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                              | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
 | 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`                                              | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
 | 13. Material Map and Course alignment    | Immutable revision-bound material outlines and exact selectors plus optional neutral alignment to exact Course membership                         | `5e762f8336b33d7d8365c9bc9204b52f52eba114`                                              | `docs/research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md`            |
+| 14. Learner navigation continuity        | Learner-controlled default Course preference and independent exact per-Course route anchors with append-only correction and command provenance    | `a6b542d59879f0a4b1111eaef4ad23e446b473d0`                                              | `docs/research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md`     |
 
 Read a historical record with:
 
@@ -764,6 +765,44 @@ and no new acceptance-changing implementation defect remained.
 - The maintainer separately authorized integration after review acceptance.
   Commit `5e762f833` fixes the accepted implementation provenance;
   `docs/README.md` therefore closes Gate 13 without starting Gate 14.
+
+## 2026-07-20 Gate 14 review acceptance provenance
+
+Current disposition remains owned only by `docs/README.md`. Retained top-level
+reviewer task `019f7ace-da04-7b92-9b2a-722a236b1ba7`, run
+`gate14-whole-20260719-01`, accepted contract/theory after closing
+`G14-CT-001`–`G14-CT-005` and both nonblocking strengthenings. During
+implementation/evidence review it closed `G14-IE-001`–`G14-IE-004` and raised
+`G14-IE-005`; its final closure turn then ended in external `systemError` and
+supplied no replacement verdict or closure authority.
+
+- Independent replacement reviewer task
+  `019f7bcb-a5b1-7612-a094-f093389a38cf`, run
+  `gate14-replacement-20260720-01`, reviewed the complete implementation/evidence
+  candidate, independently confirmed `G14-IE-001`–`G14-IE-005` resolved, and
+  returned `Accept` with no acceptance-changing finding. Its sole finding,
+  `G14-RR-001`, was low-severity review-status bookkeeping and was reconciled in
+  the project-owned status documents before integration.
+- The accepted evidence passed both affected package typechecks and migration
+  `--check`; 27 database-migration tests with 163 assertions; 2 Core settlement
+  tests with 50 assertions; 13 released-v1 navigation runtime tests with 183
+  assertions; 7 permission-projection tests with 27 assertions; and 2 focused
+  registry tests with 10 assertions. A contained Gate-13-to-14 upgrade probe
+  preserved an existing receipt exactly, installed `WITHOUT ROWID` storage,
+  left navigation state empty, and returned no foreign-key violation.
+- The known unfiltered registry policy mismatch and bounded broad Session-file
+  timeout were outside this Gate's causal evidence boundary and were neither
+  hidden nor promoted into acceptance blockers.
+- The independently accepted snapshot remained at HEAD
+  `a4681447f713400b32cf002c6cc52d7de61265df` on branch
+  `codex/opencode-v1.17.18-baseline`, with 33 changed paths, zero staged, and
+  candidate digest
+  `285633465ca59883cc280e5080ad627037b58208f17a2ac3a67cf1378aafdfa1` at
+  review start and end. The replacement reviewer made no project-tree, Git,
+  branch/ref, publication, or other durable-system mutation.
+- The maintainer separately authorized integration after review acceptance.
+  Commit `a6b542d59` fixes the accepted implementation provenance;
+  `docs/README.md` therefore closes Gate 14 without starting Gate 15.
 
 ## Historical evidence locators
 
