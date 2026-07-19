@@ -5,7 +5,14 @@ implementation/evidence are accepted by the retained independent reviewer;
 all six contract findings and all eight implementation findings are closed.
 Maintainer-authorized implementation commit
 `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d` fixes the accepted snapshot and
-formally closes Gate 12. Gate 13 has not begun.
+formally closes Gate 12. Gate 13's maintainer grill is complete. Independent
+contract/theory review run `gate13-whole-20260719-01` returned `Accept` after
+closing `G13-CT-001` through `G13-CT-006`. The accepted contract is
+implementation authority. The maintainer authorized implementation and the
+whole-Gate review loop. The retained reviewer accepted implementation/evidence
+after closing `G13-IE-001` through `G13-IE-003` and found no new
+acceptance-changing defect. Gate 13 remains open only because the accepted
+snapshot has no closing commit.
 Gate 11 remains independently accepted at implementation commit `bdbfa0c05`;
 Gate 12 realizes the existing Roadmap 09 boundary without changing roadmap
 topology.
@@ -27,6 +34,7 @@ topology.
 | 10. [Content-root authority and bounded observation](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md) | Gives real local-file discovery and observation an explicitly approved path/object authority before exact bytes enter Gate 9 records.                                        | Closed. Its contract, ContentRoot authority, local-NTFS verifier, project-origin quarantine, bounded observation, mutation authority, schema/migration, and focused evidence are independently accepted at implementation commit `fb6ed5763`.                                                                                                                                                                                                                                                                                 |
 | 11. [Readable representation lineage](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md)       | Gives one exact Artifact Revision an optional immutable readable derivation with truthful conversion, drift, availability, exact bounded reads, and cleanup semantics.       | Closed at implementation commit `bdbfa0c05`. Contract/theory and implementation/evidence are independently accepted; all twelve contract findings and all three implementation findings are closed. Accepted evidence includes the inherited OpenAI OAuth configured-model path and both packaged Windows families. The boundary includes one local PDF text-layer producer plus one optional user-configured multimodal-model producer and no baseline Repa-owned OCR. Current Roadmap 09 preserves its number and boundary. |
 | 12. [Durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)                         | Makes one admitted learner or synchronous delegated request a durable finite Turn with exact model/tool membership, frozen budgets, child lineage, and one terminal outcome. | Closed at implementation commit `80f5fa30a`. The same reviewer accepted contract/theory and implementation/evidence after closing `G12-CT-001`–`G12-CT-006` and `G12-IE-001`–`G12-IE-008`. Accepted evidence includes direct-SQL authority attacks, root/child handoff races, non-escalating nested delegation, exact visible-Turn routing, destructive-lifecycle rollback/retention, fork chronology, and the reconciled Windows packaged lifecycle oracle.                                                                  |
+| 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)              | Adds independent immutable material outlines/selectors bound to exact revisions, plus optional neutral many-to-many alignment to exact Course membership.                    | Contract/theory and implementation/evidence accepted by independent review run `gate13-whole-20260719-01`; `G13-CT-001` through `G13-CT-006` and `G13-IE-001` through `G13-IE-003` are closed, with no new acceptance-changing implementation finding. Gate 13 remains open only because the accepted snapshot has no closing commit.                                                                                                                                                                                         |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -82,8 +90,13 @@ semantic effect identity and state transitions.
 The dependency-guided Gate 7–23 decomposition in Roadmap 09 is accepted. Gates
 7–12 are closed. Gate 12's grill, contract/theory, implementation, and evidence
 are independently accepted after closing all contract and implementation
-findings. Gate 13 has not begun. The
-2026-07-17 global audit preserved Gate 11 and replaced the
+findings. Gate 13's maintainer grill is complete; its first independent
+contract/theory review returned `Accept` after closing all six findings. The
+accepted contract is implementation authority. A maintainer-authorized
+implementation/evidence candidate received three valid localized findings; the
+retained reviewer accepted their repairs and the complete implementation/evidence
+layer. Gate 13 is not formally closed because no closing commit exists.
+The 2026-07-17 global audit preserved Gate 11 and replaced the
 then-unstarted route after it with Gates 12–23. The revised route adds durable Turn truth,
 natural-language bootstrap, retained steering, Learner Goal, learning-native
 terminal inspection/correction, and final integrated product acceptance while
@@ -130,6 +143,7 @@ legacy labs.
 - [Passed Gate 10 content-root authority and bounded observation record](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md)
 - [Passed Gate 11 readable representation lineage record](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md)
 - [Gate 12 durable Turn lifecycle record](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)
+- [Gate 13 Material Map and Course alignment record](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

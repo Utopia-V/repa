@@ -197,6 +197,31 @@ export type OrdinaryUseRevisionSnapshot = OrdinaryUseSnapshot & {
   readonly mediaType: string
 }
 
+export type OrdinaryUseByteSnapshot = OrdinaryUseSnapshot & {
+  readonly fingerprint: Fingerprint
+}
+
+export type ExpectedOrdinarySource = {
+  readonly source: ExpectedSource
+  readonly revision: OrdinaryUseRevisionSnapshot
+}
+
+export type OrdinaryUseByteStatus =
+  | { readonly status: "eligible" }
+  | {
+      readonly status: "stale"
+      readonly cause:
+        | "artifact_not_found"
+        | "artifact_withdrawn"
+        | "lineage_hidden"
+        | "source_missing"
+        | "source_unbound"
+        | "source_ineligible"
+        | "revision_changed"
+        | "attribution_changed"
+        | "fingerprint_changed"
+    }
+
 export type RevisionInfo = {
   readonly id: RevisionID
   readonly recordedArtifactID: ArtifactID
@@ -439,6 +464,64 @@ export function requireOrdinaryUseRevisionSnapshot(tx: Transaction, expected: Or
     const actual = yield* makeOrdinaryUseRevisionSnapshot(tx, current)
     if (!equalOrdinaryUseRevisionSnapshot(expected, actual)) return yield* sourceConflict(current)
     return actual
+  })
+}
+
+export function ordinaryUseByteSnapshot(snapshot: OrdinaryUseRevisionSnapshot): OrdinaryUseByteSnapshot {
+  return {
+    effectiveArtifactID: snapshot.effectiveArtifactID,
+    dispositionVersion: snapshot.dispositionVersion,
+    currentRevisionID: snapshot.currentRevisionID,
+    attribution: snapshot.attribution,
+    lineageVersion: snapshot.lineageVersion,
+    fingerprint: snapshot.fingerprint,
+  }
+}
+
+export function requireOrdinaryUseByteSnapshot(tx: Transaction, expected: OrdinaryUseByteSnapshot) {
+  return Effect.gen(function* () {
+    const current = yield* getArtifactInfo(tx, expected.effectiveArtifactID)
+    const actual = ordinaryUseByteSnapshot(yield* makeOrdinaryUseRevisionSnapshot(tx, current))
+    if (!equalOrdinaryUseByteSnapshot(expected, actual)) return yield* sourceConflict(current)
+    return actual
+  })
+}
+
+export function requireExpectedOrdinarySource(tx: Transaction, expected: ExpectedOrdinarySource) {
+  return Effect.gen(function* () {
+    const current = yield* requireExpectedSource(tx, expected.source, true)
+    const actual = yield* makeOrdinaryUseRevisionSnapshot(tx, current)
+    if (!equalOrdinaryUseRevisionSnapshot(expected.revision, actual)) return yield* sourceConflict(current)
+    return actual
+  })
+}
+
+export function inspectOrdinaryUseByteStatus(tx: Transaction, expected: OrdinaryUseByteSnapshot) {
+  return Effect.gen(function* () {
+    const current = yield* getArtifactInfo(tx, expected.effectiveArtifactID).pipe(
+      Effect.catchTag("Artifact.NotFoundError", () => Effect.succeed(undefined)),
+    )
+    if (!current) return { status: "stale", cause: "artifact_not_found" } as const
+    if (current.withdrawalReason) return { status: "stale", cause: "artifact_withdrawn" } as const
+    if (current.correctionHidden) return { status: "stale", cause: "lineage_hidden" } as const
+    if (current.source.availability === "missing") return { status: "stale", cause: "source_missing" } as const
+    if (current.source.availability === "unbound" || !current.source.activeBinding) {
+      return { status: "stale", cause: "source_unbound" } as const
+    }
+    if (!current.source.currentRevisionID || !current.source.revisionAttribution || !current.source.descriptor) {
+      return { status: "stale", cause: "source_ineligible" } as const
+    }
+    if (current.source.currentRevisionID !== expected.currentRevisionID) {
+      return { status: "stale", cause: "revision_changed" } as const
+    }
+    if (!equalAttribution(current.source.revisionAttribution, expected.attribution)) {
+      return { status: "stale", cause: "attribution_changed" } as const
+    }
+    const revision = yield* requireRevisionRow(tx, current.source.currentRevisionID)
+    if (!sameFingerprint(revision, expected.fingerprint)) {
+      return { status: "stale", cause: "fingerprint_changed" } as const
+    }
+    return { status: "eligible" } as const
   })
 }
 
@@ -1946,6 +2029,15 @@ function equalOrdinaryUseRevisionSnapshot(left: OrdinaryUseRevisionSnapshot, rig
     left.fingerprint.digest === right.fingerprint.digest &&
     left.fingerprint.byteLength === right.fingerprint.byteLength &&
     left.mediaType === right.mediaType
+  )
+}
+
+function equalOrdinaryUseByteSnapshot(left: OrdinaryUseByteSnapshot, right: OrdinaryUseByteSnapshot) {
+  return (
+    equalOrdinaryUseSnapshot(left, right) &&
+    left.fingerprint.algorithm === right.fingerprint.algorithm &&
+    left.fingerprint.digest === right.fingerprint.digest &&
+    left.fingerprint.byteLength === right.fingerprint.byteLength
   )
 }
 

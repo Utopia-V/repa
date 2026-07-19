@@ -4,7 +4,8 @@ Status: Closed. Independent review run `gate12-20260718-whole-01` accepted both
 contract/theory and implementation/evidence. Findings `G12-CT-001` through
 `G12-CT-006` and `G12-IE-001` through `G12-IE-008` are closed. The accepted
 implementation is fixed by maintainer-authorized commit
-`80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`; Gate 13 has not begun.
+`80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`. Gate 13 remains outside this
+record; its current status is owned by `docs/README.md`.
 
 Date: 2026-07-18
 

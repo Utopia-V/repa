@@ -55,6 +55,7 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Artifact } from "@opencode-ai/core/artifact"
 import { Representation } from "@opencode-ai/core/representation"
+import { MaterialMap } from "@opencode-ai/core/material-map"
 
 export const AppLayer = AppNodeBuilderV1.build(
   LayerNode.group([
@@ -67,6 +68,8 @@ export const AppLayer = AppNodeBuilderV1.build(
     Representation.node,
     Representation.historicalReaderNode,
     Representation.currentUseReaderNode,
+    MaterialMap.currentUseReaderNode,
+    MaterialMap.node,
     Auth.node,
     Account.node,
     Config.node,

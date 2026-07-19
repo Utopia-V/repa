@@ -71,6 +71,7 @@ export type ErrorCode =
   | "profile_limit_exceeded"
   | "no_readable_text"
   | "invalid_record_range"
+  | "invalid_record_sequence"
 
 export type Result<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: ErrorCode }
 
@@ -85,6 +86,12 @@ export interface ReadResult {
   readonly pages: ReadonlyArray<Page>
   readonly nextPage?: number
   readonly truncated: boolean
+}
+
+export interface DecodedPageRecords {
+  readonly bytes: Uint8Array
+  readonly pages: ReadonlyArray<Page>
+  readonly records: ReadonlyArray<PageRecord>
 }
 
 const encoder = new TextEncoder()
@@ -104,45 +111,14 @@ export function encode(pages: ReadonlyArray<Page>, limits: Limits = defaultLimit
   let readable = false
 
   for (const [index, page] of pages.entries()) {
-    const pageKeys = isRecord(page) ? Object.keys(page) : []
-    const expectedPageKeys = page.signals === undefined ? ["page", "items"] : ["page", "items", "signals"]
-    if (
-      !isRecord(page) ||
-      !sameKeys(pageKeys, expectedPageKeys) ||
-      page.page !== index + 1 ||
-      !Array.isArray(page.items)
-    ) {
-      return failure("invalid_page_sequence")
-    }
-    if (page.items.length > limits.maxItemsPerPage) return failure("item_limit_exceeded")
-
-    const items: TextItem[] = []
-    for (const item of page.items) {
-      if (
-        !isRecord(item) ||
-        !sameKeys(Object.keys(item), ["text", "lineBreakAfter"]) ||
-        typeof item.text !== "string" ||
-        typeof item.lineBreakAfter !== "boolean"
-      ) {
-        return failure("invalid_text_item")
-      }
-      if (hasLoneSurrogate(item.text)) return failure("invalid_text_item")
-      const text = item.text.normalize("NFC").replace(/\r\n?/g, "\n")
-      if (encoder.encode(text).byteLength > limits.maxTextItemBytes) return failure("text_item_limit_exceeded")
-      readable = readable || /\S/u.test(text)
-      items.push({ text, lineBreakAfter: item.lineBreakAfter })
-    }
-
-    const signals = normalizeSignals(page.signals as PageSignals | undefined, limits)
-    if (!signals.ok) return signals
-    const value: Page = signals.value ? { page: page.page, items, signals: signals.value } : { page: page.page, items }
-    const record = line(value)
-    if (record.byteLength > limits.maxRecordBytes) return failure("record_limit_exceeded")
-    if (offset + record.byteLength > limits.maxProfileBytes) return failure("profile_limit_exceeded")
-    normalized.push(value)
-    lines.push(record)
-    records.push({ page: page.page, start: offset, end: offset + record.byteLength })
-    offset += record.byteLength
+    const result = normalizePage(page, index + 1, limits)
+    if (!result.ok) return result
+    if (offset + result.value.record.byteLength > limits.maxProfileBytes) return failure("profile_limit_exceeded")
+    readable = readable || result.value.readable
+    normalized.push(result.value.page)
+    lines.push(result.value.record)
+    records.push({ page: result.value.page.page, start: offset, end: offset + result.value.record.byteLength })
+    offset += result.value.record.byteLength
   }
 
   if (!readable) return failure("no_readable_text")
@@ -219,6 +195,90 @@ export function readPageRecords(encoded: Encoded, request: ReadRequest): Result<
     ...(truncated ? { nextPage } : {}),
     truncated,
   })
+}
+
+export function decodePageRecords(
+  bytes: Uint8Array,
+  startPage: number,
+  limits: Limits = defaultLimits,
+): Result<DecodedPageRecords> {
+  if (!validLimits(limits)) return failure("invalid_limits")
+  if (!Number.isSafeInteger(startPage) || startPage < 1 || bytes.byteLength === 0) {
+    return failure("invalid_record_sequence")
+  }
+  if (bytes.byteLength > limits.maxProfileBytes) return failure("profile_limit_exceeded")
+  const text = decodeUTF8(bytes)
+  if (!text.ok) return text
+  if (!text.value.endsWith("\n")) return failure("invalid_format")
+  const rows = text.value.slice(0, -1).split("\n")
+  if (rows.length === 0 || rows.length > limits.maxPages) return failure("invalid_record_sequence")
+  if (rows.some((row) => encoder.encode(`${row}\n`).byteLength > limits.maxRecordBytes)) {
+    return failure("record_limit_exceeded")
+  }
+  const pages: Page[] = []
+  const records: PageRecord[] = []
+  let offset = 0
+  for (const [index, row] of rows.entries()) {
+    const parsed = parseJSON(row)
+    if (!parsed.ok) return parsed
+    const page = parsePage(parsed.value)
+    if (!page.ok) return page
+    if (page.value.page !== startPage + index) return failure("invalid_record_sequence")
+    pages.push(page.value)
+    const length = encoder.encode(`${row}\n`).byteLength
+    records.push({ page: page.value.page, start: offset, end: offset + length })
+    offset += length
+  }
+  const canonical: Page[] = []
+  for (const page of pages) {
+    const normalized = normalizePage(page, page.page, limits)
+    if (!normalized.ok) return normalized
+    canonical.push(normalized.value.page)
+  }
+  const canonicalRecords = canonical.map(line)
+  const canonicalBytes = concat(
+    canonicalRecords,
+    canonicalRecords.reduce((length, record) => length + record.byteLength, 0),
+  )
+  if (!equalBytes(canonicalBytes, bytes)) return failure("noncanonical")
+  return success({ bytes, pages: canonical, records })
+}
+
+function normalizePage(page: Page, expectedPage: number, limits: Limits) {
+  const pageKeys = isRecord(page) ? Object.keys(page) : []
+  const expectedPageKeys = page.signals === undefined ? ["page", "items"] : ["page", "items", "signals"]
+  if (
+    !isRecord(page) ||
+    !sameKeys(pageKeys, expectedPageKeys) ||
+    page.page !== expectedPage ||
+    !Array.isArray(page.items)
+  ) {
+    return failure("invalid_page_sequence")
+  }
+  if (page.items.length > limits.maxItemsPerPage) return failure("item_limit_exceeded")
+  const items: TextItem[] = []
+  let readable = false
+  for (const item of page.items) {
+    if (
+      !isRecord(item) ||
+      !sameKeys(Object.keys(item), ["text", "lineBreakAfter"]) ||
+      typeof item.text !== "string" ||
+      typeof item.lineBreakAfter !== "boolean"
+    ) {
+      return failure("invalid_text_item")
+    }
+    if (hasLoneSurrogate(item.text)) return failure("invalid_text_item")
+    const text = item.text.normalize("NFC").replace(/\r\n?/g, "\n")
+    if (encoder.encode(text).byteLength > limits.maxTextItemBytes) return failure("text_item_limit_exceeded")
+    readable = readable || /\S/u.test(text)
+    items.push({ text, lineBreakAfter: item.lineBreakAfter })
+  }
+  const signals = normalizeSignals(page.signals as PageSignals | undefined, limits)
+  if (!signals.ok) return signals
+  const value: Page = signals.value ? { page: page.page, items, signals: signals.value } : { page: page.page, items }
+  const record = line(value)
+  if (record.byteLength > limits.maxRecordBytes) return failure("record_limit_exceeded")
+  return success({ page: value, record, readable })
 }
 
 function normalizeSignals(signals: PageSignals | undefined, limits: Limits): Result<PageSignals | undefined> {

@@ -21,6 +21,7 @@ import sourceArtifactAuthorityMigration from "@opencode-ai/core/database/migrati
 import contentRootAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716191911_content_root_authority"
 import readableRepresentationLineageMigration from "@opencode-ai/core/database/migration/repa/20260717141402_readable_representation_lineage"
 import durableTurnMigration from "@opencode-ai/core/database/migration/repa/20260718134404_gate12_durable_turn"
+import materialMapAlignmentMigration from "@opencode-ai/core/database/migration/repa/20260719104356_material_map_alignment"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -111,6 +112,18 @@ const turnTables = [
   "turn_unavailable_model",
   "turn_unavailable_source",
   "learning_shared_frontier",
+] as const
+const materialTables = [
+  "material_course_alignment_disposition_event",
+  "material_course_alignment_state",
+  "material_course_alignment",
+  "material_selector",
+  "material_outline_node",
+  "material_map_disposition_event",
+  "material_map_state",
+  "material_map_artifact_target",
+  "material_map_representation_target",
+  "material_map",
 ] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
@@ -261,6 +274,15 @@ function restoreGate8LearningSchema(db: TestDatabase) {
   })
 }
 
+function removeGate13(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* Effect.forEach(materialTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+      discard: true,
+    })
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 7}`)
+  })
+}
+
 describe("DatabaseMigration", () => {
   test("serializes concurrent embedded initialization for one database path", async () => {
     await using tmp = await tmpdir()
@@ -318,6 +340,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
           { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
           { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
+          { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -456,6 +479,7 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* artifactSchema(db)
 
+        yield* removeGate13(db)
         yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -515,7 +539,7 @@ describe("DatabaseMigration", () => {
           id: "loc_gate8",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 6,
+          user_version: DatabaseMigration.version,
         })
 
         yield* db.run(sql`PRAGMA foreign_keys = ON`)
@@ -591,6 +615,7 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* contentRootSchema(db)
 
+        yield* removeGate13(db)
         yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -619,7 +644,7 @@ describe("DatabaseMigration", () => {
           id: "gate9-artifact",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 6,
+          user_version: DatabaseMigration.version,
         })
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
       }),
@@ -635,6 +660,7 @@ describe("DatabaseMigration", () => {
         const freshContentRoot = yield* contentRootSchema(db)
         const freshRepresentation = yield* representationSchema(db)
 
+        yield* removeGate13(db)
         yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -783,7 +809,7 @@ describe("DatabaseMigration", () => {
           disposition: "active",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 6,
+          user_version: DatabaseMigration.version,
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA foreign_keys"))).toEqual({ foreign_keys: 1 })
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
@@ -798,6 +824,7 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* turnSchema(db)
 
+        yield* removeGate13(db)
         yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -839,7 +866,7 @@ describe("DatabaseMigration", () => {
           yield* db.get(sql`SELECT aggregate_id FROM event_sequence WHERE aggregate_id = 'gate11-empty'`),
         ).toBeUndefined()
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 6,
+          user_version: DatabaseMigration.version,
         })
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
       }),
@@ -851,6 +878,7 @@ describe("DatabaseMigration", () => {
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db)
+        yield* removeGate13(db)
         yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -1394,6 +1422,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
           { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
           { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
+          { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
         ])
       }),
     )

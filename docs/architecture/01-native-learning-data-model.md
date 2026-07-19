@@ -377,6 +377,14 @@ representation revision. Alignment from material ranges to Course items is
 many-to-many and revision-bound. Source order never becomes a Course route by
 implication, and a Course may use material from several LearningSpaces.
 
+Several immutable Material Map snapshots may coexist for the same exact target.
+There is no canonical, working, preferred, or automatically selected Map.
+Correction creates an explicit successor while retaining the predecessor;
+independently authored alternatives remain distinct. An alignment binds one
+exact Map selector and one exact Course/View/Revision/item membership. It is
+optional and neutral: it does not by itself mean `teaches`, `requires`,
+`assesses`, prerequisite, completeness, learner evidence, or Course order.
+
 ### Learner continuity and record
 
 The first navigation-continuity slice owns two distinct learner-controlled
@@ -462,8 +470,8 @@ but each family first appears only with a demonstrated consumer:
 | native Course use               | Course item identity and View membership   | Course-owned stable identity where justified; revision-bound title, parent, and order                                                                                       |
 | exact material use              | artifact and exact revision                | mutable location separated from exact observed content                                                                                                                      |
 | exact material use              | readable representation                    | optional exact derivation from one artifact revision with availability truth                                                                                                |
-| material structure              | material map                               | exact selectors bound to one artifact or representation revision; no Course dependency                                                                                      |
-| grounded material use           | Course alignment                           | optional many-to-many relation bound to exact material and Course View revisions                                                                                            |
+| material structure              | material map                               | immutable alternative snapshots with exact selectors bound to one artifact or representation revision; no Course dependency or preferred pointer                            |
+| grounded material use           | Course alignment                           | optional neutral many-to-many relation bound to one exact Map selector and exact Course/View/Revision/item membership                                                       |
 | durable continuation            | route anchor                               | learner-record-owned Course/View/item reference, distinct from current focus and mastery                                                                                    |
 | first durable command           | causal source and command receipt          | trusted Interaction/source identity and atomic domain/tool settlement                                                                                                       |
 | exact continuation, if required | context cut                                | exact bounded manifest when existing Interaction records cannot express it honestly                                                                                         |

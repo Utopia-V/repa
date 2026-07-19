@@ -96,6 +96,68 @@ export type Selection = {
   readonly version: number
 }
 
+export type MembershipEndpoint = {
+  readonly courseID: CourseID
+  readonly viewID: ViewID
+  readonly revisionID: RevisionID
+  readonly itemID: ItemID
+}
+
+export type MembershipSelection =
+  | { readonly type: "explicit_exact" }
+  | {
+      readonly type: "observed_working"
+      readonly revisionID: RevisionID
+      readonly version: number
+    }
+
+type MembershipExpectation = {
+  readonly endpoint: MembershipEndpoint
+  readonly selection: MembershipSelection
+  readonly courseVersion: number
+  readonly viewVersion: number
+  readonly revisionVersion: number
+}
+
+export type MembershipReceipt = MembershipExpectation
+
+export type MembershipStatus =
+  | { readonly status: "eligible" }
+  | {
+      readonly status: "stale"
+      readonly cause:
+        | "course_not_found"
+        | "course_withdrawn"
+        | "view_not_found"
+        | "view_withdrawn"
+        | "revision_not_found"
+        | "revision_withdrawn"
+        | "membership_missing"
+        | "working_selection_mismatch"
+    }
+
+const membershipProofToken = Symbol("Course.MembershipProof")
+
+export class MembershipProof {
+  readonly endpoint: MembershipEndpoint
+  readonly selection: MembershipSelection
+  readonly receipt: MembershipReceipt
+  #expectation: MembershipExpectation
+
+  constructor(token: symbol, expectation: MembershipExpectation) {
+    if (token !== membershipProofToken) throw new Error("Course membership proofs are owner-issued")
+    this.endpoint = Object.freeze({ ...expectation.endpoint })
+    this.selection = Object.freeze({ ...expectation.selection })
+    this.receipt = Object.freeze({ ...expectation, endpoint: this.endpoint, selection: this.selection })
+    this.#expectation = this.receipt
+  }
+
+  expectation(token: symbol) {
+    if (token !== membershipProofToken) return
+    return this.#expectation
+  }
+}
+
 export type SelectionAcceptanceInput = {
   readonly courseID: CourseID
   readonly revisionID: RevisionID
@@ -302,6 +364,10 @@ export interface Interface {
     viewID: ViewID,
     revisionID: RevisionID,
   ) => Effect.Effect<RevisionSummary, Error>
+  readonly prepareMembership: (input: {
+    readonly endpoint: MembershipEndpoint
+    readonly selection: MembershipSelection
+  }) => Effect.Effect<MembershipProof, Error>
   readonly listRevisionItems: (
     courseID: CourseID,
     viewID: ViewID,
@@ -1504,6 +1570,10 @@ const layer = Layer.effect(
       },
     )
 
+    const prepareMembership: Interface["prepareMembership"] = Effect.fn("Course.prepareMembership")(function* (input) {
+      return yield* snapshot(db, (tx) => prepareMembershipProof(tx, input))
+    })
+
     return Service.of({
       createCourse,
       correctCourse,
@@ -1524,6 +1594,7 @@ const layer = Layer.effect(
       getView,
       listRevisions,
       getRevision,
+      prepareMembership,
       listRevisionItems,
       getRevisionTransition,
       listMappingGroups,
@@ -1535,6 +1606,91 @@ const layer = Layer.effect(
 )
 
 export const node = makeGlobalNode({ service: Service, layer, deps: [Database.node] })
+
+export function requireMembershipProof(tx: Transaction, proof: MembershipProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof MembershipProof ? proof.expectation(membershipProofToken) : undefined
+    if (!expected) {
+      return yield* new InvalidTransitionError({ detail: "Course membership proof is not owner-issued" })
+    }
+    yield* requireCourse(tx, expected.endpoint.courseID, expected.courseVersion, true)
+    yield* requireView(tx, expected.endpoint.courseID, expected.endpoint.viewID, expected.viewVersion, true)
+    yield* requireRevision(
+      tx,
+      expected.endpoint.courseID,
+      expected.endpoint.viewID,
+      expected.endpoint.revisionID,
+      expected.revisionVersion,
+      true,
+    )
+    yield* requireMembershipRow(tx, expected.endpoint)
+    if (expected.selection.type === "observed_working") {
+      yield* requireSelection(tx, expected.endpoint.courseID, expected.selection.revisionID, expected.selection.version)
+    }
+    return proof
+  })
+}
+
+export function inspectMembershipStatus(tx: Transaction, endpoint: MembershipEndpoint, selection: MembershipSelection) {
+  return Effect.gen(function* () {
+    const course = yield* tx
+      .select({ withdrawal_reason: CourseTable.withdrawal_reason })
+      .from(CourseTable)
+      .where(eq(CourseTable.id, endpoint.courseID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!course) return { status: "stale", cause: "course_not_found" } as const
+    if (course.withdrawal_reason) return { status: "stale", cause: "course_withdrawn" } as const
+    const view = yield* tx
+      .select({ withdrawal_reason: CourseViewTable.withdrawal_reason })
+      .from(CourseViewTable)
+      .where(and(eq(CourseViewTable.course_id, endpoint.courseID), eq(CourseViewTable.id, endpoint.viewID)))
+      .get()
+      .pipe(Effect.orDie)
+    if (!view) return { status: "stale", cause: "view_not_found" } as const
+    if (view.withdrawal_reason) return { status: "stale", cause: "view_withdrawn" } as const
+    const revision = yield* tx
+      .select({ withdrawal_reason: CourseViewRevisionStateTable.withdrawal_reason })
+      .from(CourseViewRevisionTable)
+      .innerJoin(CourseViewRevisionStateTable, eq(CourseViewRevisionStateTable.revision_id, CourseViewRevisionTable.id))
+      .where(
+        and(
+          eq(CourseViewRevisionTable.course_id, endpoint.courseID),
+          eq(CourseViewRevisionTable.view_id, endpoint.viewID),
+          eq(CourseViewRevisionTable.id, endpoint.revisionID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!revision) return { status: "stale", cause: "revision_not_found" } as const
+    if (revision.withdrawal_reason) return { status: "stale", cause: "revision_withdrawn" } as const
+    const item = yield* tx
+      .select({ item_id: CourseViewRevisionItemTable.item_id })
+      .from(CourseViewRevisionItemTable)
+      .where(
+        and(
+          eq(CourseViewRevisionItemTable.course_id, endpoint.courseID),
+          eq(CourseViewRevisionItemTable.view_id, endpoint.viewID),
+          eq(CourseViewRevisionItemTable.revision_id, endpoint.revisionID),
+          eq(CourseViewRevisionItemTable.item_id, endpoint.itemID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!item) return { status: "stale", cause: "membership_missing" } as const
+    if (selection.type === "explicit_exact") return { status: "eligible" } as const
+    const working = yield* tx
+      .select({ revision_id: CourseWorkingSelectionTable.revision_id })
+      .from(CourseWorkingSelectionTable)
+      .where(eq(CourseWorkingSelectionTable.course_id, endpoint.courseID))
+      .get()
+      .pipe(Effect.orDie)
+    if (working?.revision_id !== endpoint.revisionID) {
+      return { status: "stale", cause: "working_selection_mismatch" } as const
+    }
+    return { status: "eligible" } as const
+  })
+}
 
 type CourseRow = typeof CourseTable.$inferSelect
 type ViewRow = typeof CourseViewTable.$inferSelect
@@ -1644,6 +1800,60 @@ function requireSelection(
       return yield* conflict("selection", courseID)
     }
     return selection
+  })
+}
+
+function prepareMembershipProof(
+  tx: Transaction,
+  input: { readonly endpoint: MembershipEndpoint; readonly selection: MembershipSelection },
+) {
+  return Effect.gen(function* () {
+    if (input.selection.type === "observed_working" && input.selection.revisionID !== input.endpoint.revisionID) {
+      return yield* new InvalidTransitionError({
+        detail: "Observed working membership must name the endpoint Revision",
+      })
+    }
+    const course = yield* requireCourse(tx, input.endpoint.courseID, undefined, true)
+    const view = yield* requireView(tx, input.endpoint.courseID, input.endpoint.viewID, undefined, true)
+    const revision = yield* requireRevision(
+      tx,
+      input.endpoint.courseID,
+      input.endpoint.viewID,
+      input.endpoint.revisionID,
+      undefined,
+      true,
+    )
+    yield* requireMembershipRow(tx, input.endpoint)
+    if (input.selection.type === "observed_working") {
+      yield* requireSelection(tx, input.endpoint.courseID, input.selection.revisionID, input.selection.version)
+    }
+    return new MembershipProof(membershipProofToken, {
+      endpoint: input.endpoint,
+      selection: input.selection,
+      courseVersion: course.state_version,
+      viewVersion: view.state_version,
+      revisionVersion: revision.state_version,
+    })
+  })
+}
+
+function requireMembershipRow(source: Queryable, endpoint: MembershipEndpoint) {
+  return Effect.gen(function* () {
+    const item = yield* source
+      .select({ item_id: CourseViewRevisionItemTable.item_id })
+      .from(CourseViewRevisionItemTable)
+      .where(
+        and(
+          eq(CourseViewRevisionItemTable.course_id, endpoint.courseID),
+          eq(CourseViewRevisionItemTable.view_id, endpoint.viewID),
+          eq(CourseViewRevisionItemTable.revision_id, endpoint.revisionID),
+          eq(CourseViewRevisionItemTable.item_id, endpoint.itemID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!item) return yield* new NotFoundError({ entity: "item", id: endpoint.itemID })
+    return item
   })
 }
 

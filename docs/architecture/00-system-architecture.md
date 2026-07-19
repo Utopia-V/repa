@@ -56,13 +56,13 @@ pre-create every future class or table.
 
 ## Semantic checksum
 
-| Check | Architecture meaning |
-| --- | --- |
-| Product-loop purpose | Connect goals, course/material position, teaching, learner activity, review, assignments, deadlines, and later continuation. |
-| Owned invariant | Durable learning meaning survives Sessions independently of model context and remains source-linked, correctable, and legally transitioned. |
+| Check                   | Architecture meaning                                                                                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Product-loop purpose    | Connect goals, course/material position, teaching, learner activity, review, assignments, deadlines, and later continuation.                                      |
+| Owned invariant         | Durable learning meaning survives Sessions independently of model context and remains source-linked, correctable, and legally transitioned.                       |
 | Representative behavior | In a new Session, `continue` receives a compact current learning view, chooses a useful move, and reads exact old material or history only if that move needs it. |
-| Counterexample | Replaying an old transcript, loading every course node, or trusting an LLM summary as the current learner state. |
-| Failure/correction | A failed or stale command commits nothing; a later correction preserves the original source and changes the active projection through a new transition. |
+| Counterexample          | Replaying an old transcript, loading every course node, or trusting an LLM summary as the current learner state.                                                  |
+| Failure/correction      | A failed or stale command commits nothing; a later correction preserves the original source and changes the active projection through a new transition.           |
 
 ## Architecture drivers and evidence
 
@@ -102,14 +102,14 @@ Control theory is useful here as an ownership model, not as a claim that the
 learner is a passive plant to be controlled. Repa controls **its own future
 Tutor behavior** in response to an autonomous learner and a changing world.
 
-| Control-system role | Repa meaning |
-| --- | --- |
-| reference signal | learner-owned goals, deadlines, intended outcomes, and current steering |
-| observed system | learner interactions, materials, assignments, artifacts, time, and external results |
-| state estimator | source-aware learner/course/agenda queries; uncertainty remains explicit |
-| controller | Tutor composition using hard constraints, current state, learner intent, and model judgment |
-| actuator | explanation, demonstration, questions, research, tools, artifact work, and authorized commands |
-| feedback | later questions, attempts, corrections, completed work, time changes, and learner overrides |
+| Control-system role | Repa meaning                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| reference signal    | learner-owned goals, deadlines, intended outcomes, and current steering                        |
+| observed system     | learner interactions, materials, assignments, artifacts, time, and external results            |
+| state estimator     | source-aware learner/course/agenda queries; uncertainty remains explicit                       |
+| controller          | Tutor composition using hard constraints, current state, learner intent, and model judgment    |
+| actuator            | explanation, demonstration, questions, research, tools, artifact work, and authorized commands |
+| feedback            | later questions, attempts, corrections, completed work, time changes, and learner overrides    |
 
 The controller is receding-horizon: it chooses or proposes a useful current
 move and near-term agenda, observes what happens, and chooses again. It does
@@ -118,13 +118,13 @@ study, review, and assignment behavior remain policy profiles over one loop.
 
 The state also changes at different rates:
 
-| Timescale | Typical authority | Consequence |
-| --- | --- | --- |
-| slow | domain foundations, course structure, accepted curricular relations | high-inertia; a learner error does not rewrite it |
-| medium | material alignment, progress, activities, observations, evidence, correctable hypotheses | changes after meaningful interactions or source revisions |
-| planning horizon | assignments, remaining-work estimates, capacity, cross-day allocations, commitments | recomputed when time, progress, estimates, or availability changes |
-| fast | current focus, revisits, scoped steering, current learner direction | re-evaluated around each Turn |
-| query-time | due/overdue/expired status and time pressure | derived from stored facts and the current clock; no daemon event is required |
+| Timescale        | Typical authority                                                                        | Consequence                                                                  |
+| ---------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| slow             | domain foundations, course structure, accepted curricular relations                      | high-inertia; a learner error does not rewrite it                            |
+| medium           | material alignment, progress, activities, observations, evidence, correctable hypotheses | changes after meaningful interactions or source revisions                    |
+| planning horizon | assignments, remaining-work estimates, capacity, cross-day allocations, commitments      | recomputed when time, progress, estimates, or availability changes           |
+| fast             | current focus, revisits, scoped steering, current learner direction                      | re-evaluated around each Turn                                                |
+| query-time       | due/overdue/expired status and time pressure                                             | derived from stored facts and the current clock; no daemon event is required |
 
 In plain language: the course map changes slowly, multi-day work is rebalanced
 when its inputs change, today's route can change quickly, and “due now” can
@@ -191,17 +191,17 @@ references. The current learning view is their bounded composition output, not
 a ninth authority or a stored source of truth. None of these meanings is a
 table in one universal graph.
 
-| Authority | Owns | Must not imply |
-| --- | --- | --- |
-| interaction | Session, Turn, durable item, model operation, tool invocation, terminal outcome, causal source identity | that assistant prose is a learning fact |
-| source/artifact | origin, observed content, content revision, selector, license/trust metadata | that source order is the course route or that source text is trusted instruction |
-| domain foundation | optional reusable concepts, capabilities, task families, aliases, and reviewed relations | that every course or subject needs a populated foundation |
-| course view | one versioned ordered learning/curricular view, its items, authored order, sparse typed relations, and provenance | that one learner mastered it or must study an item today |
-| material map | material outline and revision-bound many-to-many alignment to course/domain items | that exposition order proves prerequisites |
-| learner record | route progress, meaningful activities, reports, observations, evidence, correctable hypotheses, and source links | a single global mastery score or today's plan |
-| agenda | learner-owned goals, assignments, deadlines, revisits, commitments, deferrals, temporary focus, and intended rejoin | permanent curriculum structure or learner ability |
-| Tutor policy | hard constraints, policy profiles, scoped learner steering, and future stable defaults | a second runtime or evidence about the learner |
-| current learning view | a bounded query result for one model sample | a new source of truth or durable summary that replaces its sources |
+| Authority             | Owns                                                                                                                | Must not imply                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| interaction           | Session, Turn, durable item, model operation, tool invocation, terminal outcome, causal source identity             | that assistant prose is a learning fact                                                         |
+| source/artifact       | origin, observed content, content revision, location/history, and license/trust metadata                            | that source order is the course route or that source text is trusted instruction                |
+| domain foundation     | optional reusable concepts, capabilities, task families, aliases, and reviewed relations                            | that every course or subject needs a populated foundation                                       |
+| course view           | one versioned ordered learning/curricular view, its items, authored order, sparse typed relations, and provenance   | that one learner mastered it or must study an item today                                        |
+| material map          | revision-bound material outline, exact selectors, and optional neutral many-to-many alignment to exact Course items | that exposition order proves prerequisites or that alignment is complete or pedagogically typed |
+| learner record        | route progress, meaningful activities, reports, observations, evidence, correctable hypotheses, and source links    | a single global mastery score or today's plan                                                   |
+| agenda                | learner-owned goals, assignments, deadlines, revisits, commitments, deferrals, temporary focus, and intended rejoin | permanent curriculum structure or learner ability                                               |
+| Tutor policy          | hard constraints, policy profiles, scoped learner steering, and future stable defaults                              | a second runtime or evidence about the learner                                                  |
+| current learning view | a bounded query result for one model sample                                                                         | a new source of truth or durable summary that replaces its sources                              |
 
 ### Route anchor, focus, and rejoin
 
@@ -696,7 +696,7 @@ machinery rather than source or learning authority.
 For a mutable remote source, Repa normally retains the smallest exact snapshot
 that materially supported the learning move, not merely a URL and not an
 unrequested mirror of the whole site. Source/artifact authority records the
-remote locator, observation time, selector, content revision or digest,
+remote locator, observation time, acquisition scope, content revision or digest,
 acquisition tool, retained bytes or representation, and any known
 reproducibility limit. If exact retention is unavailable, the receipt says that
 the observation cannot be reproduced instead of treating a future fetch as the
@@ -705,10 +705,12 @@ supported full-page content as another explicit artifact revision. Acquisition
 and normalization may be supplied by an ordinary Skill or MCP capability; this
 source rule does not require a Repa-owned web-reader subsystem.
 
-When a material revision invalidates a current alignment:
+When an exact Map target ceases to be admissible for current use, or a working
+Course selection moves away from the exact aligned Revision:
 
-1. the old observed range remains available for audit;
-2. the alignment becomes stale rather than resolving against new bytes;
+1. the old exact Map, selector, and alignment remain available for audit;
+2. the current-use projection reports the owning stale or unavailable cause
+   rather than resolving against new bytes or a new Course membership;
 3. the course view and learner progress remain intact;
 4. an Agent may propose replacement alignment against the new revision; and
 5. unresolved mappings appear in current context only when they affect the
@@ -780,15 +782,15 @@ explanation remains Session history when no such consumer exists.
 
 The architecture deliberately rejects one overloaded `revision` number.
 
-| Identity/version | Meaning | Not used for |
-| --- | --- | --- |
-| Session sequence | order of durable interaction items in one Session | learning-state conflict detection |
-| commit sequence | monotonic local order/watermark of committed domain changes | rejecting a command merely because an unrelated course changed |
-| entity version | optimistic precondition for one mutable goal, agenda item, progress record, or other aggregate | material content identity |
-| course-view revision | immutable identity of one route/structure view | ordering Session messages |
-| artifact revision | content identity, normally a digest or source-native immutable revision | learner-state confidence |
-| policy profile revision | identity of selected Tutor defaults and enforced overlays | domain evidence |
-| context cut | immutable manifest of the exact revisions, references, time, and capabilities shown to one model sample | durable authority after the sample finishes |
+| Identity/version        | Meaning                                                                                                 | Not used for                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Session sequence        | order of durable interaction items in one Session                                                       | learning-state conflict detection                              |
+| commit sequence         | monotonic local order/watermark of committed domain changes                                             | rejecting a command merely because an unrelated course changed |
+| entity version          | optimistic precondition for one mutable goal, agenda item, progress record, or other aggregate          | material content identity                                      |
+| course-view revision    | immutable identity of one route/structure view                                                          | ordering Session messages                                      |
+| artifact revision       | content identity, normally a digest or source-native immutable revision                                 | learner-state confidence                                       |
+| policy profile revision | identity of selected Tutor defaults and enforced overlays                                               | domain evidence                                                |
+| context cut             | immutable manifest of the exact revisions, references, time, and capabilities shown to one model sample | durable authority after the sample finishes                    |
 
 The production fork does not retain the pre-fork
 `system_state.state_revision`. A context cut may record the native database
@@ -804,11 +806,11 @@ an already-dispatched request never changes underneath the model.
 
 Context construction has three depths:
 
-| Depth | Typical contents | Delivery |
-| --- | --- | --- |
-| routine current view | relevant goals/course candidates, route anchor/current focus, urgent agenda items, time budget, active steering, compact source references | compiled automatically when relevant |
-| current-move detail | route neighborhood, exact material range, active assignment/revisit, recent activity or evidence that changes the move | selected during composition or read through a tool |
-| cold detail | complete old Sessions, full attempts, superseded interpretations, full course maps, unrelated materials | lazy search/read only |
+| Depth                | Typical contents                                                                                                                           | Delivery                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| routine current view | relevant goals/course candidates, route anchor/current focus, urgent agenda items, time budget, active steering, compact source references | compiled automatically when relevant               |
+| current-move detail  | route neighborhood, exact material range, active assignment/revisit, recent activity or evidence that changes the move                     | selected during composition or read through a tool |
+| cold detail          | complete old Sessions, full attempts, superseded interpretations, full course maps, unrelated materials                                    | lazy search/read only                              |
 
 Read authorization, system-visible resource management, model-visible
 retrieval, and learner-visible disclosure are different boundaries.
@@ -1033,8 +1035,8 @@ learner may redirect or request direct help. No universal scheduler or
 The boundary is responsibility-based, not a fixed percentage and not a claim
 that “program” always decides while “model” only writes prose.
 
-| Program-led | Model-led | Mixed initiative |
-| --- | --- | --- |
+| Program-led                                                                                                                                                                                                                                           | Model-led                                                                                                                                                                               | Mixed initiative                                                                                                                                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | identity, revisions, source binding, time math, due/overdue derivation, workload/capacity feasibility, cross-day allocation and recomputation, legal transitions, atomicity, correction mechanics, context budgets, capability/permission enforcement | open-source research, semantic material interpretation and work decomposition, coarse route proposals, explanations, examples, questions, comparisons, and interaction-level adaptation | selecting among genuinely different feasible routes, refining a course view, interpreting open-ended work, forming a gap hypothesis, and adapting a plan where meaning or learner preference matters |
 
 For mixed work, code supplies trustworthy facts, hard boundaries, available
@@ -1220,18 +1222,18 @@ overdue, and expired state from stored times and the trusted clock.
 
 ## Failure and correction behavior
 
-| Failure | Required behavior |
-| --- | --- |
-| provider error or cancellation | preserve admitted input; fail/interrupt the model operation and Turn truthfully; do not invent assistant completion |
-| crash during a local learning command | SQLite commits both domain effect and receipt or neither; recovery returns settled state by identity |
-| crash during provider/text work | close/recover as interrupted; do not automatically repeat ambiguous model or external work |
-| stale entity or course revision | reject the command with current references; let the Tutor re-read and decide again |
-| material content drift | fail the old selector closed; preserve old observation; propose explicit re-alignment |
-| poor provisional course route | create a corrected/superseding revision and reconcile item lineage; retain the old route as provenance |
-| learner corrects a report or inference | append correction/supersession; preserve the original source; rebuild active projections |
-| generic tool changes an artifact | record the artifact/tool result; create no learner/course fact until an explicit domain command imports it |
-| context omitted relevant state | model may inspect state lazily; recorded selection manifest and source refs make the omission diagnosable and correctable |
-| conflicting local writer | reject/serialize through the LearnerHome owner and entity preconditions; never silently merge semantic state |
+| Failure                                | Required behavior                                                                                                            |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| provider error or cancellation         | preserve admitted input; fail/interrupt the model operation and Turn truthfully; do not invent assistant completion          |
+| crash during a local learning command  | SQLite commits both domain effect and receipt or neither; recovery returns settled state by identity                         |
+| crash during provider/text work        | close/recover as interrupted; do not automatically repeat ambiguous model or external work                                   |
+| stale entity or course revision        | reject the command with current references; let the Tutor re-read and decide again                                           |
+| material content drift                 | fail current-use resolution of the old selector closed; preserve its exact historical meaning; propose explicit re-alignment |
+| poor provisional course route          | create a corrected/superseding revision and reconcile item lineage; retain the old route as provenance                       |
+| learner corrects a report or inference | append correction/supersession; preserve the original source; rebuild active projections                                     |
+| generic tool changes an artifact       | record the artifact/tool result; create no learner/course fact until an explicit domain command imports it                   |
+| context omitted relevant state         | model may inspect state lazily; recorded selection manifest and source refs make the omission diagnosable and correctable    |
+| conflicting local writer               | reject/serialize through the LearnerHome owner and entity preconditions; never silently merge semantic state                 |
 
 ## Target module ownership
 
@@ -1247,8 +1249,8 @@ logical ownership remains:
 ```text
 Repa product composition
   interaction/harness       Session, Turn, typed item, model/tool lifecycle
-  sources/artifacts         origins, revisions, representations, selectors
-  curriculum/materials      Course View, Material Map, alignment
+  sources/artifacts         origins, revisions, representations
+  curriculum/materials      Course View, Material Map, exact selectors, alignment
   learner                   progress, activity, evidence, inference
   agenda                    goals, assignments, revisits, commitments
   tutor policy/context      scoped policy and bounded sample composition
@@ -1275,14 +1277,14 @@ read-only oracle worktree. It is executable evidence, not source present in the
 fork to be deleted at cutover. It is not extended, imported as a compatibility
 layer, or treated as the final package topology.
 
-| Pre-fork oracle shape | Architectural treatment |
-| --- | --- |
-| `run-tutor-turn.ts`, pre-fork CLI/provider adapter, and `interaction/records.ts` | retain in the immutable oracle as Turn/context/tool/failure evidence; never import or edit them during fork cutover |
-| pre-fork `session_item`, `model_operation`, `tool_invocation`, `system_state`, and `durable_effect` tables | do not migrate or mirror; preserve accepted invariants through the native Session/message/part and domain schemas |
-| Course, material, Agenda, policy, and context modules | port their owned semantics and behavioral tests; rewrite trusted identities, transactions, and foreign keys against the native database |
-| pre-fork AI SDK tool bindings | leave in the oracle; bind learning capabilities independently through the fork's native tool admission and atomic settlement path |
-| pre-fork one-string assistant history | replace with inherited typed items; never preserve flattened output for compatibility |
-| pre-fork production tests | classify as invariant or old API; port invariant assertions and leave old-API-only tests as historical oracle evidence |
+| Pre-fork oracle shape                                                                                      | Architectural treatment                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `run-tutor-turn.ts`, pre-fork CLI/provider adapter, and `interaction/records.ts`                           | retain in the immutable oracle as Turn/context/tool/failure evidence; never import or edit them during fork cutover                     |
+| pre-fork `session_item`, `model_operation`, `tool_invocation`, `system_state`, and `durable_effect` tables | do not migrate or mirror; preserve accepted invariants through the native Session/message/part and domain schemas                       |
+| Course, material, Agenda, policy, and context modules                                                      | port their owned semantics and behavioral tests; rewrite trusted identities, transactions, and foreign keys against the native database |
+| pre-fork AI SDK tool bindings                                                                              | leave in the oracle; bind learning capabilities independently through the fork's native tool admission and atomic settlement path       |
+| pre-fork one-string assistant history                                                                      | replace with inherited typed items; never preserve flattened output for compatibility                                                   |
+| pre-fork production tests                                                                                  | classify as invariant or old API; port invariant assertions and leave old-API-only tests as historical oracle evidence                  |
 
 This is a deliberate substrate replacement. Source/runtime lineage cutover is
 complete: the fork is the sole active source/runtime line and the oracle remains

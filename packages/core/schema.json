@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "20e4e473-e799-4846-9758-231cbbad78a7",
+  "id": "d87b1d51-fbaf-4b44-a31a-3e7ed14b8305",
   "prevIds": [
-    "c80735cd-62cc-4889-bb46-aeeacdfd3f8a"
+    "b67faca4-210b-4ade-8576-0995c1548651"
   ],
   "ddl": [
     {
@@ -168,6 +168,46 @@
     },
     {
       "name": "learning_command_receipt",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_course_alignment_disposition_event",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_course_alignment_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_course_alignment",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_map_artifact_target",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_map_disposition_event",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_map_representation_target",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_map_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_map",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_outline_node",
+      "entityType": "tables"
+    },
+    {
+      "name": "material_selector",
       "entityType": "tables"
     },
     {
@@ -3296,26 +3336,6 @@
     },
     {
       "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "turn_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "input_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -3510,6 +3530,26 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "learning_command_receipt"
@@ -3633,6 +3673,1116 @@
       "name": "commit_order",
       "entityType": "columns",
       "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "alignment_id",
+      "entityType": "columns",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "alignment_id",
+      "entityType": "columns",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "withdrawal_reason",
+      "entityType": "columns",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_input",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "map_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selector_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "item_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selection_basis",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_selection_revision_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_selection_version",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "accepted_course_version",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "accepted_view_version",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "accepted_revision_version",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "supersedes_alignment_id",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorship_basis",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorship_capability_identity",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorship_capability_version",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "material_course_alignment"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "map_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "artifact_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "artifact_revision_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attribution_type",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "attribution_member_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition_version",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "lineage_version",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_version",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "artifact_binding_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "active_location",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "descriptor_observation_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "descriptor_correction_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fingerprint_algorithm",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "fingerprint_digest",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "byte_length",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "media_type",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_binding_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_binding_episode_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_binding_episode_ordinal",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_grant_episode_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_grant_episode_ordinal",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content_root_grant_version",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_relative_path",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_platform",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_verifier_version",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_canonical_path",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_canonical_path_key",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_volume_serial",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_id",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_creation_time",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_change_time",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_last_write_time",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_object_size",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_observed_time",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "map_id",
+      "entityType": "columns",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "map_id",
+      "entityType": "columns",
+      "table": "material_map_representation_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "representation_revision_id",
+      "entityType": "columns",
+      "table": "material_map_representation_target"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "map_id",
+      "entityType": "columns",
+      "table": "material_map_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "material_map_state"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "material_map_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "withdrawal_reason",
+      "entityType": "columns",
+      "table": "material_map_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "material_map_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_input",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_kind",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "supersedes_map_id",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorship_basis",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorship_capability_identity",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorship_capability_version",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "material_map"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "material_outline_node"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "map_id",
+      "entityType": "columns",
+      "table": "material_outline_node"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_node_id",
+      "entityType": "columns",
+      "table": "material_outline_node"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "material_outline_node"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preorder_position",
+      "entityType": "columns",
+      "table": "material_outline_node"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "depth",
+      "entityType": "columns",
+      "table": "material_outline_node"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "map_id",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "node_id",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selector_position",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "artifact_start_byte",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "artifact_end_byte",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pdf_start_page",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pdf_end_page",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pdf_start_item",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pdf_start_scalar",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pdf_end_item",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "pdf_end_scalar",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model_start_scalar",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model_end_scalar",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "witness_algorithm",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "witness_digest",
+      "entityType": "columns",
+      "table": "material_selector"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "witness_byte_length",
+      "entityType": "columns",
+      "table": "material_selector"
     },
     {
       "type": "text",
@@ -8551,6 +9701,426 @@
     },
     {
       "columns": [
+        "alignment_id"
+      ],
+      "tableTo": "material_course_alignment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_course_alignment_disposition_event_alignment_id_material_course_alignment_id_fk",
+      "entityType": "fks",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "columns": [
+        "alignment_id"
+      ],
+      "tableTo": "material_course_alignment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_course_alignment_state_alignment_id_material_course_alignment_id_fk",
+      "entityType": "fks",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "columns": [
+        "map_id",
+        "selector_id"
+      ],
+      "tableTo": "material_selector",
+      "columnsTo": [
+        "map_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_course_alignment_map_id_selector_id_material_selector_map_id_id_fk",
+      "entityType": "fks",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "tableTo": "course_view_revision_item",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_course_alignment_course_id_view_id_revision_id_item_id_course_view_revision_item_course_id_view_id_revision_id_item_id_fk",
+      "entityType": "fks",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        "course_id",
+        "observed_selection_revision_id"
+      ],
+      "tableTo": "course_view_revision",
+      "columnsTo": [
+        "course_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_course_alignment_course_id_observed_selection_revision_id_course_view_revision_course_id_id_fk",
+      "entityType": "fks",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        "supersedes_alignment_id"
+      ],
+      "tableTo": "material_course_alignment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_course_alignment_supersedes_alignment_id_material_course_alignment_id_fk",
+      "entityType": "fks",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "tableTo": "material_map",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_map_id_material_map_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "artifact_id"
+      ],
+      "tableTo": "artifact",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_artifact_id_artifact_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "artifact_revision_id"
+      ],
+      "tableTo": "artifact_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_artifact_revision_id_artifact_revision_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "artifact_binding_id"
+      ],
+      "tableTo": "artifact_source_binding",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_artifact_binding_id_artifact_source_binding_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "descriptor_observation_id"
+      ],
+      "tableTo": "artifact_source_observation",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_descriptor_observation_id_artifact_source_observation_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "descriptor_correction_id"
+      ],
+      "tableTo": "artifact_observation_correction",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_descriptor_correction_id_artifact_observation_correction_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "attribution_member_id"
+      ],
+      "tableTo": "artifact_lineage_correction_member",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_attribution_member_id_artifact_lineage_correction_member_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "content_root_id"
+      ],
+      "tableTo": "content_root",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_content_root_id_content_root_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "content_root_id",
+        "content_root_binding_id"
+      ],
+      "tableTo": "content_root_binding",
+      "columnsTo": [
+        "content_root_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_content_root_id_content_root_binding_id_content_root_binding_content_root_id_id_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "content_root_id",
+        "content_root_binding_episode_id",
+        "content_root_binding_id",
+        "content_root_binding_episode_ordinal"
+      ],
+      "tableTo": "content_root_binding_episode",
+      "columnsTo": [
+        "content_root_id",
+        "id",
+        "binding_id",
+        "ordinal"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_content_root_id_content_root_binding_episode_id_content_root_binding_id_content_root_binding_episode_ordinal_content_root_binding_episode_content_root_id_id_binding_id_ordinal_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "content_root_id",
+        "content_root_grant_episode_id",
+        "content_root_binding_id",
+        "content_root_binding_episode_id",
+        "content_root_grant_episode_ordinal"
+      ],
+      "tableTo": "content_root_grant_episode",
+      "columnsTo": [
+        "content_root_id",
+        "id",
+        "binding_id",
+        "binding_episode_id",
+        "ordinal"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_artifact_target_content_root_id_content_root_grant_episode_id_content_root_binding_id_content_root_binding_episode_id_content_root_grant_episode_ordinal_content_root_grant_episode_content_root_id_id_binding_id_binding_episode_id_ordinal_fk",
+      "entityType": "fks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "tableTo": "material_map",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_disposition_event_map_id_material_map_id_fk",
+      "entityType": "fks",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "tableTo": "material_map",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_representation_target_map_id_material_map_id_fk",
+      "entityType": "fks",
+      "table": "material_map_representation_target"
+    },
+    {
+      "columns": [
+        "representation_revision_id"
+      ],
+      "tableTo": "representation_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_representation_target_representation_revision_id_representation_revision_id_fk",
+      "entityType": "fks",
+      "table": "material_map_representation_target"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "tableTo": "material_map",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_state_map_id_material_map_id_fk",
+      "entityType": "fks",
+      "table": "material_map_state"
+    },
+    {
+      "columns": [
+        "supersedes_map_id"
+      ],
+      "tableTo": "material_map",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_map_supersedes_map_id_material_map_id_fk",
+      "entityType": "fks",
+      "table": "material_map"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "tableTo": "material_map",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_outline_node_map_id_material_map_id_fk",
+      "entityType": "fks",
+      "table": "material_outline_node"
+    },
+    {
+      "columns": [
+        "map_id",
+        "parent_node_id"
+      ],
+      "tableTo": "material_outline_node",
+      "columnsTo": [
+        "map_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_outline_node_map_id_parent_node_id_material_outline_node_map_id_id_fk",
+      "entityType": "fks",
+      "table": "material_outline_node"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "tableTo": "material_map",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_selector_map_id_material_map_id_fk",
+      "entityType": "fks",
+      "table": "material_selector"
+    },
+    {
+      "columns": [
+        "map_id",
+        "node_id"
+      ],
+      "tableTo": "material_outline_node",
+      "columnsTo": [
+        "map_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_material_selector_map_id_node_id_material_outline_node_map_id_id_fk",
+      "entityType": "fks",
+      "table": "material_selector"
+    },
+    {
+      "columns": [
         "project_id"
       ],
       "tableTo": "project",
@@ -9925,6 +11495,96 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "material_course_alignment_disposition_event_pk",
+      "table": "material_course_alignment_disposition_event",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "alignment_id"
+      ],
+      "nameExplicit": false,
+      "name": "material_course_alignment_state_pk",
+      "table": "material_course_alignment_state",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "material_course_alignment_pk",
+      "table": "material_course_alignment",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "nameExplicit": false,
+      "name": "material_map_artifact_target_pk",
+      "table": "material_map_artifact_target",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "material_map_disposition_event_pk",
+      "table": "material_map_disposition_event",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "nameExplicit": false,
+      "name": "material_map_representation_target_pk",
+      "table": "material_map_representation_target",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "map_id"
+      ],
+      "nameExplicit": false,
+      "name": "material_map_state_pk",
+      "table": "material_map_state",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "material_map_pk",
+      "table": "material_map",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "material_outline_node_pk",
+      "table": "material_outline_node",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "material_selector_pk",
+      "table": "material_selector",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "permission_pk",
       "table": "permission",
       "entityType": "pks"
@@ -11121,6 +12781,294 @@
     {
       "columns": [
         {
+          "value": "alignment_id",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_course_alignment_disposition_history_idx",
+      "entityType": "indexes",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "columns": [
+        {
+          "value": "disposition",
+          "isExpression": false
+        },
+        {
+          "value": "time_updated",
+          "isExpression": false
+        },
+        {
+          "value": "alignment_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_course_alignment_state_discovery_idx",
+      "entityType": "indexes",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "columns": [
+        {
+          "value": "map_id",
+          "isExpression": false
+        },
+        {
+          "value": "selector_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_course_alignment_selector_idx",
+      "entityType": "indexes",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "view_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "item_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_course_alignment_membership_idx",
+      "entityType": "indexes",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        {
+          "value": "supersedes_alignment_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_course_alignment_predecessor_idx",
+      "entityType": "indexes",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        {
+          "value": "artifact_id",
+          "isExpression": false
+        },
+        {
+          "value": "artifact_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "attribution_type",
+          "isExpression": false
+        },
+        {
+          "value": "attribution_member_id",
+          "isExpression": false
+        },
+        {
+          "value": "map_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_map_artifact_target_idx",
+      "entityType": "indexes",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "columns": [
+        {
+          "value": "map_id",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_map_disposition_history_idx",
+      "entityType": "indexes",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "columns": [
+        {
+          "value": "representation_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "map_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_map_representation_target_idx",
+      "entityType": "indexes",
+      "table": "material_map_representation_target"
+    },
+    {
+      "columns": [
+        {
+          "value": "disposition",
+          "isExpression": false
+        },
+        {
+          "value": "time_updated",
+          "isExpression": false
+        },
+        {
+          "value": "map_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_map_state_discovery_idx",
+      "entityType": "indexes",
+      "table": "material_map_state"
+    },
+    {
+      "columns": [
+        {
+          "value": "supersedes_map_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_map_predecessor_idx",
+      "entityType": "indexes",
+      "table": "material_map"
+    },
+    {
+      "columns": [
+        {
+          "value": "map_id",
+          "isExpression": false
+        },
+        {
+          "value": "preorder_position",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_outline_node_page_idx",
+      "entityType": "indexes",
+      "table": "material_outline_node"
+    },
+    {
+      "columns": [
+        {
+          "value": "map_id",
+          "isExpression": false
+        },
+        {
+          "value": "node_id",
+          "isExpression": false
+        },
+        {
+          "value": "selector_position",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "material_selector_page_idx",
+      "entityType": "indexes",
+      "table": "material_selector"
+    },
+    {
+      "columns": [
+        {
           "value": "project_id",
           "isExpression": false
         },
@@ -12201,6 +14149,88 @@
     },
     {
       "columns": [
+        "alignment_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "material_course_alignment_disposition_version_unique",
+      "entityType": "uniques",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "columns": [
+        "id",
+        "map_id",
+        "selector_id"
+      ],
+      "nameExplicit": true,
+      "name": "material_course_alignment_owner_unique",
+      "entityType": "uniques",
+      "table": "material_course_alignment"
+    },
+    {
+      "columns": [
+        "map_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "material_map_disposition_version_unique",
+      "entityType": "uniques",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "columns": [
+        "id",
+        "target_kind"
+      ],
+      "nameExplicit": true,
+      "name": "material_map_id_target_unique",
+      "entityType": "uniques",
+      "table": "material_map"
+    },
+    {
+      "columns": [
+        "map_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "material_outline_node_owner_unique",
+      "entityType": "uniques",
+      "table": "material_outline_node"
+    },
+    {
+      "columns": [
+        "map_id",
+        "preorder_position"
+      ],
+      "nameExplicit": true,
+      "name": "material_outline_node_position_unique",
+      "entityType": "uniques",
+      "table": "material_outline_node"
+    },
+    {
+      "columns": [
+        "map_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "material_selector_owner_unique",
+      "entityType": "uniques",
+      "table": "material_selector"
+    },
+    {
+      "columns": [
+        "map_id",
+        "node_id",
+        "selector_position"
+      ],
+      "nameExplicit": true,
+      "name": "material_selector_node_position_unique",
+      "entityType": "uniques",
+      "table": "material_selector"
+    },
+    {
+      "columns": [
         "representation_revision_id",
         "version"
       ],
@@ -13046,6 +15076,216 @@
       "table": "learning_command_receipt"
     },
     {
+      "value": "\"version\" >= 0",
+      "name": "material_course_alignment_disposition_version",
+      "entityType": "checks",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "value": "(\"disposition\" = 'active' AND \"reason\" IS NULL) OR (\"disposition\" = 'withdrawn' AND \"reason\" IS NOT NULL AND length(trim(\"reason\")) BETWEEN 1 AND 2000)",
+      "name": "material_course_alignment_disposition_shape",
+      "entityType": "checks",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "value": "\"time_committed\" >= 0",
+      "name": "material_course_alignment_disposition_time",
+      "entityType": "checks",
+      "table": "material_course_alignment_disposition_event"
+    },
+    {
+      "value": "\"version\" >= 0",
+      "name": "material_course_alignment_state_version",
+      "entityType": "checks",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "value": "(\"disposition\" = 'active' AND \"withdrawal_reason\" IS NULL) OR (\"disposition\" = 'withdrawn' AND \"withdrawal_reason\" IS NOT NULL AND length(trim(\"withdrawal_reason\")) BETWEEN 1 AND 2000)",
+      "name": "material_course_alignment_state_shape",
+      "entityType": "checks",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "value": "\"time_updated\" >= 0",
+      "name": "material_course_alignment_state_time",
+      "entityType": "checks",
+      "table": "material_course_alignment_state"
+    },
+    {
+      "value": "json_valid(\"canonical_input\")",
+      "name": "material_course_alignment_canonical_input",
+      "entityType": "checks",
+      "table": "material_course_alignment"
+    },
+    {
+      "value": "(\"selection_basis\" = 'explicit_exact' AND \"observed_selection_revision_id\" IS NULL AND \"observed_selection_version\" IS NULL) OR (\"selection_basis\" = 'observed_working' AND \"observed_selection_revision_id\" = \"revision_id\" AND \"observed_selection_version\" IS NOT NULL AND \"observed_selection_version\" >= 0)",
+      "name": "material_course_alignment_selection_shape",
+      "entityType": "checks",
+      "table": "material_course_alignment"
+    },
+    {
+      "value": "length(trim(\"reason\")) BETWEEN 1 AND 2000",
+      "name": "material_course_alignment_reason",
+      "entityType": "checks",
+      "table": "material_course_alignment"
+    },
+    {
+      "value": "\"accepted_course_version\" >= 0 AND \"accepted_view_version\" >= 0 AND \"accepted_revision_version\" >= 0",
+      "name": "material_course_alignment_endpoint_versions",
+      "entityType": "checks",
+      "table": "material_course_alignment"
+    },
+    {
+      "value": "length(trim(\"authorship_basis\")) BETWEEN 1 AND 2000 AND length(trim(\"authorship_capability_identity\")) BETWEEN 1 AND 500 AND \"authorship_capability_version\" >= 0",
+      "name": "material_course_alignment_authorship",
+      "entityType": "checks",
+      "table": "material_course_alignment"
+    },
+    {
+      "value": "\"supersedes_alignment_id\" IS NULL OR \"supersedes_alignment_id\" <> \"id\"",
+      "name": "material_course_alignment_no_self_predecessor",
+      "entityType": "checks",
+      "table": "material_course_alignment"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "material_course_alignment_time",
+      "entityType": "checks",
+      "table": "material_course_alignment"
+    },
+    {
+      "value": "(\"attribution_type\" = 'recorded' AND \"attribution_member_id\" IS NULL) OR (\"attribution_type\" = 'lineage_correction' AND \"attribution_member_id\" IS NOT NULL)",
+      "name": "material_map_artifact_target_attribution",
+      "entityType": "checks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "value": "\"disposition_version\" >= 0 AND \"lineage_version\" >= 0 AND \"source_version\" >= 0 AND \"content_root_binding_episode_ordinal\" >= 1 AND \"content_root_grant_episode_ordinal\" >= 1 AND \"content_root_grant_version\" >= 1",
+      "name": "material_map_artifact_target_versions",
+      "entityType": "checks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "value": "\"fingerprint_algorithm\" = 'sha256' AND length(\"fingerprint_digest\") = 64 AND \"fingerprint_digest\" NOT GLOB '*[^0-9a-f]*' AND \"byte_length\" > 0 AND length(\"media_type\") > 0",
+      "name": "material_map_artifact_target_content",
+      "entityType": "checks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "value": "length(\"active_location\") > 0 AND length(\"normalized_relative_path\") > 0 AND \"source_object_platform\" = 'windows_ntfs' AND \"source_object_verifier_version\" >= 1 AND length(\"source_object_canonical_path\") > 0 AND length(\"source_object_canonical_path_key\") > 0 AND \"source_object_canonical_path\" = \"active_location\" AND length(\"source_object_volume_serial\") > 0 AND length(\"source_object_id\") = 32 AND length(\"source_object_creation_time\") > 0 AND length(\"source_object_change_time\") > 0 AND length(\"source_object_last_write_time\") > 0 AND \"source_object_size\" = \"byte_length\" AND \"source_observed_time\" >= 0",
+      "name": "material_map_artifact_target_source",
+      "entityType": "checks",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "value": "\"version\" >= 0",
+      "name": "material_map_disposition_version",
+      "entityType": "checks",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "value": "(\"disposition\" = 'active' AND \"reason\" IS NULL) OR (\"disposition\" = 'withdrawn' AND \"reason\" IS NOT NULL AND length(trim(\"reason\")) BETWEEN 1 AND 2000)",
+      "name": "material_map_disposition_shape",
+      "entityType": "checks",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "value": "\"time_committed\" >= 0",
+      "name": "material_map_disposition_time",
+      "entityType": "checks",
+      "table": "material_map_disposition_event"
+    },
+    {
+      "value": "\"version\" >= 0",
+      "name": "material_map_state_version",
+      "entityType": "checks",
+      "table": "material_map_state"
+    },
+    {
+      "value": "(\"disposition\" = 'active' AND \"withdrawal_reason\" IS NULL) OR (\"disposition\" = 'withdrawn' AND \"withdrawal_reason\" IS NOT NULL AND length(trim(\"withdrawal_reason\")) BETWEEN 1 AND 2000)",
+      "name": "material_map_state_shape",
+      "entityType": "checks",
+      "table": "material_map_state"
+    },
+    {
+      "value": "\"time_updated\" >= 0",
+      "name": "material_map_state_time",
+      "entityType": "checks",
+      "table": "material_map_state"
+    },
+    {
+      "value": "json_valid(\"canonical_input\")",
+      "name": "material_map_canonical_input",
+      "entityType": "checks",
+      "table": "material_map"
+    },
+    {
+      "value": "\"target_kind\" IN ('artifact', 'representation')",
+      "name": "material_map_target_kind",
+      "entityType": "checks",
+      "table": "material_map"
+    },
+    {
+      "value": "\"supersedes_map_id\" IS NULL OR \"supersedes_map_id\" <> \"id\"",
+      "name": "material_map_no_self_predecessor",
+      "entityType": "checks",
+      "table": "material_map"
+    },
+    {
+      "value": "length(trim(\"authorship_basis\")) BETWEEN 1 AND 2000 AND length(trim(\"authorship_capability_identity\")) BETWEEN 1 AND 500 AND \"authorship_capability_version\" >= 0",
+      "name": "material_map_authorship",
+      "entityType": "checks",
+      "table": "material_map"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "material_map_time_nonnegative",
+      "entityType": "checks",
+      "table": "material_map"
+    },
+    {
+      "value": "length(trim(\"title\")) BETWEEN 1 AND 500",
+      "name": "material_outline_node_title",
+      "entityType": "checks",
+      "table": "material_outline_node"
+    },
+    {
+      "value": "\"preorder_position\" >= 0",
+      "name": "material_outline_node_position",
+      "entityType": "checks",
+      "table": "material_outline_node"
+    },
+    {
+      "value": "\"depth\" BETWEEN 0 AND 16",
+      "name": "material_outline_node_depth",
+      "entityType": "checks",
+      "table": "material_outline_node"
+    },
+    {
+      "value": "(\"parent_node_id\" IS NULL AND \"depth\" = 0) OR (\"parent_node_id\" IS NOT NULL AND \"depth\" > 0)",
+      "name": "material_outline_node_parent_shape",
+      "entityType": "checks",
+      "table": "material_outline_node"
+    },
+    {
+      "value": "\"selector_position\" >= 0",
+      "name": "material_selector_position",
+      "entityType": "checks",
+      "table": "material_selector"
+    },
+    {
+      "value": "(\"kind\" = 'whole_target.v1' AND \"artifact_start_byte\" IS NULL AND \"artifact_end_byte\" IS NULL AND \"pdf_start_page\" IS NULL AND \"pdf_end_page\" IS NULL AND \"pdf_start_item\" IS NULL AND \"pdf_start_scalar\" IS NULL AND \"pdf_end_item\" IS NULL AND \"pdf_end_scalar\" IS NULL AND \"model_start_scalar\" IS NULL AND \"model_end_scalar\" IS NULL) OR (\"kind\" = 'artifact_byte_range.v1' AND \"artifact_start_byte\" IS NOT NULL AND \"artifact_start_byte\" >= 0 AND \"artifact_end_byte\" IS NOT NULL AND \"artifact_end_byte\" > \"artifact_start_byte\" AND \"pdf_start_page\" IS NULL AND \"pdf_end_page\" IS NULL AND \"pdf_start_item\" IS NULL AND \"pdf_start_scalar\" IS NULL AND \"pdf_end_item\" IS NULL AND \"pdf_end_scalar\" IS NULL AND \"model_start_scalar\" IS NULL AND \"model_end_scalar\" IS NULL) OR (\"kind\" = 'pdf_page_range.v1' AND \"artifact_start_byte\" IS NULL AND \"artifact_end_byte\" IS NULL AND \"pdf_start_page\" IS NOT NULL AND \"pdf_start_page\" >= 1 AND \"pdf_end_page\" IS NOT NULL AND \"pdf_end_page\" >= \"pdf_start_page\" AND \"pdf_start_item\" IS NULL AND \"pdf_start_scalar\" IS NULL AND \"pdf_end_item\" IS NULL AND \"pdf_end_scalar\" IS NULL AND \"model_start_scalar\" IS NULL AND \"model_end_scalar\" IS NULL) OR (\"kind\" = 'pdf_text_range.v1' AND \"artifact_start_byte\" IS NULL AND \"artifact_end_byte\" IS NULL AND \"pdf_start_page\" IS NOT NULL AND \"pdf_start_page\" >= 1 AND \"pdf_end_page\" IS NOT NULL AND \"pdf_end_page\" >= \"pdf_start_page\" AND \"pdf_start_item\" IS NOT NULL AND \"pdf_start_item\" >= 0 AND \"pdf_start_scalar\" IS NOT NULL AND \"pdf_start_scalar\" >= 0 AND \"pdf_end_item\" IS NOT NULL AND \"pdf_end_item\" >= 0 AND \"pdf_end_scalar\" IS NOT NULL AND \"pdf_end_scalar\" >= 0 AND \"model_start_scalar\" IS NULL AND \"model_end_scalar\" IS NULL) OR (\"kind\" = 'model_text_range.v1' AND \"artifact_start_byte\" IS NULL AND \"artifact_end_byte\" IS NULL AND \"pdf_start_page\" IS NULL AND \"pdf_end_page\" IS NULL AND \"pdf_start_item\" IS NULL AND \"pdf_start_scalar\" IS NULL AND \"pdf_end_item\" IS NULL AND \"pdf_end_scalar\" IS NULL AND \"model_start_scalar\" IS NOT NULL AND \"model_start_scalar\" >= 0 AND \"model_end_scalar\" IS NOT NULL AND \"model_end_scalar\" > \"model_start_scalar\")",
+      "name": "material_selector_coordinate_shape",
+      "entityType": "checks",
+      "table": "material_selector"
+    },
+    {
+      "value": "\"witness_algorithm\" = 'sha256' AND length(\"witness_digest\") = 64 AND \"witness_digest\" NOT GLOB '*[^0-9a-f]*' AND \"witness_byte_length\" > 0",
+      "name": "material_selector_witness",
+      "entityType": "checks",
+      "table": "material_selector"
+    },
+    {
       "value": "\"version\" >= 1",
       "name": "representation_availability_current_version_positive",
       "entityType": "checks",
@@ -13148,7 +15388,7 @@
       "table": "representation_revision"
     },
     {
-      "value": "length(\"source_media_type\") > 0 AND length(\"source_digest\") = 64 AND \"source_digest\" NOT GLOB '*[^0-9a-f]*' AND \"source_byte_length\" >= 0 AND length(\"normalized_relative_path\") > 0 AND \"source_object_platform\" = 'windows_ntfs' AND \"source_object_verifier_version\" >= 1 AND length(\"source_object_canonical_path\") > 0 AND length(\"source_object_canonical_path_key\") > 0 AND lower(\"source_object_canonical_path\") = \"source_object_canonical_path_key\" AND length(\"source_object_volume_serial\") > 0 AND length(\"source_object_id\") = 32 AND length(\"source_object_creation_time\") > 0 AND length(\"source_object_change_time\") > 0 AND length(\"source_object_last_write_time\") > 0 AND \"source_object_size\" >= 0 AND \"source_object_size\" = \"source_byte_length\" AND \"source_object_kind\" = 'file' AND \"source_observed_time\" >= 0",
+      "value": "length(\"source_media_type\") > 0 AND length(\"source_digest\") = 64 AND \"source_digest\" NOT GLOB '*[^0-9a-f]*' AND \"source_byte_length\" >= 0 AND length(\"normalized_relative_path\") > 0 AND \"source_object_platform\" = 'windows_ntfs' AND \"source_object_verifier_version\" >= 1 AND length(\"source_object_canonical_path\") > 0 AND length(\"source_object_canonical_path_key\") > 0 AND length(\"source_object_volume_serial\") > 0 AND length(\"source_object_id\") = 32 AND length(\"source_object_creation_time\") > 0 AND length(\"source_object_change_time\") > 0 AND length(\"source_object_last_write_time\") > 0 AND \"source_object_size\" >= 0 AND \"source_object_size\" = \"source_byte_length\" AND \"source_object_kind\" = 'file' AND \"source_observed_time\" >= 0",
       "name": "representation_revision_source_shape",
       "entityType": "checks",
       "table": "representation_revision"

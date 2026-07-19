@@ -36,6 +36,7 @@ reopening one bounded completion claim.
 | 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                              | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
 | 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                              | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
 | 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`                                              | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
+| 13. Material Map and Course alignment    | Immutable revision-bound material outlines and exact selectors plus optional neutral alignment to exact Course membership                         | frozen at base `461a1acc28b41550539496f58a5cedcb2339a583`; commit pending               | `docs/research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md`            |
 
 Read a historical record with:
 
@@ -726,6 +727,44 @@ implementation/evidence. It closed `G12-CT-001`–`G12-CT-006` and
 - The maintainer separately authorized integration after review acceptance.
   Commit `80f5fa30a` fixes the accepted implementation provenance;
   `docs/README.md` therefore closes Gate 12 without starting Gate 13.
+
+## 2026-07-19 Gate 13 review acceptance provenance
+
+Current disposition remains owned only by `docs/README.md`. Retained top-level
+reviewer task `019f7996-36e0-72e1-8429-9e7f0d8b57f0`, run
+`gate13-whole-20260719-01`, accepted both contract/theory and
+implementation/evidence. It closed `G13-CT-001`–`G13-CT-006` and
+`G13-IE-001`–`G13-IE-003`; no maintainer-owned product decision was reopened
+and no new acceptance-changing implementation defect remained.
+
+- Contract review repaired exact Artifact source binding, Map-withdrawal
+  current-use linearization, stable replay identity, Course-owned membership
+  revalidation, media-correction lifecycle, and external selector provenance.
+- Implementation review repaired the Representation capability boundary,
+  Unicode Windows canonical-path-key persistence across the Gate 11 and Gate 13
+  tables, and the AppLayer executable-carrier evidence claim.
+- The accepted executor evidence passed 100 Core tests with 752 expectations
+  across the affected Gate 7/9/11 owners and all Gate 13 suites, both package
+  typechecks, migration `--check`, and document integrity checks. The reviewer
+  independently reran the three repair-focused Core suites at 20 tests and 161
+  expectations plus the AppLayer construction suite at 4 tests and 5
+  expectations.
+- No packaged release build or provider call was run or claimed. The focused
+  AppLayer construction oracle covers the shared executable-composition change;
+  packaging and provider surfaces remain outside this Gate's evidence claim.
+- The independently accepted implementation/evidence snapshot remained at HEAD
+  `461a1acc28b41550539496f58a5cedcb2339a583` on branch
+  `codex/opencode-v1.17.18-baseline`, with tracked binary diff hash
+  `79551428adcb103366d6cbf83401e2c9bf674d17`. At review close, the Gate record
+  and `docs/README.md` hashed to
+  `8360CC185E3E871197B2E43B1EF02C49AB2418D4D37EF096A94624DED8B4DF64` and
+  `61DB6157E8625A3F34E9A8A69FE5B825E1B1993D29C8438EAFC7A74CF5270944`.
+  The reviewer observed identical start/end bindings and made no repository,
+  Git, credential, or external durable-system mutation.
+- No integration commit has been made. The accepted executable candidate is
+  unchanged by the producer's post-verdict status and ledger transcription;
+  Gate 13 remains open until the maintainer-authorized integration commit fixes
+  that provenance.
 
 ## Historical evidence locators
 

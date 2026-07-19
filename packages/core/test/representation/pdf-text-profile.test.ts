@@ -138,6 +138,42 @@ describe("PDF text profile v1", () => {
     expect(tail.nextPage).toBeUndefined()
     expect(tail.truncated).toBe(false)
   })
+
+  test("decodes a canonical contiguous record window without requiring that window to contain prose", () => {
+    const encoded = unwrap(PDFTextProfile.encode(pages))
+    const empty = unwrap(
+      PDFTextProfile.readPageRecords(encoded, {
+        startPage: 2,
+        maxRecords: 1,
+        maxBytes: Number.MAX_SAFE_INTEGER,
+      }),
+    )
+    expect(unwrap(PDFTextProfile.decodePageRecords(empty.bytes, 2)).pages).toEqual([encoded.profile.pages[1]])
+
+    const tail = unwrap(
+      PDFTextProfile.readPageRecords(encoded, {
+        startPage: 2,
+        maxRecords: 2,
+        maxBytes: Number.MAX_SAFE_INTEGER,
+      }),
+    )
+    expect(unwrap(PDFTextProfile.decodePageRecords(tail.bytes, 2)).pages.map((page) => page.page)).toEqual([2, 3])
+    expect(PDFTextProfile.decodePageRecords(tail.bytes, 1)).toEqual({
+      ok: false,
+      error: "invalid_record_sequence",
+    })
+    const reordered = new TextEncoder().encode(
+      new TextDecoder().decode(tail.bytes).trimEnd().split("\n").reverse().join("\n") + "\n",
+    )
+    expect(PDFTextProfile.decodePageRecords(reordered, 2)).toEqual({
+      ok: false,
+      error: "invalid_record_sequence",
+    })
+    expect(PDFTextProfile.decodePageRecords(tail.bytes.subarray(0, tail.bytes.byteLength - 1), 2)).toEqual({
+      ok: false,
+      error: "invalid_format",
+    })
+  })
 })
 
 function unwrap<T>(result: PDFTextProfile.Result<T>) {

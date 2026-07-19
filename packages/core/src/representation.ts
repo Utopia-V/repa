@@ -249,6 +249,7 @@ export type CurrentUseRead = {
   readonly use: "current"
   readonly representation: RepresentationInfo
   readonly content: VerifiedContent
+  readonly proof: CurrentUseProof
   readonly admission:
     | {
         readonly basis: "current_revision"
@@ -260,6 +261,53 @@ export type CurrentUseRead = {
         readonly grantID: ContinuedUseGrantID
         readonly grantVersion: number
       }
+}
+
+export type CurrentUseStatus =
+  | { readonly status: "eligible" }
+  | {
+      readonly status: "stale"
+      readonly cause:
+        | "representation_not_found"
+        | "artifact_ineligible"
+        | "wrong_artifact"
+        | "source_drift"
+        | "grant_required"
+        | "grant_stale"
+        | "grant_revoked"
+        | "availability_changed"
+        | "externally_missing"
+        | "integrity_mismatch"
+        | "explicitly_deleted"
+        | "material_unavailable"
+    }
+
+export type CurrentUseDescriptor = {
+  readonly id: RevisionID
+  readonly effectiveArtifactID: Artifact.ArtifactID
+  readonly profile: string
+}
+
+type CurrentUseExpectation = CurrentAdmission & { readonly availabilityVersion: number }
+
+const currentUseProofToken = Symbol("Representation.CurrentUseProof")
+
+export class CurrentUseProof {
+  readonly representationRevisionID: RevisionID
+  readonly effectiveArtifactID: Artifact.ArtifactID
+  #expectation: CurrentUseExpectation
+
+  constructor(token: symbol, expectation: CurrentUseExpectation) {
+    if (token !== currentUseProofToken) throw new Error("Representation current-use proofs are owner-issued")
+    this.representationRevisionID = expectation.row.id
+    this.effectiveArtifactID = expectation.row.effective_artifact_id
+    this.#expectation = expectation
+  }
+
+  expectation(token: symbol) {
+    if (token !== currentUseProofToken) return
+    return this.#expectation
+  }
 }
 
 export interface Interface {
@@ -316,6 +364,7 @@ export interface HistoricalReaderInterface {
 }
 
 export interface CurrentUseReaderInterface {
+  readonly describeForCurrentUse: (representationRevisionID: RevisionID) => Effect.Effect<CurrentUseDescriptor, Error>
   readonly readForCurrentUse: (input: {
     readonly representationRevisionID: RevisionID
     readonly effectiveArtifactID: Artifact.ArtifactID
@@ -853,6 +902,17 @@ const currentUseLayer = Layer.effect(
   Effect.gen(function* () {
     const database = yield* Database.Service
     const db = database.db
+    const describeForCurrentUse: CurrentUseReaderInterface["describeForCurrentUse"] = Effect.fn(
+      "Representation.describeForCurrentUse",
+    )(function* (representationRevisionID) {
+      return yield* snapshot(db, (tx) =>
+        Effect.map(requireRepresentationRow(tx, representationRevisionID), (row) => ({
+          id: row.id,
+          effectiveArtifactID: row.effective_artifact_id,
+          profile: row.profile,
+        })),
+      )
+    })
     const readForCurrentUse: CurrentUseReaderInterface["readForCurrentUse"] = Effect.fn(
       "Representation.readForCurrentUse",
     )(function* (input) {
@@ -874,27 +934,37 @@ const currentUseLayer = Layer.effect(
       )
       const verified = yield* applyStorageObservation(db, admission.row, ready, read)
       const content = yield* materializeContent(admission.row, verified.bytes, input.selection, input.budgets)
-      const revalidated = yield* snapshot(db, (tx) =>
-        revalidateCurrentUse(tx, {
-          ...admission,
-          availabilityVersion: verified.availability.version,
+      const finalized = yield* snapshot(db, (tx) =>
+        Effect.gen(function* () {
+          const revalidated = yield* revalidateCurrentUse(tx, {
+            ...admission,
+            availabilityVersion: verified.availability.version,
+          })
+          return {
+            revalidated,
+            representation: yield* requireRepresentationInfo(tx, admission.row.id),
+          }
         }),
       )
       return {
         use: "current",
-        representation: yield* snapshot(db, (tx) => requireRepresentationInfo(tx, admission.row.id)),
+        representation: finalized.representation,
         content,
+        proof: new CurrentUseProof(currentUseProofToken, {
+          ...admission,
+          availabilityVersion: verified.availability.version,
+        }),
         admission: admission.grant
           ? {
               basis: "continued_use_grant",
-              artifact: revalidated.artifact,
+              artifact: finalized.revalidated.artifact,
               grantID: admission.grant.id,
               grantVersion: admission.grant.version,
             }
-          : { basis: "current_revision", artifact: revalidated.artifact },
+          : { basis: "current_revision", artifact: finalized.revalidated.artifact },
       }
     })
-    return { readForCurrentUse }
+    return { describeForCurrentUse, readForCurrentUse }
   }),
 )
 
@@ -909,6 +979,59 @@ export const currentUseReaderNode = makeGlobalNode({
   layer: currentUseLayer,
   deps: [Database.node],
 })
+
+export function requireCurrentUseProof(tx: Transaction, proof: CurrentUseProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof CurrentUseProof ? proof.expectation(currentUseProofToken) : undefined
+    if (!expected) {
+      return yield* new InvalidTransitionError({ detail: "Representation current-use proof is not owner-issued" })
+    }
+    yield* revalidateCurrentUse(tx, expected)
+    return proof
+  })
+}
+
+export function inspectCurrentUseStatus(tx: Transaction, representationRevisionID: RevisionID) {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select()
+      .from(RepresentationRevisionTable)
+      .where(eq(RepresentationRevisionTable.id, representationRevisionID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!row) return { status: "stale", cause: "representation_not_found" } as const
+    return yield* admitCurrentUse(tx, {
+      revisionID: row.id,
+      effectiveArtifactID: row.effective_artifact_id,
+    }).pipe(
+      Effect.map((admission) => {
+        if (admission.availability.disposition === "available") return { status: "eligible" } as const
+        return {
+          status: "stale",
+          cause: admission.availability.disposition as Exclude<Availability, "available">,
+        } as const
+      }),
+      Effect.catch((error) => Effect.succeed(currentUseStatusFailure(error))),
+    )
+  })
+}
+
+function currentUseStatusFailure(error: Error): CurrentUseStatus {
+  if (error instanceof CurrentUseDeniedError) return { status: "stale", cause: error.reason }
+  if (error instanceof UnavailableError) {
+    return { status: "stale", cause: error.disposition as Exclude<Availability, "available"> }
+  }
+  if (
+    error instanceof Artifact.NotFoundError ||
+    error instanceof Artifact.InactiveError ||
+    error instanceof Artifact.InvalidTransitionError ||
+    error instanceof Artifact.ConflictError
+  ) {
+    return { status: "stale", cause: "artifact_ineligible" }
+  }
+  if (error instanceof NotFoundError) return { status: "stale", cause: "representation_not_found" }
+  return { status: "stale", cause: "material_unavailable" }
+}
 
 function snapshot<A, E, R>(database: DatabaseShape, read: (tx: Transaction) => Effect.Effect<A, E, R>) {
   return database.transaction(read).pipe(Effect.catchTag("SqlError", Effect.die))
