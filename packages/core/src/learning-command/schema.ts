@@ -6,6 +6,18 @@ import { Identifier } from "../id/id"
 import { RepresentationSchema } from "../representation/schema"
 import { SessionSchema } from "../session/schema"
 import type { MessageID, PartID } from "../v1/session"
+import type { PermissionV1 } from "../v1/permission"
+import type {
+  AnchorEffect,
+  AnchorEffectID,
+  AnchorProjection,
+  DefaultConfirmationSnapshot,
+  DefaultCourseCommand,
+  DefaultEffect,
+  DefaultEffectID,
+  DefaultProjection,
+  RouteAnchorCommand,
+} from "../learner-navigation/schema"
 import type { OccurrenceID } from "./occurrence-schema"
 
 export const ReceiptID = Schema.String.check(Schema.isPattern(/^lcr_[0-9A-Za-z]{26}$/)).pipe(
@@ -55,6 +67,19 @@ export type RepresentationConvertInvocation = {
   /** Selected by trusted Repa code, never by the initiating model payload. */
   readonly producerKind: RepresentationSchema.ProducerKind
 }
+
+export type SetDefaultCoursePreferenceInvocation = {
+  readonly envelope: InvocationEnvelope
+  readonly command: DefaultCourseCommand
+  readonly permissionRequestID: PermissionV1.ID
+}
+
+export type SetCourseRouteAnchorInvocation = {
+  readonly envelope: InvocationEnvelope
+  readonly command: RouteAnchorCommand
+}
+
+export type NavigationInvocation = SetDefaultCoursePreferenceInvocation | SetCourseRouteAnchorInvocation
 
 export type SettlementMetadata = {
   readonly time: number
@@ -111,6 +136,62 @@ export type RepresentationAlreadyAppliedSettlement = {
   readonly settlementOrder: number
 }
 
+export type DefaultCourseAppliedSettlement = {
+  readonly outcome: "applied"
+  readonly navigationKind: "default_course_preference"
+  readonly receiptID: ReceiptID
+  readonly effectID: DefaultEffectID
+  readonly effect: DefaultEffect
+  readonly current: DefaultProjection
+  readonly confirmation: DefaultConfirmationSnapshot
+  readonly settlementTime: number
+  readonly settlementOrder: number
+}
+
+export type DefaultCourseAlreadyAppliedSettlement = {
+  readonly outcome: "already_applied"
+  readonly navigationKind: "default_course_preference"
+  readonly receiptID: ReceiptID
+  readonly effectID: DefaultEffectID
+  readonly effect: DefaultEffect
+  readonly current: DefaultProjection
+  readonly relation: "active" | "superseded"
+  readonly confirmation: DefaultConfirmationSnapshot
+  readonly settlementTime: number
+  readonly settlementOrder: number
+}
+
+export type RouteAnchorAppliedSettlement = {
+  readonly outcome: "applied"
+  readonly navigationKind: "course_route_anchor"
+  readonly receiptID: ReceiptID
+  readonly effectID: AnchorEffectID
+  readonly effect: AnchorEffect
+  readonly current: AnchorProjection
+  readonly settlementTime: number
+  readonly settlementOrder: number
+}
+
+export type RouteAnchorAlreadyAppliedSettlement = {
+  readonly outcome: "already_applied"
+  readonly navigationKind: "course_route_anchor"
+  readonly receiptID: ReceiptID
+  readonly effectID: AnchorEffectID
+  readonly effect: AnchorEffect
+  readonly current: AnchorProjection
+  readonly relation: "active" | "superseded"
+  readonly settlementTime: number
+  readonly settlementOrder: number
+}
+
+export type NavigationNoChangeSettlement = {
+  readonly outcome: "no_change"
+  readonly navigationKind: "default_course_preference" | "course_route_anchor"
+  readonly current: DefaultProjection | AnchorProjection
+  readonly settlementTime: number
+  readonly settlementOrder: number
+}
+
 export type ErrorCode =
   | "semantic_conflict"
   | "context_refresh_required"
@@ -127,6 +208,7 @@ export type ErrorCode =
   | "producer_timeout"
   | "invalid_producer_output"
   | "publication_failed"
+  | "outcome_unknown"
   | "stale"
   | "inactive"
   | "validation_error"
@@ -149,6 +231,11 @@ export type Settlement =
   | AlreadyAppliedSettlement
   | RepresentationAppliedSettlement
   | RepresentationAlreadyAppliedSettlement
+  | DefaultCourseAppliedSettlement
+  | DefaultCourseAlreadyAppliedSettlement
+  | RouteAnchorAppliedSettlement
+  | RouteAnchorAlreadyAppliedSettlement
+  | NavigationNoChangeSettlement
   | ErrorSettlement
 
 export type PermissionOutcome =

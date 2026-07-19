@@ -23,7 +23,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
-import { assertExternalToolID, learningCommandPreparation } from "@/tool/accept-course-view-revision"
+import { assertExternalToolID, learningCommandPreparation } from "@/tool/learning-command"
 import { assertExternalContentToolID } from "@/tool/content-root"
 import { normalizeCommand as normalizeLearningCommandInput } from "@/learning-command/input"
 

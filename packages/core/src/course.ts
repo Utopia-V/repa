@@ -158,6 +158,63 @@ export class MembershipProof {
   }
 }
 
+export type PreferenceTargetReceipt = Readonly<{
+  courseID: CourseID
+  courseTitle: string
+  courseVersion: number
+  selectionRevisionID: RevisionID | null
+  selectionVersion: number
+  viewID: ViewID | null
+  viewName: string | null
+  viewVersion: number | null
+  revisionVersion: number | null
+}>
+
+export type PreferenceTargetExpectation = Readonly<{
+  courseID: CourseID
+  courseVersion: number
+  selectionRevisionID: RevisionID | null
+  selectionVersion: number
+  viewID: ViewID | null
+  viewVersion: number | null
+  revisionVersion: number | null
+}>
+
+const preferenceTargetProofToken = Symbol("Course.PreferenceTargetProof")
+
+export class PreferenceTargetProof {
+  readonly receipt: PreferenceTargetReceipt
+  #expectation: PreferenceTargetExpectation
+
+  constructor(token: symbol, receipt: PreferenceTargetReceipt) {
+    if (token !== preferenceTargetProofToken) throw new Error("Course preference target proofs are owner-issued")
+    this.receipt = Object.freeze({ ...receipt })
+    this.#expectation = Object.freeze({
+      courseID: receipt.courseID,
+      courseVersion: receipt.courseVersion,
+      selectionRevisionID: receipt.selectionRevisionID,
+      selectionVersion: receipt.selectionVersion,
+      viewID: receipt.viewID,
+      viewVersion: receipt.viewVersion,
+      revisionVersion: receipt.revisionVersion,
+    })
+  }
+
+  expectation(token: symbol): PreferenceTargetExpectation | undefined {
+    if (token !== preferenceTargetProofToken) return undefined
+    return this.#expectation
+  }
+}
+
+export type PreferenceTargetStatus =
+  | { readonly status: "available"; readonly courseID: CourseID; readonly title: string }
+  | {
+      readonly status: "unavailable"
+      readonly courseID: CourseID
+      readonly cause: "course_not_found" | "course_withdrawn"
+      readonly title?: string
+    }
+
 export type SelectionAcceptanceInput = {
   readonly courseID: CourseID
   readonly revisionID: RevisionID
@@ -1631,6 +1688,44 @@ export function requireMembershipProof(tx: Transaction, proof: MembershipProof) 
   })
 }
 
+export function requirePreferenceTargetProof(tx: Transaction, proof: PreferenceTargetProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof PreferenceTargetProof ? proof.expectation(preferenceTargetProofToken) : undefined
+    if (!expected) {
+      return yield* new InvalidTransitionError({ detail: "Course preference target proof is not owner-issued" })
+    }
+    yield* preparePreferenceTargetProof(tx, expected)
+    return proof
+  })
+}
+
+export function inspectPreferenceTarget(tx: Transaction, courseID: CourseID) {
+  return Effect.gen(function* () {
+    const course = yield* tx
+      .select({ title: CourseTable.title, withdrawal_reason: CourseTable.withdrawal_reason })
+      .from(CourseTable)
+      .where(eq(CourseTable.id, courseID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!course) {
+      return {
+        status: "unavailable",
+        courseID,
+        cause: "course_not_found",
+      } satisfies PreferenceTargetStatus
+    }
+    if (course.withdrawal_reason) {
+      return {
+        status: "unavailable",
+        courseID,
+        cause: "course_withdrawn",
+        title: course.title,
+      } satisfies PreferenceTargetStatus
+    }
+    return { status: "available", courseID, title: course.title } satisfies PreferenceTargetStatus
+  })
+}
+
 export function inspectMembershipStatus(tx: Transaction, endpoint: MembershipEndpoint, selection: MembershipSelection) {
   return Effect.gen(function* () {
     const course = yield* tx
@@ -1803,7 +1898,7 @@ function requireSelection(
   })
 }
 
-function prepareMembershipProof(
+export function prepareMembershipProof(
   tx: Transaction,
   input: { readonly endpoint: MembershipEndpoint; readonly selection: MembershipSelection },
 ) {
@@ -1831,6 +1926,61 @@ function prepareMembershipProof(
       endpoint: input.endpoint,
       selection: input.selection,
       courseVersion: course.state_version,
+      viewVersion: view.state_version,
+      revisionVersion: revision.state_version,
+    })
+  })
+}
+
+export function preparePreferenceTargetProof(tx: Transaction, expected: PreferenceTargetExpectation) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(tx, expected.courseID, expected.courseVersion, true)
+    const selection = yield* requireSelection(
+      tx,
+      expected.courseID,
+      expected.selectionRevisionID ?? undefined,
+      expected.selectionVersion,
+    )
+    if (expected.selectionRevisionID === null) {
+      if (expected.viewID !== null || expected.viewVersion !== null || expected.revisionVersion !== null) {
+        return yield* new InvalidTransitionError({
+          detail: "A Course preference target without a working Revision cannot name View or Revision state",
+        })
+      }
+      return new PreferenceTargetProof(preferenceTargetProofToken, {
+        courseID: course.id,
+        courseTitle: course.title,
+        courseVersion: course.state_version,
+        selectionRevisionID: null,
+        selectionVersion: selection.version,
+        viewID: null,
+        viewName: null,
+        viewVersion: null,
+        revisionVersion: null,
+      })
+    }
+    if (expected.viewID === null || expected.viewVersion === null || expected.revisionVersion === null) {
+      return yield* new InvalidTransitionError({
+        detail: "A Course preference target with a working Revision must name its exact View and state versions",
+      })
+    }
+    const view = yield* requireView(tx, expected.courseID, expected.viewID, expected.viewVersion, true)
+    const revision = yield* requireRevision(
+      tx,
+      expected.courseID,
+      expected.viewID,
+      expected.selectionRevisionID,
+      expected.revisionVersion,
+      true,
+    )
+    return new PreferenceTargetProof(preferenceTargetProofToken, {
+      courseID: course.id,
+      courseTitle: course.title,
+      courseVersion: course.state_version,
+      selectionRevisionID: selection.revision_id,
+      selectionVersion: selection.version,
+      viewID: view.id,
+      viewName: view.name,
       viewVersion: view.state_version,
       revisionVersion: revision.state_version,
     })

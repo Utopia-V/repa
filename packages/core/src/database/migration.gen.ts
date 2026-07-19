@@ -9,5 +9,6 @@ export const migrations = (
     import("./migration/repa/20260717141402_readable_representation_lineage"),
     import("./migration/repa/20260718134404_gate12_durable_turn"),
     import("./migration/repa/20260719104356_material_map_alignment"),
+    import("./migration/repa/20260719155243_learner_navigation"),
   ])
 ).map((module) => module.default) satisfies DatabaseMigration.Migration[]

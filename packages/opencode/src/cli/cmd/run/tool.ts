@@ -1019,6 +1019,108 @@ function permLsp(p: ToolPermissionProps<typeof LspTool>): ToolPermissionInfo {
   }
 }
 
+function permDefaultCoursePreference(p: ToolPermissionProps): ToolPermissionInfo | undefined {
+  const confirmation = dict(p.metadata.confirmation)
+  const permissionRequestID = text(confirmation.permissionRequestID)
+  const headID = confirmation.headID === null ? null : text(confirmation.headID)
+  const version = num(confirmation.version)
+  const fromCourseID = confirmation.fromCourseID === null ? null : text(confirmation.fromCourseID)
+  const fromCourseTitle = confirmation.fromCourseTitle
+  if (
+    !permissionRequestID ||
+    (headID !== null && !headID) ||
+    version === undefined ||
+    !Number.isInteger(version) ||
+    version < 0 ||
+    (version === 0 && headID !== null) ||
+    (version > 0 && headID === null) ||
+    (fromCourseID !== null && !fromCourseID) ||
+    (fromCourseTitle !== null && typeof fromCourseTitle !== "string") ||
+    (fromCourseID === null) !== (fromCourseTitle === null)
+  ) {
+    return undefined
+  }
+
+  const lines = [
+    `Current preference: version ${version}; head ${headID ?? "none"}`,
+    fromCourseID === null
+      ? "From Course: none"
+      : `From Course: "${Locale.truncate(fromCourseTitle ?? "", 80)}" [${fromCourseID}]`,
+  ]
+  if (confirmation.target === null) {
+    return {
+      icon: "◇",
+      title: "Confirm clearing the default Course preference",
+      lines: [...lines, "To Course: none (clear the preference)"],
+    }
+  }
+
+  const target = dict(confirmation.target)
+  const courseID = text(target.courseID)
+  const courseTitle = target.courseTitle
+  const courseVersion = num(target.courseVersion)
+  const selectionVersion = num(target.selectionVersion)
+  const selectionRevisionID = target.selectionRevisionID === null ? null : text(target.selectionRevisionID)
+  const viewID = target.viewID === null ? null : text(target.viewID)
+  const viewName = target.viewName
+  const viewVersion = target.viewVersion === null ? null : num(target.viewVersion)
+  const revisionVersion = target.revisionVersion === null ? null : num(target.revisionVersion)
+  if (
+    !courseID ||
+    typeof courseTitle !== "string" ||
+    courseVersion === undefined ||
+    !Number.isInteger(courseVersion) ||
+    courseVersion < 0 ||
+    selectionVersion === undefined ||
+    !Number.isInteger(selectionVersion) ||
+    selectionVersion < 0 ||
+    (selectionRevisionID !== null && !selectionRevisionID) ||
+    (viewID !== null && !viewID) ||
+    (viewName !== null && typeof viewName !== "string") ||
+    viewVersion === undefined ||
+    revisionVersion === undefined ||
+    (viewVersion !== null && (!Number.isInteger(viewVersion) || viewVersion < 0)) ||
+    (revisionVersion !== null && (!Number.isInteger(revisionVersion) || revisionVersion < 0))
+  ) {
+    return undefined
+  }
+
+  const noWorkingView =
+    selectionRevisionID === null &&
+    viewID === null &&
+    viewName === null &&
+    viewVersion === null &&
+    revisionVersion === null
+  const exactWorkingView =
+    selectionRevisionID !== null &&
+    viewID !== null &&
+    typeof viewName === "string" &&
+    viewVersion !== null &&
+    revisionVersion !== null
+  if (!noWorkingView && !exactWorkingView) {
+    return undefined
+  }
+
+  return {
+    icon: "◇",
+    title:
+      fromCourseID === null
+        ? "Confirm setting the default Course preference"
+        : "Confirm changing the default Course preference",
+    lines: [
+      ...lines,
+      `To Course: "${Locale.truncate(courseTitle, 80)}" [${courseID}]`,
+      `Target Course version: ${courseVersion}; selection version: ${selectionVersion}`,
+      ...(noWorkingView
+        ? ["Working View: none", "Working Revision: none"]
+        : [
+            `Working View: "${Locale.truncate(typeof viewName === "string" ? viewName : "", 80)}" [${viewID}]; version ${viewVersion}`,
+            `Working Revision: ${selectionRevisionID}; version ${revisionVersion}`,
+          ]),
+    ],
+  }
+}
+
 const TOOL_RULES = {
   invalid: {
     view: {
@@ -1344,6 +1446,10 @@ export function toolPermissionInfo(
   meta: ToolDict,
   patterns: string[],
 ): ToolPermissionInfo | undefined {
+  if (name === "set_default_course_preference") {
+    return permDefaultCoursePreference(permission({ input, meta, patterns }))
+  }
+
   const draw = rule(name)?.permission
   if (!draw) {
     return undefined

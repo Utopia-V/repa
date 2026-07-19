@@ -1,6 +1,8 @@
 import { and, asc, eq, ne, or } from "drizzle-orm"
 import { Effect } from "effect"
 import { Course } from "../course"
+import { LearnerNavigation } from "../learner-navigation"
+import { CourseRouteAnchorTransitionTable, DefaultCoursePreferenceTransitionTable } from "../learner-navigation/sql"
 import { CourseSelectionAcceptanceEffectTable } from "../course/sql"
 import { RepresentationSchema } from "../representation/schema"
 import { RepresentationEffectTable, RepresentationRevisionTable } from "../representation/sql"
@@ -28,6 +30,9 @@ import {
   type RepresentationAlreadyAppliedSettlement,
   type RepresentationAppliedSettlement,
   type RepresentationConvertInvocation,
+  type NavigationInvocation,
+  type SetDefaultCoursePreferenceInvocation,
+  type SetCourseRouteAnchorInvocation,
   type ReceiptID,
   type Settlement,
   type SettlementMetadata,
@@ -45,6 +50,10 @@ export const ACCEPT_COURSE_VIEW_REVISION_CAPABILITY = "accept_course_view_revisi
 export const ACCEPT_COURSE_VIEW_REVISION_VERSION = 1
 export const REPRESENTATION_CONVERT_CAPABILITY = "representation.convert"
 export const REPRESENTATION_CONVERT_VERSION = 1
+export const SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY = "set_default_course_preference"
+export const SET_DEFAULT_COURSE_PREFERENCE_VERSION = 1
+export const SET_COURSE_ROUTE_ANCHOR_CAPABILITY = "set_course_route_anchor"
+export const SET_COURSE_ROUTE_ANCHOR_VERSION = 1
 
 type StoredAssistant = Omit<SessionV1.Assistant, "id" | "sessionID">
 type StoredToolPart = Omit<SessionV1.ToolPart, "id" | "sessionID" | "messageID">
@@ -209,6 +218,229 @@ export function reserveRepresentationConversion(tx: Transaction, input: Represen
       .run()
       .pipe(Effect.orDie)
     return { type: "candidate" as const }
+  })
+}
+
+export function reserveNavigation(tx: Transaction, input: NavigationInvocation) {
+  return Effect.gen(function* () {
+    const identity = navigationIdentity(input)
+    const fingerprint = navigationInvocationFingerprint(input)
+    const physical = yield* findPhysical(tx, input, fingerprint, identity.capability)
+    if (physical) {
+      if (physical.status === "admitted") return { type: "admitted" as const }
+      return { type: "replay" as const, settlement: requireSettlement(physical) }
+    }
+    yield* validateNewEnvelope(tx, input.envelope, identity)
+    yield* tx
+      .insert(LearningCommandInvocationTable)
+      .values({
+        part_id: input.envelope.partID,
+        turn_id: input.envelope.turnID,
+        input_id: input.envelope.inputID,
+        session_id: input.envelope.sessionID,
+        parent_user_message_id: input.envelope.parentUserMessageID,
+        assistant_message_id: input.envelope.assistantMessageID,
+        provider_call_id: input.envelope.providerCallID,
+        occurrence_id: input.envelope.occurrenceID,
+        command_name: identity.capability,
+        command_version: identity.version,
+        emission_ordinal: input.envelope.emissionOrdinal,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        input_fingerprint: fingerprint,
+        status: "admitted",
+        permission_request_id: isDefaultNavigation(input) ? input.permissionRequestID : null,
+        time_admitted: input.envelope.timeAdmitted,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    const decision = yield* navigationSemanticDecision(tx, input)
+    return decision.type === "candidate"
+      ? ({ type: "candidate" } as const)
+      : ({ type: "terminal", reason: decision.type } as const)
+  })
+}
+
+export function settleNavigationReservation(
+  tx: Transaction,
+  input: NavigationInvocation & { readonly settlement: SettlementMetadata },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireNavigationPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    const decision = yield* navigationSemanticDecision(tx, input)
+    if (decision.type === "candidate") return { type: "candidate" as const }
+    const settlement = yield* navigationSettlementForDecision(tx, decision, input.settlement)
+    yield* settleInvocation(tx, invocation.part_id, settlement)
+    return { type: "settled" as const, settlement }
+  })
+}
+
+export function settleNavigation(
+  tx: Transaction,
+  input: NavigationInvocation & {
+    readonly permission: PermissionOutcome
+    readonly settlement: SettlementMetadata
+    readonly prepared?: LearnerNavigation.PreparedDefault | LearnerNavigation.PreparedAnchor
+  },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireNavigationPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    const decision = yield* navigationSemanticDecision(tx, input)
+    if (decision.type !== "candidate") {
+      const settlement = yield* navigationSettlementForDecision(tx, decision, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const permissionError = permissionErrorCode(input.permission)
+    if (permissionError) {
+      const settlement = errorSettlement(permissionError, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (!(yield* occurrenceAvailable(tx, input))) {
+      const settlement = errorSettlement("source_unavailable", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (isDefaultNavigation(input)) {
+      const fresh = yield* LearnerNavigation.prepareDefaultInTransaction(
+        tx,
+        input.command,
+        input.permissionRequestID,
+      ).pipe(
+        Effect.map((value) => ({ type: "success" as const, value })),
+        Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+      )
+      if (fresh.type === "failure") {
+        const settlement = navigationErrorSettlement(fresh.error, input.settlement)
+        yield* settleInvocation(tx, invocation.part_id, settlement)
+        return { type: "settled" as const, settlement }
+      }
+      if (fresh.value.decision === "no_change") {
+        const settlement = {
+          outcome: "no_change",
+          navigationKind: "default_course_preference",
+          current: fresh.value.current,
+          settlementTime: input.settlement.time,
+          settlementOrder: input.settlement.order,
+        } as const
+        yield* settleInvocation(tx, invocation.part_id, settlement)
+        return { type: "settled" as const, settlement }
+      }
+      const prepared =
+        input.prepared?.decision === "candidate" && "confirmation" in input.prepared ? input.prepared : undefined
+      if (!prepared || JSON.stringify(prepared.confirmation) !== JSON.stringify(fresh.value.confirmation)) {
+        const settlement = errorSettlement("stale", input.settlement)
+        yield* settleInvocation(tx, invocation.part_id, settlement)
+        return { type: "settled" as const, settlement }
+      }
+      const applied = yield* LearnerNavigation.applyDefault(tx, {
+        occurrenceID: input.envelope.occurrenceID,
+        command: input.command,
+        permissionRequestID: input.permissionRequestID,
+        confirmation: prepared.confirmation,
+        proof: prepared.proof,
+        trustedTime: input.settlement.time,
+        commitOrder: input.settlement.order,
+      }).pipe(
+        Effect.map((value) => ({ type: "success" as const, value })),
+        Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+      )
+      if (applied.type === "failure") {
+        const settlement = navigationErrorSettlement(applied.error, input.settlement)
+        yield* settleInvocation(tx, invocation.part_id, settlement)
+        return { type: "settled" as const, settlement }
+      }
+      const receiptID = yield* insertNavigationReceipt(
+        tx,
+        input,
+        {
+          kind: "default",
+          effectID: applied.value.id,
+          confirmation: prepared.confirmation,
+        },
+        input.settlement,
+      )
+      const current = yield* LearnerNavigation.readCurrentDefault(tx)
+      const settlement = {
+        outcome: "applied",
+        navigationKind: "default_course_preference",
+        receiptID,
+        effectID: applied.value.id,
+        effect: applied.value,
+        current,
+        confirmation: prepared.confirmation,
+        settlementTime: input.settlement.time,
+        settlementOrder: input.settlement.order,
+      } as const
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const fresh = yield* LearnerNavigation.prepareAnchorInTransaction(tx, input.command).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (fresh.type === "failure") {
+      const settlement = navigationErrorSettlement(fresh.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (fresh.value.decision === "no_change") {
+      const settlement = {
+        outcome: "no_change",
+        navigationKind: "course_route_anchor",
+        current: fresh.value.current,
+        settlementTime: input.settlement.time,
+        settlementOrder: input.settlement.order,
+      } as const
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const prepared =
+      input.prepared?.decision === "candidate" && !("confirmation" in input.prepared) ? input.prepared : undefined
+    const applied = yield* LearnerNavigation.applyAnchor(tx, {
+      occurrenceID: input.envelope.occurrenceID,
+      command: input.command,
+      proof: prepared?.proof,
+      trustedTime: input.settlement.time,
+      commitOrder: input.settlement.order,
+    }).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (applied.type === "failure") {
+      const settlement = navigationErrorSettlement(applied.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const receiptID = yield* insertNavigationReceipt(
+      tx,
+      input,
+      { kind: "anchor", effectID: applied.value.id },
+      input.settlement,
+    )
+    const current = yield* LearnerNavigation.readCurrentAnchor(tx, input.command.courseID)
+    const settlement = {
+      outcome: "applied",
+      navigationKind: "course_route_anchor",
+      receiptID,
+      effectID: applied.value.id,
+      effect: applied.value,
+      current,
+      settlementTime: input.settlement.time,
+      settlementOrder: input.settlement.order,
+    } as const
+    yield* settleInvocation(tx, invocation.part_id, settlement)
+    return { type: "settled" as const, settlement }
   })
 }
 
@@ -654,6 +886,18 @@ export function garbageCollectOccurrences(tx: Transaction, occurrenceIDs: readon
             .get()
             .pipe(Effect.orDie),
           tx
+            .select({ id: DefaultCoursePreferenceTransitionTable.id })
+            .from(DefaultCoursePreferenceTransitionTable)
+            .where(eq(DefaultCoursePreferenceTransitionTable.occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ id: CourseRouteAnchorTransitionTable.id })
+            .from(CourseRouteAnchorTransitionTable)
+            .where(eq(CourseRouteAnchorTransitionTable.occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
             .select({ id: TurnHistoricalInputPresentationTable.message_id })
             .from(TurnHistoricalInputPresentationTable)
             .where(eq(TurnHistoricalInputPresentationTable.occurrence_id, occurrenceID))
@@ -710,6 +954,26 @@ type SemanticDecision =
     }
   | { readonly type: "context_refresh_required"; readonly timeSettled: number }
 
+type NavigationSemanticDecision =
+  | { readonly type: "candidate" }
+  | {
+      readonly type: "already_applied"
+      readonly navigationKind: "default_course_preference"
+      readonly resolution: Extract<LearnerNavigation.DefaultResolution, { readonly type: "already_applied" }>
+    }
+  | {
+      readonly type: "already_applied"
+      readonly navigationKind: "course_route_anchor"
+      readonly resolution: Extract<LearnerNavigation.AnchorResolution, { readonly type: "already_applied" }>
+    }
+  | {
+      readonly type: "semantic_conflict"
+      readonly resolution:
+        | Extract<LearnerNavigation.DefaultResolution, { readonly type: "semantic_conflict" }>
+        | Extract<LearnerNavigation.AnchorResolution, { readonly type: "semantic_conflict" }>
+    }
+  | { readonly type: "context_refresh_required"; readonly timeSettled: number }
+
 function semanticDecision(tx: Transaction, input: AcceptCourseViewRevisionInvocation): Effect.Effect<SemanticDecision> {
   return Effect.gen(function* () {
     const resolution = yield* Course.resolveSelectionAcceptance(tx, {
@@ -735,6 +999,43 @@ function semanticDecision(tx: Transaction, input: AcceptCourseViewRevisionInvoca
       )
       .get()
       .pipe(Effect.orDie)
+    if (occupied) {
+      return { type: "context_refresh_required" as const, timeSettled: occupied.timeSettled ?? 0 }
+    }
+    return { type: "candidate" as const }
+  })
+}
+
+function navigationSemanticDecision(
+  tx: Transaction,
+  input: NavigationInvocation,
+): Effect.Effect<NavigationSemanticDecision> {
+  return Effect.gen(function* () {
+    if (isDefaultNavigation(input)) {
+      const resolution = yield* LearnerNavigation.resolveDefaultEffect(tx, {
+        occurrenceID: input.envelope.occurrenceID,
+        targetCourseID: input.command.target?.courseID ?? null,
+      }).pipe(Effect.orDie)
+      if (resolution.type === "already_applied") {
+        return { type: "already_applied" as const, navigationKind: input.command.kind, resolution }
+      }
+      if (resolution.type === "semantic_conflict") {
+        return { type: "semantic_conflict" as const, resolution }
+      }
+    } else {
+      const resolution = yield* LearnerNavigation.resolveAnchorEffect(tx, {
+        occurrenceID: input.envelope.occurrenceID,
+        courseID: input.command.courseID,
+        target: navigationTarget(input.command),
+      }).pipe(Effect.orDie)
+      if (resolution.type === "already_applied") {
+        return { type: "already_applied" as const, navigationKind: input.command.kind, resolution }
+      }
+      if (resolution.type === "semantic_conflict") {
+        return { type: "semantic_conflict" as const, resolution }
+      }
+    }
+    const occupied = yield* appliedMutation(tx, input.envelope.assistantMessageID)
     if (occupied) {
       return { type: "context_refresh_required" as const, timeSettled: occupied.timeSettled ?? 0 }
     }
@@ -790,11 +1091,82 @@ function settlementForDecision(
   })
 }
 
+function navigationSettlementForDecision(
+  tx: Transaction,
+  decision: Exclude<NavigationSemanticDecision, { readonly type: "candidate" }>,
+  metadata: SettlementMetadata,
+) {
+  if (decision.type === "semantic_conflict") {
+    return requireMetadataFloor(metadata, decision.resolution.effect.timeCommitted).pipe(
+      Effect.map(() => errorSettlement("semantic_conflict", metadata)),
+    )
+  }
+  if (decision.type === "context_refresh_required") {
+    return requireMetadataFloor(metadata, decision.timeSettled).pipe(
+      Effect.map(() => errorSettlement("context_refresh_required", metadata)),
+    )
+  }
+  return Effect.gen(function* () {
+    yield* requireMetadataFloor(
+      metadata,
+      Math.max(decision.resolution.effect.timeCommitted, decision.resolution.current.timeCommitted ?? 0),
+    )
+    if (decision.navigationKind === "default_course_preference") {
+      const effect = decision.resolution.effect
+      const receipt = yield* tx
+        .select()
+        .from(LearningCommandReceiptTable)
+        .where(eq(LearningCommandReceiptTable.default_navigation_effect_id, effect.id))
+        .get()
+        .pipe(Effect.orDie)
+      if (!receipt) return yield* Effect.die("Applied navigation effect has no immutable receipt")
+      if (!receipt.confirmation_snapshot || !receipt.permission_request_id) {
+        return yield* Effect.die("Default Course effect receipt has no exact confirmation snapshot")
+      }
+      return {
+        outcome: "already_applied",
+        navigationKind: decision.navigationKind,
+        receiptID: receipt.id,
+        effectID: effect.id,
+        effect,
+        current: decision.resolution.current,
+        relation: decision.resolution.relation,
+        confirmation: receipt.confirmation_snapshot,
+        settlementTime: metadata.time,
+        settlementOrder: metadata.order,
+      } as const
+    }
+    const effect = decision.resolution.effect
+    const receipt = yield* tx
+      .select()
+      .from(LearningCommandReceiptTable)
+      .where(eq(LearningCommandReceiptTable.anchor_navigation_effect_id, effect.id))
+      .get()
+      .pipe(Effect.orDie)
+    if (!receipt) return yield* Effect.die("Applied navigation effect has no immutable receipt")
+    return {
+      outcome: "already_applied",
+      navigationKind: decision.navigationKind,
+      receiptID: receipt.id,
+      effectID: effect.id,
+      effect,
+      current: decision.resolution.current,
+      relation: decision.resolution.relation,
+      settlementTime: metadata.time,
+      settlementOrder: metadata.order,
+    } as const
+  })
+}
+
 function findPhysical(
   tx: Transaction,
-  input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation,
+  input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation | NavigationInvocation,
   fingerprint: string,
-  commandName: typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY | typeof REPRESENTATION_CONVERT_CAPABILITY,
+  commandName:
+    | typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY
+    | typeof REPRESENTATION_CONVERT_CAPABILITY
+    | typeof SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
+    | typeof SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
 ) {
   return Effect.gen(function* () {
     const row = yield* lookupPhysicalInvocation(tx, input.envelope)
@@ -827,11 +1199,27 @@ function requireRepresentationPhysical(tx: Transaction, input: RepresentationCon
   })
 }
 
+function requireNavigationPhysical(tx: Transaction, input: NavigationInvocation) {
+  return Effect.gen(function* () {
+    const identity = navigationIdentity(input)
+    const row = yield* findPhysical(tx, input, navigationInvocationFingerprint(input), identity.capability)
+    if (!row) return yield* new InvocationNotFoundError({ partID: input.envelope.partID })
+    if (isDefaultNavigation(input) && row.permission_request_id !== input.permissionRequestID) {
+      return yield* invocationConflict(input.envelope)
+    }
+    return row
+  })
+}
+
 function validateNewEnvelope(
   tx: Transaction,
   envelope: AcceptCourseViewRevisionInvocation["envelope"],
   command: {
-    readonly capability: typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY | typeof REPRESENTATION_CONVERT_CAPABILITY
+    readonly capability:
+      | typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY
+      | typeof REPRESENTATION_CONVERT_CAPABILITY
+      | typeof SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
+      | typeof SET_COURSE_ROUTE_ANCHOR_CAPABILITY
     readonly version: number
   },
 ) {
@@ -959,6 +1347,121 @@ function representationInvocationFingerprint(input: RepresentationConvertInvocat
     .digest("hex")
 }
 
+function navigationInvocationFingerprint(input: NavigationInvocation) {
+  return new Bun.CryptoHasher("sha256")
+    .update(
+      JSON.stringify({
+        command:
+          input.command.kind === "default_course_preference"
+            ? SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
+            : SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+        commandVersion: 1,
+        occurrenceID: input.envelope.occurrenceID,
+        turnID: input.envelope.turnID,
+        inputID: input.envelope.inputID,
+        sessionID: input.envelope.sessionID,
+        parentUserMessageID: input.envelope.parentUserMessageID,
+        assistantMessageID: input.envelope.assistantMessageID,
+        partID: input.envelope.partID,
+        providerCallID: input.envelope.providerCallID,
+        emissionOrdinal: input.envelope.emissionOrdinal,
+        capabilityIdentity: input.envelope.capabilityIdentity,
+        capabilityVersion: input.envelope.capabilityVersion,
+        authorizationBasis: input.envelope.authorizationBasis,
+        timeAdmitted: input.envelope.timeAdmitted,
+        input: input.command,
+        ...(isDefaultNavigation(input) ? { trusted: { permissionRequestID: input.permissionRequestID } } : {}),
+      }),
+    )
+    .digest("hex")
+}
+
+function navigationIdentity(input: NavigationInvocation) {
+  return input.command.kind === "default_course_preference"
+    ? ({
+        capability: SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        version: SET_DEFAULT_COURSE_PREFERENCE_VERSION,
+      } as const)
+    : ({ capability: SET_COURSE_ROUTE_ANCHOR_CAPABILITY, version: SET_COURSE_ROUTE_ANCHOR_VERSION } as const)
+}
+
+function isDefaultNavigation(input: NavigationInvocation): input is SetDefaultCoursePreferenceInvocation {
+  return input.command.kind === "default_course_preference"
+}
+
+function navigationTarget(command: SetCourseRouteAnchorInvocation["command"]) {
+  if (!command.target) return null
+  return {
+    courseID: command.courseID,
+    viewID: command.target.viewID,
+    revisionID: command.target.revisionID,
+    itemID: command.target.itemID,
+  }
+}
+
+function insertNavigationReceipt(
+  tx: Transaction,
+  input: NavigationInvocation,
+  effect:
+    | {
+        readonly kind: "default"
+        readonly effectID: LearnerNavigation.DefaultEffectID
+        readonly confirmation: LearnerNavigation.DefaultConfirmationSnapshot
+      }
+    | { readonly kind: "anchor"; readonly effectID: LearnerNavigation.AnchorEffectID },
+  metadata: SettlementMetadata,
+) {
+  return Effect.gen(function* () {
+    const occurrence = yield* tx
+      .select()
+      .from(AdmittedLearnerOccurrenceTable)
+      .where(eq(AdmittedLearnerOccurrenceTable.id, input.envelope.occurrenceID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!occurrence) return yield* Effect.die("Applied navigation command has no admitted occurrence")
+    const receiptID = createReceiptID()
+    yield* tx
+      .insert(LearningCommandReceiptTable)
+      .values({
+        id: receiptID,
+        occurrence_id: occurrence.id,
+        origin_session_id: occurrence.origin_session_id,
+        origin_message_id: occurrence.origin_message_id,
+        assistant_message_id: input.envelope.assistantMessageID,
+        invocation_part_id: input.envelope.partID,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        effect_id: null,
+        representation_effect_id: null,
+        default_navigation_effect_id: effect.kind === "default" ? effect.effectID : null,
+        anchor_navigation_effect_id: effect.kind === "anchor" ? effect.effectID : null,
+        permission_request_id:
+          effect.kind === "default" && isDefaultNavigation(input) ? input.permissionRequestID : null,
+        confirmation_snapshot: effect.kind === "default" ? effect.confirmation : null,
+        time_committed: metadata.time,
+        commit_order: metadata.order,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    return receiptID
+  })
+}
+
+function navigationErrorSettlement(error: unknown, metadata: SettlementMetadata) {
+  if (error instanceof LearnerNavigation.StaleStateError || error instanceof Course.ConflictError) {
+    return errorSettlement("stale", metadata)
+  }
+  if (error instanceof Course.InactiveError) return errorSettlement("inactive", metadata)
+  if (error instanceof Course.NotFoundError || error instanceof Course.InvalidTransitionError) {
+    return errorSettlement("validation_error", metadata)
+  }
+  if (error instanceof LearnerNavigation.IntegrityError) {
+    return errorSettlement("validation_error", metadata)
+  }
+  return errorSettlement("validation_error", metadata)
+}
+
 function appliedMutation(tx: Transaction, assistantMessageID: MessageID) {
   return tx
     .select({
@@ -978,7 +1481,7 @@ function appliedMutation(tx: Transaction, assistantMessageID: MessageID) {
 
 function occurrenceAvailable(
   tx: Transaction,
-  input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation,
+  input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation | NavigationInvocation,
 ) {
   return Effect.gen(function* () {
     const occurrence = yield* tx
@@ -1090,13 +1593,15 @@ function representationSettlement(
 function settleInvocation(tx: Transaction, partID: PartID, settlement: Settlement) {
   return Effect.gen(function* () {
     const status = settlement.outcome === "error" ? "error" : settlement.outcome
-    const representation = settlement.outcome !== "error" && "representationRevisionID" in settlement
+    const effects = settlementEffects(settlement)
     const updated = yield* tx
       .update(LearningCommandInvocationTable)
       .set({
         status,
-        effect_id: settlement.outcome === "error" || representation ? null : settlement.effectID,
-        representation_effect_id: representation ? settlement.effectID : null,
+        effect_id: effects.course,
+        representation_effect_id: effects.representation,
+        default_navigation_effect_id: effects.defaultNavigation,
+        anchor_navigation_effect_id: effects.anchorNavigation,
         settlement,
         time_settled: settlement.settlementTime,
         settlement_order: settlement.settlementOrder,
@@ -1109,6 +1614,26 @@ function settleInvocation(tx: Transaction, partID: PartID, settlement: Settlemen
       .pipe(Effect.orDie)
     if (!updated) return yield* Effect.die("Learning invocation was not admitted during settlement")
   })
+}
+
+function settlementEffects(settlement: Settlement) {
+  const none = {
+    course: null,
+    representation: null,
+    defaultNavigation: null,
+    anchorNavigation: null,
+  }
+  if (settlement.outcome === "error" || settlement.outcome === "no_change") return none
+  if ("navigationKind" in settlement) {
+    if (settlement.navigationKind === "default_course_preference") {
+      return { ...none, defaultNavigation: settlement.effectID }
+    }
+    return { ...none, anchorNavigation: settlement.effectID }
+  }
+  if ("representationRevisionID" in settlement) {
+    return { ...none, representation: settlement.effectID }
+  }
+  return { ...none, course: settlement.effectID }
 }
 
 function errorSettlement(

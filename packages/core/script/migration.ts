@@ -12,6 +12,12 @@ const snapshot = path.join(root, "packages/core/schema.json")
 const tsDir = path.join(root, "packages/core/src/database/migration/repa")
 const registry = path.join(root, "packages/core/src/database/migration.gen.ts")
 const schema = path.join(root, "packages/core/src/database/schema.gen.ts")
+// These text-keyed append-only authorities must not expose SQLite's hidden replacement-conflict key.
+const withoutRowidTables = new Set([
+  "learner_course_route_anchor_transition",
+  "learner_default_course_transition",
+  "learning_command_receipt",
+])
 const args = parseArgs({
   args: process.argv.slice(2),
   options: {
@@ -165,8 +171,17 @@ function renderStatements(sql: string) {
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0)
+    .map(applyTableOptions)
     .map(renderRun)
     .join("\n")
+}
+
+function applyTableOptions(statement: string) {
+  const generatedName = /^CREATE TABLE `([^`]+)` \(/.exec(statement)?.[1]
+  const tableName = generatedName?.replace(/^__new_/, "")
+  if (!tableName || !withoutRowidTables.has(tableName)) return statement
+  if (!statement.endsWith(");")) throw new Error(`Cannot apply WITHOUT ROWID to generated table ${generatedName}.`)
+  return `${statement.slice(0, -1)} WITHOUT ROWID;`
 }
 
 function renderRun(statement: string) {

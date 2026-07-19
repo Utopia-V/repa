@@ -36,7 +36,7 @@ import { LearningCommandInvocationTable } from "@opencode-ai/core/learning-comma
 import { LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import {
   MessageTable,
   PartTable,
@@ -1574,7 +1574,12 @@ describe("Session", () => {
       const historical = yield* database.db
         .select()
         .from(SessionHistoricalMessagePresentationTable)
-        .where(eq(SessionHistoricalMessagePresentationTable.session_id, targetSessionID))
+        .where(
+          and(
+            eq(SessionHistoricalMessagePresentationTable.session_id, targetSessionID),
+            eq(SessionHistoricalMessagePresentationTable.source_message_id, source.user.id),
+          ),
+        )
         .get()
         .pipe(Effect.orDie)
       expect(historical).toMatchObject({

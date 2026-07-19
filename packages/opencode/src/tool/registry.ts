@@ -54,11 +54,9 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { McpCatalog } from "@/mcp/catalog"
-import {
-  AcceptCourseViewRevisionTool,
-  assertExternalToolID,
-  learningCommandPreparation,
-} from "./accept-course-view-revision"
+import { AcceptCourseViewRevisionTool } from "./accept-course-view-revision"
+import { assertExternalToolID, learningCommandPreparation } from "./learning-command"
+import { SetCourseRouteAnchorTool, SetDefaultCoursePreferenceTool } from "./learner-navigation"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { RepresentationConvertTool } from "./representation-convert"
@@ -128,6 +126,8 @@ const layer = Layer.effect(
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
     const acceptCourseViewRevision = yield* AcceptCourseViewRevisionTool
+    const setDefaultCoursePreference = yield* SetDefaultCoursePreferenceTool
+    const setCourseRouteAnchor = yield* SetCourseRouteAnchorTool
     const representationConvert = yield* RepresentationConvertTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
@@ -248,6 +248,8 @@ const layer = Layer.effect(
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
           acceptCourseViewRevision: Tool.init(acceptCourseViewRevision),
+          setDefaultCoursePreference: Tool.init(setDefaultCoursePreference),
+          setCourseRouteAnchor: Tool.init(setCourseRouteAnchor),
           representationConvert: Tool.init(representationConvert),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
@@ -263,6 +265,8 @@ const layer = Layer.effect(
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
             tool.acceptCourseViewRevision,
+            tool.setDefaultCoursePreference,
+            tool.setCourseRouteAnchor,
             tool.representationConvert,
             tool.contentRoots,
             tool.contentInventory,

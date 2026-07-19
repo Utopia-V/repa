@@ -21,7 +21,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
-import { assertExternalToolID } from "@/tool/accept-course-view-revision"
+import { assertExternalToolID } from "@/tool/learning-command"
 
 const configLayer = TestConfig.layer({
   directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".repa")])),
@@ -133,16 +133,24 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("representation.convert", "mcp")).toThrow(
         "mcp tool ID representation.convert is reserved by the learning-command runtime",
       )
+      expect(() => assertExternalToolID("set_default_course_preference", "mcp")).toThrow(
+        "mcp tool ID set_default_course_preference is reserved by the learning-command runtime",
+      )
+      expect(() => assertExternalToolID("set_course_route_anchor", "mcp")).toThrow(
+        "mcp tool ID set_course_route_anchor is reserved by the learning-command runtime",
+      )
     }),
   )
 
-  it.instance("exposes both closed learning-command capabilities", () =>
+  it.instance("exposes every closed learning-command capability", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
       const ids = yield* registry.ids()
 
       expect(ids).toContain("accept_course_view_revision")
       expect(ids).toContain("representation.convert")
+      expect(ids).toContain("set_default_course_preference")
+      expect(ids).toContain("set_course_route_anchor")
     }),
   )
 

@@ -22,6 +22,7 @@ import contentRootAuthorityMigration from "@opencode-ai/core/database/migration/
 import readableRepresentationLineageMigration from "@opencode-ai/core/database/migration/repa/20260717141402_readable_representation_lineage"
 import durableTurnMigration from "@opencode-ai/core/database/migration/repa/20260718134404_gate12_durable_turn"
 import materialMapAlignmentMigration from "@opencode-ai/core/database/migration/repa/20260719104356_material_map_alignment"
+import learnerNavigationMigration from "@opencode-ai/core/database/migration/repa/20260719155243_learner_navigation"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -59,6 +60,8 @@ const courseTables = [
 const learningCommandTables = [
   "learning_command_receipt",
   "learning_command_invocation",
+  "learner_default_course_transition",
+  "learner_course_route_anchor_transition",
   "course_selection_acceptance_effect",
   "learning_occurrence_tombstone",
   "learning_occurrence_presentation",
@@ -262,9 +265,30 @@ function turnSchema(db: TestDatabase) {
     )
 }
 
+function learnerNavigationSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE (tbl_name LIKE 'learner_%' OR tbl_name IN ('learning_command_invocation', 'learning_command_receipt'))
+        AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: normalizeSchemaDefinition(row.definition),
+        })),
+      ),
+    )
+}
+
 function restoreGate8LearningSchema(db: TestDatabase) {
   return Effect.gen(function* () {
-    yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+    yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(name)}`), {
       discard: true,
     })
     yield* Effect.forEach(representationTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
@@ -276,10 +300,85 @@ function restoreGate8LearningSchema(db: TestDatabase) {
 
 function removeGate13(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* removeGate14(db)
     yield* Effect.forEach(materialTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
       discard: true,
     })
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 7}`)
+  })
+}
+
+function removeGate14(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+    yield* db.run(sql`DROP TABLE learning_command_receipt`)
+    yield* db.run(sql`DROP TABLE learning_command_invocation`)
+    yield* db.run(sql`DROP TABLE learner_default_course_transition`)
+    yield* db.run(sql`DROP TABLE learner_course_route_anchor_transition`)
+    yield* db.run(
+      sql.raw(`
+      CREATE TABLE learning_command_invocation (
+        part_id text PRIMARY KEY, session_id text NOT NULL, parent_user_message_id text NOT NULL,
+        assistant_message_id text NOT NULL, provider_call_id text NOT NULL, occurrence_id text NOT NULL,
+        command_name text NOT NULL, command_version integer NOT NULL, emission_ordinal integer NOT NULL,
+        capability_identity text NOT NULL, capability_version integer NOT NULL, authorization_basis text NOT NULL,
+        input_fingerprint text NOT NULL, status text NOT NULL, effect_id text, representation_effect_id text,
+        settlement text, time_admitted integer NOT NULL, time_settled integer, settlement_order integer,
+        turn_id text, input_id text,
+        FOREIGN KEY (occurrence_id) REFERENCES learning_admitted_occurrence(id) ON DELETE RESTRICT,
+        FOREIGN KEY (effect_id) REFERENCES course_selection_acceptance_effect(id) ON DELETE RESTRICT,
+        FOREIGN KEY (representation_effect_id) REFERENCES representation_effect(id) ON DELETE RESTRICT,
+        UNIQUE(assistant_message_id, provider_call_id), UNIQUE(assistant_message_id, emission_ordinal),
+        CHECK(length(provider_call_id) > 0),
+        CHECK(command_name IN ('accept_course_view_revision', 'representation.convert')),
+        CHECK(command_version = 1), CHECK(emission_ordinal >= 0), CHECK(length(capability_identity) > 0),
+        CHECK(capability_version >= 1),
+        CHECK((command_name = 'accept_course_view_revision' AND capability_identity = 'accept_course_view_revision' AND capability_version = 1) OR (command_name = 'representation.convert' AND capability_identity = 'representation.convert' AND capability_version = 1)),
+        CHECK(authorization_basis IN ('learner_request', 'learner_acceptance')),
+        CHECK(length(input_fingerprint) = 64), CHECK(status IN ('admitted', 'applied', 'already_applied', 'error')),
+        CHECK((status = 'admitted' AND settlement IS NULL AND time_settled IS NULL AND settlement_order IS NULL AND effect_id IS NULL AND representation_effect_id IS NULL) OR (status <> 'admitted' AND settlement IS NOT NULL AND time_settled IS NOT NULL AND settlement_order IS NOT NULL)),
+        CHECK((status IN ('applied', 'already_applied') AND ((command_name = 'accept_course_view_revision' AND effect_id IS NOT NULL AND representation_effect_id IS NULL) OR (command_name = 'representation.convert' AND effect_id IS NULL AND representation_effect_id IS NOT NULL))) OR (status IN ('admitted', 'error') AND effect_id IS NULL AND representation_effect_id IS NULL)),
+        CHECK(time_admitted >= 0 AND (time_settled IS NULL OR time_settled >= time_admitted) AND (settlement_order IS NULL OR settlement_order >= 0))
+      )
+    `),
+    )
+    yield* db.run(
+      sql.raw(`
+      CREATE TABLE learning_command_receipt (
+        id text PRIMARY KEY, occurrence_id text NOT NULL, origin_session_id text NOT NULL,
+        origin_message_id text NOT NULL, assistant_message_id text NOT NULL,
+        invocation_part_id text NOT NULL UNIQUE, capability_identity text NOT NULL,
+        capability_version integer NOT NULL, authorization_basis text NOT NULL,
+        effect_id text UNIQUE, representation_effect_id text UNIQUE,
+        time_committed integer NOT NULL, commit_order integer NOT NULL,
+        FOREIGN KEY (occurrence_id) REFERENCES learning_admitted_occurrence(id) ON DELETE RESTRICT,
+        FOREIGN KEY (invocation_part_id) REFERENCES learning_command_invocation(part_id) ON DELETE RESTRICT,
+        FOREIGN KEY (effect_id) REFERENCES course_selection_acceptance_effect(id) ON DELETE RESTRICT,
+        FOREIGN KEY (representation_effect_id) REFERENCES representation_effect(id) ON DELETE RESTRICT,
+        CHECK(length(capability_identity) > 0), CHECK(capability_version >= 1),
+        CHECK(authorization_basis IN ('learner_request', 'learner_acceptance')),
+        CHECK((capability_identity = 'accept_course_view_revision' AND capability_version = 1 AND effect_id IS NOT NULL AND representation_effect_id IS NULL) OR (capability_identity = 'representation.convert' AND capability_version = 1 AND effect_id IS NULL AND representation_effect_id IS NOT NULL)),
+        CHECK(time_committed >= 0 AND commit_order >= 0)
+      )
+    `),
+    )
+    yield* db.run(
+      sql`CREATE UNIQUE INDEX learning_command_invocation_one_mutation_idx ON learning_command_invocation (assistant_message_id) WHERE status = 'applied'`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_invocation_session_owner_idx ON learning_command_invocation (session_id, assistant_message_id, part_id)`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_invocation_occurrence_idx ON learning_command_invocation (occurrence_id, part_id)`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_invocation_admitted_idx ON learning_command_invocation (status, session_id, time_admitted)`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_receipt_occurrence_idx ON learning_command_receipt (occurrence_id, id)`,
+    )
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 8}`)
+    yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
   })
 }
 
@@ -341,6 +440,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
           { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
           { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
+          { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -378,14 +478,179 @@ describe("DatabaseMigration", () => {
     )
   })
 
+  test("builds the same Gate 14 schema from Gate 13 without fabricating navigation", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* learnerNavigationSchema(db)
+        const freshReceiptUpdateTrigger = fresh.find(
+          (item) => item.name === "learner_navigation_receipt_immutable",
+        )?.definition
+        const freshTableStorage = yield* db.all<{ name: string; wr: number }>(sql`
+          SELECT name, wr
+          FROM pragma_table_list
+          WHERE name IN (
+            'learner_default_course_transition',
+            'learner_course_route_anchor_transition',
+            'learning_command_receipt'
+          )
+          ORDER BY name
+        `)
+        expect(freshTableStorage).toEqual([
+          { name: "learner_course_route_anchor_transition", wr: 1 },
+          { name: "learner_default_course_transition", wr: 1 },
+          { name: "learning_command_receipt", wr: 1 },
+        ])
+        const freshDefaultConflictTrigger = fresh.find(
+          (item) => item.name === "learner_default_course_conflict_forbidden",
+        )?.definition
+        expect(freshDefaultConflictTrigger).toContain("existing.id = NEW.id")
+        expect(freshDefaultConflictTrigger).toContain("existing.version = NEW.version")
+        expect(freshDefaultConflictTrigger).toContain("existing.predecessor_id = NEW.predecessor_id")
+        expect(freshDefaultConflictTrigger).toContain("existing.occurrence_id = NEW.occurrence_id")
+        expect(freshDefaultConflictTrigger).toContain("existing.frontier_sequence = NEW.frontier_sequence")
+        const freshAnchorConflictTrigger = fresh.find(
+          (item) => item.name === "learner_course_route_anchor_conflict_forbidden",
+        )?.definition
+        expect(freshAnchorConflictTrigger).toContain("existing.id = NEW.id")
+        expect(freshAnchorConflictTrigger).toContain("existing.course_id = NEW.course_id")
+        expect(freshAnchorConflictTrigger).toContain("existing.version = NEW.version")
+        expect(freshAnchorConflictTrigger).toContain("existing.predecessor_id = NEW.predecessor_id")
+        expect(freshAnchorConflictTrigger).toContain("existing.occurrence_id = NEW.occurrence_id")
+        expect(freshAnchorConflictTrigger).toContain("existing.frontier_sequence = NEW.frontier_sequence")
+        expect(freshReceiptUpdateTrigger).toContain("NEW.default_navigation_effect_id IS NOT NULL")
+        expect(freshReceiptUpdateTrigger).toContain("NEW.anchor_navigation_effect_id IS NOT NULL")
+        const freshReceiptConflictTrigger = fresh.find(
+          (item) => item.name === "learner_navigation_receipt_conflict_forbidden",
+        )?.definition
+        expect(freshReceiptConflictTrigger).toContain("NEW.default_navigation_effect_id IS NOT NULL")
+        expect(freshReceiptConflictTrigger).toContain("NEW.anchor_navigation_effect_id IS NOT NULL")
+        expect(freshReceiptConflictTrigger).toContain("existing.id = NEW.id")
+        expect(freshReceiptConflictTrigger).toContain("existing.invocation_part_id = NEW.invocation_part_id")
+        expect(freshReceiptConflictTrigger).toContain(
+          "existing.default_navigation_effect_id = NEW.default_navigation_effect_id",
+        )
+        expect(freshReceiptConflictTrigger).toContain(
+          "existing.anchor_navigation_effect_id = NEW.anchor_navigation_effect_id",
+        )
+        const freshReceiptUpdateConflictTrigger = fresh.find(
+          (item) => item.name === "learner_navigation_receipt_update_conflict_forbidden",
+        )?.definition
+        expect(freshReceiptUpdateConflictTrigger).toContain("existing.id <> OLD.id")
+        expect(freshReceiptUpdateConflictTrigger).toContain("existing.id = NEW.id")
+        expect(freshReceiptUpdateConflictTrigger).toContain("existing.invocation_part_id = NEW.invocation_part_id")
+        expect(freshReceiptUpdateConflictTrigger).toContain(
+          "existing.default_navigation_effect_id = NEW.default_navigation_effect_id",
+        )
+        expect(freshReceiptUpdateConflictTrigger).toContain(
+          "existing.anchor_navigation_effect_id = NEW.anchor_navigation_effect_id",
+        )
+
+        yield* removeGate14(db)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 7}`))
+        yield* db.run(sql`
+          INSERT INTO course (id, title, state_version, time_created, time_updated)
+          VALUES ('course_gate13', 'Preserved Course', 0, 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted)
+          VALUES ('occ_gate13_course', 'session_gate13', 'message_gate13_course', 1),
+                 ('occ_gate13_representation', 'session_gate13', 'message_gate13_representation', 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_invocation (
+            part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+            occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+            capability_version, authorization_basis, input_fingerprint, status, time_admitted, turn_id, input_id
+          ) VALUES
+            ('part_gate13_course', 'session_gate13', 'message_gate13_course', 'assistant_gate13_course',
+             'call_gate13_course', 'occ_gate13_course', 'accept_course_view_revision', 1, 0,
+             'accept_course_view_revision', 1, 'learner_acceptance', ${"a".repeat(64)}, 'admitted', 1,
+             'turn_gate13_course', 'input_gate13_course'),
+            ('part_gate13_representation', 'session_gate13', 'message_gate13_representation',
+             'assistant_gate13_representation', 'call_gate13_representation', 'occ_gate13_representation',
+             'representation.convert', 1, 0, 'representation.convert', 1, 'learner_request',
+             ${"b".repeat(64)}, 'admitted', 1, 'turn_gate13_representation', 'input_gate13_representation')
+        `)
+
+        yield* DatabaseMigration.apply(db)
+
+        const upgraded = yield* learnerNavigationSchema(db)
+        expect(upgraded).toEqual(fresh)
+        expect(
+          yield* db.all<{ name: string; wr: number }>(sql`
+            SELECT name, wr
+            FROM pragma_table_list
+            WHERE name IN (
+              'learner_default_course_transition',
+              'learner_course_route_anchor_transition',
+              'learning_command_receipt'
+            )
+            ORDER BY name
+          `),
+        ).toEqual(freshTableStorage)
+        expect(upgraded.find((item) => item.name === "learner_default_course_conflict_forbidden")?.definition).toBe(
+          freshDefaultConflictTrigger,
+        )
+        expect(
+          upgraded.find((item) => item.name === "learner_course_route_anchor_conflict_forbidden")?.definition,
+        ).toBe(freshAnchorConflictTrigger)
+        expect(upgraded.find((item) => item.name === "learner_navigation_receipt_immutable")?.definition).toBe(
+          freshReceiptUpdateTrigger,
+        )
+        expect(upgraded.find((item) => item.name === "learner_navigation_receipt_conflict_forbidden")?.definition).toBe(
+          freshReceiptConflictTrigger,
+        )
+        expect(
+          upgraded.find((item) => item.name === "learner_navigation_receipt_update_conflict_forbidden")?.definition,
+        ).toBe(freshReceiptUpdateConflictTrigger)
+        expect(yield* db.all(sql`SELECT id FROM learner_default_course_transition`)).toEqual([])
+        expect(yield* db.all(sql`SELECT id FROM learner_course_route_anchor_transition`)).toEqual([])
+        expect(yield* db.get(sql`SELECT id, title FROM course WHERE id = 'course_gate13'`)).toEqual({
+          id: "course_gate13",
+          title: "Preserved Course",
+        })
+        expect(
+          yield* db.all(sql`
+            SELECT part_id, command_name, default_navigation_effect_id, anchor_navigation_effect_id,
+                   permission_request_id
+            FROM learning_command_invocation
+            ORDER BY part_id
+          `),
+        ).toEqual([
+          {
+            part_id: "part_gate13_course",
+            command_name: "accept_course_view_revision",
+            default_navigation_effect_id: null,
+            anchor_navigation_effect_id: null,
+            permission_request_id: null,
+          },
+          {
+            part_id: "part_gate13_representation",
+            command_name: "representation.convert",
+            default_navigation_effect_id: null,
+            anchor_navigation_effect_id: null,
+            permission_request_id: null,
+          },
+        ])
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+      }),
+    )
+  })
+
   test("upgrades a Gate 6 database without changing Session rows", async () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db, { migrations: [] })
-        yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
-          discard: true,
-        })
+        yield* Effect.forEach(
+          learningCommandTables,
+          (name) => db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(name)}`),
+          {
+            discard: true,
+          },
+        )
         yield* Effect.forEach(courseTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -439,9 +704,13 @@ describe("DatabaseMigration", () => {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db)
 
-        yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
-          discard: true,
-        })
+        yield* Effect.forEach(
+          learningCommandTables,
+          (name) => db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(name)}`),
+          {
+            discard: true,
+          },
+        )
         yield* db.run(
           sql`INSERT INTO project (id, worktree, time_created, time_updated, sandboxes) VALUES ('gate7-project', '/learning', 1, 1, '[]')`,
         )
@@ -1423,6 +1692,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
           { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
           { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
+          { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
         ])
       }),
     )

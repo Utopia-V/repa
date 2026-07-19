@@ -141,6 +141,132 @@ describe("run permission shared", () => {
     })
   })
 
+  test("shows the exact once-only default Course preference state", () => {
+    const target = {
+      courseID: "crs_target",
+      courseTitle: "Target Course",
+      courseVersion: 4,
+      selectionRevisionID: "rev_target",
+      selectionVersion: 3,
+      viewID: "view_target",
+      viewName: "Target View",
+      viewVersion: 2,
+      revisionVersion: 1,
+    }
+    expect(
+      permissionInfo(
+        req({
+          permission: "set_default_course_preference",
+          metadata: {
+            onceOnly: true,
+            confirmation: {
+              permissionRequestID: "perm-set",
+              headID: null,
+              version: 0,
+              fromCourseID: null,
+              fromCourseTitle: null,
+              target,
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      icon: "◇",
+      title: "Confirm setting the default Course preference",
+      lines: [
+        "Current preference: version 0; head none",
+        "From Course: none",
+        'To Course: "Target Course" [crs_target]',
+        "Target Course version: 4; selection version: 3",
+        'Working View: "Target View" [view_target]; version 2',
+        "Working Revision: rev_target; version 1",
+      ],
+    })
+
+    expect(
+      permissionInfo(
+        req({
+          permission: "set_default_course_preference",
+          metadata: {
+            onceOnly: true,
+            confirmation: {
+              permissionRequestID: "perm-change",
+              headID: "ndp_previous",
+              version: 7,
+              fromCourseID: "crs_previous",
+              fromCourseTitle: "Previous Course",
+              target,
+            },
+          },
+        }),
+      ).lines,
+    ).toEqual([
+      "Current preference: version 7; head ndp_previous",
+      'From Course: "Previous Course" [crs_previous]',
+      'To Course: "Target Course" [crs_target]',
+      "Target Course version: 4; selection version: 3",
+      'Working View: "Target View" [view_target]; version 2',
+      "Working Revision: rev_target; version 1",
+    ])
+
+    expect(
+      permissionInfo(
+        req({
+          permission: "set_default_course_preference",
+          metadata: {
+            onceOnly: true,
+            confirmation: {
+              permissionRequestID: "perm-clear",
+              headID: "ndp_current",
+              version: 2,
+              fromCourseID: "crs_current",
+              fromCourseTitle: "Current Course",
+              target: null,
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      icon: "◇",
+      title: "Confirm clearing the default Course preference",
+      lines: [
+        "Current preference: version 2; head ndp_current",
+        'From Course: "Current Course" [crs_current]',
+        "To Course: none (clear the preference)",
+      ],
+    })
+
+    const withoutWorkingView = permissionInfo(
+      req({
+        permission: "set_default_course_preference",
+        metadata: {
+          onceOnly: true,
+          confirmation: {
+            permissionRequestID: "perm-no-view",
+            headID: null,
+            version: 0,
+            fromCourseID: null,
+            fromCourseTitle: null,
+            target: {
+              courseID: "crs_no_view",
+              courseTitle: "N".repeat(120),
+              courseVersion: 0,
+              selectionRevisionID: null,
+              selectionVersion: 0,
+              viewID: null,
+              viewName: null,
+              viewVersion: null,
+              revisionVersion: null,
+            },
+          },
+        },
+      }),
+    )
+    expect(withoutWorkingView.lines.slice(-2)).toEqual(["Working View: none", "Working Revision: none"])
+    expect(withoutWorkingView.lines[2]).toContain("[crs_no_view]")
+    expect(withoutWorkingView.lines[2]).not.toContain("N".repeat(120))
+  })
+
   test("formats always-allow copy for wildcard and explicit patterns", () => {
     expect(permissionAlwaysLines(req({ permission: "bash", always: ["*"] }))).toEqual([
       "This will allow bash until Repa is restarted.",

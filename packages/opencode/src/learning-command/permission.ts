@@ -5,7 +5,7 @@ import type { Permission } from "@/permission"
 
 export function ask(
   permission: Permission.Interface,
-  input: PermissionV1.AskInput,
+  input: Permission.AskInput,
   abort: AbortSignal,
 ): Effect.Effect<LearningCommand.PermissionOutcome> {
   if (abort.aborted) return Effect.succeed({ type: "abort" })
