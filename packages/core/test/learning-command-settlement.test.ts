@@ -19,6 +19,7 @@ import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Turn } from "@opencode-ai/schema/turn"
 import { testEffect } from "./lib/effect"
 
 const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
@@ -139,6 +140,8 @@ describe("learning-command settlement storage", () => {
               return {
                 envelope: {
                   occurrenceID,
+                  turnID: Turn.ID.create(),
+                  inputID: Turn.InputID.create(),
                   sessionID,
                   parentUserMessageID,
                   assistantMessageID,
@@ -556,6 +559,8 @@ describe("learning-command settlement storage", () => {
       const invocation = {
         envelope: {
           occurrenceID: occurrence.id,
+          turnID: Turn.ID.create(),
+          inputID: Turn.InputID.create(),
           sessionID,
           parentUserMessageID: cloneMessageID,
           assistantMessageID,

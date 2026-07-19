@@ -22,10 +22,14 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
+import { materializeTestSessionInfo } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 import { httpApiLayer, requestInDirectory } from "./httpapi-layer"
+import { EventV2Bridge } from "@/event-v2-bridge"
 
-const it = testEffect(Layer.mergeAll(LayerNode.compile(LayerNode.group([Session.node, Storage.node])), httpApiLayer))
+const it = testEffect(
+  Layer.mergeAll(LayerNode.compile(LayerNode.group([Session.node, Storage.node, EventV2Bridge.node])), httpApiLayer),
+)
 
 afterEach(async () => {
   await disposeAllInstances()
@@ -36,8 +40,10 @@ function pathFor(template: string, params: Record<string, string>) {
   return Object.entries(params).reduce((result, [key, value]) => result.replace(`:${key}`, value), template)
 }
 
-const withSession = (input?: Parameters<Session.Interface["create"]>[0]) =>
-  Effect.acquireRelease(Session.use.create(input), (created) => Session.use.remove(created.id).pipe(Effect.ignore))
+const withSession = (input?: Parameters<typeof materializeTestSessionInfo>[0]) =>
+  Effect.acquireRelease(materializeTestSessionInfo(input), (created) =>
+    Session.use.remove(created.id).pipe(Effect.ignore),
+  )
 
 describe("session diff with missing patch (#26574)", () => {
   it.instance(

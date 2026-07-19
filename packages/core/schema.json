@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "04e19ccc-392b-4304-9e8c-178c59141b24",
+  "id": "20e4e473-e799-4846-9758-231cbbad78a7",
   "prevIds": [
-    "2bf4b743-d996-4049-8e99-6a42f3b38cce"
+    "c80735cd-62cc-4889-bb46-aeeacdfd3f8a"
   ],
   "ddl": [
     {
@@ -28,6 +28,10 @@
     },
     {
       "name": "learning_occurrence_tombstone",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_shared_frontier",
       "entityType": "tables"
     },
     {
@@ -211,6 +215,14 @@
       "entityType": "tables"
     },
     {
+      "name": "session_historical_message_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_historical_part_presentation",
+      "entityType": "tables"
+    },
+    {
       "name": "session_input",
       "entityType": "tables"
     },
@@ -228,6 +240,78 @@
     },
     {
       "name": "session_share",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_candidate_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_candidate_redaction",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_child_lineage",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_child_result",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_historical_input_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_historical_model_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_historical_tool_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_input_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_input",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_model_operation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_model_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_tool_candidate",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_tool_invocation",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_transcript_redaction",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_unavailable_model",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_unavailable_source",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_unavailable_tool",
       "entityType": "tables"
     },
     {
@@ -549,6 +633,36 @@
       "name": "time_deleted",
       "entityType": "columns",
       "table": "learning_occurrence_tombstone"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "singleton",
+      "entityType": "columns",
+      "table": "learning_shared_frontier"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "sequence",
+      "entityType": "columns",
+      "table": "learning_shared_frontier"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learning_shared_frontier"
     },
     {
       "type": "integer",
@@ -3182,6 +3296,26 @@
     },
     {
       "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -4896,6 +5030,136 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_session_id",
+      "entityType": "columns",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_message_id",
+      "entityType": "columns",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_event_sequence",
+      "entityType": "columns",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_session_id",
+      "entityType": "columns",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_message_id",
+      "entityType": "columns",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_part_id",
+      "entityType": "columns",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "session_input"
@@ -5449,6 +5713,1556 @@
       "name": "time_updated",
       "entityType": "columns",
       "table": "session_share"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "turn_candidate_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_candidate_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_removed",
+      "entityType": "columns",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "child_turn_id",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "child_session_id",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "child_depth",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_turn_id",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_session_id",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_depth",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_task_part_id",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_model_message_id",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "delegated_capability",
+      "entityType": "columns",
+      "table": "turn_child_lineage"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_task_part_id",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_turn_id",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_session_id",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "child_turn_id",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "child_session_id",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "terminal_outcome",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "requested_output_state",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "requested_output",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
+      "entityType": "columns",
+      "table": "turn_child_result"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_session_id",
+      "entityType": "columns",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_turn_id",
+      "entityType": "columns",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_input_id",
+      "entityType": "columns",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_session_id",
+      "entityType": "columns",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_turn_id",
+      "entityType": "columns",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_occurrence_id",
+      "entityType": "columns",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_session_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_turn_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_part_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_id",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input_id",
+      "entityType": "columns",
+      "table": "turn_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "turn_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_input_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "message_id",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_model_message_id",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "envelope_fingerprint",
+      "entityType": "columns",
+      "table": "turn_input"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "input_id",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_occurrence_id",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'running'",
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "request_fingerprint",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "context_fingerprint",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snapshot_frontier_sequence",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snapshot_frontier_time",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_shared_frontier_sequence",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_shared_frontier_time",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "candidates_sealed",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "candidate_count",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_candidates_sealed",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_model_presentation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admission_kind",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "initial_input_id",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_input_id",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model_limit",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tool_limit",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "model_count",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "tool_count",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'running'",
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "depth",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_envelope",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "envelope_fingerprint",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_basis",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_time",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_terminal",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "terminal_reason",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exhaustion_counter",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exhaustion_observed",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exhaustion_limit",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exhaustion_attempt_id",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exhaustion_envelope",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exhaustion_envelope_fingerprint",
+      "entityType": "columns",
+      "table": "turn"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_id",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tool",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "emission_ordinal",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'pending_admission'",
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "normalized_envelope",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "envelope_fingerprint",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_registered",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_terminal",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exhaustion_turn_id",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'running'",
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_shared_frontier_sequence",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "observed_shared_frontier_time",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "consumed_shared_frontier_sequence",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "consumed_shared_frontier_time",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resulting_shared_frontier_sequence",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resulting_shared_frontier_time",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
+      "entityType": "columns",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_transcript_redaction"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_removed",
+      "entityType": "columns",
+      "table": "turn_transcript_redaction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reason",
+      "entityType": "columns",
+      "table": "turn_transcript_redaction"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_occurrence_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admission_kind",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_terminal",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_turn_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_session_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_task_part_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "parent_model_message_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "depth",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "causal_occurrence_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_deleted",
+      "entityType": "columns",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_tool"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_tool"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_tool"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_tool"
     },
     {
       "columns": [
@@ -7053,6 +8867,51 @@
     },
     {
       "columns": [
+        "message_id"
+      ],
+      "tableTo": "message",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_historical_message_presentation_message_id_message_id_fk",
+      "entityType": "fks",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "part",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_historical_part_presentation_part_id_part_id_fk",
+      "entityType": "fks",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "tableTo": "session_historical_message_presentation",
+      "columnsTo": [
+        "message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_historical_part_presentation_message_id_session_historical_message_presentation_message_id_fk",
+      "entityType": "fks",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "columns": [
         "session_id"
       ],
       "tableTo": "session",
@@ -7125,6 +8984,548 @@
       "name": "fk_session_share_session_id_session_id_fk",
       "entityType": "fks",
       "table": "session_share"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_candidate_presentation_part_id_turn_tool_candidate_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_candidate_presentation"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "part",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_candidate_presentation_part_id_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_candidate_presentation"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_candidate_redaction_part_id_turn_tool_candidate_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "turn_id",
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_candidate_redaction_turn_id_part_id_turn_tool_candidate_turn_id_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "columns": [
+        "child_turn_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_child_lineage_child_turn_id_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_child_lineage"
+    },
+    {
+      "columns": [
+        "child_turn_id",
+        "child_session_id",
+        "child_depth"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id",
+        "session_id",
+        "depth"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_child_lineage_child_turn_id_child_session_id_child_depth_turn_id_session_id_depth_fk",
+      "entityType": "fks",
+      "table": "turn_child_lineage"
+    },
+    {
+      "columns": [
+        "parent_turn_id",
+        "parent_session_id",
+        "parent_depth"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id",
+        "session_id",
+        "depth"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_turn_child_lineage_parent_turn_id_parent_session_id_parent_depth_turn_id_session_id_depth_fk",
+      "entityType": "fks",
+      "table": "turn_child_lineage"
+    },
+    {
+      "columns": [
+        "parent_turn_id",
+        "parent_task_part_id",
+        "parent_model_message_id"
+      ],
+      "tableTo": "turn_tool_invocation",
+      "columnsTo": [
+        "turn_id",
+        "part_id",
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_turn_child_lineage_parent_turn_id_parent_task_part_id_parent_model_message_id_turn_tool_invocation_turn_id_part_id_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_child_lineage"
+    },
+    {
+      "columns": [
+        "parent_task_part_id"
+      ],
+      "tableTo": "part",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_child_result_parent_task_part_id_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_child_result"
+    },
+    {
+      "columns": [
+        "parent_turn_id",
+        "parent_task_part_id"
+      ],
+      "tableTo": "turn_tool_invocation",
+      "columnsTo": [
+        "turn_id",
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_child_result_parent_turn_id_parent_task_part_id_turn_tool_invocation_turn_id_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_child_result"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "tableTo": "message",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_historical_input_presentation_message_id_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "message",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_historical_model_presentation_assistant_message_id_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "part",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_historical_tool_presentation_part_id_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "columns": [
+        "input_id"
+      ],
+      "tableTo": "turn_input",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_input_presentation_input_id_turn_input_id_fk",
+      "entityType": "fks",
+      "table": "turn_input_presentation"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "tableTo": "message",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_input_presentation_message_id_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_input_presentation"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_input_turn_id_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_turn_input_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "session_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id",
+        "session_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_input_turn_id_session_id_turn_id_session_id_fk",
+      "entityType": "fks",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_model_operation_turn_id_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_model_operation"
+    },
+    {
+      "columns": [
+        "causal_occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_turn_model_operation_causal_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "turn_model_operation"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "session_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id",
+        "session_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_model_operation_turn_id_session_id_turn_id_session_id_fk",
+      "entityType": "fks",
+      "table": "turn_model_operation"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "input_id"
+      ],
+      "tableTo": "turn_input",
+      "columnsTo": [
+        "turn_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_turn_model_operation_turn_id_input_id_turn_input_turn_id_id_fk",
+      "entityType": "fks",
+      "table": "turn_model_operation"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_model_operation",
+      "columnsTo": [
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_model_presentation_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_model_presentation"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "tableTo": "message",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_model_presentation_assistant_message_id_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_model_presentation"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "tableTo": "session",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_session_id_session_id_fk",
+      "entityType": "fks",
+      "table": "turn"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_tool_candidate_turn_id_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "assistant_message_id",
+        "session_id"
+      ],
+      "tableTo": "turn_model_operation",
+      "columnsTo": [
+        "turn_id",
+        "assistant_message_id",
+        "session_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_tool_candidate_turn_id_assistant_message_id_session_id_turn_model_operation_turn_id_assistant_message_id_session_id_fk",
+      "entityType": "fks",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
+        "exhaustion_turn_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_turn_tool_candidate_exhaustion_turn_id_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_tool_invocation_part_id_turn_tool_candidate_part_id_fk",
+      "entityType": "fks",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id",
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "turn_id",
+        "part_id",
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_tool_invocation_turn_id_part_id_assistant_message_id_turn_tool_candidate_turn_id_part_id_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "session_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id",
+        "session_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_tool_invocation_turn_id_session_id_turn_id_session_id_fk",
+      "entityType": "fks",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "tableTo": "turn",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_transcript_redaction_turn_id_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_transcript_redaction"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "tableTo": "turn_unavailable_source",
+      "columnsTo": [
+        "turn_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_unavailable_model_turn_id_turn_unavailable_source_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "tableTo": "turn_unavailable_source",
+      "columnsTo": [
+        "turn_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_unavailable_tool_turn_id_turn_unavailable_source_turn_id_fk",
+      "entityType": "fks",
+      "table": "turn_unavailable_tool"
     },
     {
       "columns": [
@@ -7238,6 +9639,15 @@
       "nameExplicit": false,
       "name": "learning_occurrence_tombstone_pk",
       "table": "learning_occurrence_tombstone",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "singleton"
+      ],
+      "nameExplicit": false,
+      "name": "learning_shared_frontier_pk",
+      "table": "learning_shared_frontier",
       "entityType": "pks"
     },
     {
@@ -7602,6 +10012,24 @@
     },
     {
       "columns": [
+        "message_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_historical_message_presentation_pk",
+      "table": "session_historical_message_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "session_historical_part_presentation_pk",
+      "table": "session_historical_part_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -7634,6 +10062,150 @@
       "nameExplicit": false,
       "name": "session_share_pk",
       "table": "session_share",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_candidate_presentation_pk",
+      "table": "turn_candidate_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_candidate_redaction_pk",
+      "table": "turn_candidate_redaction",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "child_turn_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_child_lineage_pk",
+      "table": "turn_child_lineage",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "parent_task_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_child_result_pk",
+      "table": "turn_child_result",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_historical_input_presentation_pk",
+      "table": "turn_historical_input_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_historical_model_presentation_pk",
+      "table": "turn_historical_model_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_historical_tool_presentation_pk",
+      "table": "turn_historical_tool_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "input_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_input_presentation_pk",
+      "table": "turn_input_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_input_pk",
+      "table": "turn_input",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_model_operation_pk",
+      "table": "turn_model_operation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_model_presentation_pk",
+      "table": "turn_model_presentation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_pk",
+      "table": "turn",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_tool_candidate_pk",
+      "table": "turn_tool_candidate",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_tool_invocation_pk",
+      "table": "turn_tool_invocation",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_transcript_redaction_pk",
+      "table": "turn_transcript_redaction",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "turn_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_unavailable_source_pk",
+      "table": "turn_unavailable_source",
       "entityType": "pks"
     },
     {
@@ -8761,6 +11333,42 @@
     {
       "columns": [
         {
+          "value": "source_session_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "session_historical_message_source_idx",
+      "entityType": "indexes",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_session_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "session_historical_part_source_idx",
+      "entityType": "indexes",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "columns": [
+        {
           "value": "session_id",
           "isExpression": false
         },
@@ -8951,6 +11559,282 @@
       "name": "todo_session_idx",
       "entityType": "indexes",
       "table": "todo"
+    },
+    {
+      "columns": [
+        {
+          "value": "turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_candidate_redaction_turn_idx",
+      "entityType": "indexes",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "columns": [
+        {
+          "value": "parent_turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "parent_task_part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_child_lineage_parent_idx",
+      "entityType": "indexes",
+      "table": "turn_child_lineage"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_input_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_historical_input_source_idx",
+      "entityType": "indexes",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_assistant_message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_historical_model_source_idx",
+      "entityType": "indexes",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "columns": [
+        {
+          "value": "source_turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "source_part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_historical_tool_source_idx",
+      "entityType": "indexes",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "columns": [
+        {
+          "value": "turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "ordinal",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_input_turn_ordinal_idx",
+      "entityType": "indexes",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        {
+          "value": "message_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_input_message_idx",
+      "entityType": "indexes",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        {
+          "value": "occurrence_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_input_occurrence_idx",
+      "entityType": "indexes",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        {
+          "value": "turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "ordinal",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_model_turn_ordinal_idx",
+      "entityType": "indexes",
+      "table": "turn_model_operation"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"turn\".\"state\" = 'running'",
+      "origin": "manual",
+      "name": "turn_one_running_per_session_idx",
+      "entityType": "indexes",
+      "table": "turn"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_admitted",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_session_admitted_idx",
+      "entityType": "indexes",
+      "table": "turn"
+    },
+    {
+      "columns": [
+        {
+          "value": "assistant_message_id",
+          "isExpression": false
+        },
+        {
+          "value": "emission_ordinal",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_candidate_model_emission_idx",
+      "entityType": "indexes",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
+        {
+          "value": "assistant_message_id",
+          "isExpression": false
+        },
+        {
+          "value": "call_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_candidate_model_call_idx",
+      "entityType": "indexes",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
+        {
+          "value": "turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "ordinal",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_invocation_turn_ordinal_idx",
+      "entityType": "indexes",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_unavailable_session_idx",
+      "entityType": "indexes",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "columns": [
+        {
+          "value": "parent_turn_id",
+          "isExpression": false
+        },
+        {
+          "value": "parent_task_part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "turn_unavailable_parent_idx",
+      "entityType": "indexes",
+      "table": "turn_unavailable_source"
     },
     {
       "columns": [
@@ -9380,6 +12264,176 @@
       "table": "representation_revision"
     },
     {
+      "columns": [
+        "child_turn_id",
+        "child_session_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_child_lineage_child_session_unique",
+      "entityType": "uniques",
+      "table": "turn_child_lineage"
+    },
+    {
+      "columns": [
+        "child_turn_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_child_result_child_unique",
+      "entityType": "uniques",
+      "table": "turn_child_result"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_input_turn_id_unique",
+      "entityType": "uniques",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        "session_id",
+        "id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_input_session_id_unique",
+      "entityType": "uniques",
+      "table": "turn_input"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "assistant_message_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_model_turn_message_unique",
+      "entityType": "uniques",
+      "table": "turn_model_operation"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "assistant_message_id",
+        "session_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_model_turn_message_session_unique",
+      "entityType": "uniques",
+      "table": "turn_model_operation"
+    },
+    {
+      "columns": [
+        "id",
+        "session_id",
+        "depth"
+      ],
+      "nameExplicit": true,
+      "name": "turn_id_session_depth_unique",
+      "entityType": "uniques",
+      "table": "turn"
+    },
+    {
+      "columns": [
+        "id",
+        "session_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_id_session_unique",
+      "entityType": "uniques",
+      "table": "turn"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_candidate_turn_part_unique",
+      "entityType": "uniques",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id",
+        "assistant_message_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_candidate_turn_part_model_unique",
+      "entityType": "uniques",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_invocation_turn_part_unique",
+      "entityType": "uniques",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id",
+        "assistant_message_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_invocation_turn_part_model_unique",
+      "entityType": "uniques",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "assistant_message_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_unavailable_model_identity_unique",
+      "entityType": "uniques",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "columns": [
+        "assistant_message_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_unavailable_model_message_unique",
+      "entityType": "uniques",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_unavailable_tool_identity_unique",
+      "entityType": "uniques",
+      "table": "turn_unavailable_tool"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": true,
+      "name": "turn_unavailable_tool_part_unique",
+      "entityType": "uniques",
+      "table": "turn_unavailable_tool"
+    },
+    {
+      "columns": [
+        "message_id"
+      ],
+      "nameExplicit": false,
+      "name": "turn_input_presentation_message_id_unique",
+      "entityType": "uniques",
+      "table": "turn_input_presentation"
+    },
+    {
       "value": "\"time_admitted\" >= 0",
       "name": "learning_admitted_occurrence_time_nonnegative",
       "entityType": "checks",
@@ -9432,6 +12486,18 @@
       "name": "learning_occurrence_tombstone_time_nonnegative",
       "entityType": "checks",
       "table": "learning_occurrence_tombstone"
+    },
+    {
+      "value": "\"singleton\" = 1",
+      "name": "learning_shared_frontier_singleton",
+      "entityType": "checks",
+      "table": "learning_shared_frontier"
+    },
+    {
+      "value": "\"sequence\" >= 0 AND \"time_committed\" >= 0",
+      "name": "learning_shared_frontier_nonnegative",
+      "entityType": "checks",
+      "table": "learning_shared_frontier"
     },
     {
       "value": "\"source_version\" >= 0",
@@ -10110,6 +13176,252 @@
       "name": "representation_revision_creation_shape",
       "entityType": "checks",
       "table": "representation_revision"
+    },
+    {
+      "value": "\"source_event_sequence\" >= 0 AND \"time_created\" >= 0",
+      "name": "session_historical_message_time",
+      "entityType": "checks",
+      "table": "session_historical_message_presentation"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "session_historical_part_time",
+      "entityType": "checks",
+      "table": "session_historical_part_presentation"
+    },
+    {
+      "value": "\"reason\" = 'presentation_removed'",
+      "name": "turn_candidate_redaction_reason",
+      "entityType": "checks",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "value": "\"time_removed\" >= 0",
+      "name": "turn_candidate_redaction_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_candidate_redaction"
+    },
+    {
+      "value": "\"parent_depth\" >= 0 AND \"child_depth\" = \"parent_depth\" + 1",
+      "name": "turn_child_lineage_depth",
+      "entityType": "checks",
+      "table": "turn_child_lineage"
+    },
+    {
+      "value": "\"terminal_outcome\" IN ('completed', 'failed', 'interrupted', 'exhausted')",
+      "name": "turn_child_result_terminal_outcome",
+      "entityType": "checks",
+      "table": "turn_child_result"
+    },
+    {
+      "value": "(\"requested_output_state\" = 'complete' AND \"requested_output\" IS NOT NULL AND \"reason\" IS NULL) OR (\"requested_output_state\" = 'incomplete' AND \"reason\" IS NOT NULL)",
+      "name": "turn_child_result_output_shape",
+      "entityType": "checks",
+      "table": "turn_child_result"
+    },
+    {
+      "value": "\"time_settled\" >= 0",
+      "name": "turn_child_result_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_child_result"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "turn_historical_input_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_historical_input_presentation"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "turn_historical_model_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_historical_model_presentation"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "turn_historical_tool_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_historical_tool_presentation"
+    },
+    {
+      "value": "\"ordinal\" >= 0",
+      "name": "turn_input_ordinal_nonnegative",
+      "entityType": "checks",
+      "table": "turn_input"
+    },
+    {
+      "value": "\"time_admitted\" >= 0",
+      "name": "turn_input_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_input"
+    },
+    {
+      "value": "length(\"envelope_fingerprint\") = 64",
+      "name": "turn_input_fingerprint",
+      "entityType": "checks",
+      "table": "turn_input"
+    },
+    {
+      "value": "(\"source\" = 'learner_root' AND \"ordinal\" = 0 AND \"occurrence_id\" IS NOT NULL AND \"parent_model_message_id\" IS NULL) OR (\"source\" = 'learner_steer' AND \"ordinal\" > 0 AND \"occurrence_id\" IS NOT NULL AND \"parent_model_message_id\" IS NULL) OR (\"source\" = 'delegated_task' AND \"ordinal\" = 0 AND \"parent_model_message_id\" IS NOT NULL)",
+      "name": "turn_input_source_shape",
+      "entityType": "checks",
+      "table": "turn_input"
+    },
+    {
+      "value": "\"ordinal\" >= 0",
+      "name": "turn_model_ordinal_nonnegative",
+      "entityType": "checks",
+      "table": "turn_model_operation"
+    },
+    {
+      "value": "length(\"request_fingerprint\") = 64 AND length(\"context_fingerprint\") = 64",
+      "name": "turn_model_fingerprints",
+      "entityType": "checks",
+      "table": "turn_model_operation"
+    },
+    {
+      "value": "\"snapshot_frontier_sequence\" >= 0 AND \"observed_shared_frontier_sequence\" >= \"snapshot_frontier_sequence\" AND \"snapshot_frontier_time\" >= 0 AND \"observed_shared_frontier_time\" >= \"snapshot_frontier_time\" AND \"time_admitted\" >= \"snapshot_frontier_time\" AND \"time_admitted\" >= \"observed_shared_frontier_time\"",
+      "name": "turn_model_times",
+      "entityType": "checks",
+      "table": "turn_model_operation"
+    },
+    {
+      "value": "(\"state\" = 'running' AND \"time_settled\" IS NULL) OR (\"state\" IN ('completed', 'failed', 'interrupted') AND \"time_settled\" IS NOT NULL AND \"time_settled\" >= \"time_admitted\")",
+      "name": "turn_model_state_shape",
+      "entityType": "checks",
+      "table": "turn_model_operation"
+    },
+    {
+      "value": "(\"candidates_sealed\" = 0 AND \"candidate_count\" IS NULL AND \"time_candidates_sealed\" IS NULL) OR (\"candidates_sealed\" = 1 AND \"candidate_count\" IS NOT NULL AND \"candidate_count\" >= 0 AND \"time_candidates_sealed\" IS NOT NULL AND \"time_candidates_sealed\" >= \"time_admitted\")",
+      "name": "turn_model_candidate_seal_shape",
+      "entityType": "checks",
+      "table": "turn_model_operation"
+    },
+    {
+      "value": "\"model_limit\" >= 0 AND \"tool_limit\" >= 0",
+      "name": "turn_limits_nonnegative",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "\"model_count\" >= 0 AND \"tool_count\" >= 0 AND \"model_count\" <= \"model_limit\" AND \"tool_count\" <= \"tool_limit\"",
+      "name": "turn_counts_bounded",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "\"depth\" >= 0",
+      "name": "turn_depth_nonnegative",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "length(\"envelope_fingerprint\") = 64",
+      "name": "turn_fingerprints",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "\"time_admitted\" >= 0 AND \"causal_time\" >= \"time_admitted\"",
+      "name": "turn_times_nonnegative",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "(\"admission_kind\" = 'learner' AND \"depth\" = 0) OR (\"admission_kind\" = 'delegated_task' AND \"depth\" > 0)",
+      "name": "turn_lineage_shape",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "\"state\" IN ('running', 'completed', 'failed', 'interrupted', 'exhausted')",
+      "name": "turn_state",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "(\"state\" = 'running' AND \"time_terminal\" IS NULL AND \"terminal_reason\" IS NULL AND \"exhaustion_counter\" IS NULL AND \"exhaustion_observed\" IS NULL AND \"exhaustion_limit\" IS NULL AND \"exhaustion_attempt_id\" IS NULL AND \"exhaustion_envelope\" IS NULL AND \"exhaustion_envelope_fingerprint\" IS NULL) OR (\"state\" = 'completed' AND \"time_terminal\" IS NOT NULL AND \"time_terminal\" >= \"causal_time\" AND \"terminal_reason\" IS NOT NULL AND \"terminal_reason\" = 'normal' AND \"exhaustion_counter\" IS NULL AND \"exhaustion_observed\" IS NULL AND \"exhaustion_limit\" IS NULL AND \"exhaustion_attempt_id\" IS NULL AND \"exhaustion_envelope\" IS NULL AND \"exhaustion_envelope_fingerprint\" IS NULL) OR (\"state\" = 'failed' AND \"time_terminal\" IS NOT NULL AND \"time_terminal\" >= \"causal_time\" AND \"terminal_reason\" IS NOT NULL AND \"terminal_reason\" IN ('provider_failure', 'tool_runtime_failure', 'permission_failure', 'projection_failure', 'owner_failure', 'integrity_failure') AND \"exhaustion_counter\" IS NULL AND \"exhaustion_observed\" IS NULL AND \"exhaustion_limit\" IS NULL AND \"exhaustion_attempt_id\" IS NULL AND \"exhaustion_envelope\" IS NULL AND \"exhaustion_envelope_fingerprint\" IS NULL) OR (\"state\" = 'interrupted' AND \"time_terminal\" IS NOT NULL AND \"time_terminal\" >= \"causal_time\" AND \"terminal_reason\" IS NOT NULL AND \"terminal_reason\" IN ('learner_interrupt', 'ancestor_interrupt', 'owner_handoff_failed', 'owner_lost', 'startup_recovery') AND \"exhaustion_counter\" IS NULL AND \"exhaustion_observed\" IS NULL AND \"exhaustion_limit\" IS NULL AND \"exhaustion_attempt_id\" IS NULL AND \"exhaustion_envelope\" IS NULL AND \"exhaustion_envelope_fingerprint\" IS NULL) OR (\"state\" = 'exhausted' AND \"time_terminal\" IS NOT NULL AND \"time_terminal\" >= \"causal_time\" AND \"terminal_reason\" IS NOT NULL AND \"exhaustion_counter\" IS NOT NULL AND \"exhaustion_observed\" IS NOT NULL AND \"exhaustion_limit\" IS NOT NULL AND ((\"exhaustion_counter\" = 'model' AND \"terminal_reason\" = 'model_limit' AND \"exhaustion_observed\" = \"model_count\" AND \"exhaustion_limit\" = \"model_limit\") OR (\"exhaustion_counter\" = 'tool' AND \"terminal_reason\" = 'tool_limit' AND \"exhaustion_observed\" = \"tool_count\" AND \"exhaustion_limit\" = \"tool_limit\")) AND \"exhaustion_attempt_id\" IS NOT NULL AND \"exhaustion_envelope\" IS NOT NULL AND \"exhaustion_envelope_fingerprint\" IS NOT NULL AND length(\"exhaustion_envelope_fingerprint\") = 64)",
+      "name": "turn_terminal_shape",
+      "entityType": "checks",
+      "table": "turn"
+    },
+    {
+      "value": "\"emission_ordinal\" >= 0",
+      "name": "turn_candidate_ordinal_nonnegative",
+      "entityType": "checks",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "value": "length(\"envelope_fingerprint\") = 64",
+      "name": "turn_candidate_fingerprint",
+      "entityType": "checks",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "value": "\"time_registered\" >= 0",
+      "name": "turn_candidate_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "value": "(\"state\" IN ('pending_admission', 'admitted') AND \"time_terminal\" IS NULL AND \"exhaustion_turn_id\" IS NULL) OR (\"state\" IN ('not_started_interrupted', 'not_started_failed') AND \"time_terminal\" IS NOT NULL AND \"time_terminal\" >= \"time_registered\" AND \"exhaustion_turn_id\" IS NULL) OR (\"state\" IN ('not_started_limit', 'not_started_turn_exhausted') AND \"time_terminal\" IS NOT NULL AND \"time_terminal\" >= \"time_registered\" AND \"exhaustion_turn_id\" = \"turn_id\")",
+      "name": "turn_candidate_state_shape",
+      "entityType": "checks",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "value": "\"ordinal\" >= 0",
+      "name": "turn_invocation_ordinal_nonnegative",
+      "entityType": "checks",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "value": "\"observed_shared_frontier_sequence\" >= 0 AND \"consumed_shared_frontier_sequence\" >= \"observed_shared_frontier_sequence\" AND \"observed_shared_frontier_time\" >= 0 AND \"consumed_shared_frontier_time\" >= \"observed_shared_frontier_time\" AND (\"resulting_shared_frontier_sequence\" IS NULL OR (\"resulting_shared_frontier_sequence\" >= \"consumed_shared_frontier_sequence\" AND \"resulting_shared_frontier_time\" >= \"consumed_shared_frontier_time\")) AND \"time_admitted\" >= \"consumed_shared_frontier_time\"",
+      "name": "turn_invocation_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "value": "(\"state\" = 'running' AND \"time_settled\" IS NULL AND ((\"resulting_shared_frontier_sequence\" IS NULL AND \"resulting_shared_frontier_time\" IS NULL) OR (\"resulting_shared_frontier_sequence\" IS NOT NULL AND \"resulting_shared_frontier_time\" IS NOT NULL))) OR (\"state\" IN ('completed', 'failed', 'interrupted') AND \"time_settled\" IS NOT NULL AND \"time_settled\" >= \"time_admitted\" AND \"time_settled\" >= \"consumed_shared_frontier_time\" AND ((\"resulting_shared_frontier_sequence\" IS NULL AND \"resulting_shared_frontier_time\" IS NULL) OR (\"resulting_shared_frontier_sequence\" IS NOT NULL AND \"resulting_shared_frontier_time\" IS NOT NULL AND \"time_settled\" >= \"resulting_shared_frontier_time\")))",
+      "name": "turn_invocation_state_shape",
+      "entityType": "checks",
+      "table": "turn_tool_invocation"
+    },
+    {
+      "value": "\"reason\" = 'presentation_removed'",
+      "name": "turn_transcript_redaction_reason",
+      "entityType": "checks",
+      "table": "turn_transcript_redaction"
+    },
+    {
+      "value": "\"time_removed\" >= 0",
+      "name": "turn_transcript_redaction_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_transcript_redaction"
+    },
+    {
+      "value": "\"outcome\" IN ('completed', 'failed', 'interrupted', 'exhausted')",
+      "name": "turn_unavailable_outcome",
+      "entityType": "checks",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "value": "\"time_admitted\" >= 0 AND \"depth\" >= 0 AND \"time_deleted\" >= \"time_admitted\" AND (\"time_terminal\" IS NULL OR (\"time_terminal\" >= \"time_admitted\" AND \"time_deleted\" >= \"time_terminal\"))",
+      "name": "turn_unavailable_time_nonnegative",
+      "entityType": "checks",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "value": "(\"admission_kind\" = 'learner' AND \"depth\" = 0 AND \"parent_turn_id\" IS NULL AND \"parent_session_id\" IS NULL AND \"parent_task_part_id\" IS NULL AND \"parent_model_message_id\" IS NULL) OR (\"admission_kind\" = 'delegated_task' AND \"depth\" > 0 AND \"parent_turn_id\" IS NOT NULL AND \"parent_session_id\" IS NOT NULL AND \"parent_task_part_id\" IS NOT NULL AND \"parent_model_message_id\" IS NOT NULL)",
+      "name": "turn_unavailable_parent_shape",
+      "entityType": "checks",
+      "table": "turn_unavailable_source"
+    },
+    {
+      "value": "\"time_terminal\" IS NOT NULL",
+      "name": "turn_unavailable_terminal_shape",
+      "entityType": "checks",
+      "table": "turn_unavailable_source"
     }
   ],
   "renames": []

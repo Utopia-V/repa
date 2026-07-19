@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test"
 import { tmpdir } from "../../../fixture/fixture"
 import { deferred, directory, json, mount, wait, worktree } from "./sync-fixture"
-import type { GlobalEvent } from "@opencode-ai/sdk/v2"
+import type { GlobalEvent, TurnInfo, TurnInput } from "@opencode-ai/sdk/v2"
 
 function branchEvent(branch: string, eventDirectory: string): GlobalEvent {
   return {
@@ -13,6 +13,36 @@ function branchEvent(branch: string, eventDirectory: string): GlobalEvent {
       type: "vcs.branch.updated",
       properties: { branch },
     },
+  }
+}
+
+function turnInfo(sessionID: string, turnID: string): TurnInfo {
+  return {
+    id: turnID,
+    sessionID,
+    admissionKind: "learner",
+    initialInputID: `${turnID}_input`,
+    currentInputID: `${turnID}_input`,
+    limits: { model: 8, tool: 32 },
+    counters: { model: 0, tool: 0 },
+    state: "running",
+    depth: 0,
+    timeAdmitted: 1,
+    causalTime: 1,
+  }
+}
+
+function turnInput(sessionID: string, turnID: string): TurnInput {
+  return {
+    id: `${turnID}_input`,
+    turnID,
+    sessionID,
+    messageID: `${turnID}_message`,
+    source: "learner_root",
+    ordinal: 0,
+    occurrenceID: `${turnID}_occurrence`,
+    timeAdmitted: 1,
+    envelopeFingerprint: `${turnID}_fingerprint`,
   }
 }
 
@@ -72,7 +102,11 @@ describe("tui sync", () => {
 
     try {
       requests.length = 0
-      emit({ directory: "/tmp/other", project: "proj_test", payload: { id: "evt_lsp_other", type: "lsp.updated", properties: {} } })
+      emit({
+        directory: "/tmp/other",
+        project: "proj_test",
+        payload: { id: "evt_lsp_other", type: "lsp.updated", properties: {} },
+      })
       await Bun.sleep(30)
       expect(requests).toEqual([])
 
@@ -127,9 +161,7 @@ describe("tui sync", () => {
       await sync.bootstrap({ fatal: false, directory: latestDirectory })
       await wait(() => sync.data.lsp[0]?.id === "latest")
 
-      staleLsp.resolve(
-        json([{ id: "stale", name: "typescript", root: directory, status: "connected" }]),
-      )
+      staleLsp.resolve(json([{ id: "stale", name: "typescript", root: directory, status: "connected" }]))
       await Bun.sleep(30)
       expect(sync.data.lsp[0]?.id).toBe("latest")
     } finally {
@@ -145,7 +177,13 @@ describe("tui sync", () => {
     const { app, project, sync } = await mount((url) => {
       requests.push(new URL(url))
       if (url.pathname === "/path")
-        return json({ home: "/tmp", state: "", config: "", worktree, directory: url.searchParams.get("directory") ?? directory })
+        return json({
+          home: "/tmp",
+          state: "",
+          config: "",
+          worktree,
+          directory: url.searchParams.get("directory") ?? directory,
+        })
       if (url.pathname === "/project/proj_test/directories")
         return json([{ directory: worktree }, { directory: selected, strategy: "git_worktree" }])
       return undefined
@@ -155,7 +193,19 @@ describe("tui sync", () => {
       requests.length = 0
       await sync.bootstrap({ fatal: false, directory: selected })
       const hydrated = requests.filter((url) =>
-        ["/config/providers", "/provider", "/agent", "/config", "/command", "/lsp", "/mcp", "/formatter", "/session/status", "/provider/auth", "/vcs"].includes(url.pathname),
+        [
+          "/config/providers",
+          "/provider",
+          "/agent",
+          "/config",
+          "/command",
+          "/lsp",
+          "/mcp",
+          "/formatter",
+          "/session/status",
+          "/provider/auth",
+          "/vcs",
+        ].includes(url.pathname),
       )
       expect(project.instance.directory()).toBe(selected)
       expect(hydrated.length).toBeGreaterThan(0)
@@ -233,9 +283,7 @@ describe("tui sync", () => {
 
     try {
       const controller = new AbortController()
-      expect(
-        await sync.bootstrap({ fatal: false, directory: targetDirectory, signal: controller.signal }),
-      ).toBe(true)
+      expect(await sync.bootstrap({ fatal: false, directory: targetDirectory, signal: controller.signal })).toBe(true)
       await targetVcsStarted.promise
       expect(project.instance.directory()).toBe(targetDirectory)
       expect(sync.status).toBe("partial")
@@ -367,9 +415,7 @@ describe("tui sync", () => {
       const failed = sync.bootstrap({ fatal: false, directory: targetDirectory })
       await expect(failed).rejects.toBeDefined()
 
-      delayedPath.resolve(
-        json({ home: "/tmp", state: "", config: "", worktree, directory: targetDirectory }),
-      )
+      delayedPath.resolve(json({ home: "/tmp", state: "", config: "", worktree, directory: targetDirectory }))
       await targetPrepared.promise
       await Bun.sleep(30)
 
@@ -455,6 +501,103 @@ describe("tui sync", () => {
       })
       await wait(() => sync.session.get("ses_sibling") !== undefined)
       expect(sync.session.get("ses_sibling")?.directory).toBe("/tmp/learning/sibling")
+    } finally {
+      app.renderer.destroy()
+    }
+  })
+
+  test("captured steer and interrupt identities do not retarget a replacement Turn", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/kv.json`, "{}")
+    const { app, emit, sync } = await mount(undefined, tmp.path)
+    const sessionID = "ses_visible_turn"
+    const turnA = "trn_visible_a"
+    const turnB = "trn_visible_b"
+
+    try {
+      emit({
+        directory,
+        project: "proj_test",
+        payload: {
+          id: "evt_turn_a_started",
+          type: "turn.started",
+          properties: {
+            sessionID,
+            turnID: turnA,
+            timestamp: 1,
+            turn: turnInfo(sessionID, turnA),
+            input: turnInput(sessionID, turnA),
+          },
+        },
+      })
+      await wait(() => sync.data.active_turn[sessionID] === turnA)
+
+      const steerTarget = sync.data.active_turn[sessionID]
+      const interruptTarget = sync.data.active_turn[sessionID]
+
+      emit({
+        directory,
+        project: "proj_test",
+        payload: {
+          id: "evt_turn_a_terminal",
+          type: "turn.terminal",
+          properties: {
+            sessionID,
+            turnID: turnA,
+            timestamp: 2,
+            terminal: {
+              outcome: "completed",
+              reason: "normal",
+              counters: { model: 1, tool: 0 },
+              time: 2,
+            },
+          },
+        },
+      })
+      emit({
+        directory,
+        project: "proj_test",
+        payload: {
+          id: "evt_turn_b_started",
+          type: "turn.started",
+          properties: {
+            sessionID,
+            turnID: turnB,
+            timestamp: 3,
+            turn: turnInfo(sessionID, turnB),
+            input: turnInput(sessionID, turnB),
+          },
+        },
+      })
+      await wait(() => sync.data.active_turn[sessionID] === turnB)
+
+      expect({ steerTarget, interruptTarget, current: sync.data.active_turn[sessionID] }).toEqual({
+        steerTarget: turnA,
+        interruptTarget: turnA,
+        current: turnB,
+      })
+
+      emit({
+        directory,
+        project: "proj_test",
+        payload: {
+          id: "evt_stale_turn_a_terminal",
+          type: "turn.terminal",
+          properties: {
+            sessionID,
+            turnID: turnA,
+            timestamp: 4,
+            terminal: {
+              outcome: "interrupted",
+              reason: "learner_interrupt",
+              counters: { model: 1, tool: 0 },
+              time: 4,
+            },
+          },
+        },
+      })
+      await Bun.sleep(20)
+      expect(sync.data.active_turn[sessionID]).toBe(turnB)
     } finally {
       app.renderer.destroy()
     }

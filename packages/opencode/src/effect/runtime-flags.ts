@@ -39,7 +39,6 @@ export class Service extends ConfigService.Service<Service>()("@opencode/Runtime
   enableExperimentalModels: bool("REPA_ENABLE_EXPERIMENTAL_MODELS"),
   enableQuestionTool: bool("REPA_ENABLE_QUESTION_TOOL"),
   experimentalReferences: enabledByExperimental("REPA_EXPERIMENTAL_REFERENCES"),
-  experimentalBackgroundSubagents: enabledByExperimental("REPA_EXPERIMENTAL_BACKGROUND_SUBAGENTS"),
   experimentalLspTy: bool("REPA_EXPERIMENTAL_LSP_TY"),
   experimentalLspTool: enabledByExperimental("REPA_EXPERIMENTAL_LSP_TOOL"),
   experimentalOxfmt: enabledByExperimental("REPA_EXPERIMENTAL_OXFMT"),

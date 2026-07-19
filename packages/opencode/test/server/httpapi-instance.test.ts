@@ -9,6 +9,8 @@ import { WorkspaceV2 } from "@opencode-ai/core/workspace"
 import { ControlPaths } from "../../src/server/routes/instance/httpapi/groups/control"
 import { InstancePaths } from "../../src/server/routes/instance/httpapi/groups/instance"
 import { SessionPaths } from "../../src/server/routes/instance/httpapi/groups/session"
+import { MessageID, SessionID } from "../../src/session/schema"
+import { Turn } from "@opencode-ai/schema/turn"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { QuestionID } from "../../src/question/schema"
 import { HttpApiApp } from "../../src/server/routes/instance/httpapi/server"
@@ -16,6 +18,7 @@ import { HEADER as FenceHeader } from "../../src/server/shared/fence"
 import { resetDatabase } from "../fixture/db"
 import { tmpdirScoped } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
+import { testProviderConfig } from "../lib/test-provider"
 
 // Flip the experimental workspaces flag so EventV2.run actually writes to
 // EventSequenceTable (the source of truth the fence middleware reads). Reset
@@ -52,7 +55,6 @@ const httpApiServerLayer = servedRoutes.pipe(
 
 const it = testEffect(Layer.mergeAll(testStateLayer, httpApiServerLayer))
 const handlerContext = Context.empty() as Context.Context<unknown>
-
 const directoryHeader = (dir: string) => HttpClientRequest.setHeader("x-opencode-directory", dir)
 
 describe("instance HttpApi", () => {
@@ -83,15 +85,36 @@ describe("instance HttpApi", () => {
         }),
       )
 
-      const dir = yield* tmpdirScoped({ git: true })
-      const response = yield* HttpClientRequest.post(SessionPaths.create).pipe(
+      const dir = yield* tmpdirScoped({ git: true, config: testProviderConfig("http://127.0.0.1:1/v1") })
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const response = yield* HttpClientRequest.post(SessionPaths.start.replace(":sessionID", sessionID)).pipe(
         directoryHeader(dir),
-        HttpClientRequest.bodyJson({ title: "fenced" }),
+        HttpClientRequest.bodyJson({
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          agent: "repa",
+          model: { providerID: "test", modelID: "test-model" },
+          limits: { model: 0, tool: 0 },
+          session: { title: "fenced" },
+          parts: [{ type: "text", text: "admit through the fenced root start" }],
+        }),
         Effect.flatMap(HttpClient.execute),
       )
 
       expect(response.status).toBe(200)
+      const basis = yield* HttpClientRequest.get(SessionPaths.forkBasis.replace(":sessionID", sessionID)).pipe(
+        directoryHeader(dir),
+        HttpClient.execute,
+      )
+      expect(basis.status).toBe(200)
+      expect(((yield* basis.json) as { sourceEventSequence: number }).sourceEventSequence).toBeGreaterThanOrEqual(0)
       expect(JSON.parse(response.headers[FenceHeader] ?? "{}")).not.toEqual({})
+      const terminal = yield* HttpClientRequest.get(
+        SessionPaths.awaitTurn.replace(":sessionID", sessionID).replace(":turnID", turnID),
+      ).pipe(directoryHeader(dir), HttpClient.execute)
+      expect(terminal.status).toBe(200)
     }),
   )
 

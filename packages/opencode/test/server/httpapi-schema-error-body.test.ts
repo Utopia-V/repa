@@ -13,11 +13,15 @@ import { PartTable } from "@opencode-ai/core/session/sql"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
+import { httpApiLayer, requestInDirectory } from "./httpapi-layer"
+import { materializeTestSession } from "../fixture/session"
+import { EventV2Bridge } from "@/event-v2-bridge"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
-import { httpApiLayer, requestInDirectory } from "./httpapi-layer"
 
-const it = testEffect(Layer.mergeAll(LayerNode.compile(LayerNode.group([Session.node, Database.node])), httpApiLayer))
+const it = testEffect(
+  Layer.mergeAll(LayerNode.compile(LayerNode.group([Session.node, Database.node, EventV2Bridge.node])), httpApiLayer),
+)
 
 const text = (response: HttpClientResponse.HttpClientResponse) => response.text
 
@@ -28,20 +32,27 @@ afterEach(async () => {
 
 const seedCorruptStepFinishPart = Effect.gen(function* () {
   const session = yield* Session.Service
-  const info = yield* session.create({})
-  const message = yield* session.updateMessage({
+  const seeded = yield* materializeTestSession()
+  const assistant = yield* session.updateMessage({
     id: MessageID.ascending(),
-    role: "user",
-    sessionID: info.id,
+    role: "assistant",
+    parentID: seeded.user.id,
+    sessionID: seeded.info.id,
+    mode: "repa",
     agent: "repa",
-    model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
-    time: { created: Date.now() },
+    path: { cwd: seeded.info.directory, root: seeded.info.directory },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    modelID: ModelV2.ID.make("test-model"),
+    providerID: ProviderV2.ID.make("test"),
+    time: { created: Date.now(), completed: Date.now() },
+    finish: "stop",
   })
   const partID = PartID.ascending()
   yield* session.updatePart({
     id: partID,
-    sessionID: info.id,
-    messageID: message.id,
+    sessionID: seeded.info.id,
+    messageID: assistant.id,
     type: "step-finish",
     reason: "stop",
     cost: 0,
@@ -63,7 +74,7 @@ const seedCorruptStepFinishPart = Effect.gen(function* () {
     .where(eq(PartTable.id, partID))
     .run()
     .pipe(Effect.orDie)
-  return info.id
+  return seeded.info.id
 })
 
 describe("schema-rejection wire shape", () => {

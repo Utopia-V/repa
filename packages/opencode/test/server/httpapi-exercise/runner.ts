@@ -13,6 +13,7 @@ import { runtime } from "./runtime"
 import type { ActiveScenario, Options, ProjectOptions, Result, Scenario, ScenarioContext, SeededContext } from "./types"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { materializeTestSession, materializeTestSessionInfo } from "../../fixture/session"
 
 export function runScenario(options: Options) {
   return (scenario: Scenario) => {
@@ -134,7 +135,11 @@ function withContext<A, E>(
               return Bun.write(`${directory()}/${name}`, content)
             }).pipe(Effect.asVoid),
           session: (input) =>
-            run(modules.Session.Service.use((svc) => svc.create({ title: input?.title, parentID: input?.parentID }))),
+            run(materializeTestSessionInfo({ title: input?.title, parentID: input?.parentID }).pipe(Effect.orDie)),
+          turnSession: (input) =>
+            run(materializeTestSession({ title: input?.title }).pipe(Effect.orDie)).pipe(
+              Effect.map((seed) => ({ session: seed.info, turn: seed.turn })),
+            ),
           sessionGet: (sessionID) =>
             run(modules.Session.Service.use((svc) => svc.get(sessionID))).pipe(
               Effect.catchCause(() => Effect.succeed(undefined)),

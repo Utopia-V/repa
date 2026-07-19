@@ -11,18 +11,22 @@ import { Database } from "@opencode-ai/core/database/database"
 import { Worktree } from "../../src/worktree"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
+import { materializeTestSessionInfo } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 import { httpApiLayer, requestInDirectory } from "./httpapi-layer"
+import { EventV2Bridge } from "@/event-v2-bridge"
 
-const it = testEffect(Layer.mergeAll(LayerNode.compile(LayerNode.group([Session.node, Database.node])), httpApiLayer))
+const it = testEffect(
+  Layer.mergeAll(LayerNode.compile(LayerNode.group([Session.node, Database.node, EventV2Bridge.node])), httpApiLayer),
+)
 const testWorktreeMutations = process.platform === "win32" ? it.instance.skip : it.instance
 
 function request(path: string, directory: string, init: RequestInit = {}) {
   return requestInDirectory(path, directory, init)
 }
 
-function createSession(input?: Session.CreateInput) {
-  return Session.use.create(input)
+function createSession(input?: Parameters<typeof materializeTestSessionInfo>[0]) {
+  return materializeTestSessionInfo(input)
 }
 
 function json<T>(response: HttpClientResponse.HttpClientResponse) {

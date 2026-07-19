@@ -25,8 +25,7 @@ import { UI } from "../ui"
 import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { InstanceRef } from "@/effect/instance-ref"
 import { Session } from "@/session/session"
-import type { SessionID } from "../../session/schema"
-import { MessageID, PartID } from "../../session/schema"
+import { MessageID, SessionID } from "../../session/schema"
 import { Provider } from "@/provider/provider"
 import { MessageV2 } from "../../session/message-v2"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -38,6 +37,7 @@ import { Process } from "@/util/process"
 import { parseGitHubRemote } from "@/util/repository"
 import { Effect } from "effect"
 import { extractResponseText, formatPromptTooLargeError } from "./github.shared"
+import { Turn } from "@opencode-ai/schema/turn"
 
 type GitHubAuthor = {
   login: string
@@ -433,7 +433,8 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
     let octoRest: Octokit
     let octoGraph: typeof graphql
     let gitConfig: string
-    let session: { id: SessionID; title: string; version: string }
+    let session: { id: SessionID }
+    let materialized = false
     let exitCode = 0
     type PromptFiles = Awaited<ReturnType<typeof getUserPrompt>>["promptFiles"]
     const triggerCommentId = isCommentEvent
@@ -496,17 +497,7 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
 
       // Setup opencode session
       const repoData = await fetchRepo()
-      session = await runLocalEffect(
-        sessionSvc.create({
-          permission: [
-            {
-              permission: "question",
-              action: "deny",
-              pattern: "*",
-            },
-          ],
-        }),
-      )
+      session = { id: SessionID.create() }
       await subscribeSessionEvents()
       console.log("opencode session", session.id)
 
@@ -876,41 +867,62 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
       return runLocalEffect(
         Effect.gen(function* () {
           const prompt = sessionPrompt
-          const result = yield* prompt.prompt({
-            sessionID: session.id,
-            messageID: MessageID.ascending(),
-            variant,
-            model: {
-              providerID,
-              modelID,
-            },
-            // agent is omitted - server will use the configured default or the Repa profile
-            parts: [
-              {
-                id: PartID.ascending(),
-                type: "text",
-                text: message,
-              },
-              ...files.flatMap((f) => [
-                {
-                  id: PartID.ascending(),
-                  type: "file" as const,
-                  mime: f.mime,
-                  url: `data:${f.mime};base64,${f.content}`,
-                  filename: f.filename,
-                  source: {
+          const runTurn = Effect.fn("Cli.github.chat.turn")(function* (
+            text: string,
+            attachments: PromptFiles,
+            tools?: Record<string, boolean>,
+          ) {
+            const turnID = Turn.ID.create()
+            const messageID = MessageID.ascending()
+            yield* prompt
+              .start({
+                sessionID: session.id,
+                turnID,
+                inputID: Turn.InputID.create(),
+                messageID,
+                variant,
+                model: { providerID, modelID },
+                tools,
+                parts: [
+                  { type: "text", text },
+                  ...attachments.map((file) => ({
                     type: "file" as const,
-                    text: {
-                      value: f.replacement,
-                      start: f.start,
-                      end: f.end,
+                    mime: file.mime,
+                    url: `data:${file.mime};base64,${file.content}`,
+                    filename: file.filename,
+                    source: {
+                      type: "file" as const,
+                      text: { value: file.replacement, start: file.start, end: file.end },
+                      path: file.filename,
                     },
-                    path: f.filename,
-                  },
-                },
-              ]),
-            ],
+                  })),
+                ],
+                ...(!materialized
+                  ? {
+                      session: {
+                        permission: [{ permission: "question", action: "deny", pattern: "*" }],
+                      },
+                    }
+                  : {}),
+              })
+              .pipe(
+                Effect.tap(() =>
+                  Effect.sync(() => {
+                    materialized = true
+                  }),
+                ),
+                Effect.uninterruptible,
+              )
+            const terminal = yield* prompt.awaitTurn(session.id, turnID)
+            const messages = yield* sessionSvc.messages({ sessionID: session.id })
+            const result = messages
+              .toReversed()
+              .find((item) => item.info.role === "assistant" && item.info.parentID === messageID)
+            if (result?.info.role === "assistant") return result
+            return yield* Effect.fail(new Error(`Turn ${turnID} ended ${terminal.state} without an assistant response`))
           })
+
+          const result = yield* runTurn(message, files)
 
           if (result.info.role === "assistant" && result.info.error) {
             const err = result.info.error
@@ -924,23 +936,11 @@ export const githubRun = Effect.fn("Cli.github.run")(function* (args: { event?: 
           if (text) return text
 
           console.log("Requesting summary from agent...")
-          const summary = yield* prompt.prompt({
-            sessionID: session.id,
-            messageID: MessageID.ascending(),
-            variant,
-            model: {
-              providerID,
-              modelID,
-            },
-            tools: { "*": false },
-            parts: [
-              {
-                id: PartID.ascending(),
-                type: "text",
-                text: "Summarize the actions (tool calls & reasoning) you did for the user in 1-2 sentences.",
-              },
-            ],
-          })
+          const summary = yield* runTurn(
+            "Summarize the actions (tool calls & reasoning) you did for the user in 1-2 sentences.",
+            [],
+            { "*": false },
+          )
 
           if (summary.info.role === "assistant" && summary.info.error) {
             const err = summary.info.error

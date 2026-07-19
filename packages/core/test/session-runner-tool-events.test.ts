@@ -50,6 +50,7 @@ const capture = () => {
     replay: () => Effect.void,
     replayAll: () => Effect.succeed(undefined),
     remove: () => Effect.void,
+    removeMany: () => Effect.die("unused"),
     claim: () => Effect.void,
   })
   return {

@@ -141,10 +141,10 @@ describe("run interactive runtime", () => {
     const providers = defer<void>()
 
     const sdk = new OpencodeClient()
-    spyOn(sdk.config, "providers").mockImplementation(async () => {
+    spyOn(sdk.provider, "list").mockImplementation(async () => {
       providersStarted.resolve()
       await providers.promise
-      return ok({ providers: [provider], default: {} })
+      return ok({ all: [provider], default: {}, connected: [provider.id] })
     })
     spyOn(sdk.session, "messages").mockImplementation(() =>
       ok([
@@ -197,7 +197,6 @@ describe("run interactive runtime", () => {
         variant: undefined,
         files: [],
         thinking: true,
-        backgroundSubagents: false,
       },
       {
         createRuntimeLifecycle: async () => ({

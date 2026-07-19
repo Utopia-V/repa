@@ -1,6 +1,7 @@
 import { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Turn } from "@opencode-ai/schema/turn"
 import { Plugin } from "@/plugin"
 import { MessageID, SessionID } from "@/session/schema"
 import { observeLearningCommandResult, prepareLearningCommandCall } from "@/session/tools"
@@ -20,6 +21,8 @@ const canonical = {
   expectedRevisionVersion: 0,
 }
 const registration = Object.freeze({
+  turnID: Turn.ID.create(),
+  inputID: Turn.InputID.create(),
   partID: SessionV1.PartID.ascending("prt_learning_hook"),
   callID: "call-learning-hook",
   emissionOrdinal: 0,

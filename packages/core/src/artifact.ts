@@ -53,6 +53,7 @@ import {
 } from "./artifact/sql"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
+import { LearningFrontier } from "./learning-frontier"
 
 export {
   Admission,
@@ -539,6 +540,7 @@ const layer = Layer.effect(
               })
               .run()
               .pipe(Effect.orDie)
+            yield* LearningFrontier.advance(tx, { time })
             return yield* getArtifactInfo(tx, artifactID)
           }),
         )
@@ -579,6 +581,7 @@ const layer = Layer.effect(
                 availability: "missing",
                 time_updated: time,
               })
+              yield* LearningFrontier.advance(tx, { time })
               return {
                 changed: true,
                 observationID,
@@ -633,6 +636,7 @@ const layer = Layer.effect(
               availability: "available",
               time_updated: time,
             })
+            yield* LearningFrontier.advance(tx, { time })
             return {
               changed: true,
               observationID,
@@ -723,6 +727,7 @@ const layer = Layer.effect(
               availability: "available",
               time_updated: time,
             })
+            yield* LearningFrontier.advance(tx, { time })
             return yield* getArtifactInfo(tx, current.id)
           }),
         )
@@ -791,6 +796,7 @@ const layer = Layer.effect(
                   }),
                 { discard: true },
               )
+              yield* LearningFrontier.advance(tx, { time })
               const correction = yield* requireObservationCorrectionRow(tx, correctionID)
               return {
                 correction: observationCorrectionInfo(correction),
@@ -854,6 +860,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* artifactConflict(artifact)
+            yield* LearningFrontier.advance(tx, { time })
             return yield* getArtifactInfo(tx, artifact.id)
           }),
         )
@@ -871,12 +878,13 @@ const layer = Layer.effect(
             if (!artifact.withdrawal_reason) {
               return yield* new InvalidTransitionError({ detail: "Artifact is not ordinarily withdrawn" })
             }
+            const time = Date.now()
             const updated = yield* tx
               .update(ArtifactTable)
               .set({
                 withdrawal_reason: null,
                 disposition_version: sql`${ArtifactTable.disposition_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -889,6 +897,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* artifactConflict(artifact)
+            yield* LearningFrontier.advance(tx, { time })
             return yield* getArtifactInfo(tx, artifact.id)
           }),
         )
@@ -2671,6 +2680,7 @@ function applyLineageCorrection(tx: Transaction, input: ApplyLineageInput) {
         .run()
         .pipe(Effect.orDie)
     }
+    yield* LearningFrontier.advance(tx, { time: input.timeCommitted })
 
     const committedSet = yield* tx
       .select()

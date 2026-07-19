@@ -47,7 +47,37 @@ describe("tool parameters", () => {
     test("question", () => expect(toJsonSchema(Question)).toMatchSnapshot())
     test("read", () => expect(toJsonSchema(Read)).toMatchSnapshot())
     test("skill", () => expect(toJsonSchema(Skill)).toMatchSnapshot())
-    test("task", () => expect(toJsonSchema(Task)).toMatchSnapshot())
+    test("task", () => {
+      const schema = toJsonSchema(Task)
+      expect(schema).toMatchObject({
+        type: "object",
+        required: ["description", "prompt", "subagent_type", "capabilities"],
+        properties: {
+          description: { type: "string" },
+          prompt: { type: "string" },
+          subagent_type: { type: "string" },
+          capabilities: {
+            type: "array",
+            items: {
+              type: "object",
+              required: ["permission", "patterns"],
+              properties: {
+                permission: { type: "string" },
+                patterns: { type: "array", minItems: 1, items: { type: "string" } },
+              },
+            },
+          },
+          child_session_id: { type: "string" },
+        },
+      })
+      expect(Object.keys(schema.properties ?? {}).sort()).toEqual([
+        "capabilities",
+        "child_session_id",
+        "description",
+        "prompt",
+        "subagent_type",
+      ])
+    })
     test("todo", () => expect(toJsonSchema(Todo)).toMatchSnapshot())
     test("webfetch", () => expect(toJsonSchema(WebFetch)).toMatchSnapshot())
     test("websearch", () => expect(toJsonSchema(WebSearch)).toMatchSnapshot())
@@ -235,16 +265,52 @@ describe("tool parameters", () => {
   })
 
   describe("task", () => {
-    test("accepts description + prompt + subagent_type", () => {
-      const parsed = parse(Task, { description: "d", prompt: "p", subagent_type: "general" })
+    test("accepts required explicit capabilities", () => {
+      const parsed = parse(Task, {
+        description: "d",
+        prompt: "p",
+        subagent_type: "general",
+        capabilities: [{ permission: "read", patterns: ["src/**"] }],
+      })
       expect(parsed.subagent_type).toBe("general")
+      expect(parsed.capabilities).toEqual([{ permission: "read", patterns: ["src/**"] }])
     })
-    test("accepts optional background flag", () => {
-      const parsed = parse(Task, { description: "d", prompt: "p", subagent_type: "general", background: true })
-      expect(parsed.background).toBe(true)
+
+    test("accepts an explicit exact child_session_id", () => {
+      const parsed = parse(Task, {
+        description: "d",
+        prompt: "p",
+        subagent_type: "general",
+        capabilities: [],
+        child_session_id: "ses_followup",
+      })
+      expect(String(parsed.child_session_id)).toBe("ses_followup")
     })
+
     test("rejects missing prompt", () => {
-      expect(accepts(Task, { description: "d", subagent_type: "general" })).toBe(false)
+      expect(accepts(Task, { description: "d", subagent_type: "general", capabilities: [] })).toBe(false)
+    })
+
+    test("rejects missing capabilities", () => {
+      expect(accepts(Task, { description: "d", prompt: "p", subagent_type: "general" })).toBe(false)
+    })
+
+    test("rejects a capability with no patterns", () => {
+      expect(
+        accepts(Task, {
+          description: "d",
+          prompt: "p",
+          subagent_type: "general",
+          capabilities: [{ permission: "read", patterns: [] }],
+        }),
+      ).toBe(false)
+    })
+
+    test("rejects detached background and legacy arbitrary-task fields", () => {
+      const base = { description: "d", prompt: "p", subagent_type: "general", capabilities: [] }
+      expect(accepts(Task, { ...base, background: true })).toBe(false)
+      expect(accepts(Task, { ...base, task_id: "ses_arbitrary" })).toBe(false)
+      expect(accepts(Task, { ...base, command: "legacy" })).toBe(false)
     })
   })
 

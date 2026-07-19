@@ -21,16 +21,20 @@ export type RunFilePart = {
   mime: string
 }
 
-type PromptModel = Parameters<OpencodeClient["session"]["prompt"]>[0]["model"]
-type PromptInput = Parameters<OpencodeClient["session"]["prompt"]>[0]
+type PromptInput = Parameters<OpencodeClient["session"]["start"]>[0]
+type PromptModel = PromptInput["model"]
 
 export type RunPromptPart = NonNullable<PromptInput["parts"]>[number]
+
+export type RunStart = Pick<PromptInput, "session" | "fork">
 
 export type RunCommand = NonNullable<Awaited<ReturnType<OpencodeClient["command"]["list"]>>["data"]>[number]
 
 export type RunProvider = NonNullable<Awaited<ReturnType<OpencodeClient["provider"]["list"]>>["data"]>["all"][number]
 
 export type RunPrompt = {
+  turnID?: string
+  inputID?: string
   messageID?: string
   partID?: string
   text: string
@@ -59,6 +63,7 @@ export type RunInput = {
   directory: string
   sessionID: string
   sessionTitle?: string
+  start?: RunStart
   resume?: boolean
   replay?: boolean
   replayLimit?: number
@@ -68,7 +73,6 @@ export type RunInput = {
   files: RunFilePart[]
   initialInput?: string
   thinking: boolean
-  backgroundSubagents: boolean
   demo?: boolean
 }
 
@@ -187,12 +191,13 @@ export type FooterPromptRoute =
 
 export type FooterSubagentTab = {
   sessionID: string
+  turnID?: string
   partID: string
   callID: string
   label: string
   description: string
-  status: "running" | "completed" | "cancelled" | "error"
-  background?: boolean
+  status: "running" | "completed" | "failed" | "interrupted" | "exhausted" | "cancelled" | "error"
+  unavailable?: boolean
   title?: string
   toolCalls?: number
   lastUpdatedAt: number

@@ -20,6 +20,7 @@ import learningCommandSettlementMigration from "@opencode-ai/core/database/migra
 import sourceArtifactAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716152016_source_artifact_authority"
 import contentRootAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260716191911_content_root_authority"
 import readableRepresentationLineageMigration from "@opencode-ai/core/database/migration/repa/20260717141402_readable_representation_lineage"
+import durableTurnMigration from "@opencode-ai/core/database/migration/repa/20260718134404_gate12_durable_turn"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -87,6 +88,29 @@ const representationTables = [
   "representation_continued_use_grant",
   "representation_revision",
   "representation_effect",
+] as const
+const turnTables = [
+  "session_historical_part_presentation",
+  "session_historical_message_presentation",
+  "turn_historical_tool_presentation",
+  "turn_historical_model_presentation",
+  "turn_historical_input_presentation",
+  "turn_candidate_redaction",
+  "turn_transcript_redaction",
+  "turn_child_result",
+  "turn_child_lineage",
+  "turn_candidate_presentation",
+  "turn_model_presentation",
+  "turn_input_presentation",
+  "turn_tool_invocation",
+  "turn_tool_candidate",
+  "turn_model_operation",
+  "turn_input",
+  "turn",
+  "turn_unavailable_tool",
+  "turn_unavailable_model",
+  "turn_unavailable_source",
+  "learning_shared_frontier",
 ] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
@@ -204,6 +228,27 @@ function representationSchema(db: TestDatabase) {
     )
 }
 
+function turnSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE (tbl_name LIKE 'turn%' OR tbl_name LIKE 'session_historical_%' OR tbl_name = 'learning_shared_frontier')
+        AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: normalizeSchemaDefinition(row.definition),
+        })),
+      ),
+    )
+}
+
 function restoreGate8LearningSchema(db: TestDatabase) {
   return Effect.gen(function* () {
     yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
@@ -272,6 +317,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
           { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
           { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
+          { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -410,6 +456,9 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* artifactSchema(db)
 
+        yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
         yield* restoreGate8LearningSchema(db)
         yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
@@ -418,7 +467,7 @@ describe("DatabaseMigration", () => {
           discard: true,
         })
         yield* db.run(
-          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 3}, ${BASELINE_VERSION + 4}, ${BASELINE_VERSION + 5})`,
+          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 3}, ${BASELINE_VERSION + 4}, ${BASELINE_VERSION + 5}, ${BASELINE_VERSION + 6})`,
         )
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 2}`))
         yield* db.run(
@@ -426,6 +475,9 @@ describe("DatabaseMigration", () => {
         )
         yield* db.run(
           sql`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES ('gate8-session', 'gate8-project', 'gate8', '/learning', 'Gate 8', 'test', 1, 1)`,
+        )
+        yield* db.run(
+          sql`INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES ('msg_gate8', 'gate8-session', 1, 1, '{"role":"user"}')`,
         )
         yield* db.run(
           sql`INSERT INTO course (id, title, state_version, time_created, time_updated) VALUES ('crs_gate8', 'Gate 8 course', 0, 1, 1)`,
@@ -463,7 +515,7 @@ describe("DatabaseMigration", () => {
           id: "loc_gate8",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 5,
+          user_version: BASELINE_VERSION + 6,
         })
 
         yield* db.run(sql`PRAGMA foreign_keys = ON`)
@@ -539,12 +591,15 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* contentRootSchema(db)
 
+        yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
         yield* restoreGate8LearningSchema(db)
         yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
         yield* db.run(
-          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 4}, ${BASELINE_VERSION + 5})`,
+          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 4}, ${BASELINE_VERSION + 5}, ${BASELINE_VERSION + 6})`,
         )
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 3}`))
         yield* db.run(sql`
@@ -564,7 +619,7 @@ describe("DatabaseMigration", () => {
           id: "gate9-artifact",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 5,
+          user_version: BASELINE_VERSION + 6,
         })
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
       }),
@@ -580,12 +635,17 @@ describe("DatabaseMigration", () => {
         const freshContentRoot = yield* contentRootSchema(db)
         const freshRepresentation = yield* representationSchema(db)
 
+        yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
         yield* restoreGate8LearningSchema(db)
         yield* Effect.forEach(contentRootTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
         yield* db.transaction((tx) => contentRootAuthorityMigration.up(tx))
-        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 5}`)
+        yield* db.run(
+          sql`DELETE FROM repa_migration WHERE version IN (${BASELINE_VERSION + 5}, ${BASELINE_VERSION + 6})`,
+        )
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 4}`))
         yield* db.run(
           sql`INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted) VALUES ('loc_gate10', 'gate10-session', 'gate10-message', 1)`,
@@ -693,9 +753,15 @@ describe("DatabaseMigration", () => {
         expect(yield* db.all(sql`SELECT id FROM representation_revision`)).toEqual([])
         expect(
           yield* db.get(
-            sql`SELECT part_id, status, representation_effect_id FROM learning_command_invocation WHERE part_id = 'part_gate10'`,
+            sql`SELECT part_id, status, representation_effect_id, turn_id, input_id FROM learning_command_invocation WHERE part_id = 'part_gate10'`,
           ),
-        ).toEqual({ part_id: "part_gate10", status: "admitted", representation_effect_id: null })
+        ).toEqual({
+          part_id: "part_gate10",
+          status: "admitted",
+          representation_effect_id: null,
+          turn_id: null,
+          input_id: null,
+        })
         expect(
           yield* db.get(sql`
             SELECT id, invocation_part_id, effect_id
@@ -717,10 +783,106 @@ describe("DatabaseMigration", () => {
           disposition: "active",
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
-          user_version: BASELINE_VERSION + 5,
+          user_version: BASELINE_VERSION + 6,
         })
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA foreign_keys"))).toEqual({ foreign_keys: 1 })
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+      }),
+    )
+  })
+
+  test("builds the same Gate 12 schema from Gate 11 without fabricating legacy Turns", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* turnSchema(db)
+
+        yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 6}`)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 5}`))
+        yield* db.run(sql`
+          INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES ('gate11-project', '/learning', 1, 1, '[]')
+        `)
+        yield* db.run(sql`
+          INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+          VALUES ('gate11-legacy', 'gate11-project', 'legacy', '/learning', 'Legacy transcript', 'test', 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES ('msg_gate11_legacy', 'gate11-legacy', 1, 1, '{"role":"user"}')
+        `)
+        yield* db.run(sql`
+          INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+          VALUES ('gate11-empty', 'gate11-project', 'empty', '/learning', 'Empty', 'test', 2, 2)
+        `)
+        yield* db.run(sql`INSERT INTO event_sequence (aggregate_id, seq) VALUES ('gate11-empty', 0)`)
+        yield* db.run(sql`
+          INSERT INTO event (id, aggregate_id, seq, type, data)
+          VALUES ('evt_gate11_empty', 'gate11-empty', 0, 'session.created.1', '{}')
+        `)
+
+        yield* DatabaseMigration.apply(db)
+
+        expect(yield* turnSchema(db)).toEqual(fresh)
+        expect(yield* db.all(sql`SELECT id FROM turn`)).toEqual([])
+        expect(yield* db.get(sql`SELECT id FROM session WHERE id = 'gate11-legacy'`)).toEqual({ id: "gate11-legacy" })
+        expect(yield* db.get(sql`SELECT id FROM message WHERE id = 'msg_gate11_legacy'`)).toEqual({
+          id: "msg_gate11_legacy",
+        })
+        expect(yield* db.get(sql`SELECT id FROM session WHERE id = 'gate11-empty'`)).toBeUndefined()
+        expect(yield* db.get(sql`SELECT id FROM event WHERE aggregate_id = 'gate11-empty'`)).toBeUndefined()
+        expect(
+          yield* db.get(sql`SELECT aggregate_id FROM event_sequence WHERE aggregate_id = 'gate11-empty'`),
+        ).toBeUndefined()
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + 6,
+        })
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+      }),
+    )
+  })
+
+  test("rolls Gate 12 migration back for a referenced empty legacy Session", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        yield* Effect.forEach(turnTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
+          discard: true,
+        })
+        yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 6}`)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 5}`))
+        yield* db.run(sql`
+          INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES ('gate11-anomaly-project', '/learning', 1, 1, '[]')
+        `)
+        yield* db.run(sql`
+          INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+          VALUES ('gate11-anomaly', 'gate11-anomaly-project', 'anomaly', '/learning', 'Anomaly', 'test', 1, 1)
+        `)
+        yield* db.run(sql`
+          INSERT INTO session_input (id, session_id, prompt, delivery, admitted_seq, time_created)
+          VALUES ('input_gate11_anomaly', 'gate11-anomaly', '{}', 'steer', 0, 1)
+        `)
+
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "gate11-anomaly.db" }))
+
+        expect(error).toMatchObject({ migrationID: durableTurnMigration.id })
+        expect(String(error.cause)).toContain("cannot migrate referenced empty legacy Session gate11-anomaly")
+        expect(yield* db.get(sql`SELECT id FROM session WHERE id = 'gate11-anomaly'`)).toEqual({
+          id: "gate11-anomaly",
+        })
+        expect(yield* db.get(sql`SELECT name FROM sqlite_master WHERE name = 'turn'`)).toBeUndefined()
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + 5,
+        })
+        expect(
+          yield* db.get(sql`SELECT version FROM repa_migration WHERE version = ${BASELINE_VERSION + 6}`),
+        ).toBeUndefined()
       }),
     )
   })
@@ -1231,6 +1393,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 3, id: sourceArtifactAuthorityMigration.id },
           { version: BASELINE_VERSION + 4, id: contentRootAuthorityMigration.id },
           { version: BASELINE_VERSION + 5, id: readableRepresentationLineageMigration.id },
+          { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
         ])
       }),
     )

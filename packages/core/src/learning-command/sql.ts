@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm"
 import { check, foreignKey, index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core"
+import type { Turn } from "@opencode-ai/schema/turn"
 import type { SelectionAcceptanceEffectID } from "../course"
 import { CourseSelectionAcceptanceEffectTable } from "../course/sql"
 import { RepresentationSchema } from "../representation/schema"
@@ -33,6 +34,10 @@ export const LearningCommandInvocationTable = sqliteTable(
     time_admitted: integer().notNull(),
     time_settled: integer(),
     settlement_order: integer(),
+    // Gate 8 rows migrate without fabricated Turns. New writes always fill both;
+    // no FK is intentional because applied domain receipts outlive transcript deletion.
+    turn_id: text().$type<Turn.ID>(),
+    input_id: text().$type<Turn.InputID>(),
   },
   (table) => [
     foreignKey({ columns: [table.occurrence_id], foreignColumns: [AdmittedLearnerOccurrenceTable.id] }).onDelete(

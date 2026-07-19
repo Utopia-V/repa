@@ -203,6 +203,23 @@ describe("session.llm.hasToolCalls", () => {
   })
 })
 
+test("session.llm strips execute callbacks from provider tool definitions", () => {
+  let executed = false
+  const original = tool({
+    description: "lookup",
+    inputSchema: z.object({ query: z.string() }),
+    execute: async () => {
+      executed = true
+      return { output: "unexpected" }
+    },
+  })
+  const prepared = LLM.definitionOnlyTools({ lookup: original })
+
+  expect(prepared.lookup.execute).toBeUndefined()
+  expect(original.execute).toBeFunction()
+  expect(executed).toBe(false)
+})
+
 describe("session.llm.ai-sdk adapter", () => {
   type AISDKAdapterEvent = Parameters<typeof LLMAISDK.toLLMEvents>[1]
 
@@ -1338,7 +1355,7 @@ describe("session.llm.stream", () => {
   )
 
   it.instance(
-    "uses injected native request executor for tool calls",
+    "uses injected native request executor without provider-side tool execution",
     () =>
       Effect.gen(function* () {
         const model = loadFixture("openai", "gpt-5.2").model
@@ -1433,7 +1450,7 @@ describe("session.llm.stream", () => {
             },
           },
         ])
-        expect(executed).toEqual({ args: { query: "weather" }, toolCallId: "call-injected-tool" })
+        expect(executed).toBeUndefined()
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, "https://injected-openai.test/v1") },
   )
@@ -1586,7 +1603,7 @@ describe("session.llm.stream", () => {
   )
 
   it.instance(
-    "executes OpenAI tool calls through native runtime",
+    "emits OpenAI tool calls through native runtime without provider-side execution",
     () =>
       Effect.gen(function* () {
         const model = loadFixture("openai", "gpt-5.2").model
@@ -1670,7 +1687,7 @@ describe("session.llm.stream", () => {
             },
           },
         ])
-        expect(executed).toEqual({ args: { query: "weather" }, toolCallId: "call-native-tool" })
+        expect(executed).toBeUndefined()
       }),
     {
       config: () => {

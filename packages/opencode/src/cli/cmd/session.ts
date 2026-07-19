@@ -63,6 +63,9 @@ export const SessionDeleteCommand = effectCmd({
     yield* svc.remove(sessionID).pipe(
       Effect.catchIf(NotFoundError.isInstance, () => fail(`Session not found: ${args.sessionID}`)),
       Effect.catchTag("SessionBusyError", () => fail(`Session is busy: ${args.sessionID}`)),
+      Effect.catchTag("SessionTreeBusyError", (error) =>
+        fail(`Session tree is busy (${error.activeTurnIDs.join(", ")}): ${args.sessionID}`),
+      ),
     )
     UI.println(UI.Style.TEXT_SUCCESS_BOLD + `Session ${args.sessionID} deleted` + UI.Style.TEXT_NORMAL)
   }),

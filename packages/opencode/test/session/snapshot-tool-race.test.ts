@@ -31,6 +31,8 @@ import { LSP } from "@/lsp/lsp"
 import { MCP } from "../../src/mcp"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { MessageID, SessionID } from "@/session/schema"
+import { Turn } from "@opencode-ai/schema/turn"
 
 const mcp = Layer.succeed(
   MCP.Service,
@@ -127,13 +129,9 @@ it.live("tool execution produces non-empty session diff (snapshot race)", () =>
   provideTmpdirServer(
     Effect.fnUntraced(function* ({ dir, llm }) {
       const prompt = yield* SessionPrompt.Service
-      const sessions = yield* Session.Service
       const summary = yield* SessionSummary.Service
-
-      const session = yield* sessions.create({
-        title: "snapshot race test",
-        permission: [{ permission: "*", pattern: "*", action: "allow" }],
-      })
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
 
       // Use bash tool (always registered) to create a file
       const command = `echo 'snapshot race test content' > ${path.join(dir, "race-test.txt")}`
@@ -142,17 +140,20 @@ it.live("tool execution produces non-empty session diff (snapshot race)", () =>
       })
       yield* llm.textMatch((hit) => JSON.stringify(hit.body).includes("bash"), "done")
 
-      // Seed user message
-      yield* prompt.prompt({
-        sessionID: session.id,
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
         agent: "repa",
-        noReply: true,
+        session: {
+          title: "snapshot race test",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
         parts: [{ type: "text", text: "create the file" }],
       })
-
-      // Run the agent loop
-      const result = yield* prompt.loop({ sessionID: session.id })
-      expect(result.info.role).toBe("assistant")
+      const turn = yield* prompt.awaitTurn(sessionID, turnID)
+      expect(turn.terminal?.outcome).toBe("completed")
 
       // Verify the file was created
       const filePath = path.join(dir, "race-test.txt")
@@ -165,7 +166,7 @@ it.live("tool execution produces non-empty session diff (snapshot race)", () =>
       expect(fileExists).toBe(true)
 
       // Verify the tool call completed (in the first assistant message)
-      const allMsgs = yield* MessageV2.filterCompactedEffect(session.id)
+      const allMsgs = yield* MessageV2.filterCompactedEffect(sessionID)
       const user = allMsgs.find(
         (msg): msg is SessionV1.WithParts & { info: SessionV1.User } => msg.info.role === "user",
       )
@@ -178,7 +179,7 @@ it.live("tool execution produces non-empty session diff (snapshot race)", () =>
       // Poll for the turn diff — summarize() is fire-and-forget.
       let diff: Array<{ file?: string }> = []
       for (let i = 0; i < 50; i++) {
-        diff = yield* summary.diff({ sessionID: session.id, messageID: user.info.id })
+        diff = yield* summary.diff({ sessionID, messageID: user.info.id })
         if (diff.length > 0) break
         yield* Effect.sleep("100 millis")
       }

@@ -304,8 +304,8 @@ export async function SnowflakeCortexAuthPlugin(_input: PluginInput): Promise<Ho
             const refreshedExpires = Date.now() + (tokens.expires_in ?? 600) * 1000
             await _input.client.auth
               .set({
-                path: { id: "snowflake-cortex" },
-                body: {
+                providerID: "snowflake-cortex",
+                auth: {
                   type: "oauth",
                   access: tokens.access_token,
                   refresh: refreshedRefresh,
@@ -341,8 +341,8 @@ export async function SnowflakeCortexAuthPlugin(_input: PluginInput): Promise<Ho
                     const refreshedExpires = Date.now() + (tokens.expires_in ?? 600) * 1000
                     await _input.client.auth
                       .set({
-                        path: { id: "snowflake-cortex" },
-                        body: {
+                        providerID: "snowflake-cortex",
+                        auth: {
                           type: "oauth",
                           access: tokens.access_token,
                           refresh: refreshedRefresh,

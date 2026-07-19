@@ -62,6 +62,34 @@ const ask = (input: Parameters<Permission.Interface["ask"]>[0]) =>
     return yield* permission.ask(input)
   })
 
+test("delegated authority is a deny-first intersection", () => {
+  const child = [{ permission: "edit", pattern: "*", action: "allow" as const }]
+  const authority: Permission.AuthorityLayer[] = [
+    {
+      ruleset: [{ permission: "edit", pattern: "*", action: "deny" }],
+      absence: "deny",
+    },
+  ]
+
+  expect(Permission.evaluateAuthority("edit", "lesson.md", child, authority).action).toBe("deny")
+  expect(Permission.disabled(["edit", "write", "apply_patch"], child, authority)).toEqual(
+    new Set(["edit", "write", "apply_patch"]),
+  )
+})
+
+test("an explicit delegation layer denies absent capabilities", () => {
+  const child = [{ permission: "*", pattern: "*", action: "allow" as const }]
+  const authority: Permission.AuthorityLayer[] = [
+    {
+      ruleset: [{ permission: "read", pattern: "*", action: "allow" }],
+      absence: "deny",
+    },
+  ]
+
+  expect(Permission.evaluateAuthority("read", "lesson.md", child, authority).action).toBe("allow")
+  expect(Permission.evaluateAuthority("bash", "git status", child, authority).action).toBe("deny")
+})
+
 const reply = (input: Parameters<Permission.Interface["reply"]>[0]) =>
   Effect.gen(function* () {
     const permission = yield* Permission.Service

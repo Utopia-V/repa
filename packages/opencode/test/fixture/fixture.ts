@@ -194,7 +194,10 @@ export function provideTmpdirInstance<A, E, R>(
   }).pipe(Effect.provide(testInstanceStoreLayer))
 }
 
-function provideMachineConfig<A, E, R>(config: Partial<ConfigV1.Info> | undefined, self: Effect.Effect<A, E, R>) {
+export function provideMachineConfig<A, E, R>(
+  config: Partial<ConfigV1.Info> | undefined,
+  self: Effect.Effect<A, E, R>,
+) {
   if (!config) return self
   return Effect.acquireUseRelease(
     Effect.sync(() => {

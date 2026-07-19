@@ -71,7 +71,7 @@ await createClient({
   ],
 })
 
-const generatedTypes = await Bun.file("./src/v2/gen/types.gen.ts").text()
+const generatedTypes = await retryGeneratedFileAccess(() => Bun.file("./src/v2/gen/types.gen.ts").text())
 if (/export type SessionNext\w+1 =/.test(generatedTypes)) {
   throw new Error("Session history generated duplicate Session event variants")
 }
@@ -82,9 +82,9 @@ const historyTypesPatched = generatedTypes.replace(
 if (historyTypesPatched === generatedTypes) {
   throw new Error("Session history numeric query patch did not apply")
 }
-await Bun.write("./src/v2/gen/types.gen.ts", historyTypesPatched)
+await retryGeneratedFileAccess(() => Bun.write("./src/v2/gen/types.gen.ts", historyTypesPatched))
 
-const generatedSdk = await Bun.file("./src/v2/gen/sdk.gen.ts").text()
+const generatedSdk = await retryGeneratedFileAccess(() => Bun.file("./src/v2/gen/sdk.gen.ts").text())
 const historySdkPatched = generatedSdk.replace(
   /(Get session history[\s\S]*?parameters: \{\s*sessionID: string[;,]\s*limit\?: )string([;,]\s*after\?: )string/,
   "$1number$2number",
@@ -92,7 +92,7 @@ const historySdkPatched = generatedSdk.replace(
 if (historySdkPatched === generatedSdk) {
   throw new Error("Session history numeric SDK patch did not apply")
 }
-await Bun.write("./src/v2/gen/sdk.gen.ts", historySdkPatched)
+await retryGeneratedFileAccess(() => Bun.write("./src/v2/gen/sdk.gen.ts", historySdkPatched))
 
 // Patch a @hey-api/openapi-ts codegen bug: SseFn incorrectly passes the
 // endpoint's TError into the second generic of ServerSentEventsResult, which
@@ -102,7 +102,7 @@ await Bun.write("./src/v2/gen/sdk.gen.ts", historySdkPatched)
 // arg so TReturn defaults to void.
 const sseTypesPath = "./src/v2/gen/client/types.gen.ts"
 const sseTypesFile = Bun.file(sseTypesPath)
-const sseTypesSource = await sseTypesFile.text()
+const sseTypesSource = await retryGeneratedFileAccess(() => sseTypesFile.text())
 const sseTypesPatched = sseTypesSource.replace(
   "=> Promise<ServerSentEventsResult<TData, TError>>",
   "=> Promise<ServerSentEventsResult<TData>>",
@@ -110,9 +110,25 @@ const sseTypesPatched = sseTypesSource.replace(
 if (sseTypesPatched === sseTypesSource) {
   throw new Error(`SseFn patch did not apply; @hey-api/openapi-ts output may have changed (${sseTypesPath})`)
 }
-await Bun.write(sseTypesPath, sseTypesPatched)
+await retryGeneratedFileAccess(() => Bun.write(sseTypesPath, sseTypesPatched))
 
-await $`bun prettier --write src/v2/gen`
+await retryGeneratedFileAccess(() => $`bun prettier --write src/v2/gen`)
 await $`rm -rf dist`
 await $`bun tsc`
 await $`rm openapi.json`
+
+async function retryGeneratedFileAccess<A>(operation: () => Promise<A>) {
+  const attempts = process.platform === "win32" ? 20 : 1
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const result = await operation().then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    )
+    if (result.ok) return result.value
+    if (attempt === attempts - 1) throw result.error
+    // Windows scanners can briefly retain generated files after the codegen
+    // promise resolves. Retry the exact idempotent post-processing operation.
+    await Bun.sleep(100)
+  }
+  throw new Error("Generated file retry exhausted without a result")
+}

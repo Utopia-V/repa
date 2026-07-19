@@ -26,7 +26,7 @@ import {
   type SequenceBindingLike,
 } from "@opentui/keymap/extras"
 import type { JSX, SolidPlugin } from "@opentui/solid"
-import type { Config as PluginConfig, PluginOptions } from "./index.js"
+import type { PluginOptions } from "./index.js"
 
 export type { CliRenderer, KeyEvent, Renderable, SlotMode } from "@opentui/core"
 export { stringifyKeySequence, stringifyKeyStroke } from "@opentui/keymap"
@@ -416,13 +416,23 @@ type TuiAttentionConfigView = {
   sounds: Partial<Record<TuiAttentionSoundName, string>>
 }
 
-type TuiConfigView = Pick<PluginConfig, "$schema" | "theme" | "plugin"> &
-  NonNullable<PluginConfig["tui"]> & {
-    leader_timeout: number
-    attention: TuiAttentionConfigView
-    plugin_enabled?: Record<string, boolean>
-    keybinds: TuiBindingLookupView
+type TuiConfigView = {
+  $schema?: string
+  theme?: string
+  plugin?: Array<string | [string, PluginOptions]>
+  plugin_enabled?: Record<string, boolean>
+  leader_timeout: number
+  attention: TuiAttentionConfigView
+  prompt?: {
+    max_height?: number
+    max_width?: number | "auto"
   }
+  scroll_speed?: number
+  scroll_acceleration?: { enabled: boolean }
+  diff_style?: "auto" | "stacked"
+  mouse: boolean
+  keybinds: TuiBindingLookupView
+}
 
 export type TuiApp = {
   readonly version: string

@@ -155,6 +155,28 @@ describe("tool.registry", () => {
     }),
   )
 
+  it.instance("hides capabilities absent from an explicit delegated authority", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent: yield* agents.defaultInfo(),
+        authority: [
+          {
+            ruleset: [{ permission: "read", pattern: "lesson.md", action: "allow" }],
+            absence: "deny",
+          },
+        ],
+      })
+
+      expect(tools.map((tool) => tool.id)).toContain("read")
+      expect(tools.map((tool) => tool.id)).not.toContain("task")
+      expect(tools.map((tool) => tool.id)).not.toContain("bash")
+    }),
+  )
+
   it.instance("does not expose execute unless code mode is enabled", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service

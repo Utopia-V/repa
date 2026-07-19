@@ -48,6 +48,15 @@ export type Event =
   | EventSessionNextRevertStaged
   | EventSessionNextRevertCleared
   | EventSessionNextRevertCommitted
+  | EventTurnStarted
+  | EventTurnInputPromoted
+  | EventTurnModelAdmitted
+  | EventTurnModelSettled
+  | EventTurnToolCandidatesSealed
+  | EventTurnToolCandidateDisposition
+  | EventTurnToolAdmitted
+  | EventTurnToolSettled
+  | EventTurnTerminal
   | EventMessagePartDelta
   | EventSessionDiff
   | EventSessionError
@@ -1175,6 +1184,100 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "turn.started"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          turn: TurnInfo
+          input: TurnInput
+        }
+      }
+    | {
+        id: string
+        type: "turn.input.promoted"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          input: TurnInput
+        }
+      }
+    | {
+        id: string
+        type: "turn.model.admitted"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          operation: TurnModelOperation
+        }
+      }
+    | {
+        id: string
+        type: "turn.model.settled"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          assistantMessageID: string
+          state: "running" | "completed" | "failed" | "interrupted"
+        }
+      }
+    | {
+        id: string
+        type: "turn.tool.candidates.sealed"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          assistantMessageID: string
+          count: number
+        }
+      }
+    | {
+        id: string
+        type: "turn.tool.candidate.disposition"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          candidate: TurnToolCandidate
+        }
+      }
+    | {
+        id: string
+        type: "turn.tool.admitted"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          invocation: TurnToolInvocation
+        }
+      }
+    | {
+        id: string
+        type: "turn.tool.settled"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          partID: string
+          state: "running" | "completed" | "failed" | "interrupted"
+        }
+      }
+    | {
+        id: string
+        type: "turn.terminal"
+        properties: {
+          sessionID: string
+          turnID: string
+          timestamp: number
+          terminal: TurnTerminal2
+        }
+      }
+    | {
+        id: string
         type: "message.part.delta"
         properties: {
           sessionID: string
@@ -1604,6 +1707,15 @@ export type GlobalEvent = {
     | SyncEventSessionNextRevertStaged
     | SyncEventSessionNextRevertCleared
     | SyncEventSessionNextRevertCommitted
+    | SyncEventTurnStarted
+    | SyncEventTurnInputPromoted
+    | SyncEventTurnModelAdmitted
+    | SyncEventTurnModelSettled
+    | SyncEventTurnToolCandidatesSealed
+    | SyncEventTurnToolCandidateDisposition
+    | SyncEventTurnToolAdmitted
+    | SyncEventTurnToolSettled
+    | SyncEventTurnTerminal
 }
 
 /**
@@ -1909,6 +2021,25 @@ export type Config = {
   provider?: {
     [key: string]: ProviderConfig
   }
+  representation?: {
+    model?:
+      | {
+          enabled: false
+        }
+      | {
+          enabled?: true
+          provider_id: string
+          model_id: string
+          variant?: string
+          temperature?: number
+          top_p?: number
+          top_k?: number
+          max_input_bytes?: number
+          max_output_bytes?: number
+          max_output_tokens?: number
+          timeout_ms?: number
+        }
+  }
   mcp?: {
     [key: string]:
       | McpLocalConfig
@@ -2078,10 +2209,6 @@ export type Provider = {
   models: {
     [key: string]: Model
   }
-}
-
-export type ExperimentalCapabilities = {
-  backgroundSubagents: boolean
 }
 
 export type ToolListItem = {
@@ -2497,6 +2624,13 @@ export type SessionBusyError = {
   message: string
 }
 
+export type SessionTreeBusyError = {
+  _tag: "SessionTreeBusyError"
+  sessionID: string
+  activeTurnIDs: Array<string>
+  message: string
+}
+
 export type TextPartInput = {
   id?: string
   type: "text"
@@ -2532,17 +2666,62 @@ export type AgentPartInput = {
   }
 }
 
-export type SubtaskPartInput = {
-  id?: string
-  type: "subtask"
-  prompt: string
-  description: string
-  agent: string
-  model?: {
-    providerID: string
-    modelID: string
-  }
-  command?: string
+export type TurnNotFoundError = {
+  _tag: "TurnNotFoundError"
+  turnID: string
+}
+
+export type TurnAdmissionConflictError = {
+  _tag: "TurnAdmissionConflictError"
+  turnID: string
+}
+
+export type TurnAlreadyRunningError = {
+  _tag: "TurnAlreadyRunningError"
+  sessionID: string
+  activeTurnID: string
+}
+
+export type TurnSessionMismatchError = {
+  _tag: "TurnSessionMismatchError"
+  sessionID: string
+  turnID: string
+}
+
+export type TurnNoActiveError = {
+  _tag: "TurnNoActiveError"
+  sessionID: string
+}
+
+export type TurnActiveMismatchError = {
+  _tag: "TurnActiveMismatchError"
+  sessionID: string
+  expectedTurnID: string
+  activeTurnID: string
+}
+
+export type TurnNotSteerableError = {
+  _tag: "TurnNotSteerableError"
+  sessionID: string
+  turnID: string
+  state: "running" | "completed" | "failed" | "interrupted" | "exhausted"
+}
+
+export type SessionTreeChangedError = {
+  _tag: "SessionTreeChangedError"
+  sessionID: string
+}
+
+export type TurnSourceUnavailableError = {
+  _tag: "TurnSourceUnavailableError"
+  turnID: string
+  receipt?: TurnUnavailableReceipt
+}
+
+export type TurnIntegrityError = {
+  _tag: "TurnIntegrityError"
+  turnID: string
+  reason: string
 }
 
 export type EventTuiPromptAppend = {
@@ -2699,6 +2878,26 @@ export type OutputFormat1 =
       retryCount?: number
     }
 
+export type TurnTerminal = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.terminal"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    terminal: TurnTerminal2
+  }
+}
+
 export type SessionStatus2 = {
   id: string
   metadata?: {
@@ -2798,6 +2997,15 @@ export type V2Event =
   | SessionNextRevertStaged
   | SessionNextRevertCleared
   | SessionNextRevertCommitted
+  | TurnStarted
+  | TurnInputPromoted
+  | TurnModelAdmitted
+  | TurnModelSettled
+  | TurnToolCandidatesSealed
+  | TurnToolCandidateDisposition
+  | TurnToolAdmitted
+  | TurnToolSettled
+  | TurnTerminal
   | MessagePartDelta
   | SessionDiff
   | SessionError
@@ -3012,6 +3220,145 @@ export type RevertState = {
   snapshot?: string
   diff?: string
   files?: Array<FileDiff>
+}
+
+export type TurnLimits = {
+  model: number
+  tool: number
+}
+
+export type TurnCounters = {
+  model: number
+  tool: number
+}
+
+export type TurnLineage = {
+  parentTurnID: string
+  parentSessionID: string
+  parentTaskPartID: string
+  parentModelMessageID: string
+  depth: number
+  delegatedCapability: {
+    [key: string]: unknown
+  }
+}
+
+export type TurnExhaustion = {
+  counter: "model" | "tool"
+  observed: number
+  limit: number
+  rejectedAttemptID: string
+  envelope: {
+    [key: string]: unknown
+  }
+  envelopeFingerprint: string
+  time: number
+}
+
+export type TurnTerminal2 = {
+  outcome: "completed" | "failed" | "interrupted" | "exhausted"
+  reason:
+    | "normal"
+    | "provider_failure"
+    | "tool_runtime_failure"
+    | "permission_failure"
+    | "projection_failure"
+    | "owner_failure"
+    | "integrity_failure"
+    | "learner_interrupt"
+    | "ancestor_interrupt"
+    | "owner_handoff_failed"
+    | "owner_lost"
+    | "startup_recovery"
+    | "model_limit"
+    | "tool_limit"
+  counters: TurnCounters
+  time: number
+  exhaustion?: TurnExhaustion
+}
+
+export type TurnInfo = {
+  id: string
+  sessionID: string
+  admissionKind: "learner" | "delegated_task"
+  initialInputID: string
+  currentInputID: string
+  limits: TurnLimits
+  counters: TurnCounters
+  state: "running" | "completed" | "failed" | "interrupted" | "exhausted"
+  depth: number
+  lineage?: TurnLineage
+  timeAdmitted: number
+  causalTime: number
+  terminal?: TurnTerminal2
+}
+
+export type TurnInput = {
+  id: string
+  turnID: string
+  sessionID: string
+  messageID: string
+  source: "learner_root" | "learner_steer" | "delegated_task"
+  ordinal: number
+  occurrenceID?: string
+  parentModelMessageID?: string
+  timeAdmitted: number
+  envelopeFingerprint: string
+}
+
+export type LearningFrontierSnapshot = {
+  sequence: number
+  time: number
+}
+
+export type TurnModelOperation = {
+  turnID: string
+  sessionID: string
+  assistantMessageID: string
+  inputID: string
+  causalOccurrenceID?: string
+  ordinal: number
+  state: "running" | "completed" | "failed" | "interrupted"
+  requestFingerprint: string
+  contextFingerprint: string
+  snapshotFrontier: LearningFrontierSnapshot
+  observedSharedFrontier: LearningFrontierSnapshot
+  timeAdmitted: number
+  timeSettled?: number
+}
+
+export type TurnToolCandidate = {
+  turnID: string
+  sessionID: string
+  assistantMessageID: string
+  partID: string
+  callID: string
+  tool: string
+  emissionOrdinal: number
+  state:
+    | "pending_admission"
+    | "admitted"
+    | "not_started_limit"
+    | "not_started_turn_exhausted"
+    | "not_started_interrupted"
+    | "not_started_failed"
+  envelopeFingerprint: string
+  timeRegistered: number
+  timeTerminal?: number
+}
+
+export type TurnToolInvocation = {
+  turnID: string
+  sessionID: string
+  assistantMessageID: string
+  partID: string
+  ordinal: number
+  state: "running" | "completed" | "failed" | "interrupted"
+  observedSharedFrontier: LearningFrontierSnapshot
+  consumedSharedFrontier: LearningFrontierSnapshot
+  resultingSharedFrontier?: LearningFrontierSnapshot
+  timeAdmitted: number
+  timeSettled?: number
 }
 
 export type PermissionV2Source = {
@@ -3718,6 +4065,163 @@ export type SyncEventSessionNextRevertCommitted = {
   }
 }
 
+export type SyncEventTurnStarted = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.started.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      turn: TurnInfo
+      input: TurnInput
+    }
+  }
+}
+
+export type SyncEventTurnInputPromoted = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.input.promoted.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      input: TurnInput
+    }
+  }
+}
+
+export type SyncEventTurnModelAdmitted = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.model.admitted.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      operation: TurnModelOperation
+    }
+  }
+}
+
+export type SyncEventTurnModelSettled = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.model.settled.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      assistantMessageID: string
+      state: "running" | "completed" | "failed" | "interrupted"
+    }
+  }
+}
+
+export type SyncEventTurnToolCandidatesSealed = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.tool.candidates.sealed.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      assistantMessageID: string
+      count: number
+    }
+  }
+}
+
+export type SyncEventTurnToolCandidateDisposition = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.tool.candidate.disposition.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      candidate: TurnToolCandidate
+    }
+  }
+}
+
+export type SyncEventTurnToolAdmitted = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.tool.admitted.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      invocation: TurnToolInvocation
+    }
+  }
+}
+
+export type SyncEventTurnToolSettled = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.tool.settled.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      partID: string
+      state: "running" | "completed" | "failed" | "interrupted"
+    }
+  }
+}
+
+export type SyncEventTurnTerminal = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "turn.terminal.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      timestamp: number
+      terminal: TurnTerminal2
+    }
+  }
+}
+
 export type ConfigV2ReferenceGit = {
   repository: string
   branch?: string
@@ -3747,6 +4251,41 @@ export type ProjectDirectories = Array<{
 export type PtyTicketConnectToken = {
   ticket: string
   expires_in: number
+}
+
+export type TurnUnavailableSource = {
+  turnID: string
+  sessionID: string
+  admissionKind: "learner" | "delegated_task"
+  timeAdmitted: number
+  timeTerminal: number
+  outcome: "completed" | "failed" | "interrupted" | "exhausted"
+  parentTurnID?: string
+  parentSessionID?: string
+  parentTaskPartID?: string
+  parentModelMessageID?: string
+  depth: number
+  causalOccurrenceID?: string
+  timeDeleted: number
+}
+
+export type TurnUnavailableModelMapping = {
+  turnID: string
+  assistantMessageID: string
+  causalOccurrenceID?: string
+}
+
+export type TurnUnavailableToolMapping = {
+  turnID: string
+  assistantMessageID: string
+  partID: string
+  callID: string
+}
+
+export type TurnUnavailableReceipt = {
+  source: TurnUnavailableSource
+  models: Array<TurnUnavailableModelMapping>
+  tools: Array<TurnUnavailableToolMapping>
 }
 
 export type LocationInfo = {
@@ -5173,6 +5712,170 @@ export type SessionNextCompactionDelta = {
   }
 }
 
+export type TurnStarted = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.started"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    turn: TurnInfo
+    input: TurnInput
+  }
+}
+
+export type TurnInputPromoted = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.input.promoted"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    input: TurnInput
+  }
+}
+
+export type TurnModelAdmitted = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.model.admitted"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    operation: TurnModelOperation
+  }
+}
+
+export type TurnModelSettled = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.model.settled"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    assistantMessageID: string
+    state: "running" | "completed" | "failed" | "interrupted"
+  }
+}
+
+export type TurnToolCandidatesSealed = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.tool.candidates.sealed"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    assistantMessageID: string
+    count: number
+  }
+}
+
+export type TurnToolCandidateDisposition = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.tool.candidate.disposition"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    candidate: TurnToolCandidate
+  }
+}
+
+export type TurnToolAdmitted = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.tool.admitted"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    invocation: TurnToolInvocation
+  }
+}
+
+export type TurnToolSettled = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "turn.tool.settled"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    partID: string
+    state: "running" | "completed" | "failed" | "interrupted"
+  }
+}
+
 export type MessagePartDelta = {
   id: string
   metadata?: {
@@ -6490,6 +7193,109 @@ export type EventSessionNextRevertCommitted = {
   }
 }
 
+export type EventTurnStarted = {
+  id: string
+  type: "turn.started"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    turn: TurnInfo
+    input: TurnInput
+  }
+}
+
+export type EventTurnInputPromoted = {
+  id: string
+  type: "turn.input.promoted"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    input: TurnInput
+  }
+}
+
+export type EventTurnModelAdmitted = {
+  id: string
+  type: "turn.model.admitted"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    operation: TurnModelOperation
+  }
+}
+
+export type EventTurnModelSettled = {
+  id: string
+  type: "turn.model.settled"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    assistantMessageID: string
+    state: "running" | "completed" | "failed" | "interrupted"
+  }
+}
+
+export type EventTurnToolCandidatesSealed = {
+  id: string
+  type: "turn.tool.candidates.sealed"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    assistantMessageID: string
+    count: number
+  }
+}
+
+export type EventTurnToolCandidateDisposition = {
+  id: string
+  type: "turn.tool.candidate.disposition"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    candidate: TurnToolCandidate
+  }
+}
+
+export type EventTurnToolAdmitted = {
+  id: string
+  type: "turn.tool.admitted"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    invocation: TurnToolInvocation
+  }
+}
+
+export type EventTurnToolSettled = {
+  id: string
+  type: "turn.tool.settled"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    partID: string
+    state: "running" | "completed" | "failed" | "interrupted"
+  }
+}
+
+export type EventTurnTerminal = {
+  id: string
+  type: "turn.terminal"
+  properties: {
+    sessionID: string
+    turnID: string
+    timestamp: number
+    terminal: TurnTerminal2
+  }
+}
+
 export type EventMessagePartDelta = {
   id: string
   type: "message.part.delta"
@@ -7245,35 +8051,6 @@ export type ConfigProvidersResponses = {
 
 export type ConfigProvidersResponse = ConfigProvidersResponses[keyof ConfigProvidersResponses]
 
-export type ExperimentalCapabilitiesGetData = {
-  body?: never
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/capabilities"
-}
-
-export type ExperimentalCapabilitiesGetErrors = {
-  /**
-   * Bad request
-   */
-  400: BadRequestError
-}
-
-export type ExperimentalCapabilitiesGetError =
-  ExperimentalCapabilitiesGetErrors[keyof ExperimentalCapabilitiesGetErrors]
-
-export type ExperimentalCapabilitiesGetResponses = {
-  /**
-   * Experimental capabilities
-   */
-  200: ExperimentalCapabilities
-}
-
-export type ExperimentalCapabilitiesGetResponse =
-  ExperimentalCapabilitiesGetResponses[keyof ExperimentalCapabilitiesGetResponses]
-
 export type ToolListData = {
   body?: never
   path?: never
@@ -7470,37 +8247,6 @@ export type ExperimentalSessionListResponses = {
 }
 
 export type ExperimentalSessionListResponse = ExperimentalSessionListResponses[keyof ExperimentalSessionListResponses]
-
-export type ExperimentalSessionBackgroundData = {
-  body?: never
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/experimental/session/{sessionID}/background"
-}
-
-export type ExperimentalSessionBackgroundErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type ExperimentalSessionBackgroundError =
-  ExperimentalSessionBackgroundErrors[keyof ExperimentalSessionBackgroundErrors]
-
-export type ExperimentalSessionBackgroundResponses = {
-  /**
-   * Backgrounded subagents
-   */
-  200: boolean
-}
-
-export type ExperimentalSessionBackgroundResponse =
-  ExperimentalSessionBackgroundResponses[keyof ExperimentalSessionBackgroundResponses]
 
 export type ExperimentalResourceListData = {
   body?: never
@@ -7994,6 +8740,7 @@ export type AppSkillsResponses = {
     description?: string
     location: string
     content: string
+    origin?: "machine" | "project"
   }>
 }
 
@@ -9064,46 +9811,6 @@ export type SessionListResponses = {
 
 export type SessionListResponse = SessionListResponses[keyof SessionListResponses]
 
-export type SessionCreateData = {
-  body?: {
-    parentID?: string
-    title?: string
-    agent?: string
-    model?: {
-      id: string
-      providerID: string
-      variant?: string
-    }
-    metadata?: {
-      [key: string]: unknown
-    }
-    permission?: PermissionRuleset
-  }
-  path?: never
-  query?: {
-    directory?: string
-  }
-  url: "/session"
-}
-
-export type SessionCreateErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type SessionCreateError = SessionCreateErrors[keyof SessionCreateErrors]
-
-export type SessionCreateResponses = {
-  /**
-   * Successfully created session
-   */
-  200: Session
-}
-
-export type SessionCreateResponse = SessionCreateResponses[keyof SessionCreateResponses]
-
 export type SessionStatusData = {
   body?: never
   path?: never
@@ -9154,9 +9861,9 @@ export type SessionDeleteErrors = {
    */
   404: NotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | SessionTreeBusyError
    */
-  409: SessionBusyError
+  409: SessionBusyError | SessionTreeBusyError
 }
 
 export type SessionDeleteError = SessionDeleteErrors[keyof SessionDeleteErrors]
@@ -9383,61 +10090,6 @@ export type SessionMessagesResponses = {
 
 export type SessionMessagesResponse2 = SessionMessagesResponses[keyof SessionMessagesResponses]
 
-export type SessionPromptData = {
-  body?: {
-    messageID?: string
-    model?: {
-      providerID: string
-      modelID: string
-    }
-    agent?: string
-    noReply?: boolean
-    tools?: {
-      [key: string]: boolean
-    }
-    format?: OutputFormat
-    system?: string
-    variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/message"
-}
-
-export type SessionPromptErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-  /**
-   * SessionBusyError
-   */
-  409: SessionBusyError
-}
-
-export type SessionPromptError = SessionPromptErrors[keyof SessionPromptErrors]
-
-export type SessionPromptResponses = {
-  /**
-   * Created message
-   */
-  200: {
-    info: AssistantMessage
-    parts: Array<Part>
-  }
-}
-
-export type SessionPromptResponse = SessionPromptResponses[keyof SessionPromptResponses]
-
 export type SessionDeleteMessageData = {
   body?: never
   path: {
@@ -9513,46 +10165,7 @@ export type SessionMessageResponses = {
 
 export type SessionMessageResponse = SessionMessageResponses[keyof SessionMessageResponses]
 
-export type SessionForkData = {
-  body?: {
-    messageID?: string
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/fork"
-}
-
-export type SessionForkErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-  /**
-   * SessionBusyError
-   */
-  409: SessionBusyError
-}
-
-export type SessionForkError = SessionForkErrors[keyof SessionForkErrors]
-
-export type SessionForkResponses = {
-  /**
-   * 200
-   */
-  200: Session
-}
-
-export type SessionForkResponse = SessionForkResponses[keyof SessionForkResponses]
-
-export type SessionAbortData = {
+export type SessionForkBasisData = {
   body?: never
   path: {
     sessionID: string
@@ -9560,125 +10173,119 @@ export type SessionAbortData = {
   query?: {
     directory?: string
   }
-  url: "/session/{sessionID}/abort"
+  url: "/session/{sessionID}/fork-basis"
 }
 
-export type SessionAbortErrors = {
+export type SessionForkBasisErrors = {
   /**
    * BadRequest | InvalidRequestError
    */
   400: EffectHttpApiErrorBadRequest | InvalidRequestError
-}
-
-export type SessionAbortError = SessionAbortErrors[keyof SessionAbortErrors]
-
-export type SessionAbortResponses = {
   /**
-   * Aborted session
+   * NotFoundError
    */
-  200: boolean
+  404: NotFoundError
 }
 
-export type SessionAbortResponse = SessionAbortResponses[keyof SessionAbortResponses]
+export type SessionForkBasisError = SessionForkBasisErrors[keyof SessionForkBasisErrors]
 
-export type SessionInitData = {
+export type SessionForkBasisResponses = {
+  /**
+   * Exact durable source frontier for a process-local fork draft
+   */
+  200: {
+    sourceSessionID: string
+    sourceEventSequence: number
+  }
+}
+
+export type SessionForkBasisResponse = SessionForkBasisResponses[keyof SessionForkBasisResponses]
+
+export type SessionTurnsData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/turn"
+}
+
+export type SessionTurnsErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError | TurnNotFoundError
+   */
+  404: NotFoundError | TurnNotFoundError
+  /**
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   */
+  409:
+    | SessionBusyError
+    | TurnAdmissionConflictError
+    | TurnAlreadyRunningError
+    | TurnSessionMismatchError
+    | TurnNoActiveError
+    | TurnActiveMismatchError
+    | TurnNotSteerableError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+  /**
+   * TurnSourceUnavailableError
+   */
+  410: TurnSourceUnavailableError
+  /**
+   * TurnIntegrityError
+   */
+  500: TurnIntegrityError
+}
+
+export type SessionTurnsError = SessionTurnsErrors[keyof SessionTurnsErrors]
+
+export type SessionTurnsResponses = {
+  /**
+   * Turns in durable admission order
+   */
+  200: Array<TurnInfo>
+}
+
+export type SessionTurnsResponse = SessionTurnsResponses[keyof SessionTurnsResponses]
+
+export type SessionStartData = {
   body?: {
-    modelID: string
-    providerID: string
+    turnID: string
+    inputID: string
     messageID: string
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/init"
-}
-
-export type SessionInitErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-  /**
-   * SessionBusyError
-   */
-  409: SessionBusyError
-}
-
-export type SessionInitError = SessionInitErrors[keyof SessionInitErrors]
-
-export type SessionInitResponses = {
-  /**
-   * 200
-   */
-  200: boolean
-}
-
-export type SessionInitResponse = SessionInitResponses[keyof SessionInitResponses]
-
-export type SessionSummarizeData = {
-  body?: {
-    providerID: string
-    modelID: string
-    auto?: boolean
-  }
-  path: {
-    sessionID: string
-  }
-  query?: {
-    directory?: string
-  }
-  url: "/session/{sessionID}/summarize"
-}
-
-export type SessionSummarizeErrors = {
-  /**
-   * BadRequest | InvalidRequestError
-   */
-  400: EffectHttpApiErrorBadRequest | InvalidRequestError
-  /**
-   * NotFoundError
-   */
-  404: NotFoundError
-  /**
-   * SessionBusyError
-   */
-  409: SessionBusyError
-}
-
-export type SessionSummarizeError = SessionSummarizeErrors[keyof SessionSummarizeErrors]
-
-export type SessionSummarizeResponses = {
-  /**
-   * Summarized session
-   */
-  200: boolean
-}
-
-export type SessionSummarizeResponse = SessionSummarizeResponses[keyof SessionSummarizeResponses]
-
-export type SessionPromptAsyncData = {
-  body?: {
-    messageID?: string
     model?: {
       providerID: string
       modelID: string
     }
     agent?: string
-    noReply?: boolean
+    limits?: TurnLimits
     tools?: {
       [key: string]: boolean
     }
     format?: OutputFormat
     system?: string
     variant?: string
-    parts: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput>
+    session?: {
+      parentID?: string
+      title?: string
+      metadata?: {
+        [key: string]: unknown
+      }
+      permission?: PermissionRuleset
+    }
+    fork?: {
+      sourceSessionID: string
+      sourceEventSequence: number
+      cutoffMessageID?: string
+    }
   }
   path: {
     sessionID: string
@@ -9686,85 +10293,340 @@ export type SessionPromptAsyncData = {
   query?: {
     directory?: string
   }
-  url: "/session/{sessionID}/prompt_async"
+  url: "/session/{sessionID}/turn"
 }
 
-export type SessionPromptAsyncErrors = {
+export type SessionStartErrors = {
   /**
    * BadRequest | InvalidRequestError
    */
   400: EffectHttpApiErrorBadRequest | InvalidRequestError
   /**
-   * NotFoundError
+   * NotFoundError | TurnNotFoundError
    */
-  404: NotFoundError
-}
-
-export type SessionPromptAsyncError = SessionPromptAsyncErrors[keyof SessionPromptAsyncErrors]
-
-export type SessionPromptAsyncResponses = {
+  404: NotFoundError | TurnNotFoundError
   /**
-   * Prompt accepted
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
    */
-  204: void
+  409:
+    | SessionBusyError
+    | TurnAdmissionConflictError
+    | TurnAlreadyRunningError
+    | TurnSessionMismatchError
+    | TurnNoActiveError
+    | TurnActiveMismatchError
+    | TurnNotSteerableError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+  /**
+   * TurnSourceUnavailableError
+   */
+  410: TurnSourceUnavailableError
+  /**
+   * TurnIntegrityError
+   */
+  500: TurnIntegrityError
 }
 
-export type SessionPromptAsyncResponse = SessionPromptAsyncResponses[keyof SessionPromptAsyncResponses]
+export type SessionStartError = SessionStartErrors[keyof SessionStartErrors]
 
-export type SessionCommandData = {
+export type SessionStartResponses = {
+  /**
+   * Admitted root Turn
+   */
+  200: TurnInfo
+}
+
+export type SessionStartResponse = SessionStartResponses[keyof SessionStartResponses]
+
+export type SessionActiveTurnData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/turn/active"
+}
+
+export type SessionActiveTurnErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError | TurnNotFoundError
+   */
+  404: NotFoundError | TurnNotFoundError
+  /**
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   */
+  409:
+    | SessionBusyError
+    | TurnAdmissionConflictError
+    | TurnAlreadyRunningError
+    | TurnSessionMismatchError
+    | TurnNoActiveError
+    | TurnActiveMismatchError
+    | TurnNotSteerableError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+  /**
+   * TurnSourceUnavailableError
+   */
+  410: TurnSourceUnavailableError
+  /**
+   * TurnIntegrityError
+   */
+  500: TurnIntegrityError
+}
+
+export type SessionActiveTurnError = SessionActiveTurnErrors[keyof SessionActiveTurnErrors]
+
+export type SessionActiveTurnResponses = {
+  /**
+   * Active Turn, or null when the Session is idle
+   */
+  200: TurnInfo
+}
+
+export type SessionActiveTurnResponse = SessionActiveTurnResponses[keyof SessionActiveTurnResponses]
+
+export type SessionGetTurnData = {
+  body?: never
+  path: {
+    sessionID: string
+    turnID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/turn/{turnID}"
+}
+
+export type SessionGetTurnErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError | TurnNotFoundError
+   */
+  404: NotFoundError | TurnNotFoundError
+  /**
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   */
+  409:
+    | SessionBusyError
+    | TurnAdmissionConflictError
+    | TurnAlreadyRunningError
+    | TurnSessionMismatchError
+    | TurnNoActiveError
+    | TurnActiveMismatchError
+    | TurnNotSteerableError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+  /**
+   * TurnSourceUnavailableError
+   */
+  410: TurnSourceUnavailableError
+  /**
+   * TurnIntegrityError
+   */
+  500: TurnIntegrityError
+}
+
+export type SessionGetTurnError = SessionGetTurnErrors[keyof SessionGetTurnErrors]
+
+export type SessionGetTurnResponses = {
+  /**
+   * Exact Turn
+   */
+  200: TurnInfo
+}
+
+export type SessionGetTurnResponse = SessionGetTurnResponses[keyof SessionGetTurnResponses]
+
+export type SessionAwaitTurnData = {
+  body?: never
+  path: {
+    sessionID: string
+    turnID: string
+  }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/turn/{turnID}/await"
+}
+
+export type SessionAwaitTurnErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError | TurnNotFoundError
+   */
+  404: NotFoundError | TurnNotFoundError
+  /**
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   */
+  409:
+    | SessionBusyError
+    | TurnAdmissionConflictError
+    | TurnAlreadyRunningError
+    | TurnSessionMismatchError
+    | TurnNoActiveError
+    | TurnActiveMismatchError
+    | TurnNotSteerableError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+  /**
+   * TurnSourceUnavailableError
+   */
+  410: TurnSourceUnavailableError
+  /**
+   * TurnIntegrityError
+   */
+  500: TurnIntegrityError
+}
+
+export type SessionAwaitTurnError = SessionAwaitTurnErrors[keyof SessionAwaitTurnErrors]
+
+export type SessionAwaitTurnResponses = {
+  /**
+   * Terminal exact Turn
+   */
+  200: TurnInfo
+}
+
+export type SessionAwaitTurnResponse = SessionAwaitTurnResponses[keyof SessionAwaitTurnResponses]
+
+export type SessionSteerData = {
   body?: {
-    messageID?: string
+    inputID: string
+    messageID: string
+    model?: {
+      providerID: string
+      modelID: string
+    }
     agent?: string
-    model?: string
-    arguments: string
-    command: string
+    tools?: {
+      [key: string]: boolean
+    }
+    format?: OutputFormat
+    system?: string
     variant?: string
-    parts?: Array<{
-      id?: string
-      type: "file"
-      mime: string
-      filename?: string
-      url: string
-      source?: FilePartSource
-    }>
+    parts: Array<TextPartInput | FilePartInput | AgentPartInput>
   }
   path: {
     sessionID: string
+    turnID: string
   }
   query?: {
     directory?: string
   }
-  url: "/session/{sessionID}/command"
+  url: "/session/{sessionID}/turn/{turnID}/steer"
 }
 
-export type SessionCommandErrors = {
+export type SessionSteerErrors = {
   /**
    * BadRequest | InvalidRequestError
    */
   400: EffectHttpApiErrorBadRequest | InvalidRequestError
   /**
-   * NotFoundError
+   * NotFoundError | TurnNotFoundError
    */
-  404: NotFoundError
+  404: NotFoundError | TurnNotFoundError
   /**
-   * SessionBusyError
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
    */
-  409: SessionBusyError
+  409:
+    | SessionBusyError
+    | TurnAdmissionConflictError
+    | TurnAlreadyRunningError
+    | TurnSessionMismatchError
+    | TurnNoActiveError
+    | TurnActiveMismatchError
+    | TurnNotSteerableError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+  /**
+   * TurnSourceUnavailableError
+   */
+  410: TurnSourceUnavailableError
+  /**
+   * TurnIntegrityError
+   */
+  500: TurnIntegrityError
 }
 
-export type SessionCommandError = SessionCommandErrors[keyof SessionCommandErrors]
+export type SessionSteerError = SessionSteerErrors[keyof SessionSteerErrors]
 
-export type SessionCommandResponses = {
+export type SessionSteerResponses = {
   /**
-   * Created message
+   * Promoted input of the exact Turn
    */
-  200: {
-    info: AssistantMessage
-    parts: Array<Part>
+  200: TurnInput
+}
+
+export type SessionSteerResponse = SessionSteerResponses[keyof SessionSteerResponses]
+
+export type SessionInterruptTurnData = {
+  body?: never
+  path: {
+    sessionID: string
+    turnID: string
   }
+  query?: {
+    directory?: string
+  }
+  url: "/session/{sessionID}/turn/{turnID}/interrupt"
 }
 
-export type SessionCommandResponse = SessionCommandResponses[keyof SessionCommandResponses]
+export type SessionInterruptTurnErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError | TurnNotFoundError
+   */
+  404: NotFoundError | TurnNotFoundError
+  /**
+   * SessionBusyError | TurnAdmissionConflictError | TurnAlreadyRunningError | TurnSessionMismatchError | TurnNoActiveError | TurnActiveMismatchError | TurnNotSteerableError | SessionTreeBusyError | SessionTreeChangedError
+   */
+  409:
+    | SessionBusyError
+    | TurnAdmissionConflictError
+    | TurnAlreadyRunningError
+    | TurnSessionMismatchError
+    | TurnNoActiveError
+    | TurnActiveMismatchError
+    | TurnNotSteerableError
+    | SessionTreeBusyError
+    | SessionTreeChangedError
+  /**
+   * TurnSourceUnavailableError
+   */
+  410: TurnSourceUnavailableError
+  /**
+   * TurnIntegrityError
+   */
+  500: TurnIntegrityError
+}
+
+export type SessionInterruptTurnError = SessionInterruptTurnErrors[keyof SessionInterruptTurnErrors]
+
+export type SessionInterruptTurnResponses = {
+  /**
+   * Interrupted or already-terminal exact Turn
+   */
+  200: TurnInfo
+}
+
+export type SessionInterruptTurnResponse = SessionInterruptTurnResponses[keyof SessionInterruptTurnResponses]
 
 export type SessionShellData = {
   body?: {

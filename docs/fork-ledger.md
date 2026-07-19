@@ -13,13 +13,14 @@ Status: Active production-fork ledger
 Locally materialized reference checkouts are ignored files beside the oracle
 worktree. Their pins are durable; their paths are not part of this fork.
 
-## Original Gate close evidence
+## Gate close evidence
 
-The commits below are the historical acceptance points. They do not override
-the current disposition in `docs/README.md`; a later audit may preserve the
-implementation evidence while reopening one bounded completion claim.
+The commits and explicitly frozen working-tree snapshots below are the
+historical acceptance points. They do not override the current disposition in
+`docs/README.md`; a later audit may preserve the implementation evidence while
+reopening one bounded completion claim.
 
-| Gate                                     | Result                                                                                                                                            | Fork commit                                                                             | Historical record                                                                     |
+| Gate                                     | Result                                                                                                                                            | Fork evidence                                                                           | Historical record                                                                     |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | 0. Oracle freeze                         | Pre-fork behavior and assets classified                                                                                                           | pre-fork lineage                                                                        | `docs/roadmap/09-one-time-opencode-fork-baseline.md` at the oracle tag                |
 | 1. Lineage                               | Exact full-history `v1.17.18` fork with MIT provenance                                                                                            | `b1fc8113948b518835c2a39ece49553cffe9b30c`                                              | `docs/research/opencode-fork-gate-01-lineage-2026-07-13.md`                           |
@@ -34,6 +35,7 @@ implementation evidence while reopening one bounded completion claim.
 | 9. Source and Artifact authority         | Stable Artifact identity, exact observed revisions, location/availability history, provenance, and correction without retargeting                 | `41db7c292aaeb83abfafea9236480d006ccabe0f`                                              | `docs/research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md`         |
 | 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                              | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
 | 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                              | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
+| 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | frozen at base `64a77fd3a6a3d13747f1312f029b9d4c48682752`; commit pending               | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
 
 Read a historical record with:
 
@@ -658,6 +660,72 @@ closure `Accept`.
 - The maintainer separately authorized integration after review acceptance.
   Commit `bdbfa0c05` fixes the accepted implementation provenance;
   `docs/README.md` therefore closes Gate 11 without starting Gate 12.
+
+## 2026-07-19 Gate 12 review acceptance provenance
+
+Current disposition remains owned only by `docs/README.md`. Retained top-level
+reviewer task `019f7443-f008-7243-8016-f78b5ced55e7`, run
+`gate12-20260718-whole-01`, accepted both contract/theory and
+implementation/evidence. It closed `G12-CT-001`–`G12-CT-006` and
+`G12-IE-001`–`G12-IE-008`; no maintainer-owned product decision was reopened.
+
+- Contract review first returned `Revise` for six derived lifecycle
+  corrections, then accepted the repaired fork materialization,
+  admission-to-owner handoff, causal-input window, candidate-exhaustion,
+  destructive-retention, and cross-Session frontier contracts.
+- Implementation review first returned `Revise` for seven code/evidence
+  findings. The same reviewer accepted the repaired handoff cancellation,
+  deny-first delegated authority, SQLite immutability and learning-frontier
+  constraints, exact visible-Turn targeting, destructive-lifecycle evidence,
+  and reconciled packaged Windows provenance. It also disclosed and closed
+  `G12-IE-008`, which makes fork chronology use durable `(created time, ID)`
+  ordering so historical clone IDs cannot outrank a genuine newer root.
+- Fresh closure execution passed Core Turn plus migration at 46 tests and 298
+  assertions; the admission/handoff matrix at 8 and 50; delegated Task
+  authority at 9 and 42; Message chronology at 37 and 63; atomic fork-start
+  HttpApi at 1 and 13; and the exact TUI identity subset at 18 and 59. Core
+  migration `--check` also passed. The reviewer accepted the deterministic
+  A-to-B capture test as causally equivalent to pausing the same production
+  seam under external ConPTY.
+- The byte-ordinal build-source manifest records 169 paths and 4,752,171 bytes,
+  has file hash
+  `605F53CC6FF63A040E252DF5501EFEE681C5B307A9C124F0AA64E189F688AE58`,
+  and has aggregate
+  `F469C6186FDE5961D0100212097DA25C123EC597CFF821EC8365491C46695AD6`.
+  The reviewer independently matched every non-document entry to the accepted
+  source.
+- The retained 209-file Windows package has aggregate
+  `8FB179648E3E34ECF38DB9C24EB04E83A8AD3C57F9193A9204F608F15F943753`;
+  its manifest hashes to
+  `C8F122331B1B12A39DF3B6482496991CF16CC011AB14A4EE2B7618ABF16E1F02`
+  and `repa.exe` to
+  `C735FBFFF65A6326512A474340B0727A9DE83EFBD03F496146F3C735101A6F9A`.
+  The accepted `ok: true` oracle consumed 12/12 provider requests and proves
+  first admission, visible queue and steer, fork start, bounded child outcomes,
+  typed unavailable-child projection, learner interrupt/exact replay, and
+  startup recovery without provider redispatch or durable queued-draft replay.
+- `oracle-report.json`, raw ConPTY, and normalized terminal output hash to
+  `2DA0C4BF0F44B87B513686151938376BB84C434473266535ABDBF19D124A35CD`,
+  `10F0F30BC0B3089E3A33BFCD2B7A93F37CD9D7D0AC9E65C3E813F73BAB53624B`,
+  and `9058F51B90DC3CA54FBFF2C8A96CD9301AB6F83175557EC1F1779BDBEDAC8F83`.
+  The exact oracle source is the sibling retained file
+  `gate12-windows-packaged-evidence/oracle.ts`, not a child of the repaired
+  artifact root, and hashes to
+  `4AEE7EC8B144BD51EEA2D600CA6CAD0196921DC912E6182A95588CA6645B7BFD`.
+- The independently accepted snapshot remained at HEAD
+  `64a77fd3a6a3d13747f1312f029b9d4c48682752` on branch
+  `codex/opencode-v1.17.18-baseline`, with 169 changed paths, raw status hash
+  `77425AA8F88E501ADD80338DCB3AB7F4D0B800B1439666EB0A6A7DE36640A9B8`,
+  and changed-content aggregate
+  `BCFDC1FFA01872C1930D750447DEAD051502CC38BDFBD37ADE00F93EFD32E290`.
+  At review close, `docs/README.md` and the Gate record hashed to
+  `C2723616EC65519B55BEC8611B8A46FF7509C3C29DD3C591D7EEAAE73E4F9C82`
+  and `1EA13FE10FAE0A6AA44AB16DB52621BDA7B2D84A7065A3582D8BB3F35A7C50FB`.
+  The reviewer made no repository, retained-artifact, Git, credential, or
+  external durable-system mutation.
+- No integration commit has been made. The accepted implementation remains the
+  frozen working-tree snapshot; the status-only closure edits to this ledger,
+  `docs/README.md`, and the Gate record do not start Gate 13.
 
 ## Historical evidence locators
 

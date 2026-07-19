@@ -127,7 +127,6 @@ function matchLegacyOpenApi(input: Record<string, unknown>) {
         delete operation.responses?.["401"]
         normalizeLegacyErrorResponses(operation)
       }
-      normalizeLegacyOperation(operation, path, method)
       if ((path === "/event" || path === "/global/event" || path === "/api/event") && method === "get") {
         // HttpApi has no first-class SSE response schema, and these handlers are
         // raw/streaming routes. Document the actual wire protocol explicitly.
@@ -346,23 +345,6 @@ function referencesComponent(input: unknown, name: string): boolean {
   if (!input || typeof input !== "object") return false
   if ((input as OpenApiSchema).$ref === `#/components/schemas/${name}`) return true
   return Object.values(input).some((value) => referencesComponent(value, name))
-}
-
-function normalizeLegacyOperation(operation: OpenApiOperation, path: string, method: string) {
-  if ((path !== "/session/{sessionID}/message" && path !== "/session/{sessionID}/command") || method !== "post") return
-  const response = operation.responses?.["200"]?.content?.["application/json"]
-  if (!response) return
-  response.schema = {
-    type: "object",
-    required: ["info", "parts"],
-    properties: {
-      info: { $ref: "#/components/schemas/AssistantMessage" },
-      parts: {
-        type: "array",
-        items: { $ref: "#/components/schemas/Part" },
-      },
-    },
-  }
 }
 
 function isRefResponse(response: OpenApiResponse, name: string) {

@@ -139,3 +139,52 @@ test("mode-less bindings stay active when the Repa mode changes", async () => {
     app.renderer.destroy()
   }
 })
+
+test("Ctrl+Enter is reserved for explicit Turn steering, not textarea newline", async () => {
+  const sequences: Record<string, string[]> = {}
+
+  function Harness() {
+    const renderer = useRenderer()
+    const keymap = createDefaultOpenTuiKeymap(renderer)
+    const config = createResolvedKeymapConfig()
+    const offKeymap = registerOpencodeKeymap(keymap, renderer, config)
+    const offSession = keymap.registerLayer({
+      commands: [{ name: "session.steer", run() {} }],
+      bindings: config.keybinds.gather("session", ["session.steer"]),
+    })
+    const bindings = keymap.getCommandBindings({
+      visibility: "registered",
+      commands: ["session.steer", "input.newline"],
+    })
+    sequences.steer =
+      bindings
+        .get("session.steer")
+        ?.map((binding) =>
+          binding.sequence.map((part) => `${part.stroke.ctrl ? "ctrl+" : ""}${part.stroke.name}`).join(">"),
+        ) ?? []
+    sequences.newline =
+      bindings
+        .get("input.newline")
+        ?.map((binding) =>
+          binding.sequence.map((part) => `${part.stroke.ctrl ? "ctrl+" : ""}${part.stroke.name}`).join(">"),
+        ) ?? []
+    onCleanup(() => {
+      offSession()
+      offKeymap()
+    })
+    return (
+      <OpencodeKeymapProvider keymap={keymap}>
+        <textarea />
+      </OpencodeKeymapProvider>
+    )
+  }
+
+  const app = await testRender(() => <Harness />)
+  try {
+    expect(sequences.steer).toContain("ctrl+return")
+    expect(sequences.newline).not.toContain("ctrl+return")
+    expect(TuiKeybind.defaultValue("input_newline")).toBe("shift+return,alt+return,ctrl+j")
+  } finally {
+    app.renderer.destroy()
+  }
+})

@@ -11,7 +11,7 @@ import { LLM } from "../../src/session/llm"
 import { SessionCompaction } from "../../src/session/compaction"
 import { Token } from "@/util/token"
 import { Plugin } from "../../src/plugin"
-import { provideTmpdirInstance, TestInstance } from "../fixture/fixture"
+import { provideTmpdirInstance, requireInstance, TestInstance } from "../fixture/fixture"
 import { Session as SessionNs } from "@/session/session"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
@@ -34,6 +34,8 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearnerAdmission, Occurrence } from "@opencode-ai/core/learning-command"
+import { materializeTestSessionInfo } from "../fixture/session"
+import { SessionTable } from "@opencode-ai/core/session/sql"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -239,6 +241,7 @@ function fake(
     updateToolCall: Effect.fn("TestSessionProcessor.updateToolCall")(() => Effect.succeed(undefined)),
     completeToolCall: Effect.fn("TestSessionProcessor.completeToolCall")(() => Effect.void),
     registeredToolCall: () => undefined,
+    bindModelOperation: Effect.fn("TestSessionProcessor.bindModelOperation")(() => Effect.void),
     process: Effect.fn("TestSessionProcessor.process")(() => Effect.succeed(result)),
   } satisfies SessionProcessorModule.SessionProcessor.Handle
 }
@@ -612,7 +615,7 @@ describe("session.compaction.create", () => {
         const compact = yield* SessionCompaction.Service
         const ssn = yield* SessionNs.Service
 
-        const info = yield* ssn.create({})
+        const info = yield* materializeTestSessionInfo()
 
         yield* compact.create({
           sessionID: info.id,
@@ -623,10 +626,10 @@ describe("session.compaction.create", () => {
         })
 
         const msgs = yield* ssn.messages({ sessionID: info.id })
-        expect(msgs).toHaveLength(1)
-        expect(msgs[0].info.role).toBe("user")
-        expect(msgs[0].parts).toHaveLength(1)
-        expect(msgs[0].parts[0]).toMatchObject({
+        expect(msgs).toHaveLength(2)
+        expect(msgs.at(-1)?.info.role).toBe("user")
+        expect(msgs.at(-1)?.parts).toHaveLength(1)
+        expect(msgs.at(-1)?.parts[0]).toMatchObject({
           type: "compaction",
           auto: true,
           overflow: true,
@@ -641,7 +644,7 @@ describe("session.compaction.create", () => {
       Effect.gen(function* () {
         const compact = yield* SessionCompaction.Service
         const ssn = yield* SessionNs.Service
-        const info = yield* ssn.create({})
+        const info = yield* materializeTestSessionInfo()
 
         yield* compact.create({
           sessionID: info.id,
@@ -672,7 +675,7 @@ describe("session.compaction.prune", () => {
         Effect.gen(function* () {
           const compact = yield* SessionCompaction.Service
           const ssn = yield* SessionNs.Service
-          const info = yield* ssn.create({})
+          const info = yield* materializeTestSessionInfo()
           const a = yield* ssn.updateMessage({
             id: MessageID.ascending(),
             role: "user",
@@ -768,7 +771,7 @@ describe("session.compaction.prune", () => {
       Effect.gen(function* () {
         const compact = yield* SessionCompaction.Service
         const ssn = yield* SessionNs.Service
-        const info = yield* ssn.create({})
+        const info = yield* materializeTestSessionInfo()
         const a = yield* ssn.updateMessage({
           id: MessageID.ascending(),
           role: "user",
@@ -866,7 +869,7 @@ describe("session.compaction.process", () => {
 
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* createUserMessage(session.id, "continuity source")
         yield* createSummaryCompaction(session.id)
 
@@ -913,7 +916,7 @@ describe("session.compaction.process", () => {
 
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* createUserMessage(session.id, "continuity source")
         yield* createSummaryCompaction(session.id)
 
@@ -963,7 +966,7 @@ describe("session.compaction.process", () => {
     Effect.gen(function* () {
       const test = yield* TestInstance
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       const msg = yield* createUserMessage(session.id, "hello")
       const reply = yield* createAssistantMessage(session.id, msg.id, test.directory)
       const msgs = yield* ssn.messages({ sessionID: session.id })
@@ -993,7 +996,7 @@ describe("session.compaction.process", () => {
     Effect.gen(function* () {
       const events = yield* EventV2Bridge.Service
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       const msg = yield* createUserMessage(session.id, "hello")
       const msgs = yield* ssn.messages({ sessionID: session.id })
       const done = yield* Deferred.make<void, Error>()
@@ -1026,7 +1029,7 @@ describe("session.compaction.process", () => {
     "marks summary message as errored on compact result",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       const msg = yield* createUserMessage(session.id, "hello")
       const msgs = yield* ssn.messages({ sessionID: session.id })
 
@@ -1054,7 +1057,7 @@ describe("session.compaction.process", () => {
     "adds synthetic continue prompt when auto is enabled",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       const msg = yield* createUserMessage(session.id, "hello")
       const msgs = yield* ssn.messages({ sessionID: session.id })
 
@@ -1085,7 +1088,7 @@ describe("session.compaction.process", () => {
     "persists tail_start_id for retained recent turns",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       yield* createUserMessage(session.id, "first")
       const keep = yield* createUserMessage(session.id, "second")
       yield* createUserMessage(session.id, "third")
@@ -1111,7 +1114,7 @@ describe("session.compaction.process", () => {
     "shrinks retained tail to fit preserve token budget",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       yield* createUserMessage(session.id, "first")
       yield* createUserMessage(session.id, "x".repeat(2_000))
       const keep = yield* createUserMessage(session.id, "tiny")
@@ -1141,7 +1144,7 @@ describe("session.compaction.process", () => {
       stub.push(reply("summary", (input) => (captured = JSON.stringify(input.messages))))
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* createUserMessage(session.id, "first")
         yield* createUserMessage(session.id, "y".repeat(2_000))
         yield* createSummaryCompaction(session.id)
@@ -1168,7 +1171,7 @@ describe("session.compaction.process", () => {
       stub.push(reply("summary", (input) => (captured = JSON.stringify(input.messages))))
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* createUserMessage(session.id, "older")
         const recent = yield* createUserMessage(session.id, "recent image turn")
         yield* ssn.updatePart({
@@ -1206,7 +1209,7 @@ describe("session.compaction.process", () => {
       return Effect.gen(function* () {
         const test = yield* TestInstance
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* createUserMessage(session.id, "older")
         const recent = yield* createUserMessage(session.id, "recent turn")
         const large = yield* createAssistantMessage(session.id, recent.id, test.directory)
@@ -1252,7 +1255,7 @@ describe("session.compaction.process", () => {
     "allows plugins to disable synthetic continue prompt",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       const msg = yield* createUserMessage(session.id, "hello")
       const msgs = yield* ssn.messages({ sessionID: session.id })
 
@@ -1284,7 +1287,7 @@ describe("session.compaction.process", () => {
     "replays the prior user turn on overflow when earlier context exists",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       yield* createUserMessage(session.id, "root")
       const replay = yield* createUserMessage(session.id, "image")
       yield* ssn.updatePart({
@@ -1327,10 +1330,28 @@ describe("session.compaction.process", () => {
   )
 
   it.instance(
-    "falls back to overflow guidance when no replayable turn exists",
+    "falls back to overflow guidance for a pre-Turn legacy Session",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const instance = yield* requireInstance
+      const sessionID = SessionID.create()
+      const now = Date.now()
+      const database = yield* Database.Service
+      yield* database.db
+        .insert(SessionTable)
+        .values({
+          id: sessionID,
+          project_id: instance.project.id,
+          slug: sessionID,
+          directory: instance.directory,
+          title: "legacy Session without Turn admission",
+          version: "0.0.0-test",
+          time_created: now,
+          time_updated: now,
+        })
+        .run()
+        .pipe(Effect.orDie)
+      const session = yield* ssn.get(sessionID).pipe(Effect.orDie)
       yield* createUserMessage(session.id, "earlier")
       const msg = yield* createUserMessage(session.id, "current")
       const msgs = yield* ssn.messages({ sessionID: session.id })
@@ -1357,7 +1378,7 @@ describe("session.compaction.process", () => {
     "does not infer occurrence lineage for a legacy overflow replay",
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       yield* createUserMessage(session.id, "root")
       yield* createUserMessage(session.id, "legacy replay")
       const current = yield* createUserMessage(session.id, "current")
@@ -1406,7 +1427,7 @@ describe("session.compaction.process", () => {
         const ssn = yield* SessionNs.Service
         const events = yield* EventV2Bridge.Service
         const ready = yield* Deferred.make<void>()
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         const msg = yield* createUserMessage(session.id, "hello")
         const msgs = yield* ssn.messages({ sessionID: session.id })
         const off = yield* events.listen((evt) => {
@@ -1450,7 +1471,7 @@ describe("session.compaction.process", () => {
         const ready = yield* Deferred.make<void>()
         return yield* Effect.gen(function* () {
           const ssn = yield* SessionNs.Service
-          const session = yield* ssn.create({})
+          const session = yield* materializeTestSessionInfo()
           const msg = yield* createUserMessage(session.id, "hello")
           const msgs = yield* ssn.messages({ sessionID: session.id })
           const fiber = yield* SessionCompaction.use
@@ -1494,7 +1515,7 @@ describe("session.compaction.process", () => {
       )
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         const msg = yield* createUserMessage(session.id, "hello")
         const msgs = yield* ssn.messages({ sessionID: session.id })
         yield* SessionCompaction.use.process({
@@ -1535,7 +1556,7 @@ describe("session.compaction.process", () => {
       )
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         const msg = yield* createUserMessage(session.id, "hello")
         const msgs = yield* ssn.messages({ sessionID: session.id })
         yield* SessionCompaction.use.process({ parentID: msg.id, messages: msgs, sessionID: session.id, auto: false })
@@ -1563,7 +1584,7 @@ describe("session.compaction.process", () => {
       )
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* createUserMessage(session.id, "older context")
         yield* createUserMessage(session.id, "keep this turn")
         yield* createUserMessage(session.id, "and this one too")
@@ -1602,7 +1623,7 @@ describe("session.compaction.process", () => {
 
       return Effect.gen(function* () {
         const ssn = yield* SessionNs.Service
-        const session = yield* ssn.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* createUserMessage(session.id, "older context")
         yield* createUserMessage(session.id, "keep this turn")
         yield* createCompactionMarker(session.id)
@@ -1637,7 +1658,7 @@ describe("session.compaction.process", () => {
 
     return Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       const u1 = yield* createUserMessage(session.id, "one")
       const u2 = yield* createUserMessage(session.id, "two")
       const u3 = yield* createUserMessage(session.id, "three")
@@ -1675,7 +1696,7 @@ describe("session.compaction.process", () => {
     Effect.gen(function* () {
       const ssn = yield* SessionNs.Service
       const test = yield* TestInstance
-      const session = yield* ssn.create({})
+      const session = yield* materializeTestSessionInfo()
       yield* createUserMessage(session.id, "older")
       const keep = yield* createUserMessage(session.id, "keep this turn")
       const keepReply = yield* createAssistantMessage(session.id, keep.id, test.directory)

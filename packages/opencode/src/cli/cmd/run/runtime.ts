@@ -31,7 +31,8 @@ export { runPromptQueue } from "./runtime.queue"
 type BootContext = Pick<
   RunInput,
   "sdk" | "directory" | "sessionID" | "sessionTitle" | "resume" | "agent" | "model" | "variant"
->
+> &
+  Pick<RunInput, "start">
 
 type CreateSessionInput = {
   agent: string | undefined
@@ -39,19 +40,21 @@ type CreateSessionInput = {
   variant: string | undefined
 }
 
-type CreateSession = (sdk: RunInput["sdk"], input: CreateSessionInput) => Promise<{ id: string; title?: string }>
+type CreateSession = (
+  sdk: RunInput["sdk"],
+  input: CreateSessionInput,
+) => Promise<{ id: string; title?: string; start?: RunInput["start"] }>
 
 type RunRuntimeInput = {
   boot: () => Promise<BootContext>
   afterPaint?: (ctx: BootContext) => Promise<void> | void
   resolveSession?: (
     ctx: BootContext,
-  ) => Promise<{ sessionID: string; sessionTitle?: string; agent?: string | undefined }>
+  ) => Promise<{ sessionID: string; sessionTitle?: string; agent?: string | undefined; start?: RunInput["start"] }>
   createSession?: (ctx: BootContext, input: CreateSessionInput) => Promise<ResolvedSession>
   files: RunInput["files"]
   initialInput?: string
   thinking: boolean
-  backgroundSubagents: boolean
   replay?: boolean
   replayLimit?: number
   demo?: RunInput["demo"]
@@ -61,7 +64,7 @@ type RunLocalInput = {
   directory: string
   fetch: typeof globalThis.fetch
   resolveAgent: () => Promise<string | undefined>
-  session: (sdk: RunInput["sdk"]) => Promise<{ id: string; title?: string } | undefined>
+  session: (sdk: RunInput["sdk"]) => Promise<{ id: string; title?: string; start?: RunInput["start"] } | undefined>
   createSession?: CreateSession
   agent: RunInput["agent"]
   model: RunInput["model"]
@@ -69,7 +72,6 @@ type RunLocalInput = {
   files: RunInput["files"]
   initialInput?: string
   thinking: boolean
-  backgroundSubagents: boolean
   replay?: boolean
   replayLimit?: number
   demo?: RunInput["demo"]
@@ -94,6 +96,7 @@ type ResolvedSession = {
   sessionID: string
   sessionTitle?: string
   agent?: string | undefined
+  start?: RunInput["start"]
 }
 
 function createSessionResolver(fn?: CreateSession) {
@@ -111,6 +114,7 @@ function createSessionResolver(fn?: CreateSession) {
       sessionID: created.id,
       sessionTitle: created.title,
       agent: input.agent,
+      start: created.start,
     }
   }
 }
@@ -128,6 +132,7 @@ type RuntimeState = {
   localRows: LocalReplayRow[]
   sessionTitle?: string
   agent: string | undefined
+  start?: RunInput["start"]
   switching?: Promise<void>
   demo?: ReturnType<typeof createRunDemo>
   selectSubagent?: (sessionID: string | undefined) => void
@@ -206,6 +211,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     localRows: [],
     sessionTitle: ctx.sessionTitle,
     agent: ctx.agent,
+    start: ctx.start,
   }
   const ensureSession = () => {
     if (!input.resolveSession || state.sessionID) {
@@ -220,6 +226,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
       state.sessionID = next.sessionID
       state.sessionTitle = next.sessionTitle ?? state.sessionTitle
       state.agent = next.agent
+      state.start = next.start
     })
     return state.session
   }
@@ -242,7 +249,6 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
     model: state.model,
     variant: state.activeVariant,
     tuiConfig,
-    backgroundSubagents: input.backgroundSubagents,
     onPermissionReply: async (next) => {
       if (state.demo?.permission(next)) {
         return
@@ -343,17 +349,15 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
 
       state.aborting = true
       void ctx.sdk.session
-        .abort({
-          sessionID: state.sessionID,
+        .activeTurn({ sessionID: state.sessionID })
+        .then((result) => {
+          if (!result.data) return
+          return ctx.sdk.session.interruptTurn({ sessionID: state.sessionID, turnID: result.data.id })
         })
         .catch(() => {})
         .finally(() => {
           state.aborting = false
         })
-    },
-    onBackground: () => {
-      if (!hasSession(input, state)) return
-      void ctx.sdk.experimental.session.background({ sessionID: state.sessionID }).catch(() => {})
     },
     onSubagentSelect: (sessionID) => {
       state.selectSubagent?.(sessionID)
@@ -475,6 +479,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
         sdk: ctx.sdk,
         directory: ctx.directory,
         sessionID: state.sessionID,
+        start: state.start,
         thinking: input.thinking,
         replay: input.replay,
         replayLimit: input.replayLimit,
@@ -576,6 +581,7 @@ async function runInteractiveRuntime(input: RunRuntimeInput, deps: RunRuntimeDep
               state.sessionID = created.sessionID
               state.sessionTitle = created.sessionTitle
               state.agent = created.agent ?? state.agent
+              state.start = created.start
               state.history = []
               state.localRows = []
               includeFiles = true
@@ -743,7 +749,6 @@ export async function runInteractiveLocalMode(input: RunLocalInput): Promise<voi
     files: input.files,
     initialInput: input.initialInput,
     thinking: input.thinking,
-    backgroundSubagents: input.backgroundSubagents,
     replay: input.replay,
     replayLimit: input.replayLimit,
     demo: input.demo,
@@ -761,6 +766,7 @@ export async function runInteractiveLocalMode(input: RunLocalInput): Promise<voi
           sessionID: next.id,
           sessionTitle: next.title,
           agent,
+          start: next.start,
         }
       })
       return session
@@ -791,7 +797,6 @@ export async function runInteractiveMode(
       files: input.files,
       initialInput: input.initialInput,
       thinking: input.thinking,
-      backgroundSubagents: input.backgroundSubagents,
       replay: input.replay,
       replayLimit: input.replayLimit,
       demo: input.demo,
@@ -804,6 +809,7 @@ export async function runInteractiveMode(
         agent: input.agent,
         model: input.model,
         variant: input.variant,
+        start: input.start,
       }),
       createSession: createSessionResolver(input.createSession),
     },

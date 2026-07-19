@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm"
 import { Effect, Semaphore } from "effect"
 import type { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { migrations } from "./migration.gen"
+import { DatabaseSchemaExtras } from "./schema-extras"
 import schema from "./schema.gen"
 import {
   APPLICATION_ID,
@@ -109,6 +110,7 @@ function initialize(db: Database, path: string, input: readonly Migration[]) {
     yield* db.transaction((tx) =>
       Effect.gen(function* () {
         yield* schema.up(tx)
+        yield* DatabaseSchemaExtras.install(tx)
         yield* tx.run(sql`
           CREATE TABLE ${sql.identifier("repa_migration")} (
             version INTEGER PRIMARY KEY,
@@ -168,12 +170,13 @@ function applyRecognized(db: Database, path: string, observedVersion: number, in
           yield* checks(tx, path, toVersion)
         }),
       )
-      yield* (migration.foreignKeyMode === "rebuild_graph"
-        ? Effect.gen(function* () {
-            yield* setForeignKeys(db, false)
-            return yield* apply
-          }).pipe(Effect.ensuring(setForeignKeys(db, true).pipe(Effect.orDie)))
-        : apply
+      yield* (
+        migration.foreignKeyMode === "rebuild_graph"
+          ? Effect.gen(function* () {
+              yield* setForeignKeys(db, false)
+              return yield* apply
+            }).pipe(Effect.ensuring(setForeignKeys(db, true).pipe(Effect.orDie)))
+          : apply
       ).pipe(
         Effect.mapError(
           (cause) =>
@@ -196,7 +199,9 @@ function setForeignKeys(db: Database, enabled: boolean) {
     yield* db.run(`PRAGMA foreign_keys = ${enabled ? "ON" : "OFF"}`)
     const observed = yield* db.get<Record<string, unknown>>(sql.raw("PRAGMA foreign_keys"))
     if (Number(observed ? Object.values(observed)[0] : Number.NaN) !== Number(enabled)) {
-      return yield* Effect.fail(new Error(`SQLite foreign-key enforcement could not be ${enabled ? "enabled" : "disabled"}`))
+      return yield* Effect.fail(
+        new Error(`SQLite foreign-key enforcement could not be ${enabled ? "enabled" : "disabled"}`),
+      )
     }
   })
 }

@@ -13,6 +13,7 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { Snapshot } from "../../src/snapshot"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { provideTmpdirInstance } from "../fixture/fixture"
+import { materializeTestSessionInfo } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
@@ -115,7 +116,7 @@ describe("revert + compact workflow", () => {
           const session = yield* Session.Service
           const revert = yield* SessionRevert.Service
 
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const sessionID = info.id
 
           const userMsg1 = yield* session.updateMessage({
@@ -233,7 +234,7 @@ describe("revert + compact workflow", () => {
           })
 
           let messages = yield* session.messages({ sessionID })
-          expect(messages.length).toBe(4)
+          expect(messages.length).toBe(5)
           const messageIds = messages.map((m) => m.info.id)
           expect(messageIds).toContain(userMsg1.id)
           expect(messageIds).toContain(userMsg2.id)
@@ -250,13 +251,13 @@ describe("revert + compact workflow", () => {
           expect(sessionInfo.revert?.messageID).toBeDefined()
 
           messages = yield* session.messages({ sessionID })
-          expect(messages.length).toBe(4)
+          expect(messages.length).toBe(5)
 
           yield* revert.cleanup(sessionInfo)
 
           messages = yield* session.messages({ sessionID })
           const remainingIds = messages.map((m) => m.info.id)
-          expect(messages.length).toBeLessThan(4)
+          expect(messages.length).toBeLessThan(5)
           expect(remainingIds).not.toContain(userMsg2.id)
           expect(remainingIds).not.toContain(assistantMsg2.id)
 
@@ -277,7 +278,7 @@ describe("revert + compact workflow", () => {
           const session = yield* Session.Service
           const revert = yield* SessionRevert.Service
 
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const sessionID = info.id
 
           const userMsg = yield* session.updateMessage({
@@ -351,7 +352,7 @@ describe("revert + compact workflow", () => {
           expect(sessionInfo.revert).toBeUndefined()
 
           const messages = yield* session.messages({ sessionID })
-          expect(messages.length).toBe(0)
+          expect(messages.length).toBe(1)
 
           yield* session.remove(sessionID)
         }),
@@ -367,7 +368,7 @@ describe("revert + compact workflow", () => {
           const session = yield* Session.Service
           const revert = yield* SessionRevert.Service
 
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const sid = info.id
 
           const u1 = yield* user(sid)
@@ -385,9 +386,10 @@ describe("revert + compact workflow", () => {
           yield* revert.cleanup(state)
 
           const msgs = yield* session.messages({ sessionID: sid })
-          expect(msgs.length).toBe(1)
-          expect(msgs[0].parts.length).toBe(1)
-          expect(msgs[0].parts[0].id).toBe(p1.id)
+          expect(msgs.length).toBe(2)
+          const reverted = msgs.find((message) => message.info.id === u1.id)
+          expect(reverted?.parts.length).toBe(1)
+          expect(reverted?.parts[0].id).toBe(p1.id)
 
           const cleared = yield* session.get(sid)
           expect(cleared.revert).toBeUndefined()
@@ -404,7 +406,7 @@ describe("revert + compact workflow", () => {
           const session = yield* Session.Service
           const revert = yield* SessionRevert.Service
 
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const sid = info.id
 
           const u1 = yield* user(sid)
@@ -445,7 +447,7 @@ describe("revert + compact workflow", () => {
           const session = yield* Session.Service
           const revert = yield* SessionRevert.Service
           const events = yield* EventV2Bridge.Service
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const linked = yield* user(info.id)
           const protectedPart = yield* text(info.id, linked.id, "immutable learner input")
           yield* events.transaction((tx) =>
@@ -489,7 +491,7 @@ describe("revert + compact workflow", () => {
           const session = yield* Session.Service
           const revert = yield* SessionRevert.Service
           const events = yield* EventV2Bridge.Service
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const linked = yield* user(info.id)
           yield* text(info.id, linked.id, "reverted learner input")
           const admitted = yield* events.transaction((tx) =>
@@ -503,7 +505,7 @@ describe("revert + compact workflow", () => {
               Effect.orDie,
             ),
           )
-          yield* session.fork({ sessionID: info.id })
+          yield* materializeTestSessionInfo({ fork: { sourceSessionID: info.id } })
           yield* session.setRevert({
             sessionID: info.id,
             revert: { messageID: linked.id },
@@ -512,7 +514,7 @@ describe("revert + compact workflow", () => {
 
           yield* revert.cleanup(yield* session.get(info.id))
 
-          expect(yield* session.messages({ sessionID: info.id })).toHaveLength(0)
+          expect(yield* session.messages({ sessionID: info.id })).toHaveLength(1)
           expect((yield* session.get(info.id)).revert).toBeUndefined()
           const tombstone = yield* events.transaction((tx) =>
             tx
@@ -539,7 +541,7 @@ describe("revert + compact workflow", () => {
           const session = yield* Session.Service
           const revert = yield* SessionRevert.Service
 
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const sid = info.id
 
           const u1 = yield* user(sid)
@@ -550,7 +552,7 @@ describe("revert + compact workflow", () => {
           yield* revert.cleanup(state)
 
           const msgs = yield* session.messages({ sessionID: sid })
-          expect(msgs.length).toBe(1)
+          expect(msgs.length).toBe(2)
         }),
       { git: true },
     ),
@@ -569,7 +571,7 @@ describe("revert + compact workflow", () => {
           yield* write(path.join(dir, "b.txt"), "b0")
           yield* write(path.join(dir, "c.txt"), "c0")
 
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const sid = info.id
 
           const turn = Effect.fn("test.turn")(function* (file: string, next: string) {
@@ -664,7 +666,7 @@ describe("revert + compact workflow", () => {
 
           yield* write(path.join(dir, "a.txt"), "a0")
 
-          const info = yield* session.create({})
+          const info = yield* materializeTestSessionInfo()
           const sid = info.id
 
           const turn = Effect.fn("test.turnSame")(function* (next: string) {

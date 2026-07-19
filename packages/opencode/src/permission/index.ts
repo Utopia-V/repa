@@ -33,7 +33,15 @@ export interface Interface {
   readonly list: () => Effect.Effect<ReadonlyArray<PermissionV1.Request>>
 }
 
-export type AskInput = PermissionV1.AskInput & { readonly requirePrompt?: boolean }
+export type AuthorityLayer = {
+  readonly ruleset: PermissionV1.Ruleset
+  readonly absence: "ask" | "deny"
+}
+
+export type AskInput = PermissionV1.AskInput & {
+  readonly requirePrompt?: boolean
+  readonly authority?: readonly AuthorityLayer[]
+}
 
 interface PendingEntry {
   info: PermissionV1.Request
@@ -48,13 +56,29 @@ interface State {
 
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
   return (
-    orderedRules(...rulesets)
-      .findLast((rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern)) ?? {
+    orderedRules(...rulesets).findLast(
+      (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
+    ) ?? {
       action: "ask",
       permission,
       pattern: "*",
     }
   )
+}
+
+export function evaluateAuthority(
+  permission: string,
+  pattern: string,
+  ruleset: PermissionV1.Ruleset,
+  authority: readonly AuthorityLayer[],
+): PermissionV1.Rule {
+  const decisions = [
+    evaluate(permission, pattern, ruleset),
+    ...authority.map((layer) => evaluateLayer(permission, pattern, layer)),
+  ]
+  if (decisions.some((rule) => rule.action === "deny")) return { permission, pattern, action: "deny" }
+  if (decisions.every((rule) => rule.action === "allow")) return { permission, pattern, action: "allow" }
+  return { permission, pattern, action: "ask" }
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Permission") {}
@@ -86,15 +110,21 @@ const layer = Layer.effect(
 
     const ask = Effect.fn("Permission.ask")(function* (input: AskInput) {
       const { approved, pending } = yield* InstanceState.get(state)
-      const { ruleset, requirePrompt = false, ...request } = input
+      const { ruleset, requirePrompt = false, authority = [], ...request } = input
       let needsAsk = requirePrompt
 
       for (const pattern of request.patterns) {
-        const rule = evaluate(request.permission, pattern, ruleset, approved)
+        const base = evaluateAuthority(request.permission, pattern, ruleset, authority)
+        const rule =
+          base.action === "ask" && evaluate(request.permission, pattern, approved).action === "allow"
+            ? { ...base, action: "allow" as const }
+            : base
         yield* Effect.logInfo("evaluated", { permission: request.permission, pattern, action: rule })
         if (rule.action === "deny") {
           return yield* new PermissionV1.DeniedError({
-            ruleset: ruleset.filter((rule) => Wildcard.match(request.permission, rule.permission)),
+            ruleset: [ruleset, ...authority.map((layer) => layer.ruleset)]
+              .flat()
+              .filter((rule) => Wildcard.match(request.permission, rule.permission)),
           })
         }
         if (rule.action === "allow") continue
@@ -222,22 +252,42 @@ export function merge(...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule[] 
   return orderedRules(...rulesets)
 }
 
-export function disabled(tools: string[], ruleset: PermissionV1.Ruleset): Set<string> {
+export function disabled(
+  tools: string[],
+  ruleset: PermissionV1.Ruleset,
+  authority: readonly AuthorityLayer[] = [],
+): Set<string> {
   const edits = ["edit", "write", "apply_patch"]
   const reads = ["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"]
-  const rules = orderedRules(ruleset)
   return new Set(
     tools.filter((tool) => {
       const permission = edits.includes(tool) ? "edit" : reads.includes(tool) ? "read" : tool
-      const rule = rules.findLast((rule) => Wildcard.match(permission, rule.permission))
-      return rule?.pattern === "*" && rule.action === "deny"
+      if (disabledByRules(permission, ruleset, "ask")) return true
+      return authority.some((layer) => disabledByRules(permission, layer.ruleset, layer.absence))
     }),
   )
 }
 
-export function visibleTools<T>(tools: Record<string, T>, ruleset: PermissionV1.Ruleset): Record<string, T> {
-  const hidden = disabled(Object.keys(tools), ruleset)
+export function visibleTools<T>(
+  tools: Record<string, T>,
+  ruleset: PermissionV1.Ruleset,
+  authority: readonly AuthorityLayer[] = [],
+): Record<string, T> {
+  const hidden = disabled(Object.keys(tools), ruleset, authority)
   return Object.fromEntries(Object.entries(tools).filter(([name]) => !hidden.has(name)))
+}
+
+function evaluateLayer(permission: string, pattern: string, layer: AuthorityLayer): PermissionV1.Rule {
+  const matched = orderedRules(layer.ruleset).findLast(
+    (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
+  )
+  return matched ?? { permission, pattern: "*", action: layer.absence }
+}
+
+function disabledByRules(permission: string, ruleset: PermissionV1.Ruleset, absence: AuthorityLayer["absence"]) {
+  const rule = orderedRules(ruleset).findLast((rule) => Wildcard.match(permission, rule.permission))
+  if (!rule) return absence === "deny"
+  return rule.pattern === "*" && rule.action === "deny"
 }
 
 export const node = LayerNode.make({ service: Service, layer: layer, deps: [EventV2Bridge.node] })

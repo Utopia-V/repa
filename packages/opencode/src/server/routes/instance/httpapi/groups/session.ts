@@ -12,7 +12,7 @@ import { Todo } from "@/session/todo"
 import { MessageID, PartID, SessionID } from "@/session/schema"
 import { Snapshot } from "@/snapshot"
 import { Schema, Struct } from "effect"
-import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, HttpApiSchema, OpenApi } from "effect/unstable/httpapi"
+import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { Authorization } from "../middleware/authorization"
 import { InstanceContextMiddleware } from "../middleware/instance-context"
 import {
@@ -20,11 +20,26 @@ import {
   WorkspaceRoutingQuery,
   WorkspaceRoutingQueryFields,
 } from "../middleware/workspace-routing"
-import { ApiNotFoundError, PermissionNotFoundError, SessionBusyError } from "../errors"
+import {
+  ApiNotFoundError,
+  InvalidRequestError,
+  PermissionNotFoundError,
+  SessionBusyError,
+  SessionTreeBusyError,
+  TurnActiveMismatchError,
+  TurnAdmissionConflictError,
+  TurnAlreadyRunningError,
+  TurnIntegrityError,
+  TurnNoActiveError,
+  TurnNotFoundError,
+  TurnNotSteerableError,
+  TurnSessionMismatchError,
+  TurnSourceUnavailableError,
+  TurnTreeChangedError,
+} from "../errors"
 import { described } from "./metadata"
 import { QueryBoolean } from "./query"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { ModelV2 } from "@opencode-ai/core/model"
+import { Turn } from "@opencode-ai/schema/turn"
 
 const root = "/session"
 export const ListQuery = Schema.Struct({
@@ -56,24 +71,31 @@ export const UpdatePayload = Schema.Struct({
     }),
   ),
 })
-export const ForkPayload = Schema.Struct(Struct.omit(Session.ForkInput.fields, ["sessionID"]))
-export const InitPayload = Schema.Struct({
-  modelID: ModelV2.ID,
-  providerID: ProviderV2.ID,
-  messageID: MessageID,
+export const StartPayload = Schema.Struct(Struct.omit(SessionPrompt.StartInput.fields, ["sessionID"]))
+export const SteerPayload = Schema.Struct(Struct.omit(SessionPrompt.SteerInput.fields, ["sessionID", "expectedTurnID"]))
+export const ForkBasis = Schema.Struct({
+  sourceSessionID: SessionID,
+  sourceEventSequence: Schema.Int,
 })
-export const SummarizePayload = Schema.Struct({
-  providerID: ProviderV2.ID,
-  modelID: ModelV2.ID,
-  auto: Schema.optional(Schema.Boolean),
-})
-export const PromptPayload = Schema.Struct(Struct.omit(SessionPrompt.PromptInput.fields, ["sessionID"]))
-export const CommandPayload = Schema.Struct(Struct.omit(SessionPrompt.CommandInput.fields, ["sessionID"]))
 export const ShellPayload = Schema.Struct(Struct.omit(SessionPrompt.ShellInput.fields, ["sessionID"]))
 export const RevertPayload = Schema.Struct(Struct.omit(SessionRevert.RevertInput.fields, ["sessionID"]))
 export const PermissionResponsePayload = Schema.Struct({
   response: PermissionV1.Reply,
 })
+
+const TurnErrors = [
+  TurnAdmissionConflictError,
+  TurnAlreadyRunningError,
+  TurnNotFoundError,
+  TurnSessionMismatchError,
+  TurnNoActiveError,
+  TurnActiveMismatchError,
+  TurnNotSteerableError,
+  TurnSourceUnavailableError,
+  SessionTreeBusyError,
+  TurnTreeChangedError,
+  TurnIntegrityError,
+] as const
 
 export const SessionPaths = {
   list: root,
@@ -84,16 +106,16 @@ export const SessionPaths = {
   diff: `${root}/:sessionID/diff`,
   messages: `${root}/:sessionID/message`,
   message: `${root}/:sessionID/message/:messageID`,
-  create: root,
   remove: `${root}/:sessionID`,
   update: `${root}/:sessionID`,
-  fork: `${root}/:sessionID/fork`,
-  abort: `${root}/:sessionID/abort`,
-  init: `${root}/:sessionID/init`,
-  summarize: `${root}/:sessionID/summarize`,
-  prompt: `${root}/:sessionID/message`,
-  promptAsync: `${root}/:sessionID/prompt_async`,
-  command: `${root}/:sessionID/command`,
+  forkBasis: `${root}/:sessionID/fork-basis`,
+  start: `${root}/:sessionID/turn`,
+  turns: `${root}/:sessionID/turn`,
+  activeTurn: `${root}/:sessionID/turn/active`,
+  getTurn: `${root}/:sessionID/turn/:turnID`,
+  awaitTurn: `${root}/:sessionID/turn/:turnID/await`,
+  steer: `${root}/:sessionID/turn/:turnID/steer`,
+  interruptTurn: `${root}/:sessionID/turn/:turnID/interrupt`,
   shell: `${root}/:sessionID/shell`,
   revert: `${root}/:sessionID/revert`,
   unrevert: `${root}/:sessionID/unrevert`,
@@ -199,23 +221,11 @@ export const SessionApi = HttpApi.make("session")
             description: "Retrieve a specific message from a session by its message ID.",
           }),
         ),
-        HttpApiEndpoint.post("create", SessionPaths.create, {
-          query: WorkspaceRoutingQuery,
-          payload: [HttpApiSchema.NoContent, Session.CreateInput],
-          success: described(Session.Info, "Successfully created session"),
-          error: HttpApiError.BadRequest,
-        }).annotateMerge(
-          OpenApi.annotations({
-            identifier: "session.create",
-            summary: "Create session",
-            description: "Create a new Repa session for interacting with AI assistants and managing conversations.",
-          }),
-        ),
         HttpApiEndpoint.delete("remove", SessionPaths.remove, {
           params: { sessionID: SessionID },
           query: WorkspaceRoutingQuery,
           success: described(Schema.Boolean, "Successfully deleted session"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError, SessionTreeBusyError],
         }).annotateMerge(
           OpenApi.annotations({
             identifier: "session.delete",
@@ -236,96 +246,106 @@ export const SessionApi = HttpApi.make("session")
             description: "Update properties of an existing session, such as title or other metadata.",
           }),
         ),
-        HttpApiEndpoint.post("fork", SessionPaths.fork, {
+        HttpApiEndpoint.get("forkBasis", SessionPaths.forkBasis, {
           params: { sessionID: SessionID },
           query: WorkspaceRoutingQuery,
-          payload: [HttpApiSchema.NoContent, ForkPayload],
-          success: described(Session.Info, "200"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
-        }).annotateMerge(
-          OpenApi.annotations({
-            identifier: "session.fork",
-            summary: "Fork session",
-            description: "Create a new session by forking an existing session at a specific message point.",
-          }),
-        ),
-        HttpApiEndpoint.post("abort", SessionPaths.abort, {
-          params: { sessionID: SessionID },
-          query: WorkspaceRoutingQuery,
-          success: described(Schema.Boolean, "Aborted session"),
-          error: HttpApiError.BadRequest,
-        }).annotateMerge(
-          OpenApi.annotations({
-            identifier: "session.abort",
-            summary: "Abort session",
-            description: "Abort an active session and stop any ongoing AI processing or command execution.",
-          }),
-        ),
-        HttpApiEndpoint.post("init", SessionPaths.init, {
-          params: { sessionID: SessionID },
-          query: WorkspaceRoutingQuery,
-          payload: InitPayload,
-          success: described(Schema.Boolean, "200"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
-        }).annotateMerge(
-          OpenApi.annotations({
-            identifier: "session.init",
-            summary: "Initialize session",
-            description:
-              "Analyze the current application and create an AGENTS.md file with project-specific agent configurations.",
-          }),
-        ),
-        HttpApiEndpoint.post("summarize", SessionPaths.summarize, {
-          params: { sessionID: SessionID },
-          query: WorkspaceRoutingQuery,
-          payload: SummarizePayload,
-          success: described(Schema.Boolean, "Summarized session"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
-        }).annotateMerge(
-          OpenApi.annotations({
-            identifier: "session.summarize",
-            summary: "Summarize session",
-            description: "Generate a concise summary of the session using AI compaction to preserve key information.",
-          }),
-        ),
-        HttpApiEndpoint.post("prompt", SessionPaths.prompt, {
-          params: { sessionID: SessionID },
-          query: WorkspaceRoutingQuery,
-          payload: PromptPayload,
-          success: described(SessionV1.WithParts, "Created message"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
-        }).annotateMerge(
-          OpenApi.annotations({
-            identifier: "session.prompt",
-            summary: "Send message",
-            description: "Create and send a new message to a session, streaming the AI response.",
-          }),
-        ),
-        HttpApiEndpoint.post("promptAsync", SessionPaths.promptAsync, {
-          params: { sessionID: SessionID },
-          query: WorkspaceRoutingQuery,
-          payload: PromptPayload,
-          success: described(HttpApiSchema.NoContent, "Prompt accepted"),
+          success: described(ForkBasis, "Exact durable source frontier for a process-local fork draft"),
           error: [HttpApiError.BadRequest, ApiNotFoundError],
         }).annotateMerge(
           OpenApi.annotations({
-            identifier: "session.prompt_async",
-            summary: "Send async message",
+            identifier: "session.fork_basis",
+            summary: "Read fork basis",
             description:
-              "Create and send a new message to a session asynchronously, starting the session if needed and returning immediately.",
+              "Read the exact source Session frontier for a process-local fork draft. This call creates no target Session.",
           }),
         ),
-        HttpApiEndpoint.post("command", SessionPaths.command, {
+        HttpApiEndpoint.post("start", SessionPaths.start, {
           params: { sessionID: SessionID },
           query: WorkspaceRoutingQuery,
-          payload: CommandPayload,
-          success: described(SessionV1.WithParts, "Created message"),
-          error: [HttpApiError.BadRequest, ApiNotFoundError, SessionBusyError],
+          payload: StartPayload,
+          success: described(Turn.Info, "Admitted root Turn"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, InvalidRequestError, SessionBusyError, ...TurnErrors],
         }).annotateMerge(
           OpenApi.annotations({
-            identifier: "session.command",
-            summary: "Send command",
-            description: "Send a new command to a session for execution by the AI assistant.",
+            identifier: "session.start",
+            summary: "Start exact Turn",
+            description:
+              "Admit one new root Turn using stable identities. This never becomes a steer; fork materialization is an atomic start variant.",
+          }),
+        ),
+        HttpApiEndpoint.get("listTurns", SessionPaths.turns, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.Array(Turn.Info), "Turns in durable admission order"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, InvalidRequestError, SessionBusyError, ...TurnErrors],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.turns",
+            summary: "List Session Turns",
+            description:
+              "Inspect every available durable Turn in one Session without reconstructing state from messages.",
+          }),
+        ),
+        HttpApiEndpoint.get("activeTurn", SessionPaths.activeTurn, {
+          params: { sessionID: SessionID },
+          query: WorkspaceRoutingQuery,
+          success: described(Schema.NullOr(Turn.Info), "Active Turn, or null when the Session is idle"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, InvalidRequestError, SessionBusyError, ...TurnErrors],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.active_turn",
+            summary: "Get active Turn",
+            description: "Read the exact durable active Turn and its matching live owner state.",
+          }),
+        ),
+        HttpApiEndpoint.get("getTurn", SessionPaths.getTurn, {
+          params: { sessionID: SessionID, turnID: Turn.ID },
+          query: WorkspaceRoutingQuery,
+          success: described(Turn.Info, "Exact Turn"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, InvalidRequestError, SessionBusyError, ...TurnErrors],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.get_turn",
+            summary: "Get exact Turn",
+            description: "Read one exact Turn without retargeting a replacement active Turn.",
+          }),
+        ),
+        HttpApiEndpoint.get("awaitTurn", SessionPaths.awaitTurn, {
+          params: { sessionID: SessionID, turnID: Turn.ID },
+          query: WorkspaceRoutingQuery,
+          success: described(Turn.Info, "Terminal exact Turn"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, InvalidRequestError, SessionBusyError, ...TurnErrors],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.await_turn",
+            summary: "Await exact Turn",
+            description: "Wait for one exact Turn to reach a durable terminal outcome.",
+          }),
+        ),
+        HttpApiEndpoint.post("steer", SessionPaths.steer, {
+          params: { sessionID: SessionID, turnID: Turn.ID },
+          query: WorkspaceRoutingQuery,
+          payload: SteerPayload,
+          success: described(Turn.Input, "Promoted input of the exact Turn"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, InvalidRequestError, SessionBusyError, ...TurnErrors],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.steer",
+            summary: "Steer exact Turn",
+            description:
+              "Promote one stable learner input into the named active Turn at its next safe boundary. This never moves to another Turn.",
+          }),
+        ),
+        HttpApiEndpoint.post("interruptTurn", SessionPaths.interruptTurn, {
+          params: { sessionID: SessionID, turnID: Turn.ID },
+          query: WorkspaceRoutingQuery,
+          success: described(Turn.Info, "Interrupted or already-terminal exact Turn"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError, InvalidRequestError, SessionBusyError, ...TurnErrors],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.interrupt_turn",
+            summary: "Interrupt exact Turn",
+            description: "Interrupt the named Turn and its live descendant subtree; terminal replay is idempotent.",
           }),
         ),
         HttpApiEndpoint.post("shell", SessionPaths.shell, {

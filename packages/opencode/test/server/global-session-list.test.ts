@@ -5,15 +5,19 @@ import { Deferred, Effect, Layer } from "effect"
 import { Project } from "@/project/project"
 import { Session as SessionNs } from "@/session/session"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
+import { EventV2Bridge } from "@/event-v2-bridge"
 import { provideInstance, TestInstance, tmpdirScoped } from "../fixture/fixture"
+import { materializeTestSessionInfo } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 
 const it = testEffect(
-  LayerNode.compile(LayerNode.group([SessionNs.node, SessionProjector.node, Project.node, CrossSpawnSpawner.node])),
+  LayerNode.compile(
+    LayerNode.group([SessionNs.node, SessionProjector.node, Project.node, CrossSpawnSpawner.node, EventV2Bridge.node]),
+  ),
 )
 
-const withSession = (input?: Parameters<SessionNs.Interface["create"]>[0]) =>
-  Effect.acquireRelease(SessionNs.use.create(input), (created) =>
+const withSession = (input?: Parameters<typeof materializeTestSessionInfo>[0]) =>
+  Effect.acquireRelease(materializeTestSessionInfo(input), (created) =>
     SessionNs.Service.use((session) => session.remove(created.id).pipe(Effect.ignore)),
   )
 

@@ -19,7 +19,8 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, provideTmpdirInstance, requireInstance, TestInstance } from "../fixture/fixture"
-import { testEffect } from "../lib/effect"
+import { materializeTestSessionInfo } from "../fixture/session"
+import { testEffect, testEffectShared } from "../lib/effect"
 import { registerAdapter } from "../../src/control-plane/adapters"
 import { WorkspaceV2 } from "@opencode-ai/core/workspace"
 import { WorkspaceTable } from "@opencode-ai/core/control-plane/workspace.sql"
@@ -31,6 +32,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { EventV2Bridge } from "@/event-v2-bridge"
 
 const originalEnv = {
   REPA_AUTH_CONTENT: process.env.REPA_AUTH_CONTENT,
@@ -49,6 +51,7 @@ const workspaceLayer = (experimentalWorkspaces: boolean) =>
       Database.node,
       InstanceStore.node,
       Ripgrep.node,
+      EventV2Bridge.node,
     ]),
     [
       [RuntimeFlags.node, RuntimeFlags.layer({ experimentalWorkspaces })],
@@ -63,7 +66,8 @@ const testServerLayer = Layer.mergeAll(
   NodeHttpServer.layer(Http.createServer, { host: "127.0.0.1", port: 0 }),
   workspaceLayer(true),
 )
-const it = testEffect(testServerLayer)
+const it = testEffectShared(testServerLayer)
+const itDisabled = testEffect(workspaceLayer(false))
 
 type RecordedCreate = {
   info: WorkspaceInfo
@@ -127,11 +131,6 @@ async function initGitRepo(dir: string) {
   await $`git add tracked.txt`.cwd(dir).quiet()
   await $`git commit -m "base"`.cwd(dir).quiet()
 }
-
-const startWorkspaceSyncingWithFlag = (projectID: ProjectV2.ID, experimentalWorkspaces: boolean) =>
-  Effect.runPromise(
-    Workspace.use.startWorkspaceSyncing(projectID).pipe(Effect.provide(workspaceLayer(experimentalWorkspaces))),
-  )
 
 function captureGlobalEvents() {
   const events: GlobalEvent[] = []
@@ -374,6 +373,30 @@ describe("workspace schemas and exports", () => {
     expect(() => decode({ ...input, id: 1 })).toThrow()
     expect(() => decode({ ...input, branch: 1 })).toThrow()
   })
+})
+
+describe("workspace disabled sync", () => {
+  itDisabled.instance(
+    "startWorkspaceSyncing is disabled by the experimental workspace flag",
+    () =>
+      Effect.gen(function* () {
+        const { directory: dir } = yield* TestInstance
+        const instance = yield* requireInstance
+        const workspace = yield* Workspace.Service
+        const type = unique("flag-disabled")
+        const info = workspaceInfo(instance.project.id, type)
+        const session = yield* materializeTestSessionInfo()
+        yield* attachSessionToWorkspace(session.id, info.id)
+        yield* insertWorkspace(info)
+        registerAdapter(instance.project.id, type, localAdapter(path.join(dir, "flag-disabled")).adapter)
+
+        yield* workspace.startWorkspaceSyncing(instance.project.id)
+        yield* Effect.sleep("25 millis")
+
+        expect((yield* workspace.status()).find((item) => item.workspaceID === info.id)?.status).toBeUndefined()
+      }),
+    { git: true },
+  )
 })
 
 describe("workspace CRUD", () => {
@@ -624,11 +647,14 @@ describe("workspace CRUD", () => {
 
         yield* workspace.syncList(instance.project)
         const synced = (yield* workspace.list(instance.project)).filter((item) => item.name === discovered.name)
+        const created = synced[0]
+        if (!created) return yield* Effect.die("syncList did not persist the discovered workspace")
+        yield* Effect.addFinalizer(() => workspace.remove(created.id).pipe(Effect.ignore))
 
         expect(synced).toHaveLength(1)
-        expect(synced[0]).toMatchObject(discovered)
-        expect(synced[0]?.id).toStartWith("wrk_")
-        expect(yield* workspace.list(instance.project)).toEqual(expect.arrayContaining([existing, synced[0]]))
+        expect(created).toMatchObject(discovered)
+        expect(created.id).toStartWith("wrk_")
+        expect(yield* workspace.list(instance.project)).toEqual(expect.arrayContaining([existing, created]))
         expect(recorded.calls.list).toBe(1)
         expect(recorded.calls.configure).toHaveLength(0)
         expect(recorded.calls.create).toHaveLength(0)
@@ -690,13 +716,12 @@ describe("workspace CRUD", () => {
 
         yield* workspace.syncList(instance.project)
         const synced = yield* workspace.list(instance.project)
+        const created = synced.filter((item) => item.type === typeA || item.type === typeB)
+        yield* Effect.addFinalizer(() =>
+          Effect.forEach(created, (item) => workspace.remove(item.id), { discard: true }).pipe(Effect.ignore),
+        )
 
-        expect(
-          synced
-            .filter((item) => item.type === typeA || item.type === typeB)
-            .map((item) => item.name)
-            .toSorted(),
-        ).toEqual(["adapter-a", "adapter-b"])
+        expect(created.map((item) => item.name).toSorted()).toEqual(["adapter-a", "adapter-b"])
         expect(adapterA.calls.list).toBe(1)
         expect(adapterB.calls.list).toBe(1)
         expect(noList.calls.list).toBe(0)
@@ -770,13 +795,12 @@ describe("workspace CRUD", () => {
         const { directory: dir } = yield* TestInstance
         const instance = yield* requireInstance
         const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
         const type = unique("remove-local")
         const recorded = localAdapter(path.join(dir, "remove-local"))
         registerAdapter(instance.project.id, type, recorded.adapter)
         const info = yield* workspace.create({ type, branch: null, projectID: instance.project.id, extra: null })
-        const one = yield* sessionSvc.create({})
-        const two = yield* sessionSvc.create({})
+        const one = yield* materializeTestSessionInfo()
+        const two = yield* materializeTestSessionInfo()
         yield* attachSessionToWorkspace(one.id, info.id)
         yield* attachSessionToWorkspace(two.id, info.id)
 
@@ -835,7 +859,6 @@ describe("workspace CRUD", () => {
         const { directory: dir } = yield* TestInstance
         const instance = yield* requireInstance
         const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
         const previousType = unique("warp-prev-local")
         const targetType = unique("warp-target-local")
         const previous = workspaceInfo(instance.project.id, previousType)
@@ -844,7 +867,7 @@ describe("workspace CRUD", () => {
         yield* insertWorkspace(target)
         registerAdapter(instance.project.id, previousType, localAdapter(path.join(dir, "warp-prev-local")).adapter)
         registerAdapter(instance.project.id, targetType, localAdapter(path.join(dir, "warp-target-local")).adapter)
-        const session = yield* sessionSvc.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* attachSessionToWorkspace(session.id, previous.id)
 
         yield* workspace.sessionWarp({ workspaceID: target.id, sessionID: session.id })
@@ -871,7 +894,6 @@ describe("workspace CRUD", () => {
         const { directory: dir } = yield* TestInstance
         const instance = yield* requireInstance
         const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
         const previousType = unique("warp-patch-prev-local")
         const targetType = unique("warp-patch-target-local")
         const previousDir = path.join(dir, "warp-patch-prev-local")
@@ -887,7 +909,7 @@ describe("workspace CRUD", () => {
         yield* insertWorkspace(target)
         registerAdapter(instance.project.id, previousType, localAdapter(previousDir, { createDir: false }).adapter)
         registerAdapter(instance.project.id, targetType, localAdapter(targetDir, { createDir: false }).adapter)
-        const session = yield* sessionSvc.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* attachSessionToWorkspace(session.id, previous.id)
 
         yield* workspace.sessionWarp({ workspaceID: target.id, sessionID: session.id, copyChanges: true })
@@ -906,12 +928,11 @@ describe("workspace CRUD", () => {
         const { directory: dir } = yield* TestInstance
         const instance = yield* requireInstance
         const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
         const previousType = unique("warp-detach-local")
         const previous = workspaceInfo(instance.project.id, previousType)
         yield* insertWorkspace(previous)
         registerAdapter(instance.project.id, previousType, localAdapter(path.join(dir, "warp-detach-local")).adapter)
-        const session = yield* sessionSvc.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* attachSessionToWorkspace(session.id, previous.id)
 
         yield* workspace.sessionWarp({ workspaceID: null, sessionID: session.id })
@@ -939,11 +960,10 @@ describe("workspace CRUD", () => {
         const instance = yield* requireInstance
         const projectID = instance.project.id
         const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
         const previousType = unique("warp-detach-workspace-instance")
         const previous = workspaceInfo(projectID, previousType)
         yield* insertWorkspace(previous)
-        const session = yield* sessionSvc.create({})
+        const session = yield* materializeTestSessionInfo()
         yield* attachSessionToWorkspace(session.id, previous.id)
 
         const workspaceProjectID = yield* provideTmpdirInstance(
@@ -1026,7 +1046,7 @@ describe("workspace CRUD", () => {
             yield* insertWorkspace(target)
             registerAdapter(instance.project.id, previousType, remoteAdapter(`${url}/warp-source`).adapter)
             registerAdapter(instance.project.id, targetType, remoteAdapter(`${url}/warp-target`).adapter)
-            const session = yield* sessionSvc.create({})
+            const session = yield* materializeTestSessionInfo()
             yield* attachSessionToWorkspace(session.id, previous.id)
             historySessionID = session.id
             historySession = { ...session, workspaceID: previous.id, title: "from source history" }
@@ -1053,6 +1073,26 @@ describe("workspace CRUD", () => {
                 },
                 {
                   aggregateID: session.id,
+                  seq: 1,
+                  type: "message.updated.1",
+                },
+                {
+                  aggregateID: session.id,
+                  seq: 2,
+                  type: "message.part.updated.1",
+                },
+                {
+                  aggregateID: session.id,
+                  seq: 3,
+                  type: "turn.started.1",
+                },
+                {
+                  aggregateID: session.id,
+                  seq: 4,
+                  type: "turn.terminal.1",
+                },
+                {
+                  aggregateID: session.id,
                   seq: historyNextSeq,
                   type: "session.updated.1",
                 },
@@ -1069,29 +1109,6 @@ describe("workspace CRUD", () => {
 })
 
 describe("workspace sync state", () => {
-  it.instance(
-    "startWorkspaceSyncing is disabled by the experimental workspace flag",
-    () =>
-      Effect.gen(function* () {
-        const { directory: dir } = yield* TestInstance
-        const instance = yield* requireInstance
-        const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
-        const type = unique("flag-disabled")
-        const info = workspaceInfo(instance.project.id, type)
-        const session = yield* sessionSvc.create({})
-        yield* attachSessionToWorkspace(session.id, info.id)
-        yield* insertWorkspace(info)
-        registerAdapter(instance.project.id, type, localAdapter(path.join(dir, "flag-disabled")).adapter)
-
-        yield* Effect.promise(() => startWorkspaceSyncingWithFlag(instance.project.id, false))
-        yield* Effect.sleep("25 millis")
-
-        expect((yield* workspace.status()).find((item) => item.workspaceID === info.id)?.status).toBeUndefined()
-      }),
-    { git: true },
-  )
-
   it.instance(
     "startWorkspaceSyncing starts all workspaces",
     () =>
@@ -1134,7 +1151,6 @@ describe("workspace sync state", () => {
         const { directory: dir } = yield* TestInstance
         const instance = yield* requireInstance
         const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
         const type = unique("missing-local")
         const info = workspaceInfo(instance.project.id, type)
         yield* insertWorkspace(info)
@@ -1143,7 +1159,7 @@ describe("workspace sync state", () => {
           type,
           localAdapter(path.join(dir, "missing-target"), { createDir: false }).adapter,
         )
-        yield* attachSessionToWorkspace((yield* sessionSvc.create({})).id, info.id)
+        yield* attachSessionToWorkspace((yield* materializeTestSessionInfo()).id, info.id)
 
         yield* workspace.startWorkspaceSyncing(instance.project.id)
 
@@ -1166,7 +1182,6 @@ describe("workspace sync state", () => {
         const { directory: dir } = yield* TestInstance
         const instance = yield* requireInstance
         const workspace = yield* Workspace.Service
-        const sessionSvc = yield* SessionNs.Service
         const captured = captureGlobalEvents()
         yield* Effect.addFinalizer(() => Effect.sync(() => captured.dispose()))
         const type = unique("dedupe-local")
@@ -1175,7 +1190,7 @@ describe("workspace sync state", () => {
         yield* Effect.promise(() => fs.mkdir(target, { recursive: true }))
         yield* insertWorkspace(info)
         registerAdapter(instance.project.id, type, localAdapter(target).adapter)
-        yield* attachSessionToWorkspace((yield* sessionSvc.create({})).id, info.id)
+        yield* attachSessionToWorkspace((yield* materializeTestSessionInfo()).id, info.id)
 
         yield* workspace.startWorkspaceSyncing(instance.project.id)
         yield* workspace.startWorkspaceSyncing(instance.project.id)
@@ -1221,7 +1236,6 @@ describe("workspace sync state", () => {
         () =>
           Effect.gen(function* () {
             const workspace = yield* Workspace.Service
-            const sessionSvc = yield* SessionNs.Service
             const instance = yield* requireInstance
             const captured = captureGlobalEvents()
             try {
@@ -1229,7 +1243,7 @@ describe("workspace sync state", () => {
               const info = workspaceInfo(instance.project.id, type)
               yield* insertWorkspace(info)
               registerAdapter(instance.project.id, type, remoteAdapter(`${url}/sync`).adapter)
-              yield* attachSessionToWorkspace((yield* sessionSvc.create({})).id, info.id)
+              yield* attachSessionToWorkspace((yield* materializeTestSessionInfo()).id, info.id)
 
               yield* workspace.startWorkspaceSyncing(instance.project.id)
               yield* eventuallyEffect(
@@ -1277,13 +1291,12 @@ describe("workspace sync state", () => {
         () =>
           Effect.gen(function* () {
             const workspace = yield* Workspace.Service
-            const sessionSvc = yield* SessionNs.Service
             const instance = yield* requireInstance
             const type = unique("remote-connect-fail")
             const info = workspaceInfo(instance.project.id, type)
             yield* insertWorkspace(info)
             registerAdapter(instance.project.id, type, remoteAdapter(`${url}/failed`).adapter)
-            yield* attachSessionToWorkspace((yield* sessionSvc.create({})).id, info.id)
+            yield* attachSessionToWorkspace((yield* materializeTestSessionInfo()).id, info.id)
 
             yield* workspace.startWorkspaceSyncing(instance.project.id)
 
@@ -1318,13 +1331,12 @@ describe("workspace sync state", () => {
         () =>
           Effect.gen(function* () {
             const workspace = yield* Workspace.Service
-            const sessionSvc = yield* SessionNs.Service
             const instance = yield* requireInstance
             const type = unique("remote-history-fail")
             const info = workspaceInfo(instance.project.id, type)
             yield* insertWorkspace(info)
             registerAdapter(instance.project.id, type, remoteAdapter(`${url}/history-failed`).adapter)
-            yield* attachSessionToWorkspace((yield* sessionSvc.create({})).id, info.id)
+            yield* attachSessionToWorkspace((yield* materializeTestSessionInfo()).id, info.id)
 
             yield* workspace.startWorkspaceSyncing(instance.project.id)
 
@@ -1375,15 +1387,15 @@ describe("workspace sync state", () => {
         () =>
           Effect.gen(function* () {
             const workspace = yield* Workspace.Service
-            const sessionSvc = yield* SessionNs.Service
             const instance = yield* requireInstance
             const captured = captureGlobalEvents()
             try {
+              const sessionSvc = yield* SessionNs.Service
               const type = unique("history-replay")
               const info = workspaceInfo(instance.project.id, type)
               yield* insertWorkspace(info)
               registerAdapter(instance.project.id, type, remoteAdapter(`${url}/history`).adapter)
-              const session = yield* sessionSvc.create({ title: "before history" })
+              const session = yield* materializeTestSessionInfo({ title: "before history" })
               yield* attachSessionToWorkspace(session.id, info.id)
               historySessionID = session.id
               historySession = { ...session, workspaceID: info.id, title: "from history" }
@@ -1445,7 +1457,6 @@ describe("workspace sync state", () => {
         () =>
           Effect.gen(function* () {
             const workspace = yield* Workspace.Service
-            const sessionSvc = yield* SessionNs.Service
             const instance = yield* requireInstance
             const captured = captureGlobalEvents()
             try {
@@ -1453,7 +1464,7 @@ describe("workspace sync state", () => {
               const info = workspaceInfo(instance.project.id, type)
               yield* insertWorkspace(info)
               registerAdapter(instance.project.id, type, remoteAdapter(`${url}/sse-forward`).adapter)
-              yield* attachSessionToWorkspace((yield* sessionSvc.create({})).id, info.id)
+              yield* attachSessionToWorkspace((yield* materializeTestSessionInfo()).id, info.id)
 
               yield* workspace.startWorkspaceSyncing(instance.project.id)
 
@@ -1536,7 +1547,7 @@ describe("workspace sync state", () => {
               const info = workspaceInfo(instance.project.id, type)
               yield* insertWorkspace(info)
               registerAdapter(instance.project.id, type, remoteAdapter(`${url}/sse-sync`).adapter)
-              const session = yield* sessionSvc.create({ title: "before sse" })
+              const session = yield* materializeTestSessionInfo({ title: "before sse" })
               yield* attachSessionToWorkspace(session.id, info.id)
               sseSessionID = session.id
               sseSession = { ...session, workspaceID: info.id, title: "from sse" }

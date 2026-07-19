@@ -33,6 +33,12 @@ import {
   type SettlementMetadata,
 } from "./schema"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "./sql"
+import {
+  TurnHistoricalInputPresentationTable,
+  TurnHistoricalModelPresentationTable,
+  TurnUnavailableModelTable,
+  TurnUnavailableSourceTable,
+} from "../turn/sql"
 import type { Transaction } from "./transaction"
 
 export const ACCEPT_COURSE_VIEW_REVISION_CAPABILITY = "accept_course_view_revision"
@@ -123,6 +129,8 @@ export function reserveAcceptance(tx: Transaction, input: AcceptCourseViewRevisi
       .insert(LearningCommandInvocationTable)
       .values({
         part_id: input.envelope.partID,
+        turn_id: input.envelope.turnID,
+        input_id: input.envelope.inputID,
         session_id: input.envelope.sessionID,
         parent_user_message_id: input.envelope.parentUserMessageID,
         assistant_message_id: input.envelope.assistantMessageID,
@@ -181,6 +189,8 @@ export function reserveRepresentationConversion(tx: Transaction, input: Represen
       .insert(LearningCommandInvocationTable)
       .values({
         part_id: input.envelope.partID,
+        turn_id: input.envelope.turnID,
+        input_id: input.envelope.inputID,
         session_id: input.envelope.sessionID,
         parent_user_message_id: input.envelope.parentUserMessageID,
         assistant_message_id: input.envelope.assistantMessageID,
@@ -398,14 +408,7 @@ export function settleAcceptance(
       return { type: "settled" as const, settlement }
     }
 
-    const available = yield* Occurrence.requireAvailableSource(tx, {
-      occurrenceID: input.envelope.occurrenceID,
-      sessionID: input.envelope.sessionID,
-      messageID: input.envelope.parentUserMessageID,
-    }).pipe(
-      Effect.map(() => true),
-      Effect.catch(() => Effect.succeed(false)),
-    )
+    const available = yield* occurrenceAvailable(tx, input)
     if (!available) {
       const settlement = errorSettlement("source_unavailable", input.settlement)
       yield* settleInvocation(tx, invocation.part_id, settlement)
@@ -650,6 +653,30 @@ export function garbageCollectOccurrences(tx: Transaction, occurrenceIDs: readon
             .where(eq(CourseSelectionAcceptanceEffectTable.occurrence_id, occurrenceID))
             .get()
             .pipe(Effect.orDie),
+          tx
+            .select({ id: TurnHistoricalInputPresentationTable.message_id })
+            .from(TurnHistoricalInputPresentationTable)
+            .where(eq(TurnHistoricalInputPresentationTable.occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ id: TurnHistoricalModelPresentationTable.assistant_message_id })
+            .from(TurnHistoricalModelPresentationTable)
+            .where(eq(TurnHistoricalModelPresentationTable.causal_occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ id: TurnUnavailableSourceTable.turn_id })
+            .from(TurnUnavailableSourceTable)
+            .where(eq(TurnUnavailableSourceTable.causal_occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ id: TurnUnavailableModelTable.assistant_message_id })
+            .from(TurnUnavailableModelTable)
+            .where(eq(TurnUnavailableModelTable.causal_occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
         ])
         if (references.some(Boolean)) return
         yield* tx
@@ -816,11 +843,6 @@ function validateNewEnvelope(
     if (envelope.capabilityIdentity !== command.capability || envelope.capabilityVersion !== command.version) {
       return yield* invalidEnvelope("invalid_capability")
     }
-    const presentation = yield* Occurrence.resolvePresentation(tx, {
-      sessionID: envelope.sessionID,
-      messageID: envelope.parentUserMessageID,
-      occurrenceID: envelope.occurrenceID,
-    }).pipe(Effect.mapError(() => new InvalidInvocationEnvelopeError({ reason: "wrong_parent" })))
     const occurrence = yield* tx
       .select()
       .from(AdmittedLearnerOccurrenceTable)
@@ -867,7 +889,6 @@ function validateNewEnvelope(
       !occurrence ||
       envelope.timeAdmitted < 0 ||
       envelope.timeAdmitted < occurrence.time_admitted ||
-      envelope.timeAdmitted < presentation.timeCreated ||
       envelope.timeAdmitted < assistant.time_created ||
       envelope.timeAdmitted < part.time_created
     ) {
@@ -883,6 +904,8 @@ function invocationFingerprint(input: AcceptCourseViewRevisionInvocation) {
         command: ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
         commandVersion: ACCEPT_COURSE_VIEW_REVISION_VERSION,
         occurrenceID: input.envelope.occurrenceID,
+        turnID: input.envelope.turnID,
+        inputID: input.envelope.inputID,
         sessionID: input.envelope.sessionID,
         parentUserMessageID: input.envelope.parentUserMessageID,
         assistantMessageID: input.envelope.assistantMessageID,
@@ -914,6 +937,8 @@ function representationInvocationFingerprint(input: RepresentationConvertInvocat
         command: REPRESENTATION_CONVERT_CAPABILITY,
         commandVersion: REPRESENTATION_CONVERT_VERSION,
         occurrenceID: input.envelope.occurrenceID,
+        turnID: input.envelope.turnID,
+        inputID: input.envelope.inputID,
         sessionID: input.envelope.sessionID,
         parentUserMessageID: input.envelope.parentUserMessageID,
         assistantMessageID: input.envelope.assistantMessageID,
@@ -955,14 +980,23 @@ function occurrenceAvailable(
   tx: Transaction,
   input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation,
 ) {
-  return Occurrence.requireAvailableSource(tx, {
-    occurrenceID: input.envelope.occurrenceID,
-    sessionID: input.envelope.sessionID,
-    messageID: input.envelope.parentUserMessageID,
-  }).pipe(
-    Effect.map(() => true),
-    Effect.catch(() => Effect.succeed(false)),
-  )
+  return Effect.gen(function* () {
+    const occurrence = yield* tx
+      .select()
+      .from(AdmittedLearnerOccurrenceTable)
+      .where(eq(AdmittedLearnerOccurrenceTable.id, input.envelope.occurrenceID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!occurrence) return false
+    return yield* Occurrence.requireAvailableSource(tx, {
+      occurrenceID: occurrence.id,
+      sessionID: occurrence.origin_session_id,
+      messageID: occurrence.origin_message_id,
+    }).pipe(
+      Effect.map(() => true),
+      Effect.catch(() => Effect.succeed(false)),
+    )
+  })
 }
 
 function requireRepresentationResult(

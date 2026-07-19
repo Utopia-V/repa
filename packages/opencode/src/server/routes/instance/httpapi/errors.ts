@@ -1,4 +1,6 @@
 import { Schema } from "effect"
+import { SessionID } from "@opencode-ai/schema/session-id"
+import { Turn } from "@opencode-ai/schema/turn"
 
 export class InvalidRequestError extends Schema.TaggedErrorClass<InvalidRequestError>()(
   "InvalidRequestError",
@@ -120,6 +122,76 @@ export class SessionBusyError extends Schema.TaggedErrorClass<SessionBusyError>(
     message: Schema.String,
   },
   { httpApiStatus: 409 },
+) {}
+
+export class SessionTreeBusyError extends Schema.TaggedErrorClass<SessionTreeBusyError>()(
+  "SessionTreeBusyError",
+  {
+    sessionID: Schema.String,
+    activeTurnIDs: Schema.Array(Schema.String),
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnAdmissionConflictError extends Schema.TaggedErrorClass<TurnAdmissionConflictError>()(
+  "TurnAdmissionConflictError",
+  { turnID: Turn.ID },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnAlreadyRunningError extends Schema.TaggedErrorClass<TurnAlreadyRunningError>()(
+  "TurnAlreadyRunningError",
+  { sessionID: SessionID, activeTurnID: Turn.ID },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnNotFoundError extends Schema.TaggedErrorClass<TurnNotFoundError>()(
+  "TurnNotFoundError",
+  { turnID: Turn.ID },
+  { httpApiStatus: 404 },
+) {}
+
+export class TurnSessionMismatchError extends Schema.TaggedErrorClass<TurnSessionMismatchError>()(
+  "TurnSessionMismatchError",
+  { sessionID: SessionID, turnID: Turn.ID },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnNoActiveError extends Schema.TaggedErrorClass<TurnNoActiveError>()(
+  "TurnNoActiveError",
+  { sessionID: SessionID },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnActiveMismatchError extends Schema.TaggedErrorClass<TurnActiveMismatchError>()(
+  "TurnActiveMismatchError",
+  { sessionID: SessionID, expectedTurnID: Turn.ID, activeTurnID: Turn.ID },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnNotSteerableError extends Schema.TaggedErrorClass<TurnNotSteerableError>()(
+  "TurnNotSteerableError",
+  { sessionID: SessionID, turnID: Turn.ID, state: Turn.State },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnSourceUnavailableError extends Schema.TaggedErrorClass<TurnSourceUnavailableError>()(
+  "TurnSourceUnavailableError",
+  { turnID: Turn.ID, receipt: Turn.UnavailableReceipt.pipe(Schema.optional) },
+  { httpApiStatus: 410 },
+) {}
+
+export class TurnTreeChangedError extends Schema.TaggedErrorClass<TurnTreeChangedError>()(
+  "SessionTreeChangedError",
+  { sessionID: SessionID },
+  { httpApiStatus: 409 },
+) {}
+
+export class TurnIntegrityError extends Schema.TaggedErrorClass<TurnIntegrityError>()(
+  "TurnIntegrityError",
+  { turnID: Turn.ID, reason: Schema.String },
+  { httpApiStatus: 500 },
 ) {}
 
 export class QuestionNotFoundError extends Schema.TaggedErrorClass<QuestionNotFoundError>()(

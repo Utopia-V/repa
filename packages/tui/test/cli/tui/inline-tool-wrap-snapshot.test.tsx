@@ -4,6 +4,7 @@ import type { BoxRenderable, ScrollBoxRenderable } from "@opentui/core"
 import { testRender, type JSX } from "@opentui/solid"
 import {
   formatCompletedSubagentDetail,
+  formatSubagentOutcome,
   formatSubagentRetry,
   formatSubagentTitle,
   formatSubagentToolcalls,
@@ -280,11 +281,15 @@ describe("TUI inline tool wrapping", () => {
     expect(formatSubagentToolcalls(0)).toBe("0 toolcalls")
   })
 
-  test("keeps background state attached to the subagent identity", () => {
-    expect(formatSubagentTitle("Explore", "Inspect renderer", false)).toBe("Explore Task — Inspect renderer")
-    expect(formatSubagentTitle("Explore", "Inspect renderer", true)).toBe(
-      "Explore Task (background) — Inspect renderer",
-    )
+  test("formats the synchronous child task identity", () => {
+    expect(formatSubagentTitle("Explore", "Inspect renderer")).toBe("Explore Task — Inspect renderer")
+    expect(
+      formatSubagentOutcome({
+        outcome: "exhausted",
+        incomplete: true,
+        sourceUnavailable: true,
+      }),
+    ).toBe("Exhausted · incomplete result · source unavailable")
   })
 
   test("keeps retry status ahead of wrapping messages", () => {

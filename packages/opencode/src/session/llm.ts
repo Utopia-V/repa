@@ -16,14 +16,10 @@ import { Config } from "@/config/config"
 import type { Agent } from "@/agent/agent"
 import type { MessageV2 } from "./message-v2"
 import { Plugin } from "@/plugin"
-import { Permission } from "@/permission"
-import { EventV2Bridge } from "@/event-v2-bridge"
-import { EventV2 } from "@opencode-ai/core/event"
-import { Wildcard } from "@/util/wildcard"
-import { SessionID } from "@/session/schema"
 import { Auth } from "@/auth"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { NamedError } from "@opencode-ai/core/util/error"
 import * as Option from "effect/Option"
 import * as OtelTracer from "@effect/opentelemetry/Tracer"
 import { LLMAISDK } from "./llm/ai-sdk"
@@ -63,14 +59,7 @@ export const use = serviceUse(Service)
 const live: Layer.Layer<
   Service,
   never,
-  | Auth.Service
-  | Config.Service
-  | Provider.Service
-  | Plugin.Service
-  | Permission.Service
-  | EventV2Bridge.Service
-  | LLMClientService
-  | RuntimeFlags.Service
+  Auth.Service | Config.Service | Provider.Service | Plugin.Service | LLMClientService | RuntimeFlags.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -78,8 +67,6 @@ const live: Layer.Layer<
     const config = yield* Config.Service
     const provider = yield* Provider.Service
     const plugin = yield* Plugin.Service
-    const perm = yield* Permission.Service
-    const events = yield* EventV2Bridge.Service
     const llmClient = yield* LLMClient.Service
     const flags = yield* RuntimeFlags.Service
 
@@ -104,9 +91,12 @@ const live: Layer.Layer<
       )
 
       const isWorkflow = language instanceof GitLabWorkflowLanguageModel
-      if (isWorkflow && input.composition.type === "internal") {
+      if (isWorkflow) {
         return yield* Effect.fail(
-          new Error(`GitLab workflow models are unavailable for internal operation: ${input.composition.purpose}`),
+          new NamedError.Unknown({
+            message:
+              "GitLab workflow models are unavailable in the released-v1 Turn runtime because their provider callback cannot expose a complete tool-candidate set before execution",
+          }),
         )
       }
       const prepared = yield* LLMRequestPrep.prepare({
@@ -118,98 +108,7 @@ const live: Layer.Layer<
         isWorkflow,
       })
 
-      // Wire up toolExecutor for DWS workflow models so that tool calls
-      // from the workflow service are executed via opencode's tool system
-      // and results sent back over the WebSocket.
       const bridge = yield* EffectBridge.make()
-      if (language instanceof GitLabWorkflowLanguageModel) {
-        const workflowModel = language as GitLabWorkflowLanguageModel & {
-          sessionID?: string
-          sessionPreapprovedTools?: string[]
-          approvalHandler?: (approvalTools: { name: string; args: string }[]) => Promise<{ approved: boolean }>
-        }
-        workflowModel.sessionID = input.sessionID
-        workflowModel.systemPrompt = LLMRequestPrep.renderSystem(prepared.system)
-        workflowModel.toolExecutor = async (toolName, argsJson, _requestID) => {
-          const t = prepared.tools[toolName]
-          if (!t || !t.execute) {
-            return { result: "", error: `Unknown tool: ${toolName}` }
-          }
-          try {
-            const result = await t.execute!(JSON.parse(argsJson), {
-              toolCallId: _requestID,
-              messages: input.messages,
-              abortSignal: input.abort,
-            })
-            const output = typeof result === "string" ? result : (result?.output ?? JSON.stringify(result))
-            return {
-              result: output,
-              metadata: typeof result === "object" ? result?.metadata : undefined,
-              title: typeof result === "object" ? result?.title : undefined,
-            }
-          } catch (e: any) {
-            return { result: "", error: e.message ?? String(e) }
-          }
-        }
-
-        const ruleset = Permission.merge(input.agent.permission ?? [], input.permission ?? [])
-        workflowModel.sessionPreapprovedTools = Object.keys(prepared.tools).filter((name) => {
-          const match = ruleset.findLast((rule) => Wildcard.match(name, rule.permission))
-          return !match || match.action !== "ask"
-        })
-
-        const approvedToolsForSession = new Set<string>()
-        workflowModel.approvalHandler = bridge.bind(async (approvalTools) => {
-          const uniqueNames = [...new Set(approvalTools.map((t: { name: string }) => t.name))] as string[]
-          // Auto-approve tools that were already approved in this session
-          // (prevents infinite approval loops for server-side MCP tools)
-          if (uniqueNames.every((name) => approvedToolsForSession.has(name))) {
-            return { approved: true }
-          }
-
-          const id = PermissionV1.ID.ascending()
-          let unsub: EventV2.Unsubscribe | undefined
-          try {
-            unsub = await bridge.promise(
-              events.listen((event) => {
-                if (event.type !== Permission.Event.Replied.type) return Effect.void
-                const data = event.data as EventV2.Data<typeof Permission.Event.Replied>
-                if (data.requestID !== id) return Effect.void
-                void data.reply
-                return Effect.void
-              }),
-            )
-            const toolPatterns = approvalTools.map((t: { name: string; args: string }) => {
-              try {
-                const parsed = JSON.parse(t.args) as Record<string, unknown>
-                const title = (parsed?.title ?? parsed?.name ?? "") as string
-                return title ? `${t.name}: ${title}` : t.name
-              } catch {
-                return t.name
-              }
-            })
-            const uniquePatterns = [...new Set(toolPatterns)] as string[]
-            await bridge.promise(
-              perm.ask({
-                id,
-                sessionID: SessionID.make(input.sessionID),
-                permission: "workflow_tool_approval",
-                patterns: uniquePatterns,
-                metadata: { tools: approvalTools },
-                always: uniquePatterns,
-                ruleset: [],
-              }),
-            )
-            for (const name of uniqueNames) approvedToolsForSession.add(name)
-            workflowModel.sessionPreapprovedTools = [...(workflowModel.sessionPreapprovedTools ?? []), ...uniqueNames]
-            return { approved: true }
-          } catch {
-            return { approved: false }
-          } finally {
-            if (unsub) await bridge.promise(unsub)
-          }
-        })
-      }
 
       const tracer = cfg.experimental?.openTelemetry
         ? Option.getOrUndefined(yield* Effect.serviceOption(OtelTracer.OtelTracer))
@@ -279,8 +178,9 @@ const live: Layer.Layer<
         "llm.provider": input.model.providerID,
         "llm.model": input.model.id,
       })
-      // Default runtime path: AI SDK owns provider execution and tool dispatch;
-      // LLMAISDK.toLLMEvents below normalizes fullStream parts for the processor.
+      // One AI SDK stream is one provider operation. Definitions deliberately
+      // omit execute callbacks; the released-v1 processor dispatches local
+      // calls only after the complete emitted set has been durably sealed.
       return {
         type: "ai-sdk" as const,
         result: streamText({
@@ -321,7 +221,7 @@ const live: Layer.Layer<
           topK: prepared.params.topK,
           providerOptions: ProviderTransform.providerOptions(input.model, prepared.params.options),
           activeTools: Object.keys(prepared.tools).filter((x) => x !== "invalid"),
-          tools: prepared.tools,
+          tools: definitionOnlyTools(prepared.tools),
           toolChoice: prepared.toolChoice,
           maxOutputTokens: prepared.params.maxOutputTokens,
           abortSignal: input.abort,
@@ -401,19 +301,14 @@ const live: Layer.Layer<
 
 export const hasToolCalls = LLMRequestPrep.hasToolCalls
 
+export function definitionOnlyTools(tools: Record<string, Tool>): Record<string, Tool> {
+  return Object.fromEntries(Object.entries(tools).map(([name, item]) => [name, { ...item, execute: undefined }]))
+}
+
 export const node = LayerNode.make({
   service: Service,
   layer: live,
-  deps: [
-    Auth.node,
-    Config.node,
-    Provider.node,
-    Plugin.node,
-    Permission.node,
-    EventV2Bridge.node,
-    llmClient,
-    RuntimeFlags.node,
-  ],
+  deps: [Auth.node, Config.node, Provider.node, Plugin.node, llmClient, RuntimeFlags.node],
 })
 
 export * as LLM from "./llm"

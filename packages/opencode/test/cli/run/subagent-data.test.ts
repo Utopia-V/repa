@@ -49,7 +49,13 @@ function reduce(data: ReturnType<typeof createSubagentData>, event: unknown) {
   })
 }
 
-function taskMessage(sessionID: string, status: "running" | "completed" | "interrupted" = "completed"): SessionMessage {
+function taskMessage(
+  sessionID: string,
+  status: "running" | "completed" | "interrupted" = "completed",
+  terminalOutcome: "completed" | "failed" | "interrupted" | "exhausted" = status === "interrupted"
+    ? "interrupted"
+    : "completed",
+): SessionMessage {
   if (status === "running") {
     return {
       parts: [
@@ -68,7 +74,8 @@ function taskMessage(sessionID: string, status: "running" | "completed" | "inter
             },
             title: "Reducer touchpoints",
             metadata: {
-              sessionId: sessionID,
+              childSessionId: sessionID,
+              childTurnId: `trn-${sessionID}`,
               toolcalls: 4,
             },
             time: { start: 1 },
@@ -96,7 +103,9 @@ function taskMessage(sessionID: string, status: "running" | "completed" | "inter
             },
             error: "Tool execution aborted",
             metadata: {
-              sessionId: sessionID,
+              childSessionId: sessionID,
+              childTurnId: `trn-${sessionID}`,
+              terminalOutcome,
               toolcalls: 4,
               interrupted: true,
             },
@@ -125,7 +134,9 @@ function taskMessage(sessionID: string, status: "running" | "completed" | "inter
           output: "",
           title: "Reducer touchpoints",
           metadata: {
-            sessionId: sessionID,
+            childSessionId: sessionID,
+            childTurnId: `trn-${sessionID}`,
+            terminalOutcome,
             toolcalls: 4,
           },
           time: { start: 1, end: 2 },
@@ -245,6 +256,7 @@ describe("run subagent data", () => {
     expect(snapshot.tabs).toEqual([
       expect.objectContaining({
         sessionID: "child-1",
+        turnID: "trn-child-1",
         label: "Explore",
         description: "Scan reducer paths",
         title: "Reducer touchpoints",
@@ -262,7 +274,7 @@ describe("run subagent data", () => {
     expect(snapshot.questions.map((item) => item.id)).toEqual(["question-1"])
   })
 
-  test("marks interrupted task tabs as cancelled during bootstrap", () => {
+  test("projects an interrupted child outcome during bootstrap", () => {
     const data = createSubagentData()
 
     bootstrapSubagentData({
@@ -276,7 +288,54 @@ describe("run subagent data", () => {
     expect(snapshotSubagentData(data).tabs).toEqual([
       expect.objectContaining({
         sessionID: "child-1",
-        status: "cancelled",
+        status: "interrupted",
+      }),
+    ])
+  })
+
+  test("preserves exact terminal outcome and marks a deleted child source unavailable", () => {
+    const data = createSubagentData()
+
+    bootstrapSubagentData({
+      data,
+      messages: [taskMessage("child-1", "completed", "exhausted")],
+      children: [],
+      permissions: [],
+      questions: [],
+    })
+
+    expect(snapshotSubagentData(data).tabs).toEqual([
+      expect.objectContaining({
+        sessionID: "child-1",
+        turnID: "trn-child-1",
+        status: "exhausted",
+        unavailable: true,
+      }),
+    ])
+  })
+
+  test("marks a terminal child unavailable when its deletion arrives live", () => {
+    const data = createSubagentData()
+
+    bootstrapSubagentData({
+      data,
+      messages: [taskMessage("child-1", "completed", "failed")],
+      children: [{ id: "child-1" }],
+      permissions: [],
+      questions: [],
+    })
+    expect(
+      reduce(data, {
+        type: "session.deleted",
+        properties: { sessionID: "child-1", info: { id: "child-1" } },
+      }),
+    ).toBe(true)
+
+    expect(snapshotSubagentData(data).tabs).toEqual([
+      expect.objectContaining({
+        sessionID: "child-1",
+        status: "failed",
+        unavailable: true,
       }),
     ])
   })

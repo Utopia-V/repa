@@ -15,6 +15,8 @@ import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { Turn } from "@opencode-ai/schema/turn"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { Permission } from "@/permission"
@@ -72,8 +74,8 @@ it.effect("applies once and preserves exact physical and semantic replay", () =>
       authorship: Course.Authorship.tutorProposed(),
       revision: { items: [{ key: "root", title: "Graph practice" }] },
     })
-    const interaction = yield* seedInteraction(db, "apply")
     const input = acceptance(first.course.id, first.view.revision.id)
+    const interaction = yield* seedInteraction(db, "apply", input)
 
     yield* runtime.prepare(input, interaction.registration)
     const applied = yield* runtime.execute(input, context(interaction.registration, "allow"))
@@ -89,11 +91,29 @@ it.effect("applies once and preserves exact physical and semantic replay", () =>
       version: 1,
     })
     expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(applied)
+    expect(
+      yield* db
+        .select()
+        .from(LearningCommandInvocationTable)
+        .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
+        .get(),
+    ).toMatchObject({
+      turn_id: interaction.turnID,
+      input_id: interaction.inputID,
+      occurrence_id: interaction.occurrenceID,
+    })
     expect(yield* sequence(db, interaction.sessionID)).toBe(0)
 
     yield* runtime.prepare(input, interaction.registration)
     expect(yield* runtime.execute(input, context(interaction.registration, "deny"))).toEqual(applied)
     expect(yield* sequence(db, interaction.sessionID)).toBe(0)
+
+    expect(
+      yield* runtime.prepare(input, { ...interaction.registration, inputID: Turn.InputID.create() }).pipe(Effect.flip),
+    ).toMatchObject({ _tag: "LearningCommand.InvocationConflictError" })
+    expect(
+      yield* runtime.prepare(input, { ...interaction.registration, causalOccurrenceID: undefined }).pipe(Effect.flip),
+    ).toMatchObject({ _tag: "LearningCommand.InvocationConflictError" })
 
     const changed = { ...input, expectedCourseVersion: 1 }
     expect(yield* runtime.prepare(changed, interaction.registration).pipe(Effect.flip)).toMatchObject({
@@ -101,7 +121,7 @@ it.effect("applies once and preserves exact physical and semantic replay", () =>
     })
     expect(yield* sequence(db, interaction.sessionID)).toBe(0)
 
-    const duplicate = yield* insertAssistant(db, interaction, "duplicate")
+    const duplicate = yield* insertAssistant(db, interaction, "duplicate", input)
     yield* runtime.prepare(input, duplicate)
     const alreadyApplied = yield* runtime.execute(input, context(duplicate, "deny"))
     expect(JSON.parse(alreadyApplied.output)).toMatchObject({
@@ -112,8 +132,8 @@ it.effect("applies once and preserves exact physical and semantic replay", () =>
     })
     expect((yield* courses.getCourse(first.course.id)).selection.version).toBe(1)
 
-    const conflicting = yield* insertAssistant(db, interaction, "semantic-conflict")
     const conflictInput = acceptance(first.course.id, alternative.revision.id)
+    const conflicting = yield* insertAssistant(db, interaction, "semantic-conflict", conflictInput)
     yield* runtime.prepare(conflictInput, conflicting)
     expect(JSON.parse((yield* runtime.execute(conflictInput, context(conflicting, "allow"))).output)).toMatchObject({
       outcome: "error",
@@ -130,8 +150,8 @@ it.effect("returns the committed exact result when terminal notification interru
     const events = yield* EventV2Bridge.Service
     const runtime = yield* LearningCommandRuntime.Service
     const course = yield* seedCourse(courses, "Observer interruption", "Main")
-    const interaction = yield* seedInteraction(db, "observer-interrupt")
     const input = acceptance(course.course.id, course.view.revision.id)
+    const interaction = yield* seedInteraction(db, "observer-interrupt", input)
     yield* runtime.prepare(input, interaction.registration)
 
     let observerRuns = 0
@@ -183,12 +203,12 @@ it.effect("reconciles terminal notification interruption during prepare and reco
     yield* Effect.addFinalizer(() => unsubscribe)
 
     const course = yield* seedCourse(courses, "Prepare observer interruption", "Main")
-    const interaction = yield* seedInteraction(db, "prepare-observer-source")
     const input = acceptance(course.course.id, course.view.revision.id)
+    const interaction = yield* seedInteraction(db, "prepare-observer-source", input)
     yield* runtime.prepare(input, interaction.registration)
     yield* runtime.execute(input, context(interaction.registration, "allow"))
 
-    const duplicate = yield* insertAssistant(db, interaction, "prepare-observer-duplicate")
+    const duplicate = yield* insertAssistant(db, interaction, "prepare-observer-duplicate", input)
     targets.add(duplicate.partID)
     yield* runtime.prepare(input, duplicate)
     expect(JSON.parse((yield* runtime.execute(input, context(duplicate, "deny"))).output)).toMatchObject({
@@ -196,8 +216,8 @@ it.effect("reconciles terminal notification interruption during prepare and reco
     })
 
     const interruptedCourse = yield* seedCourse(courses, "Recovery observer interruption", "Main")
-    const interrupted = yield* seedInteraction(db, "recovery-observer")
     const interruptedInput = acceptance(interruptedCourse.course.id, interruptedCourse.view.revision.id)
+    const interrupted = yield* seedInteraction(db, "recovery-observer", interruptedInput)
     yield* runtime.prepare(interruptedInput, interrupted.registration)
     targets.add(interrupted.registration.partID)
     expect(yield* runtime.interrupt(interrupted.registration)).toBe(true)
@@ -215,8 +235,8 @@ it.effect("never revives an audit-only applied invocation after its live Part is
     const courses = yield* Course.Service
     const runtime = yield* LearningCommandRuntime.Service
     const course = yield* seedCourse(courses, "Audit-only algorithms", "Main")
-    const interaction = yield* seedInteraction(db, "audit-only-applied")
     const input = acceptance(course.course.id, course.view.revision.id)
+    const interaction = yield* seedInteraction(db, "audit-only-applied", input)
     yield* runtime.prepare(input, interaction.registration)
     yield* runtime.execute(input, context(interaction.registration, "allow"))
     const eventSequence = yield* sequence(db, interaction.sessionID)
@@ -247,8 +267,8 @@ it.effect("settles permission denial and crash recovery as exact completed Parts
     const events = yield* EventV2Bridge.Service
 
     const deniedCourse = yield* seedCourse(courses, "Operating systems", "Main")
-    const deniedInteraction = yield* seedInteraction(db, "denied")
     const deniedInput = acceptance(deniedCourse.course.id, deniedCourse.view.revision.id)
+    const deniedInteraction = yield* seedInteraction(db, "denied", deniedInput)
     yield* runtime.prepare(deniedInput, deniedInteraction.registration)
     const denied = yield* runtime.execute(deniedInput, context(deniedInteraction.registration, "deny"))
     expect(JSON.parse(denied.output)).toMatchObject({ outcome: "error", code: "permission_rejected" })
@@ -270,8 +290,8 @@ it.effect("settles permission denial and crash recovery as exact completed Parts
     })
 
     const interruptedCourse = yield* seedCourse(courses, "Databases", "Main")
-    const interruptedInteraction = yield* seedInteraction(db, "interrupted")
     const interruptedInput = acceptance(interruptedCourse.course.id, interruptedCourse.view.revision.id)
+    const interruptedInteraction = yield* seedInteraction(db, "interrupted", interruptedInput)
     yield* runtime.prepare(interruptedInput, interruptedInteraction.registration)
     const pending = yield* db
       .select()
@@ -301,6 +321,25 @@ it.effect("settles permission denial and crash recovery as exact completed Parts
       revisionID: undefined,
       version: 0,
     })
+
+    const legacyCourse = yield* seedCourse(courses, "Legacy admitted command", "Main")
+    const legacyInput = acceptance(legacyCourse.course.id, legacyCourse.view.revision.id)
+    const legacyInteraction = yield* seedInteraction(db, "legacy-interrupted", legacyInput)
+    yield* runtime.prepare(legacyInput, legacyInteraction.registration)
+    yield* db
+      .update(LearningCommandInvocationTable)
+      .set({ turn_id: null, input_id: null })
+      .where(eq(LearningCommandInvocationTable.part_id, legacyInteraction.registration.partID))
+      .run()
+    yield* LearningCommandRuntime.recoverAdmitted(events)
+    expect(JSON.parse((yield* exactPartResult(db, legacyInteraction.registration.partID)).output)).toMatchObject({
+      outcome: "error",
+      code: "interrupted",
+    })
+    expect((yield* courses.getCourse(legacyCourse.course.id)).selection).toEqual({
+      revisionID: undefined,
+      version: 0,
+    })
   }),
 )
 
@@ -315,14 +354,14 @@ test("reopens stored success and recovers admitted work without re-execution", a
       const events = yield* EventV2Bridge.Service
 
       const appliedCourse = yield* seedCourse(courses, "Persistent algorithms", "Main")
-      const appliedInteraction = yield* seedInteraction(db, "reopen-applied")
       const appliedInput = acceptance(appliedCourse.course.id, appliedCourse.view.revision.id)
+      const appliedInteraction = yield* seedInteraction(db, "reopen-applied", appliedInput)
       yield* runtime.prepare(appliedInput, appliedInteraction.registration)
       const applied = yield* runtime.execute(appliedInput, context(appliedInteraction.registration, "allow"))
 
       const interruptedCourse = yield* seedCourse(courses, "Persistent databases", "Main")
-      const interruptedInteraction = yield* seedInteraction(db, "reopen-interrupted")
       const interruptedInput = acceptance(interruptedCourse.course.id, interruptedCourse.view.revision.id)
+      const interruptedInteraction = yield* seedInteraction(db, "reopen-interrupted", interruptedInput)
       yield* runtime.prepare(interruptedInput, interruptedInteraction.registration)
       const sessions = yield* Session.Service
       const interruptedPart = yield* sessions.getPart({
@@ -355,8 +394,8 @@ test("reopens stored success and recovers admitted work without re-execution", a
       ).toEqual(interruptedPart)
 
       const tombstonedCourse = yield* seedCourse(courses, "Persistent operating systems", "Main")
-      const tombstonedInteraction = yield* seedInteraction(db, "reopen-tombstoned")
       const tombstonedInput = acceptance(tombstonedCourse.course.id, tombstonedCourse.view.revision.id)
+      const tombstonedInteraction = yield* seedInteraction(db, "reopen-tombstoned", tombstonedInput)
       yield* runtime.prepare(tombstonedInput, tombstonedInteraction.registration)
       const tombstoned = yield* runtime.execute(tombstonedInput, context(tombstonedInteraction.registration, "deny"))
       yield* events.transaction((tx) =>
@@ -474,8 +513,8 @@ test("joins only active execution and never replays from a completed cache", asy
       const runtime = yield* LearningCommandRuntime.Service
       const sessions = yield* Session.Service
       const course = yield* seedCourse(courses, "Single-flight operating systems", "Main")
-      const interaction = yield* seedInteraction(db, "single-flight")
       const input = acceptance(course.course.id, course.view.revision.id)
+      const interaction = yield* seedInteraction(db, "single-flight", input)
       yield* runtime.prepare(input, interaction.registration)
 
       const executions = yield* Effect.all(
@@ -602,7 +641,7 @@ function seedCourse(courses: Course.Interface, title: string, view: string) {
   })
 }
 
-function seedInteraction(db: Database.Interface["db"], suffix: string) {
+function seedInteraction(db: Database.Interface["db"], suffix: string, input: ReturnType<typeof acceptance>) {
   return Effect.gen(function* () {
     const time = Date.now()
     const sessionID = SessionSchema.ID.make(`ses_learning_runtime_${suffix}`)
@@ -653,43 +692,128 @@ function seedInteraction(db: Database.Interface["db"], suffix: string) {
         time_updated: time,
       })
       .run()
-    yield* db.transaction((tx) =>
-      LearningCommand.Occurrence.admit(tx, {
-        admission: LearningCommand.LearnerAdmission.interactive(),
-        sessionID,
-        messageID: userMessageID,
-        timeAdmitted: time,
+    const turnID = Turn.ID.create()
+    const inputID = Turn.InputID.create()
+    const occurrenceID = yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        const occurrence = yield* LearningCommand.Occurrence.admit(tx, {
+          admission: LearningCommand.LearnerAdmission.interactive(),
+          sessionID,
+          messageID: userMessageID,
+          timeAdmitted: time,
+        })
+        yield* TurnLifecycle.admit(tx, {
+          kind: "learner",
+          turnID,
+          sessionID,
+          inputID,
+          messageID: userMessageID,
+          occurrenceID: occurrence.id,
+          limits: { model: 100, tool: 100 },
+          envelope: { input },
+          policyBasis: { source: "learning-command-runtime-test" },
+          timeAdmitted: time,
+        })
+        return occurrence.id
       }),
     )
-    const interaction = { sessionID, userMessageID }
+    const interaction = { sessionID, userMessageID, turnID, inputID, occurrenceID }
     return {
       ...interaction,
-      registration: yield* insertAssistant(db, interaction, suffix),
+      registration: yield* insertAssistant(db, interaction, suffix, input),
     }
   }).pipe(Effect.orDie)
 }
 
 function insertAssistant(
   db: Database.Interface["db"],
-  interaction: { sessionID: SessionSchema.ID; userMessageID: SessionV1.MessageID },
+  interaction: {
+    sessionID: SessionSchema.ID
+    userMessageID: SessionV1.MessageID
+    turnID: Turn.ID
+    inputID: Turn.InputID
+    occurrenceID: LearningCommand.OccurrenceID
+  },
   suffix: string,
+  input: ReturnType<typeof acceptance>,
 ) {
   return Effect.gen(function* () {
     const time = Date.now()
     const assistantMessageID = SessionV1.MessageID.ascending(`msg_learning_runtime_assistant_${suffix}`)
-    yield* db
-      .insert(MessageTable)
-      .values({
-        id: assistantMessageID,
-        session_id: interaction.sessionID,
-        data: assistantData(interaction.userMessageID, time),
-        time_created: time,
-        time_updated: time,
-      })
-      .run()
+    const partID = SessionV1.PartID.ascending(`prt_learning_runtime_tool_${suffix}`)
+    const callID = `call-learning-runtime-${suffix}`
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* tx
+          .insert(MessageTable)
+          .values({
+            id: assistantMessageID,
+            session_id: interaction.sessionID,
+            data: assistantData(interaction.userMessageID, time),
+            time_created: time,
+            time_updated: time,
+          })
+          .run()
+        yield* tx
+          .insert(PartTable)
+          .values({
+            id: partID,
+            session_id: interaction.sessionID,
+            message_id: assistantMessageID,
+            data: {
+              type: "tool",
+              tool: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+              callID,
+              state: { status: "pending", input, raw: JSON.stringify(input) },
+            } as (typeof PartTable.$inferInsert)["data"],
+            time_created: time,
+            time_updated: time,
+          })
+          .run()
+        yield* TurnLifecycle.admitModel(tx, {
+          turnID: interaction.turnID,
+          sessionID: interaction.sessionID,
+          assistantMessageID,
+          requestEnvelope: { input },
+          contextFingerprint: new Bun.CryptoHasher("sha256").update(`context:${suffix}`).digest("hex"),
+          snapshotFrontier: { sequence: 0, time: 0 },
+          timeAdmitted: time,
+        })
+        yield* TurnLifecycle.sealCandidateSet(tx, {
+          turnID: interaction.turnID,
+          sessionID: interaction.sessionID,
+          assistantMessageID,
+          candidates: [
+            {
+              partID,
+              callID,
+              tool: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+              envelope: { input },
+            },
+          ],
+          timeSealed: time,
+        })
+        yield* TurnLifecycle.settleModel(tx, {
+          turnID: interaction.turnID,
+          assistantMessageID,
+          state: "completed",
+          time,
+        })
+        yield* TurnLifecycle.admitTool(tx, {
+          turnID: interaction.turnID,
+          sessionID: interaction.sessionID,
+          assistantMessageID,
+          partID,
+          timeAdmitted: time,
+        })
+      }),
+    )
     return Object.freeze({
-      partID: SessionV1.PartID.ascending(`prt_learning_runtime_tool_${suffix}`),
-      callID: `call-learning-runtime-${suffix}`,
+      turnID: interaction.turnID,
+      inputID: interaction.inputID,
+      causalOccurrenceID: interaction.occurrenceID,
+      partID,
+      callID,
       emissionOrdinal: 0,
       sessionID: interaction.sessionID,
       parentUserMessageID: interaction.userMessageID,

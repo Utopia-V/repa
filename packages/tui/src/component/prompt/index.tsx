@@ -53,11 +53,15 @@ import { REPA_BASE_MODE, useBindings, useCommandShortcut, useLeaderActive, useOp
 import { useTuiConfig } from "../../config"
 import { usePromptStartLocation } from "./move"
 import { readLocalAttachment } from "./local-attachment"
+import { Identifier } from "@opencode-ai/core/id/id"
+import type { ForkDraft } from "../../util/fork-draft"
+import { captureVisibleTurn, dispatchVisibleTurn, type VisibleTurnTarget } from "../../util/visible-turn"
 
 registerOpencodeSpinner()
 
 export type PromptProps = {
   sessionID?: string
+  fork?: ForkDraft
   visible?: boolean
   disabled?: boolean
   onSubmit?: () => void
@@ -134,6 +138,21 @@ function formatEditorContext(selection: EditorSelection) {
   return `<system-reminder>${ranges.join("\n")} This may or may not be relevant to the current task.</system-reminder>\n`
 }
 
+function expandCommandTemplate(template: string, argumentsText: string) {
+  const args = argumentsText.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((arg) => arg.replace(/^"|"$/g, "")) ?? []
+  const placeholders = template.match(/\$\d+/g) ?? []
+  const last = Math.max(0, ...placeholders.map((item) => Number(item.slice(1))))
+  const expanded = template.replace(/\$(\d+)/g, (_, value: string) => {
+    const position = Number(value)
+    if (position === last) return args.slice(position - 1).join(" ")
+    return args[position - 1] ?? ""
+  })
+  const usesArguments = template.includes("$ARGUMENTS")
+  const result = expanded.replaceAll("$ARGUMENTS", argumentsText)
+  if (placeholders.length > 0 || usesArguments || !argumentsText.trim()) return result.trim()
+  return `${result}\n\n${argumentsText}`.trim()
+}
+
 let stashed: { prompt: PromptInfo; cursor: number } | undefined
 
 export function Prompt(props: PromptProps) {
@@ -156,6 +175,7 @@ export function Prompt(props: PromptProps) {
   const dialog = useDialog()
   const toast = useToast()
   const status = createMemo(() => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" })
+  const visibleActiveTurnID = createMemo(() => (props.sessionID ? sync.session.activeTurn(props.sessionID) : undefined))
   const history = usePromptHistory()
   const stash = usePromptStash()
   const keymap = useOpencodeKeymap()
@@ -290,6 +310,31 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
+  const [queuedForNext, setQueuedForNext] = createSignal(false)
+  const [notSteered, setNotSteered] = createSignal(false)
+  const queuedDraftLabel = createMemo(() =>
+    notSteered()
+      ? "steer not delivered · draft queued for a new turn (editable)"
+      : "draft queued for next turn (editable)",
+  )
+
+  createEffect(() => {
+    const sessionID = props.sessionID
+    if (!sessionID || status().type === "idle" || visibleActiveTurnID()) return
+    void sync.session.hydrateActiveTurn(sessionID).catch(() => {})
+  })
+
+  createEffect(
+    on(
+      () => status().type,
+      (next, previous) => {
+        if (next !== "idle" || previous === "idle" || !queuedForNext()) return
+        setQueuedForNext(false)
+        queueMicrotask(() => void submit())
+      },
+      { defer: true },
+    ),
+  )
 
   createEffect(
     on(
@@ -387,7 +432,7 @@ export function Prompt(props: PromptProps) {
         name: "session.interrupt",
         category: "Session",
         hidden: true,
-        enabled: status().type !== "idle",
+        enabled: status().type !== "idle" && !!visibleActiveTurnID(),
         run: () => {
           if (auto()?.visible) return
           if (!input.focused) return
@@ -405,12 +450,25 @@ export function Prompt(props: PromptProps) {
           }, 5000)
 
           if (store.interrupt >= 2) {
-            void sdk.client.session.abort({
-              sessionID: props.sessionID,
-            })
+            const target = captureVisibleTurn(props.sessionID, visibleActiveTurnID())
+            void dispatchVisibleTurn(target, (visible) =>
+              sdk.client.session.interruptTurn({ sessionID: visible.sessionID, turnID: visible.turnID }),
+            ).catch(() => {})
             setStore("interrupt", 0)
           }
           dialog.clear()
+        },
+      },
+      {
+        title: "Steer active turn",
+        name: "session.steer",
+        category: "Session",
+        enabled: status().type !== "idle" && !!visibleActiveTurnID() && !!store.prompt.input && !props.fork,
+        run: async () => {
+          if (!input.focused || auto()?.visible) return
+          const target = captureVisibleTurn(props.sessionID, visibleActiveTurnID())
+          const handled = await submit("steer", target)
+          if (handled) dialog.clear()
         },
       },
       {
@@ -557,6 +615,7 @@ export function Prompt(props: PromptProps) {
       "prompt.stash.list",
       "prompt.skills",
       "session.interrupt",
+      "session.steer",
       "session.start_location",
     ]),
   }))
@@ -910,23 +969,17 @@ export function Prompt(props: PromptProps) {
   })
 
   let submitting = false
-  async function submit() {
-    // Prevent overlapping invocations (e.g. a double-pressed Enter, or the
-    // input's native onSubmit racing another dispatch). Without this guard,
-    // a second call slips past the empty-input check before the first call
-    // clears `store.prompt.input`, then awaits its own `session.create` and
-    // ultimately reads the now-empty store — sending a phantom empty prompt
-    // to a freshly created session.
+  async function submit(delivery: "start" | "steer" = "start", target?: VisibleTurnTarget) {
     if (submitting) return false
     submitting = true
     try {
-      return await submitInner()
+      return await submitInner(delivery, target)
     } finally {
       submitting = false
     }
   }
 
-  async function submitInner() {
+  async function submitInner(delivery: "start" | "steer", target?: VisibleTurnTarget) {
     // IME: double-defer may fire before onContentChange flushes the last
     // composed character (e.g. Korean hangul) to the store, so read
     // plainText directly and sync before any downstream reads.
@@ -951,37 +1004,42 @@ export function Prompt(props: PromptProps) {
       return false
     }
 
+    if (delivery === "start" && props.sessionID && !props.fork && status().type !== "idle") {
+      setNotSteered(false)
+      setQueuedForNext(true)
+      toast.show({
+        message: "Draft queued for the next turn; keep editing it here. Use Ctrl+Enter to steer the active turn.",
+        variant: "info",
+        duration: 3000,
+      })
+      return true
+    }
+
+    if (delivery === "steer" && (!props.sessionID || props.fork)) {
+      toast.show({ message: "There is no materialized active turn to steer.", variant: "warning" })
+      return true
+    }
+
+    if (delivery === "steer" && (!target || target.sessionID !== props.sessionID)) {
+      preserveUndeliveredSteer()
+      toast.show({
+        title: "Steer not delivered",
+        message: "The visible Turn changed before the steer could be admitted; the draft is queued for a new Turn.",
+        variant: "warning",
+      })
+      return true
+    }
+
     const variant = local.model.variant.current()
-    let sessionID = props.sessionID
+    let sessionID = props.fork?.targetSessionID ?? props.sessionID
+    let directory = project.instance.directory()
     let finishMoveProgress = false
     if (sessionID == null) {
-      const directory = await startLocation.getDirectory(store.prompt.input)
-      if (startLocation.pending() && !directory) return false
+      const selectedDirectory = await startLocation.getDirectory(store.prompt.input)
+      if (startLocation.pending() && !selectedDirectory) return false
       finishMoveProgress = Boolean(startLocation.progress())
-
-      const res = await sdk.client.session.create({
-        directory: directory ?? project.instance.directory(),
-        agent: agent.name,
-        model: {
-          providerID: selectedModel.providerID,
-          id: selectedModel.modelID,
-          variant,
-        },
-      })
-
-      if (res.error) {
-        if (finishMoveProgress) startLocation.finishSubmit()
-        console.log("Creating a session failed:", res.error)
-
-        toast.show({
-          message: "Creating a session failed. Open console for more details.",
-          variant: "error",
-        })
-
-        return true
-      }
-
-      sessionID = res.data.id
+      directory = selectedDirectory ?? directory
+      sessionID = Identifier.ascending("session")
     }
 
     const inputText = expandTrackedPastedText(
@@ -1018,66 +1076,100 @@ export function Prompt(props: PromptProps) {
         : []
 
     if (store.mode === "shell") {
+      if (!props.sessionID || props.fork) {
+        if (finishMoveProgress) startLocation.finishSubmit()
+        toast.show({ message: "Start a learner turn before running a shell command.", variant: "warning" })
+        return true
+      }
       startLocation.startSubmit()
-      void sdk.client.session.shell({
-        sessionID,
-        agent: agent.name,
-        model: {
-          providerID: selectedModel.providerID,
-          modelID: selectedModel.modelID,
+      await sdk.client.session.shell(
+        {
+          sessionID,
+          agent: agent.name,
+          model: {
+            providerID: selectedModel.providerID,
+            modelID: selectedModel.modelID,
+          },
+          command: inputText,
         },
-        command: inputText,
-      })
+        { throwOnError: true },
+      )
       setStore("mode", "normal")
-    } else if (
-      inputText.startsWith("/") &&
-      sync.data.command.some((x) => x.name === inputText.split("\n")[0].split(" ")[0].slice(1))
-    ) {
-      startLocation.startSubmit()
-      // Parse command from first line, preserve multi-line content in arguments
-      const firstLineEnd = inputText.indexOf("\n")
-      const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
-      const [command, ...firstLineArgs] = firstLine.split(" ")
-      const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
-      const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
-
-      void sdk.client.session.command({
-        sessionID,
-        command: command.slice(1),
-        arguments: args,
-        agent: agent.name,
-        model: `${selectedModel.providerID}/${selectedModel.modelID}`,
-        variant,
-        parts: nonTextParts.filter((x) => x.type === "file"),
-      })
     } else {
       startLocation.startSubmit()
-      sdk.client.session
-        .prompt(
-          {
-            sessionID,
-            ...selectedModel,
-            agent: agent.name,
-            model: selectedModel,
-            variant,
-            parts: [
-              ...editorParts,
+      const firstLineEnd = inputText.indexOf("\n")
+      const firstLine = firstLineEnd === -1 ? inputText : inputText.slice(0, firstLineEnd)
+      const [commandName, ...firstLineArgs] = firstLine.split(" ")
+      const known = commandName?.startsWith("/")
+        ? sync.data.command.find((item) => item.name === commandName.slice(1))
+        : undefined
+      const restOfInput = firstLineEnd === -1 ? "" : inputText.slice(firstLineEnd + 1)
+      const argumentsText = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
+      const parts = [
+        ...editorParts,
+        {
+          type: "text" as const,
+          text: known ? expandCommandTemplate(known.template, argumentsText) : inputText,
+        },
+        ...nonTextParts,
+      ]
+      const turnID = Identifier.create("trn", "ascending")
+      const inputID = Identifier.create("tri", "ascending")
+      const messageID = Identifier.ascending("message")
+
+      try {
+        if (delivery === "steer") {
+          await dispatchVisibleTurn(target, (visible) =>
+            sdk.client.session.steer(
               {
-                type: "text",
-                text: inputText,
+                sessionID: visible.sessionID,
+                turnID: visible.turnID,
+                inputID,
+                messageID,
+                agent: known?.agent ?? agent.name,
+                model: selectedModel,
+                variant,
+                parts,
               },
-              ...nonTextParts,
-            ],
-          },
-          { throwOnError: true },
-        )
-        .catch((error) => {
-          toast.show({
-            title: "Failed to send prompt",
-            message: errorMessage(error),
-            variant: "error",
-          })
+              { throwOnError: true },
+            ),
+          )
+        } else {
+          await sdk.client.session.start(
+            {
+              sessionID,
+              turnID,
+              inputID,
+              messageID,
+              agent: known?.agent ?? agent.name,
+              model: selectedModel,
+              variant,
+              parts,
+              directory,
+              ...(!props.sessionID ? { session: {} } : {}),
+              ...(props.fork
+                ? {
+                    fork: {
+                      sourceSessionID: props.fork.sourceSessionID,
+                      sourceEventSequence: props.fork.sourceEventSequence,
+                      ...(props.fork.cutoffMessageID ? { cutoffMessageID: props.fork.cutoffMessageID } : {}),
+                    },
+                  }
+                : {}),
+            },
+            { throwOnError: true },
+          )
+        }
+      } catch (error) {
+        if (finishMoveProgress) startLocation.finishSubmit()
+        if (delivery === "steer") preserveUndeliveredSteer()
+        toast.show({
+          title: delivery === "steer" ? "Steer not delivered" : "Failed to start turn",
+          message: errorMessage(error),
+          variant: "error",
         })
+        return true
+      }
       if (editorParts.length > 0) editor.markSelectionSent()
     }
     history.append({
@@ -1090,21 +1182,24 @@ export function Prompt(props: PromptProps) {
       parts: [],
     })
     setStore("extmarkToPartIndex", new Map())
+    setQueuedForNext(false)
+    setNotSteered(false)
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent
-    if (!props.sessionID) {
+    if (!props.sessionID || props.fork) {
       if (editorParts.length > 0) editor.preserveSelectionFromNewSession()
-      setTimeout(() => {
-        route.navigate({
-          type: "session",
-          sessionID,
-        })
-      }, 50)
+      route.navigate({ type: "session", sessionID })
     }
     input.clear()
     if (finishMoveProgress) startLocation.finishSubmit()
     return true
+  }
+
+  function preserveUndeliveredSteer() {
+    setNotSteered(true)
+    setQueuedForNext(true)
+    if (status().type === "idle") setTimeout(() => void submit(), 0)
   }
 
   function pasteText(text: string, virtualText: string) {
@@ -1231,6 +1326,8 @@ export function Prompt(props: PromptProps) {
   }
 
   function clearPrompt() {
+    setQueuedForNext(false)
+    setNotSteered(false)
     if (store.prompt.input.trim().length >= DRAFT_RETENTION_MIN_CHARS || store.prompt.parts.length > 0) {
       history.append({
         ...store.prompt,
@@ -1543,6 +1640,9 @@ export function Prompt(props: PromptProps) {
                     })()}
                   </box>
                 </box>
+                <Show when={queuedForNext()}>
+                  <text fg={theme.warning}>{queuedDraftLabel()}</text>
+                </Show>
                 <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
                   esc{" "}
                   <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
@@ -1564,6 +1664,11 @@ export function Prompt(props: PromptProps) {
             <Match when={startLocation.pendingNew()}>
               <box paddingLeft={3}>
                 <text fg={theme.accent}>(new working copy)</text>
+              </box>
+            </Match>
+            <Match when={queuedForNext()}>
+              <box paddingLeft={3}>
+                <text fg={theme.warning}>{queuedDraftLabel()}</text>
               </box>
             </Match>
             <Match when={true}>{props.hint ?? <text />}</Match>

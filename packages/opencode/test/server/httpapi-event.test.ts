@@ -1,6 +1,8 @@
 import { afterEach, describe, expect } from "bun:test"
+import { Turn } from "@opencode-ai/schema/turn"
 import { Effect, Layer, Queue, Schema, Stream } from "effect"
 import { EventPaths } from "../../src/server/routes/instance/httpapi/groups/event"
+import { MessageID, SessionID } from "../../src/session/schema"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
@@ -12,7 +14,7 @@ const EventData = Schema.Struct({
   properties: Schema.Record(Schema.String, Schema.Any),
 })
 
-const readEvent = (reader: Queue.Dequeue<Uint8Array>) =>
+const readEvent = (reader: Queue.Dequeue<Uint8Array>): Effect.Effect<typeof EventData.Type, Error> =>
   Effect.gen(function* () {
     const value = yield* Queue.take(reader).pipe(
       Effect.timeoutOrElse({
@@ -20,7 +22,12 @@ const readEvent = (reader: Queue.Dequeue<Uint8Array>) =>
         orElse: () => Effect.fail(new Error("timed out waiting for event")),
       }),
     )
-    return Schema.decodeUnknownSync(EventData)(JSON.parse(new TextDecoder().decode(value).replace(/^data: /, "")))
+    const data = new TextDecoder()
+      .decode(value)
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("data: "))
+    if (!data) return yield* readEvent(reader)
+    return Schema.decodeUnknownSync(EventData)(JSON.parse(data.slice("data: ".length)))
   })
 
 const openEventStream = (directory: string) =>
@@ -85,7 +92,21 @@ describe("event HttpApi", () => {
         const { reader } = yield* openEventStream(directory)
         expect(yield* readEvent(reader)).toMatchObject({ type: "server.connected", properties: {} })
 
-        const created = yield* requestInDirectory("/session", directory, { method: "POST" })
+        const sessionID = SessionID.create()
+        const created = yield* requestInDirectory(`/session/${sessionID}/turn`, directory, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            turnID: Turn.ID.create(),
+            inputID: Turn.InputID.create(),
+            messageID: MessageID.ascending(),
+            agent: "repa",
+            model: { providerID: "test", modelID: "test" },
+            limits: { model: 0, tool: 0 },
+            session: { title: "Event stream Turn" },
+            parts: [{ type: "text", text: "Create the Session with its first learner Turn." }],
+          }),
+        })
         expect(created.status).toBe(200)
         expect(yield* readEvent(reader)).toMatchObject({ type: "session.created" })
       }),

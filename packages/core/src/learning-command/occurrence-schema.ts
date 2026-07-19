@@ -1,20 +1,12 @@
 import { Schema } from "effect"
-import { Identifier } from "../id/id"
+import { LearningOccurrence } from "@opencode-ai/schema/learning-occurrence"
 
-export const OccurrenceID = Schema.String.check(Schema.isPattern(/^lco_[0-9A-Za-z]{26}$/)).pipe(
-  Schema.brand("LearningCommand.OccurrenceID"),
-)
+export const OccurrenceID = LearningOccurrence.ID
 export type OccurrenceID = typeof OccurrenceID.Type
 
-const decodeOccurrenceID = Schema.decodeUnknownSync(OccurrenceID)
+export const createOccurrenceID = OccurrenceID.create
 
-export const createOccurrenceID = () => decodeOccurrenceID(Identifier.create("lco", "ascending"))
-
-export const PresentationProvenance = Schema.Union([
-  Schema.Literal("origin"),
-  Schema.Literal("compaction_replay"),
-  Schema.Literal("fork_clone"),
-])
+export const PresentationProvenance = LearningOccurrence.PresentationProvenance
 export type PresentationProvenance = typeof PresentationProvenance.Type
 
 export class LearnerAdmission {

@@ -37,6 +37,11 @@ export interface Interface {
     sessionID: SessionID,
     enter: Effect.Effect<Effect.Effect<A, E, R>, E2, R2>,
   ) => Effect.Effect<A, E | E2 | BusyError, R | R2>
+  readonly mutateThenAdmitGuarded: <A, E, R, E2, R2>(
+    sessionID: SessionID,
+    guardSessionIDs: readonly SessionID[],
+    enter: Effect.Effect<Effect.Effect<A, E, R>, E2, R2>,
+  ) => Effect.Effect<A, E | E2 | BusyError, R | R2>
   readonly idle: <A, E, R>(sessionID: SessionID, effect: Effect.Effect<A, E, R>) => Effect.Effect<A, E | BusyError, R>
   readonly close: <A, E, R, E2, R2>(
     sessionID: SessionID,
@@ -147,60 +152,97 @@ export const make = Effect.fn("SessionLifecycle.make")(function* () {
         ),
     )
 
-  const mutateThenAdmit: Interface["mutateThenAdmit"] = (sessionID, enter) =>
-    Effect.acquireUseRelease(
+  const mutateThenAdmitGuarded: Interface["mutateThenAdmitGuarded"] = (sessionID, guardSessionIDs, enter) =>
+    Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
-        const entry = yield* get(sessionID)
         const owner = yield* Effect.fiberId
         const token = {}
-        yield* entry.control.withPermits(1)(
+        const selected = [...new Set([sessionID, ...guardSessionIDs])].sort()
+        const acquired: { sessionID: SessionID; entry: Entry }[] = []
+
+        const releaseMutations = Effect.suspend(() =>
+          Effect.forEach(
+            acquired.toReversed(),
+            ({ entry }) =>
+              entry.control.withPermits(1)(
+                Effect.gen(function* () {
+                  yield* TxReentrantLock.releaseWrite(entry.gate)
+                  if (entry.mutation?.owner !== owner) return
+                  entry.mutation = undefined
+                  entry.phase = "open"
+                }),
+              ),
+            { discard: true },
+          ),
+        )
+
+        yield* Effect.forEach(
+          selected,
+          (selectedID) =>
+            Effect.gen(function* () {
+              const entry = yield* get(selectedID)
+              yield* entry.control.withPermits(1)(
+                Effect.gen(function* () {
+                  if (entry.phase !== "open") return yield* unavailable(selectedID)
+                  if (yield* TxReentrantLock.readLocked(entry.gate)) return yield* unavailable(selectedID)
+                  if (yield* TxReentrantLock.writeLocked(entry.gate)) return yield* unavailable(selectedID)
+                  entry.phase = "mutating"
+                  entry.mutation = { owner, depth: 1 }
+                  yield* TxReentrantLock.acquireWrite(entry.gate)
+                  acquired.push({ sessionID: selectedID, entry })
+                }),
+              )
+            }),
+          { discard: true },
+        ).pipe(Effect.onError(() => releaseMutations))
+
+        const awaitResult = yield* restore(enter).pipe(Effect.onError(() => releaseMutations))
+        const target = acquired.find((item) => item.sessionID === sessionID)
+        if (!target) return yield* Effect.die(`Missing target lifecycle admission for ${sessionID}`)
+
+        yield* target.entry.control.withPermits(1)(
           Effect.gen(function* () {
-            if (entry.phase !== "open") return yield* unavailable(sessionID)
-            if (yield* TxReentrantLock.readLocked(entry.gate)) return yield* unavailable(sessionID)
-            if (yield* TxReentrantLock.writeLocked(entry.gate)) return yield* unavailable(sessionID)
-            entry.phase = "mutating"
-            entry.mutation = { owner, depth: 1 }
-            yield* TxReentrantLock.acquireWrite(entry.gate)
+            yield* TxReentrantLock.acquireRead(target.entry.gate)
+            target.entry.readers.set(owner, (target.entry.readers.get(owner) ?? 0) + 1)
+            target.entry.admissions.add(token)
+            yield* TxReentrantLock.releaseWrite(target.entry.gate)
+            target.entry.mutation = undefined
+            target.entry.phase = "open"
           }),
         )
-        return { entry, owner, token, mode: "write" as "write" | "read" }
-      }),
-      (resource) =>
-        Effect.gen(function* () {
-          const awaitResult = yield* enter
-          yield* resource.entry.control.withPermits(1)(
-            Effect.uninterruptible(
+        yield* Effect.forEach(
+          acquired.toReversed(),
+          (item) => {
+            if (item === target) return Effect.void
+            return item.entry.control.withPermits(1)(
               Effect.gen(function* () {
-                yield* TxReentrantLock.acquireRead(resource.entry.gate)
-                resource.entry.readers.set(resource.owner, (resource.entry.readers.get(resource.owner) ?? 0) + 1)
-                resource.entry.admissions.add(resource.token)
-                yield* TxReentrantLock.releaseWrite(resource.entry.gate)
-                resource.entry.mutation = undefined
-                resource.entry.phase = "open"
-                resource.mode = "read"
+                yield* TxReentrantLock.releaseWrite(item.entry.gate)
+                item.entry.mutation = undefined
+                item.entry.phase = "open"
+              }),
+            )
+          },
+          { discard: true },
+        )
+
+        return yield* restore(awaitResult.pipe(Effect.provideService(CurrentAdmission, token))).pipe(
+          Effect.ensuring(
+            target.entry.control.withPermits(1)(
+              Effect.gen(function* () {
+                yield* TxReentrantLock.releaseRead(target.entry.gate)
+                const remaining = (target.entry.readers.get(owner) ?? 1) - 1
+                if (remaining === 0) target.entry.readers.delete(owner)
+                if (remaining > 0) target.entry.readers.set(owner, remaining)
+                target.entry.admissions.delete(token)
               }),
             ),
-          )
-          return yield* awaitResult.pipe(Effect.provideService(CurrentAdmission, resource.token))
-        }),
-      (resource) =>
-        resource.entry.control.withPermits(1)(
-          Effect.gen(function* () {
-            if (resource.mode === "read") {
-              yield* TxReentrantLock.releaseRead(resource.entry.gate)
-              const remaining = (resource.entry.readers.get(resource.owner) ?? 1) - 1
-              if (remaining === 0) resource.entry.readers.delete(resource.owner)
-              if (remaining > 0) resource.entry.readers.set(resource.owner, remaining)
-              resource.entry.admissions.delete(resource.token)
-              return
-            }
-            yield* TxReentrantLock.releaseWrite(resource.entry.gate)
-            if (resource.entry.mutation?.owner !== resource.owner) return
-            resource.entry.mutation = undefined
-            resource.entry.phase = "open"
-          }),
-        ),
+          ),
+        )
+      }),
     )
+
+  const mutateThenAdmit: Interface["mutateThenAdmit"] = (sessionID, enter) =>
+    mutateThenAdmitGuarded(sessionID, [], enter)
 
   const idle: Interface["idle"] = (sessionID, effect) =>
     Effect.acquireUseRelease(
@@ -283,7 +325,7 @@ export const make = Effect.fn("SessionLifecycle.make")(function* () {
     return (yield* get(sessionID)).phase
   })
 
-  return { shared, admit, handoff, mutateThenAdmit, idle, close, phase } satisfies Interface
+  return { shared, admit, handoff, mutateThenAdmit, mutateThenAdmitGuarded, idle, close, phase } satisfies Interface
 })
 
 export * as SessionLifecycle from "./lifecycle"

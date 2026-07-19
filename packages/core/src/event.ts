@@ -170,6 +170,15 @@ export interface Remove {
   ): Effect.Effect<A>
 }
 
+export interface RemoveMany {
+  <A, E, R, D extends Definition = Definition>(
+    aggregateIDs: readonly string[],
+    cleanup: (tx: Transaction) => Effect.Effect<A, E, R>,
+    notifications?: readonly PreparedEvent<D>[],
+    options?: RemoveOptions,
+  ): Effect.Effect<A, E, R>
+}
+
 export interface Interface {
   readonly publish: <D extends Definition>(
     definition: D,
@@ -182,9 +191,9 @@ export interface Interface {
   /** @deprecated Use `all()` and consume the returned stream. */
   readonly listen: (listener: Subscriber) => Effect.Effect<Unsubscribe>
   readonly project: <D extends Definition>(definition: D, projector: Subscriber<D>) => Effect.Effect<void>
-  readonly transaction: <A, D extends Definition = Definition>(
-    prepare: (tx: Transaction) => Effect.Effect<PreparedTransaction<A, D>>,
-  ) => Effect.Effect<TransactionResult<A, D>>
+  readonly transaction: <A, D extends Definition = Definition, E = never, R = never>(
+    prepare: (tx: Transaction) => Effect.Effect<PreparedTransaction<A, D>, E, R>,
+  ) => Effect.Effect<TransactionResult<A, D>, E, R>
   readonly replay: (
     event: SerializedEvent,
     options?: { readonly publish?: boolean; readonly ownerID?: string; readonly strictOwner?: boolean },
@@ -194,6 +203,7 @@ export interface Interface {
     options?: { readonly publish?: boolean; readonly ownerID?: string; readonly strictOwner?: boolean },
   ) => Effect.Effect<string | undefined>
   readonly remove: Remove
+  readonly removeMany: RemoveMany
   readonly claim: (aggregateID: string, ownerID: string) => Effect.Effect<void>
 }
 
@@ -255,6 +265,13 @@ export const layerWith = (options?: LayerOptions) =>
 
       const immediate = <A>(transaction: (tx: Transaction) => Effect.Effect<A>) =>
         Effect.uninterruptible(db.transaction(transaction, { behavior: "immediate" }).pipe(Effect.orDie))
+
+      const immediateFallible = <A, E, R>(transaction: (tx: Transaction) => Effect.Effect<A, E, R>) =>
+        Effect.uninterruptible(
+          db
+            .transaction(transaction, { behavior: "immediate" })
+            .pipe(Effect.catchTag("SqlError", (error) => Effect.die(error))),
+        )
 
       const wakeAggregate = (aggregateID: string) =>
         Effect.forEach(pubsub.durable.get(aggregateID) ?? [], (wake) => PubSub.publish(wake, undefined), {
@@ -444,15 +461,15 @@ export const layerWith = (options?: LayerOptions) =>
         })
       }
 
-      function transaction<A, D extends Definition = Definition>(
-        prepare: (tx: Transaction) => Effect.Effect<PreparedTransaction<A, D>>,
-      ): Effect.Effect<TransactionResult<A, D>> {
+      function transaction<A, D extends Definition = Definition, E = never, R = never>(
+        prepare: (tx: Transaction) => Effect.Effect<PreparedTransaction<A, D>, E, R>,
+      ): Effect.Effect<TransactionResult<A, D>, E, R> {
         return Effect.gen(function* () {
           const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
           const fallbackLocation = serviceLocation
             ? { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID }
             : undefined
-          const committed = yield* immediate((tx) =>
+          const committed = yield* immediateFallible((tx) =>
             Effect.gen(function* () {
               const prepared = yield* prepare(tx)
               const candidate = prepared as {
@@ -700,6 +717,88 @@ export const layerWith = (options?: LayerOptions) =>
         })
       }
 
+      function removeMany<A, E, R, D extends Definition = Definition>(
+        aggregateIDs: readonly string[],
+        cleanup: (tx: Transaction) => Effect.Effect<A, E, R>,
+        notifications: readonly PreparedEvent<D>[] = [],
+        options?: RemoveOptions,
+      ): Effect.Effect<A, E, R> {
+        return Effect.gen(function* () {
+          const selected = [...new Set(aggregateIDs)]
+          if (selected.length === 0)
+            return yield* Effect.die(
+              new InvalidDurableEventError({ type: "remove", message: "Aggregate removal requires at least one ID" }),
+            )
+          const selectedSet = new Set(selected)
+          const serviceLocation = Option.getOrUndefined(yield* Effect.serviceOption(Location.Service))
+          const fallbackLocation = serviceLocation
+            ? { directory: serviceLocation.directory, workspaceID: serviceLocation.workspaceID }
+            : undefined
+          const visibility = yield* Effect.forEach(notifications, (notification) =>
+            Effect.gen(function* () {
+              if (notification.options?.commit)
+                return yield* Effect.die(
+                  new InvalidDurableEventError({
+                    type: notification.definition.type,
+                    message: "Removal notifications cannot have a commit hook",
+                  }),
+                )
+              const durable = notification.definition.durable
+              if (durable) {
+                const aggregateID = (notification.data as Record<string, unknown>)[durable.aggregate]
+                if (typeof aggregateID !== "string" || !selectedSet.has(aggregateID))
+                  return yield* Effect.die(
+                    new InvalidDurableEventError({
+                      type: notification.definition.type,
+                      message: `Removal notification aggregate is outside the selected closure: ${String(aggregateID)}`,
+                    }),
+                  )
+              }
+              return {
+                id: notification.options?.id ?? ID.create(),
+                ...(notification.options?.metadata ? { metadata: notification.options.metadata } : {}),
+                type: notification.definition.type,
+                ...((notification.options?.location ?? fallbackLocation)
+                  ? { location: notification.options?.location ?? fallbackLocation }
+                  : {}),
+                data: notification.data,
+              } as Payload
+            }),
+          )
+          const visibilityEffect = Effect.gen(function* () {
+            yield* Effect.forEach(selected, wakeAggregate, { discard: true })
+            yield* Effect.forEach(visibility, (event) => notify(event, true), { discard: true })
+          })
+          const committed = yield* Effect.uninterruptible(
+            Effect.gen(function* () {
+              const result = yield* immediateFallible((tx) =>
+                Effect.gen(function* () {
+                  const result = yield* cleanup(tx)
+                  yield* tx
+                    .delete(EventTable)
+                    .where(inArray(EventTable.aggregate_id, selected))
+                    .run()
+                    .pipe(Effect.orDie)
+                  yield* tx
+                    .delete(EventSequenceTable)
+                    .where(inArray(EventSequenceTable.aggregate_id, selected))
+                    .run()
+                    .pipe(Effect.orDie)
+                  return result
+                }),
+              )
+              if (options?.onCommitted) yield* options.onCommitted
+              if (!options?.continueVisibilityOnInterrupt) return { result }
+              const visibility = yield* visibilityEffect.pipe(Effect.forkIn(scope, { startImmediately: true }))
+              return { result, visibility }
+            }),
+          )
+          if (committed.visibility) yield* Fiber.join(committed.visibility)
+          if (!committed.visibility) yield* visibilityEffect
+          return committed.result
+        })
+      }
+
       function claim(aggregateID: string, ownerID: string) {
         return db
           .update(EventSequenceTable)
@@ -808,6 +907,7 @@ export const layerWith = (options?: LayerOptions) =>
         replay,
         replayAll,
         remove,
+        removeMany,
         claim,
       })
     }),

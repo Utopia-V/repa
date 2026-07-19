@@ -19,6 +19,7 @@ import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Turn } from "@opencode-ai/schema/turn"
 import { eq, sql } from "drizzle-orm"
 import { Effect, Exit, Layer, ManagedRuntime } from "effect"
 import { mkdir, mkdtemp, rm, writeFile } from "fs/promises"
@@ -380,6 +381,8 @@ function invocation(input: {
   return {
     envelope: {
       occurrenceID: input.occurrenceID,
+      turnID: Turn.ID.create(),
+      inputID: Turn.InputID.create(),
       sessionID: SessionSchema.ID.make(`ses_representation_${input.suffix}`),
       parentUserMessageID: SessionV1.MessageID.ascending(`msg_representation_user_${input.suffix}`),
       assistantMessageID: SessionV1.MessageID.ascending(`msg_representation_assistant_${input.suffix}`),
@@ -527,6 +530,8 @@ function seedAssistant(
       invocation: {
         envelope: {
           occurrenceID: interaction.occurrenceID,
+          turnID: Turn.ID.create(),
+          inputID: Turn.InputID.create(),
           sessionID: interaction.sessionID,
           parentUserMessageID: interaction.userMessageID,
           assistantMessageID,

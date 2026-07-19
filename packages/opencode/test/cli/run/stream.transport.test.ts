@@ -12,6 +12,8 @@ type SessionToolPart = Extract<SessionMessage["parts"][number], { type: "tool" }
 type SessionStatusMap = NonNullable<Awaited<ReturnType<OpencodeClient["session"]["status"]>>["data"]>
 type TextPart = Extract<SessionMessage["parts"][number], { type: "text" }>
 type ReasoningPart = Extract<SessionMessage["parts"][number], { type: "reasoning" }>
+type SessionStartInput = Parameters<OpencodeClient["session"]["start"]>[0]
+type TurnInfo = NonNullable<Awaited<ReturnType<OpencodeClient["session"]["start"]>>["data"]>
 
 afterEach(() => {
   mock.restore()
@@ -159,6 +161,22 @@ function ok<T>(data: T) {
     request: new Request("https://opencode.test"),
     response: new Response(),
   })
+}
+
+function admittedTurn(input: SessionStartInput): TurnInfo {
+  return {
+    id: input.turnID ?? "trn_test",
+    sessionID: input.sessionID,
+    admissionKind: "learner",
+    initialInputID: input.inputID ?? "tri_test",
+    currentInputID: input.inputID ?? "tri_test",
+    limits: { model: 64, tool: 256 },
+    counters: { model: 0, tool: 0 },
+    state: "running",
+    depth: 0,
+    timeAdmitted: 1,
+    causalTime: 1,
+  }
 }
 
 function sse(stream: EventStream) {
@@ -419,7 +437,7 @@ function sdk(
     globalStream?: GlobalEventStream
     subscribe?: OpencodeClient["event"]["subscribe"]
     globalEvent?: OpencodeClient["global"]["event"]
-    promptAsync?: OpencodeClient["session"]["promptAsync"]
+    start?: OpencodeClient["session"]["start"]
     status?: OpencodeClient["session"]["status"]
     messages?: OpencodeClient["session"]["messages"]
     children?: OpencodeClient["session"]["children"]
@@ -432,7 +450,7 @@ function sdk(
   const subscribe: OpencodeClient["event"]["subscribe"] = input.subscribe ?? (() => sse(input.stream ?? emptyStream()))
   const globalEvent: OpencodeClient["global"]["event"] =
     input.globalEvent ?? (() => globalSse(input.globalStream ?? wrapGlobalStream(input.stream ?? emptyStream())))
-  const promptAsync: OpencodeClient["session"]["promptAsync"] = input.promptAsync ?? (() => ok(undefined))
+  const start: OpencodeClient["session"]["start"] = input.start ?? ((parameters) => ok(admittedTurn(parameters)))
   const status: OpencodeClient["session"]["status"] = input.status ?? (() => ok({}))
   const messages: OpencodeClient["session"]["messages"] = input.messages ?? (() => ok([]))
   const children: OpencodeClient["session"]["children"] = input.children ?? (() => ok([]))
@@ -441,7 +459,7 @@ function sdk(
 
   spyOn(client.event, "subscribe").mockImplementation(subscribe)
   spyOn(client.global, "event").mockImplementation(globalEvent)
-  spyOn(client.session, "promptAsync").mockImplementation(promptAsync)
+  spyOn(client.session, "start").mockImplementation(start)
   spyOn(client.session, "status").mockImplementation(status)
   spyOn(client.session, "messages").mockImplementation(messages)
   spyOn(client.session, "children").mockImplementation(children)
@@ -1786,7 +1804,7 @@ describe("run stream transport", () => {
           questionCalls += 1
           return ok(questionCalls > 1 ? [request] : [])
         },
-        promptAsync: async () => {
+        start: async (input) => {
           queueMicrotask(() => {
             src.push(busy())
             src.push(assistant("msg-1"))
@@ -1805,7 +1823,7 @@ describe("run stream transport", () => {
               ),
             )
           })
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
       }),
       sessionID: "session-1",
@@ -1920,7 +1938,7 @@ describe("run stream transport", () => {
 
           return ok([])
         },
-        promptAsync: async () => {
+        start: async (input) => {
           queueMicrotask(() => {
             src.push(busy())
             src.push(assistant("msg-1"))
@@ -1939,7 +1957,7 @@ describe("run stream transport", () => {
               ),
             )
           })
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
       }),
       sessionID: "session-1",
@@ -2019,13 +2037,13 @@ describe("run stream transport", () => {
     const transport = await createSessionTransport({
       sdk: sdk({
         stream: src.stream,
-        promptAsync: async (input) => {
+        start: async (input) => {
           seen.push(input)
           queueMicrotask(() => {
             src.push(busy())
             src.push(idle())
           })
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
       }),
       sessionID: "session-1",
@@ -2074,12 +2092,12 @@ describe("run stream transport", () => {
     const transport = await createSessionTransport({
       sdk: sdk({
         stream: src.stream,
-        promptAsync: async () => {
+        start: async (input) => {
           queueMicrotask(() => {
             src.push(assistant("msg-1"))
             busy = false
           })
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
         status: async () => ok(statusMap(busy)),
       }),
@@ -2118,14 +2136,14 @@ describe("run stream transport", () => {
     const transport = await createSessionTransport({
       sdk: sdk({
         stream: src.stream,
-        promptAsync: async () => {
+        start: async (input) => {
           queueMicrotask(() => {
             src.push(busy())
             src.push(assistant("msg-1"))
             src.push(textUpdated(textPart("txt-1", "msg-1", "")))
             src.push(textDelta("msg-1", "txt-1", "unfinished"))
           })
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
       }),
       sessionID: "session-1",
@@ -2185,7 +2203,7 @@ describe("run stream transport", () => {
     const transport = await createSessionTransport({
       sdk: sdk({
         stream: src.stream,
-        promptAsync: async (_input, opt) => {
+        start: async (input, opt) => {
           ready.resolve()
           await new Promise<void>((resolve) => {
             const onAbort = () => {
@@ -2196,7 +2214,7 @@ describe("run stream transport", () => {
 
             opt?.signal?.addEventListener("abort", onAbort, { once: true })
           })
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
       }),
       sessionID: "session-1",
@@ -2240,9 +2258,9 @@ describe("run stream transport", () => {
               throw new Error("boom")
             })(),
           ),
-        promptAsync: async () => {
+        start: async (input) => {
           ready.resolve()
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
         status: async () => ok({ "session-1": { type: "busy" } }),
       }),
@@ -2287,9 +2305,9 @@ describe("run stream transport", () => {
               })
             })(),
           ),
-        promptAsync: async () => {
+        start: async (input) => {
           ready.resolve()
-          return ok(undefined)
+          return ok(admittedTurn(input))
         },
         status: async () => ok({}),
       }),

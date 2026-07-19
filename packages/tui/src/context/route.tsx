@@ -2,6 +2,7 @@ import { createStore, reconcile } from "solid-js/store"
 import { createSimpleContext } from "./helper"
 import type { PromptInfo } from "../prompt/history"
 import { useTuiStartup } from "./runtime"
+import type { ForkDraft } from "../util/fork-draft"
 
 export type HomeRoute = {
   type: "home"
@@ -12,6 +13,7 @@ export type SessionRoute = {
   type: "session"
   sessionID: string
   prompt?: PromptInfo
+  fork?: ForkDraft
 }
 
 export type PluginRoute = {

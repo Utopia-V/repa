@@ -4,7 +4,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { expect } from "bun:test"
 import { tool } from "ai"
-import { Cause, Effect, Exit, Fiber, Layer, Stream } from "effect"
+import { Cause, Context, DateTime, Deferred, Effect, Exit, Fiber, Layer, Schema, Stream } from "effect"
 import path from "path"
 import z from "zod"
 import type { Agent } from "../../src/agent/agent"
@@ -19,6 +19,7 @@ import { SessionStatus } from "../../src/session/status"
 import { SessionSummary } from "../../src/session/summary"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { provideTmpdirInstance, provideTmpdirServer } from "../fixture/fixture"
+import { materializeTestSession } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 import { raw, reply, TestLLMServer } from "../lib/llm-server"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -27,14 +28,17 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { LLMEvent } from "@opencode-ai/llm"
 import { EffectBridge } from "@/effect/bridge"
-import { LearningCommand, type OccurrenceID } from "@opencode-ai/core/learning-command"
-import { Occurrence } from "@opencode-ai/core/learning-command"
+import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningCommandInvocationTable } from "@opencode-ai/core/learning-command/sql"
 import { Course } from "@opencode-ai/core/course"
 import { CourseSelectionAcceptanceEffectTable } from "@opencode-ai/core/course/sql"
 import { EventTable } from "@opencode-ai/core/event/sql"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { eq } from "drizzle-orm"
+import { Turn } from "@opencode-ai/schema/turn"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { TurnModelOperationTable, TurnToolCandidateTable } from "@opencode-ai/core/turn/sql"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -156,24 +160,9 @@ const waitFor = <A>(check: Effect.Effect<A | undefined>, message: string) =>
     return yield* Effect.fail(new Error(message))
   })
 
-const user = Effect.fn("TestSession.user")(function* (sessionID: SessionID, text: string) {
-  const session = yield* Session.Service
-  const msg = yield* session.updateMessage({
-    id: MessageID.ascending(),
-    role: "user",
-    sessionID,
-    agent: "repa",
-    model: ref,
-    time: { created: Date.now() },
-  })
-  yield* session.updatePart({
-    id: PartID.ascending(),
-    messageID: msg.id,
-    sessionID,
-    type: "text",
-    text,
-  })
-  return msg
+const runningSession = Effect.fn("TestSession.runningSession")(function* (text: string, limits?: Turn.Limits) {
+  const seeded = yield* materializeTestSession({ text, settle: false, limits })
+  return { chat: seeded.info, parent: seeded.user }
 })
 
 const assistant = Effect.fn("TestSession.assistant")(function* (
@@ -207,22 +196,6 @@ const assistant = Effect.fn("TestSession.assistant")(function* (
   return msg
 })
 
-const admitLearner = Effect.fn("TestSession.admitLearner")(function* (sessionID: SessionID, messageID: MessageID) {
-  const events = yield* EventV2Bridge.Service
-  const admitted = yield* events.transaction((tx) =>
-    Occurrence.admit(tx, {
-      admission: LearningCommand.LearnerAdmission.interactive(),
-      sessionID,
-      messageID,
-      timeAdmitted: Date.now(),
-    }).pipe(
-      Effect.orDie,
-      Effect.map((result) => ({ result })),
-    ),
-  )
-  return admitted.result
-})
-
 function learningInput(courseID: Course.CourseID, revisionID: Course.RevisionID) {
   return {
     courseID,
@@ -234,6 +207,11 @@ function learningInput(courseID: Course.CourseID, revisionID: Course.RevisionID)
     expectedRevisionVersion: 0,
   }
 }
+
+const syntheticLearningInput = learningInput(
+  Schema.decodeUnknownSync(Course.CourseID)("crs_00000000000000000000000000"),
+  Schema.decodeUnknownSync(Course.RevisionID)("cvr_00000000000000000000000000"),
+)
 
 const learningToolSchema = z.object({
   courseID: z.string(),
@@ -247,47 +225,10 @@ const learningToolSchema = z.object({
 
 const prepareLearningInvocation = Effect.fn("TestSession.prepareLearningInvocation")(function* (
   registration: SessionProcessor.RegisteredToolCall,
-  occurrenceID: OccurrenceID,
   input: ReturnType<typeof learningInput>,
 ) {
-  const events = yield* EventV2Bridge.Service
-  const timeAdmitted = Date.now()
-  yield* events.transaction((tx) =>
-    Effect.gen(function* () {
-      yield* SessionProjector.projectPart(
-        tx,
-        {
-          id: registration.partID,
-          messageID: registration.assistantMessageID,
-          sessionID: registration.sessionID,
-          type: "tool",
-          tool: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
-          callID: registration.callID,
-          state: { status: "pending", input, raw: JSON.stringify(input) },
-        },
-        timeAdmitted,
-      )
-      return yield* LearningCommand.reserveAcceptance(tx, {
-        envelope: {
-          occurrenceID,
-          sessionID: registration.sessionID,
-          parentUserMessageID: registration.parentUserMessageID,
-          assistantMessageID: registration.assistantMessageID,
-          partID: registration.partID,
-          providerCallID: registration.callID,
-          emissionOrdinal: registration.emissionOrdinal,
-          capabilityIdentity: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
-          capabilityVersion: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_VERSION,
-          authorizationBasis: "learner_acceptance",
-          timeAdmitted,
-        },
-        command: { ...input, expectedSelectionRevisionID: undefined },
-      })
-    }).pipe(
-      Effect.orDie,
-      Effect.map((result) => ({ result })),
-    ),
-  )
+  const runtime = yield* LearningCommandRuntime.Service
+  yield* runtime.prepare(input, registration)
 })
 
 const root = LayerNode.group([
@@ -353,11 +294,155 @@ const fragmentFailureLLM = Layer.succeed(
 const fragmentFailureEnv = LayerNode.compile(root, [...replacements, [LLM.node, fragmentFailureLLM]])
 const itFragmentFailure = testEffect(fragmentFailureEnv)
 
+const integrityFailureLLM = Layer.succeed(
+  LLM.Service,
+  LLM.Service.of({
+    stream: () =>
+      Stream.make(
+        LLMEvent.stepStart({ index: 0 }),
+        LLMEvent.toolResult({
+          id: "orphan-call",
+          name: "lookup",
+          result: { type: "text", value: "unadmitted" },
+        }),
+      ),
+  }),
+)
+const integrityFailureEnv = LayerNode.compile(root, [...replacements, [LLM.node, integrityFailureLLM]])
+const itIntegrityFailure = testEffect(integrityFailureEnv)
+
+interface PartialToolControlApi {
+  readonly entered: Effect.Effect<void>
+  readonly signal: Effect.Effect<boolean>
+}
+
+class PartialToolControl extends Context.Service<PartialToolControl, PartialToolControlApi>()(
+  "@opencode/test/PartialToolControl",
+) {}
+
+const partialToolControl = Layer.effect(
+  PartialToolControl,
+  Effect.gen(function* () {
+    const entered = yield* Deferred.make<void>()
+    return PartialToolControl.of({
+      entered: Deferred.await(entered),
+      signal: Deferred.succeed(entered, undefined),
+    })
+  }),
+)
+const partialToolLLM = Layer.effect(
+  LLM.Service,
+  Effect.gen(function* () {
+    const control = yield* PartialToolControl
+    return LLM.Service.of({
+      stream: () =>
+        Stream.make(
+          LLMEvent.stepStart({ index: 0 }),
+          LLMEvent.toolInputStart({ id: "call-1", name: "bash" }),
+          LLMEvent.toolInputDelta({ id: "call-1", name: "bash", text: '{"cmd":"pwd"}' }),
+        ).pipe(Stream.concat(Stream.fromEffect(control.signal).pipe(Stream.flatMap(() => Stream.never)))),
+    })
+  }),
+)
+const partialToolEnv = Layer.merge(
+  LayerNode.compile(root, [...replacements, [LLM.node, partialToolLLM.pipe(Layer.provide(partialToolControl))]]),
+  partialToolControl,
+)
+const itPartialTool = testEffect(partialToolEnv)
+
+const abcToolLLM = Layer.succeed(
+  LLM.Service,
+  LLM.Service.of({
+    stream: () =>
+      Stream.make(
+        LLMEvent.stepStart({ index: 0 }),
+        LLMEvent.toolCall({ id: "call-a", name: "tool_a", input: { value: "A" } }),
+        LLMEvent.toolCall({ id: "call-b", name: "tool_b", input: { value: "B" } }),
+        LLMEvent.toolCall({ id: "call-c", name: "tool_c", input: { value: "C" } }),
+        LLMEvent.stepFinish({ index: 0, reason: "tool-calls" }),
+        LLMEvent.finish({ reason: "tool-calls" }),
+      ),
+  }),
+)
+const abcToolEnv = LayerNode.compile(root, [...replacements, [LLM.node, abcToolLLM]])
+const itAbcTool = testEffect(abcToolEnv)
+
+const admitTurnModel = Effect.fn("TestSession.admitTurnModel")(function* (
+  sessionID: SessionID,
+  parent: SessionV1.User,
+  assistantMessageID: MessageID,
+  limits: Turn.Limits = { model: 4, tool: 8 },
+) {
+  const database = yield* Database.Service
+  const time = Date.now()
+  const turnID = yield* database.db
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const active = yield* TurnLifecycle.active(tx, sessionID)
+        if (!active) return yield* Effect.die(`Processor test Session ${sessionID} has no active Turn`)
+        const turnID = active.id
+        const snapshotFrontier = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.admitModel(tx, {
+          turnID,
+          sessionID,
+          assistantMessageID,
+          requestEnvelope: { purpose: "interactive-test" },
+          contextFingerprint: TurnLifecycle.envelopeFingerprint({ context: "processor-test" }),
+          snapshotFrontier,
+          timeAdmitted: time,
+        })
+        return turnID
+      }),
+    )
+    .pipe(Effect.orDie)
+  return turnID
+})
+
 const boot = Effect.fn("test.boot")(function* () {
-  const processors = yield* SessionProcessor.Service
+  const processor = yield* SessionProcessor.Service
   const session = yield* Session.Service
   const provider = yield* Provider.Service
-  return { processors, session, provider }
+  const database = yield* Database.Service
+  const eventBridge = yield* EventV2Bridge.Service
+  const processors = {
+    create: (input: Parameters<SessionProcessor.Interface["create"]>[0]) => {
+      return Effect.gen(function* () {
+        if (input.turnID) {
+          const handle = yield* processor.create(input)
+          const operation = yield* database.db.transaction((tx) =>
+            TurnLifecycle.modelOperation(tx, {
+              turnID: input.turnID!,
+              sessionID: input.sessionID,
+              assistantMessageID: input.assistantMessage.id,
+            }),
+          )
+          yield* handle.bindModelOperation(operation)
+          return handle
+        }
+        const parent = (yield* MessageV2.get({
+          sessionID: input.sessionID,
+          messageID: input.assistantMessage.parentID,
+        })).info
+        if (parent.role !== "user") return yield* Effect.die("Interactive processor test requires a parent User")
+        const turnID = yield* admitTurnModel(input.sessionID, parent, input.assistantMessage.id)
+        const handle = yield* processor.create({ ...input, turnID })
+        const operation = yield* database.db.transaction((tx) =>
+          TurnLifecycle.modelOperation(tx, {
+            turnID,
+            sessionID: input.sessionID,
+            assistantMessageID: input.assistantMessage.id,
+          }),
+        )
+        yield* handle.bindModelOperation(operation)
+        return handle
+      }).pipe(
+        Effect.provideService(Database.Service, database),
+        Effect.provideService(EventV2Bridge.Service, eventBridge),
+        Effect.orDie,
+      )
+    },
+  } satisfies SessionProcessor.Interface
+  return { processors, session, provider, database }
 })
 
 // ---------------------------------------------------------------------------
@@ -368,13 +453,11 @@ it.live("session.processor effect tests capture llm input cleanly", () =>
   provideTmpdirServer(
     ({ dir, llm }) =>
       Effect.gen(function* () {
-        const database = yield* Database.Service
-        const { processors, session, provider } = yield* boot()
+        const { processors, session, provider, database } = yield* boot()
 
         yield* llm.text("hello")
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "hi")
+        const { chat, parent } = yield* runningSession("hi")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -446,8 +529,7 @@ it.live("session.processor effect tests preserve text start time", () =>
           }),
         )
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "hi")
+        const { chat, parent } = yield* runningSession("hi")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -500,6 +582,130 @@ it.live("session.processor effect tests preserve text start time", () =>
   ),
 )
 
+itAbcTool.live("session.processor seals A/B/C before one FIFO tool effect and projects exhaustion", () =>
+  provideTmpdirInstance(
+    (dir) =>
+      Effect.gen(function* () {
+        const database = yield* Database.Service
+        const { processors, session, provider } = yield* boot()
+        const { chat, parent } = yield* runningSession("run three tools", { model: 4, tool: 1 })
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
+        const turnID = yield* admitTurnModel(chat.id, parent, msg.id, { model: 4, tool: 1 })
+        const effects: string[] = []
+        const observedAtEffect: Array<{ candidateCount: number; sealed: boolean; modelState: string }> = []
+        const local = (name: string) =>
+          tool({
+            description: name,
+            inputSchema: z.object({ value: z.string() }),
+            execute: async () => {
+              const [candidates, model] = await Effect.runPromise(
+                Effect.all([
+                  database.db.select().from(TurnToolCandidateTable).all().pipe(Effect.orDie),
+                  database.db
+                    .select()
+                    .from(TurnModelOperationTable)
+                    .where(eq(TurnModelOperationTable.assistant_message_id, msg.id))
+                    .get()
+                    .pipe(Effect.orDie),
+                ]),
+              )
+              effects.push(name)
+              observedAtEffect.push({
+                candidateCount: candidates.length,
+                sealed: model?.candidates_sealed ?? false,
+                modelState: model?.state ?? "missing",
+              })
+              return { title: name, metadata: {}, output: name }
+            },
+          })
+        const handle = yield* processors.create({
+          assistantMessage: msg,
+          sessionID: chat.id,
+          model: mdl,
+          turnID,
+        })
+
+        expect(
+          yield* handle.process({
+            user: parent,
+            sessionID: chat.id,
+            composition: { type: "interactive" },
+            model: mdl,
+            agent: agent(),
+            system: [],
+            messages: [{ role: "user", content: "run three tools" }],
+            tools: { tool_a: local("A"), tool_b: local("B"), tool_c: local("C") },
+          }),
+        ).toBe("continue")
+
+        expect(effects).toEqual(["A"])
+        expect(observedAtEffect).toEqual([{ candidateCount: 3, sealed: true, modelState: "completed" }])
+        const turn = yield* database.db.transaction((tx) => TurnLifecycle.lookup(tx, turnID)).pipe(Effect.orDie)
+        expect(turn).toMatchObject({
+          type: "available",
+          turn: {
+            state: "exhausted",
+            counters: { model: 1, tool: 1 },
+            terminal: { outcome: "exhausted", reason: "tool_limit" },
+          },
+        })
+
+        const parts = (yield* MessageV2.parts(msg.id)).filter(
+          (part): part is SessionV1.ToolPart => part.type === "tool",
+        )
+        expect(parts.map((part) => [part.callID, part.state.status])).toEqual([
+          ["call-a", "completed"],
+          ["call-b", "error"],
+          ["call-c", "error"],
+        ])
+        const storedCandidates = yield* database.db
+          .select()
+          .from(TurnToolCandidateTable)
+          .where(eq(TurnToolCandidateTable.turn_id, turnID))
+          .orderBy(TurnToolCandidateTable.emission_ordinal)
+          .all()
+          .pipe(Effect.orDie)
+        expect(storedCandidates.map((candidate) => candidate.state)).toEqual([
+          "admitted",
+          "not_started_limit",
+          "not_started_turn_exhausted",
+        ])
+
+        const replayB = yield* database.db
+          .transaction((tx) =>
+            TurnLifecycle.admitTool(tx, {
+              turnID,
+              sessionID: chat.id,
+              assistantMessageID: msg.id,
+              partID: storedCandidates[1].part_id,
+              timeAdmitted: Date.now(),
+            }),
+          )
+          .pipe(Effect.orDie)
+        const replayC = yield* database.db
+          .transaction((tx) =>
+            TurnLifecycle.admitTool(tx, {
+              turnID,
+              sessionID: chat.id,
+              assistantMessageID: msg.id,
+              partID: storedCandidates[2].part_id,
+              timeAdmitted: Date.now(),
+            }),
+          )
+          .pipe(Effect.orDie)
+        expect(replayB).toMatchObject({ type: "not_started", replay: true, candidate: { state: "not_started_limit" } })
+        expect(replayC).toMatchObject({
+          type: "not_started",
+          replay: true,
+          candidate: { state: "not_started_turn_exhausted" },
+        })
+        expect(effects).toEqual(["A"])
+      }),
+    { config: cfg },
+  ),
+)
+
 it.live("session.processor effect tests stop after token overflow requests compaction", () =>
   provideTmpdirServer(
     ({ dir, llm }) =>
@@ -509,8 +715,7 @@ it.live("session.processor effect tests stop after token overflow requests compa
 
         yield* llm.text("after", { usage: { input: 100, output: 0 } })
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "compact")
+        const { chat, parent } = yield* runningSession("compact")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const base = yield* provider.getModel(ref.providerID, ref.modelID)
         const mdl = { ...base, limit: { context: 20, output: 10 } }
@@ -557,8 +762,7 @@ it.live("session.processor effect tests capture reasoning from http mock", () =>
 
         yield* llm.push(reply().reason("think").text("done").stop())
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "reason")
+        const { chat, parent } = yield* runningSession("reason")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -606,8 +810,7 @@ it.live("session.processor effect tests reset reasoning state across retries", (
 
         yield* llm.push(reply().reason("one").reset(), reply().reason("two").stop())
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "reason")
+        const { chat, parent } = yield* runningSession("reason")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -654,8 +857,7 @@ it.live("session.processor effect tests do not retry unknown json errors", () =>
 
         yield* llm.error(400, { error: { message: "no_kv_space" } })
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "json")
+        const { chat, parent } = yield* runningSession("json")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -694,13 +896,12 @@ it.live("session.processor effect tests retry recognized structured json errors"
   provideTmpdirServer(
     ({ dir, llm }) =>
       Effect.gen(function* () {
-        const { processors, session, provider } = yield* boot()
+        const { processors, session, provider, database } = yield* boot()
 
         yield* llm.error(429, { type: "error", error: { type: "too_many_requests" } })
         yield* llm.text("after")
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "retry json")
+        const { chat, parent } = yield* runningSession("retry json")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -728,9 +929,18 @@ it.live("session.processor effect tests retry recognized structured json errors"
         })
 
         const parts = yield* MessageV2.parts(msg.id)
+        const active = yield* database.db.transaction((tx) => TurnLifecycle.active(tx, chat.id))
 
         expect(value).toBe("continue")
         expect(yield* llm.calls).toBe(2)
+        expect(active?.counters.model).toBe(1)
+        expect(
+          yield* database.db
+            .select()
+            .from(TurnModelOperationTable)
+            .where(eq(TurnModelOperationTable.session_id, chat.id))
+            .all(),
+        ).toHaveLength(1)
         expect(parts.some((part) => part.type === "text" && part.text === "after")).toBe(true)
         expect(handle.message.error).toBeUndefined()
       }),
@@ -748,8 +958,7 @@ it.live("session.processor effect tests publish retry status updates", () =>
         yield* llm.error(503, { error: "boom" })
         yield* llm.text("")
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "retry")
+        const { chat, parent } = yield* runningSession("retry")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const states: number[] = []
@@ -801,8 +1010,7 @@ it.live("session.processor effect tests compact on structured context overflow",
 
         yield* llm.error(400, { type: "error", error: { code: "context_length_exceeded" } })
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "compact json")
+        const { chat, parent } = yield* runningSession("compact json")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -845,8 +1053,7 @@ it.live("session.processor effect tests complete AI SDK tool calls when native f
 
         yield* llm.tool("lookup", { query: "weather" })
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "tool")
+        const { chat, parent } = yield* runningSession("tool")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -907,16 +1114,17 @@ it.live("session.processor effect tests run tool preparation before the local bo
   provideTmpdirServer(
     ({ dir, llm }) =>
       Effect.gen(function* () {
-        const { processors, session, provider } = yield* boot()
+        const { processors, session, provider, database } = yield* boot()
         const bridge = yield* EffectBridge.make()
         const order: string[] = []
         let partBeforePreparation: SessionV1.Part | undefined
         let preparedRegistration: SessionProcessor.RegisteredToolCall | undefined
+        let advancedFrontier: LearningFrontier.Snapshot | undefined
+        let frontierAtBody: Turn.ToolInvocation | undefined
 
         yield* llm.tool("prepared", {})
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "prepared tool")
+        const { chat, parent } = yield* runningSession("prepared tool")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -929,6 +1137,15 @@ it.live("session.processor effect tests run tool preparation before the local bo
             description: "Run only after the preparation seam",
             inputSchema: z.object({}),
             execute: async () => {
+              if (!preparedRegistration) throw new Error("Tool body has no durable registration")
+              frontierAtBody = await bridge.promise(
+                database.db.transaction((tx) =>
+                  TurnLifecycle.invocation(tx, {
+                    turnID: preparedRegistration!.turnID,
+                    partID: preparedRegistration!.partID,
+                  }),
+                ),
+              )
               order.push("body")
               return { title: "Prepared", output: "prepared", metadata: {} }
             },
@@ -957,6 +1174,9 @@ it.live("session.processor effect tests run tool preparation before the local bo
                   state: { status: "pending", input: {}, raw: "" },
                 }),
               )
+              advancedFrontier = await bridge.promise(
+                database.db.transaction((tx) => LearningFrontier.advance(tx, { time: Date.now() })),
+              )
               order.push("prepare")
             },
           },
@@ -980,12 +1200,29 @@ it.live("session.processor effect tests run tool preparation before the local bo
           tools: { prepared },
         })
         const call = (yield* MessageV2.parts(msg.id)).find((part): part is SessionV1.ToolPart => part.type === "tool")
+        const invocation = preparedRegistration
+          ? yield* database.db.transaction((tx) =>
+              TurnLifecycle.invocation(tx, {
+                turnID: preparedRegistration!.turnID,
+                partID: preparedRegistration!.partID,
+              }),
+            )
+          : undefined
 
         expect(value).toBe("continue")
-        expect(partBeforePreparation).toBeUndefined()
+        expect(partBeforePreparation).toMatchObject({
+          id: preparedRegistration?.partID,
+          type: "tool",
+          state: { status: "pending" },
+        })
         expect(order).toEqual(["prepare", "body"])
         expect(preparedRegistration?.partID).toBe(call?.id)
         expect(call?.state.status).toBe("completed")
+        expect(frontierAtBody?.consumedSharedFrontier.sequence).toBe(advancedFrontier?.sequence)
+        expect(frontierAtBody && DateTime.toEpochMillis(frontierAtBody.consumedSharedFrontier.time)).toBe(
+          advancedFrontier?.time,
+        )
+        expect(invocation?.resultingSharedFrontier).toBeUndefined()
       }),
     { config: (url) => providerCfg(url) },
   ),
@@ -1000,8 +1237,7 @@ it.live("session.processor effect tests do not overwrite a terminal Part prepare
 
         yield* llm.tool("settled", {})
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "settled tool")
+        const { chat, parent } = yield* runningSession("settled tool")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -1091,9 +1327,7 @@ it.live("session.processor returns a committed learning result when terminal not
         const input = learningInput(course.id, view.revision.id)
         yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, input)
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "commit before observer interruption")
-        yield* admitLearner(chat.id, parent.id)
+        const { chat, parent } = yield* runningSession("commit before observer interruption")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
@@ -1166,12 +1400,26 @@ it.live("session.processor returns a committed learning result when terminal not
         expect(msg.error).toBeUndefined()
         expect((yield* courses.getCourse(course.id)).selection.version).toBe(1)
         expect(yield* database.db.select().from(CourseSelectionAcceptanceEffectTable).all()).toHaveLength(1)
+        const registration = registrations.get(call.callID)
+        const frontier = yield* database.db.transaction((tx) => LearningFrontier.read(tx))
+        const invocation = registration
+          ? yield* database.db.transaction((tx) =>
+              TurnLifecycle.invocation(tx, { turnID: registration.turnID, partID: registration.partID }),
+            )
+          : undefined
+        expect(invocation?.resultingSharedFrontier?.sequence).toBe(frontier.sequence)
+        expect(
+          invocation?.resultingSharedFrontier && DateTime.toEpochMillis(invocation.resultingSharedFrontier.time),
+        ).toBe(frontier.time)
         const partEvents = (yield* database.db
           .select()
           .from(EventTable)
           .where(eq(EventTable.aggregate_id, chat.id))
+          .orderBy(EventTable.seq)
           .all()).filter((event) => (event.data as { part?: { id?: string } }).part?.id === call.id)
-        expect(partEvents).toHaveLength(1)
+        expect(
+          partEvents.map((event) => (event.data as { part?: { state?: { status?: string } } }).part?.state?.status),
+        ).toEqual(["pending", "completed"])
       }),
     { config: (url) => providerCfg(url) },
   ),
@@ -1196,9 +1444,7 @@ it.live("session.processor effect tests settle an admitted learning tool failure
         const input = learningInput(course.id, view.revision.id)
         yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, input)
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "recover a failed learning tool")
-        const occurrence = yield* admitLearner(chat.id, parent.id)
+        const { chat, parent } = yield* runningSession("recover a failed learning tool")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
@@ -1214,7 +1460,7 @@ it.live("session.processor effect tests settle an admitted learning tool failure
             [SessionProcessor.ToolCallPreparation]: async (
               _input: unknown,
               registration: SessionProcessor.RegisteredToolCall,
-            ) => bridge.promise(prepareLearningInvocation(registration, occurrence.id, input)),
+            ) => bridge.promise(prepareLearningInvocation(registration, input)),
           },
         )
 
@@ -1246,6 +1492,7 @@ it.live("session.processor effect tests settle an admitted learning tool failure
             .where(eq(LearningCommandInvocationTable.part_id, call.id))
             .get(),
         ).toMatchObject({ status: "error", settlement: { outcome: "error", code: "interrupted" } })
+        expect(handle.failureReason).toBeUndefined()
       }),
     { config: (url) => providerCfg(url) },
   ),
@@ -1270,9 +1517,7 @@ it.live("session.processor effect tests settle admitted learning cleanup through
         const input = learningInput(course.id, view.revision.id)
         yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, input)
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "recover interrupted learning cleanup")
-        const occurrence = yield* admitLearner(chat.id, parent.id)
+        const { chat, parent } = yield* runningSession("recover interrupted learning cleanup")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
@@ -1290,7 +1535,7 @@ it.live("session.processor effect tests settle admitted learning cleanup through
             [SessionProcessor.ToolCallPreparation]: async (
               _input: unknown,
               registration: SessionProcessor.RegisteredToolCall,
-            ) => bridge.promise(prepareLearningInvocation(registration, occurrence.id, input)),
+            ) => bridge.promise(prepareLearningInvocation(registration, input)),
           },
         )
 
@@ -1339,10 +1584,9 @@ it.live("session.processor effect tests exact-match a late learning-command comp
           metadata: { durablySettled: true, outcome: "applied" },
         }
 
-        yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, {})
+        yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, syntheticLearningInput)
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "exact learning callback")
+        const { chat, parent } = yield* runningSession("exact learning callback")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -1353,7 +1597,7 @@ it.live("session.processor effect tests exact-match a late learning-command comp
         const command = Object.assign(
           tool({
             description: "Return the frozen settlement",
-            inputSchema: z.object({}),
+            inputSchema: learningToolSchema,
             execute: async () => exact,
           }),
           {
@@ -1372,7 +1616,7 @@ it.live("session.processor effect tests exact-match a late learning-command comp
                   callID: registration.callID,
                   state: {
                     status: "completed",
-                    input: {},
+                    input: syntheticLearningInput,
                     ...exact,
                     time: { start: now, end: now },
                   },
@@ -1438,10 +1682,9 @@ it.live("session.processor effect tests reject a divergent late learning-command
           metadata: { durablySettled: true, outcome: "applied" },
         }
 
-        yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, {})
+        yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, syntheticLearningInput)
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "divergent learning callback")
+        const { chat, parent } = yield* runningSession("divergent learning callback")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -1452,7 +1695,7 @@ it.live("session.processor effect tests reject a divergent late learning-command
         const command = Object.assign(
           tool({
             description: "Return a divergent settlement",
-            inputSchema: z.object({}),
+            inputSchema: learningToolSchema,
             execute: async () => ({ ...frozen, output: '{"outcome":"error"}' }),
           }),
           {
@@ -1471,7 +1714,7 @@ it.live("session.processor effect tests reject a divergent late learning-command
                   callID: registration.callID,
                   state: {
                     status: "completed",
-                    input: {},
+                    input: syntheticLearningInput,
                     ...frozen,
                     time: { start: now, end: now },
                   },
@@ -1543,10 +1786,9 @@ it.live("session.processor effect tests reject a late learning-command tool erro
           metadata: { durablySettled: true, outcome: "applied" },
         }
 
-        yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, {})
+        yield* llm.tool(LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY, syntheticLearningInput)
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "late learning error")
+        const { chat, parent } = yield* runningSession("late learning error")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -1557,7 +1799,7 @@ it.live("session.processor effect tests reject a late learning-command tool erro
         const command = Object.assign(
           tool({
             description: "Fail after the settlement is frozen",
-            inputSchema: z.object({}),
+            inputSchema: learningToolSchema,
             execute: async (): Promise<typeof frozen> => {
               throw new Error("late provider callback")
             },
@@ -1578,7 +1820,7 @@ it.live("session.processor effect tests reject a late learning-command tool erro
                   callID: registration.callID,
                   state: {
                     status: "completed",
-                    input: {},
+                    input: syntheticLearningInput,
                     ...frozen,
                     time: { start: now, end: now },
                   },
@@ -1645,8 +1887,7 @@ it.live("session.processor effect tests execute local tools in provider emission
 
         yield* llm.push(parallelTools("first", "second"))
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "ordered tools")
+        const { chat, parent } = yield* runningSession("ordered tools")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -1736,8 +1977,7 @@ it.live("session.processor effect tests do not enter queued local tools after in
 
         yield* llm.push(parallelTools("first", "second"))
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "interrupt ordered tools")
+        const { chat, parent } = yield* runningSession("interrupt ordered tools")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -1816,17 +2056,14 @@ it.live("session.processor effect tests do not enter queued local tools after in
   ),
 )
 
-it.live("session.processor effect tests mark pending tools as aborted on cleanup", () =>
-  provideTmpdirServer(
-    ({ dir, llm }) =>
+itPartialTool.live("session.processor effect tests mark pending tools as aborted on cleanup", () =>
+  provideTmpdirInstance(
+    (dir) =>
       Effect.gen(function* () {
-        const database = yield* Database.Service
         const { processors, session, provider } = yield* boot()
+        const control = yield* PartialToolControl
 
-        yield* llm.toolHang("bash", { cmd: "pwd" })
-
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "tool abort")
+        const { chat, parent } = yield* runningSession("tool abort")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -1855,14 +2092,8 @@ it.live("session.processor effect tests mark pending tools as aborted on cleanup
           })
           .pipe(Effect.forkChild)
 
-        yield* llm.wait(1)
-        yield* waitFor(
-          MessageV2.parts(msg.id).pipe(
-            Effect.map((parts) => parts.find((part): part is SessionV1.ToolPart => part.type === "tool")),
-            Effect.provideService(Database.Service, database),
-          ),
-          "timed out waiting for tool part",
-        )
+        yield* control.entered
+        expect((yield* MessageV2.parts(msg.id)).some((part) => part.type === "tool")).toBe(false)
         yield* Fiber.interrupt(run)
 
         const exit = yield* Fiber.await(run)
@@ -1873,7 +2104,6 @@ it.live("session.processor effect tests mark pending tools as aborted on cleanup
         if (Exit.isFailure(exit)) {
           expect(Cause.hasInterruptsOnly(exit.cause)).toBe(true)
         }
-        expect(yield* llm.calls).toBe(1)
         expect(call?.state.status).toBe("error")
         if (call?.state.status === "error") {
           expect(call.state.error).toBe("Tool execution aborted")
@@ -1881,7 +2111,7 @@ it.live("session.processor effect tests mark pending tools as aborted on cleanup
           expect(call.state.time.end).toBeDefined()
         }
       }),
-    { config: (url) => providerCfg(url) },
+    { config: cfg },
   ),
 )
 
@@ -1896,8 +2126,7 @@ it.live("session.processor effect tests record aborted errors and idle state", (
 
         yield* llm.hang
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "abort")
+        const { chat, parent } = yield* runningSession("abort")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const errs: string[] = []
@@ -1969,8 +2198,7 @@ it.live("session.processor effect tests mark interruptions aborted without manua
 
         yield* llm.hang
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "interrupt")
+        const { chat, parent } = yield* runningSession("interrupt")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
         const handle = yield* processors.create({
@@ -2025,16 +2253,16 @@ itProviderError.live("session.processor effect tests fail provider-executed erro
         const { processors, session, provider } = yield* boot()
         const events = yield* EventV2Bridge.Service
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "provider tool error")
+        const { chat, parent } = yield* runningSession("provider tool error")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
+        const turnID = yield* admitTurnModel(chat.id, parent, msg.id)
         const seen: string[] = []
         const off = yield* events.listen((event) => {
           seen.push(event.type)
           return Effect.void
         })
-        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
+        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl, turnID })
 
         yield* handle.process({
           user: {
@@ -2074,16 +2302,16 @@ itFragmentFailure.live("session.processor effect tests retain partial legacy par
         const { processors, session, provider } = yield* boot()
         const events = yield* EventV2Bridge.Service
 
-        const chat = yield* session.create({})
-        const parent = yield* user(chat.id, "provider failure")
+        const { chat, parent } = yield* runningSession("provider failure")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
+        const turnID = yield* admitTurnModel(chat.id, parent, msg.id)
         const seen: string[] = []
         const off = yield* events.listen((event) => {
           seen.push(event.type)
           return Effect.void
         })
-        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
+        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl, turnID })
 
         expect(
           yield* handle.process({
@@ -2104,6 +2332,7 @@ itFragmentFailure.live("session.processor effect tests retain partial legacy par
             tools: {},
           }),
         ).toBe("stop")
+        expect(handle.failureReason).toBe("provider_failure")
         yield* off
 
         const parts = yield* MessageV2.parts(msg.id)
@@ -2116,6 +2345,42 @@ itFragmentFailure.live("session.processor effect tests retain partial legacy par
         expect(seen).toContain(MessageV2.Event.PartUpdated.type)
         expect(seen).toContain(Session.Event.Error.type)
         expect(seen.filter((type) => type.startsWith("session.next."))).toEqual([])
+      }),
+    { config: cfg },
+  ),
+)
+
+itIntegrityFailure.live("session.processor classifies an unadmitted provider callback as an integrity failure", () =>
+  provideTmpdirInstance(
+    (dir) =>
+      Effect.gen(function* () {
+        const { processors, provider } = yield* boot()
+        const { chat, parent } = yield* runningSession("orphan provider callback")
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
+        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
+
+        expect(
+          yield* handle.process({
+            user: {
+              id: parent.id,
+              sessionID: chat.id,
+              role: "user",
+              time: parent.time,
+              agent: parent.agent,
+              model: { providerID: ref.providerID, modelID: ref.modelID },
+            } satisfies SessionV1.User,
+            sessionID: chat.id,
+            composition: { type: "interactive" },
+            model: mdl,
+            agent: agent(),
+            system: [],
+            messages: [{ role: "user", content: "orphan provider callback" }],
+            tools: {},
+          }),
+        ).toBe("stop")
+        expect(handle.failureReason).toBe("integrity_failure")
+        expect(handle.message.error).toBeDefined()
       }),
     { config: cfg },
   ),

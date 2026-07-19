@@ -12,16 +12,18 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { eq } from "drizzle-orm"
 import { testEffect } from "../lib/effect"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { EventV2Bridge } from "@/event-v2-bridge"
+import { materializeTestSessionInfo } from "../fixture/session"
 
 const layer = (experimentalWorkspaces: boolean) =>
-  AppNodeBuilder.build(LayerNode.group([Database.node, SessionNs.node, SessionProjector.node]), [
+  AppNodeBuilder.build(LayerNode.group([Database.node, SessionNs.node, SessionProjector.node, EventV2Bridge.node]), [
     [RuntimeFlags.node, RuntimeFlags.layer({ experimentalWorkspaces })],
   ])
 const it = testEffect(layer(false))
 const itWorkspaces = testEffect(layer(true))
 
-const withSession = (input?: Parameters<SessionNs.Interface["create"]>[0]) =>
-  Effect.acquireRelease(SessionNs.use.create(input), (created) =>
+const withSession = (input?: Parameters<typeof materializeTestSessionInfo>[0]) =>
+  Effect.acquireRelease(materializeTestSessionInfo(input), (created) =>
     SessionNs.Service.use((session) => session.remove(created.id).pipe(Effect.ignore)),
   )
 

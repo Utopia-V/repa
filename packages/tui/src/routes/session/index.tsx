@@ -36,6 +36,7 @@ import type {
   TextPart,
   ReasoningPart,
   SessionStatus,
+  TurnInfo,
 } from "@opencode-ai/sdk/v2"
 import { useLocal } from "../../context/local"
 import { Locale } from "../../util/locale"
@@ -82,6 +83,7 @@ import { REPA_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap } fr
 import { usePathFormatter } from "../../context/path-format"
 import { canShowSessionPrompt, enterSession, type SessionDirectoryAccess } from "./entry"
 import { LocationProvider } from "../../context/location"
+import { isRecord } from "../../util/record"
 
 addDefaultParsers(parsers.parsers)
 
@@ -91,7 +93,6 @@ const sessionBindingCommands = [
   "session.rename",
   "session.timeline",
   "session.fork",
-  "session.compact",
   "session.undo",
   "session.redo",
   "session.sidebar.toggle",
@@ -182,20 +183,13 @@ export function Session() {
       .filter((x) => x.parentID === parentID || x.id === parentID)
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
   })
-  const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
-  const foregroundTasks = createMemo(() =>
-    sync.data.capabilities.experimentalBackgroundSubagents
-      ? messages().flatMap((message) =>
-          (sync.data.part[message.id] ?? []).filter(
-            (part): part is ToolPart =>
-              part.type === "tool" &&
-              part.tool === "task" &&
-              part.state.status === "running" &&
-              part.state.metadata?.background !== true,
-          ),
-        )
-      : [],
-  )
+  const messages = createMemo(() => {
+    const all = sync.data.message[route.sessionID] ?? []
+    const cutoff = route.fork?.cutoffMessageID
+    if (!cutoff) return all
+    const index = all.findIndex((message) => message.id === cutoff)
+    return index < 0 ? all : all.slice(0, index)
+  })
   const permissions = createMemo(() => {
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.permission[x.id] ?? [])
@@ -207,14 +201,13 @@ export function Session() {
   const requestDirectory = (request: { id: string; sessionID: string }) =>
     sync.request.directory(request.id) ?? sync.session.get(request.sessionID)?.directory
   const [directoryAccess, setDirectoryAccess] = createSignal<SessionDirectoryAccess>({ status: "pending" })
-  const visible = createMemo(
-    () =>
-      canShowSessionPrompt({
-        child: Boolean(session()?.parentID),
-        access: directoryAccess(),
-        permissions: permissions().length,
-        questions: questions().length,
-      }),
+  const visible = createMemo(() =>
+    canShowSessionPrompt({
+      child: Boolean(session()?.parentID),
+      access: directoryAccess(),
+      permissions: permissions().length,
+      questions: questions().length,
+    }),
   )
   const disabled = createMemo(
     () => directoryAccess().status !== "ready" || permissions().length > 0 || questions().length > 0,
@@ -273,14 +266,10 @@ export function Session() {
         activeDirectory: previousDirectory,
         signal: controller.signal,
         load: async (id, signal) => {
-          const response = await sdk.client.session.get(
-            { sessionID: id },
-            { throwOnError: true, signal },
-          )
+          const response = await sdk.client.session.get({ sessionID: id }, { throwOnError: true, signal })
           return response.data
         },
-        selectDirectory: (directory, signal) =>
-          sync.bootstrap({ fatal: false, directory, signal }),
+        selectDirectory: (directory, signal) => sync.bootstrap({ fatal: false, directory, signal }),
         currentDirectory: project.instance.directory,
         reconnect: editor.reconnect,
         hydrateTranscript: sync.session.sync,
@@ -492,32 +481,6 @@ export function Session() {
       },
     },
     {
-      title: "Compact session",
-      value: "session.compact",
-      category: "Session",
-      slash: {
-        name: "compact",
-        aliases: ["summarize"],
-      },
-      run: () => {
-        const selectedModel = local.model.current()
-        if (!selectedModel) {
-          toast.show({
-            variant: "warning",
-            message: "Connect a provider to summarize this session",
-            duration: 3000,
-          })
-          return
-        }
-        void sdk.client.session.summarize({
-          sessionID: route.sessionID,
-          modelID: selectedModel.modelID,
-          providerID: selectedModel.providerID,
-        })
-        dialog.clear()
-      },
-    },
-    {
       title: "Undo previous message",
       value: "session.undo",
       category: "Session",
@@ -525,8 +488,10 @@ export function Session() {
         name: "undo",
       },
       run: async () => {
-        const status = sync.data.session_status?.[route.sessionID]
-        if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
+        const active = await sdk.client.session.activeTurn({ sessionID: route.sessionID }).catch(() => undefined)
+        if (active?.data) {
+          await sdk.client.session.interruptTurn({ sessionID: route.sessionID, turnID: active.data.id }).catch(() => {})
+        }
         const revert = session()?.revert?.messageID
         const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
         if (!message) return
@@ -933,20 +898,6 @@ export function Session() {
       },
     },
     {
-      title: "Background subagents",
-      value: "session.background",
-      category: "Session",
-      hidden: true,
-      enabled: foregroundTasks().length > 0,
-      run: () => {
-        void sdk.client.experimental.session.background({
-          sessionID: route.sessionID,
-          directory: session()?.directory ?? project.instance.directory(),
-        })
-        dialog.clear()
-      },
-    },
-    {
       title: "Go to child session",
       value: "session.child.first",
       category: "Session",
@@ -1024,13 +975,6 @@ export function Session() {
   useBindings(() => ({
     mode: REPA_BASE_MODE,
     bindings: tuiConfig.keybinds.gather("session", sessionBindingCommands),
-  }))
-
-  useBindings(() => ({
-    mode: REPA_BASE_MODE,
-    enabled: foregroundTasks().length > 0,
-    priority: 1,
-    bindings: tuiConfig.keybinds.get("session.background"),
   }))
 
   const revertInfo = createMemo(() => session()?.revert)
@@ -1228,6 +1172,7 @@ export function Session() {
                       visible={visible()}
                       ref={bind}
                       disabled={disabled()}
+                      fork={route.fork}
                       onSubmit={() => {
                         toBottom()
                       }}
@@ -1392,7 +1337,6 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
   })
 
   const childShortcut = useCommandShortcut("session.child.first")
-  const backgroundShortcut = useCommandShortcut("session.background")
 
   return (
     <>
@@ -1416,22 +1360,6 @@ function AssistantMessage(props: { message: AssistantMessage; parts: Part[]; las
           <text fg={theme.text}>
             {childShortcut()}
             <span style={{ fg: theme.textMuted }}> view subagents</span>
-            <Show
-              when={
-                sync.data.capabilities.experimentalBackgroundSubagents &&
-                props.parts.some(
-                  (x) =>
-                    x.type === "tool" &&
-                    x.tool === "task" &&
-                    x.state.status === "running" &&
-                    x.state.metadata?.background !== true,
-                )
-              }
-            >
-              <span style={{ fg: theme.textMuted }}> · </span>
-              {backgroundShortcut()}
-              <span style={{ fg: theme.textMuted }}> background</span>
-            </Show>
           </text>
         </box>
       </Show>
@@ -2134,13 +2062,57 @@ function Task(props: ToolProps) {
   const { navigate } = useRoute()
   const sync = useSync()
   const dialog = useDialog()
-
-  onMount(() => {
-    const sessionID = stringValue(props.metadata.sessionId)
-    if (sessionID && !sync.data.message[sessionID]?.length) void sync.session.sync(sessionID)
+  const sdk = useSDK()
+  const [childTurn, setChildTurn] = createSignal<TurnInfo>()
+  const [sourceUnavailable, setSourceUnavailable] = createSignal(false)
+  const sessionID = createMemo(
+    () =>
+      stringValue(props.metadata.childSessionId) ??
+      stringValue(props.metadata.sessionId) ??
+      stringValue(props.metadata.sessionID),
+  )
+  const turnID = createMemo(() => stringValue(props.metadata.childTurnId) ?? stringValue(props.metadata.childTurnID))
+  const terminalOutcome = createMemo(() => {
+    const value = stringValue(props.metadata.terminalOutcome)
+    if (value === "completed" || value === "failed" || value === "interrupted" || value === "exhausted") return value
+    const state = childTurn()?.state
+    if (state && state !== "running") return state
+    return undefined
   })
 
-  const sessionID = createMemo(() => stringValue(props.metadata.sessionId))
+  createEffect(() => {
+    const childSessionID = sessionID()
+    const childTurnID = turnID()
+    const childKnown = childSessionID ? Boolean(sync.session.get(childSessionID)) : false
+    setChildTurn(undefined)
+    setSourceUnavailable(false)
+    if (!childSessionID) return
+
+    void (async () => {
+      if (!childTurnID) {
+        if (!childKnown) await sync.session.sync(childSessionID).catch(() => {})
+        return
+      }
+
+      const response = await sdk.client.session.getTurn({ sessionID: childSessionID, turnID: childTurnID })
+      if (sessionID() !== childSessionID || turnID() !== childTurnID) return
+      if (isTurnSourceUnavailable(response.error)) {
+        setSourceUnavailable(true)
+        return
+      }
+      if (!response.data) return
+      setChildTurn(response.data)
+      await sync.session.sync(childSessionID).catch(async () => {
+        const replay = await sdk.client.session.getTurn({ sessionID: childSessionID, turnID: childTurnID })
+        if (sessionID() !== childSessionID || turnID() !== childTurnID) return
+        if (isTurnSourceUnavailable(replay.error)) {
+          setChildTurn(undefined)
+          setSourceUnavailable(true)
+        }
+      })
+    })().catch(() => {})
+  })
+
   const messages = createMemo(() => sync.data.message[sessionID() ?? ""] ?? [])
 
   const tools = createMemo(() => {
@@ -2157,11 +2129,9 @@ function Task(props: ToolProps) {
 
   const status = createMemo(() => sync.data.session_status[sessionID() ?? ""])
   const isRunning = createMemo(() => {
+    if (props.part.state.status !== "running") return false
     const value = status()
-    return (
-      props.part.state.status === "running" ||
-      (props.metadata.background === true && value !== undefined && value.type !== "idle")
-    )
+    return childTurn()?.state === "running" || Boolean(value && value.type !== "idle")
   })
   const retry = createMemo(() => {
     const value = status()
@@ -2180,11 +2150,7 @@ function Task(props: ToolProps) {
     const description = stringValue(props.input.description)
     if (!description) return ""
     let content = [
-      formatSubagentTitle(
-        Locale.titlecase(stringValue(props.input.subagent_type) ?? "General"),
-        description,
-        props.metadata.background === true,
-      ),
+      formatSubagentTitle(Locale.titlecase(stringValue(props.input.subagent_type) ?? "General"), description),
     ]
 
     const retrying = retry()
@@ -2199,7 +2165,16 @@ function Task(props: ToolProps) {
     }
 
     if (!isRunning() && props.part.state.status === "completed") {
-      content.push(`↳ ${formatCompletedSubagentDetail(tools().length, Locale.duration(duration()))}`)
+      content.push(
+        `↳ ${formatSubagentOutcome({
+          outcome: terminalOutcome(),
+          detail: sourceUnavailable()
+            ? undefined
+            : formatCompletedSubagentDetail(tools().length, Locale.duration(duration())),
+          incomplete: props.metadata.requestedOutputState === "incomplete",
+          sourceUnavailable: sourceUnavailable(),
+        })}`,
+      )
     }
 
     return content.join("\n")
@@ -2207,17 +2182,46 @@ function Task(props: ToolProps) {
 
   return (
     <InlineTool
-      icon={props.part.state.status === "completed" ? "✓" : "│"}
+      icon={
+        terminalOutcome() === "completed"
+          ? "✓"
+          : terminalOutcome() === "interrupted"
+            ? "○"
+            : terminalOutcome() === "failed" || terminalOutcome() === "exhausted"
+              ? "!"
+              : "│"
+      }
       separate={true}
-      color={retry() ? theme.error : undefined}
+      color={retry() || terminalOutcome() === "failed" || terminalOutcome() === "exhausted" ? theme.error : undefined}
       spinner={isRunning()}
       complete={stringValue(props.input.description)}
       pending="Delegating..."
       part={props.part}
       onClick={() => {
-        if (sessionID()) {
-          navigate({ type: "session", sessionID: sessionID()! })
+        if (sourceUnavailable()) {
+          void DialogAlert.show(
+            dialog,
+            "Child source unavailable",
+            `Child Session ${sessionID()} / Turn ${turnID()} was deleted. The parent result remains ${terminalOutcome() ?? "terminal"}.`,
+          )
+          return
         }
+        const childSessionID = sessionID()
+        const childTurnID = turnID()
+        if (childSessionID && childTurnID) {
+          void sdk.client.session.getTurn({ sessionID: childSessionID, turnID: childTurnID }).then((response) => {
+            if (isTurnSourceUnavailable(response.error)) {
+              setSourceUnavailable(true)
+              void DialogAlert.show(
+                dialog,
+                "Child source unavailable",
+                `Child Session ${childSessionID} / Turn ${childTurnID} was deleted. The parent result remains ${terminalOutcome() ?? "terminal"}.`,
+              )
+              return
+            }
+            navigate({ type: "session", sessionID: childSessionID })
+          })
+        } else if (childSessionID) navigate({ type: "session", sessionID: childSessionID })
         const status = retry()
         if (status) void DialogAlert.show(dialog, "Retry Error", status.message)
       }}
@@ -2231,8 +2235,28 @@ export function formatSubagentToolcalls(count: number) {
   return `${count} toolcall${count === 1 ? "" : "s"}`
 }
 
-export function formatSubagentTitle(agent: string, description: string, background: boolean) {
-  return `${agent} Task${background ? " (background)" : ""} — ${description}`
+function isTurnSourceUnavailable(value: unknown) {
+  return isRecord(value) && value._tag === "TurnSourceUnavailableError"
+}
+
+export function formatSubagentTitle(agent: string, description: string) {
+  return `${agent} Task — ${description}`
+}
+
+export function formatSubagentOutcome(input: {
+  outcome?: "completed" | "failed" | "interrupted" | "exhausted"
+  detail?: string
+  incomplete: boolean
+  sourceUnavailable: boolean
+}) {
+  return [
+    input.outcome ? Locale.titlecase(input.outcome) : "Finished",
+    input.incomplete ? "incomplete result" : undefined,
+    input.detail,
+    input.sourceUnavailable ? "source unavailable" : undefined,
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join(" · ")
 }
 
 export function formatSubagentRetry(attempt: number, message: string) {

@@ -7,6 +7,7 @@ import { Context, Effect, Layer, Scope, Semaphore } from "effect"
 import { win32 } from "path"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
+import { LearningFrontier } from "./learning-frontier"
 import { ContentRootNTFS } from "./content-root/ntfs"
 import {
   BindingEpisodeID,
@@ -374,9 +375,7 @@ export interface Interface {
     readonly relativePath: string
     readonly maxBytes?: number
   }) => Effect.Effect<ReadResult, Error>
-  readonly subscribeInvalidation: (
-    contentRootID: ContentRootID,
-  ) => Effect.Effect<AbortSignal, never, Scope.Scope>
+  readonly subscribeInvalidation: (contentRootID: ContentRootID) => Effect.Effect<AbortSignal, never, Scope.Scope>
   readonly proposeMutationGrant: (input: {
     readonly anchorPath: string
     readonly relativeScope: string
@@ -461,28 +460,28 @@ const layer = Layer.effect(
         for (const controller of invalidationSubscribers.get(contentRootID) ?? []) controller.abort()
       })
 
-    const subscribeInvalidation: Interface["subscribeInvalidation"] = Effect.fn(
-      "ContentRoot.subscribeInvalidation",
-    )(function* (contentRootID) {
-      const controller = yield* Effect.acquireRelease(
-        serialize.withPermit(
-          Effect.sync(() => {
-            const controller = new AbortController()
-            const subscribers = invalidationSubscribers.get(contentRootID) ?? new Set<AbortController>()
-            subscribers.add(controller)
-            invalidationSubscribers.set(contentRootID, subscribers)
-            return controller
-          }),
-        ),
-        (controller) =>
-          Effect.sync(() => {
-            const subscribers = invalidationSubscribers.get(contentRootID)
-            subscribers?.delete(controller)
-            if (subscribers?.size === 0) invalidationSubscribers.delete(contentRootID)
-          }),
-      )
-      return controller.signal
-    })
+    const subscribeInvalidation: Interface["subscribeInvalidation"] = Effect.fn("ContentRoot.subscribeInvalidation")(
+      function* (contentRootID) {
+        const controller = yield* Effect.acquireRelease(
+          serialize.withPermit(
+            Effect.sync(() => {
+              const controller = new AbortController()
+              const subscribers = invalidationSubscribers.get(contentRootID) ?? new Set<AbortController>()
+              subscribers.add(controller)
+              invalidationSubscribers.set(contentRootID, subscribers)
+              return controller
+            }),
+          ),
+          (controller) =>
+            Effect.sync(() => {
+              const subscribers = invalidationSubscribers.get(contentRootID)
+              subscribers?.delete(controller)
+              if (subscribers?.size === 0) invalidationSubscribers.delete(contentRootID)
+            }),
+        )
+        return controller.signal
+      },
+    )
 
     const propose: Interface["propose"] = Effect.fn("ContentRoot.propose")(function* (path) {
       return Proposal.inspected(yield* native(() => ContentRootNTFS.inspectDirectory(path)))
@@ -494,7 +493,10 @@ const layer = Layer.effect(
 
     const list: Interface["list"] = Effect.fn("ContentRoot.list")(function* () {
       const ids = yield* snapshot(db, (tx) =>
-        tx.select({ id: ContentRootTable.id }).from(ContentRootTable).orderBy(asc(ContentRootTable.time_created), asc(ContentRootTable.id)),
+        tx
+          .select({ id: ContentRootTable.id })
+          .from(ContentRootTable)
+          .orderBy(asc(ContentRootTable.time_created), asc(ContentRootTable.id)),
       )
       return yield* Effect.forEach(ids, (row) => get(row.id), { concurrency: 4 })
     })
@@ -513,10 +515,7 @@ const layer = Layer.effect(
       const stored = yield* serialize.withPermit(
         db
           .transaction((tx) => approveStored(tx, current, approval.basis))
-          .pipe(
-            Effect.catchTag("EffectDrizzleQueryError", Effect.die),
-            Effect.catchTag("SqlError", Effect.die),
-          ),
+          .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die), Effect.catchTag("SqlError", Effect.die)),
       )
       return yield* materialize(stored)
     })
@@ -527,10 +526,7 @@ const layer = Layer.effect(
         Effect.gen(function* () {
           const transition = yield* db
             .transaction((tx) => revokeStored(tx, input.contentRootID, input.expectedGrantVersion, basis))
-            .pipe(
-              Effect.catchTag("EffectDrizzleQueryError", Effect.die),
-              Effect.catchTag("SqlError", Effect.die),
-            )
+            .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die), Effect.catchTag("SqlError", Effect.die))
           if (transition.invalidated) yield* requestInvalidation(input.contentRootID)
           return transition.stored
         }),
@@ -567,10 +563,7 @@ const layer = Layer.effect(
                 basis: approval.basis,
               }),
             )
-            .pipe(
-              Effect.catchTag("EffectDrizzleQueryError", Effect.die),
-              Effect.catchTag("SqlError", Effect.die),
-            )
+            .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die), Effect.catchTag("SqlError", Effect.die))
           if (transition.invalidated) yield* requestInvalidation(input.contentRootID)
           return transition.stored
         }),
@@ -628,13 +621,7 @@ const layer = Layer.effect(
       const startedAt = Date.now()
       const budgets = resolveBudgets(input.budgets)
       const authorized = yield* authorize(input.contentRootID)
-      const inventory = yield* inventoryAuthorized(
-        authorized.stored,
-        authorized.grant,
-        input.scope,
-        budgets,
-        startedAt,
-      )
+      const inventory = yield* inventoryAuthorized(authorized.stored, authorized.grant, input.scope, budgets, startedAt)
       return yield* searchAuthorized(
         inventory,
         authorized.stored.binding.descriptor,
@@ -645,32 +632,36 @@ const layer = Layer.effect(
       )
     })
 
-    const proposeMutationGrant: Interface["proposeMutationGrant"] = Effect.fn(
-      "ContentRoot.proposeMutationGrant",
-    )(function* (input) {
-      if (input.rights.length === 0) {
-        return yield* new InvalidTransitionError({ detail: "A mutation grant must contain at least one exact right" })
-      }
-      const anchor = yield* native(() => ContentRootNTFS.inspectDirectory(input.anchorPath))
-      const relativeScope = ContentRootNTFS.normalizeRelativePath(input.relativeScope)
-      if (input.provenance) {
-        const root = yield* snapshot(db, (tx) => requireStoredRoot(tx, input.provenance!.contentRootID))
-        if (root.binding.id !== input.provenance.bindingID) {
-          return yield* new InvalidTransitionError({ detail: "Mutation provenance does not name the root's current binding" })
+    const proposeMutationGrant: Interface["proposeMutationGrant"] = Effect.fn("ContentRoot.proposeMutationGrant")(
+      function* (input) {
+        if (input.rights.length === 0) {
+          return yield* new InvalidTransitionError({ detail: "A mutation grant must contain at least one exact right" })
         }
-      }
-      return MutationProposal.inspected({
-        anchor,
-        relativeScope,
-        scopeKind: input.scopeKind,
-        rights: input.rights,
-        provenance: input.provenance,
-      })
-    })
+        const anchor = yield* native(() => ContentRootNTFS.inspectDirectory(input.anchorPath))
+        const relativeScope = ContentRootNTFS.normalizeRelativePath(input.relativeScope)
+        if (input.provenance) {
+          const root = yield* snapshot(db, (tx) => requireStoredRoot(tx, input.provenance!.contentRootID))
+          if (root.binding.id !== input.provenance.bindingID) {
+            return yield* new InvalidTransitionError({
+              detail: "Mutation provenance does not name the root's current binding",
+            })
+          }
+        }
+        return MutationProposal.inspected({
+          anchor,
+          relativeScope,
+          scopeKind: input.scopeKind,
+          rights: input.rights,
+          provenance: input.provenance,
+        })
+      },
+    )
 
     const getMutationGrant: Interface["getMutationGrant"] = Effect.fn("ContentRoot.getMutationGrant")(
       function* (mutationGrantID) {
-        return yield* materializeMutationGrant(yield* snapshot(db, (tx) => requireStoredMutationGrant(tx, mutationGrantID)))
+        return yield* materializeMutationGrant(
+          yield* snapshot(db, (tx) => requireStoredMutationGrant(tx, mutationGrantID)),
+        )
       },
     )
 
@@ -686,113 +677,129 @@ const layer = Layer.effect(
       },
     )
 
-    const approveMutationGrant: Interface["approveMutationGrant"] = Effect.fn(
-      "ContentRoot.approveMutationGrant",
-    )(function* (input) {
-      const proposal = yield* requireMutationProposal(input.proposal)
-      const approval = yield* requireApproval(input.approval, { kind: "mutation_grant", proposal })
-      const id = approval.mutationGrantIdentity(proposal)
-      if (!id) {
-        return yield* new InvalidTransitionError({ detail: "Mutation approval has no stable authority identity" })
-      }
-      const stored = yield* serialize.withPermit(
-        Effect.gen(function* () {
-          const existing = yield* db
-            .select()
-            .from(ContentMutationGrantTable)
-            .where(eq(ContentMutationGrantTable.id, id))
-            .get()
-            .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die))
-          if (existing) return mutationGrantInfo(existing)
+    const approveMutationGrant: Interface["approveMutationGrant"] = Effect.fn("ContentRoot.approveMutationGrant")(
+      function* (input) {
+        const proposal = yield* requireMutationProposal(input.proposal)
+        const approval = yield* requireApproval(input.approval, { kind: "mutation_grant", proposal })
+        const id = approval.mutationGrantIdentity(proposal)
+        if (!id) {
+          return yield* new InvalidTransitionError({ detail: "Mutation approval has no stable authority identity" })
+        }
+        const stored = yield* serialize.withPermit(
+          Effect.gen(function* () {
+            const existing = yield* snapshot(db, (tx) =>
+              tx.select().from(ContentMutationGrantTable).where(eq(ContentMutationGrantTable.id, id)).get(),
+            )
+            if (existing) return mutationGrantInfo(existing)
 
-          const current = yield* native(() => ContentRootNTFS.inspectDirectory(proposal.anchor.canonicalPath))
-          if (!ContentRootNTFS.sameObject(proposal.anchor, current)) {
-            return yield* new PathError({
-              path: proposal.anchor.canonicalPath,
-              reason: "stale",
-              detail: "The mutation anchor changed after the grant was displayed",
-            })
-          }
-          const time = Date.now()
-          yield* db
-            .insert(ContentMutationGrantTable)
-            .values({
-              id,
-              canonical_anchor_path: current.canonicalPath,
-              canonical_anchor_path_key: current.canonicalPathKey,
-              platform: current.platform,
-              volume_serial: current.volumeSerial,
-              object_id: current.objectID,
-              creation_time: current.creationTime,
-              initial_change_time: current.changeTime,
-              verifier_version: current.verifierVersion,
-              relative_scope: proposal.relativeScope,
-              scope_kind: proposal.scopeKind,
-              allow_create: proposal.rights.includes("create"),
-              allow_modify: proposal.rights.includes("modify"),
-              allow_delete: proposal.rights.includes("delete"),
-              allow_rename_source: proposal.rights.includes("rename_source"),
-              allow_rename_destination: proposal.rights.includes("rename_destination"),
-              version: 1,
-              disposition: "active",
-              approval_basis: approval.basis,
-              time_approved: time,
-              time_updated: time,
-              provenance_content_root_id: proposal.provenance?.contentRootID,
-              provenance_binding_id: proposal.provenance?.bindingID,
-            })
-            .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die))
-          return yield* snapshot(db, (tx) => requireStoredMutationGrant(tx, id))
-        }),
-      )
-      return yield* materializeMutationGrant(stored)
-    })
-
-    const revokeMutationGrant: Interface["revokeMutationGrant"] = Effect.fn(
-      "ContentRoot.revokeMutationGrant",
-    )(function* (input) {
-      const basis = requireBasis(input.basis)
-      const current = yield* snapshot(db, (tx) => requireStoredMutationGrant(tx, input.mutationGrantID))
-      if (current.version !== input.expectedVersion) {
-        return yield* new ConflictError({
-          entity: "mutation_grant",
-          id: current.id,
-          detail: "Mutation grant version changed",
-          expectedVersion: input.expectedVersion,
-          currentVersion: current.version,
-        })
-      }
-      if (current.disposition === "revoked") return yield* materializeMutationGrant(current)
-      const time = Date.now()
-      const updated = yield* db
-        .update(ContentMutationGrantTable)
-        .set({
-          disposition: "revoked",
-          version: current.version + 1,
-          revocation_basis: basis,
-          time_revoked: time,
-          time_updated: time,
-        })
-        .where(
-          and(
-            eq(ContentMutationGrantTable.id, current.id),
-            eq(ContentMutationGrantTable.version, input.expectedVersion),
-            eq(ContentMutationGrantTable.disposition, "active"),
-          ),
+            const current = yield* native(() => ContentRootNTFS.inspectDirectory(proposal.anchor.canonicalPath))
+            if (!ContentRootNTFS.sameObject(proposal.anchor, current)) {
+              return yield* new PathError({
+                path: proposal.anchor.canonicalPath,
+                reason: "stale",
+                detail: "The mutation anchor changed after the grant was displayed",
+              })
+            }
+            const time = Date.now()
+            return yield* db
+              .transaction((tx) =>
+                Effect.gen(function* () {
+                  const replay = yield* tx
+                    .select()
+                    .from(ContentMutationGrantTable)
+                    .where(eq(ContentMutationGrantTable.id, id))
+                    .get()
+                  if (replay) return mutationGrantInfo(replay)
+                  yield* tx.insert(ContentMutationGrantTable).values({
+                    id,
+                    canonical_anchor_path: current.canonicalPath,
+                    canonical_anchor_path_key: current.canonicalPathKey,
+                    platform: current.platform,
+                    volume_serial: current.volumeSerial,
+                    object_id: current.objectID,
+                    creation_time: current.creationTime,
+                    initial_change_time: current.changeTime,
+                    verifier_version: current.verifierVersion,
+                    relative_scope: proposal.relativeScope,
+                    scope_kind: proposal.scopeKind,
+                    allow_create: proposal.rights.includes("create"),
+                    allow_modify: proposal.rights.includes("modify"),
+                    allow_delete: proposal.rights.includes("delete"),
+                    allow_rename_source: proposal.rights.includes("rename_source"),
+                    allow_rename_destination: proposal.rights.includes("rename_destination"),
+                    version: 1,
+                    disposition: "active",
+                    approval_basis: approval.basis,
+                    time_approved: time,
+                    time_updated: time,
+                    provenance_content_root_id: proposal.provenance?.contentRootID,
+                    provenance_binding_id: proposal.provenance?.bindingID,
+                  })
+                  yield* LearningFrontier.advance(tx, { time })
+                  return yield* requireStoredMutationGrant(tx, id)
+                }),
+              )
+              .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die), Effect.catchTag("SqlError", Effect.die))
+          }),
         )
-        .returning({ id: ContentMutationGrantTable.id })
-        .get()
-        .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die))
-      if (!updated) {
-        return yield* new ConflictError({
-          entity: "mutation_grant",
-          id: current.id,
-          detail: "Mutation grant changed concurrently",
-          expectedVersion: input.expectedVersion,
-        })
-      }
-      return yield* getMutationGrant(current.id)
-    })
+        return yield* materializeMutationGrant(stored)
+      },
+    )
+
+    const revokeMutationGrant: Interface["revokeMutationGrant"] = Effect.fn("ContentRoot.revokeMutationGrant")(
+      function* (input) {
+        const basis = requireBasis(input.basis)
+        const stored = yield* serialize.withPermit(
+          db
+            .transaction((tx) =>
+              Effect.gen(function* () {
+                const current = yield* requireStoredMutationGrant(tx, input.mutationGrantID)
+                if (current.version !== input.expectedVersion) {
+                  return yield* new ConflictError({
+                    entity: "mutation_grant",
+                    id: current.id,
+                    detail: "Mutation grant version changed",
+                    expectedVersion: input.expectedVersion,
+                    currentVersion: current.version,
+                  })
+                }
+                if (current.disposition === "revoked") return current
+                const time = Date.now()
+                const updated = yield* tx
+                  .update(ContentMutationGrantTable)
+                  .set({
+                    disposition: "revoked",
+                    version: current.version + 1,
+                    revocation_basis: basis,
+                    time_revoked: time,
+                    time_updated: time,
+                  })
+                  .where(
+                    and(
+                      eq(ContentMutationGrantTable.id, current.id),
+                      eq(ContentMutationGrantTable.version, input.expectedVersion),
+                      eq(ContentMutationGrantTable.disposition, "active"),
+                    ),
+                  )
+                  .returning({ id: ContentMutationGrantTable.id })
+                  .get()
+                if (!updated) {
+                  return yield* new ConflictError({
+                    entity: "mutation_grant",
+                    id: current.id,
+                    detail: "Mutation grant changed concurrently",
+                    expectedVersion: input.expectedVersion,
+                  })
+                }
+                yield* LearningFrontier.advance(tx, { time })
+                return yield* requireStoredMutationGrant(tx, current.id)
+              }),
+            )
+            .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die), Effect.catchTag("SqlError", Effect.die)),
+        )
+        return yield* materializeMutationGrant(stored)
+      },
+    )
 
     const authorizeMutation: Interface["authorizeMutation"] = Effect.fn("ContentRoot.authorizeMutation")(
       function* (input) {
@@ -831,9 +838,7 @@ const layer = Layer.effect(
       },
     )
 
-    const authorizeRename: Interface["authorizeRename"] = Effect.fn("ContentRoot.authorizeRename")(function* (
-      input,
-    ) {
+    const authorizeRename: Interface["authorizeRename"] = Effect.fn("ContentRoot.authorizeRename")(function* (input) {
       const source = yield* authorizeMutation({ ...input.source, right: "rename_source" })
       const destination = yield* authorizeMutation({ ...input.destination, right: "rename_destination" })
       return {
@@ -881,7 +886,9 @@ const layer = Layer.effect(
 
     const writeOnce: Interface["writeOnce"] = Effect.fn("ContentRoot.writeOnce")(function* (input) {
       if (!(input.proposal instanceof OnceMutationProposal) || !(input.approval instanceof OnceMutationApproval)) {
-        return yield* new InvalidTransitionError({ detail: "A mediated one-shot write requires an exact runtime proposal" })
+        return yield* new InvalidTransitionError({
+          detail: "A mediated one-shot write requires an exact runtime proposal",
+        })
       }
       if (!input.approval.consume(input.proposal)) {
         return yield* new InvalidTransitionError({ detail: "The one-shot mutation grant is stale or already consumed" })
@@ -969,10 +976,9 @@ function snapshot<A, E, R>(
   database: DatabaseShape,
   read: (tx: Transaction) => Effect.Effect<A, E | EffectDrizzleQueryError, R>,
 ) {
-  return database.transaction(read).pipe(
-    Effect.catchTag("EffectDrizzleQueryError", Effect.die),
-    Effect.catchTag("SqlError", Effect.die),
-  )
+  return database
+    .transaction(read)
+    .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die), Effect.catchTag("SqlError", Effect.die))
 }
 
 function native<A>(run: () => Promise<A>) {
@@ -987,7 +993,9 @@ function native<A>(run: () => Promise<A>) {
 
 function requireProposal(input: Proposal) {
   if (input instanceof Proposal) return Effect.succeed(input)
-  return Effect.fail(new InvalidTransitionError({ detail: "ContentRoot approval requires a runtime-inspected proposal" }))
+  return Effect.fail(
+    new InvalidTransitionError({ detail: "ContentRoot approval requires a runtime-inspected proposal" }),
+  )
 }
 
 function requireMutationProposal(input: MutationProposal) {
@@ -998,13 +1006,16 @@ function requireMutationProposal(input: MutationProposal) {
 function requireApproval(input: LearnerApproval, target: LearnerApprovalTarget) {
   if (input instanceof LearnerApproval && input.authorizes(target)) return Effect.succeed(input)
   return Effect.fail(
-    new InvalidTransitionError({ detail: "The system-owned learner confirmation does not match this exact authority request" }),
+    new InvalidTransitionError({
+      detail: "The system-owned learner confirmation does not match this exact authority request",
+    }),
   )
 }
 
 function requireBasis(input: string) {
   const value = input.trim()
-  if (!value || value.length > 4096) throw new InvalidTransitionError({ detail: "Approval basis must be 1-4096 characters" })
+  if (!value || value.length > 4096)
+    throw new InvalidTransitionError({ detail: "Approval basis must be 1-4096 characters" })
   return value
 }
 
@@ -1071,7 +1082,8 @@ const requireStoredRoot = Effect.fn("ContentRoot.requireStoredRoot")(function* (
     .from(ContentRootCurrentTable)
     .where(eq(ContentRootCurrentTable.content_root_id, contentRootID))
     .get()
-  if (!current) return yield* new InvalidTransitionError({ detail: `ContentRoot ${contentRootID} has no current projection` })
+  if (!current)
+    return yield* new InvalidTransitionError({ detail: `ContentRoot ${contentRootID} has no current projection` })
   const binding = yield* query
     .select()
     .from(ContentRootBindingTable)
@@ -1083,7 +1095,9 @@ const requireStoredRoot = Effect.fn("ContentRoot.requireStoredRoot")(function* (
     .where(eq(ContentRootBindingEpisodeTable.id, current.binding_episode_id))
     .get()
   if (!binding || !bindingEpisode) {
-    return yield* new InvalidTransitionError({ detail: `ContentRoot ${contentRootID} has an incomplete current binding` })
+    return yield* new InvalidTransitionError({
+      detail: `ContentRoot ${contentRootID} has an incomplete current binding`,
+    })
   }
   const grant = current.grant_episode_id
     ? yield* query
@@ -1179,6 +1193,7 @@ const approveStored = Effect.fn("ContentRoot.approveStored")(function* (
     disposition: "active",
     time_updated: time,
   })
+  yield* LearningFrontier.advance(tx, { time })
   return yield* requireStoredRoot(tx, contentRootID)
 })
 
@@ -1204,6 +1219,7 @@ const appendGrant = Effect.fn("ContentRoot.appendGrant")(function* (
     .update(ContentRootCurrentTable)
     .set({ grant_episode_id: id, disposition: "active", time_updated: time })
     .where(eq(ContentRootCurrentTable.content_root_id, current.id))
+  yield* LearningFrontier.advance(tx, { time })
   return yield* requireStoredRoot(tx, current.id)
 })
 
@@ -1253,6 +1269,7 @@ const revokeStored = Effect.fn("ContentRoot.revokeStored")(function* (
         eq(ContentRootCurrentTable.grant_episode_id, current.grant.id),
       ),
     )
+  yield* LearningFrontier.advance(tx, { time })
   return { stored: yield* requireStoredRoot(tx, contentRootID), invalidated: true }
 })
 
@@ -1356,6 +1373,7 @@ const rebindStored = Effect.fn("ContentRoot.rebindStored")(function* (
       time_updated: time,
     })
     .where(eq(ContentRootCurrentTable.content_root_id, current.id))
+  yield* LearningFrontier.advance(tx, { time })
   return { stored: yield* requireStoredRoot(tx, current.id), invalidated: true }
 })
 
@@ -1497,7 +1515,8 @@ function inventoryAuthorized(
   startedAt = Date.now(),
 ) {
   return Effect.gen(function* () {
-    const scope = !requestedScope || requestedScope === "." ? "." : ContentRootNTFS.normalizeRelativePath(requestedScope)
+    const scope =
+      !requestedScope || requestedScope === "." ? "." : ContentRootNTFS.normalizeRelativePath(requestedScope)
     const queue = [{ path: scope, depth: 0 }]
     const entries: InventoryEntry[] = []
     const frontier: string[] = []
@@ -1612,7 +1631,8 @@ function inventoryEntry(
   maxFileBytes = DEFAULT_BUDGETS.maxFileBytes,
 ) {
   const mediaType = descriptor.kind === "file" ? ContentRootNTFS.detectMediaType(relativePath) : undefined
-  const supported = descriptor.kind === "directory" || (mediaType !== "application/octet-stream" && descriptor.size <= maxFileBytes)
+  const supported =
+    descriptor.kind === "directory" || (mediaType !== "application/octet-stream" && descriptor.size <= maxFileBytes)
   return {
     key: candidateKey({
       contentRootID: stored.id,
@@ -1639,7 +1659,12 @@ function searchAuthorized(
   startedAt: number,
 ) {
   return Effect.gen(function* () {
-    if (!Number.isSafeInteger(maxMatches) || maxMatches < 1 || !Number.isSafeInteger(maxContextBytes) || maxContextBytes < 1) {
+    if (
+      !Number.isSafeInteger(maxMatches) ||
+      maxMatches < 1 ||
+      !Number.isSafeInteger(maxContextBytes) ||
+      maxContextBytes < 1
+    ) {
       return yield* new InvalidTransitionError({ detail: "Search limits must be positive safe integers" })
     }
     const matches: SearchResult["matches"] = []

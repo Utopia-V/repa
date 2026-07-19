@@ -18,7 +18,9 @@ import { Provider } from "@/provider/provider"
 import { MessageID, SessionID } from "@/session/schema"
 import { RepresentationModel } from "@/session/representation-model"
 import { Session } from "@/session/session"
+import { EventV2Bridge } from "@/event-v2-bridge"
 import { TestInstance } from "../fixture/fixture"
+import { materializeTestSession } from "../fixture/session"
 import { ProviderTest } from "../fake/provider"
 import { pollWithTimeout, testEffect } from "../lib/effect"
 
@@ -140,6 +142,7 @@ const root = LayerNode.group([
   Plugin.node,
   Provider.node,
   Database.node,
+  EventV2Bridge.node,
   SessionProjector.node,
 ])
 const it = testEffect(
@@ -328,11 +331,7 @@ openaiIt.instance(
     Effect.gen(function* () {
       yield* TestInstance
       yield* Scope.Scope
-      openaiLanguage = responseLanguage(
-        textParts(validText(), "stop", Number.NaN),
-        OPENAI_PROVIDER_ID,
-        OPENAI_MODEL_ID,
-      )
+      openaiLanguage = responseLanguage(textParts(validText(), "stop", Number.NaN), OPENAI_PROVIDER_ID, OPENAI_MODEL_ID)
       const result = yield* Effect.result(RepresentationModel.sample(yield* admittedInput()))
 
       expect(Result.isFailure(result) && result.failure).toMatchObject({
@@ -619,37 +618,27 @@ function reset(parts: LanguageModelV3StreamPart[] | "hang") {
 }
 
 const admittedInput = Effect.fn("Test.admittedRepresentationInput")(function* () {
-  const sessions = yield* Session.Service
-  const session = yield* sessions.create({ title: "Representation test" })
-  const messageID = MessageID.ascending()
-  yield* sessions.updateMessage({
-    id: messageID,
-    sessionID: session.id,
-    role: "user",
-    time: { created: Date.now() },
+  const seeded = yield* materializeTestSession({
+    title: "Representation test",
     agent: "attacker-agent",
     model: {
       providerID: ProviderV2.ID.make("attacker-provider"),
       modelID: ModelV2.ID.make("attacker-model"),
       variant: "attacker-variant",
     },
-    system: "ATTACKER_SYSTEM",
-  } satisfies SessionV1.User)
+    text: "representation input",
+  })
   const bytes = new TextEncoder().encode("%PDF-1.7 fake fixture")
   return {
-    sessionID: session.id,
-    messageID,
+    sessionID: seeded.info.id,
+    messageID: seeded.user.id,
     bytes,
     mediaType: "application/pdf" as const,
     attestation: attest(bytes),
   }
 })
 
-function responseLanguage(
-  parts: LanguageModelV3StreamPart[] | "hang",
-  providerID = PROVIDER_ID,
-  modelID = MODEL_ID,
-) {
+function responseLanguage(parts: LanguageModelV3StreamPart[] | "hang", providerID = PROVIDER_ID, modelID = MODEL_ID) {
   return new MockLanguageModelV3({
     provider: providerID,
     modelId: modelID,

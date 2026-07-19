@@ -18,6 +18,7 @@
 import type { Event, GlobalEvent, OpencodeClient } from "@opencode-ai/sdk/v2"
 import { Context, Deferred, Effect, Exit, Layer, Scope, Stream } from "effect"
 import { makeRuntime } from "@/effect/run-service"
+import { Identifier } from "@opencode-ai/core/id/id"
 import {
   blockerStatus,
   bootstrapSessionData,
@@ -70,6 +71,7 @@ type StreamInput = {
   sdk: OpencodeClient
   directory?: string
   sessionID: string
+  start?: RunInput["start"]
   thinking: boolean
   replay?: boolean
   replayLimit?: number
@@ -121,6 +123,22 @@ type State = {
   blockerTick: number
   selectedSubagent?: string
   blockers: Map<string, number>
+  start?: RunInput["start"]
+}
+
+export function expandCommandTemplate(template: string, argumentsText: string) {
+  const args = argumentsText.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((arg) => arg.replace(/^"|"$/g, "")) ?? []
+  const placeholders = template.match(/\$\d+/g) ?? []
+  const last = Math.max(0, ...placeholders.map((item) => Number(item.slice(1))))
+  const expanded = template.replace(/\$(\d+)/g, (_, value: string) => {
+    const position = Number(value)
+    if (position === last) return args.slice(position - 1).join(" ")
+    return args[position - 1] ?? ""
+  })
+  const usesArguments = template.includes("$ARGUMENTS")
+  const result = expanded.replaceAll("$ARGUMENTS", argumentsText)
+  if (placeholders.length > 0 || usesArguments || !argumentsText.trim()) return result.trim()
+  return `${result}\n\n${argumentsText}`.trim()
 }
 
 type TransportService = {
@@ -450,6 +468,7 @@ function createLayer(input: StreamInput) {
           footerView: { type: "prompt" },
           blockerTick: 0,
           blockers: new Map(),
+          start: input.start,
         }
         let booting = true
         let replaying = false
@@ -1217,19 +1236,32 @@ function createLayer(input: StreamInput) {
           abort.signal.addEventListener("abort", stop, { once: true })
           yield* poll(item, turn.signal).pipe(Effect.forkIn(scope, { startImmediately: true }), Effect.asVoid)
 
-          const req = {
-            sessionID: input.sessionID,
-            messageID: next.prompt.messageID,
-            agent: next.agent,
-            model: next.model,
-            variant: next.variant,
-            parts: [
-              ...(next.includeFiles ? next.files : []),
-              { type: "text" as const, text: next.prompt.text },
-              ...next.prompt.parts,
-            ],
+          const turnID = next.prompt.turnID ?? Identifier.create("trn", "ascending")
+          const inputID = next.prompt.inputID ?? Identifier.create("tri", "ascending")
+          const messageID = next.prompt.messageID ?? Identifier.ascending("message")
+          const interrupt = () => {
+            void input.sdk.session.interruptTurn({ sessionID: input.sessionID, turnID }).catch(() => {})
           }
+          turn.signal.addEventListener("abort", interrupt, { once: true })
           const command = next.prompt.command
+          const parts = yield* command
+            ? Effect.promise(async () => {
+                const listed = await input.sdk.command.list({ directory: input.directory }, { throwOnError: true })
+                const resolved = listed.data?.find((item) => item.name === command.name)
+                if (!resolved) throw new Error(`Command not found: ${command.name}`)
+                return [
+                  ...(next.includeFiles ? next.files : []),
+                  { type: "text" as const, text: expandCommandTemplate(resolved.template, command.arguments) },
+                  ...next.prompt.parts.filter(
+                    (item): item is Extract<RunPromptPart, { type: "file" }> => item.type === "file",
+                  ),
+                ]
+              })
+            : Effect.succeed([
+                ...(next.includeFiles ? next.files : []),
+                { type: "text" as const, text: next.prompt.text },
+                ...next.prompt.parts,
+              ])
           const send =
             next.prompt.mode === "shell"
               ? Effect.sync(() => {
@@ -1272,67 +1304,41 @@ function createLayer(input: StreamInput) {
                       ),
                   ),
                 )
-              : command
-                ? Effect.sync(() => {
-                    input.trace?.write("send.command", { sessionID: input.sessionID, command: command.name })
-                  }).pipe(
-                    Effect.andThen(
-                      Effect.promise(() =>
-                        input.sdk.session.command(
-                          {
-                            sessionID: input.sessionID,
-                            messageID: next.prompt.messageID,
-                            agent: next.agent,
-                            model: next.model ? `${next.model.providerID}/${next.model.modelID}` : undefined,
-                            variant: next.variant,
-                            command: command.name,
-                            arguments: command.arguments,
-                            parts: [
-                              ...(next.includeFiles ? next.files : []),
-                              ...next.prompt.parts.filter(
-                                (item): item is Extract<RunPromptPart, { type: "file" }> => item.type === "file",
-                              ),
-                            ],
-                          },
-                          { signal: turn.signal },
-                        ),
-                      ).pipe(
-                        Effect.tap(() =>
-                          Effect.sync(() => {
-                            input.trace?.write("send.command.ok", {
-                              sessionID: input.sessionID,
-                              command: command.name,
-                            })
-                            item.armed = true
-                            item.live = true
-                          }),
-                        ),
-                        Effect.flatMap(() => Deferred.succeed(item.done, undefined).pipe(Effect.ignore)),
-                        Effect.catch((error) => Deferred.fail(item.done, error).pipe(Effect.ignore)),
-                        Effect.forkIn(scope, { startImmediately: true }),
-                        Effect.asVoid,
-                      ),
-                    ),
-                  )
-                : Effect.sync(() => {
-                    input.trace?.write("send.prompt", req)
-                  }).pipe(
-                    Effect.andThen(
-                      Effect.promise(() =>
-                        input.sdk.session.promptAsync(req, {
-                          signal: turn.signal,
-                        }),
-                      ),
-                    ),
-                    Effect.tap(() =>
-                      Effect.sync(() => {
-                        input.trace?.write("send.prompt.ok", {
+              : Effect.sync(() => {
+                  input.trace?.write(command ? "send.command" : "send.start", {
+                    sessionID: input.sessionID,
+                    turnID,
+                    ...(command ? { command: command.name } : {}),
+                  })
+                }).pipe(
+                  Effect.andThen(
+                    Effect.promise(() =>
+                      input.sdk.session.start(
+                        {
                           sessionID: input.sessionID,
-                        })
-                        item.armed = true
-                      }),
+                          turnID,
+                          inputID,
+                          messageID,
+                          agent: next.agent,
+                          model: next.model,
+                          variant: next.variant,
+                          parts,
+                          session: state.start?.session,
+                          fork: state.start?.fork,
+                        },
+                        { signal: turn.signal, throwOnError: true },
+                      ),
                     ),
-                  )
+                  ),
+                  Effect.tap(() =>
+                    Effect.sync(() => {
+                      state.start = undefined
+                      input.trace?.write("send.start.ok", { sessionID: input.sessionID, turnID })
+                      item.armed = true
+                      item.live = true
+                    }),
+                  ),
+                )
 
           yield* send.pipe(
             Effect.flatMap(() => {

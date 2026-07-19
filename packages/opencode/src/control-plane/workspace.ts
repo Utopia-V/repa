@@ -582,7 +582,10 @@ const layer = Layer.effect(
                 ),
               )
             } else {
-              yield* prompt.cancel(input.sessionID)
+              yield* Effect.gen(function* () {
+                const active = yield* prompt.activeTurn(input.sessionID)
+                if (active) yield* prompt.interruptTurn(input.sessionID, active.id)
+              }).pipe(Effect.mapError(() => new Session.BusyError({ sessionID: input.sessionID })))
             }
 
             // "claim" this session so any future events coming from
@@ -794,7 +797,12 @@ const layer = Layer.effect(
       yield* Effect.forEach(
         sessions.filter((sessionInfo) => !sessionInfo.parentID || !sessionIDs.has(sessionInfo.parentID)),
         (sessionInfo) =>
-          session.remove(sessionInfo.id).pipe(Effect.catchIf(NotFoundError.isInstance, () => Effect.void)),
+          session.remove(sessionInfo.id).pipe(
+            Effect.catchIf(NotFoundError.isInstance, () => Effect.void),
+            Effect.catchTag("SessionTreeBusyError", (error) =>
+              Effect.fail(new Session.BusyError({ sessionID: error.sessionID })),
+            ),
+          ),
         { discard: true },
       )
 

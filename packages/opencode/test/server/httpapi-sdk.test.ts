@@ -1,7 +1,7 @@
 import { afterEach, describe, expect } from "bun:test"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
-import { Deferred, Effect, Layer } from "effect"
+import { Deferred, Effect, Fiber, Layer } from "effect"
 import type * as Scope from "effect/Scope"
 import { HttpServer } from "effect/unstable/http"
 import { ChildProcessSpawner } from "effect/unstable/process"
@@ -23,11 +23,12 @@ import { errorMessage } from "../../src/util/error"
 import { TestLLMServer } from "../lib/llm-server"
 import path from "path"
 import { resetDatabase } from "../fixture/db"
-import { disposeAllInstances, TestInstance, tmpdirScoped } from "../fixture/fixture"
+import { disposeAllInstances, provideMachineConfig, TestInstance, tmpdirScoped } from "../fixture/fixture"
 import { awaitWithTimeout, pollWithTimeout, testEffect } from "../lib/effect"
 import { testProviderConfig } from "../lib/test-provider"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { Turn } from "@opencode-ai/schema/turn"
 import { Database } from "@opencode-ai/core/database/database"
 import { httpApiLayer } from "./httpapi-layer"
 
@@ -58,6 +59,44 @@ type TestServices =
   | SessionNs.Service
   | HttpServer.HttpServer
 type TestScope = Scope.Scope | TestServices
+
+function startSession(
+  sdk: Sdk,
+  input?: {
+    title?: string
+    parentID?: string
+    permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }>
+    model?: { providerID: string; modelID: string }
+    text?: string
+    limits?: { model: number; tool: number }
+  },
+) {
+  const sessionID = SessionID.create()
+  const turnID = Turn.ID.create()
+  const inputID = Turn.InputID.create()
+  const messageID = MessageID.ascending()
+  return {
+    sessionID,
+    turnID,
+    inputID,
+    messageID,
+    request: () =>
+      sdk.session.start({
+        sessionID,
+        turnID,
+        inputID,
+        messageID,
+        model: input?.model ?? { providerID: "test", modelID: "test-model" },
+        limits: input?.limits ?? { model: 0, tool: 0 },
+        session: {
+          title: input?.title,
+          parentID: input?.parentID,
+          permission: input?.permission,
+        },
+        parts: [{ type: "text", text: input?.text ?? "SDK test admission" }],
+      }),
+  }
+}
 
 function client(
   serverPath: ServerPath,
@@ -254,7 +293,10 @@ function withStandardProject<A, E>(
 function withFakeLlm<A, E>(serverPath: ServerPath, run: (input: LlmProjectFixture) => Effect.Effect<A, E, TestScope>) {
   return Effect.gen(function* () {
     const llm = yield* TestLLMServer
-    return yield* withProject(serverPath, { config: testProviderConfig(llm.url) }, (input) => run({ ...input, llm }))
+    return yield* provideMachineConfig(
+      testProviderConfig(llm.url),
+      withProject(serverPath, {}, (input) => run({ ...input, llm })),
+    )
   }).pipe(Effect.provide(TestLLMServer.layer))
 }
 
@@ -265,13 +307,15 @@ function withFakeLlmProject<A, E>(
 ) {
   return Effect.gen(function* () {
     const llm = yield* TestLLMServer
-    return yield* withProject(
-      serverPath,
-      {
-        config: testProviderConfig(llm.url),
-        setup: options.setup,
-      },
-      (input) => run({ ...input, llm }),
+    return yield* provideMachineConfig(
+      testProviderConfig(llm.url),
+      withProject(
+        serverPath,
+        {
+          setup: options.setup,
+        },
+        (input) => run({ ...input, llm }),
+      ),
     )
   }).pipe(Effect.provide(TestLLMServer.layer))
 }
@@ -362,15 +406,16 @@ describe("HttpApi SDK", () => {
     ({ sdk }) =>
       Effect.gen(function* () {
         const file = yield* call(() => sdk.file.read({ path: "hello.txt" }))
-        const session = yield* call(() => sdk.session.create({ title: "sdk" }))
+        const started = startSession(sdk, { title: "sdk" })
+        const session = yield* call(started.request)
         const listed = yield* call(() => sdk.session.list({ roots: true, limit: 10 }))
 
         expect(file.response.status).toBe(200)
         expect(file.data).toMatchObject({ content: "hello" })
-        expect(session.response.status).toBe(200)
-        expect(session.data).toMatchObject({ title: "sdk" })
+        expect(session.response.status, JSON.stringify(session.error)).toBe(200)
+        expect(session.data).toMatchObject({ sessionID: started.sessionID })
         expect(listed.response.status).toBe(200)
-        expect(listed.data?.map((item) => item.id)).toContain(session.data?.id)
+        expect(listed.data?.map((item) => item.id)).toContain(started.sessionID)
 
         yield* Effect.all([
           expectStatus(() => sdk.project.current(), 200),
@@ -397,20 +442,12 @@ describe("HttpApi SDK", () => {
           ),
           "SDK file search index was not ready",
         )
-        const retiredCreateInput = {
-          location: { directory, workspaceID: "wrk_retired" },
-        }
-        const created = yield* call(() => sdk.v2.session.create(retiredCreateInput))
         const findRequest = requests.findLast((request) => new URL(request.url).pathname === "/api/fs/find")
-        const createRequest = requests.findLast(
-          (request) => request.method === "POST" && new URL(request.url).pathname === "/api/session",
-        )
         const url = new URL(findRequest!.url)
 
         expect(configIsDirectoryOnly).toBe(true)
         expect(found.response.status).toBe(200)
         expect(found.data).toMatchObject({ data: [{ path: "hello.txt", type: "file" }] })
-        expect(created.data?.data.location).toEqual({ directory })
         expect(url.searchParams.get("directory")).toBe(directory)
         expect(url.searchParams.get("location[directory]")).toBe(directory)
         expect(findRequest!.headers.has("x-opencode-directory")).toBe(false)
@@ -418,12 +455,10 @@ describe("HttpApi SDK", () => {
           workspace: url.searchParams.get("workspace"),
           locationWorkspace: url.searchParams.get("location[workspace]"),
           findWorkspaceHeader: findRequest!.headers.has("x-opencode-workspace"),
-          createWorkspaceHeader: createRequest!.headers.has("x-opencode-workspace"),
         }).toEqual({
           workspace: null,
           locationWorkspace: null,
           findWorkspaceHeader: false,
-          createWorkspaceHeader: false,
         })
       }),
     ),
@@ -589,10 +624,12 @@ describe("HttpApi SDK", () => {
   serverPathParity("matches generated SDK session lifecycle routes", (serverPath) =>
     withStandardProject(serverPath, ({ sdk }) =>
       Effect.gen(function* () {
-        const parent = yield* capture(() => sdk.session.create({ title: "parent" }))
-        const parentID = String(record(parent.data).id)
-        const child = yield* capture(() => sdk.session.create({ title: "child", parentID }))
-        const childID = String(record(child.data).id)
+        const parentStart = startSession(sdk, { title: "parent" })
+        const parent = yield* capture(parentStart.request)
+        const parentID = parentStart.sessionID
+        const childStart = startSession(sdk, { title: "child", parentID })
+        const child = yield* capture(childStart.request)
+        const childID = childStart.sessionID
         const get = yield* capture(() => sdk.session.get({ sessionID: parentID }))
         const update = yield* capture(() => sdk.session.update({ sessionID: parentID, title: "renamed" }))
         const roots = yield* capture(() => sdk.session.list({ roots: true, limit: 10 }))
@@ -642,8 +679,9 @@ describe("HttpApi SDK", () => {
   serverPathParity("matches generated SDK session message and part routes", (serverPath) =>
     withStandardProject(serverPath, ({ sdk, directory }) =>
       Effect.gen(function* () {
-        const session = yield* capture(() => sdk.session.create({ title: "messages" }))
-        const sessionID = String(record(session.data).id)
+        const start = startSession(sdk, { title: "messages" })
+        const session = yield* capture(start.request)
+        const sessionID = start.sessionID
         const seeded = yield* seedMessage(directory, sessionID)
         const list = yield* capture(() => sdk.session.messages({ sessionID }))
         const page = yield* capture(() => sdk.session.messages({ sessionID, limit: 1 }))
@@ -700,8 +738,9 @@ describe("HttpApi SDK", () => {
   serverPathParity("streams sync-backed part updates to /event subscribers", (serverPath) =>
     withStandardProject(serverPath, ({ sdk, directory }) =>
       Effect.gen(function* () {
-        const session = yield* capture(() => sdk.session.create({ title: "sync-backed part event" }))
-        const sessionID = String(record(session.data).id)
+        const start = startSession(sdk, { title: "sync-backed part event" })
+        const session = yield* capture(start.request)
+        const sessionID = start.sessionID
         const seeded = yield* seedMessage(directory, sessionID)
 
         const controller = new AbortController()
@@ -755,70 +794,29 @@ describe("HttpApi SDK", () => {
     ),
   )
 
-  serverPathParity("matches generated SDK prompt no-reply routes", (serverPath) =>
-    withStandardProject(serverPath, ({ sdk }) =>
-      Effect.gen(function* () {
-        const session = yield* capture(() => sdk.session.create({ title: "prompt" }))
-        const sessionID = String(record(session.data).id)
-        const prompt = yield* capture(() =>
-          sdk.session.prompt({
-            sessionID,
-            agent: "repa",
-            noReply: true,
-            parts: [{ type: "text", text: "hello" }],
-          }),
-        )
-        const asyncPrompt = yield* capture(() =>
-          sdk.session.promptAsync({
-            sessionID,
-            agent: "repa",
-            noReply: true,
-            parts: [{ type: "text", text: "async hello" }],
-          }),
-        )
-        const messages = yield* capture(() => sdk.session.messages({ sessionID }))
-
-        return {
-          statuses: statuses({ session, prompt, asyncPrompt, messages }),
-          promptRole: record(record(prompt.data).info).role,
-          messageCount: array(messages.data).length,
-          messageTexts: array(messages.data)
-            .flatMap((item) => array(record(item).parts))
-            .map((part) => record(part).text)
-            .filter((text): text is string => typeof text === "string")
-            .sort(),
-        }
-      }),
-    ),
-  )
-
   serverPathParity("matches generated SDK prompt streaming through fake LLM", (serverPath) =>
     withFakeLlm(serverPath, ({ sdk, llm }) =>
       Effect.gen(function* () {
         yield* llm.text("fake world", { usage: { input: 11, output: 7 } })
-        const session = yield* capture(() =>
-          sdk.session.create({
-            title: "llm prompt",
-            permission: [{ permission: "*", pattern: "*", action: "allow" }],
-          }),
-        )
-        const sessionID = String(record(session.data).id)
-        const prompt = yield* capture(() =>
-          sdk.session.prompt({
-            sessionID,
-            agent: "repa",
-            model: { providerID: "test", modelID: "test-model" },
-            parts: [{ type: "text", text: "hello llm" }],
-          }),
-        )
+        const start = startSession(sdk, {
+          title: "llm prompt",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+          model: { providerID: "test", modelID: "test-model" },
+          text: "hello llm",
+          limits: { model: 2, tool: 2 },
+        })
+        const session = yield* capture(start.request)
+        const turnID = String(record(session.data).id)
+        const terminal = yield* capture(() => sdk.session.awaitTurn({ sessionID: start.sessionID, turnID }))
+        const sessionID = start.sessionID
         const messages = yield* capture(() => sdk.session.messages({ sessionID }))
         const inputs = yield* llm.inputs
 
         return {
-          statuses: statuses({ session, prompt, messages }),
+          statuses: statuses({ session, terminal, messages }),
           calls: inputs.length,
           requestedModel: inputs[0]?.model,
-          responseText: JSON.stringify(prompt.data).includes("fake world"),
+          responseText: JSON.stringify(messages.data).includes("fake world"),
           persistedText: JSON.stringify(messages.data).includes("fake world"),
           userText: JSON.stringify(messages.data).includes("hello llm"),
         }
@@ -826,31 +824,147 @@ describe("HttpApi SDK", () => {
     ),
   )
 
+  serverPathParity("preserves strict Turn identity and typed steer errors through the generated SDK", (serverPath) =>
+    withFakeLlm(serverPath, ({ sdk, llm }) =>
+      Effect.gen(function* () {
+        const release = Promise.withResolvers<void>()
+        yield* llm.hold("first boundary", release.promise)
+        yield* llm.text("second boundary")
+        const start = startSession(sdk, {
+          title: "generated SDK strict Turn",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+          model: { providerID: "test", modelID: "test-model" },
+          text: "sample the first operation",
+          limits: { model: 2, tool: 0 },
+        })
+        const admitted = yield* capture(start.request)
+        yield* llm.wait(1).pipe(Effect.timeout("5 seconds"))
+
+        const active = yield* capture(() => sdk.session.activeTurn({ sessionID: start.sessionID }))
+        const exact = yield* capture(() => sdk.session.getTurn({ sessionID: start.sessionID, turnID: start.turnID }))
+        const mismatchedTurnID = Turn.ID.create()
+        const mismatch = yield* capture(() =>
+          sdk.session.steer({
+            sessionID: start.sessionID,
+            turnID: mismatchedTurnID,
+            inputID: Turn.InputID.create(),
+            messageID: MessageID.ascending(),
+            parts: [{ type: "text", text: "must not retarget" }],
+          }),
+        )
+        const busy = yield* capture(() =>
+          sdk.session.start({
+            sessionID: start.sessionID,
+            turnID: Turn.ID.create(),
+            inputID: Turn.InputID.create(),
+            messageID: MessageID.ascending(),
+            model: { providerID: "test", modelID: "test-model" },
+            limits: { model: 1, tool: 0 },
+            parts: [{ type: "text", text: "must not become a steer" }],
+          }),
+        )
+
+        const steerInputID = Turn.InputID.create()
+        const steering = yield* capture(() =>
+          sdk.session.steer({
+            sessionID: start.sessionID,
+            turnID: start.turnID,
+            inputID: steerInputID,
+            messageID: MessageID.ascending(),
+            parts: [{ type: "text", text: "promote this exact correction" }],
+          }),
+        ).pipe(Effect.forkChild)
+        expect(
+          yield* Effect.race(
+            Fiber.join(steering).pipe(Effect.as(true)),
+            Effect.sleep("50 millis").pipe(Effect.as(false)),
+          ),
+        ).toBe(false)
+        release.resolve()
+        const steered = yield* Fiber.join(steering)
+        const terminal = yield* capture(() =>
+          sdk.session.awaitTurn({ sessionID: start.sessionID, turnID: start.turnID }),
+        )
+        const terminalSteer = yield* capture(() =>
+          sdk.session.steer({
+            sessionID: start.sessionID,
+            turnID: start.turnID,
+            inputID: Turn.InputID.create(),
+            messageID: MessageID.ascending(),
+            parts: [{ type: "text", text: "must remain terminal" }],
+          }),
+        )
+        const idleSteer = yield* capture(() =>
+          sdk.session.steer({
+            sessionID: start.sessionID,
+            turnID: Turn.ID.create(),
+            inputID: Turn.InputID.create(),
+            messageID: MessageID.ascending(),
+            parts: [{ type: "text", text: "must not invent an active Turn" }],
+          }),
+        )
+        const interruptedReplay = yield* capture(() =>
+          sdk.session.interruptTurn({ sessionID: start.sessionID, turnID: start.turnID }),
+        )
+        const inactive = yield* capture(() => sdk.session.activeTurn({ sessionID: start.sessionID }))
+
+        expect(statuses({ admitted, active, exact, steered, terminal, interruptedReplay, inactive })).toEqual({
+          admitted: 200,
+          active: 200,
+          exact: 200,
+          steered: 200,
+          terminal: 200,
+          interruptedReplay: 200,
+          inactive: 200,
+        })
+        expect(record(active.data)).toMatchObject({ id: start.turnID, state: "running" })
+        expect(record(exact.data)).toMatchObject({ id: start.turnID, state: "running" })
+        expect(record(steered.data)).toMatchObject({ id: steerInputID, turnID: start.turnID })
+        expect(record(terminal.data)).toMatchObject({
+          id: start.turnID,
+          state: "completed",
+          currentInputID: steerInputID,
+        })
+        expect(interruptedReplay.data).toEqual(terminal.data)
+        expect(inactive.data).toBeNull()
+        expect(mismatch.status).toBe(409)
+        expect(record(mismatch.error)).toMatchObject({
+          _tag: "TurnActiveMismatchError",
+          expectedTurnID: mismatchedTurnID,
+          activeTurnID: start.turnID,
+        })
+        expect(busy.status).toBe(409)
+        expect(record(busy.error)).toMatchObject({ _tag: "TurnAlreadyRunningError", activeTurnID: start.turnID })
+        expect(terminalSteer.status).toBe(409)
+        expect(record(terminalSteer.error)).toMatchObject({ _tag: "TurnNotSteerableError", state: "completed" })
+        expect(idleSteer.status).toBe(409)
+        expect(record(idleSteer.error)).toMatchObject({ _tag: "TurnNoActiveError", sessionID: start.sessionID })
+      }),
+    ),
+  )
+
   httpapi(
-    "includes project skills in REST API prompt context",
+    "keeps quarantined project skills out of REST API prompt context",
     withFakeLlmProject("default", { setup: writeProjectSkill }, ({ sdk, llm }) =>
       Effect.gen(function* () {
         yield* llm.text("skill context ok", { usage: { input: 11, output: 7 } })
-        const session = yield* capture(() =>
-          sdk.session.create({
-            title: "project skill prompt",
-            permission: [{ permission: "*", pattern: "*", action: "allow" }],
-          }),
-        )
-        const sessionID = String(record(session.data).id)
-        const prompt = yield* capture(() =>
-          sdk.session.prompt({
-            sessionID,
-            agent: "repa",
-            model: { providerID: "test", modelID: "test-model" },
-            parts: [{ type: "text", text: "hello skill context" }],
-          }),
+        const start = startSession(sdk, {
+          title: "project skill prompt",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+          model: { providerID: "test", modelID: "test-model" },
+          text: "hello skill context",
+          limits: { model: 2, tool: 2 },
+        })
+        const session = yield* capture(start.request)
+        const terminal = yield* capture(() =>
+          sdk.session.awaitTurn({ sessionID: start.sessionID, turnID: String(record(session.data).id) }),
         )
         const inputs = yield* llm.inputs
 
         expect(session.status).toBe(200)
-        expect(prompt.status).toBe(200)
-        expect(JSON.stringify(inputs[0])).toContain("project-rest-skill")
+        expect(terminal.status).toBe(200)
+        expect(inputs.length, JSON.stringify(terminal.data)).toBeGreaterThan(0)
+        expect(JSON.stringify(inputs[0])).not.toContain("project-rest-skill")
       }),
     ),
   )
@@ -858,8 +972,9 @@ describe("HttpApi SDK", () => {
   serverPathParity("matches generated SDK TUI validation and command routes", (serverPath) =>
     withStandardProject(serverPath, ({ sdk }) =>
       Effect.gen(function* () {
-        const session = yield* capture(() => sdk.session.create({ title: "tui" }))
-        const sessionID = String(record(session.data).id)
+        const start = startSession(sdk, { title: "tui" })
+        const session = yield* capture(start.request)
+        const sessionID = start.sessionID
         const appendPrompt = yield* capture(() => sdk.tui.appendPrompt({ text: "hello" }))
         const openHelp = yield* capture(() => sdk.tui.openHelp())
         const openSessions = yield* capture(() => sdk.tui.openSessions())

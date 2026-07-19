@@ -49,7 +49,7 @@ const it = testEffect(
   ]),
 )
 
-it.instance("rejects internal GitLab workflow models before any action or approval bridge", () =>
+it.instance("rejects GitLab workflow callback execution before provider IO", () =>
   Effect.gen(function* () {
     const { directory } = yield* TestInstance
     permissionAsks = 0
@@ -129,11 +129,31 @@ it.instance("rejects internal GitLab workflow models before any action or approv
         toolChoice: "required",
       })
       .pipe(Stream.runDrain, Effect.exit)
+    const interactiveExit = yield* llm
+      .stream({
+        composition: { type: "interactive" },
+        sessionID,
+        model,
+        agent,
+        user: {
+          id: MessageID.make("msg-interactive-gitlab-workflow"),
+          sessionID,
+          role: "user",
+          time: { created: Date.now() },
+          agent: "repa",
+          model: { providerID: model.providerID, modelID: model.id },
+        } satisfies SessionV1.User,
+        system: [],
+        messages: [{ role: "user", content: "Act through the workflow" }],
+        tools: {},
+      })
+      .pipe(Stream.runDrain, Effect.exit)
 
     expect(Exit.isFailure(exit)).toBe(true)
+    expect(Exit.isFailure(interactiveExit)).toBe(true)
     if (Exit.isFailure(exit)) {
-      expect(String(Cause.squash(exit.cause))).toContain(
-        "GitLab workflow models are unavailable for internal operation: compaction",
+      expect(JSON.stringify(Cause.squash(exit.cause))).toContain(
+        "GitLab workflow models are unavailable in the released-v1 Turn runtime",
       )
     }
     expect(permissionAsks).toBe(0)

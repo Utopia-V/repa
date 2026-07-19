@@ -96,6 +96,31 @@ const layer = Layer.effect(
       })
     }
 
+    const removeMany: EventV2.Interface["removeMany"] = (aggregateIDs, cleanup, notifications, options) =>
+      Effect.gen(function* () {
+        if (!notifications || notifications.every((notification) => notification.options?.location)) {
+          return yield* events.removeMany(aggregateIDs, cleanup, notifications, options)
+        }
+        const ctx = yield* InstanceRef
+        if (!ctx) return yield* events.removeMany(aggregateIDs, cleanup, notifications, options)
+        const workspaceID = yield* WorkspaceRef
+        const location = new Location.Info({
+          directory: AbsolutePath.make(ctx.directory),
+          ...(workspaceID ? { workspaceID } : {}),
+          project: { id: Project.ID.make(ctx.project.id), directory: AbsolutePath.make(ctx.worktree) },
+        })
+        return yield* events.removeMany(
+          aggregateIDs,
+          cleanup,
+          notifications.map((notification) =>
+            notification.options?.location
+              ? notification
+              : { ...notification, options: { ...notification.options, location } },
+          ),
+          options,
+        )
+      })
+
     const unsubscribe = yield* events.listen((event) =>
       Effect.gen(function* () {
         const ctx = yield* InstanceRef
@@ -126,7 +151,7 @@ const layer = Layer.effect(
     )
     yield* Effect.addFinalizer(() => unsubscribe)
 
-    return Service.of({ ...events, publish, transaction, remove })
+    return Service.of({ ...events, publish, transaction, remove, removeMany })
   }),
 )
 

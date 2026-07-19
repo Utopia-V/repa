@@ -23,10 +23,12 @@ import { effectCmd } from "../effect-cmd"
 import { EOL } from "os"
 import { Filesystem } from "@/util/filesystem"
 import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencode-ai/sdk/v2"
+import { Identifier } from "@opencode-ai/core/id/id"
 import { FormatError, FormatUnknownError } from "../error"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./run/runtime.stdin"
 
-type ModelInput = Parameters<OpencodeClient["session"]["prompt"]>[0]["model"]
+type SessionStartInput = Parameters<OpencodeClient["session"]["start"]>[0]
+type ModelInput = SessionStartInput["model"]
 
 function pick(value: string | undefined): ModelInput | undefined {
   if (!value) return undefined
@@ -49,12 +51,6 @@ function resolveRunInput(value?: string, piped?: string): string | undefined {
   return value + "\n" + piped
 }
 
-function enabledByExperimental(name: string) {
-  const value = process.env[name]
-  const truthy = (input: string | undefined) => input === "1" || input?.toLowerCase() === "true"
-  return value === undefined ? truthy(process.env.REPA_EXPERIMENTAL) : truthy(value)
-}
-
 type FilePart = {
   type: "file"
   url: string
@@ -74,6 +70,7 @@ type SessionInfo = {
   id: string
   title?: string
   directory?: string
+  start?: Pick<SessionStartInput, "session" | "fork">
 }
 
 function inline(info: Inline) {
@@ -265,13 +262,9 @@ export const RunCommand = effectCmd({
       }),
   handler: Effect.fn("Cli.run")(function* (args) {
     const { Agent } = yield* Effect.promise(() => import("@/agent/agent"))
-    const { RuntimeFlags } = yield* Effect.promise(() => import("@/effect/runtime-flags"))
     const { InstanceRef } = yield* Effect.promise(() => import("@/effect/instance-ref"))
     const { ServerAuth } = yield* Effect.promise(() => import("@/server/auth"))
     const agentSvc = args.attach ? undefined : yield* Agent.Service
-    const flags = args.attach
-      ? { experimentalBackgroundSubagents: enabledByExperimental("REPA_EXPERIMENTAL_BACKGROUND_SUBAGENTS") }
-      : yield* RuntimeFlags.Service
     const localInstance = args.attach ? undefined : yield* InstanceRef
     yield* Effect.promise(async () => {
       const rawMessage = [...args.message, ...(args["--"] || [])].join(" ")
@@ -472,18 +465,16 @@ export const RunCommand = effectCmd({
           }
 
           if (args.fork) {
-            const forked = await sdk.session.fork({
+            const basis = await sdk.session.forkBasis({
               sessionID: args.session,
             })
-            const id = forked.data?.id
-            if (!id) {
-              return
-            }
+            if (!basis.data) return
 
             return {
-              id,
-              title: forked.data?.title ?? current.data.title,
-              directory: forked.data?.directory ?? current.data.directory,
+              id: Identifier.ascending("session"),
+              title: current.data.title,
+              directory: current.data.directory,
+              start: { fork: basis.data },
             }
           }
 
@@ -497,18 +488,16 @@ export const RunCommand = effectCmd({
         const base = args.continue ? (await sdk.session.list()).data?.find((item) => !item.parentID) : undefined
 
         if (base && args.fork) {
-          const forked = await sdk.session.fork({
+          const basis = await sdk.session.forkBasis({
             sessionID: base.id,
           })
-          const id = forked.data?.id
-          if (!id) {
-            return
-          }
+          if (!basis.data) return
 
           return {
-            id,
-            title: forked.data?.title ?? base.title,
-            directory: forked.data?.directory ?? base.directory,
+            id: Identifier.ascending("session"),
+            title: base.title,
+            directory: base.directory,
+            start: { fork: basis.data },
           }
         }
 
@@ -521,19 +510,11 @@ export const RunCommand = effectCmd({
         }
 
         const name = title()
-        const result = await sdk.session.create({
-          title: name,
-          permission: [...rules],
-        })
-        const id = result.data?.id
-        if (!id) {
-          return
-        }
 
         return {
-          id,
-          title: result.data?.title ?? name,
-          directory: result.data?.directory,
+          id: Identifier.ascending("session"),
+          title: name,
+          start: { session: { title: name, permission: [...rules] } },
         }
       }
 
@@ -541,26 +522,12 @@ export const RunCommand = effectCmd({
         sdk: OpencodeClient,
         input: { agent: string | undefined; model: ModelInput | undefined; variant: string | undefined },
       ): Promise<SessionInfo> {
-        const result = await sdk.session.create({
-          title: args.title !== undefined && args.title !== "" ? args.title : undefined,
-          agent: input.agent,
-          model: input.model
-            ? {
-                providerID: input.model.providerID,
-                id: input.model.modelID,
-                variant: input.variant,
-              }
-            : undefined,
-          permission: [...rules],
-        })
-        const id = result.data?.id
-        if (!id) {
-          throw new Error("Failed to create session")
-        }
+        const name = args.title !== undefined && args.title !== "" ? args.title : undefined
 
         return {
-          id,
-          title: result.data?.title,
+          id: Identifier.ascending("session"),
+          title: name,
+          start: { session: { title: name, permission: [...rules] } },
         }
       }
 
@@ -826,13 +793,25 @@ export const RunCommand = effectCmd({
           }
 
           if (args.command) {
-            const result = await client.session.command({
+            const commands = await client.command.list({ directory: cwd }, { throwOnError: true })
+            const command = commands.data?.find((item) => item.name === args.command)
+            if (!command) {
+              UI.error(`Command not found: ${args.command}`)
+              process.exitCode = 1
+              return
+            }
+            const { expandCommandTemplate } = await import("./run/stream.transport")
+            const result = await client.session.start({
               sessionID,
-              agent,
-              model: args.model,
-              command: args.command,
-              arguments: message,
+              turnID: Identifier.create("trn", "ascending"),
+              inputID: Identifier.create("tri", "ascending"),
+              messageID: Identifier.ascending("message"),
+              agent: command.agent ?? agent,
+              model: pick(command.model) ?? pick(args.model),
               variant: args.variant,
+              parts: [...files, { type: "text", text: expandCommandTemplate(command.template, message) }],
+              session: sess.start?.session,
+              fork: sess.start?.fork,
             })
             if (result.error) {
               if (!emit("error", { error: result.error })) UI.error(formatRunError(result.error))
@@ -844,12 +823,17 @@ export const RunCommand = effectCmd({
           }
 
           const model = pick(args.model)
-          const result = await client.session.prompt({
+          const result = await client.session.start({
             sessionID,
+            turnID: Identifier.create("trn", "ascending"),
+            inputID: Identifier.create("tri", "ascending"),
+            messageID: Identifier.ascending("message"),
             agent,
             model,
             variant: args.variant,
             parts: [...files, { type: "text", text: message }],
+            session: sess.start?.session,
+            fork: sess.start?.fork,
           })
           if (result.error) {
             if (!emit("error", { error: result.error })) UI.error(formatRunError(result.error))
@@ -868,6 +852,7 @@ export const RunCommand = effectCmd({
             directory: cwd,
             sessionID,
             sessionTitle: sess.title,
+            start: sess.start,
             resume: Boolean(args.session || args.continue) && !args.fork,
             replay,
             replayLimit: args["replay-limit"],
@@ -878,7 +863,6 @@ export const RunCommand = effectCmd({
             initialInput,
             createSession: createFreshSession,
             thinking,
-            backgroundSubagents: flags.experimentalBackgroundSubagents,
             demo: args.demo,
           })
         } catch (error) {
@@ -914,7 +898,6 @@ export const RunCommand = effectCmd({
             files,
             initialInput,
             thinking,
-            backgroundSubagents: flags.experimentalBackgroundSubagents,
             demo: args.demo,
           })
         } catch (error) {

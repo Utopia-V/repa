@@ -43,6 +43,7 @@ import { UsageService } from "./usage"
 import { ACPProfile } from "./profile"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { Identifier } from "@opencode-ai/core/id/id"
 import { Provider } from "@/provider/provider"
 import type { Command } from "@/command"
 
@@ -164,25 +165,8 @@ export function make(input: {
     const selected = selectDefaultModel(snapshot)
     const variant = selectVariant(snapshot, selected)
     const modeId = snapshot.availableModes.length > 0 ? snapshot.defaultModeID : undefined
-    const created = yield* profiledRequest(
-      "acp.newSession.session.create",
-      () =>
-        input.sdk.session.create(
-          {
-            directory: params.cwd,
-            ...(modeId ? { agent: modeId } : {}),
-            model: {
-              providerID: selected.providerID,
-              id: selected.modelID,
-              ...(variant ? { variant } : {}),
-            },
-          },
-          { throwOnError: true },
-        ),
-      "session",
-    )
     const state = yield* session.create({
-      id: created.id,
+      id: Identifier.ascending("session"),
       cwd: params.cwd,
       mcpServers: params.mcpServers,
       model: selected,
@@ -326,10 +310,18 @@ export function make(input: {
   })
 
   const abortBackingSession = Effect.fn("ACP.abortBackingSession")(function* (current: ACPSession.Info) {
-    yield* request(
-      () => input.sdk.session.abort({ directory: current.cwd, sessionID: current.id }, { throwOnError: true }),
-      "session",
-    ).pipe(
+    if (!current.materialized) return
+    yield* request(async () => {
+      const active = await input.sdk.session.activeTurn(
+        { directory: current.cwd, sessionID: current.id },
+        { throwOnError: true },
+      )
+      if (!active.data) return
+      return input.sdk.session.interruptTurn(
+        { directory: current.cwd, sessionID: current.id, turnID: active.data.id },
+        { throwOnError: true },
+      )
+    }, "session").pipe(
       Effect.catch((error) =>
         Effect.logError("failed to abort ACP backing session", { error: error, sessionID: current.id }),
       ),
@@ -353,9 +345,9 @@ export function make(input: {
 
   const forkSession = Effect.fn("ACP.forkSession")(function* (params: ForkSessionRequest) {
     const snapshot = yield* directorySnapshot(params.cwd)
-    const forked = yield* request(
+    const basis = yield* request(
       () =>
-        input.sdk.session.fork(
+        input.sdk.session.forkBasis(
           {
             directory: params.cwd,
             sessionID: params.sessionId,
@@ -366,18 +358,22 @@ export function make(input: {
     )
     const messages = yield* request(
       () =>
-        input.sdk.session.messages({ directory: params.cwd, sessionID: forked.id, limit: 20 }, { throwOnError: true }),
+        input.sdk.session.messages(
+          { directory: params.cwd, sessionID: params.sessionId, limit: 20 },
+          { throwOnError: true },
+        ),
       "session",
     )
     const restored = restoreFromMessages(messages.map((item) => item.info))
     const model = restored.model ?? selectDefaultModel(snapshot)
-    const state = yield* session.load({
-      id: forked.id,
+    const state = yield* session.create({
+      id: Identifier.ascending("session"),
       cwd: params.cwd,
       mcpServers: params.mcpServers ?? [],
       model,
       variant: restored.variant ?? selectVariant(snapshot, model),
       modeId: restored.modeId ?? (snapshot.availableModes.length > 0 ? snapshot.defaultModeID : undefined),
+      fork: basis,
     })
     sessionSnapshots.set(state.id, snapshot)
 
@@ -500,70 +496,80 @@ export function make(input: {
       const modeId = current.modeId ?? (snapshot.availableModes.length > 0 ? snapshot.defaultModeID : undefined)
       const parts = promptContentToParts(params.prompt)
       const command = detectSlashCommand(parts)
+      const known = command ? snapshot.availableCommands.find((item) => item.name === command.name) : undefined
+      if (command && !known) return yield* promptResponse(undefined, params.messageId)
 
-      if (!command) {
-        const response = yield* request(
-          () =>
-            input.sdk.session.prompt(
-              {
-                sessionID: current.id,
-                model: {
-                  providerID: selected.providerID,
-                  modelID: selected.modelID,
-                },
-                ...(variant ? { variant } : {}),
-                parts,
-                ...(modeId ? { agent: modeId } : {}),
-                directory: current.cwd,
-              },
-              { throwOnError: true },
-            ),
-          "session",
-        )
-        yield* sendUsageUpdate(input.usage, input.sdk, input.connection, current.id, current.cwd)
-        return yield* promptResponse(response.info, params.messageId)
-      }
-
-      const known = snapshot.availableCommands.find((item) => item.name === command.name)
-      if (known) {
-        const response = yield* request(
-          () =>
-            input.sdk.session.command(
-              {
-                sessionID: current.id,
-                command: known.name,
-                arguments: command.args,
-                model: `${selected.providerID}/${selected.modelID}`,
-                ...(variant ? { variant } : {}),
-                ...(modeId ? { agent: modeId } : {}),
-                directory: current.cwd,
-              },
-              { throwOnError: true },
-            ),
-          "session",
-        )
-        yield* sendUsageUpdate(input.usage, input.sdk, input.connection, current.id, current.cwd)
-        return yield* promptResponse(response.info, params.messageId)
-      }
-
-      if (command.name === "compact") {
-        yield* request(
-          () =>
-            input.sdk.session.summarize(
-              {
-                sessionID: current.id,
-                directory: current.cwd,
+      const turnID = Identifier.create("trn", "ascending")
+      const inputID = Identifier.create("tri", "ascending")
+      const messageID = Identifier.ascending("message")
+      const template = known ? yield* Effect.promise(() => Promise.resolve(known.template)) : undefined
+      const learnerParts = known
+        ? [
+            ...parts.filter((part) => part.type !== "text"),
+            { type: "text" as const, text: expandCommandTemplate(template ?? "", command?.args ?? "") },
+          ]
+        : parts
+      const admitted = yield* request(
+        () =>
+          input.sdk.session.start(
+            {
+              sessionID: current.id,
+              turnID,
+              inputID,
+              messageID,
+              model: {
                 providerID: selected.providerID,
                 modelID: selected.modelID,
               },
-              { throwOnError: true },
-            ),
-          "session",
-        )
-      }
-
+              ...(variant ? { variant } : {}),
+              parts: learnerParts,
+              ...(modeId ? { agent: modeId } : {}),
+              directory: current.cwd,
+              ...(!current.materialized && !current.fork ? { session: {} } : {}),
+              ...(current.fork ? { fork: current.fork } : {}),
+            },
+            { throwOnError: true },
+          ),
+        "session",
+      ).pipe(
+        Effect.tap(() =>
+          current.materialized ? Effect.void : session.markMaterialized(current.id).pipe(Effect.asVoid),
+        ),
+        Effect.uninterruptible,
+      )
+      const terminal = yield* request(
+        () =>
+          input.sdk.session.awaitTurn(
+            { sessionID: current.id, turnID: admitted.id, directory: current.cwd },
+            { throwOnError: true },
+          ),
+        "session",
+      )
+      const messages = yield* request(
+        () =>
+          input.sdk.session.messages(
+            { sessionID: current.id, directory: current.cwd, limit: 50 },
+            { throwOnError: true },
+          ),
+        "session",
+      )
+      const response = messages
+        .toReversed()
+        .find((item) => item.info.role === "assistant" && item.info.parentID === messageID)
+      const assistant = response?.info.role === "assistant" ? response.info : undefined
       yield* sendUsageUpdate(input.usage, input.sdk, input.connection, current.id, current.cwd)
-      return yield* promptResponse(undefined, params.messageId)
+      if (terminal.state === "interrupted") return promptTerminal("cancelled", params.messageId)
+      if (terminal.state === "exhausted" && terminal.terminal?.reason === "model_limit") {
+        return promptTerminal("max_tokens", params.messageId)
+      }
+      if (terminal.state === "failed" && !assistant?.error) {
+        return yield* new ACPError.ServiceFailureError({
+          service: "session",
+          safeMessage: `Turn failed: ${terminal.terminal?.reason ?? "unknown"}`,
+          errorName: "TurnFailedError",
+        })
+      }
+      return yield* promptResponse(assistant, params.messageId)
     }),
     cancel,
   }
@@ -713,10 +719,6 @@ function request<T>(fn: () => Promise<T | SdkResponse<T>>, service?: string) {
   })
 }
 
-function profiledRequest<T>(name: string, fn: () => Promise<T | SdkResponse<T>>, service?: string) {
-  return request(() => ACPProfile.measure(name, fn), service)
-}
-
 async function loadDirectorySnapshot(sdk: OpencodeClient, directory: string) {
   return ACPProfile.measure("acp.directory.load", async () => {
     const [providersResponse, agentsResponse, commandsResponse, skillsResponse, configResponse] = await Promise.all([
@@ -808,6 +810,29 @@ function detectSlashCommand(parts: ReturnType<typeof promptContentToParts>) {
   const [name, ...rest] = text.slice(1).split(/\s+/)
   if (!name) return
   return { name, args: rest.join(" ").trim() }
+}
+
+function expandCommandTemplate(template: string, argumentsText: string) {
+  const args = argumentsText.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((arg) => arg.replace(/^"|"$/g, "")) ?? []
+  const placeholders = template.match(/\$\d+/g) ?? []
+  const last = Math.max(0, ...placeholders.map((item) => Number(item.slice(1))))
+  const expanded = template.replace(/\$(\d+)/g, (_, value: string) => {
+    const position = Number(value)
+    if (position === last) return args.slice(position - 1).join(" ")
+    return args[position - 1] ?? ""
+  })
+  const usesArguments = template.includes("$ARGUMENTS")
+  const result = expanded.replaceAll("$ARGUMENTS", argumentsText)
+  if (placeholders.length > 0 || usesArguments || !argumentsText.trim()) return result.trim()
+  return `${result}\n\n${argumentsText}`.trim()
+}
+
+function promptTerminal(stopReason: "cancelled" | "max_tokens", messageId: string | null | undefined) {
+  return {
+    stopReason,
+    ...(messageId ? { userMessageId: messageId } : {}),
+    _meta: {},
+  }
 }
 
 const promptResponse = Effect.fn("ACP.promptResponse")(function* (

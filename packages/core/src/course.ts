@@ -5,6 +5,7 @@ import { and, asc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
 import { Context, Effect, Layer } from "effect"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
+import { LearningFrontier } from "./learning-frontier"
 import { CourseCursor } from "./course/cursor"
 import { CourseRevision } from "./course/revision"
 import {
@@ -596,6 +597,7 @@ const layer = Layer.effect(
               .values({ course_id: courseID, version: 0, time_updated: time })
               .run()
               .pipe(Effect.orDie)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.orDie)
@@ -604,13 +606,14 @@ const layer = Layer.effect(
 
     const correctCourse: Interface["correctCourse"] = Effect.fn("Course.correctCourse")(function* (input) {
       const title = yield* titleValue(input.title, "Course")
+      const time = Date.now()
       yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
             yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
             const updated = yield* tx
               .update(CourseTable)
-              .set({ title, state_version: sql`${CourseTable.state_version} + 1`, time_updated: Date.now() })
+              .set({ title, state_version: sql`${CourseTable.state_version} + 1`, time_updated: time })
               .where(
                 and(
                   eq(CourseTable.id, input.courseID),
@@ -622,6 +625,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("course", input.courseID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -661,6 +665,7 @@ const layer = Layer.effect(
               prepared,
               time,
             })
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -674,6 +679,7 @@ const layer = Layer.effect(
 
     const correctView: Interface["correctView"] = Effect.fn("Course.correctView")(function* (input) {
       const name = yield* titleValue(input.name, "View")
+      const time = Date.now()
       yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
@@ -681,7 +687,7 @@ const layer = Layer.effect(
             yield* requireView(tx, input.courseID, input.viewID, input.expectedViewVersion, true)
             const updated = yield* tx
               .update(CourseViewTable)
-              .set({ name, state_version: sql`${CourseViewTable.state_version} + 1`, time_updated: Date.now() })
+              .set({ name, state_version: sql`${CourseViewTable.state_version} + 1`, time_updated: time })
               .where(
                 and(
                   eq(CourseViewTable.course_id, input.courseID),
@@ -694,6 +700,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("view", input.viewID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -725,6 +732,7 @@ const layer = Layer.effect(
               return yield* conflict("revision", input.predecessorRevisionID)
             }
             const prepared = yield* prepareRevision(tx, input.courseID, input.revision, input.predecessorRevisionID)
+            const time = Date.now()
             yield* publishRevision({
               tx,
               courseID: input.courseID,
@@ -734,8 +742,9 @@ const layer = Layer.effect(
               predecessorRevisionID: input.predecessorRevisionID,
               authorshipBasis: input.authorship.basis,
               prepared,
-              time: Date.now(),
+              time,
             })
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -767,14 +776,17 @@ const layer = Layer.effect(
                 input.expectedRevisionVersion,
               )
             }
-            return yield* updateSelection(
+            const time = Date.now()
+            const selection = yield* updateSelection(
               tx,
               input.courseID,
               input.expectedSelectionRevisionID,
               input.expectedSelectionVersion,
               input.revisionID,
-              Date.now(),
+              time,
             )
+            yield* LearningFrontier.advance(tx, { time })
+            return selection
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -827,12 +839,13 @@ const layer = Layer.effect(
               })
             }
             yield* assertSelectionUnchanged(tx, selection)
+            const time = Date.now()
             const updated = yield* tx
               .update(CourseViewRevisionStateTable)
               .set({
                 withdrawal_reason: "rejected_candidate",
                 state_version: sql`${CourseViewRevisionStateTable.state_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -845,6 +858,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("revision", input.revisionID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -871,19 +885,21 @@ const layer = Layer.effect(
               input.expectedSelectionRevisionID,
               input.expectedSelectionVersion,
             )
+            const time = Date.now()
             yield* applyWithdrawalSelection(tx, {
               courseID: input.courseID,
               selection,
               effect: input.selection,
               affected: selection.revision_id === input.revisionID,
               forbiddenRevisionID: input.revisionID,
+              time,
             })
             const updated = yield* tx
               .update(CourseViewRevisionStateTable)
               .set({
                 withdrawal_reason: "removed",
                 state_version: sql`${CourseViewRevisionStateTable.state_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -896,6 +912,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("revision", input.revisionID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -927,19 +944,21 @@ const layer = Layer.effect(
                   .get()
                   .pipe(Effect.orDie)
               : undefined
+            const time = Date.now()
             yield* applyWithdrawalSelection(tx, {
               courseID: input.courseID,
               selection,
               effect: input.selection,
               affected: selected?.viewID === input.viewID,
               forbiddenViewID: input.viewID,
+              time,
             })
             const updated = yield* tx
               .update(CourseViewTable)
               .set({
                 withdrawal_reason: "removed",
                 state_version: sql`${CourseViewTable.state_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -953,6 +972,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("view", input.viewID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -970,20 +990,21 @@ const layer = Layer.effect(
               input.expectedSelectionRevisionID,
               input.expectedSelectionVersion,
             )
+            const time = Date.now()
             yield* updateSelection(
               tx,
               input.courseID,
               input.expectedSelectionRevisionID,
               input.expectedSelectionVersion,
               undefined,
-              Date.now(),
+              time,
             )
             const updated = yield* tx
               .update(CourseTable)
               .set({
                 withdrawal_reason: "removed",
                 state_version: sql`${CourseTable.state_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -996,6 +1017,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("course", input.courseID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -1016,12 +1038,13 @@ const layer = Layer.effect(
                 detail: "A withdrawn Course cannot be restored with a selection",
               })
             }
+            const time = Date.now()
             const updated = yield* tx
               .update(CourseTable)
               .set({
                 withdrawal_reason: null,
                 state_version: sql`${CourseTable.state_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -1034,6 +1057,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("course", input.courseID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -1049,12 +1073,13 @@ const layer = Layer.effect(
             if (!view.withdrawal_reason) {
               return yield* new InvalidTransitionError({ detail: "View is already active" })
             }
+            const time = Date.now()
             const updated = yield* tx
               .update(CourseViewTable)
               .set({
                 withdrawal_reason: null,
                 state_version: sql`${CourseViewTable.state_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -1068,6 +1093,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("view", input.viewID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -1090,12 +1116,13 @@ const layer = Layer.effect(
             if (!revision.withdrawal_reason) {
               return yield* new InvalidTransitionError({ detail: "Revision is already active" })
             }
+            const time = Date.now()
             const updated = yield* tx
               .update(CourseViewRevisionStateTable)
               .set({
                 withdrawal_reason: null,
                 state_version: sql`${CourseViewRevisionStateTable.state_version} + 1`,
-                time_updated: Date.now(),
+                time_updated: time,
               })
               .where(
                 and(
@@ -1108,6 +1135,7 @@ const layer = Layer.effect(
               .get()
               .pipe(Effect.orDie)
             if (!updated) return yield* conflict("revision", input.revisionID)
+            yield* LearningFrontier.advance(tx, { time })
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -1765,6 +1793,7 @@ export function applySelectionAcceptance(
       })
       .run()
       .pipe(Effect.orDie)
+    yield* LearningFrontier.advance(tx, { time: input.trustedTime })
     return {
       id: effectID,
       occurrenceID: input.occurrenceID,
@@ -1858,6 +1887,7 @@ function applyWithdrawalSelection(
     readonly affected: boolean
     readonly forbiddenViewID?: ViewID
     readonly forbiddenRevisionID?: RevisionID
+    readonly time: number
   },
 ) {
   return Effect.gen(function* () {
@@ -1881,7 +1911,7 @@ function applyWithdrawalSelection(
         input.selection.revision_id ?? undefined,
         input.selection.version,
         undefined,
-        Date.now(),
+        input.time,
       )
     }
 
@@ -1901,7 +1931,7 @@ function applyWithdrawalSelection(
       input.selection.revision_id ?? undefined,
       input.selection.version,
       replacement.id,
-      Date.now(),
+      input.time,
     )
   })
 }

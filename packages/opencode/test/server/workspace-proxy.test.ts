@@ -119,9 +119,10 @@ describe("HttpApi workspace proxy", () => {
           return yield* HttpServerResponse.json({ method: req.method, body: yield* req.text })
         }),
       )
-      const request = HttpServerRequest.fromWeb(new Request("http://localhost/session/abc/abort", { method: "POST" }))
+      const path = "/session/ses_proxy/turn/turn_proxy/interrupt"
+      const request = HttpServerRequest.fromWeb(new Request(`http://localhost${path}`, { method: "POST" }))
       const httpClient = yield* HttpClient.HttpClient
-      const response = yield* HttpApiProxy.http(httpClient, `${url}/session/abc/abort`, undefined, request)
+      const response = yield* HttpApiProxy.http(httpClient, `${url}${path}`, undefined, request)
 
       expect(response.status).toBe(200)
       expect(yield* HttpServerResponse.toClientResponse(response).json).toEqual({ method: "POST", body: "" })

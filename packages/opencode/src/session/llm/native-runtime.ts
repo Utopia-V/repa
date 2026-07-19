@@ -4,14 +4,13 @@ import { ProviderTransform } from "@/provider/transform"
 import { errorMessage } from "@/util/error"
 import { isRecord } from "@/util/record"
 import { asSchema, type ModelMessage, type Tool } from "ai"
-import { Cause, Effect, FiberSet, Queue } from "effect"
+import { Effect } from "effect"
 import * as Stream from "effect/Stream"
 import { FetchHttpClient } from "effect/unstable/http"
 import {
   LLMRequest,
   Tool as NativeTool,
   ToolFailure,
-  ToolRuntime,
   toDefinitions,
   type JsonSchema,
   type LLMEvent,
@@ -100,43 +99,13 @@ export function stream(input: StreamInput): StreamResult {
     providerOptions: ProviderTransform.providerOptions(input.model, input.providerOptions ?? {}),
     headers: { ...providerHeaders(input.provider.options.headers), ...input.headers },
   })
-  const stream = Stream.scoped(
-    Stream.unwrap(
-      Effect.gen(function* () {
-        const settlements = yield* FiberSet.make<void>()
-        const results = yield* Queue.unbounded<LLMEvent, Cause.Done>()
-        const provider = input.llmClient
-          .stream(
-            LLMRequest.update(request, {
-              tools: [...request.tools, ...toDefinitions(tools)],
-            }),
-          )
-          .pipe(
-            Stream.flatMap((event) =>
-              event.type !== "tool-call" || event.providerExecuted
-                ? Stream.make(event)
-                : Stream.make(event).pipe(
-                    Stream.concat(
-                      Stream.fromEffectDrain(
-                        ToolRuntime.dispatch(tools, event).pipe(
-                          Effect.flatMap((dispatched) => Queue.offerAll(results, dispatched.events)),
-                          Effect.catchCause((cause) => Queue.failCause(results, cause)),
-                          Effect.asVoid,
-                          FiberSet.run(settlements, { startImmediately: true }),
-                        ),
-                      ),
-                    ),
-                  ),
-            ),
-            Stream.concat(
-              Stream.fromEffectDrain(
-                FiberSet.awaitEmpty(settlements).pipe(Effect.andThen(Queue.end(results)), Effect.asVoid),
-              ),
-            ),
-          )
-        return provider.pipe(Stream.concat(Stream.fromQueue(results)))
-      }),
-    ),
+  // One native stream is exactly one provider operation. Local tool calls stay
+  // as events so the released-v1 processor can durably seal the complete
+  // emitted set before dispatching any effect through ToolRuntime.
+  const stream = input.llmClient.stream(
+    LLMRequest.update(request, {
+      tools: [...request.tools, ...toDefinitions(tools)],
+    }),
   )
 
   return {

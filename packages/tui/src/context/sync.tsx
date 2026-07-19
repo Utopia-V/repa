@@ -61,9 +61,6 @@ export const {
       provider: Provider[]
       provider_default: Record<string, string>
       provider_next: ProviderListResponse
-      capabilities: {
-        experimentalBackgroundSubagents: boolean
-      }
       provider_auth: Record<string, ProviderAuthMethod[]>
       agent: Agent[]
       command: Command[]
@@ -78,6 +75,9 @@ export const {
       session: Session[]
       session_status: {
         [sessionID: string]: SessionStatus
+      }
+      active_turn: {
+        [sessionID: string]: string | undefined
       }
       session_diff: {
         [sessionID: string]: SnapshotFileDiff[]
@@ -106,9 +106,6 @@ export const {
         default: {},
         connected: [],
       },
-      capabilities: {
-        experimentalBackgroundSubagents: false,
-      },
       provider_auth: {},
       config: {},
       status: "loading",
@@ -122,6 +119,7 @@ export const {
       provider_default: {},
       session: [],
       session_status: {},
+      active_turn: {},
       session_diff: {},
       todo: {},
       message: {},
@@ -140,6 +138,13 @@ export const {
     const fullSyncedSessions = new Set<string>()
     const syncingSessions = new Map<string, Promise<void>>()
     const hydratingSessions = new Map<string, { messages: Set<string>; parts: Set<string> }>()
+    const activeTurnRevision = new Map<string, number>()
+    const activeTurnHydration = new Map<string, Promise<string | undefined>>()
+
+    function publishActiveTurn(sessionID: string, turnID?: string) {
+      activeTurnRevision.set(sessionID, (activeTurnRevision.get(sessionID) ?? 0) + 1)
+      setStore("active_turn", sessionID, turnID)
+    }
     const touchMessage = (sessionID: string, messageID: string) => {
       hydratingSessions.get(sessionID)?.messages.add(messageID)
     }
@@ -151,9 +156,7 @@ export const {
       if (!kv.get("session_directory_filter_enabled", true)) return { scope: "project" }
       if (!instancePath.worktree || !instancePath.directory) return { scope: "project" }
       return {
-        path: path
-          .relative(path.resolve(instancePath.worktree), instancePath.directory)
-          .replaceAll("\\", "/"),
+        path: path.relative(path.resolve(instancePath.worktree), instancePath.directory).replaceAll("\\", "/"),
       }
     }
 
@@ -283,6 +286,7 @@ export const {
           break
 
         case "session.deleted": {
+          publishActiveTurn(event.properties.info.id)
           const result = search(store.session, event.properties.info.id, (s) => s.id)
           if (result.found) {
             setStore(
@@ -326,6 +330,24 @@ export const {
 
         case "session.status": {
           setStore("session_status", event.properties.sessionID, event.properties.status)
+          if (event.properties.status.type === "idle") {
+            activeTurnRevision.set(
+              event.properties.sessionID,
+              (activeTurnRevision.get(event.properties.sessionID) ?? 0) + 1,
+            )
+          }
+          break
+        }
+
+        case "turn.started": {
+          publishActiveTurn(event.properties.sessionID, event.properties.turnID)
+          break
+        }
+
+        case "turn.terminal": {
+          if (store.active_turn[event.properties.sessionID] === event.properties.turnID) {
+            publishActiveTurn(event.properties.sessionID)
+          }
           break
         }
 
@@ -486,19 +508,14 @@ export const {
       // blocking - include session.list when continuing a session
       const providersPromise = sdk.client.config.providers({ directory }, blockingRequest)
       const providerListPromise = sdk.client.provider.list({ directory }, blockingRequest)
-      const capabilitiesPromise = sdk.client.experimental.capabilities
-        .get({ directory }, blockingRequest)
-        .then((x) => x.data)
-        .catch(() => undefined)
       const agentsPromise = sdk.client.app.agents({ directory }, blockingRequest)
       const configPromise = sdk.client.config.get({ directory }, blockingRequest)
 
       try {
-        const [providersResult, providerListResult, capabilities, agentsResult, configResult, projectSnapshot, sessions] =
+        const [providersResult, providerListResult, agentsResult, configResult, projectSnapshot, sessions] =
           await Promise.all([
             providersPromise,
             providerListPromise,
-            capabilitiesPromise,
             agentsPromise,
             configPromise,
             projectPromise,
@@ -516,7 +533,6 @@ export const {
           setStore("provider", reconcile(providersResult.data.providers))
           setStore("provider_default", reconcile(providersResult.data.default))
           setStore("provider_next", reconcile(providerListResult.data))
-          setStore("capabilities", "experimentalBackgroundSubagents", capabilities?.backgroundSubagents === true)
           setStore("agent", reconcile(agentsResult.data ?? []))
           setStore("config", reconcile(configResult.data))
           setStore("session", reconcile(sessions ?? []))
@@ -526,6 +542,7 @@ export const {
           setStore("mcp_resource", reconcile({}))
           setStore("formatter", reconcile([]))
           setStore("session_status", reconcile({}))
+          setStore("active_turn", reconcile({}))
           setStore("provider_auth", reconcile({}))
           setStore("vcs", undefined)
           setStore("cache_directory", directory)
@@ -566,8 +583,10 @@ export const {
           hydrate("mcp", sdk.client.mcp.status({ directory }, backgroundRequest), (response) =>
             setStore("mcp", reconcile(response.data ?? {})),
           ),
-          hydrate("mcp resources", sdk.client.experimental.resource.list({ directory }, backgroundRequest), (response) =>
-            setStore("mcp_resource", reconcile(response.data ?? {})),
+          hydrate(
+            "mcp resources",
+            sdk.client.experimental.resource.list({ directory }, backgroundRequest),
+            (response) => setStore("mcp_resource", reconcile(response.data ?? {})),
           ),
           hydrate("formatters", sdk.client.formatter.status({ directory }, backgroundRequest), (response) =>
             setStore("formatter", reconcile(response.data ?? [])),
@@ -649,6 +668,32 @@ export const {
           if (!last) return "idle"
           if (last.role === "user") return "working"
           return last.time.completed ? "idle" : "working"
+        },
+        activeTurn(sessionID: string) {
+          return store.active_turn[sessionID]
+        },
+        async hydrateActiveTurn(sessionID: string) {
+          const known = store.active_turn[sessionID]
+          if (known) return known
+          const inflight = activeTurnHydration.get(sessionID)
+          if (inflight) return inflight
+          const revision = activeTurnRevision.get(sessionID) ?? 0
+          const directory = project.instance.directory()
+          const task = sdk.client.session
+            .activeTurn({ sessionID }, { throwOnError: true })
+            .then((response) => {
+              if (project.instance.directory() !== directory) return store.active_turn[sessionID]
+              if ((activeTurnRevision.get(sessionID) ?? 0) !== revision) return store.active_turn[sessionID]
+              if (store.session_status[sessionID]?.type === "idle") return undefined
+              const turnID = response.data?.id
+              if (turnID) publishActiveTurn(sessionID, turnID)
+              return turnID
+            })
+            .finally(() => {
+              activeTurnHydration.delete(sessionID)
+            })
+          activeTurnHydration.set(sessionID, task)
+          return task
         },
         async sync(sessionID: string) {
           if (fullSyncedSessions.has(sessionID)) return

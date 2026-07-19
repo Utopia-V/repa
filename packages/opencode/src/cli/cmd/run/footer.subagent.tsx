@@ -17,11 +17,11 @@ function statusColor(theme: RunFooterTheme, status: FooterSubagentTab["status"])
     return theme.highlight
   }
 
-  if (status === "cancelled") {
+  if (status === "cancelled" || status === "interrupted") {
     return theme.muted
   }
 
-  if (status === "error") {
+  if (status === "error" || status === "failed" || status === "exhausted") {
     return theme.error
   }
 
@@ -33,15 +33,20 @@ function statusIcon(status: FooterSubagentTab["status"]) {
     return "●"
   }
 
-  if (status === "cancelled") {
+  if (status === "cancelled" || status === "interrupted") {
     return "○"
   }
 
-  if (status === "error") {
+  if (status === "error" || status === "failed" || status === "exhausted") {
     return "◍"
   }
 
   return "◔"
+}
+
+function statusLabel(tab: FooterSubagentTab) {
+  const status = tab.status === "cancelled" ? "interrupted" : tab.status === "error" ? "failed" : tab.status
+  return tab.unavailable ? `${status} · source unavailable` : status
 }
 
 export function RunFooterSubagentBody(props: {
@@ -140,6 +145,7 @@ export function RunFooterSubagentBody(props: {
                 <Show when={subtitle().length > 0}>
                   <span style={{ fg: footer().muted }}>{"  " + subtitle()}</span>
                 </Show>
+                <span style={{ fg: footer().muted }}>{"  " + statusLabel(current())}</span>
               </text>
               <Show when={props.total() > 1 && props.index() > 0}>
                 <text fg={footer().muted} wrapMode="none" truncate flexShrink={0}>

@@ -4,6 +4,7 @@ import { ContentRoot } from "@opencode-ai/core/content-root"
 import { ContentRootSchema } from "@opencode-ai/core/content-root/schema"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import { ModelV2 } from "@opencode-ai/core/model"
@@ -17,15 +18,18 @@ import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Turn } from "@opencode-ai/schema/turn"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import type { RepresentationConvertInput } from "@/learning-command/input"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { Permission } from "@/permission"
 import { Session } from "@/session/session"
 import { expect, test } from "bun:test"
 import { eq } from "drizzle-orm"
-import { Deferred, Effect, Fiber, Layer, ManagedRuntime, Schema } from "effect"
+import { DateTime, Deferred, Effect, Fiber, Layer, ManagedRuntime, Schema } from "effect"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
@@ -85,13 +89,13 @@ test("representation.convert publishes and settles one exact local Representatio
           },
           authority: Artifact.Admission.learnerInstruction("representation-runtime-test", 1),
         })
-        const interaction = yield* seedInteraction(database.db, directory, "applied")
         const input = {
           effectiveArtifactID: artifact.id,
           sourceRevisionID: artifact.source.currentRevisionID!,
           contentRootID: root.id,
           relativePath: "lecture.pdf",
         }
+        const interaction = yield* seedInteraction(database.db, directory, "applied", input)
 
         yield* commands.prepare(input, interaction.registration)
         const applied = yield* commands.execute(input, context(interaction.registration, artifact.id, "allow"))
@@ -107,15 +111,29 @@ test("representation.convert publishes and settles one exact local Representatio
         expect(yield* database.db.select().from(LearningCommandInvocationTable).all()).toMatchObject([
           {
             command_name: LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
+            turn_id: interaction.turnID,
+            input_id: interaction.inputID,
+            occurrence_id: interaction.occurrenceID,
             status: "applied",
             effect_id: null,
           },
         ])
+        const frontier = yield* database.db.transaction((tx) => LearningFrontier.read(tx))
+        const invocation = yield* database.db.transaction((tx) =>
+          TurnLifecycle.invocation(tx, {
+            turnID: interaction.registration.turnID,
+            partID: interaction.registration.partID,
+          }),
+        )
+        expect(invocation?.resultingSharedFrontier?.sequence).toBe(frontier.sequence)
+        expect(
+          invocation?.resultingSharedFrontier && DateTime.toEpochMillis(invocation.resultingSharedFrontier.time),
+        ).toBe(frontier.time)
 
         yield* commands.prepare(input, interaction.registration)
         expect(yield* commands.execute(input, context(interaction.registration, artifact.id, "deny"))).toEqual(applied)
 
-        const duplicate = yield* insertAssistant(database.db, interaction, "duplicate")
+        const duplicate = yield* insertAssistant(database.db, interaction, "duplicate", input)
         yield* commands.prepare(input, duplicate)
         const replay = yield* commands.execute(input, context(duplicate, artifact.id, "allow"))
         expect(JSON.parse(replay.output)).toMatchObject({
@@ -143,20 +161,20 @@ test("representation.convert denial and recovery settle without starting or resu
         const database = yield* Database.Service
         const commands = yield* RepresentationCommandRuntime.Service
         const artifactID = ArtifactSchema.createArtifactID()
-        const denied = yield* seedInteraction(database.db, directory, "denied")
         const deniedInput = {
           effectiveArtifactID: artifactID,
           sourceRevisionID: ArtifactSchema.createRevisionID(),
           contentRootID: ContentRootSchema.createContentRootID(),
           relativePath: "unread.pdf",
         }
+        const denied = yield* seedInteraction(database.db, directory, "denied", deniedInput)
         yield* commands.prepare(deniedInput, denied.registration)
         expect(
           JSON.parse((yield* commands.execute(deniedInput, context(denied.registration, artifactID, "deny"))).output),
         ).toMatchObject({ outcome: "error", code: "permission_rejected" })
         expect(yield* database.db.select().from(RepresentationRevisionTable).all()).toHaveLength(0)
 
-        const interrupted = yield* seedInteraction(database.db, directory, "interrupted")
+        const interrupted = yield* seedInteraction(database.db, directory, "interrupted", deniedInput)
         yield* commands.prepare(deniedInput, interrupted.registration)
         expect(yield* commands.interrupt(interrupted.registration)).toBeTrue()
         expect(JSON.parse((yield* exactPartResult(database.db, interrupted.registration.partID)).output)).toMatchObject(
@@ -166,12 +184,24 @@ test("representation.convert denial and recovery settle without starting or resu
           },
         )
 
-        const missing = yield* seedInteraction(database.db, directory, "missing")
+        const missing = yield* seedInteraction(database.db, directory, "missing", deniedInput)
         yield* commands.prepare(deniedInput, missing.registration)
         expect(
           JSON.parse((yield* commands.execute(deniedInput, context(missing.registration, artifactID, "allow"))).output),
         ).toMatchObject({ outcome: "error", code: "source_unavailable" })
+
+        const legacy = yield* seedInteraction(database.db, directory, "legacy-interrupted", deniedInput)
+        yield* commands.prepare(deniedInput, legacy.registration)
+        yield* database.db
+          .update(LearningCommandInvocationTable)
+          .set({ turn_id: null, input_id: null })
+          .where(eq(LearningCommandInvocationTable.part_id, legacy.registration.partID))
+          .run()
         yield* RepresentationCommandRuntime.recoverAdmitted(yield* EventV2Bridge.Service)
+        expect(JSON.parse((yield* exactPartResult(database.db, legacy.registration.partID)).output)).toMatchObject({
+          outcome: "error",
+          code: "interrupted",
+        })
         expect(yield* database.db.select().from(RepresentationRevisionTable).all()).toHaveLength(0)
       }).pipe(Effect.scoped),
     )
@@ -235,7 +265,7 @@ test("representation.convert durably preserves cancellation, timeout, and invali
           relativePath: "lecture.pdf",
         }
 
-        const cancelled = yield* seedInteraction(database.db, directory, "cancelled")
+        const cancelled = yield* seedInteraction(database.db, directory, "cancelled", input)
         const cancellationStarted = yield* Deferred.make<void>()
         const controller = new AbortController()
         processControl.run = (_command, options) =>
@@ -263,7 +293,7 @@ test("representation.convert durably preserves cancellation, timeout, and invali
           code: "cancelled",
         })
 
-        const timedOut = yield* seedInteraction(database.db, directory, "producer-timeout")
+        const timedOut = yield* seedInteraction(database.db, directory, "producer-timeout", input)
         processControl.run = () =>
           Effect.fail(
             new AppProcess.AppProcessError({
@@ -272,17 +302,14 @@ test("representation.convert durably preserves cancellation, timeout, and invali
             }),
           )
         yield* commands.prepare(input, timedOut.registration)
-        const timeoutResult = yield* commands.execute(
-          input,
-          context(timedOut.registration, artifact.id, "allow"),
-        )
+        const timeoutResult = yield* commands.execute(input, context(timedOut.registration, artifact.id, "allow"))
         expect(JSON.parse(timeoutResult.output)).toMatchObject({ outcome: "error", code: "producer_timeout" })
         yield* commands.prepare(input, timedOut.registration)
         expect(yield* commands.execute(input, context(timedOut.registration, artifact.id, "deny"))).toEqual(
           timeoutResult,
         )
 
-        const invalid = yield* seedInteraction(database.db, directory, "invalid-producer-output")
+        const invalid = yield* seedInteraction(database.db, directory, "invalid-producer-output", input)
         processControl.run = () =>
           Effect.succeed({
             command: "repa-pdf-worker",
@@ -299,7 +326,7 @@ test("representation.convert durably preserves cancellation, timeout, and invali
           code: "invalid_producer_output",
         })
 
-        const failed = yield* seedInteraction(database.db, directory, "producer-failed")
+        const failed = yield* seedInteraction(database.db, directory, "producer-failed", input)
         processControl.run = () =>
           Effect.fail(
             new AppProcess.AppProcessError({
@@ -370,7 +397,12 @@ function context(
   } satisfies RepresentationCommandRuntime.ExecuteContext
 }
 
-function seedInteraction(db: Database.Interface["db"], directory: string, suffix: string) {
+function seedInteraction(
+  db: Database.Interface["db"],
+  directory: string,
+  suffix: string,
+  input: RepresentationConvertInput,
+) {
   return Effect.gen(function* () {
     const time = Date.now()
     const sessionID = SessionSchema.ID.make(`ses_representation_runtime_${suffix}`)
@@ -424,40 +456,125 @@ function seedInteraction(db: Database.Interface["db"], directory: string, suffix
         time_updated: time,
       })
       .run()
-    yield* db.transaction((tx) =>
-      LearningCommand.Occurrence.admit(tx, {
-        admission: LearningCommand.LearnerAdmission.interactive(),
-        sessionID,
-        messageID: userMessageID,
-        timeAdmitted: time,
+    const turnID = Turn.ID.create()
+    const inputID = Turn.InputID.create()
+    const occurrenceID = yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        const occurrence = yield* LearningCommand.Occurrence.admit(tx, {
+          admission: LearningCommand.LearnerAdmission.interactive(),
+          sessionID,
+          messageID: userMessageID,
+          timeAdmitted: time,
+        })
+        yield* TurnLifecycle.admit(tx, {
+          kind: "learner",
+          turnID,
+          sessionID,
+          inputID,
+          messageID: userMessageID,
+          occurrenceID: occurrence.id,
+          limits: { model: 100, tool: 100 },
+          envelope: { input },
+          policyBasis: { source: "representation-command-runtime-test" },
+          timeAdmitted: time,
+        })
+        return occurrence.id
       }),
     )
-    const interaction = { sessionID, userMessageID }
-    return { ...interaction, registration: yield* insertAssistant(db, interaction, suffix) }
+    const interaction = { sessionID, userMessageID, turnID, inputID, occurrenceID }
+    return { ...interaction, registration: yield* insertAssistant(db, interaction, suffix, input) }
   }).pipe(Effect.orDie)
 }
 
 function insertAssistant(
   db: Database.Interface["db"],
-  interaction: { sessionID: SessionSchema.ID; userMessageID: SessionV1.MessageID },
+  interaction: {
+    sessionID: SessionSchema.ID
+    userMessageID: SessionV1.MessageID
+    turnID: Turn.ID
+    inputID: Turn.InputID
+    occurrenceID: LearningCommand.OccurrenceID
+  },
   suffix: string,
+  input: RepresentationConvertInput,
 ) {
   return Effect.gen(function* () {
     const time = Date.now()
     const assistantMessageID = SessionV1.MessageID.ascending(`msg_representation_runtime_assistant_${suffix}`)
-    yield* db
-      .insert(MessageTable)
-      .values({
-        id: assistantMessageID,
-        session_id: interaction.sessionID,
-        data: assistantData(interaction.userMessageID, time),
-        time_created: time,
-        time_updated: time,
-      })
-      .run()
+    const partID = SessionV1.PartID.ascending(`prt_representation_runtime_tool_${suffix}`)
+    const callID = `call-representation-runtime-${suffix}`
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* tx
+          .insert(MessageTable)
+          .values({
+            id: assistantMessageID,
+            session_id: interaction.sessionID,
+            data: assistantData(interaction.userMessageID, time),
+            time_created: time,
+            time_updated: time,
+          })
+          .run()
+        yield* tx
+          .insert(PartTable)
+          .values({
+            id: partID,
+            session_id: interaction.sessionID,
+            message_id: assistantMessageID,
+            data: {
+              type: "tool",
+              tool: LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
+              callID,
+              state: { status: "pending", input, raw: JSON.stringify(input) },
+            } as (typeof PartTable.$inferInsert)["data"],
+            time_created: time,
+            time_updated: time,
+          })
+          .run()
+        yield* TurnLifecycle.admitModel(tx, {
+          turnID: interaction.turnID,
+          sessionID: interaction.sessionID,
+          assistantMessageID,
+          requestEnvelope: { input },
+          contextFingerprint: new Bun.CryptoHasher("sha256").update(`context:${suffix}`).digest("hex"),
+          snapshotFrontier: { sequence: 0, time: 0 },
+          timeAdmitted: time,
+        })
+        yield* TurnLifecycle.sealCandidateSet(tx, {
+          turnID: interaction.turnID,
+          sessionID: interaction.sessionID,
+          assistantMessageID,
+          candidates: [
+            {
+              partID,
+              callID,
+              tool: LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
+              envelope: { input },
+            },
+          ],
+          timeSealed: time,
+        })
+        yield* TurnLifecycle.settleModel(tx, {
+          turnID: interaction.turnID,
+          assistantMessageID,
+          state: "completed",
+          time,
+        })
+        yield* TurnLifecycle.admitTool(tx, {
+          turnID: interaction.turnID,
+          sessionID: interaction.sessionID,
+          assistantMessageID,
+          partID,
+          timeAdmitted: time,
+        })
+      }),
+    )
     return Object.freeze({
-      partID: SessionV1.PartID.ascending(`prt_representation_runtime_tool_${suffix}`),
-      callID: `call-representation-runtime-${suffix}`,
+      turnID: interaction.turnID,
+      inputID: interaction.inputID,
+      causalOccurrenceID: interaction.occurrenceID,
+      partID,
+      callID,
       emissionOrdinal: 0,
       sessionID: interaction.sessionID,
       parentUserMessageID: interaction.userMessageID,

@@ -10,6 +10,7 @@
 // Resolves when the footer closes and all in-flight work finishes.
 import * as Locale from "@/util/locale"
 import { MessageID, PartID } from "@/session/schema"
+import { Identifier } from "@opencode-ai/core/id/id"
 import { isExitCommand, isNewCommand } from "./prompt.shared"
 import type { FooterApi, FooterEvent, FooterQueuedPrompt, RunPrompt } from "./types"
 
@@ -167,6 +168,8 @@ export async function runPromptQueue(input: QueueInput): Promise<void> {
               ? prompt
               : {
                   ...prompt,
+                  turnID: prompt.turnID ?? Identifier.create("trn", "ascending"),
+                  inputID: prompt.inputID ?? Identifier.create("tri", "ascending"),
                   messageID: prompt.messageID ?? queued?.messageID ?? MessageID.ascending(),
                 }
           state.active = sent

@@ -82,6 +82,7 @@ import * as TuiAudio from "./audio"
 import { win32DisableProcessedInput, win32FlushInputBuffer } from "./terminal-win32"
 import { destroyRenderer } from "./util/renderer"
 import { cliErrorMessage, errorFormat } from "./util/error"
+import { prepareForkDraft } from "./util/fork-draft"
 
 registerOpencodeSpinner()
 
@@ -485,13 +486,9 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     if (match) {
       continued = true
       if (args.fork) {
-        void sdk.client.session.fork({ sessionID: match }).then((result) => {
-          if (result.data?.id) {
-            route.navigate({ type: "session", sessionID: result.data.id })
-          } else {
-            toast.show({ message: "Failed to fork session", variant: "error" })
-          }
-        })
+        void prepareForkDraft(sdk.client, match)
+          .then((fork) => route.navigate({ type: "session", sessionID: match, fork }))
+          .catch(() => toast.show({ message: "Failed to fork session", variant: "error" }))
       } else {
         route.navigate({ type: "session", sessionID: match })
       }
@@ -505,13 +502,9 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
   createEffect(() => {
     if (forked || sync.status !== "complete" || !args.sessionID || !args.fork) return
     forked = true
-    void sdk.client.session.fork({ sessionID: args.sessionID }).then((result) => {
-      if (result.data?.id) {
-        route.navigate({ type: "session", sessionID: result.data.id })
-      } else {
-        toast.show({ message: "Failed to fork session", variant: "error" })
-      }
-    })
+    void prepareForkDraft(sdk.client, args.sessionID)
+      .then((fork) => route.navigate({ type: "session", sessionID: args.sessionID!, fork }))
+      .catch(() => toast.show({ message: "Failed to fork session", variant: "error" }))
   })
 
   createEffect(
@@ -981,9 +974,7 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         evt.stopPropagation()
       }}
       onMouseUp={
-        !Flag.REPA_EXPERIMENTAL_DISABLE_COPY_ON_SELECT
-          ? () => Selection.copy(renderer, toast, clipboard)
-          : undefined
+        !Flag.REPA_EXPERIMENTAL_DISABLE_COPY_ON_SELECT ? () => Selection.copy(renderer, toast, clipboard) : undefined
       }
     >
       <Show when={Flag.REPA_SHOW_TTFD}>

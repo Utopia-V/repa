@@ -3,54 +3,34 @@ import { pathToFileURL } from "bun"
 
 const server = await createOpencodeServer()
 const client = createOpencodeClient({ baseUrl: server.url })
-
-const input = await Array.fromAsync(new Bun.Glob("packages/core/*.ts").scan())
-
-const tasks: Promise<void>[] = []
-for await (const file of input) {
-  console.log("processing", file)
-  const session = await client.session.create()
-  tasks.push(
-    client.session.prompt({
-      path: { id: session.data.id },
-      body: {
-        parts: [
-          {
-            type: "file",
-            mime: "text/plain",
-            url: pathToFileURL(file).href,
-          },
-          {
-            type: "text",
-            text: `Write tests for every public function in this file.`,
-          },
-        ],
-      },
-    }),
-  )
-  console.log("done", file)
-}
+const files = await Array.fromAsync(new Bun.Glob("packages/core/*.ts").scan())
 
 await Promise.all(
-  input.map(async (file) => {
-    const session = await client.session.create()
+  files.map(async (file) => {
+    const nonce = crypto.randomUUID()
+    const sessionID = `ses_${nonce}`
+    const turnID = `trn_${nonce}`
     console.log("processing", file)
-    await client.session.prompt({
-      path: { id: session.data.id },
-      body: {
-        parts: [
-          {
-            type: "file",
-            mime: "text/plain",
-            url: pathToFileURL(file).href,
-          },
-          {
-            type: "text",
-            text: `Write tests for every public function in this file.`,
-          },
-        ],
-      },
+    const admitted = await client.session.start({
+      sessionID,
+      turnID,
+      inputID: `tri_${nonce}`,
+      messageID: `msg_${nonce}`,
+      parts: [
+        {
+          type: "file",
+          mime: "text/plain",
+          url: pathToFileURL(file).href,
+        },
+        {
+          type: "text",
+          text: "Write tests for every public function in this file.",
+        },
+      ],
     })
-    console.log("done", file)
+    if (admitted.error) throw admitted.error
+    const terminal = await client.session.awaitTurn({ sessionID, turnID })
+    if (terminal.error) throw terminal.error
+    console.log("done", file, terminal.data.state)
   }),
 )

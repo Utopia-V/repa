@@ -5,9 +5,9 @@ import type { Agent } from "./agent"
  * Build the `permission` ruleset for a subagent's session when it's spawned
  * via the task tool. Combines:
  *
- * 1. The parent session's deny rules and external_directory rules.
- *    Parent agent restrictions only govern that agent; the subagent's own
- *    permissions determine its capabilities.
+ * 1. The parent session's deny rules and external_directory rules. The full
+ *    parent base plus inherited authority is frozen separately in the child
+ *    Turn capability and remains an absence-deny ceiling for every effect.
  * 2. Default `todowrite` and `task` denies if the subagent's own ruleset
  *    doesn't already permit them.
  */

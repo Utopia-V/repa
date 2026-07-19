@@ -29,20 +29,15 @@ import type {
   EventTuiPromptAppend,
   EventTuiSessionSelect,
   EventTuiToastShow,
-  ExperimentalCapabilitiesGetErrors,
-  ExperimentalCapabilitiesGetResponses,
   ExperimentalProjectCopyGenerateNameErrors,
   ExperimentalProjectCopyGenerateNameResponses,
   ExperimentalResourceListErrors,
   ExperimentalResourceListResponses,
-  ExperimentalSessionBackgroundErrors,
-  ExperimentalSessionBackgroundResponses,
   ExperimentalSessionListErrors,
   ExperimentalSessionListResponses,
   FileListErrors,
   FileListResponses,
   FilePartInput,
-  FilePartSource,
   FileReadErrors,
   FileReadResponses,
   FileStatusErrors,
@@ -149,51 +144,50 @@ import type {
   QuestionReplyErrors,
   QuestionReplyResponses,
   QuestionV2Reply,
-  SessionAbortErrors,
-  SessionAbortResponses,
+  SessionActiveTurnErrors,
+  SessionActiveTurnResponses,
+  SessionAwaitTurnErrors,
+  SessionAwaitTurnResponses,
   SessionChildrenErrors,
   SessionChildrenResponses,
-  SessionCommandErrors,
-  SessionCommandResponses,
-  SessionCreateErrors,
-  SessionCreateResponses,
   SessionDeleteErrors,
   SessionDeleteMessageErrors,
   SessionDeleteMessageResponses,
   SessionDeleteResponses,
   SessionDiffErrors,
   SessionDiffResponses,
-  SessionForkErrors,
-  SessionForkResponses,
+  SessionForkBasisErrors,
+  SessionForkBasisResponses,
   SessionGetErrors,
   SessionGetResponses,
-  SessionInitErrors,
-  SessionInitResponses,
+  SessionGetTurnErrors,
+  SessionGetTurnResponses,
+  SessionInterruptTurnErrors,
+  SessionInterruptTurnResponses,
   SessionListErrors,
   SessionListResponses,
   SessionMessageErrors,
   SessionMessageResponses,
   SessionMessagesErrors,
   SessionMessagesResponses,
-  SessionPromptAsyncErrors,
-  SessionPromptAsyncResponses,
-  SessionPromptErrors,
-  SessionPromptResponses,
   SessionRevertErrors,
   SessionRevertResponses,
   SessionShellErrors,
   SessionShellResponses,
+  SessionStartErrors,
+  SessionStartResponses,
   SessionStatusErrors,
   SessionStatusResponses,
-  SessionSummarizeErrors,
-  SessionSummarizeResponses,
+  SessionSteerErrors,
+  SessionSteerResponses,
   SessionTodoErrors,
   SessionTodoResponses,
+  SessionTurnsErrors,
+  SessionTurnsResponses,
   SessionUnrevertErrors,
   SessionUnrevertResponses,
   SessionUpdateErrors,
   SessionUpdateResponses,
-  SubtaskPartInput,
   TextPartInput,
   ToolIdsErrors,
   ToolIdsResponses,
@@ -225,6 +219,7 @@ import type {
   TuiShowToastResponses,
   TuiSubmitPromptErrors,
   TuiSubmitPromptResponses,
+  TurnLimits,
   V2AgentListErrors,
   V2AgentListResponses,
   V2CommandListErrors,
@@ -719,201 +714,6 @@ export class Config2 extends HeyApiClient {
   }
 }
 
-export class Capabilities extends HeyApiClient {
-  /**
-   * Get experimental capabilities
-   *
-   * Get experimental features enabled on the Repa server.
-   */
-  public get<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<
-      ExperimentalCapabilitiesGetResponses,
-      ExperimentalCapabilitiesGetErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/capabilities",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Session extends HeyApiClient {
-  /**
-   * List sessions
-   *
-   * Get a list of all Repa sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      roots?: boolean | "true" | "false"
-      start?: number
-      cursor?: number
-      search?: string
-      limit?: number
-      archived?: boolean | "true" | "false"
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "query", key: "roots" },
-            { in: "query", key: "start" },
-            { in: "query", key: "cursor" },
-            { in: "query", key: "search" },
-            { in: "query", key: "limit" },
-            { in: "query", key: "archived" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).get<
-      ExperimentalSessionListResponses,
-      ExperimentalSessionListErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/session",
-      ...options,
-      ...params,
-    })
-  }
-
-  /**
-   * Background subagents
-   *
-   * Detach any synchronous subagents currently blocking the session and continue them in the background.
-   */
-  public background<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperimentalSessionBackgroundResponses,
-      ExperimentalSessionBackgroundErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/session/{sessionID}/background",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class Resource extends HeyApiClient {
-  /**
-   * Get MCP resources
-   *
-   * Get all available MCP resources from connected servers. Optionally filter by name.
-   */
-  public list<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
-    return (options?.client ?? this.client).get<
-      ExperimentalResourceListResponses,
-      ExperimentalResourceListErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/resource",
-      ...options,
-      ...params,
-    })
-  }
-}
-
-export class ProjectCopy extends HeyApiClient {
-  /**
-   * Generate project copy name
-   *
-   * Generate a short name for a project copy from task context.
-   */
-  public generateName<ThrowOnError extends boolean = false>(
-    parameters: {
-      projectID: string
-      directory?: string
-      context?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "projectID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "context" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<
-      ExperimentalProjectCopyGenerateNameResponses,
-      ExperimentalProjectCopyGenerateNameErrors,
-      ThrowOnError
-    >({
-      url: "/experimental/project/{projectID}/copy/generate-name",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-}
-
-export class Experimental extends HeyApiClient {
-  private _capabilities?: Capabilities
-  get capabilities(): Capabilities {
-    return (this._capabilities ??= new Capabilities({ client: this.client }))
-  }
-
-  private _session?: Session
-  get session(): Session {
-    return (this._session ??= new Session({ client: this.client }))
-  }
-
-  private _resource?: Resource
-  get resource(): Resource {
-    return (this._resource ??= new Resource({ client: this.client }))
-  }
-
-  private _projectCopy?: ProjectCopy
-  get projectCopy(): ProjectCopy {
-    return (this._projectCopy ??= new ProjectCopy({ client: this.client }))
-  }
-}
-
 export class Tool extends HeyApiClient {
   /**
    * List tools
@@ -1090,6 +890,137 @@ export class Worktree extends HeyApiClient {
         ...params.headers,
       },
     })
+  }
+}
+
+export class Session extends HeyApiClient {
+  /**
+   * List sessions
+   *
+   * Get a list of all Repa sessions across projects, sorted by most recently updated. Archived sessions are excluded by default.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+      roots?: boolean | "true" | "false"
+      start?: number
+      cursor?: number
+      search?: string
+      limit?: number
+      archived?: boolean | "true" | "false"
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "query", key: "directory" },
+            { in: "query", key: "roots" },
+            { in: "query", key: "start" },
+            { in: "query", key: "cursor" },
+            { in: "query", key: "search" },
+            { in: "query", key: "limit" },
+            { in: "query", key: "archived" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      ExperimentalSessionListResponses,
+      ExperimentalSessionListErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/session",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class Resource extends HeyApiClient {
+  /**
+   * Get MCP resources
+   *
+   * Get all available MCP resources from connected servers. Optionally filter by name.
+   */
+  public list<ThrowOnError extends boolean = false>(
+    parameters?: {
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams([parameters], [{ args: [{ in: "query", key: "directory" }] }])
+    return (options?.client ?? this.client).get<
+      ExperimentalResourceListResponses,
+      ExperimentalResourceListErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/resource",
+      ...options,
+      ...params,
+    })
+  }
+}
+
+export class ProjectCopy extends HeyApiClient {
+  /**
+   * Generate project copy name
+   *
+   * Generate a short name for a project copy from task context.
+   */
+  public generateName<ThrowOnError extends boolean = false>(
+    parameters: {
+      projectID: string
+      directory?: string
+      context?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "projectID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "context" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<
+      ExperimentalProjectCopyGenerateNameResponses,
+      ExperimentalProjectCopyGenerateNameErrors,
+      ThrowOnError
+    >({
+      url: "/experimental/project/{projectID}/copy/generate-name",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+}
+
+export class Experimental extends HeyApiClient {
+  private _session?: Session
+  get session(): Session {
+    return (this._session ??= new Session({ client: this.client }))
+  }
+
+  private _resource?: Resource
+  get resource(): Resource {
+    return (this._resource ??= new Resource({ client: this.client }))
+  }
+
+  private _projectCopy?: ProjectCopy
+  get projectCopy(): ProjectCopy {
+    return (this._projectCopy ??= new ProjectCopy({ client: this.client }))
   }
 }
 
@@ -2507,57 +2438,6 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Create session
-   *
-   * Create a new Repa session for interacting with AI assistants and managing conversations.
-   */
-  public create<ThrowOnError extends boolean = false>(
-    parameters?: {
-      directory?: string
-      parentID?: string
-      title?: string
-      agent?: string
-      model?: {
-        id: string
-        providerID: string
-        variant?: string
-      }
-      metadata?: {
-        [key: string]: unknown
-      }
-      permission?: PermissionRuleset
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "query", key: "directory" },
-            { in: "body", key: "parentID" },
-            { in: "body", key: "title" },
-            { in: "body", key: "agent" },
-            { in: "body", key: "model" },
-            { in: "body", key: "metadata" },
-            { in: "body", key: "permission" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionCreateResponses, SessionCreateErrors, ThrowOnError>({
-      url: "/session",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
    * Get session status
    *
    * Retrieve the current status of all sessions, including active, idle, and completed states.
@@ -2810,64 +2690,6 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Send message
-   *
-   * Create and send a new message to a session, streaming the AI response.
-   */
-  public prompt<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-      messageID?: string
-      model?: {
-        providerID: string
-        modelID: string
-      }
-      agent?: string
-      noReply?: boolean
-      tools?: {
-        [key: string]: boolean
-      }
-      format?: OutputFormat
-      system?: string
-      variant?: string
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "messageID" },
-            { in: "body", key: "model" },
-            { in: "body", key: "agent" },
-            { in: "body", key: "noReply" },
-            { in: "body", key: "tools" },
-            { in: "body", key: "format" },
-            { in: "body", key: "system" },
-            { in: "body", key: "variant" },
-            { in: "body", key: "parts" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionPromptResponses, SessionPromptErrors, ThrowOnError>({
-      url: "/session/{sessionID}/message",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
    * Delete message
    *
    * Permanently delete a specific message and all of its parts from a session without reverting file changes.
@@ -2936,48 +2758,11 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Fork session
+   * Read fork basis
    *
-   * Create a new session by forking an existing session at a specific message point.
+   * Read the exact source Session frontier for a process-local fork draft. This call creates no target Session.
    */
-  public fork<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
-      messageID?: string
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "messageID" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionForkResponses, SessionForkErrors, ThrowOnError>({
-      url: "/session/{sessionID}/fork",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Abort session
-   *
-   * Abort an active session and stop any ongoing AI processing or command execution.
-   */
-  public abort<ThrowOnError extends boolean = false>(
+  public forkBasis<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
@@ -2995,25 +2780,22 @@ export class Session2 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<SessionAbortResponses, SessionAbortErrors, ThrowOnError>({
-      url: "/session/{sessionID}/abort",
+    return (options?.client ?? this.client).get<SessionForkBasisResponses, SessionForkBasisErrors, ThrowOnError>({
+      url: "/session/{sessionID}/fork-basis",
       ...options,
       ...params,
     })
   }
 
   /**
-   * Initialize session
+   * List Session Turns
    *
-   * Analyze the current application and create an AGENTS.md file with project-specific agent configurations.
+   * Inspect every available durable Turn in one Session without reconstructing state from messages.
    */
-  public init<ThrowOnError extends boolean = false>(
+  public turns<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
-      modelID?: string
-      providerID?: string
-      messageID?: string
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3024,89 +2806,55 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
-            { in: "body", key: "modelID" },
-            { in: "body", key: "providerID" },
-            { in: "body", key: "messageID" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<SessionInitResponses, SessionInitErrors, ThrowOnError>({
-      url: "/session/{sessionID}/init",
+    return (options?.client ?? this.client).get<SessionTurnsResponses, SessionTurnsErrors, ThrowOnError>({
+      url: "/session/{sessionID}/turn",
       ...options,
       ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 
   /**
-   * Summarize session
+   * Start exact Turn
    *
-   * Generate a concise summary of the session using AI compaction to preserve key information.
+   * Admit one new root Turn using stable identities. This never becomes a steer; fork materialization is an atomic start variant.
    */
-  public summarize<ThrowOnError extends boolean = false>(
+  public start<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
       directory?: string
-      providerID?: string
-      modelID?: string
-      auto?: boolean
-    },
-    options?: Options<never, ThrowOnError>,
-  ) {
-    const params = buildClientParams(
-      [parameters],
-      [
-        {
-          args: [
-            { in: "path", key: "sessionID" },
-            { in: "query", key: "directory" },
-            { in: "body", key: "providerID" },
-            { in: "body", key: "modelID" },
-            { in: "body", key: "auto" },
-          ],
-        },
-      ],
-    )
-    return (options?.client ?? this.client).post<SessionSummarizeResponses, SessionSummarizeErrors, ThrowOnError>({
-      url: "/session/{sessionID}/summarize",
-      ...options,
-      ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
-    })
-  }
-
-  /**
-   * Send async message
-   *
-   * Create and send a new message to a session asynchronously, starting the session if needed and returning immediately.
-   */
-  public promptAsync<ThrowOnError extends boolean = false>(
-    parameters: {
-      sessionID: string
-      directory?: string
+      turnID?: string
+      inputID?: string
       messageID?: string
       model?: {
         providerID: string
         modelID: string
       }
       agent?: string
-      noReply?: boolean
+      limits?: TurnLimits
       tools?: {
         [key: string]: boolean
       }
       format?: OutputFormat
       system?: string
       variant?: string
-      parts?: Array<TextPartInput | FilePartInput | AgentPartInput | SubtaskPartInput>
+      parts?: Array<TextPartInput | FilePartInput | AgentPartInput>
+      session?: {
+        parentID?: string
+        title?: string
+        metadata?: {
+          [key: string]: unknown
+        }
+        permission?: PermissionRuleset
+      }
+      fork?: {
+        sourceSessionID: string
+        sourceEventSequence: number
+        cutoffMessageID?: string
+      }
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3117,10 +2865,168 @@ export class Session2 extends HeyApiClient {
           args: [
             { in: "path", key: "sessionID" },
             { in: "query", key: "directory" },
+            { in: "body", key: "turnID" },
+            { in: "body", key: "inputID" },
             { in: "body", key: "messageID" },
             { in: "body", key: "model" },
             { in: "body", key: "agent" },
-            { in: "body", key: "noReply" },
+            { in: "body", key: "limits" },
+            { in: "body", key: "tools" },
+            { in: "body", key: "format" },
+            { in: "body", key: "system" },
+            { in: "body", key: "variant" },
+            { in: "body", key: "parts" },
+            { in: "body", key: "session" },
+            { in: "body", key: "fork" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).post<SessionStartResponses, SessionStartErrors, ThrowOnError>({
+      url: "/session/{sessionID}/turn",
+      ...options,
+      ...params,
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+        ...params.headers,
+      },
+    })
+  }
+
+  /**
+   * Get active Turn
+   *
+   * Read the exact durable active Turn and its matching live owner state.
+   */
+  public activeTurn<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionActiveTurnResponses, SessionActiveTurnErrors, ThrowOnError>({
+      url: "/session/{sessionID}/turn/active",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Get exact Turn
+   *
+   * Read one exact Turn without retargeting a replacement active Turn.
+   */
+  public getTurn<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      turnID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "turnID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionGetTurnResponses, SessionGetTurnErrors, ThrowOnError>({
+      url: "/session/{sessionID}/turn/{turnID}",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Await exact Turn
+   *
+   * Wait for one exact Turn to reach a durable terminal outcome.
+   */
+  public awaitTurn<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      turnID: string
+      directory?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "turnID" },
+            { in: "query", key: "directory" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<SessionAwaitTurnResponses, SessionAwaitTurnErrors, ThrowOnError>({
+      url: "/session/{sessionID}/turn/{turnID}/await",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * Steer exact Turn
+   *
+   * Promote one stable learner input into the named active Turn at its next safe boundary. This never moves to another Turn.
+   */
+  public steer<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      turnID: string
+      directory?: string
+      inputID?: string
+      messageID?: string
+      model?: {
+        providerID: string
+        modelID: string
+      }
+      agent?: string
+      tools?: {
+        [key: string]: boolean
+      }
+      format?: OutputFormat
+      system?: string
+      variant?: string
+      parts?: Array<TextPartInput | FilePartInput | AgentPartInput>
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "path", key: "turnID" },
+            { in: "query", key: "directory" },
+            { in: "body", key: "inputID" },
+            { in: "body", key: "messageID" },
+            { in: "body", key: "model" },
+            { in: "body", key: "agent" },
             { in: "body", key: "tools" },
             { in: "body", key: "format" },
             { in: "body", key: "system" },
@@ -3130,8 +3036,8 @@ export class Session2 extends HeyApiClient {
         },
       ],
     )
-    return (options?.client ?? this.client).post<SessionPromptAsyncResponses, SessionPromptAsyncErrors, ThrowOnError>({
-      url: "/session/{sessionID}/prompt_async",
+    return (options?.client ?? this.client).post<SessionSteerResponses, SessionSteerErrors, ThrowOnError>({
+      url: "/session/{sessionID}/turn/{turnID}/steer",
       ...options,
       ...params,
       headers: {
@@ -3143,28 +3049,15 @@ export class Session2 extends HeyApiClient {
   }
 
   /**
-   * Send command
+   * Interrupt exact Turn
    *
-   * Send a new command to a session for execution by the AI assistant.
+   * Interrupt the named Turn and its live descendant subtree; terminal replay is idempotent.
    */
-  public command<ThrowOnError extends boolean = false>(
+  public interruptTurn<ThrowOnError extends boolean = false>(
     parameters: {
       sessionID: string
+      turnID: string
       directory?: string
-      messageID?: string
-      agent?: string
-      model?: string
-      arguments?: string
-      command?: string
-      variant?: string
-      parts?: Array<{
-        id?: string
-        type: "file"
-        mime: string
-        filename?: string
-        url: string
-        source?: FilePartSource
-      }>
     },
     options?: Options<never, ThrowOnError>,
   ) {
@@ -3174,27 +3067,20 @@ export class Session2 extends HeyApiClient {
         {
           args: [
             { in: "path", key: "sessionID" },
+            { in: "path", key: "turnID" },
             { in: "query", key: "directory" },
-            { in: "body", key: "messageID" },
-            { in: "body", key: "agent" },
-            { in: "body", key: "model" },
-            { in: "body", key: "arguments" },
-            { in: "body", key: "command" },
-            { in: "body", key: "variant" },
-            { in: "body", key: "parts" },
           ],
         },
       ],
     )
-    return (options?.client ?? this.client).post<SessionCommandResponses, SessionCommandErrors, ThrowOnError>({
-      url: "/session/{sessionID}/command",
+    return (options?.client ?? this.client).post<
+      SessionInterruptTurnResponses,
+      SessionInterruptTurnErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/turn/{turnID}/interrupt",
       ...options,
       ...params,
-      headers: {
-        "Content-Type": "application/json",
-        ...options?.headers,
-        ...params.headers,
-      },
     })
   }
 
@@ -5688,11 +5574,6 @@ export class OpencodeClient extends HeyApiClient {
     return (this._config ??= new Config2({ client: this.client }))
   }
 
-  private _experimental?: Experimental
-  get experimental(): Experimental {
-    return (this._experimental ??= new Experimental({ client: this.client }))
-  }
-
   private _tool?: Tool
   get tool(): Tool {
     return (this._tool ??= new Tool({ client: this.client }))
@@ -5701,6 +5582,11 @@ export class OpencodeClient extends HeyApiClient {
   private _worktree?: Worktree
   get worktree(): Worktree {
     return (this._worktree ??= new Worktree({ client: this.client }))
+  }
+
+  private _experimental?: Experimental
+  get experimental(): Experimental {
+    return (this._experimental ??= new Experimental({ client: this.client }))
   }
 
   private _find?: Find

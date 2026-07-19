@@ -1,11 +1,14 @@
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
-import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
-import { PartTable } from "@opencode-ai/core/session/sql"
+import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { PartTable } from "@opencode-ai/core/session/sql"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Turn } from "@opencode-ai/schema/turn"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Permission } from "@/permission"
 import { eq } from "drizzle-orm"
@@ -15,6 +18,9 @@ import { command, normalize, type AcceptCourseViewRevisionInput } from "./input"
 import { LearningCommandPermission } from "./permission"
 
 export type Registration = Readonly<{
+  turnID: Turn.ID
+  inputID: Turn.InputID
+  causalOccurrenceID?: LearningCommand.OccurrenceID
   partID: SessionV1.ToolPart["id"]
   callID: string
   emissionOrdinal: number
@@ -42,6 +48,11 @@ type Prepared = Readonly<{
   invocation: LearningCommand.AcceptCourseViewRevisionInvocation
   settlement?: LearningCommand.Settlement
 }>
+
+type TerminalPartEnvelope = Pick<
+  LearningCommand.InvocationEnvelope,
+  "partID" | "assistantMessageID" | "sessionID" | "providerCallID" | "timeAdmitted"
+>
 
 type Active = Readonly<{
   canonical: AcceptCourseViewRevisionInput
@@ -77,19 +88,37 @@ const layer = Layer.effect(
       const canonical = normalize(modelInput)
       const transaction = events.transaction((tx) =>
         Effect.gen(function* () {
+          const consumed = yield* LearningFrontier.read(tx)
+          yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
           const physical = yield* loadPhysicalPrepared(tx, canonical, registration)
           if (physical) return noEvent<PreparationOutcome>({ type: "success" })
           const row = yield* readPartRow(tx, registration.partID)
-          const timeAdmitted = row?.time_created ?? Date.now()
-          if (row) yield* assertAdmittedPart(tx, canonical, registration, timeAdmitted)
-          if (!row) yield* SessionProjector.projectPart(tx, pendingPart(canonical, registration), timeAdmitted)
-          const presentation = yield* Occurrence.resolvePresentation(tx, {
+          if (!row) {
+            return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+          }
+          const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+            turnID: registration.turnID,
+            inputID: registration.inputID,
+            causalOccurrenceID: registration.causalOccurrenceID,
+            partID: registration.partID,
+            callID: registration.callID,
+            emissionOrdinal: registration.emissionOrdinal,
             sessionID: registration.sessionID,
-            messageID: registration.parentUserMessageID,
+            assistantMessageID: registration.assistantMessageID,
+            capabilityIdentity: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
           })
+          const timeAdmitted = Math.max(
+            row.time_created,
+            trusted.modelTimeAdmitted,
+            trusted.candidateTimeRegistered,
+            trusted.toolTimeAdmitted,
+          )
+          yield* assertAdmittedPart(tx, canonical, registration, timeAdmitted)
           const invocation = {
             envelope: {
-              occurrenceID: presentation.occurrenceID,
+              occurrenceID: registration.causalOccurrenceID!,
+              turnID: registration.turnID,
+              inputID: registration.inputID,
               sessionID: registration.sessionID,
               parentUserMessageID: registration.parentUserMessageID,
               assistantMessageID: registration.assistantMessageID,
@@ -250,9 +279,14 @@ function invocationFromPhysical(
   physical: LearningCommand.PhysicalInvocation,
   canonical: AcceptCourseViewRevisionInput,
 ): LearningCommand.AcceptCourseViewRevisionInvocation {
+  if (!physical.turn_id || !physical.input_id) {
+    throw new Error(`Learning invocation ${physical.part_id} predates durable Turn authorization`)
+  }
   return {
     envelope: {
       occurrenceID: physical.occurrence_id,
+      turnID: physical.turn_id,
+      inputID: physical.input_id,
       sessionID: physical.session_id,
       parentUserMessageID: physical.parent_user_message_id,
       assistantMessageID: physical.assistant_message_id,
@@ -326,6 +360,11 @@ function executePrepared(
     )
     const committed = yield* events.transaction((tx) =>
       Effect.gen(function* () {
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, {
+          partID: prepared.invocation.envelope.partID,
+          frontier: consumed,
+        })
         const current = yield* loadPhysicalPrepared(
           tx,
           prepared.canonical,
@@ -345,6 +384,12 @@ function executePrepared(
         if (settlement.type === "replay") {
           yield* assertTerminalPart(tx, prepared.canonical, current.invocation.envelope, settlement.settlement)
           return noEvent(settlement.settlement)
+        }
+        if (settlement.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: current.invocation.envelope.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
         }
         const part = terminalPart(prepared.canonical, current.invocation.envelope, settlement.settlement)
         return withPartEvent(settlement.settlement, part, settlement.settlement.settlementTime)
@@ -367,17 +412,49 @@ export function recoverAdmitted(events: EventV2.Interface) {
     yield* Effect.forEach(
       admitted.result,
       (row) =>
-        interruptInvocation(events, {
-          partID: row.part_id,
-          callID: row.provider_call_id,
-          emissionOrdinal: row.emission_ordinal,
-          sessionID: row.session_id,
-          parentUserMessageID: row.parent_user_message_id,
-          assistantMessageID: row.assistant_message_id,
-        }).pipe(Effect.orDie),
+        row.turn_id && row.input_id
+          ? interruptInvocation(events, {
+              turnID: row.turn_id,
+              inputID: row.input_id,
+              causalOccurrenceID: row.occurrence_id,
+              partID: row.part_id,
+              callID: row.provider_call_id,
+              emissionOrdinal: row.emission_ordinal,
+              sessionID: row.session_id,
+              parentUserMessageID: row.parent_user_message_id,
+              assistantMessageID: row.assistant_message_id,
+            }).pipe(Effect.orDie)
+          : recoverLegacyAdmitted(events, row),
       { discard: true },
     )
   })
+}
+
+function recoverLegacyAdmitted(events: EventV2.Interface, row: LearningCommand.PhysicalInvocation) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const canonical = yield* canonicalFromStoredPart(tx, row.part_id)
+        if (!canonical) {
+          return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: row.part_id })
+        }
+        const settlement = yield* LearningCommand.recoverInterrupted(tx, {
+          partID: row.part_id,
+          settlement: yield* settlementMetadata(tx, row.session_id, row.time_admitted),
+        })
+        const envelope = terminalEnvelopeFromPhysical(row)
+        if (settlement.type === "replay") {
+          yield* assertTerminalPart(tx, canonical, envelope, settlement.settlement)
+          return noEvent(true)
+        }
+        return withPartEvent(
+          true,
+          terminalPart(canonical, envelope, settlement.settlement),
+          settlement.settlement.settlementTime,
+        )
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
 }
 
 export const interruptInvocation = Effect.fn("LearningCommandRuntime.interrupt")(function* (
@@ -453,7 +530,7 @@ function pendingPart(input: AcceptCourseViewRevisionInput, registration: Registr
 
 function terminalPart(
   input: AcceptCourseViewRevisionInput,
-  envelope: LearningCommand.InvocationEnvelope,
+  envelope: TerminalPartEnvelope,
   settlement: LearningCommand.Settlement,
 ): SessionV1.ToolPart {
   const result = exactResult(settlement)
@@ -535,7 +612,7 @@ function partFromRow(row: typeof PartTable.$inferSelect): SessionV1.ToolPart {
 function assertTerminalPart(
   tx: EventV2.Transaction,
   canonical: AcceptCourseViewRevisionInput,
-  envelope: LearningCommand.InvocationEnvelope,
+  envelope: TerminalPartEnvelope,
   settlement: LearningCommand.Settlement,
 ) {
   return readPart(tx, envelope.partID).pipe(
@@ -545,6 +622,16 @@ function assertTerminalPart(
         : Effect.die(`Terminal learning Part ${envelope.partID} diverged from its exact settlement`),
     ),
   )
+}
+
+function terminalEnvelopeFromPhysical(physical: LearningCommand.PhysicalInvocation): TerminalPartEnvelope {
+  return {
+    partID: physical.part_id,
+    assistantMessageID: physical.assistant_message_id,
+    sessionID: physical.session_id,
+    providerCallID: physical.provider_call_id,
+    timeAdmitted: physical.time_admitted,
+  }
 }
 
 function assertAdmittedPart(
@@ -558,10 +645,7 @@ function assertAdmittedPart(
     if (!row) {
       return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
     }
-    if (
-      row.time_created === timeAdmitted &&
-      isDeepStrictEqual(partFromRow(row), pendingPart(canonical, registration))
-    ) {
+    if (row.time_created <= timeAdmitted && isDeepStrictEqual(partFromRow(row), pendingPart(canonical, registration))) {
       return
     }
     return yield* invocationConflict(registration)
@@ -592,6 +676,9 @@ function isRegistration(value: unknown): value is Registration {
   const item = value as Record<string, unknown>
   return (
     typeof item.partID === "string" &&
+    typeof item.turnID === "string" &&
+    typeof item.inputID === "string" &&
+    typeof item.causalOccurrenceID === "string" &&
     typeof item.callID === "string" &&
     typeof item.emissionOrdinal === "number" &&
     typeof item.sessionID === "string" &&
@@ -602,6 +689,9 @@ function isRegistration(value: unknown): value is Registration {
 
 function sameRegistration(envelope: LearningCommand.InvocationEnvelope, registration: Registration) {
   return (
+    envelope.turnID === registration.turnID &&
+    envelope.inputID === registration.inputID &&
+    envelope.occurrenceID === registration.causalOccurrenceID &&
     envelope.partID === registration.partID &&
     envelope.providerCallID === registration.callID &&
     envelope.emissionOrdinal === registration.emissionOrdinal &&
@@ -616,6 +706,9 @@ function sameRegistration(envelope: LearningCommand.InvocationEnvelope, registra
 
 function registrationFromEnvelope(envelope: LearningCommand.InvocationEnvelope): Registration {
   return {
+    turnID: envelope.turnID,
+    inputID: envelope.inputID,
+    causalOccurrenceID: envelope.occurrenceID,
     partID: envelope.partID,
     callID: envelope.providerCallID,
     emissionOrdinal: envelope.emissionOrdinal,
@@ -638,7 +731,7 @@ function invocationConflict(registration: Registration) {
 export const node = LayerNode.make({
   service: Service,
   layer,
-  deps: [EventV2Bridge.node, Permission.node, SessionProjector.node, Database.node],
+  deps: [EventV2Bridge.node, Permission.node, Database.node, SessionProjector.node],
 })
 
 export * as LearningCommandRuntime from "./runtime"

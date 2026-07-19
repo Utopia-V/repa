@@ -10,10 +10,15 @@ import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { Database } from "@opencode-ai/core/database/database"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
+import { EventSequenceTable } from "@opencode-ai/core/event/sql"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnChildLineageTable } from "@opencode-ai/core/turn/sql"
+import { Turn } from "@opencode-ai/schema/turn"
 import { locationServiceMapLayer } from "@opencode-ai/core/location-services"
 
 import { NotFoundError } from "@/storage/storage"
 import { eq } from "drizzle-orm"
+import { asc } from "drizzle-orm"
 import { and } from "drizzle-orm"
 import { gte } from "drizzle-orm"
 import { isNull } from "drizzle-orm"
@@ -24,7 +29,13 @@ import { inArray } from "drizzle-orm"
 import { lt } from "drizzle-orm"
 import { or } from "drizzle-orm"
 import type { SQL } from "drizzle-orm"
-import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import {
+  MessageTable,
+  PartTable,
+  SessionHistoricalMessagePresentationTable,
+  SessionHistoricalPartPresentationTable,
+  SessionTable,
+} from "@opencode-ai/core/session/sql"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { MessageV2 } from "./message-v2"
@@ -55,7 +66,6 @@ import {
   lookupPhysicalInvocationByPart,
   Occurrence,
   removeNoEffectInvocationsForAssistant,
-  removeNoEffectInvocationsForSession,
   removeOccurrencePresentation,
 } from "@opencode-ai/core/learning-command"
 import {
@@ -64,6 +74,7 @@ import {
 } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { isDeepStrictEqual } from "node:util"
 import { SessionRunState } from "./run-state"
+import { SessionTurnEvents } from "./turn-events"
 
 const parentTitlePrefix = "New session - "
 const childTitlePrefix = "Child session - "
@@ -277,22 +288,6 @@ export const GlobalInfo = Schema.Struct({
 }).annotate({ identifier: "GlobalSession" })
 export type GlobalInfo = Types.DeepMutable<Schema.Schema.Type<typeof GlobalInfo>>
 
-export const CreateInput = Schema.optional(
-  Schema.Struct({
-    parentID: Schema.optional(SessionID),
-    title: Schema.optional(Schema.String),
-    agent: Schema.optional(Schema.String),
-    model: Schema.optional(Model),
-    metadata: Schema.optional(Metadata),
-    permission: Schema.optional(PermissionV1.Ruleset),
-  }),
-)
-export type CreateInput = Types.DeepMutable<Schema.Schema.Type<typeof CreateInput>>
-
-export const ForkInput = Schema.Struct({
-  sessionID: SessionID,
-  messageID: Schema.optional(MessageID),
-})
 export const GetInput = SessionID
 export const ChildrenInput = SessionID
 export const RemoveInput = SessionID
@@ -432,16 +427,16 @@ export type NotFound = NotFoundError
 export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<Info[]>
   readonly listGlobal: (input?: GlobalListInput) => Effect.Effect<GlobalInfo[]>
-  readonly create: (input?: {
-    parentID?: SessionID
-    title?: string
-    agent?: string
-    model?: Schema.Schema.Type<typeof Model>
-    metadata?: typeof Metadata.Type
-    permission?: PermissionV1.Ruleset
-    workspaceID?: WorkspaceV2.ID
-  }) => Effect.Effect<Info>
-  readonly fork: (input: { sessionID: SessionID; messageID?: MessageID }) => Effect.Effect<Info, NotFound | BusyError>
+  readonly prepareRootStart: (
+    tx: EventV2.Transaction,
+    input: {
+      targetSessionID: SessionID
+      turnID: Turn.ID
+      session?: NewSessionInput
+      fork?: ForkStartBasis
+    },
+  ) => Effect.Effect<RootStartPlan, NotFound | BusyError | Turn.Error>
+  readonly prepareChildStart: (input: ChildStartInput) => Effect.Effect<TurnLifecycle.Admitted, NotFound | Turn.Error>
   readonly touch: (sessionID: SessionID) => Effect.Effect<void, BusyError>
   readonly get: (id: SessionID) => Effect.Effect<Info, NotFound>
   readonly setTitle: (input: { sessionID: SessionID; title: string }) => Effect.Effect<void, BusyError>
@@ -473,8 +468,12 @@ export interface Interface {
   readonly diff: (sessionID: SessionID) => Effect.Effect<Snapshot.FileDiff[]>
   readonly messages: (input: { sessionID: SessionID; limit?: number }) => Effect.Effect<SessionV1.WithParts[], NotFound>
   readonly children: (parentID: SessionID) => Effect.Effect<Info[]>
-  readonly remove: (sessionID: SessionID) => Effect.Effect<void, NotFound | BusyError>
+  readonly remove: (sessionID: SessionID) => Effect.Effect<void, NotFound | BusyError | Turn.SessionTreeBusyError>
   readonly updateMessage: <T extends SessionV1.Info>(msg: T) => Effect.Effect<T>
+  readonly finalizeMessage: (input: {
+    info: SessionV1.Assistant
+    parts: readonly SessionV1.Part[]
+  }) => Effect.Effect<SessionV1.WithParts>
   readonly updateMessageWithParts: (input: {
     info: SessionV1.Info
     parts: readonly SessionV1.Part[]
@@ -527,6 +526,64 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/Se
 
 export const use = serviceUse(Service)
 
+export type NewSessionInput = {
+  title?: string
+  agent?: string
+  model?: Schema.Schema.Type<typeof Model>
+  parentID?: SessionID
+  workspaceID?: WorkspaceV2.ID
+  metadata?: typeof Metadata.Type
+  permission?: PermissionV1.Ruleset
+}
+
+export type ForkStartBasis = {
+  sourceSessionID: SessionID
+  sourceEventSequence: number
+  cutoffMessageID?: MessageID
+}
+
+export type RootStartPlan = {
+  readonly session: Info
+  readonly events: readonly EventV2.PreparedEvent<EventV2.Definition>[]
+}
+
+export type ChildStartInput = {
+  readonly childSessionID: SessionID
+  readonly childTurnID: Turn.ID
+  readonly childInputID: Turn.InputID
+  readonly parentSessionID: SessionID
+  readonly parentTurnID: Turn.ID
+  readonly parentTaskPartID: PartID
+  readonly parentModelMessageID: MessageID
+  readonly delegatedCapability: Record<string, unknown>
+  readonly depthLimit: number
+  readonly limits: Turn.Limits
+  readonly envelope: Record<string, unknown>
+  readonly policyBasis: Record<string, unknown>
+  readonly timeAdmitted: number
+  readonly session: Omit<NewSessionInput, "parentID">
+  readonly message: SessionV1.WithParts
+}
+
+function childAdmission(input: ChildStartInput): TurnLifecycle.DelegatedAdmission {
+  return {
+    kind: "delegated_task",
+    turnID: input.childTurnID,
+    sessionID: input.childSessionID,
+    inputID: input.childInputID,
+    messageID: input.message.info.id,
+    limits: input.limits,
+    envelope: input.envelope,
+    policyBasis: input.policyBasis,
+    delegatedCapability: input.delegatedCapability,
+    parentTurnID: input.parentTurnID,
+    parentTaskPartID: input.parentTaskPartID,
+    parentModelMessageID: input.parentModelMessageID,
+    depthLimit: input.depthLimit,
+    timeAdmitted: input.timeAdmitted,
+  }
+}
+
 export type Patch = Omit<Partial<Info>, "time" | "share" | "summary" | "revert" | "permission"> & {
   time?: Partial<Info["time"]>
   share?: Partial<NonNullable<Info["share"]>> | null
@@ -549,20 +606,15 @@ const layer: Layer.Layer<
     const flags = yield* RuntimeFlags.Service
     const patchLocks = KeyedMutex.makeUnsafe<SessionID>()
 
-    const createNext = Effect.fn("Session.createNext")(function* (input: {
-      id?: SessionID
-      title?: string
-      agent?: string
-      model?: Schema.Schema.Type<typeof Model>
-      parentID?: SessionID
-      workspaceID?: WorkspaceV2.ID
-      directory: string
-      path?: string
-      metadata?: typeof Metadata.Type
-      permission?: PermissionV1.Ruleset
-    }) {
+    const prepareNext = Effect.fn("Session.prepareNext")(function* (
+      input: NewSessionInput & {
+        id?: SessionID
+        directory: string
+        path?: string
+      },
+    ) {
       const ctx = yield* InstanceState.context
-      const result: Info = {
+      return {
         id: SessionID.descending(input.id),
         slug: Slug.create(),
         version: InstallationVersion,
@@ -582,12 +634,7 @@ const layer: Layer.Layer<
           created: Date.now(),
           updated: Date.now(),
         },
-      }
-      yield* Effect.logInfo("created", result)
-
-      yield* events.publish(SessionV1.Event.Created, { sessionID: result.id, info: result })
-
-      return result
+      } satisfies Info
     })
 
     const get = Effect.fn("Session.get")(function* (id: SessionID) {
@@ -656,83 +703,113 @@ const layer: Layer.Layer<
       return rows.map(fromRow)
     })
 
-    const removeUnlocked = Effect.fnUntraced(function* (sessionID: SessionID, markCommitted: Effect.Effect<void>) {
-      const session = yield* get(sessionID)
-      const kids = yield* children(sessionID)
-      for (const child of kids) {
-        yield* remove(child.id)
+    const removalTree = Effect.fn("Session.removalTree")(function* (sessionID: SessionID) {
+      const root = yield* get(sessionID)
+      const rows = yield* db.select().from(SessionTable).all().pipe(Effect.orDie)
+      const selected = new Map<SessionID, { readonly info: Info; readonly depth: number }>([
+        [root.id, { info: root, depth: 0 }],
+      ])
+      let changed = true
+      while (changed) {
+        const size = selected.size
+        rows.forEach((row) => {
+          if (!row.parent_id || selected.has(row.id)) return
+          const parent = selected.get(row.parent_id)
+          if (parent) selected.set(row.id, { info: fromRow(row), depth: parent.depth + 1 })
+        })
+        changed = selected.size !== size
       }
-
-      const timeDeleted = Date.now()
-      yield* events.remove(
-        sessionID,
-        (tx) =>
-          Effect.gen(function* () {
-            const presentations = yield* tx
-              .select({ messageID: LearnerOccurrencePresentationTable.message_id })
-              .from(LearnerOccurrencePresentationTable)
-              .where(eq(LearnerOccurrencePresentationTable.session_id, sessionID))
-              .all()
-              .pipe(Effect.orDie)
-            yield* removeNoEffectInvocationsForSession(tx, sessionID).pipe(Effect.orDie)
-            yield* Effect.forEach(
-              presentations,
-              (presentation) =>
-                removeOccurrencePresentation(tx, {
-                  messageID: presentation.messageID,
-                  timeDeleted,
-                }).pipe(Effect.orDie),
-              { discard: true },
-            )
-            yield* SessionProjector.removeSession(tx, sessionID)
-          }),
-        {
-          definition: SessionV1.Event.Deleted,
-          data: { sessionID, info: session },
-        },
-        { onCommitted: markCommitted, continueVisibilityOnInterrupt: true },
+      return [...selected.values()].sort(
+        (left, right) => right.depth - left.depth || left.info.id.localeCompare(right.info.id),
       )
     })
 
-    const remove: Interface["remove"] = Effect.fn("Session.remove")((sessionID: SessionID) =>
-      runState.close(sessionID, (markCommitted) => removeUnlocked(sessionID, markCommitted)),
-    )
+    const remove: Interface["remove"] = Effect.fn("Session.remove")(function* (sessionID) {
+      const tree = yield* removalTree(sessionID)
+      const sessionIDs = tree.map((entry) => entry.info.id)
+      const deletion = Effect.forEach(sessionIDs, runState.assertNotBusy, { discard: true }).pipe(
+        Effect.andThen(
+          runState.closeMany(sessionIDs, (markCommitted) =>
+            events.removeMany(
+              sessionIDs,
+              (tx) =>
+                TurnLifecycle.deleteSessionTree(tx, {
+                  rootSessionID: sessionID,
+                  sessionIDs,
+                  timeDeleted: Date.now(),
+                }),
+              tree.map((entry) => ({
+                definition: SessionV1.Event.Deleted,
+                data: { sessionID: entry.info.id, info: entry.info },
+              })),
+              {
+                onCommitted: markCommitted.pipe(Effect.andThen(runState.discard(sessionIDs))),
+                continueVisibilityOnInterrupt: true,
+              },
+            ),
+          ),
+        ),
+      )
+      yield* deletion.pipe(
+        Effect.catchTag("SessionBusyError", (error) =>
+          db
+            .transaction((tx) =>
+              Effect.gen(function* () {
+                const activeTurnIDs = yield* TurnLifecycle.activeIDs(tx, sessionIDs)
+                if (activeTurnIDs.length > 0) {
+                  return yield* new Turn.SessionTreeBusyError({ sessionID, activeTurnIDs })
+                }
+                return yield* error
+              }),
+            )
+            .pipe(Effect.catchTag("SqlError", (cause) => Effect.die(cause))),
+        ),
+        Effect.catchTag("SessionTreeChangedError", () => Effect.fail(new BusyError({ sessionID }))),
+        Effect.catchTag("TurnIntegrityError", (error) => Effect.die(error)),
+      )
+    })
+
+    function prepareMessageUpdate<T extends SessionV1.Info>(tx: EventV2.Transaction, msg: T) {
+      return Effect.gen(function* () {
+        const row = yield* tx.select().from(MessageTable).where(eq(MessageTable.id, msg.id)).get().pipe(Effect.orDie)
+        if (row && row.session_id !== msg.sessionID) {
+          return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+        }
+        const presentation = yield* tx
+          .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+          .from(LearnerOccurrencePresentationTable)
+          .where(eq(LearnerOccurrencePresentationTable.message_id, msg.id))
+          .get()
+          .pipe(Effect.orDie)
+        if (presentation) {
+          yield* Occurrence.assertPresentationUnchanged(tx, {
+            sessionID: msg.sessionID,
+            messageID: msg.id,
+          }).pipe(Effect.orDie)
+          if (row && exactStored(row, msg)) return
+          return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+        }
+        const historical = yield* tx
+          .select({ messageID: SessionHistoricalMessagePresentationTable.message_id })
+          .from(SessionHistoricalMessagePresentationTable)
+          .where(eq(SessionHistoricalMessagePresentationTable.message_id, msg.id))
+          .get()
+          .pipe(Effect.orDie)
+        if (historical) {
+          if (row && exactStored(row, msg)) return
+          return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+        }
+        return {
+          definition: SessionV1.Event.MessageUpdated,
+          data: { sessionID: msg.sessionID, info: msg },
+        } satisfies EventV2.PreparedEvent<typeof SessionV1.Event.MessageUpdated>
+      })
+    }
 
     const updateMessageUnlocked = <T extends SessionV1.Info>(msg: T): Effect.Effect<T> =>
       events
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            const row = yield* tx
-              .select()
-              .from(MessageTable)
-              .where(eq(MessageTable.id, msg.id))
-              .get()
-              .pipe(Effect.orDie)
-            if (row && row.session_id !== msg.sessionID) {
-              return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
-            }
-            const presentation = yield* tx
-              .select({ messageID: LearnerOccurrencePresentationTable.message_id })
-              .from(LearnerOccurrencePresentationTable)
-              .where(eq(LearnerOccurrencePresentationTable.message_id, msg.id))
-              .get()
-              .pipe(Effect.orDie)
-            if (presentation) {
-              yield* Occurrence.assertPresentationUnchanged(tx, {
-                sessionID: msg.sessionID,
-                messageID: msg.id,
-              }).pipe(Effect.orDie)
-              if (row && exactStored(row, msg)) return { result: msg }
-              return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
-            }
-            return {
-              result: msg,
-              event: {
-                definition: SessionV1.Event.MessageUpdated,
-                data: { sessionID: msg.sessionID, info: msg },
-              },
-            }
-          }),
+        .transaction<T, EventV2.Definition>((tx) =>
+          prepareMessageUpdate(tx, msg).pipe(Effect.map((event) => (event ? { result: msg, event } : { result: msg }))),
         )
         .pipe(
           Effect.map((result) => result.result),
@@ -742,52 +819,65 @@ const layer: Layer.Layer<
     const updateMessage: Interface["updateMessage"] = (msg) =>
       runState.shared(msg.sessionID, updateMessageUnlocked(msg)).pipe(Effect.orDie)
 
+    function preparePartUpdate<T extends SessionV1.Part>(tx: EventV2.Transaction, part: T, time: number) {
+      return Effect.gen(function* () {
+        const row = yield* tx.select().from(PartTable).where(eq(PartTable.id, part.id)).get().pipe(Effect.orDie)
+        if (row && (row.session_id !== part.sessionID || row.message_id !== part.messageID)) {
+          return yield* Effect.die(new SettledPartImmutableError({ partID: part.id }))
+        }
+        const exact = row ? exactStored(row, part) : false
+        const invocation = yield* lookupPhysicalInvocationByPart(tx, part.id)
+        if (invocation) {
+          if (exact) return
+          return yield* Effect.die(new SettledPartImmutableError({ partID: part.id }))
+        }
+        const presentation = yield* tx
+          .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+          .from(LearnerOccurrencePresentationTable)
+          .where(eq(LearnerOccurrencePresentationTable.message_id, part.messageID))
+          .get()
+          .pipe(Effect.orDie)
+        if (presentation) {
+          yield* Occurrence.assertPresentationUnchanged(tx, {
+            sessionID: part.sessionID,
+            messageID: part.messageID,
+          }).pipe(Effect.orDie)
+          if (exact) return
+          return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
+        }
+        const sessionHistorical = yield* tx
+          .select({ partID: SessionHistoricalPartPresentationTable.part_id })
+          .from(SessionHistoricalPartPresentationTable)
+          .where(eq(SessionHistoricalPartPresentationTable.part_id, part.id))
+          .get()
+          .pipe(Effect.orDie)
+        if (sessionHistorical) {
+          if (exact) return
+          return yield* Effect.die(new HistoricalPresentationConflictError({ partID: part.id }))
+        }
+        const historical = yield* tx
+          .select({ partID: HistoricalLearningToolPresentationTable.part_id })
+          .from(HistoricalLearningToolPresentationTable)
+          .where(eq(HistoricalLearningToolPresentationTable.part_id, part.id))
+          .get()
+          .pipe(Effect.orDie)
+        if (historical) {
+          if (exact) return
+          return yield* Effect.die(new HistoricalPresentationConflictError({ partID: part.id }))
+        }
+        return {
+          definition: SessionV1.Event.PartUpdated,
+          data: { sessionID: part.sessionID, part: structuredClone(part), time },
+        } satisfies EventV2.PreparedEvent<typeof SessionV1.Event.PartUpdated>
+      })
+    }
+
     const updatePartUnlocked = <T extends SessionV1.Part>(part: T): Effect.Effect<T> =>
       events
-        .transaction((tx) =>
-          Effect.gen(function* () {
-            const row = yield* tx.select().from(PartTable).where(eq(PartTable.id, part.id)).get().pipe(Effect.orDie)
-            if (row && (row.session_id !== part.sessionID || row.message_id !== part.messageID)) {
-              return yield* Effect.die(new SettledPartImmutableError({ partID: part.id }))
-            }
-            const exact = row ? exactStored(row, part) : false
-            const invocation = yield* lookupPhysicalInvocationByPart(tx, part.id)
-            if (invocation) {
-              if (exact) return { result: part }
-              return yield* Effect.die(new SettledPartImmutableError({ partID: part.id }))
-            }
-            const presentation = yield* tx
-              .select({ messageID: LearnerOccurrencePresentationTable.message_id })
-              .from(LearnerOccurrencePresentationTable)
-              .where(eq(LearnerOccurrencePresentationTable.message_id, part.messageID))
-              .get()
-              .pipe(Effect.orDie)
-            if (presentation) {
-              yield* Occurrence.assertPresentationUnchanged(tx, {
-                sessionID: part.sessionID,
-                messageID: part.messageID,
-              }).pipe(Effect.orDie)
-              if (exact) return { result: part }
-              return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
-            }
-            const historical = yield* tx
-              .select({ partID: HistoricalLearningToolPresentationTable.part_id })
-              .from(HistoricalLearningToolPresentationTable)
-              .where(eq(HistoricalLearningToolPresentationTable.part_id, part.id))
-              .get()
-              .pipe(Effect.orDie)
-            if (historical) {
-              if (exact) return { result: part }
-              return yield* Effect.die(new HistoricalPresentationConflictError({ partID: part.id }))
-            }
-            return {
-              result: part,
-              event: {
-                definition: SessionV1.Event.PartUpdated,
-                data: { sessionID: part.sessionID, part: structuredClone(part), time: Date.now() },
-              },
-            }
-          }),
+        .transaction<T, EventV2.Definition>((tx) =>
+          preparePartUpdate(tx, part, Date.now()).pipe(
+            Effect.map((event) => (event ? { result: part, event } : { result: part })),
+          ),
         )
         .pipe(
           Effect.map((result) => result.result),
@@ -796,6 +886,41 @@ const layer: Layer.Layer<
 
     const updatePart: Interface["updatePart"] = (part) =>
       runState.shared(part.sessionID, updatePartUnlocked(part)).pipe(Effect.orDie)
+
+    const finalizeMessageUnlocked = Effect.fn("Session.finalizeMessageUnlocked")(function* (
+      input: Parameters<Interface["finalizeMessage"]>[0],
+    ) {
+      if (
+        new Set(input.parts.map((part) => part.id)).size !== input.parts.length ||
+        input.parts.some((part) => part.sessionID !== input.info.sessionID || part.messageID !== input.info.id)
+      ) {
+        return yield* Effect.die(new InvalidCausalSourceError({ reason: "wrong_session" }))
+      }
+      const result = { info: input.info, parts: [...input.parts] } satisfies SessionV1.WithParts
+      return yield* events
+        .transaction<SessionV1.WithParts, EventV2.Definition>((tx) =>
+          Effect.gen(function* () {
+            const time = Date.now()
+            const partEvents = (yield* Effect.forEach(input.parts, (part) => preparePartUpdate(tx, part, time))).filter(
+              (event): event is NonNullable<typeof event> => event !== undefined,
+            )
+            const messageEvent = yield* prepareMessageUpdate(tx, input.info)
+            const prepared: EventV2.PreparedEvent<EventV2.Definition>[] = [
+              ...partEvents,
+              ...(messageEvent ? [messageEvent] : []),
+            ]
+            if (prepared.length === 0) return { result }
+            return { result, events: prepared }
+          }),
+        )
+        .pipe(
+          Effect.map((committed) => committed.result),
+          Effect.withSpan("Session.finalizeMessage"),
+        )
+    })
+
+    const finalizeMessage: Interface["finalizeMessage"] = (input) =>
+      runState.shared(input.info.sessionID, finalizeMessageUnlocked(input)).pipe(Effect.orDie)
 
     const updateMessageWithPartsUnlocked = Effect.fn("Session.updateMessageWithPartsUnlocked")(function* (
       input: Parameters<Interface["updateMessageWithParts"]>[0],
@@ -942,113 +1067,436 @@ const layer: Layer.Layer<
       } as SessionV1.Part
     })
 
-    const create = Effect.fn("Session.create")(function* (input?: {
-      parentID?: SessionID
-      title?: string
-      agent?: string
-      model?: Schema.Schema.Type<typeof Model>
-      metadata?: typeof Metadata.Type
-      permission?: PermissionV1.Ruleset
-      workspaceID?: WorkspaceV2.ID
-    }) {
-      const ctx = yield* InstanceState.context
-      const workspace = yield* InstanceState.workspaceID
-      return yield* createNext({
-        parentID: input?.parentID,
-        directory: ctx.directory,
-        path: sessionPath(ctx.worktree, ctx.directory),
-        title: input?.title,
-        agent: input?.agent,
-        model: input?.model,
-        metadata: input?.metadata,
-        permission: input?.permission,
-        workspaceID: input?.workspaceID ?? workspace,
-      })
-    })
+    const prepareRootStart: Interface["prepareRootStart"] = Effect.fn("Session.prepareRootStart")(
+      function* (tx, input) {
+        const existing = yield* tx
+          .select()
+          .from(SessionTable)
+          .where(eq(SessionTable.id, input.targetSessionID))
+          .get()
+          .pipe(Effect.orDie)
+        if (existing) return { session: fromRow(existing), events: [] }
+        if (!input.session && !input.fork) {
+          return yield* new NotFoundError({ message: `Session not found: ${input.targetSessionID}` })
+        }
+        if (input.fork && input.session?.parentID) {
+          return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
+        }
 
-    const forkUnlocked = Effect.fn("Session.forkUnlocked")(function* (input: {
-      sessionID: SessionID
-      messageID?: MessageID
-    }) {
-      const ctx = yield* InstanceState.context
-      const original = yield* get(input.sessionID)
-      const title = getForkedTitle(original.title)
-      const msgs = yield* messages({ sessionID: input.sessionID })
-      const linked = new Set(
-        (yield* db
-          .select({ messageID: LearnerOccurrencePresentationTable.message_id })
-          .from(LearnerOccurrencePresentationTable)
-          .where(eq(LearnerOccurrencePresentationTable.session_id, input.sessionID))
-          .all()
-          .pipe(Effect.orDie)).map((presentation) => presentation.messageID),
-      )
-      const session = yield* createNext({
-        directory: ctx.directory,
-        path: sessionPath(ctx.worktree, ctx.directory),
-        workspaceID: original.workspaceID,
-        title,
-        metadata: structuredClone(original.metadata),
-      })
-      const idMap = new Map<string, MessageID>()
-
-      return yield* Effect.gen(function* () {
-        for (const msg of msgs) {
-          if (input.messageID && msg.info.id >= input.messageID) break
-          const newID = MessageID.ascending()
-          idMap.set(msg.info.id, newID)
-
-          const parentID = msg.info.role === "assistant" && msg.info.parentID ? idMap.get(msg.info.parentID) : undefined
-          const clonedInfo: SessionV1.Info = {
-            ...msg.info,
-            sessionID: session.id,
-            id: newID,
-            ...(parentID && { parentID }),
+        const ctx = yield* InstanceState.context
+        const workspaceID = yield* InstanceState.workspaceID
+        const source = input.fork
+          ? yield* tx
+              .select()
+              .from(SessionTable)
+              .where(eq(SessionTable.id, input.fork.sourceSessionID))
+              .get()
+              .pipe(Effect.orDie)
+          : undefined
+        if (input.fork && (!source || source.project_id !== ctx.project.id)) {
+          return yield* new NotFoundError({ message: `Session not found: ${input.fork.sourceSessionID}` })
+        }
+        if (input.fork && source) {
+          const frontier = yield* tx
+            .select({ sequence: EventSequenceTable.seq })
+            .from(EventSequenceTable)
+            .where(eq(EventSequenceTable.aggregate_id, input.fork.sourceSessionID))
+            .get()
+            .pipe(Effect.orDie)
+          if (frontier?.sequence !== input.fork.sourceEventSequence) {
+            return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
           }
-          const clonedParts = msg.parts.map((part) => {
-            const p: SessionV1.Part = {
-              ...part,
+          const active = yield* TurnLifecycle.active(tx, input.fork.sourceSessionID)
+          if (active) return yield* new BusyError({ sessionID: input.fork.sourceSessionID })
+        }
+
+        const sourceInfo = source ? fromRow(source) : undefined
+        const session = yield* prepareNext({
+          id: input.targetSessionID,
+          directory: ctx.directory,
+          path: sessionPath(ctx.worktree, ctx.directory),
+          title: input.session?.title ?? (sourceInfo ? getForkedTitle(sourceInfo.title) : undefined),
+          agent: input.session?.agent,
+          model: input.session?.model,
+          parentID: input.session?.parentID,
+          workspaceID: input.session?.workspaceID ?? sourceInfo?.workspaceID ?? workspaceID,
+          metadata:
+            input.session?.metadata ?? (sourceInfo?.metadata ? structuredClone(sourceInfo.metadata) : undefined),
+          permission: input.session?.permission,
+        })
+        const prepared: EventV2.PreparedEvent<EventV2.Definition>[] = [
+          {
+            definition: SessionV1.Event.Created,
+            data: { sessionID: session.id, info: session },
+          },
+        ]
+        if (!input.fork || !sourceInfo) return { session, events: prepared }
+
+        const messageRows = yield* tx
+          .select()
+          .from(MessageTable)
+          .where(eq(MessageTable.session_id, input.fork.sourceSessionID))
+          .orderBy(asc(MessageTable.time_created), asc(MessageTable.id))
+          .all()
+          .pipe(Effect.orDie)
+        const cutoff = input.fork.cutoffMessageID
+          ? messageRows.findIndex((message) => message.id === input.fork?.cutoffMessageID)
+          : messageRows.length
+        if (cutoff < 0) return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
+        const selectedRows = messageRows.slice(0, cutoff)
+        const selectedIDs = selectedRows.map((message) => message.id)
+        const partRows =
+          selectedIDs.length === 0
+            ? []
+            : yield* tx
+                .select()
+                .from(PartTable)
+                .where(inArray(PartTable.message_id, selectedIDs))
+                .orderBy(asc(PartTable.time_created), asc(PartTable.id))
+                .all()
+                .pipe(Effect.orDie)
+        const sourceParts = new Map<MessageID, (typeof PartTable.$inferSelect)[]>()
+        partRows.forEach((part) => {
+          const current = sourceParts.get(part.message_id)
+          if (current) current.push(part)
+          else sourceParts.set(part.message_id, [part])
+        })
+        const occurrenceMessages =
+          selectedIDs.length === 0
+            ? new Set<MessageID>()
+            : new Set(
+                (yield* tx
+                  .select({ messageID: LearnerOccurrencePresentationTable.message_id })
+                  .from(LearnerOccurrencePresentationTable)
+                  .where(inArray(LearnerOccurrencePresentationTable.message_id, selectedIDs))
+                  .all()
+                  .pipe(Effect.orDie)).map((row) => row.messageID),
+              )
+        const idMap = new Map<MessageID, MessageID>()
+        for (const row of selectedRows) {
+          const sourceMessage = {
+            ...row.data,
+            id: row.id,
+            sessionID: row.session_id,
+          } as SessionV1.Info
+          const messageID = MessageID.ascending()
+          idMap.set(sourceMessage.id, messageID)
+          const parentID =
+            sourceMessage.role === "assistant" && sourceMessage.parentID ? idMap.get(sourceMessage.parentID) : undefined
+          const message: SessionV1.Info = {
+            ...sourceMessage,
+            sessionID: session.id,
+            id: messageID,
+            ...(parentID ? { parentID } : {}),
+          }
+          const sourceMessageParts = sourceParts.get(sourceMessage.id) ?? []
+          const parts = sourceMessageParts.map((part) => {
+            const cloned = {
+              ...part.data,
               id: PartID.ascending(),
-              messageID: clonedInfo.id,
+              messageID,
               sessionID: session.id,
+            } as SessionV1.Part
+            if (cloned.type === "compaction" && cloned.tail_start_id) {
+              cloned.tail_start_id = idMap.get(cloned.tail_start_id)
             }
-            if (p.type === "compaction" && p.tail_start_id) {
-              p.tail_start_id = idMap.get(p.tail_start_id)
-            }
-            return p
+            return cloned
           })
-          yield* updateMessageWithParts({
-            info: clonedInfo,
-            parts: clonedParts,
-            ...(msg.info.role === "user" && linked.has(msg.info.id)
-              ? {
-                  occurrenceSource: {
-                    messageID: msg.info.id,
-                    provenance: "fork_clone" as const,
-                    required: true,
-                  },
-                }
-              : {}),
-            historicalSources: msg.parts.flatMap((part, index) => {
-              const clonedPart = clonedParts[index]
-              if (part.type !== "tool" || !clonedPart) return []
-              return [
-                {
-                  partID: clonedPart.id,
-                  sourceSessionID: input.sessionID,
-                  sourceAssistantMessageID: msg.info.id,
-                  sourcePartID: part.id,
+          const recordProvenance = () =>
+            Effect.gen(function* () {
+              yield* tx
+                .insert(SessionHistoricalMessagePresentationTable)
+                .values({
+                  message_id: messageID,
+                  session_id: session.id,
+                  source_session_id: sourceInfo.id,
+                  source_message_id: sourceMessage.id,
+                  source_event_sequence: input.fork!.sourceEventSequence,
+                  time_created: session.time.created,
+                })
+                .run()
+                .pipe(Effect.orDie)
+              yield* Effect.forEach(
+                sourceMessageParts,
+                (sourcePart, index) => {
+                  const part = parts[index]
+                  if (!part) return Effect.void
+                  return tx
+                    .insert(SessionHistoricalPartPresentationTable)
+                    .values({
+                      part_id: part.id,
+                      message_id: messageID,
+                      session_id: session.id,
+                      source_session_id: sourceInfo.id,
+                      source_message_id: sourceMessage.id,
+                      source_part_id: sourcePart.id,
+                      time_created: session.time.created,
+                    })
+                    .run()
+                    .pipe(Effect.orDie)
                 },
-              ]
-            }),
+                { discard: true },
+              )
+              if (sourceMessage.role === "user") {
+                if (occurrenceMessages.has(sourceMessage.id)) {
+                  yield* Occurrence.copyPresentation(tx, {
+                    sourceMessageID: sourceMessage.id,
+                    sessionID: session.id,
+                    messageID,
+                    provenance: "fork_clone",
+                  })
+                }
+                yield* TurnLifecycle.copyHistoricalInputPresentation(tx, {
+                  sessionID: session.id,
+                  messageID,
+                  sourceSessionID: sourceInfo.id,
+                  sourceMessageID: sourceMessage.id,
+                  timeCreated: session.time.created,
+                })
+              }
+              if (sourceMessage.role === "assistant") {
+                yield* TurnLifecycle.copyHistoricalModelPresentation(tx, {
+                  sessionID: session.id,
+                  assistantMessageID: messageID,
+                  sourceSessionID: sourceInfo.id,
+                  sourceAssistantMessageID: sourceMessage.id,
+                  timeCreated: session.time.created,
+                })
+              }
+              yield* Effect.forEach(
+                sourceMessageParts,
+                (sourcePart, index) => {
+                  const part = parts[index]
+                  if (!part || sourcePart.data.type !== "tool") return Effect.void
+                  return Effect.gen(function* () {
+                    const [invocation, settlement, historical] = yield* Effect.all([
+                      lookupPhysicalInvocationByPart(tx, sourcePart.id),
+                      exactSettlement(tx, sourcePart.id),
+                      tx
+                        .select()
+                        .from(HistoricalLearningToolPresentationTable)
+                        .where(eq(HistoricalLearningToolPresentationTable.part_id, sourcePart.id))
+                        .get()
+                        .pipe(Effect.orDie),
+                    ])
+                    if (invocation && historical) {
+                      return yield* new HistoricalPresentationConflictError({ partID: part.id })
+                    }
+                    if (settlement || historical) {
+                      yield* Occurrence.recordHistoricalToolPresentation(tx, {
+                        sessionID: session.id,
+                        assistantMessageID: messageID,
+                        partID: part.id,
+                        sourceSessionID: historical?.source_session_id ?? sourceInfo.id,
+                        sourceAssistantMessageID: historical?.source_assistant_message_id ?? sourceMessage.id,
+                        sourcePartID: historical?.source_part_id ?? sourcePart.id,
+                        timeCreated: session.time.created,
+                      })
+                    }
+                    yield* TurnLifecycle.copyHistoricalToolPresentation(tx, {
+                      sessionID: session.id,
+                      assistantMessageID: messageID,
+                      partID: part.id,
+                      sourceSessionID: sourceInfo.id,
+                      sourcePartID: sourcePart.id,
+                      timeCreated: session.time.created,
+                    })
+                  })
+                },
+                { discard: true },
+              )
+            }).pipe(Effect.orDie)
+          prepared.push({
+            definition: SessionV1.Event.MessageUpdated,
+            data: { sessionID: session.id, info: message },
+            ...(parts.length === 0 ? { options: { commit: recordProvenance } } : {}),
+          })
+          parts.forEach((part, index) => {
+            prepared.push({
+              definition: SessionV1.Event.PartUpdated,
+              data: { sessionID: session.id, part, time: session.time.created },
+              ...(index === parts.length - 1 ? { options: { commit: recordProvenance } } : {}),
+            })
           })
         }
-        return session
-      }).pipe(Effect.onError(() => remove(session.id).pipe(Effect.ignore)))
-    })
-
-    const fork: Interface["fork"] = Effect.fn("Session.fork")((input) =>
-      runState.idle(input.sessionID, forkUnlocked(input)),
+        return { session, events: prepared }
+      },
     )
+
+    const prepareChildStart: Interface["prepareChildStart"] = Effect.fn("Session.prepareChildStart")(function* (input) {
+      if (
+        input.message.info.role !== "user" ||
+        input.message.info.sessionID !== input.childSessionID ||
+        input.message.info.time.created !== input.timeAdmitted ||
+        new Set(input.message.parts.map((part) => part.id)).size !== input.message.parts.length ||
+        input.message.parts.some(
+          (part) => part.sessionID !== input.childSessionID || part.messageID !== input.message.info.id,
+        )
+      ) {
+        return yield* new Turn.IntegrityError({
+          turnID: input.childTurnID,
+          reason: "Delegated child presentation does not belong to the requested child Session and User Message",
+        })
+      }
+
+      let admitted: TurnLifecycle.Admitted | undefined
+      yield* events.transaction((tx) =>
+        Effect.gen(function* () {
+          const stored = yield* TurnLifecycle.lookup(tx, input.childTurnID)
+          if (stored.type === "source_unavailable") {
+            return yield* TurnLifecycle.sourceUnavailableError(stored)
+          }
+          if (stored.type === "available") {
+            admitted = yield* TurnLifecycle.admit(tx, childAdmission(input))
+            return { result: undefined }
+          }
+
+          const delegation = yield* TurnLifecycle.validateDelegation(tx, childAdmission(input))
+          if (delegation.sessionID !== input.parentSessionID) {
+            return yield* new Turn.SessionMismatchError({
+              sessionID: input.parentSessionID,
+              turnID: input.parentTurnID,
+            })
+          }
+          const parentRow = yield* tx
+            .select()
+            .from(SessionTable)
+            .where(eq(SessionTable.id, input.parentSessionID))
+            .get()
+            .pipe(Effect.orDie)
+          if (!parentRow) {
+            return yield* new NotFoundError({ message: `Session not found: ${input.parentSessionID}` })
+          }
+
+          const existing = yield* tx
+            .select()
+            .from(SessionTable)
+            .where(eq(SessionTable.id, input.childSessionID))
+            .get()
+            .pipe(Effect.orDie)
+          if (
+            existing &&
+            (existing.parent_id !== input.parentSessionID ||
+              existing.project_id !== parentRow.project_id ||
+              existing.directory !== parentRow.directory)
+          ) {
+            return yield* new Turn.AdmissionConflictError({ turnID: input.childTurnID })
+          }
+          if (existing) {
+            const delegatedHistory = yield* tx
+              .select({ id: TurnChildLineageTable.child_turn_id })
+              .from(TurnChildLineageTable)
+              .where(
+                and(
+                  eq(TurnChildLineageTable.child_session_id, input.childSessionID),
+                  eq(TurnChildLineageTable.parent_session_id, input.parentSessionID),
+                ),
+              )
+              .get()
+              .pipe(Effect.orDie)
+            if (!delegatedHistory) {
+              return yield* new Turn.AdmissionConflictError({ turnID: input.childTurnID })
+            }
+            const active = yield* TurnLifecycle.active(tx, input.childSessionID)
+            if (active) {
+              return yield* new Turn.AlreadyRunningError({
+                sessionID: input.childSessionID,
+                activeTurnID: active.id,
+              })
+            }
+          }
+
+          const reusedPresentation = yield* tx
+            .select({ id: MessageTable.id })
+            .from(MessageTable)
+            .where(eq(MessageTable.id, input.message.info.id))
+            .get()
+            .pipe(Effect.orDie)
+          if (reusedPresentation) return yield* new Turn.AdmissionConflictError({ turnID: input.childTurnID })
+          if (input.message.parts.length > 0) {
+            const reusedPart = yield* tx
+              .select({ id: PartTable.id })
+              .from(PartTable)
+              .where(
+                inArray(
+                  PartTable.id,
+                  input.message.parts.map((part) => part.id),
+                ),
+              )
+              .get()
+              .pipe(Effect.orDie)
+            if (reusedPart) return yield* new Turn.AdmissionConflictError({ turnID: input.childTurnID })
+          }
+
+          const current = existing ? fromRow(existing) : undefined
+          const child = current
+            ? {
+                ...current,
+                title: input.session.title ?? current.title,
+                agent: input.session.agent ?? current.agent,
+                model: input.session.model ?? current.model,
+                metadata: input.session.metadata ?? current.metadata,
+                permission: input.session.permission ? [...input.session.permission] : current.permission,
+                time: { ...current.time, updated: Math.max(current.time.updated, input.timeAdmitted) },
+              }
+            : {
+                ...(yield* prepareNext({
+                  id: input.childSessionID,
+                  directory: parentRow.directory,
+                  path: parentRow.path ?? undefined,
+                  parentID: input.parentSessionID,
+                  title: input.session.title,
+                  agent: input.session.agent,
+                  model: input.session.model,
+                  workspaceID: input.session.workspaceID ?? parentRow.workspace_id ?? undefined,
+                  metadata: input.session.metadata,
+                  permission: input.session.permission,
+                })),
+                time: { created: input.timeAdmitted, updated: input.timeAdmitted },
+              }
+          const sessionEvent: EventV2.PreparedEvent<EventV2.Definition> = current
+            ? {
+                definition: SessionV1.Event.Updated,
+                data: { sessionID: child.id, info: child },
+              }
+            : {
+                definition: SessionV1.Event.Created,
+                data: { sessionID: child.id, info: child },
+              }
+          const commit = () =>
+            TurnLifecycle.admit(tx, childAdmission(input)).pipe(
+              Effect.tap((result) => Effect.sync(() => (admitted = result))),
+              Effect.asVoid,
+              Effect.orDie,
+            )
+          const messageEvents: EventV2.PreparedEvent<EventV2.Definition>[] = [
+            {
+              definition: SessionV1.Event.MessageUpdated,
+              data: { sessionID: input.childSessionID, info: input.message.info },
+              ...(input.message.parts.length === 0 ? { options: { commit } } : {}),
+            },
+            ...input.message.parts.map((part, index) => ({
+              definition: SessionV1.Event.PartUpdated,
+              data: { sessionID: input.childSessionID, part, time: input.timeAdmitted },
+              ...(index === input.message.parts.length - 1 ? { options: { commit } } : {}),
+            })),
+          ]
+          return {
+            result: undefined,
+            events: [
+              sessionEvent,
+              ...messageEvents,
+              SessionTurnEvents.started(() => {
+                if (!admitted) throw new Error(`Delegated child Turn admission did not commit: ${input.childTurnID}`)
+                return admitted
+              }),
+            ],
+          }
+        }),
+      )
+      if (!admitted) return yield* Effect.die(`Child Turn ${input.childTurnID} committed without admission`)
+      return admitted
+    })
 
     const patchUnlocked = (sessionID: SessionID, info: Patch) =>
       Effect.gen(function* () {
@@ -1198,7 +1646,7 @@ const layer: Layer.Layer<
         : undefined
       const messageIDs = input.messageIDs
       const parts = input.parts
-      yield* events.transaction<void, EventV2.Definition>((tx) =>
+      yield* events.transaction<void, EventV2.Definition, BusyError>((tx) =>
         Effect.gen(function* () {
           const messages = yield* Effect.forEach(messageIDs, (messageID) =>
             tx.select().from(MessageTable).where(eq(MessageTable.id, messageID)).get().pipe(Effect.orDie),
@@ -1241,6 +1689,19 @@ const layer: Layer.Layer<
           if (linkedPartMessage) {
             return yield* Effect.die(new InvalidCausalSourceError({ reason: "changed_presentation" }))
           }
+
+          yield* TurnLifecycle.prepareTranscriptRemoval(tx, {
+            sessionID: input.sessionID,
+            messageIDs: selectedMessages.map((message) => message.id),
+            partIDs: selectedParts.flatMap((part) => (part ? [part.id] : [])),
+            timeRemoved: Date.now(),
+          }).pipe(
+            Effect.catch((error) =>
+              error._tag === "SessionTreeBusyError"
+                ? Effect.fail(new BusyError({ sessionID: input.sessionID }))
+                : Effect.die(error),
+            ),
+          )
 
           yield* Effect.forEach(
             selectedMessages.filter((message) => message.data.role === "assistant"),
@@ -1340,6 +1801,12 @@ const layer: Layer.Layer<
               .where(eq(HistoricalLearningToolPresentationTable.part_id, input.partID))
               .get()
               .pipe(Effect.orDie, Effect.map(Boolean)),
+            tx
+              .select({ partID: SessionHistoricalPartPresentationTable.part_id })
+              .from(SessionHistoricalPartPresentationTable)
+              .where(eq(SessionHistoricalPartPresentationTable.part_id, input.partID))
+              .get()
+              .pipe(Effect.orDie, Effect.map(Boolean)),
           ])
           if (protectedPart.some(Boolean)) {
             return yield* Effect.die(new SettledPartImmutableError({ partID: input.partID }))
@@ -1372,8 +1839,8 @@ const layer: Layer.Layer<
     return Service.of({
       list,
       listGlobal,
-      create,
-      fork,
+      prepareRootStart,
+      prepareChildStart,
       touch,
       get,
       setTitle,
@@ -1392,6 +1859,7 @@ const layer: Layer.Layer<
       children,
       remove,
       updateMessage,
+      finalizeMessage,
       removeMessage,
       removePart,
       removeTranscript,

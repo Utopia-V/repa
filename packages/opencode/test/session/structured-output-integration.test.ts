@@ -8,6 +8,8 @@ import { Session } from "@/session/session"
 import { SessionPrompt } from "../../src/session/prompt"
 import { MessageV2 } from "../../src/session/message-v2"
 import { testEffect } from "../lib/effect"
+import { MessageID, SessionID } from "@/session/schema"
+import { Turn } from "@opencode-ai/schema/turn"
 
 // Skip tests if no API key is available
 const hasApiKey = !!process.env.ANTHROPIC_API_KEY
@@ -21,10 +23,14 @@ describe("StructuredOutput Integration", () => {
       Effect.gen(function* () {
         const prompt = yield* SessionPrompt.Service
         const sessions = yield* Session.Service
-        const session = yield* sessions.create({ title: "Structured Output Test" })
-
-        const result = yield* prompt.prompt({
-          sessionID: session.id,
+        const sessionID = SessionID.create()
+        const turnID = Turn.ID.create()
+        yield* prompt.start({
+          sessionID,
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          session: { title: "Structured Output Test" },
           parts: [
             {
               type: "text",
@@ -45,7 +51,12 @@ describe("StructuredOutput Integration", () => {
           },
         })
 
-        // Verify structured output was captured (only on assistant messages)
+        yield* prompt.awaitTurn(sessionID, turnID)
+        const result = (yield* sessions.messages({ sessionID })).findLast(
+          (message) => message.info.role === "assistant",
+        )
+        expect(result).toBeDefined()
+        if (!result) return yield* Effect.die("Expected assistant response")
         expect(result.info.role).toBe("assistant")
         if (result.info.role === "assistant") {
           expect(result.info.structured).toBeDefined()
@@ -71,10 +82,14 @@ describe("StructuredOutput Integration", () => {
       Effect.gen(function* () {
         const prompt = yield* SessionPrompt.Service
         const sessions = yield* Session.Service
-        const session = yield* sessions.create({ title: "Nested Schema Test" })
-
-        const result = yield* prompt.prompt({
-          sessionID: session.id,
+        const sessionID = SessionID.create()
+        const turnID = Turn.ID.create()
+        yield* prompt.start({
+          sessionID,
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          session: { title: "Nested Schema Test" },
           parts: [
             {
               type: "text",
@@ -105,7 +120,12 @@ describe("StructuredOutput Integration", () => {
           },
         })
 
-        // Verify structured output was captured (only on assistant messages)
+        yield* prompt.awaitTurn(sessionID, turnID)
+        const result = (yield* sessions.messages({ sessionID })).findLast(
+          (message) => message.info.role === "assistant",
+        )
+        expect(result).toBeDefined()
+        if (!result) return yield* Effect.die("Expected assistant response")
         expect(result.info.role).toBe("assistant")
         if (result.info.role === "assistant") {
           expect(result.info.structured).toBeDefined()
@@ -136,10 +156,14 @@ describe("StructuredOutput Integration", () => {
       Effect.gen(function* () {
         const prompt = yield* SessionPrompt.Service
         const sessions = yield* Session.Service
-        const session = yield* sessions.create({ title: "Text Output Test" })
-
-        const result = yield* prompt.prompt({
-          sessionID: session.id,
+        const sessionID = SessionID.create()
+        const turnID = Turn.ID.create()
+        yield* prompt.start({
+          sessionID,
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          session: { title: "Text Output Test" },
           parts: [
             {
               type: "text",
@@ -151,7 +175,12 @@ describe("StructuredOutput Integration", () => {
           },
         })
 
-        // Verify no structured output (text mode) and no error
+        yield* prompt.awaitTurn(sessionID, turnID)
+        const result = (yield* sessions.messages({ sessionID })).findLast(
+          (message) => message.info.role === "assistant",
+        )
+        expect(result).toBeDefined()
+        if (!result) return yield* Effect.die("Expected assistant response")
         expect(result.info.role).toBe("assistant")
         if (result.info.role === "assistant") {
           expect(result.info.structured).toBeUndefined()
@@ -174,10 +203,14 @@ describe("StructuredOutput Integration", () => {
       Effect.gen(function* () {
         const prompt = yield* SessionPrompt.Service
         const sessions = yield* Session.Service
-        const session = yield* sessions.create({ title: "OutputFormat Storage Test" })
-
-        yield* prompt.prompt({
-          sessionID: session.id,
+        const sessionID = SessionID.create()
+        const turnID = Turn.ID.create()
+        yield* prompt.start({
+          sessionID,
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          session: { title: "OutputFormat Storage Test" },
           parts: [
             {
               type: "text",
@@ -197,8 +230,8 @@ describe("StructuredOutput Integration", () => {
           },
         })
 
-        // Get all messages from session
-        const messages = yield* sessions.messages({ sessionID: session.id })
+        yield* prompt.awaitTurn(sessionID, turnID)
+        const messages = yield* sessions.messages({ sessionID })
         const userMessage = messages.find((m) => m.info.role === "user")
 
         // Verify outputFormat was stored on user message

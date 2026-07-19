@@ -151,34 +151,6 @@ describe("Session.GlobalInfo", () => {
 })
 
 describe("Session input schemas", () => {
-  test("CreateInput accepts local fields and drops retired workspace placement", () => {
-    const decode = decodeUnknown(Session.CreateInput)
-    expect(decode(undefined)).toBeUndefined()
-
-    const populated = {
-      parentID: sessionID,
-      title: "child",
-      metadata: { source: "test" },
-      permission: [{ action: "ask" as const, pattern: "*", permission: "bash" }],
-      workspaceID,
-    }
-    expect(decode(populated)).toEqual({
-      parentID: sessionID,
-      title: "child",
-      metadata: { source: "test" },
-      permission: [{ action: "ask", pattern: "*", permission: "bash" }],
-    })
-  })
-
-  test("ForkInput round-trips", () => {
-    const decode = decodeUnknown(Session.ForkInput)
-    const input = { sessionID, messageID }
-    expect(decode(input)).toEqual(input)
-    // messageID is optional
-    const bare = { sessionID }
-    expect(decode(bare)).toEqual(bare)
-  })
-
   test("SetTitleInput rejects missing title", () => {
     expect(() => decodeUnknown(Session.SetTitleInput)({ sessionID })).toThrow()
   })
@@ -272,11 +244,6 @@ describe("Todo.Info", () => {
 })
 
 describe("SessionPrompt input schemas", () => {
-  test("LoopInput is just sessionID", () => {
-    const decode = decodeUnknown(SessionPrompt.LoopInput)
-    expect(decode({ sessionID })).toEqual({ sessionID })
-  })
-
   test("ShellInput requires agent + command", () => {
     const decode = decodeUnknown(SessionPrompt.ShellInput)
     const expected = { sessionID, agent: "build", command: "echo hi" }
@@ -308,16 +275,5 @@ describe("SessionPrompt input schemas", () => {
       parts: [{ type: "nonsense", payload: 42 }],
     }
     expect(() => decode(bad)).toThrow()
-  })
-
-  test("CommandInput round-trips core fields", () => {
-    const decode = decodeUnknown(SessionPrompt.CommandInput)
-    const expected = {
-      sessionID,
-      arguments: "--flag",
-      command: "deploy",
-    }
-    const input: unknown = expected
-    expect(decode(input)).toEqual(expected)
   })
 })

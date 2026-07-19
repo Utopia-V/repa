@@ -5,6 +5,7 @@ import { useSDK } from "../../context/sdk"
 import { useRoute } from "../../context/route"
 import { useClipboard } from "../../context/clipboard"
 import type { PromptInfo } from "../../component/prompt/history"
+import { prepareForkDraft } from "../../util/fork-draft"
 import { stripPromptPartIDs as strip } from "../../prompt/part"
 
 export function DialogMessage(props: {
@@ -78,10 +79,7 @@ export function DialogMessage(props: {
           value: "session.fork",
           description: "create a new session",
           onSelect: async (dialog) => {
-            const result = await sdk.client.session.fork({
-              sessionID: props.sessionID,
-              messageID: props.messageID,
-            })
+            const fork = await prepareForkDraft(sdk.client, props.sessionID, props.messageID)
             const msg = message()
             const prompt = msg
               ? sync.data.part[msg.id].reduce(
@@ -96,9 +94,10 @@ export function DialogMessage(props: {
                 )
               : undefined
             route.navigate({
-              sessionID: result.data!.id,
+              sessionID: props.sessionID,
               type: "session",
               prompt,
+              fork,
             })
             dialog.clear()
           },

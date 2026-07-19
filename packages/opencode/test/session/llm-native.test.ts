@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { LLMEvent, ToolFailure } from "@opencode-ai/llm"
 import { LLMClient, RequestExecutor, WebSocketExecutor, type LLMClientShape } from "@opencode-ai/llm/route"
 import { jsonSchema, tool, type ModelMessage, type Tool } from "ai"
-import { Effect, Fiber, Layer, Stream } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import { FetchHttpClient } from "effect/unstable/http"
 import { LLMNative } from "@/session/llm/native-request"
 import { LLMNativeRuntime } from "@/session/llm/native-runtime"
@@ -525,25 +525,14 @@ describe("session.llm-native.request", () => {
     }),
   )
 
-  it.effect("emits native tool calls before overlapping local settlements complete", () =>
+  it.effect("emits native tool candidates without executing provider callbacks", () =>
     Effect.gen(function* () {
-      const observed: string[] = []
       const started: string[] = []
-      let release: (() => void) | undefined
-      let notifyStarted: (() => void) | undefined
-      const gate = new Promise<void>((resolve) => {
-        release = resolve
-      })
-      const bothStarted = new Promise<void>((resolve) => {
-        notifyStarted = resolve
-      })
       const lookup = {
         description: "Lookup data",
         inputSchema: jsonSchema({ type: "object" }),
         execute: async (_args: unknown, options: { toolCallId: string }) => {
           started.push(options.toolCallId)
-          if (started.length === 2) notifyStarted?.()
-          await gate
           return { output: options.toolCallId }
         },
       } satisfies Tool
@@ -570,18 +559,9 @@ describe("session.llm-native.request", () => {
       expect(native.type).toBe("supported")
       if (native.type === "unsupported") throw new Error(native.reason)
 
-      const fiber = yield* native.stream.pipe(
-        Stream.runForEach((event) => Effect.sync(() => observed.push(event.type))),
-        Effect.forkScoped,
-      )
-      yield* Effect.promise(() => bothStarted)
-
-      expect(started).toEqual(["call-1", "call-2"])
+      const observed = Array.from(yield* native.stream.pipe(Stream.runCollect)).map((event) => event.type)
+      expect(started).toEqual([])
       expect(observed).toEqual(["tool-call", "tool-call", "finish"])
-
-      release?.()
-      yield* Fiber.join(fiber)
-      expect(observed).toEqual(["tool-call", "tool-call", "finish", "tool-result", "tool-result"])
     }),
   )
 

@@ -4,4 +4,6 @@ Give the worker the parent question, why its result matters, its scope and exclu
 
 Use direct read, glob, grep, or other local tools for a narrow lookup. Delegate when the worker will consume much more raw context than the parent needs, or when genuinely independent work can proceed in parallel. Do not split tightly coupled reasoning merely to create more tasks, and do not duplicate a delegated investigation in the parent context.
 
-Ask for conclusions, decisive evidence, confidence, and remaining unknowns rather than raw logs or a second project narrative. Check evidence that can change a consequential decision; neither accept nor reject a worker result solely because it was produced by another model. Reuse the returned task identifier only when continuing the same bounded question.
+Ask for conclusions, decisive evidence, confidence, and remaining unknowns rather than raw logs or a second project narrative. Check evidence that can change a consequential decision; neither accept nor reject a worker result solely because it was produced by another model.
+
+Delegate only the explicit capabilities needed by the task. Use `child_session_id` only to follow up the exact child Session returned by an earlier task result; names, descriptions, or similar prompts never identify a prior child.

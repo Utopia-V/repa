@@ -9,9 +9,10 @@ import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
 import { Session as SessionNs } from "@/session/session"
 import { SessionRunState } from "@/session/run-state"
 import { MessageV2 } from "../../src/session/message-v2"
-import { MessageID, PartID, type SessionID } from "../../src/session/schema"
+import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { provideInstance, tmpdir, tmpdirScoped } from "../fixture/fixture"
+import { materializeTestSession, materializeTestSessionInfo } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -21,6 +22,10 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { InstanceStore } from "@/project/instance-store"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { Database } from "@opencode-ai/core/database/database"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnHistoricalInputPresentationTable, TurnInputTable, TurnTable } from "@opencode-ai/core/turn/sql"
+import { Turn } from "@opencode-ai/schema/turn"
+import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { LearnerAdmission, LearningCommand, Occurrence, type OccurrenceID } from "@opencode-ai/core/learning-command"
 import {
   AdmittedLearnerOccurrenceTable,
@@ -32,7 +37,12 @@ import { LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { eq } from "drizzle-orm"
-import { PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import {
+  MessageTable,
+  PartTable,
+  SessionHistoricalMessagePresentationTable,
+  SessionTable,
+} from "@opencode-ai/core/session/sql"
 import { join } from "path"
 
 const sessionRoot = LayerNode.group([
@@ -104,6 +114,233 @@ const occurrencePresentation = Effect.fn("test.occurrencePresentation")(function
     ),
   )
   return presentation.result
+})
+
+const admitRootTurn = Effect.fn("test.admitRootTurn")(function* (input: {
+  sessionID: SessionID
+  turnID: Turn.ID
+  inputID: Turn.InputID
+  messageID: MessageID
+  envelope: Record<string, unknown>
+}) {
+  const events = yield* EventV2Bridge.Service
+  const committed = yield* events.transaction((tx) =>
+    Effect.gen(function* () {
+      const occurrence = yield* Occurrence.resolvePresentation(tx, {
+        sessionID: input.sessionID,
+        messageID: input.messageID,
+      }).pipe(Effect.orDie)
+      const result = yield* TurnLifecycle.admit(tx, {
+        kind: "learner",
+        ...input,
+        occurrenceID: occurrence.occurrenceID,
+        limits: { model: 8, tool: 16 },
+        policyBasis: { source: "test" },
+        timeAdmitted: Date.now(),
+      })
+      return { result }
+    }),
+  )
+  return committed.result
+})
+
+const seedTurnFixture = Effect.fn("test.seedTurnFixture")(function* (title: string) {
+  const session = yield* SessionNs.Service
+  const seeded = yield* materializeTestSession({ title, text: title })
+  const user = yield* session.updateMessage({
+    id: MessageID.ascending(),
+    role: "user" as const,
+    sessionID: seeded.info.id,
+    agent: "repa",
+    model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+    time: { created: Date.now() + 1 },
+  })
+  yield* session.updatePart({
+    id: PartID.ascending(),
+    messageID: user.id,
+    sessionID: seeded.info.id,
+    type: "text" as const,
+    text: title,
+  })
+  yield* admitOccurrence(seeded.info.id, user.id)
+  return { session, info: seeded.info, user }
+})
+
+const sessionEvidence = Effect.fn("test.sessionEvidence")(function* (sessionID: SessionID) {
+  const database = yield* Database.Service
+  const [sessions, turns, inputs, messages, parts, occurrences, events] = yield* Effect.all([
+    database.db.select().from(SessionTable).where(eq(SessionTable.id, sessionID)).all().pipe(Effect.orDie),
+    database.db.select().from(TurnTable).where(eq(TurnTable.session_id, sessionID)).all().pipe(Effect.orDie),
+    database.db.select().from(TurnInputTable).where(eq(TurnInputTable.session_id, sessionID)).all().pipe(Effect.orDie),
+    database.db.select().from(MessageTable).where(eq(MessageTable.session_id, sessionID)).all().pipe(Effect.orDie),
+    database.db.select().from(PartTable).where(eq(PartTable.session_id, sessionID)).all().pipe(Effect.orDie),
+    database.db
+      .select()
+      .from(AdmittedLearnerOccurrenceTable)
+      .where(eq(AdmittedLearnerOccurrenceTable.origin_session_id, sessionID))
+      .all()
+      .pipe(Effect.orDie),
+    database.db.select().from(EventTable).where(eq(EventTable.aggregate_id, sessionID)).all().pipe(Effect.orDie),
+  ])
+  return {
+    sessions: sessions.length,
+    turns: turns.length,
+    inputs: inputs.length,
+    messages: messages.length,
+    parts: parts.length,
+    occurrences: occurrences.length,
+    events: events.length,
+    terminalEvents: events.filter((event) => event.type === EventV2.versionedType(TurnEvent.Terminal.type, 1)).length,
+  }
+})
+
+const seedDelegatedStartFixture = Effect.fn("test.seedDelegatedStartFixture")(function* (title: string) {
+  const fixture = yield* seedTurnFixture(title)
+  const events = yield* EventV2Bridge.Service
+  const parentTurnID = Turn.ID.create()
+  yield* admitRootTurn({
+    sessionID: fixture.info.id,
+    turnID: parentTurnID,
+    inputID: Turn.InputID.create(),
+    messageID: fixture.user.id,
+    envelope: { request: "delegate" },
+  })
+
+  const time = Date.now() + 10
+  const assistant = yield* fixture.session.updateMessage({
+    id: MessageID.ascending(),
+    parentID: fixture.user.id,
+    role: "assistant" as const,
+    sessionID: fixture.info.id,
+    mode: "repa",
+    agent: "repa",
+    path: { cwd: fixture.info.directory, root: fixture.info.directory },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    modelID: ModelV2.ID.make("test"),
+    providerID: ProviderV2.ID.make("test"),
+    time: { created: time },
+  })
+  const taskPart = yield* fixture.session.updatePart({
+    id: PartID.ascending(),
+    messageID: assistant.id,
+    sessionID: fixture.info.id,
+    type: "tool" as const,
+    tool: "task",
+    callID: `task-${title}`,
+    state: { status: "pending" as const, input: { prompt: "bounded child work" }, raw: "" },
+  })
+  yield* events.transaction((tx) =>
+    Effect.gen(function* () {
+      const model = yield* TurnLifecycle.admitModel(tx, {
+        turnID: parentTurnID,
+        sessionID: fixture.info.id,
+        assistantMessageID: assistant.id,
+        requestEnvelope: { request: "delegate model" },
+        contextFingerprint: TurnLifecycle.envelopeFingerprint({ context: "delegate" }),
+        snapshotFrontier: { sequence: 0, time: 0 },
+        timeAdmitted: time,
+      })
+      if (model.type !== "admitted") return yield* Effect.die("parent model unexpectedly exhausted")
+      yield* TurnLifecycle.sealCandidateSet(tx, {
+        turnID: parentTurnID,
+        sessionID: fixture.info.id,
+        assistantMessageID: assistant.id,
+        candidates: [{ partID: taskPart.id, callID: taskPart.callID, tool: "task", envelope: taskPart.state.input }],
+        timeSealed: time + 1,
+      })
+      const tool = yield* TurnLifecycle.admitTool(tx, {
+        turnID: parentTurnID,
+        sessionID: fixture.info.id,
+        assistantMessageID: assistant.id,
+        partID: taskPart.id,
+        timeAdmitted: time + 2,
+      })
+      if (tool.type !== "admitted") return yield* Effect.die("parent task unexpectedly rejected")
+      return { result: undefined }
+    }),
+  )
+
+  const childSessionID = SessionID.descending()
+  const childTurnID = Turn.ID.create()
+  const childMessageID = MessageID.ascending()
+  const childTime = time + 3
+  const childMessage: SessionV1.WithParts = {
+    info: {
+      id: childMessageID,
+      role: "user",
+      sessionID: childSessionID,
+      agent: "general",
+      model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+      time: { created: childTime },
+    },
+    parts: [
+      {
+        id: PartID.ascending(),
+        messageID: childMessageID,
+        sessionID: childSessionID,
+        type: "text",
+        text: "bounded child work",
+      },
+    ],
+  }
+  const capability = {
+    version: 1,
+    parent: [{ permission: "read", pattern: "*", action: "allow" as const }],
+    profile: [{ permission: "read", pattern: "*", action: "allow" as const }],
+    explicit: [{ permission: "read", pattern: "*", action: "allow" as const }],
+  }
+  const base = {
+    childSessionID,
+    childTurnID,
+    childInputID: Turn.InputID.create(),
+    parentSessionID: fixture.info.id,
+    parentTurnID,
+    parentTaskPartID: taskPart.id,
+    parentModelMessageID: assistant.id,
+    delegatedCapability: capability,
+    depthLimit: 1,
+    limits: { model: 2, tool: 2 },
+    envelope: { prompt: "bounded child work", requestedOutput: "text" },
+    policyBasis: { source: "gate12-test" },
+    timeAdmitted: childTime,
+    session: {
+      title: "delegated child",
+      agent: "general",
+      model: { id: ModelV2.ID.make("test"), providerID: ProviderV2.ID.make("test"), variant: "default" },
+      permission: capability.explicit,
+    },
+    message: childMessage,
+  } as const
+  return { fixture, parentTurnID, assistant, taskPart, childTime, childMessage, capability, base }
+})
+
+const settleDelegatedParent = Effect.fn("test.settleDelegatedParent")(function* (
+  input: Effect.Success<ReturnType<typeof seedDelegatedStartFixture>>,
+) {
+  const database = yield* Database.Service
+  yield* database.db.transaction((tx) =>
+    Effect.gen(function* () {
+      yield* TurnLifecycle.settleTool(tx, {
+        turnID: input.parentTurnID,
+        partID: input.taskPart.id,
+        state: "completed",
+        time: input.childTime + 2,
+      })
+      yield* TurnLifecycle.settleModel(tx, {
+        turnID: input.parentTurnID,
+        assistantMessageID: input.assistant.id,
+        state: "completed",
+        time: input.childTime + 2,
+      })
+      yield* TurnLifecycle.settle(tx, {
+        turnID: input.parentTurnID,
+        outcome: "completed",
+        reason: "normal",
+        time: input.childTime + 3,
+      })
+    }),
+  )
 })
 
 const addNoEffectInvocation = Effect.fn("test.addNoEffectInvocation")(function* (
@@ -203,7 +440,7 @@ describe("session.created event", () => {
       })
       yield* Effect.addFinalizer(() => unsub)
 
-      const info = yield* session.create({})
+      const info = yield* materializeTestSessionInfo()
       const receivedInfo = yield* awaitDeferred(received, "timed out waiting for session.created")
 
       expect(receivedInfo.id).toBe(info.id)
@@ -236,7 +473,7 @@ describe("session.created event", () => {
       })
       yield* Effect.addFinalizer(() => unsubscribe)
 
-      const info = yield* session.create({})
+      const info = yield* materializeTestSessionInfo()
       yield* session.setTitle({ sessionID: info.id, title: "updated" })
       const receivedEvents = yield* awaitDeferred(received, "timed out waiting for session created/updated events")
 
@@ -259,7 +496,7 @@ describe("session.created event", () => {
       GlobalBus.on("event", listener)
       yield* Effect.addFinalizer(() => Effect.sync(() => GlobalBus.off("event", listener)))
 
-      const info = yield* session.create({})
+      const info = yield* materializeTestSessionInfo()
       const event = yield* awaitDeferred(received, "timed out waiting for legacy global sync event")
 
       expect(event.syncEvent).toMatchObject({
@@ -281,7 +518,7 @@ describe("step-finish token propagation via event", () => {
       Effect.gen(function* () {
         const session = yield* SessionNs.Service
         const events = yield* EventV2Bridge.Service
-        const info = yield* session.create({})
+        const info = yield* materializeTestSessionInfo()
 
         const messageID = MessageID.ascending()
         yield* session.updateMessage({
@@ -352,7 +589,7 @@ describe("Session", () => {
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
       const dir = yield* tmpdirScoped({ git: true })
-      const info = yield* provideInstance(dir)(session.create({ title: "remove-without-instance" }))
+      const info = yield* provideInstance(dir)(materializeTestSessionInfo({ title: "remove-without-instance" }))
 
       const removeExit = yield* remove(info.id).pipe(Effect.exit)
       expect(Exit.isSuccess(removeExit)).toBe(true)
@@ -366,12 +603,14 @@ describe("Session", () => {
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
       const meta = { source: "sdk", trace: { id: "abc" } }
-      const created = yield* Effect.acquireRelease(session.create({ title: "with-meta", metadata: meta }), (info) =>
-        session.remove(info.id).pipe(Effect.ignore),
+      const created = yield* Effect.acquireRelease(
+        materializeTestSessionInfo({ title: "with-meta", metadata: meta }),
+        (info) => session.remove(info.id).pipe(Effect.ignore),
       )
       const saved = yield* session.get(created.id)
-      const fork = yield* Effect.acquireRelease(session.fork({ sessionID: created.id }), (info) =>
-        session.remove(info.id).pipe(Effect.ignore),
+      const fork = yield* Effect.acquireRelease(
+        materializeTestSessionInfo({ fork: { sourceSessionID: created.id } }),
+        (info) => session.remove(info.id).pipe(Effect.ignore),
       )
 
       expect(saved.metadata).toEqual(meta)
@@ -384,7 +623,7 @@ describe("Session", () => {
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
       const database = yield* Database.Service
-      const info = yield* session.create({ title: "no-effect ownership" })
+      const info = yield* materializeTestSessionInfo({ title: "no-effect ownership" })
       const user = yield* session.updateMessage({
         id: MessageID.ascending(),
         role: "user",
@@ -496,7 +735,7 @@ describe("Session", () => {
         authorship: Course.Authorship.learnerAuthored(),
         revision: { items: [{ key: "root", title: "Recovery" }] },
       })
-      const info = yield* session.create({ title: "admitted Part immutability" })
+      const info = yield* materializeTestSessionInfo({ title: "admitted Part immutability" })
       const user = yield* session.updateMessage({
         id: MessageID.ascending(),
         role: "user",
@@ -556,6 +795,8 @@ describe("Session", () => {
         LearningCommand.reserveAcceptance(tx, {
           envelope: {
             occurrenceID: occurrence.id,
+            turnID: Turn.ID.create(),
+            inputID: Turn.InputID.create(),
             sessionID: info.id,
             parentUserMessageID: user.id,
             assistantMessageID: assistant.id,
@@ -629,7 +870,7 @@ describe("Session", () => {
         authorship: Course.Authorship.learnerAuthored(),
         revision: { items: [{ key: "root", title: "Transactions" }] },
       })
-      const info = yield* session.create({ title: "applied retention" })
+      const info = yield* materializeTestSessionInfo({ title: "applied retention" })
       const user = yield* session.updateMessage({
         id: MessageID.ascending(),
         role: "user",
@@ -672,6 +913,8 @@ describe("Session", () => {
       const invocation = {
         envelope: {
           occurrenceID: occurrence.id,
+          turnID: Turn.ID.create(),
+          inputID: Turn.InputID.create(),
           sessionID: info.id,
           parentUserMessageID: user.id,
           assistantMessageID: assistant.id,
@@ -846,7 +1089,7 @@ describe("Session", () => {
             authorship: Course.Authorship.learnerAuthored(),
             revision: { items: [{ key: "root", title: "Durable transactions" }] },
           })
-          const info = yield* session.create({ title: "reopened applied retention" })
+          const info = yield* materializeTestSessionInfo({ title: "reopened applied retention" })
           const user = yield* session.updateMessage({
             id: MessageID.ascending(),
             role: "user",
@@ -896,6 +1139,8 @@ describe("Session", () => {
           const invocation = {
             envelope: {
               occurrenceID: occurrence.id,
+              turnID: Turn.ID.create(),
+              inputID: Turn.InputID.create(),
               sessionID: info.id,
               parentUserMessageID: user.id,
               assistantMessageID: assistant.id,
@@ -1055,7 +1300,7 @@ describe("Session", () => {
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
       const events = yield* EventV2Bridge.Service
-      const committed = yield* session.create({ title: "committed deletion" })
+      const committed = yield* materializeTestSessionInfo({ title: "committed deletion" })
       const observed = yield* Deferred.make<boolean>()
       const unsubscribe = yield* events.listen((event) => {
         if (event.type !== SessionNs.Event.Deleted.type) return Effect.void
@@ -1072,7 +1317,7 @@ describe("Session", () => {
       yield* session.remove(committed.id)
       expect(yield* awaitDeferred(observed, "timed out waiting for committed deletion visibility")).toBe(true)
 
-      const rolledBack = yield* session.create({ title: "rolled back deletion" })
+      const rolledBack = yield* materializeTestSessionInfo({ title: "rolled back deletion" })
       const future = Date.now() + 60_000
       const user = yield* session.updateMessage({
         id: MessageID.ascending(),
@@ -1095,7 +1340,7 @@ describe("Session", () => {
       expect(Exit.isFailure(deletion)).toBe(true)
       expect((yield* session.get(rolledBack.id)).id).toBe(rolledBack.id)
       expect(yield* occurrencePresentation(rolledBack.id, user.id)).toBeDefined()
-      const reopened = yield* session.fork({ sessionID: rolledBack.id })
+      const reopened = yield* materializeTestSessionInfo({ fork: { sourceSessionID: rolledBack.id } })
       expect(reopened.id).not.toBe(rolledBack.id)
       yield* session.remove(reopened.id)
     }),
@@ -1107,7 +1352,7 @@ describe("Session", () => {
       const state = yield* SessionRunState.Service
       const events = yield* EventV2Bridge.Service
       const database = yield* Database.Service
-      const info = yield* session.create({ title: "committed interrupted deletion" })
+      const info = yield* materializeTestSessionInfo({ title: "committed interrupted deletion" })
       const visibilityEntered = yield* Deferred.make<void>()
       const releaseVisibility = yield* Deferred.make<void>()
       const visibilityFinished = yield* Deferred.make<void>()
@@ -1165,7 +1410,7 @@ describe("Session", () => {
       const session = yield* SessionNs.Service
       const events = yield* EventV2Bridge.Service
       const database = yield* Database.Service
-      const info = yield* session.create({ title: "delayed patch" })
+      const info = yield* materializeTestSessionInfo({ title: "delayed patch" })
       const patchReady = yield* Deferred.make<void>()
       const releasePatch = yield* Deferred.make<void>()
       const originalPublish = events.publish
@@ -1226,11 +1471,227 @@ describe("Session", () => {
     }),
   )
 
+  it.instance("materializes a fork draft only with its first Turn and rolls the whole aggregate back on failure", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const events = yield* EventV2Bridge.Service
+      const database = yield* Database.Service
+      const source = yield* seedTurnFixture("atomic fork source")
+      const sourceTurnID = Turn.ID.create()
+      const sourceInputID = Turn.InputID.create()
+      yield* admitRootTurn({
+        sessionID: source.info.id,
+        turnID: sourceTurnID,
+        inputID: sourceInputID,
+        messageID: source.user.id,
+        envelope: { prompt: "source" },
+      })
+      yield* events.transaction((tx) =>
+        TurnLifecycle.settle(tx, {
+          turnID: sourceTurnID,
+          outcome: "interrupted",
+          reason: "learner_interrupt",
+          time: Date.now(),
+        }).pipe(Effect.map((result) => ({ result }))),
+      )
+      const frontier = yield* database.db
+        .select({ sequence: EventSequenceTable.seq })
+        .from(EventSequenceTable)
+        .where(eq(EventSequenceTable.aggregate_id, source.info.id))
+        .get()
+        .pipe(Effect.orDie)
+      if (!frontier) throw new Error("Expected source event frontier")
+      const fork = {
+        sourceSessionID: source.info.id,
+        sourceEventSequence: frontier.sequence,
+      }
+
+      const targetSessionID = SessionID.descending()
+      const targetTurnID = Turn.ID.create()
+      const targetInputID = Turn.InputID.create()
+      const targetMessageID = MessageID.ascending()
+      const targetPartID = PartID.ascending()
+      yield* events.transaction((tx) =>
+        Effect.gen(function* () {
+          const plan = yield* session.prepareRootStart(tx, {
+            targetSessionID,
+            turnID: targetTurnID,
+            session: { title: "atomic fork target" },
+            fork,
+          })
+          const message = {
+            id: targetMessageID,
+            role: "user" as const,
+            sessionID: targetSessionID,
+            agent: "repa",
+            model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+            time: { created: Date.now() },
+          }
+          const part = {
+            id: targetPartID,
+            messageID: targetMessageID,
+            sessionID: targetSessionID,
+            type: "text" as const,
+            text: "first genuine request",
+          }
+          return {
+            result: plan.session,
+            events: [
+              ...plan.events,
+              { definition: SessionV1.Event.MessageUpdated, data: { sessionID: targetSessionID, info: message } },
+              {
+                definition: SessionV1.Event.PartUpdated,
+                data: { sessionID: targetSessionID, part, time: message.time.created },
+                options: {
+                  commit: () =>
+                    Effect.gen(function* () {
+                      const occurrence = yield* Occurrence.admit(tx, {
+                        admission: LearnerAdmission.interactive(),
+                        sessionID: targetSessionID,
+                        messageID: targetMessageID,
+                        timeAdmitted: message.time.created,
+                      })
+                      yield* TurnLifecycle.admit(tx, {
+                        kind: "learner",
+                        turnID: targetTurnID,
+                        sessionID: targetSessionID,
+                        inputID: targetInputID,
+                        messageID: targetMessageID,
+                        occurrenceID: occurrence.id,
+                        limits: { model: 8, tool: 16 },
+                        envelope: { prompt: "first genuine request", fork },
+                        policyBasis: { source: "test" },
+                        timeAdmitted: message.time.created,
+                      })
+                    }).pipe(Effect.orDie, Effect.asVoid),
+                },
+              },
+            ],
+          }
+        }),
+      )
+
+      const historical = yield* database.db
+        .select()
+        .from(SessionHistoricalMessagePresentationTable)
+        .where(eq(SessionHistoricalMessagePresentationTable.session_id, targetSessionID))
+        .get()
+        .pipe(Effect.orDie)
+      expect(historical).toMatchObject({
+        source_session_id: source.info.id,
+        source_message_id: source.user.id,
+        source_event_sequence: frontier.sequence,
+      })
+      expect(
+        yield* database.db
+          .select({ sourceTurnID: TurnHistoricalInputPresentationTable.source_turn_id })
+          .from(TurnHistoricalInputPresentationTable)
+          .where(eq(TurnHistoricalInputPresentationTable.message_id, historical!.message_id))
+          .get()
+          .pipe(Effect.orDie),
+      ).toEqual({ sourceTurnID })
+      expect(
+        yield* database.db
+          .select({ messageID: TurnInputTable.message_id })
+          .from(TurnInputTable)
+          .where(eq(TurnInputTable.turn_id, targetTurnID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([{ messageID: targetMessageID }])
+
+      const failedSessionID = SessionID.descending()
+      const failedTurnID = Turn.ID.create()
+      const failedMessageID = MessageID.ascending()
+      const failedPartID = PartID.ascending()
+      const failure = yield* events
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            const plan = yield* session.prepareRootStart(tx, {
+              targetSessionID: failedSessionID,
+              turnID: failedTurnID,
+              session: {},
+              fork,
+            })
+            const message = {
+              id: failedMessageID,
+              role: "user" as const,
+              sessionID: failedSessionID,
+              agent: "repa",
+              model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+              time: { created: Date.now() },
+            }
+            const part = {
+              id: failedPartID,
+              messageID: failedMessageID,
+              sessionID: failedSessionID,
+              type: "text" as const,
+              text: "rollback",
+            }
+            return {
+              result: plan.session,
+              events: [
+                ...plan.events,
+                { definition: SessionV1.Event.MessageUpdated, data: { sessionID: failedSessionID, info: message } },
+                {
+                  definition: SessionV1.Event.PartUpdated,
+                  data: { sessionID: failedSessionID, part, time: message.time.created },
+                  options: { commit: () => Effect.die("injected fork-start failure") },
+                },
+              ],
+            }
+          }),
+        )
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(failure)).toBe(true)
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, failedSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+      expect(
+        yield* database.db
+          .select({ id: MessageTable.id })
+          .from(MessageTable)
+          .where(eq(MessageTable.session_id, failedSessionID))
+          .all()
+          .pipe(Effect.orDie),
+      ).toEqual([])
+
+      yield* session.touch(source.info.id)
+      const driftSessionID = SessionID.descending()
+      const driftTurnID = Turn.ID.create()
+      const drift = yield* Effect.flip(
+        events.transaction((tx) =>
+          session
+            .prepareRootStart(tx, {
+              targetSessionID: driftSessionID,
+              turnID: driftTurnID,
+              session: {},
+              fork,
+            })
+            .pipe(Effect.map((plan) => ({ result: plan.session, events: plan.events }))),
+        ),
+      )
+      expect(drift).toMatchObject({ _tag: "TurnAdmissionConflictError", turnID: driftTurnID })
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, driftSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+    }),
+  )
+
   it.instance("fork copies admitted User lineage without inferring it for legacy history", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
       const events = yield* EventV2Bridge.Service
-      const source = yield* Effect.acquireRelease(session.create({ title: "source" }), (info) =>
+      const source = yield* Effect.acquireRelease(materializeTestSessionInfo({ title: "source" }), (info) =>
         session.remove(info.id).pipe(Effect.ignore),
       )
       const linked = yield* session.updateMessage({
@@ -1265,8 +1726,9 @@ describe("Session", () => {
         text: "legacy learner input",
       })
 
-      const fork = yield* Effect.acquireRelease(session.fork({ sessionID: source.id }), (info) =>
-        session.remove(info.id).pipe(Effect.ignore),
+      const fork = yield* Effect.acquireRelease(
+        materializeTestSessionInfo({ fork: { sourceSessionID: source.id } }),
+        (info) => session.remove(info.id).pipe(Effect.ignore),
       )
       const forked = yield* session.messages({ sessionID: fork.id })
       const linkedClone = forked.find((message) =>
@@ -1307,7 +1769,7 @@ describe("Session", () => {
       const session = yield* SessionNs.Service
       const events = yield* EventV2Bridge.Service
       const database = yield* Database.Service
-      const source = yield* session.create({ title: "source lifecycle" })
+      const source = yield* materializeTestSessionInfo({ title: "source lifecycle" })
       const user = yield* session.updateMessage({
         id: MessageID.ascending(),
         role: "user",
@@ -1349,7 +1811,9 @@ describe("Session", () => {
         ),
       )
 
-      const forkFiber = yield* session.fork({ sessionID: source.id }).pipe(Effect.forkChild)
+      const forkFiber = yield* materializeTestSessionInfo({ fork: { sourceSessionID: source.id } }).pipe(
+        Effect.forkChild,
+      )
       yield* Deferred.await(destinationStarted)
       const deletion = yield* session.remove(source.id).pipe(Effect.exit)
       expect(Exit.isFailure(deletion)).toBe(true)
@@ -1396,7 +1860,7 @@ describe("Session", () => {
       const session = yield* SessionNs.Service
       const events = yield* EventV2Bridge.Service
       const database = yield* Database.Service
-      const source = yield* session.create({ title: "settled source" })
+      const source = yield* materializeTestSessionInfo({ title: "settled source" })
       const user = yield* session.updateMessage({
         id: MessageID.ascending(),
         role: "user",
@@ -1475,7 +1939,7 @@ describe("Session", () => {
           .pipe(Effect.orDie, Effect.as({ result: undefined })),
       )
 
-      const fork = yield* session.fork({ sessionID: source.id })
+      const fork = yield* materializeTestSessionInfo({ fork: { sourceSessionID: source.id } })
       const clone = (yield* session.messages({ sessionID: fork.id }))
         .flatMap((message) => message.parts)
         .find((part): part is SessionV1.ToolPart => part.type === "tool" && part.callID === tool.callID)
@@ -1522,7 +1986,7 @@ describe("Session", () => {
         "LearningCommand.HistoricalPresentationConflictError",
       )
 
-      const secondFork = yield* session.fork({ sessionID: fork.id })
+      const secondFork = yield* materializeTestSessionInfo({ fork: { sourceSessionID: fork.id } })
       const secondClone = (yield* session.messages({ sessionID: secondFork.id }))
         .flatMap((message) => message.parts)
         .find((part): part is SessionV1.ToolPart => part.type === "tool" && part.callID === tool.callID)
@@ -1574,13 +2038,883 @@ describe("Session", () => {
   it.instance("omits metadata when not provided", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
-      const created = yield* Effect.acquireRelease(session.create({ title: "empty-meta" }), (info) =>
+      const created = yield* Effect.acquireRelease(materializeTestSessionInfo({ title: "empty-meta" }), (info) =>
         session.remove(info.id).pipe(Effect.ignore),
       )
       const saved = yield* session.get(created.id)
 
       expect(created.metadata).toBeUndefined()
       expect(saved.metadata).toBeUndefined()
+    }),
+  )
+
+  it.instance("creates a delegated child Session and first Turn atomically after exact task admission", () =>
+    Effect.gen(function* () {
+      const delegated = yield* seedDelegatedStartFixture("delegated child admission")
+      const fixture = delegated.fixture
+      const database = yield* Database.Service
+      const { parentTurnID, assistant, taskPart, childTime, childMessage, capability, base } = delegated
+      const { childSessionID, childTurnID } = base
+
+      const untrustedChild = yield* materializeTestSessionInfo({
+        title: "legacy child without delegated lineage",
+      })
+      yield* database.db
+        .update(SessionTable)
+        .set({ parent_id: fixture.info.id })
+        .where(eq(SessionTable.id, untrustedChild.id))
+        .run()
+        .pipe(Effect.orDie)
+      const untrustedMessages = yield* fixture.session.messages({ sessionID: untrustedChild.id })
+      const untrustedTurnID = Turn.ID.create()
+      const untrustedMessageID = MessageID.ascending()
+      const untrusted = yield* fixture.session
+        .prepareChildStart({
+          ...base,
+          childSessionID: untrustedChild.id,
+          childTurnID: untrustedTurnID,
+          childInputID: Turn.InputID.create(),
+          depthLimit: 1,
+          message: {
+            info: {
+              ...childMessage.info,
+              id: untrustedMessageID,
+              sessionID: untrustedChild.id,
+            },
+            parts: childMessage.parts.map((part) => ({
+              ...part,
+              id: PartID.ascending(),
+              messageID: untrustedMessageID,
+              sessionID: untrustedChild.id,
+            })),
+          },
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(untrusted)).toBe(true)
+      expect(yield* fixture.session.messages({ sessionID: untrustedChild.id })).toEqual(untrustedMessages)
+      expect(yield* database.db.transaction((tx) => TurnLifecycle.lookup(tx, untrustedTurnID))).toEqual({
+        type: "missing",
+      })
+
+      const rejectedSessionID = SessionID.descending()
+      const rejected = yield* fixture.session
+        .prepareChildStart({
+          ...base,
+          childSessionID: rejectedSessionID,
+          childTurnID: Turn.ID.create(),
+          childInputID: Turn.InputID.create(),
+          depthLimit: 0,
+          message: {
+            ...childMessage,
+            info: { ...childMessage.info, sessionID: rejectedSessionID },
+            parts: childMessage.parts.map((part) => ({
+              ...part,
+              id: PartID.ascending(),
+              sessionID: rejectedSessionID,
+            })),
+          },
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(rejected)).toBe(true)
+      expect(
+        yield* database.db
+          .select()
+          .from(SessionTable)
+          .where(eq(SessionTable.id, rejectedSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+
+      const admitted = yield* fixture.session.prepareChildStart({ ...base, depthLimit: 1 })
+      expect(admitted.replay).toBe(false)
+      expect(admitted.turn).toMatchObject({
+        id: childTurnID,
+        sessionID: childSessionID,
+        admissionKind: "delegated_task",
+        depth: 1,
+        lineage: {
+          parentTurnID,
+          parentTaskPartID: taskPart.id,
+          delegatedCapability: capability,
+        },
+      })
+      expect((yield* fixture.session.get(childSessionID)).parentID).toBe(fixture.info.id)
+      expect(yield* fixture.session.messages({ sessionID: childSessionID })).toHaveLength(1)
+
+      const replay = yield* fixture.session.prepareChildStart({ ...base, depthLimit: 1 })
+      expect(replay.replay).toBe(true)
+      expect(yield* fixture.session.messages({ sessionID: childSessionID })).toHaveLength(1)
+
+      yield* database.db.transaction((tx) =>
+        TurnLifecycle.settle(tx, {
+          turnID: childTurnID,
+          outcome: "interrupted",
+          reason: "learner_interrupt",
+          time: childTime + 1,
+        }),
+      )
+      yield* settleDelegatedParent(delegated)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  it.instance("interrupts pre-commit admission without durable rows, events, owner, or work", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("precommit admission interruption")
+      const state = yield* SessionRunState.Service
+      const database = yield* Database.Service
+      const turnID = Turn.ID.create()
+      const inputID = Turn.InputID.create()
+      const envelope = { request: "interrupt before commit" }
+      const before = yield* sessionEvidence(fixture.info.id)
+      const admissionEntered = yield* Deferred.make<void>()
+      const releaseAdmission = yield* Deferred.make<void>()
+      let workCalls = 0
+
+      const starting = yield* state
+        .startTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+          admit: Effect.gen(function* () {
+            yield* Deferred.succeed(admissionEntered, undefined)
+            yield* Deferred.await(releaseAdmission)
+            return yield* admitRootTurn({
+              sessionID: fixture.info.id,
+              turnID,
+              inputID,
+              messageID: fixture.user.id,
+              envelope,
+            })
+          }),
+          work: Effect.sync(() => {
+            workCalls += 1
+            return { outcome: "completed" as const, reason: "normal" as const }
+          }),
+        })
+        .pipe(Effect.forkChild)
+
+      yield* awaitDeferred(admissionEntered, "Turn admission did not reach the pre-commit boundary")
+      yield* Fiber.interrupt(starting)
+      const interrupted = yield* Fiber.await(starting)
+      expect(Exit.isFailure(interrupted)).toBe(true)
+      if (Exit.isFailure(interrupted)) expect(Cause.hasInterrupts(interrupted.cause)).toBe(true)
+      expect(yield* sessionEvidence(fixture.info.id)).toEqual(before)
+      expect(workCalls).toBe(0)
+      expect(yield* database.db.transaction((tx) => TurnLifecycle.lookup(tx, turnID))).toEqual({
+        type: "missing",
+      })
+      yield* state.assertNotBusy(fixture.info.id)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  it.instance("terminalizes a delegated child when post-commit owner installation fails without work", () =>
+    Effect.gen(function* () {
+      const delegated = yield* seedDelegatedStartFixture("delegated owner handoff failure")
+      const state = yield* SessionRunState.Service
+      const before = yield* sessionEvidence(delegated.base.childSessionID)
+      let workCalls = 0
+
+      const terminal = yield* state.startTurn({
+        sessionID: delegated.base.childSessionID,
+        turnID: delegated.base.childTurnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(delegated.base.envelope),
+        admit: delegated.fixture.session.prepareChildStart(delegated.base),
+        install: Effect.fail("child runner construction failed"),
+        work: Effect.sync(() => {
+          workCalls += 1
+          return { outcome: "completed" as const, reason: "normal" as const }
+        }),
+      })
+
+      expect(before).toEqual({
+        sessions: 0,
+        turns: 0,
+        inputs: 0,
+        messages: 0,
+        parts: 0,
+        occurrences: 0,
+        events: 0,
+        terminalEvents: 0,
+      })
+      expect(terminal).toMatchObject({
+        id: delegated.base.childTurnID,
+        sessionID: delegated.base.childSessionID,
+        admissionKind: "delegated_task",
+        state: "interrupted",
+        terminal: { outcome: "interrupted", reason: "owner_handoff_failed" },
+      })
+      expect(yield* sessionEvidence(delegated.base.childSessionID)).toEqual({
+        sessions: 1,
+        turns: 1,
+        inputs: 1,
+        messages: 1,
+        parts: 1,
+        occurrences: 0,
+        events: 5,
+        terminalEvents: 1,
+      })
+      expect(workCalls).toBe(0)
+      expect((yield* state.getTurn(delegated.base.childSessionID, delegated.base.childTurnID)).terminal).toEqual(
+        terminal.terminal,
+      )
+
+      yield* settleDelegatedParent(delegated)
+      yield* delegated.fixture.session.remove(delegated.fixture.info.id)
+    }),
+  )
+
+  it.instance("settles root admission when caller cancellation wins a paused post-commit handoff", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("root postcommit handoff cancellation")
+      const state = yield* SessionRunState.Service
+      const database = yield* Database.Service
+      const turnID = Turn.ID.create()
+      const inputID = Turn.InputID.create()
+      const envelope = { request: "cancel paused root handoff" }
+      const fingerprint = TurnLifecycle.envelopeFingerprint(envelope)
+      const before = yield* sessionEvidence(fixture.info.id)
+      const installEntered = yield* Deferred.make<void>()
+      const releaseInstall = yield* Deferred.make<void>()
+      let workCalls = 0
+
+      const admit = admitRootTurn({
+        sessionID: fixture.info.id,
+        turnID,
+        inputID,
+        messageID: fixture.user.id,
+        envelope,
+      })
+      const starting = yield* state
+        .startTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          envelopeFingerprint: fingerprint,
+          admit,
+          install: Deferred.succeed(installEntered, undefined).pipe(Effect.andThen(Deferred.await(releaseInstall))),
+          work: Effect.sync(() => {
+            workCalls += 1
+            return { outcome: "completed" as const, reason: "normal" as const }
+          }),
+        })
+        .pipe(Effect.forkChild)
+
+      yield* awaitDeferred(installEntered, "root handoff did not reach post-commit installation")
+      const committed = yield* database.db.transaction((tx) => TurnLifecycle.lookup(tx, turnID))
+      expect(committed).toMatchObject({ type: "available", turn: { state: "running" } })
+
+      // Signal without joining so the oracle can release the installation barrier
+      // after the caller's cancellation finalizer has been scheduled.
+      starting.interruptUnsafe()
+      yield* Effect.yieldNow
+      yield* Deferred.succeed(releaseInstall, undefined)
+      const interrupted = yield* Fiber.await(starting).pipe(Effect.timeout("2 seconds"))
+      expect(Exit.isFailure(interrupted)).toBe(true)
+      if (Exit.isFailure(interrupted)) expect(Cause.hasInterrupts(interrupted.cause)).toBe(true)
+
+      const terminal = yield* state.getTurn(fixture.info.id, turnID)
+      expect(terminal).toMatchObject({
+        id: turnID,
+        sessionID: fixture.info.id,
+        state: "interrupted",
+        terminal: { outcome: "interrupted", reason: "owner_handoff_failed" },
+      })
+      expect(workCalls).toBe(0)
+      yield* state.assertNotBusy(fixture.info.id)
+
+      const replay = yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID,
+        envelopeFingerprint: fingerprint,
+        admit,
+        work: Effect.die("terminal root replay must not dispatch work"),
+      })
+      expect(replay).toEqual(terminal)
+      expect(yield* sessionEvidence(fixture.info.id)).toEqual({
+        ...before,
+        turns: before.turns + 1,
+        inputs: before.inputs + 1,
+        events: before.events + 1,
+        terminalEvents: before.terminalEvents + 1,
+      })
+      yield* state.assertNotBusy(fixture.info.id)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  it.instance("settles delegated admission when caller cancellation wins a paused post-commit handoff", () =>
+    Effect.gen(function* () {
+      const delegated = yield* seedDelegatedStartFixture("delegated postcommit handoff cancellation")
+      const state = yield* SessionRunState.Service
+      const database = yield* Database.Service
+      const fingerprint = TurnLifecycle.envelopeFingerprint(delegated.base.envelope)
+      const before = yield* sessionEvidence(delegated.base.childSessionID)
+      const installEntered = yield* Deferred.make<void>()
+      const releaseInstall = yield* Deferred.make<void>()
+      let workCalls = 0
+
+      const admit = delegated.fixture.session.prepareChildStart(delegated.base)
+      const starting = yield* state
+        .startTurn({
+          sessionID: delegated.base.childSessionID,
+          turnID: delegated.base.childTurnID,
+          envelopeFingerprint: fingerprint,
+          admit,
+          install: Deferred.succeed(installEntered, undefined).pipe(Effect.andThen(Deferred.await(releaseInstall))),
+          work: Effect.sync(() => {
+            workCalls += 1
+            return { outcome: "completed" as const, reason: "normal" as const }
+          }),
+        })
+        .pipe(Effect.forkChild)
+
+      yield* awaitDeferred(installEntered, "delegated handoff did not reach post-commit installation")
+      const committed = yield* database.db.transaction((tx) => TurnLifecycle.lookup(tx, delegated.base.childTurnID))
+      expect(committed).toMatchObject({ type: "available", turn: { state: "running" } })
+
+      starting.interruptUnsafe()
+      yield* Effect.yieldNow
+      yield* Deferred.succeed(releaseInstall, undefined)
+      const interrupted = yield* Fiber.await(starting).pipe(Effect.timeout("2 seconds"))
+      expect(Exit.isFailure(interrupted)).toBe(true)
+      if (Exit.isFailure(interrupted)) expect(Cause.hasInterrupts(interrupted.cause)).toBe(true)
+
+      const terminal = yield* state.getTurn(delegated.base.childSessionID, delegated.base.childTurnID)
+      expect(terminal).toMatchObject({
+        id: delegated.base.childTurnID,
+        sessionID: delegated.base.childSessionID,
+        admissionKind: "delegated_task",
+        state: "interrupted",
+        terminal: { outcome: "interrupted", reason: "owner_handoff_failed" },
+      })
+      expect(workCalls).toBe(0)
+      yield* state.assertNotBusy(delegated.base.childSessionID)
+
+      const replay = yield* state.startTurn({
+        sessionID: delegated.base.childSessionID,
+        turnID: delegated.base.childTurnID,
+        envelopeFingerprint: fingerprint,
+        admit,
+        work: Effect.die("terminal delegated replay must not dispatch work"),
+      })
+      expect(replay).toEqual(terminal)
+      expect(yield* sessionEvidence(delegated.base.childSessionID)).toEqual({
+        sessions: 1,
+        turns: 1,
+        inputs: 1,
+        messages: 1,
+        parts: 1,
+        occurrences: 0,
+        events: 5,
+        terminalEvents: 1,
+      })
+      expect(before).toEqual({
+        sessions: 0,
+        turns: 0,
+        inputs: 0,
+        messages: 0,
+        parts: 0,
+        occurrences: 0,
+        events: 0,
+        terminalEvents: 0,
+      })
+      yield* state.assertNotBusy(delegated.base.childSessionID)
+
+      yield* settleDelegatedParent(delegated)
+      yield* delegated.fixture.session.remove(delegated.fixture.info.id)
+    }),
+  )
+
+  it.instance("reserves one durable Turn owner and exact replay never installs replacement work", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("turn owner exact replay")
+      const state = yield* SessionRunState.Service
+      const turnID = Turn.ID.create()
+      const inputID = Turn.InputID.create()
+      const envelope = { request: "first" }
+      const fingerprint = TurnLifecycle.envelopeFingerprint(envelope)
+      const admissionEntered = yield* Deferred.make<void>()
+      const releaseAdmission = yield* Deferred.make<void>()
+      const workEntered = yield* Deferred.make<void>()
+      const releaseWork = yield* Deferred.make<void>()
+      const exactRetryEntered = yield* Deferred.make<void>()
+      const calls = { admission: 0, replacementAdmission: 0, work: 0 }
+      const admit = Effect.gen(function* () {
+        calls.admission += 1
+        yield* Deferred.succeed(admissionEntered, undefined)
+        yield* Deferred.await(releaseAdmission)
+        return yield* admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          inputID,
+          messageID: fixture.user.id,
+          envelope,
+        })
+      })
+      const work = Effect.gen(function* () {
+        calls.work += 1
+        yield* Deferred.succeed(workEntered, undefined)
+        yield* Deferred.await(releaseWork)
+        return { outcome: "failed" as const, reason: "provider_failure" as const }
+      })
+
+      const first = yield* state
+        .startTurn({ sessionID: fixture.info.id, turnID, envelopeFingerprint: fingerprint, admit, work })
+        .pipe(Effect.forkChild)
+      yield* awaitDeferred(admissionEntered, "Turn admission reservation was not installed")
+
+      const exactRetry = yield* Deferred.succeed(exactRetryEntered, undefined).pipe(
+        Effect.andThen(
+          state.startTurn({
+            sessionID: fixture.info.id,
+            turnID,
+            envelopeFingerprint: fingerprint,
+            admit: Effect.die("exact running replay must not readmit"),
+            work: Effect.die("exact running replay must not redispatch"),
+          }),
+        ),
+        Effect.forkChild,
+      )
+      yield* awaitDeferred(exactRetryEntered, "exact retry did not enter the existing owner request")
+
+      const otherTurnID = Turn.ID.create()
+      const busy = yield* state
+        .startTurn({
+          sessionID: fixture.info.id,
+          turnID: otherTurnID,
+          envelopeFingerprint: TurnLifecycle.envelopeFingerprint({ request: "other" }),
+          admit: Effect.sync(() => {
+            calls.replacementAdmission += 1
+            throw new Error("replacement admission must not run")
+          }),
+          work: Effect.die("replacement work must not run"),
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(busy)).toBe(true)
+      if (Exit.isFailure(busy)) expect(Cause.squash(busy.cause)).toBeInstanceOf(Turn.AlreadyRunningError)
+      expect(calls.replacementAdmission).toBe(0)
+
+      yield* Deferred.succeed(releaseAdmission, undefined)
+      const [started, replay] = yield* Effect.all([Fiber.join(first), Fiber.join(exactRetry)])
+      expect(started.state).toBe("running")
+      expect(replay).toEqual(started)
+      yield* awaitDeferred(workEntered, "released-v1 Turn work did not start after handoff")
+      expect(replay.id).toBe(turnID)
+      expect(replay.state).toBe("running")
+      expect(calls).toEqual({ admission: 1, replacementAdmission: 0, work: 1 })
+
+      yield* Deferred.succeed(releaseWork, undefined)
+      const terminal = yield* Effect.gen(function* () {
+        while (true) {
+          const current = yield* state.getTurn(fixture.info.id, turnID)
+          if (current.state !== "running") return current
+          yield* Effect.yieldNow
+        }
+      }).pipe(Effect.timeout("2 seconds"))
+      expect(terminal.terminal).toMatchObject({ outcome: "failed", reason: "provider_failure" })
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  it.instance("terminalizes post-commit owner installation failure without starting work", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("turn owner handoff failure")
+      const state = yield* SessionRunState.Service
+      const turnID = Turn.ID.create()
+      const inputID = Turn.InputID.create()
+      const envelope = { request: "handoff failure" }
+      const before = yield* sessionEvidence(fixture.info.id)
+      let workCalls = 0
+
+      const terminal = yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+        admit: admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          inputID,
+          messageID: fixture.user.id,
+          envelope,
+        }),
+        install: Effect.fail("runner construction failed"),
+        work: Effect.sync(() => {
+          workCalls += 1
+          return { outcome: "completed" as const, reason: "normal" as const }
+        }),
+      })
+
+      expect(terminal.terminal).toMatchObject({ outcome: "interrupted", reason: "owner_handoff_failed" })
+      expect(workCalls).toBe(0)
+      expect((yield* state.getTurn(fixture.info.id, turnID)).state).toBe("interrupted")
+      expect(yield* sessionEvidence(fixture.info.id)).toEqual({
+        ...before,
+        turns: before.turns + 1,
+        inputs: before.inputs + 1,
+        events: before.events + 1,
+        terminalEvents: before.terminalEvents + 1,
+      })
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  for (const winner of ["completion", "interrupt"] as const) {
+    it.instance(`keeps the first terminal CAS immutable when ${winner} wins completion versus interrupt`, () =>
+      Effect.gen(function* () {
+        const fixture = yield* seedTurnFixture(`${winner} terminal CAS`)
+        const state = yield* SessionRunState.Service
+        const database = yield* Database.Service
+        const turnID = Turn.ID.create()
+        const envelope = { request: `${winner} terminal CAS` }
+        const assistant = yield* fixture.session.updateMessage({
+          id: MessageID.ascending(),
+          parentID: fixture.user.id,
+          role: "assistant" as const,
+          sessionID: fixture.info.id,
+          mode: "repa",
+          agent: "repa",
+          path: { cwd: fixture.info.directory, root: fixture.info.directory },
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+          modelID: ModelV2.ID.make("test"),
+          providerID: ProviderV2.ID.make("test"),
+          time: { created: Date.now() },
+        })
+        const workEntered = yield* Deferred.make<void>()
+        const releaseWork = yield* Deferred.make<void>()
+        let workCalls = 0
+        let completedWork = 0
+
+        yield* state.startTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+          admit: admitRootTurn({
+            sessionID: fixture.info.id,
+            turnID,
+            inputID: Turn.InputID.create(),
+            messageID: fixture.user.id,
+            envelope,
+          }),
+          work: Effect.gen(function* () {
+            workCalls += 1
+            yield* Deferred.succeed(workEntered, undefined)
+            yield* Deferred.await(releaseWork)
+            yield* database.db.transaction((tx) =>
+              Effect.gen(function* () {
+                const model = yield* TurnLifecycle.admitModel(tx, {
+                  turnID,
+                  sessionID: fixture.info.id,
+                  assistantMessageID: assistant.id,
+                  requestEnvelope: { request: `${winner} terminal model` },
+                  contextFingerprint: TurnLifecycle.envelopeFingerprint({ context: `${winner} terminal model` }),
+                  snapshotFrontier: { sequence: 0, time: 0 },
+                  timeAdmitted: Date.now(),
+                })
+                if (model.type !== "admitted") return yield* Effect.die("terminal CAS model exhausted unexpectedly")
+                yield* TurnLifecycle.sealCandidateSet(tx, {
+                  turnID,
+                  sessionID: fixture.info.id,
+                  assistantMessageID: assistant.id,
+                  candidates: [],
+                  timeSealed: Date.now(),
+                })
+                yield* TurnLifecycle.settleModel(tx, {
+                  turnID,
+                  assistantMessageID: assistant.id,
+                  state: "completed",
+                  time: Date.now(),
+                })
+              }),
+            )
+            completedWork += 1
+            return { outcome: "completed" as const, reason: "normal" as const }
+          }),
+        })
+        yield* awaitDeferred(workEntered, "Turn work did not reach the completion/interrupt boundary")
+        const before = yield* sessionEvidence(fixture.info.id)
+
+        const first =
+          winner === "completion"
+            ? yield* Deferred.succeed(releaseWork, undefined).pipe(
+                Effect.andThen(state.awaitTurn(fixture.info.id, turnID)),
+              )
+            : yield* state.interruptTurn(fixture.info.id, turnID)
+        if (winner === "interrupt") yield* Deferred.succeed(releaseWork, undefined).pipe(Effect.ignore)
+        const losingAttempt =
+          winner === "completion"
+            ? yield* state.interruptTurn(fixture.info.id, turnID)
+            : yield* state.awaitTurn(fixture.info.id, turnID)
+        const stored = yield* state.getTurn(fixture.info.id, turnID)
+
+        expect(first.terminal).toMatchObject(
+          winner === "completion"
+            ? { outcome: "completed", reason: "normal" }
+            : { outcome: "interrupted", reason: "learner_interrupt" },
+        )
+        expect(losingAttempt.terminal).toEqual(first.terminal)
+        expect(stored.terminal).toEqual(first.terminal)
+        expect(workCalls).toBe(1)
+        expect(completedWork).toBe(winner === "completion" ? 1 : 0)
+        expect(yield* sessionEvidence(fixture.info.id)).toEqual({
+          ...before,
+          events: before.events + 1,
+          terminalEvents: before.terminalEvents + 1,
+        })
+        yield* fixture.session.remove(fixture.info.id)
+      }),
+    )
+  }
+
+  it.instance("settles a same-process ownerless durable running Turn without dispatch", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("same-process ownerless recovery")
+      const state = yield* SessionRunState.Service
+      const turnID = Turn.ID.create()
+      const envelope = { request: "orphan" }
+      const admitted = yield* admitRootTurn({
+        sessionID: fixture.info.id,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: fixture.user.id,
+        envelope,
+      })
+      expect(admitted.turn.state).toBe("running")
+
+      const recovered = yield* state.getTurn(fixture.info.id, turnID)
+      expect(recovered.terminal).toMatchObject({ outcome: "interrupted", reason: "owner_lost" })
+      expect((yield* state.getTurn(fixture.info.id, turnID)).terminal).toEqual(recovered.terminal)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  it.instance("promotes queued steering only at the exact owner boundary and interrupts by Turn ID", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("strict steer and interrupt")
+      const state = yield* SessionRunState.Service
+      const events = yield* EventV2Bridge.Service
+      const turnID = Turn.ID.create()
+      const inputID = Turn.InputID.create()
+      const envelope = { request: "initial" }
+      const workEntered = yield* Deferred.make<void>()
+      const allowBoundary = yield* Deferred.make<void>()
+      const boundaryResult = yield* Deferred.make<boolean>()
+      const steerStarted = yield* Deferred.make<void>()
+      const keepRunning = yield* Deferred.make<void>()
+      const work = Effect.gen(function* () {
+        yield* Deferred.succeed(workEntered, undefined)
+        yield* Deferred.await(allowBoundary)
+        while (true) {
+          const promoted = yield* state.promoteSteer(fixture.info.id, turnID)
+          if (promoted) {
+            yield* Deferred.succeed(boundaryResult, true)
+            break
+          }
+          yield* Effect.yieldNow
+        }
+        yield* Deferred.await(keepRunning)
+        return { outcome: "completed" as const, reason: "normal" as const }
+      })
+
+      yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+        admit: admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          inputID,
+          messageID: fixture.user.id,
+          envelope,
+        }),
+        work,
+      })
+      yield* awaitDeferred(workEntered, "Turn work did not reach steering boundary")
+
+      const steerMessage = yield* fixture.session.updateMessage({
+        ...fixture.user,
+        id: MessageID.ascending(),
+        time: { created: Date.now() + 1 },
+      })
+      yield* fixture.session.updatePart({
+        id: PartID.ascending(),
+        messageID: steerMessage.id,
+        sessionID: fixture.info.id,
+        type: "text" as const,
+        text: "steer exactly this Turn",
+      })
+      const occurrence = yield* admitOccurrence(fixture.info.id, steerMessage.id)
+      const steerInputID = Turn.InputID.create()
+      const steerEnvelope = { request: "steer" }
+      const steerFingerprint = TurnLifecycle.envelopeFingerprint(steerEnvelope)
+      const promote = events
+        .transaction((tx) =>
+          TurnLifecycle.promoteSteer(tx, {
+            sessionID: fixture.info.id,
+            expectedTurnID: turnID,
+            inputID: steerInputID,
+            messageID: steerMessage.id,
+            occurrenceID: occurrence.id,
+            envelope: steerEnvelope,
+            timeAdmitted: Date.now(),
+          }).pipe(Effect.map((result) => ({ result }))),
+        )
+        .pipe(Effect.map((result) => result.result))
+      const steering = yield* state
+        .steerTurn({
+          sessionID: fixture.info.id,
+          expectedTurnID: turnID,
+          inputID: steerInputID,
+          envelopeFingerprint: steerFingerprint,
+          replay: Deferred.succeed(steerStarted, undefined).pipe(Effect.as(undefined)),
+          promote,
+        })
+        .pipe(Effect.forkChild)
+
+      yield* awaitDeferred(steerStarted, "steer did not enter the exact owner queue")
+      yield* Deferred.succeed(allowBoundary, undefined)
+      expect(yield* awaitDeferred(boundaryResult, "steer was not considered at the safe boundary")).toBe(true)
+      const promoted = yield* Fiber.join(steering)
+      expect(promoted.id).toBe(steerInputID)
+      expect(promoted.turnID).toBe(turnID)
+
+      const replay = yield* state.steerTurn({
+        sessionID: fixture.info.id,
+        expectedTurnID: turnID,
+        inputID: steerInputID,
+        envelopeFingerprint: steerFingerprint,
+        replay: Effect.succeed(promoted),
+        promote: Effect.die("exact steer replay must not promote twice"),
+      })
+      expect(replay).toEqual(promoted)
+
+      const terminal = yield* state.interruptTurn(fixture.info.id, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "interrupted", reason: "learner_interrupt" })
+      yield* Deferred.succeed(keepRunning, undefined).pipe(Effect.ignore)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  it.instance("joins an exact pending steer retry and rejects conflicting reuse before promotion", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("pending steer exact retry")
+      const state = yield* SessionRunState.Service
+      const events = yield* EventV2Bridge.Service
+      const turnID = Turn.ID.create()
+      const envelope = { request: "initial" }
+      const workEntered = yield* Deferred.make<void>()
+      const allowBoundary = yield* Deferred.make<void>()
+      const keepRunning = yield* Deferred.make<void>()
+      const firstReplayCompleted = yield* Deferred.make<void>()
+      const retryReplayCompleted = yield* Deferred.make<void>()
+      const promotionCompleted = yield* Deferred.make<boolean>()
+
+      yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+        admit: admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: fixture.user.id,
+          envelope,
+        }),
+        work: Effect.gen(function* () {
+          yield* Deferred.succeed(workEntered, undefined)
+          yield* Deferred.await(allowBoundary)
+          yield* Deferred.succeed(promotionCompleted, yield* state.promoteSteer(fixture.info.id, turnID))
+          yield* Deferred.await(keepRunning)
+          return { outcome: "completed" as const, reason: "normal" as const }
+        }),
+      })
+      yield* awaitDeferred(workEntered, "Turn work did not reach pending-steer boundary")
+
+      const steerMessage = yield* fixture.session.updateMessage({
+        ...fixture.user,
+        id: MessageID.ascending(),
+        time: { created: Date.now() + 1 },
+      })
+      yield* fixture.session.updatePart({
+        id: PartID.ascending(),
+        messageID: steerMessage.id,
+        sessionID: fixture.info.id,
+        type: "text" as const,
+        text: "retry this exact pending steer",
+      })
+      const occurrence = yield* admitOccurrence(fixture.info.id, steerMessage.id)
+      const inputID = Turn.InputID.create()
+      const steerEnvelope = { request: "steer" }
+      const fingerprint = TurnLifecycle.envelopeFingerprint(steerEnvelope)
+      let promotions = 0
+      const promote = Effect.gen(function* () {
+        promotions += 1
+        return yield* events
+          .transaction((tx) =>
+            TurnLifecycle.promoteSteer(tx, {
+              sessionID: fixture.info.id,
+              expectedTurnID: turnID,
+              inputID,
+              messageID: steerMessage.id,
+              occurrenceID: occurrence.id,
+              envelope: steerEnvelope,
+              timeAdmitted: Date.now(),
+            }).pipe(Effect.map((result) => ({ result }))),
+          )
+          .pipe(Effect.map((result) => result.result))
+      })
+      const first = yield* state
+        .steerTurn({
+          sessionID: fixture.info.id,
+          expectedTurnID: turnID,
+          inputID,
+          envelopeFingerprint: fingerprint,
+          replay: Deferred.succeed(firstReplayCompleted, undefined).pipe(Effect.as(undefined)),
+          promote,
+        })
+        .pipe(Effect.forkChild)
+      yield* awaitDeferred(firstReplayCompleted, "first exact steer retry did not finish replay lookup")
+      yield* Effect.yieldNow
+
+      const retry = yield* state
+        .steerTurn({
+          sessionID: fixture.info.id,
+          expectedTurnID: turnID,
+          inputID,
+          envelopeFingerprint: fingerprint,
+          replay: Deferred.succeed(retryReplayCompleted, undefined).pipe(Effect.as(undefined)),
+          promote: Effect.die("joined exact retry must not install replacement promotion"),
+        })
+        .pipe(Effect.forkChild)
+      yield* awaitDeferred(retryReplayCompleted, "exact retry did not finish replay lookup")
+      yield* Effect.yieldNow
+      const conflict = yield* state
+        .steerTurn({
+          sessionID: fixture.info.id,
+          expectedTurnID: turnID,
+          inputID,
+          envelopeFingerprint: TurnLifecycle.envelopeFingerprint({ request: "conflicting steer" }),
+          replay: Effect.succeed(undefined),
+          promote: Effect.die("conflicting retry must not promote"),
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(conflict)).toBe(true)
+      if (Exit.isFailure(conflict)) expect(Cause.squash(conflict.cause)).toBeInstanceOf(Turn.AdmissionConflictError)
+
+      yield* Deferred.succeed(allowBoundary, undefined)
+      expect(yield* awaitDeferred(promotionCompleted, "pending exact steer was not promoted at the boundary")).toBe(
+        true,
+      )
+      const [firstResult, retryResult] = yield* Effect.all([Fiber.join(first), Fiber.join(retry)])
+      expect(firstResult).toEqual(retryResult)
+      expect(firstResult.id).toBe(inputID)
+      expect(promotions).toBe(1)
+
+      const terminal = yield* state.interruptTurn(fixture.info.id, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "interrupted", reason: "learner_interrupt" })
+      yield* Deferred.succeed(keepRunning, undefined).pipe(Effect.ignore)
+      yield* fixture.session.remove(fixture.info.id)
     }),
   )
 })

@@ -2,7 +2,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Image } from "@/image/image"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
-import { Cause, Deferred, Effect, Exit, Layer, Context, Scope, Schema } from "effect"
+import { Cause, DateTime, Effect, Exit, Layer, Context, Scope, Schema } from "effect"
 import * as Stream from "effect/Stream"
 import { Agent } from "@/agent/agent"
 import { Config } from "@/config/config"
@@ -25,18 +25,32 @@ import { isRecord } from "@/util/record"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Database } from "@opencode-ai/core/database/database"
-import { Usage, type LLMEvent } from "@opencode-ai/llm"
-import { EffectBridge } from "@/effect/bridge"
+import { LLMEvent, ToolRuntime, Usage } from "@opencode-ai/llm"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { isDeepStrictEqual } from "node:util"
 import { isLearningCommandToolID } from "@/tool/accept-course-view-revision"
+import { normalizeCommand as normalizeLearningCommandInput } from "@/learning-command/input"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { Turn } from "@opencode-ai/schema/turn"
+import { TurnEvent } from "@opencode-ai/schema/turn-event"
+import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LLMNativeRuntime } from "./llm/native-runtime"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
+export type FailureReason = Extract<
+  Turn.TerminalReason,
+  "provider_failure" | "tool_runtime_failure" | "permission_failure" | "projection_failure" | "integrity_failure"
+>
+
+class ProcessorIntegrityFailure extends Error {}
 
 export type RegisteredToolCall = Readonly<{
+  turnID: Turn.ID
+  inputID: Turn.InputID
+  causalOccurrenceID?: Turn.ModelOperation["causalOccurrenceID"]
   partID: SessionV1.ToolPart["id"]
   callID: string
   emissionOrdinal: number
@@ -51,6 +65,7 @@ export type ToolCallPreparation = (input: unknown, registration: RegisteredToolC
 
 export interface Handle {
   readonly message: SessionV1.Assistant
+  readonly failureReason?: FailureReason
   readonly updateToolCall: (
     toolCallID: string,
     update: (part: SessionV1.ToolPart) => SessionV1.ToolPart,
@@ -66,6 +81,7 @@ export interface Handle {
   ) => Effect.Effect<void>
   readonly failToolCall?: (toolCallID: string, error: unknown) => Effect.Effect<boolean>
   readonly registeredToolCall: (toolCallID: string) => RegisteredToolCall | undefined
+  readonly bindModelOperation: (operation: Turn.ModelOperation) => Effect.Effect<void, Turn.Error>
   readonly process: (streamInput: LLM.StreamInput) => Effect.Effect<Result>
 }
 
@@ -73,6 +89,8 @@ type Input = {
   assistantMessage: SessionV1.Assistant
   sessionID: SessionID
   model: Provider.Model
+  /** Required for every interactive provider operation; omitted only by closed internal utilities. */
+  turnID?: Turn.ID
 }
 
 export interface Interface {
@@ -81,14 +99,17 @@ export interface Interface {
 
 type ToolCall = {
   partID: SessionV1.ToolPart["id"]
+  callID: string
   messageID: SessionV1.ToolPart["messageID"]
   sessionID: SessionV1.ToolPart["sessionID"]
   name: string
-  done: Deferred.Deferred<void>
-  ready: Deferred.Deferred<void>
-  entered: Deferred.Deferred<void>
-  preparing: boolean
+  raw: string
+  input?: Record<string, unknown>
+  metadata?: SessionV1.ToolPart["metadata"]
+  providerExecuted?: boolean
+  finalized: boolean
   prepared: boolean
+  admitted: boolean
   registration?: RegisteredToolCall
 }
 
@@ -128,9 +149,8 @@ const layer = Layer.effect(
     const database = yield* Database.Service
 
     const create = Effect.fn("SessionProcessor.create")(function* (input: Input) {
-      // Pre-capture snapshot before the LLM stream starts. The AI SDK
-      // may execute tools internally before emitting start-step events,
-      // so capturing inside the event handler can be too late.
+      // Capture the filesystem snapshot before the provider operation starts.
+      // Tool effects are admitted later, after the emitted set is sealed.
       const initialSnapshot = yield* snapshot.track()
       const ctx: ProcessorContext = {
         assistantMessage: input.assistantMessage,
@@ -145,11 +165,40 @@ const layer = Layer.effect(
         reasoningMap: {},
       }
       let aborted = false
-      let acceptingToolCalls = false
       let emissionOrdinal = 0
-      let toolLane = Promise.resolve()
+      let candidateSetSealed = false
+      let modelSettled = false
+      let dispatchedToolCallID: string | undefined
+      let modelOperation: Turn.ModelOperation | undefined
       let activeTools: LLM.StreamInput["tools"] = {}
-      const run = yield* EffectBridge.make()
+      let toolController: AbortController | undefined
+      let failureReason: FailureReason | undefined
+
+      const classifyFailure = (error: unknown, fallback: FailureReason): FailureReason => {
+        if (
+          error instanceof ProcessorIntegrityFailure ||
+          error instanceof Turn.IntegrityError ||
+          error instanceof Turn.AdmissionConflictError ||
+          error instanceof Turn.SourceUnavailableError
+        ) {
+          return "integrity_failure"
+        }
+        if (error instanceof PermissionV1.NotFoundError || error instanceof Question.NotFoundError) {
+          return "permission_failure"
+        }
+        return fallback
+      }
+
+      const observeFailure = <A, E, R>(
+        effect: Effect.Effect<A, E, R>,
+        fallback: FailureReason,
+      ): Effect.Effect<A, E, R> =>
+        effect.pipe(
+          Effect.catchCause((cause) => {
+            failureReason ??= classifyFailure(Cause.squash(cause), fallback)
+            return Effect.failCause(cause)
+          }),
+        )
 
       const parse = (e: unknown) =>
         MessageV2.fromError(e, {
@@ -158,9 +207,7 @@ const layer = Layer.effect(
         })
 
       const settleToolCall = Effect.fn("SessionProcessor.settleToolCall")(function* (toolCallID: string) {
-        const done = ctx.toolcalls[toolCallID]?.done
         delete ctx.toolcalls[toolCallID]
-        if (done) yield* Deferred.succeed(done, undefined).pipe(Effect.ignore)
       })
 
       const readToolCall = Effect.fn("SessionProcessor.readToolCall")(function* (toolCallID: string) {
@@ -178,25 +225,34 @@ const layer = Layer.effect(
         return { call, part }
       })
 
-      const reserveToolCall = (input: { id: string; name: string }) => {
-        if (!input.id.trim()) throw new Error("Tool call ID is required")
+      const reserveToolCall = (input: { id: string; name: string; providerExecuted?: boolean }) => {
+        if (!input.id.trim()) throw new ProcessorIntegrityFailure("Tool call ID is required")
         const existing = ctx.toolcalls[input.id]
+        if (candidateSetSealed && !input.providerExecuted && !existing?.providerExecuted) {
+          throw new ProcessorIntegrityFailure(
+            `Local tool callback arrived after the candidate set was sealed: ${input.id}`,
+          )
+        }
         if (existing) {
           if (existing.name !== input.name) {
-            throw new Error(`Tool call ${input.id} changed tool from ${existing.name} to ${input.name}`)
+            throw new ProcessorIntegrityFailure(
+              `Tool call ${input.id} changed tool from ${existing.name} to ${input.name}`,
+            )
           }
           return existing
         }
+        if (candidateSetSealed)
+          throw new ProcessorIntegrityFailure(`Tool call arrived after the candidate set was sealed: ${input.id}`)
         const call: ToolCall = {
           partID: PartID.ascending(),
+          callID: input.id,
           messageID: ctx.assistantMessage.id,
           sessionID: ctx.assistantMessage.sessionID,
           name: input.name,
-          done: Deferred.makeUnsafe<void>(),
-          ready: Deferred.makeUnsafe<void>(),
-          entered: Deferred.makeUnsafe<void>(),
-          preparing: false,
+          raw: "",
+          finalized: false,
           prepared: false,
+          admitted: false,
         }
         ctx.toolcalls[input.id] = call
         return call
@@ -205,7 +261,12 @@ const layer = Layer.effect(
       const registerToolCall = (input: { id: string; name: string }) => {
         const call = reserveToolCall(input)
         if (call.registration) return call.registration
+        if (!modelOperation)
+          throw new ProcessorIntegrityFailure(`Tool call ${input.id} arrived before exact model-operation binding`)
         call.registration = Object.freeze({
+          turnID: modelOperation.turnID,
+          inputID: modelOperation.inputID,
+          ...(modelOperation.causalOccurrenceID ? { causalOccurrenceID: modelOperation.causalOccurrenceID } : {}),
           partID: call.partID,
           callID: input.id,
           emissionOrdinal: emissionOrdinal++,
@@ -217,6 +278,26 @@ const layer = Layer.effect(
       }
 
       const registeredToolCall = (toolCallID: string) => ctx.toolcalls[toolCallID]?.registration
+
+      const bindModelOperation = Effect.fn("SessionProcessor.bindModelOperation")(function* (
+        operation: Turn.ModelOperation,
+      ) {
+        if (
+          !input.turnID ||
+          operation.turnID !== input.turnID ||
+          operation.sessionID !== input.sessionID ||
+          operation.assistantMessageID !== input.assistantMessage.id
+        ) {
+          return yield* new Turn.IntegrityError({
+            turnID: input.turnID ?? operation.turnID,
+            reason: "Processor model-operation binding does not match its exact interactive identity",
+          })
+        }
+        if (modelOperation && !isDeepStrictEqual(modelOperation, operation)) {
+          return yield* new Turn.AdmissionConflictError({ turnID: operation.turnID })
+        }
+        modelOperation = operation
+      })
 
       const updateToolCall = Effect.fn("SessionProcessor.updateToolCall")(function* (
         toolCallID: string,
@@ -331,10 +412,9 @@ const layer = Layer.effect(
         providerExecuted?: boolean
       }) {
         const call = reserveToolCall(input)
-        if (call.preparing && !call.prepared) yield* Deferred.await(call.ready)
         if (call.prepared) {
           const existing = yield* readToolCall(input.id)
-          if (!existing) throw new Error(`Prepared tool call is missing its Part: ${input.id}`)
+          if (!existing) throw new ProcessorIntegrityFailure(`Prepared tool call is missing its Part: ${input.id}`)
           if (!input.providerExecuted || existing.part.metadata?.providerExecuted) return existing
           const part = yield* session.updatePart({
             ...existing.part,
@@ -348,7 +428,6 @@ const layer = Layer.effect(
           }
           return { call: ctx.toolcalls[input.id], part }
         }
-        call.preparing = true
         const result = yield* session
           .updatePart({
             id: call.partID,
@@ -357,17 +436,12 @@ const layer = Layer.effect(
             type: "tool",
             tool: input.name,
             callID: input.id,
-            state: { status: "pending", input: {}, raw: "" },
+            state: { status: "pending", input: call.input ?? {}, raw: call.raw },
             metadata: input.providerExecuted ? { providerExecuted: true } : undefined,
           } satisfies SessionV1.ToolPart)
           .pipe(Effect.exit)
-        call.preparing = false
-        if (Exit.isFailure(result)) {
-          yield* Deferred.failCause(call.ready, result.cause).pipe(Effect.ignore)
-          return yield* Effect.failCause(result.cause)
-        }
+        if (Exit.isFailure(result)) return yield* Effect.failCause(result.cause)
         call.prepared = true
-        yield* Deferred.succeed(call.ready, undefined).pipe(Effect.ignore)
         return { call, part: result.value }
       })
 
@@ -375,99 +449,19 @@ const layer = Layer.effect(
         toolCallID: string,
       ) {
         const call = ctx.toolcalls[toolCallID]
-        if (!call) throw new Error(`Unregistered tool call: ${toolCallID}`)
+        if (!call) throw new ProcessorIntegrityFailure(`Unregistered tool call: ${toolCallID}`)
         const part = yield* session.getPart({
           partID: call.partID,
           messageID: call.messageID,
           sessionID: call.sessionID,
         })
         if (!part || part.type !== "tool" || part.callID !== toolCallID || part.tool !== call.name) {
-          throw new Error(`Tool call preparation did not persist the reserved Part: ${toolCallID}`)
+          throw new ProcessorIntegrityFailure(`Tool call preparation did not persist the reserved Part: ${toolCallID}`)
         }
-        call.preparing = false
         call.prepared = true
-        yield* Deferred.succeed(call.ready, undefined).pipe(Effect.ignore)
-      })
-
-      const failToolCallPreparation = Effect.fn("SessionProcessor.failToolCallPreparation")(function* (
-        toolCallID: string,
-        error: unknown,
-      ) {
-        const call = ctx.toolcalls[toolCallID]
-        if (!call) return
-        call.preparing = false
-        yield* Deferred.die(call.ready, error).pipe(Effect.ignore)
-      })
-
-      const enterToolCall = Effect.fn("SessionProcessor.enterToolCall")(function* (toolCallID: string) {
-        const call = ctx.toolcalls[toolCallID]
-        if (!call) throw new Error(`Unregistered tool call: ${toolCallID}`)
-        yield* Deferred.succeed(call.entered, undefined).pipe(Effect.ignore)
-      })
-
-      const failToolCallEntry = Effect.fn("SessionProcessor.failToolCallEntry")(function* (
-        toolCallID: string,
-        error: unknown,
-      ) {
-        const call = ctx.toolcalls[toolCallID]
-        if (!call) return
-        yield* Deferred.die(call.entered, error).pipe(Effect.ignore)
       })
 
       const preparation = (tool: LLM.StreamInput["tools"][string]) => (tool as LocalTool)[ToolCallPreparation]
-
-      const hasPreparation = (name: string) => {
-        const item = activeTools[name]
-        return !!item && !!preparation(item)
-      }
-
-      const wrapTools = (tools: LLM.StreamInput["tools"]): LLM.StreamInput["tools"] =>
-        Object.fromEntries(
-          Object.entries(tools).map(([name, item]) => {
-            if (!item.execute) return [name, item]
-            const execute = item.execute.bind(item)
-            const prepare = preparation(item)
-            return [
-              name,
-              {
-                ...item,
-                execute(args, options) {
-                  const registration = registerToolCall({ id: options.toolCallId, name })
-                  const result = toolLane.then(async () => {
-                    try {
-                      if (!acceptingToolCalls || options.abortSignal?.aborted) {
-                        throw new DOMException("Tool execution aborted", "AbortError")
-                      }
-                      if (prepare) {
-                        const call = ctx.toolcalls[options.toolCallId]
-                        call.preparing = true
-                        try {
-                          await prepare(args, registration)
-                          await run.promise(confirmPreparedToolCall(options.toolCallId))
-                        } catch (error) {
-                          await run.promise(failToolCallPreparation(options.toolCallId, error))
-                          throw error
-                        }
-                      } else {
-                        await run.promise(ensureToolCall({ id: options.toolCallId, name }))
-                      }
-                      await run.promise(enterToolCall(options.toolCallId))
-                      return execute(args, options)
-                    } catch (error) {
-                      await run.promise(failToolCallEntry(options.toolCallId, error))
-                      throw error
-                    }
-                  })
-                  toolLane = result.then(
-                    () => undefined,
-                    () => undefined,
-                  )
-                  return result
-                },
-              },
-            ]
-          }),
-        )
 
       const isFilePart = (value: unknown): value is SessionV1.FilePart => Schema.is(SessionV1.FilePart)(value)
 
@@ -491,6 +485,162 @@ const layer = Layer.effect(
             typeof value.result.value === "string" ? value.result.value : (JSON.stringify(value.result.value) ?? ""),
         }
       }
+
+      const canonicalToolInput = (name: string, value: unknown): Record<string, unknown> => {
+        const input = isRecord(value) ? value : { value }
+        return isLearningCommandToolID(name) ? normalizeLearningCommandInput(name, input) : input
+      }
+
+      const checkDoomLoop = Effect.fn("SessionProcessor.checkDoomLoop")(function* (
+        name: string,
+        input: Record<string, unknown>,
+      ) {
+        const parts = yield* MessageV2.parts(ctx.assistantMessage.id).pipe(
+          Effect.provideService(Database.Service, database),
+        )
+        const recentParts = parts.slice(-DOOM_LOOP_THRESHOLD)
+        if (
+          recentParts.length !== DOOM_LOOP_THRESHOLD ||
+          !recentParts.every(
+            (part) =>
+              part.type === "tool" &&
+              part.tool === name &&
+              part.state.status !== "pending" &&
+              JSON.stringify(part.state.input) === JSON.stringify(input),
+          )
+        ) {
+          return
+        }
+
+        const agent = yield* agents.get(ctx.assistantMessage.agent)
+        if (!agent) throw new Error(`Agent not found: "${ctx.assistantMessage.agent}"`)
+        yield* permission.ask({
+          permission: "doom_loop",
+          patterns: [name],
+          sessionID: ctx.assistantMessage.sessionID,
+          metadata: { tool: name, input },
+          always: [name],
+          ruleset: agent.permission,
+        })
+      })
+
+      const localToolCalls = () =>
+        Object.values(ctx.toolcalls)
+          .filter((call) => !call.providerExecuted)
+          .toSorted(
+            (a, b) => (a.registration?.emissionOrdinal ?? Infinity) - (b.registration?.emissionOrdinal ?? Infinity),
+          )
+
+      const sealAndSettleModel = Effect.fn("SessionProcessor.sealAndSettleModel")(function* (
+        state: "completed" | "failed" | "interrupted",
+        allowIncomplete: boolean,
+      ) {
+        if (modelSettled) return
+        if (!input.turnID)
+          throw new ProcessorIntegrityFailure(
+            `Interactive Assistant operation has no exact Turn: ${ctx.assistantMessage.id}`,
+          )
+
+        const calls = localToolCalls()
+        for (const call of calls) {
+          if (!call.finalized && !allowIncomplete) {
+            throw new ProcessorIntegrityFailure(
+              `Provider completed before tool call ${call.name}/${call.partID} was finalized`,
+            )
+          }
+          if (!call.registration) registerToolCall({ id: call.callID, name: call.name })
+          call.input ??= {}
+          call.raw ||= JSON.stringify(call.input)
+        }
+        const time = Date.now()
+        const candidates = calls.map((call) => ({
+          partID: call.partID,
+          callID: call.callID,
+          tool: call.name,
+          envelope: {
+            input: call.input ?? {},
+            ...(call.finalized ? {} : { incomplete: true, raw: call.raw }),
+          },
+        }))
+        yield* events.transaction<undefined, EventV2.Definition>((tx) =>
+          Effect.gen(function* () {
+            const turn = yield* TurnLifecycle.info(tx, input.turnID!)
+            const operation = yield* TurnLifecycle.modelOperation(tx, {
+              turnID: input.turnID!,
+              sessionID: input.sessionID,
+              assistantMessageID: input.assistantMessage.id,
+            })
+            const timestamp = DateTime.makeUnsafe(
+              Math.max(time, DateTime.toEpochMillis(turn.causalTime), DateTime.toEpochMillis(operation.timeAdmitted)),
+            )
+            const sessionEvents: EventV2.PreparedEvent<typeof SessionV1.Event.PartUpdated>[] = calls.map((call) => ({
+              definition: SessionV1.Event.PartUpdated,
+              data: {
+                sessionID: call.sessionID,
+                part: {
+                  id: call.partID,
+                  messageID: call.messageID,
+                  sessionID: call.sessionID,
+                  type: "tool" as const,
+                  tool: call.name,
+                  callID: call.callID,
+                  state: { status: "pending" as const, input: call.input ?? {}, raw: call.raw },
+                  metadata: call.metadata,
+                },
+                time,
+              },
+            }))
+            return {
+              result: undefined,
+              events: [
+                ...sessionEvents,
+                {
+                  definition: TurnEvent.CandidateSetSealed,
+                  data: {
+                    sessionID: input.sessionID,
+                    turnID: input.turnID!,
+                    assistantMessageID: input.assistantMessage.id,
+                    count: candidates.length,
+                    timestamp,
+                  },
+                  options: {
+                    commit: () =>
+                      TurnLifecycle.sealCandidateSet(tx, {
+                        turnID: input.turnID!,
+                        sessionID: input.sessionID,
+                        assistantMessageID: input.assistantMessage.id,
+                        candidates,
+                        timeSealed: time,
+                      }).pipe(Effect.asVoid, Effect.orDie),
+                  },
+                },
+                {
+                  definition: TurnEvent.ModelSettled,
+                  data: {
+                    sessionID: input.sessionID,
+                    turnID: input.turnID!,
+                    assistantMessageID: input.assistantMessage.id,
+                    state,
+                    timestamp,
+                  },
+                  options: {
+                    commit: () =>
+                      TurnLifecycle.settleModel(tx, {
+                        turnID: input.turnID!,
+                        assistantMessageID: input.assistantMessage.id,
+                        state,
+                        time,
+                      }).pipe(Effect.asVoid, Effect.orDie),
+                  },
+                },
+              ],
+            }
+          }).pipe(Effect.orDie),
+        )
+        for (const call of calls) call.prepared = true
+        candidateSetSealed = true
+        modelSettled = true
+      })
 
       const handleEvent = Effect.fnUntraced(function* (value: StreamEvent) {
         switch (value.type) {
@@ -531,63 +681,53 @@ const layer = Layer.effect(
 
           case "tool-input-start":
             if (ctx.assistantMessage.summary) {
-              throw new Error(`Tool call not allowed while generating summary: ${value.name}`)
+              throw new ProcessorIntegrityFailure(`Tool call not allowed while generating summary: ${value.name}`)
             }
-            if (hasPreparation(value.name)) {
-              reserveToolCall(value)
-              return
+            {
+              const call = reserveToolCall(value)
+              if (!call.finalized) call.raw = ""
             }
-            yield* ensureToolCall(value)
             return
 
-          case "tool-input-delta":
-            if (hasPreparation(value.name)) {
-              reserveToolCall(value)
-              return
-            }
-            yield* ensureToolCall(value)
+          case "tool-input-delta": {
+            const call = reserveToolCall(value)
+            if (!call.finalized) call.raw += value.text
             return
+          }
 
           case "tool-input-end": {
-            if (hasPreparation(value.name)) {
-              reserveToolCall(value)
-              return
-            }
-            yield* ensureToolCall(value)
+            reserveToolCall(value)
             return
           }
 
           case "tool-call": {
             if (ctx.assistantMessage.summary) {
-              throw new Error(`Tool call not allowed while generating summary: ${value.name}`)
+              throw new ProcessorIntegrityFailure(`Tool call not allowed while generating summary: ${value.name}`)
             }
-            if (activeTools[value.name]?.execute && !value.providerExecuted) {
-              const call = reserveToolCall(value)
-              if (!call.registration) throw new Error(`Local tool execution was not registered: ${value.id}`)
-              yield* Deferred.await(call.entered)
-            } else {
-              yield* ensureToolCall(value)
-            }
-            const input = isRecord(value.input) ? value.input : { value: value.input }
-            if (isLearningCommandToolID(value.name)) {
-              const match = yield* readToolCall(value.id)
+            const call = reserveToolCall(value)
+            const input = canonicalToolInput(value.name, value.input)
+            if (call.finalized) {
               if (
-                match?.part.tool === value.name &&
-                (match.part.state.status === "completed" || match.part.state.status === "error")
+                call.providerExecuted !== (value.providerExecuted === true) ||
+                !isDeepStrictEqual(call.input, input)
               ) {
-                return
+                throw new ProcessorIntegrityFailure(`Tool call ${value.id} changed after final emission`)
               }
-              if (
-                !match ||
-                match.part.tool !== value.name ||
-                match.part.state.status !== "pending" ||
-                !isDeepStrictEqual(match.part.state.input, input)
-              ) {
-                if (match) return yield* learningInvocationConflict(match.part)
-                throw new Error(`Prepared learning tool call is missing its Part: ${value.id}`)
-              }
+              if (value.providerMetadata) call.metadata = value.providerMetadata
               return
             }
+            call.input = input
+            call.raw = isLearningCommandToolID(value.name) || !call.raw ? JSON.stringify(input) : call.raw
+            call.metadata = value.providerMetadata
+            call.providerExecuted = value.providerExecuted === true
+            call.finalized = true
+
+            if (!call.providerExecuted) {
+              registerToolCall(value)
+              return
+            }
+
+            yield* ensureToolCall({ ...value, providerExecuted: true })
             yield* updateToolCall(value.id, (match) => {
               if (match.state.status === "completed" || match.state.status === "error") return match
               return {
@@ -606,39 +746,17 @@ const layer = Layer.effect(
                   : value.providerMetadata,
               }
             })
-
-            const parts = yield* MessageV2.parts(ctx.assistantMessage.id).pipe(
-              Effect.provideService(Database.Service, database),
-            )
-            const recentParts = parts.slice(-DOOM_LOOP_THRESHOLD)
-
-            if (
-              recentParts.length !== DOOM_LOOP_THRESHOLD ||
-              !recentParts.every(
-                (part) =>
-                  part.type === "tool" &&
-                  part.tool === value.name &&
-                  part.state.status !== "pending" &&
-                  JSON.stringify(part.state.input) === JSON.stringify(input),
-              )
-            ) {
-              return
-            }
-
-            const agent = yield* agents.get(ctx.assistantMessage.agent)
-            if (!agent) throw new Error(`Agent not found: "${ctx.assistantMessage.agent}"`)
-            yield* permission.ask({
-              permission: "doom_loop",
-              patterns: [value.name],
-              sessionID: ctx.assistantMessage.sessionID,
-              metadata: { tool: value.name, input },
-              always: [value.name],
-              ruleset: agent.permission,
-            })
+            yield* checkDoomLoop(value.name, input)
             return
           }
 
           case "tool-result": {
+            const buffered = ctx.toolcalls[value.id]
+            if (!value.providerExecuted && !buffered?.admitted && dispatchedToolCallID !== value.id) {
+              throw new ProcessorIntegrityFailure(
+                `Local tool result arrived before FIFO invocation admission: ${value.id}`,
+              )
+            }
             const toolCall = yield* readToolCall(value.id)
             if (!toolCall && value.result.type === "error") return
             if (value.result.type === "error") {
@@ -672,6 +790,12 @@ const layer = Layer.effect(
           }
 
           case "tool-error": {
+            const buffered = ctx.toolcalls[value.id]
+            if (!buffered?.admitted && !buffered?.providerExecuted && dispatchedToolCallID !== value.id) {
+              throw new ProcessorIntegrityFailure(
+                `Local tool error arrived before FIFO invocation admission: ${value.id}`,
+              )
+            }
             yield* failToolCall(value.id, value.error ?? new Error(value.message))
             return
           }
@@ -794,12 +918,312 @@ const layer = Layer.effect(
         }
       })
 
+      const markToolFailure = Effect.fn("SessionProcessor.markToolFailure")(function* (call: ToolCall, error: unknown) {
+        if (yield* failToolCall(call.callID, error)) return
+        const match = yield* readToolCall(call.callID)
+        if (!match) return
+        if (match.part.state.status === "completed" || match.part.state.status === "error") {
+          yield* settleToolCall(call.callID)
+          return
+        }
+        const end = Date.now()
+        yield* session.updatePart({
+          ...match.part,
+          state: {
+            status: "error",
+            input: match.part.state.input,
+            error: errorMessage(error),
+            time: { start: match.part.state.status === "running" ? match.part.state.time.start : end, end },
+          },
+        })
+        yield* settleToolCall(call.callID)
+      })
+
+      const settleInvocation = Effect.fn("SessionProcessor.settleInvocation")(function* (
+        call: ToolCall,
+        state: "completed" | "failed" | "interrupted",
+      ) {
+        if (!input.turnID || !call.admitted) return
+        yield* events.transaction<Turn.ToolInvocation | undefined, EventV2.Definition>((tx) =>
+          Effect.gen(function* () {
+            const before = yield* TurnLifecycle.invocation(tx, { turnID: input.turnID!, partID: call.partID })
+            if (!before || before.state !== "running") return { result: before }
+            const invocation = yield* TurnLifecycle.settleTool(tx, {
+              turnID: input.turnID!,
+              partID: call.partID,
+              state,
+              time: Date.now(),
+            })
+            return {
+              result: invocation,
+              event: {
+                definition: TurnEvent.ToolSettled,
+                data: {
+                  sessionID: input.sessionID,
+                  turnID: input.turnID!,
+                  partID: call.partID,
+                  state,
+                  timestamp: invocation.timeSettled ?? invocation.timeAdmitted,
+                },
+              },
+            }
+          }).pipe(Effect.orDie),
+        )
+      })
+
+      const notStartedPart = (
+        call: ToolCall,
+        state: "not_started_limit" | "not_started_turn_exhausted",
+        time: number,
+      ): SessionV1.ToolPart => ({
+        id: call.partID,
+        messageID: call.messageID,
+        sessionID: call.sessionID,
+        type: "tool",
+        tool: call.name,
+        callID: call.callID,
+        metadata: { ...call.metadata, turnCandidateDisposition: state },
+        state: {
+          status: "error",
+          input: call.input ?? {},
+          error:
+            state === "not_started_limit"
+              ? "Tool not started: this Turn's tool budget is exhausted"
+              : "Tool not started: an earlier sibling exhausted the Turn",
+          metadata: { turnID: input.turnID!, disposition: state, notStarted: true },
+          time: { start: time, end: time },
+        },
+      })
+
+      const admitCandidate = Effect.fn("SessionProcessor.admitCandidate")(function* (call: ToolCall) {
+        if (!input.turnID)
+          throw new ProcessorIntegrityFailure(`Interactive tool candidate has no exact Turn: ${call.callID}`)
+        const attempted = Date.now()
+        const committed = yield* events.transaction<TurnLifecycle.ToolAdmissionResult, EventV2.Definition, Turn.Error>(
+          (tx) =>
+            Effect.gen(function* () {
+              const admission = yield* TurnLifecycle.admitTool(tx, {
+                turnID: input.turnID!,
+                sessionID: input.sessionID,
+                assistantMessageID: input.assistantMessage.id,
+                partID: call.partID,
+                timeAdmitted: attempted,
+              }).pipe(Effect.orDie)
+              if (admission.replay) return { result: admission }
+              if (admission.type === "admitted") {
+                const candidate = yield* TurnLifecycle.candidate(tx, {
+                  turnID: input.turnID!,
+                  partID: call.partID,
+                })
+                const timestamp = DateTime.makeUnsafe(DateTime.toEpochMillis(admission.invocation.timeAdmitted))
+                return {
+                  result: admission,
+                  events: [
+                    {
+                      definition: TurnEvent.CandidateDisposition,
+                      data: {
+                        sessionID: input.sessionID,
+                        turnID: input.turnID!,
+                        candidate,
+                        timestamp,
+                      },
+                    },
+                    {
+                      definition: TurnEvent.ToolAdmitted,
+                      data: {
+                        sessionID: input.sessionID,
+                        turnID: input.turnID!,
+                        invocation: admission.invocation,
+                        timestamp,
+                      },
+                    },
+                  ],
+                }
+              }
+              if (admission.candidate.state !== "not_started_limit" || !admission.candidate.timeTerminal) {
+                return yield* Effect.die(`New tool exhaustion produced an invalid disposition: ${call.callID}`)
+              }
+
+              const siblings = localToolCalls()
+              const trigger = siblings.findIndex((item) => item.partID === call.partID)
+              if (trigger < 0)
+                return yield* Effect.die(`Exhaustion trigger is absent from the sealed set: ${call.callID}`)
+              const time = DateTime.toEpochMillis(admission.candidate.timeTerminal)
+              const remaining = siblings.slice(trigger)
+              const dispositions = yield* Effect.forEach(remaining, (item) =>
+                TurnLifecycle.candidate(tx, { turnID: input.turnID!, partID: item.partID }),
+              )
+              if (!admission.turn?.terminal) {
+                return yield* Effect.die(`Tool exhaustion did not terminalize its Turn: ${call.callID}`)
+              }
+              return {
+                result: admission,
+                events: [
+                  ...remaining.map((item, index) => {
+                    const state = index === 0 ? "not_started_limit" : "not_started_turn_exhausted"
+                    return {
+                      definition: SessionV1.Event.PartUpdated,
+                      data: {
+                        sessionID: item.sessionID,
+                        part: notStartedPart(item, state, time),
+                        time,
+                      },
+                    }
+                  }),
+                  ...dispositions.map((candidate) => ({
+                    definition: TurnEvent.CandidateDisposition,
+                    data: {
+                      sessionID: input.sessionID,
+                      turnID: input.turnID!,
+                      candidate,
+                      timestamp: candidate.timeTerminal!,
+                    },
+                  })),
+                  {
+                    definition: TurnEvent.Terminal,
+                    data: {
+                      sessionID: input.sessionID,
+                      turnID: input.turnID!,
+                      terminal: admission.turn.terminal,
+                      timestamp: admission.turn.terminal.time,
+                    },
+                  },
+                ],
+              }
+            }),
+        )
+        return committed.result
+      })
+
+      const prepareAdmittedCall = Effect.fn("SessionProcessor.prepareAdmittedCall")(function* (call: ToolCall) {
+        const item = activeTools[call.name]
+        const prepare = item ? preparation(item) : undefined
+        if (prepare) {
+          yield* Effect.tryPromise({
+            try: () => Promise.resolve(prepare(call.input ?? {}, call.registration!)),
+            catch: (error) => error,
+          })
+          yield* confirmPreparedToolCall(call.callID)
+        }
+        if (!isLearningCommandToolID(call.name)) {
+          yield* updateToolCall(call.callID, (part) => {
+            if (part.state.status !== "pending") return part
+            return {
+              ...part,
+              state: {
+                status: "running",
+                input: call.input ?? {},
+                time: { start: Date.now() },
+              },
+            }
+          })
+        }
+        const match = yield* readToolCall(call.callID)
+        if (!match)
+          throw new ProcessorIntegrityFailure(`Admitted tool call lost its Part during preparation: ${call.callID}`)
+        return match.part
+      })
+
+      const revalidateToolFrontier = Effect.fn("SessionProcessor.revalidateToolFrontier")(function* (call: ToolCall) {
+        const invocation = yield* database.db.transaction((tx) =>
+          Effect.gen(function* () {
+            const frontier = yield* LearningFrontier.read(tx)
+            return yield* TurnLifecycle.consumeToolFrontier(tx, { partID: call.partID, frontier })
+          }),
+        )
+        if (!invocation || invocation.state !== "running") {
+          return yield* new Turn.IntegrityError({
+            turnID: input.turnID!,
+            reason: `Admitted tool invocation became unavailable before execution: ${call.callID}`,
+          })
+        }
+        return invocation
+      })
+
+      const dispatchCandidate = Effect.fn("SessionProcessor.dispatchCandidate")(function* (
+        call: ToolCall,
+        tools: ReturnType<typeof LLMNativeRuntime.nativeTools>,
+      ) {
+        const admission = yield* admitCandidate(call)
+        if (admission.type === "not_started") {
+          yield* settleToolCall(call.callID)
+          return
+        }
+        if (admission.replay) {
+          if (admission.invocation.state === "running") {
+            throw new ProcessorIntegrityFailure(
+              `Running tool invocation replay cannot redispatch effect: ${call.callID}`,
+            )
+          }
+          yield* settleToolCall(call.callID)
+          return
+        }
+
+        call.admitted = true
+        yield* observeFailure(revalidateToolFrontier(call), "integrity_failure")
+        const prepared = yield* prepareAdmittedCall(call).pipe(Effect.exit)
+        if (Exit.isFailure(prepared)) {
+          yield* markToolFailure(call, Cause.squash(prepared.cause))
+          yield* settleInvocation(call, "failed")
+          return
+        }
+        if (prepared.value.state.status === "completed" || prepared.value.state.status === "error") {
+          yield* settleInvocation(call, prepared.value.state.status === "completed" ? "completed" : "failed")
+          yield* settleToolCall(call.callID)
+          return
+        }
+        const doom = yield* checkDoomLoop(call.name, call.input ?? {}).pipe(Effect.exit)
+        if (Exit.isFailure(doom)) {
+          yield* markToolFailure(call, Cause.squash(doom.cause))
+          yield* settleInvocation(call, "failed")
+          return
+        }
+        yield* observeFailure(revalidateToolFrontier(call), "integrity_failure")
+        const dispatched = yield* observeFailure(
+          ToolRuntime.dispatch(tools, LLMEvent.toolCall({ id: call.callID, name: call.name, input: call.input ?? {} })),
+          "tool_runtime_failure",
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(dispatched)) {
+          if (Cause.hasInterrupts(dispatched.cause)) return yield* Effect.failCause(dispatched.cause)
+          yield* markToolFailure(call, Cause.squash(dispatched.cause))
+          yield* settleInvocation(call, "failed")
+          return yield* Effect.failCause(dispatched.cause)
+        }
+
+        dispatchedToolCallID = call.callID
+        const projected = yield* observeFailure(
+          Effect.forEach(dispatched.value.events, handleEvent, { discard: true }),
+          "projection_failure",
+        ).pipe(Effect.ensuring(Effect.sync(() => (dispatchedToolCallID = undefined))), Effect.exit)
+        if (Exit.isFailure(projected)) {
+          if (Cause.hasInterrupts(projected.cause)) return yield* Effect.failCause(projected.cause)
+          yield* markToolFailure(call, Cause.squash(projected.cause))
+          yield* settleInvocation(call, "failed")
+          return yield* Effect.failCause(projected.cause)
+        }
+        yield* settleInvocation(call, dispatched.value.result.type === "error" ? "failed" : "completed")
+      })
+
+      const drainToolCandidates = Effect.fn("SessionProcessor.drainToolCandidates")(function* (
+        messages: LLM.StreamInput["messages"],
+        abort: AbortSignal,
+      ) {
+        const tools = LLMNativeRuntime.nativeTools(activeTools, { messages, abort })
+        for (const call of localToolCalls()) {
+          if (!call.finalized) continue
+          yield* dispatchCandidate(call, tools)
+        }
+      })
+
       const cleanup = Effect.fn("SessionProcessor.cleanup")(function* () {
-        acceptingToolCalls = false
+        toolController?.abort()
+        toolController = undefined
+        const terminalParts: SessionV1.Part[] = []
+        const interruptedCalls: ToolCall[] = []
         if (ctx.snapshot) {
           const patch = yield* snapshot.patch(ctx.snapshot)
           if (patch.files.length) {
-            yield* session.updatePart({
+            terminalParts.push({
               id: PartID.ascending(),
               messageID: ctx.assistantMessage.id,
               sessionID: ctx.sessionID,
@@ -814,51 +1238,48 @@ const layer = Layer.effect(
         if (ctx.currentText) {
           const end = Date.now()
           ctx.currentText.time = { start: ctx.currentText.time?.start ?? end, end }
-          yield* session.updatePart(ctx.currentText)
+          terminalParts.push(ctx.currentText)
           ctx.currentText = undefined
         }
 
         for (const part of Object.values(ctx.reasoningMap)) {
           const end = Date.now()
-          yield* session.updatePart({
+          terminalParts.push({
             ...part,
             time: { start: part.time.start ?? end, end },
           })
         }
         ctx.reasoningMap = {}
 
-        yield* Effect.forEach(
-          Object.values(ctx.toolcalls),
-          (call) => Deferred.await(call.done).pipe(Effect.timeout("250 millis"), Effect.ignore),
-          { concurrency: "unbounded" },
-        )
-
         for (const toolCallID of Object.keys(ctx.toolcalls)) {
           const call = ctx.toolcalls[toolCallID]
           const match =
             (yield* readToolCall(toolCallID)) ??
-            (!call.preparing
+            (call.providerExecuted
               ? yield* ensureToolCall({
                   id: toolCallID,
                   name: call.name,
+                  providerExecuted: true,
                 })
               : undefined)
           if (!match) continue
           const part = match.part
           if (part.state.status === "completed" || part.state.status === "error") {
+            yield* settleInvocation(call, part.state.status === "completed" ? "completed" : "failed")
             yield* settleToolCall(toolCallID)
             continue
           }
           if (isLearningCommandToolID(part.tool) && match.call.registration) {
             const interrupted = yield* interruptLearningInvocation(events, part.tool, match.call.registration)
             if (interrupted) {
+              yield* settleInvocation(call, "interrupted")
               yield* settleToolCall(toolCallID)
               continue
             }
           }
           const end = Date.now()
           const metadata = "metadata" in part.state && isRecord(part.state.metadata) ? part.state.metadata : {}
-          yield* session.updatePart({
+          terminalParts.push({
             ...part,
             state: {
               ...part.state,
@@ -868,10 +1289,12 @@ const layer = Layer.effect(
               time: { start: "time" in part.state ? part.state.time.start : end, end },
             },
           })
+          interruptedCalls.push(call)
         }
-        ctx.toolcalls = {}
         ctx.assistantMessage.time.completed = Date.now()
-        yield* session.updateMessage(ctx.assistantMessage)
+        yield* session.finalizeMessage({ info: ctx.assistantMessage, parts: terminalParts })
+        yield* Effect.forEach(interruptedCalls, (call) => settleInvocation(call, "interrupted"), { discard: true })
+        ctx.toolcalls = {}
       })
 
       const halt = Effect.fn("SessionProcessor.halt")(function* (e: unknown) {
@@ -884,12 +1307,14 @@ const layer = Layer.effect(
         const error = parse(e)
         if (SessionV1.ContextOverflowError.isInstance(error)) {
           if ((yield* config.get()).compaction?.auto === false && !ctx.assistantMessage.summary) {
+            failureReason ??= "provider_failure"
             ctx.assistantMessage.error = error
             ctx.assistantMessage.finish = "error"
             yield* events.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
             yield* status.set(ctx.sessionID, { type: "idle" })
             return
           }
+          failureReason = undefined
           ctx.needsCompaction = true
           yield* events.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
           return
@@ -915,19 +1340,46 @@ const layer = Layer.effect(
             ctx.currentText = undefined
             ctx.reasoningMap = {}
             yield* status.set(ctx.sessionID, { type: "busy" })
-            acceptingToolCalls = true
-            activeTools = wrapTools(streamInput.tools)
-            const stream = llm.stream({ ...streamInput, tools: activeTools })
-
-            yield* stream.pipe(
-              Stream.tap((event) => handleEvent(event)),
+            if (streamInput.composition.type === "interactive" && !input.turnID) {
+              throw new ProcessorIntegrityFailure(
+                `Interactive Assistant operation has no exact Turn: ${input.assistantMessage.id}`,
+              )
+            }
+            activeTools = streamInput.tools
+            toolController = new AbortController()
+            yield* llm.stream(streamInput).pipe(
+              Stream.tap((event) =>
+                observeFailure(
+                  handleEvent(event),
+                  event.type === "provider-error" ? "provider_failure" : "projection_failure",
+                ),
+              ),
               Stream.takeUntil(() => ctx.needsCompaction),
               Stream.runDrain,
+              Effect.retry(
+                SessionRetry.policy({
+                  provider: input.model.providerID,
+                  parse,
+                  set: (info) =>
+                    status.set(ctx.sessionID, {
+                      type: "retry",
+                      attempt: info.attempt,
+                      message: info.message,
+                      next: info.next,
+                    }),
+                }),
+              ),
             )
+            if (streamInput.composition.type === "internal") return
+            yield* observeFailure(sealAndSettleModel("completed", false), "integrity_failure")
+            yield* drainToolCandidates(streamInput.messages, toolController.signal)
           }).pipe(
             Effect.onInterrupt(() =>
               Effect.gen(function* () {
                 aborted = true
+                if (streamInput.composition.type === "interactive") {
+                  yield* sealAndSettleModel("interrupted", true).pipe(Effect.uninterruptible, Effect.ignore)
+                }
                 if (!ctx.assistantMessage.error) {
                   yield* halt(new DOMException("Aborted", "AbortError"))
                 }
@@ -935,24 +1387,17 @@ const layer = Layer.effect(
             ),
             Effect.catchCauseIf(
               (cause) => !Cause.hasInterruptsOnly(cause),
-              (cause) => Effect.fail(Cause.squash(cause)),
+              (cause) =>
+                Effect.gen(function* () {
+                  failureReason ??= classifyFailure(Cause.squash(cause), "provider_failure")
+                  if (streamInput.composition.type === "interactive") {
+                    yield* observeFailure(sealAndSettleModel("failed", true), "integrity_failure").pipe(Effect.ignore)
+                  }
+                  return yield* Effect.fail(Cause.squash(cause))
+                }),
             ),
-            Effect.retry(
-              SessionRetry.policy({
-                provider: input.model.providerID,
-                parse,
-                set: (info) => {
-                  return status.set(ctx.sessionID, {
-                    type: "retry",
-                    attempt: info.attempt,
-                    message: info.message,
-                    next: info.next,
-                  })
-                },
-              }),
-            ),
+            Effect.ensuring(observeFailure(cleanup(), "projection_failure").pipe(Effect.uninterruptible)),
             Effect.catch(halt),
-            Effect.ensuring(cleanup()),
           )
 
           if (ctx.needsCompaction) return "compact"
@@ -965,10 +1410,14 @@ const layer = Layer.effect(
         get message() {
           return ctx.assistantMessage
         },
+        get failureReason() {
+          return failureReason
+        },
         updateToolCall,
         completeToolCall,
         failToolCall,
         registeredToolCall,
+        bindModelOperation,
         process,
       } satisfies Handle
     })

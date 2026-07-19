@@ -1,4 +1,5 @@
-import { sqliteTable, text, integer, index, primaryKey, real, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { check, sqliteTable, text, integer, index, primaryKey, real, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { sql } from "drizzle-orm"
 import * as DatabasePath from "../database/path"
 import { ProjectTable } from "../project/sql"
 import type { SessionMessage } from "./message"
@@ -94,6 +95,48 @@ export const PartTable = sqliteTable(
   (table) => [
     index("part_message_id_id_idx").on(table.message_id, table.id),
     index("part_session_idx").on(table.session_id),
+  ],
+)
+
+export const SessionHistoricalMessagePresentationTable = sqliteTable(
+  "session_historical_message_presentation",
+  {
+    message_id: text()
+      .$type<MessageID>()
+      .primaryKey()
+      .references(() => MessageTable.id, { onDelete: "cascade" }),
+    session_id: text().$type<SessionSchema.ID>().notNull(),
+    source_session_id: text().$type<SessionSchema.ID>().notNull(),
+    source_message_id: text().$type<MessageID>().notNull(),
+    source_event_sequence: integer().notNull(),
+    time_created: integer().notNull(),
+  },
+  (table) => [
+    index("session_historical_message_source_idx").on(table.source_session_id, table.source_message_id),
+    check("session_historical_message_time", sql`${table.source_event_sequence} >= 0 AND ${table.time_created} >= 0`),
+  ],
+)
+
+export const SessionHistoricalPartPresentationTable = sqliteTable(
+  "session_historical_part_presentation",
+  {
+    part_id: text()
+      .$type<PartID>()
+      .primaryKey()
+      .references(() => PartTable.id, { onDelete: "cascade" }),
+    message_id: text()
+      .$type<MessageID>()
+      .notNull()
+      .references(() => SessionHistoricalMessagePresentationTable.message_id, { onDelete: "cascade" }),
+    session_id: text().$type<SessionSchema.ID>().notNull(),
+    source_session_id: text().$type<SessionSchema.ID>().notNull(),
+    source_message_id: text().$type<MessageID>().notNull(),
+    source_part_id: text().$type<PartID>().notNull(),
+    time_created: integer().notNull(),
+  },
+  (table) => [
+    index("session_historical_part_source_idx").on(table.source_session_id, table.source_part_id),
+    check("session_historical_part_time", sql`${table.time_created} >= 0`),
   ],
 )
 

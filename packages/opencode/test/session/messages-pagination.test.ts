@@ -11,8 +11,12 @@ import { NotFoundError } from "@/storage/storage"
 import { testEffect } from "../lib/effect"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import { EventV2Bridge } from "@/event-v2-bridge"
+import { materializeTestSessionInfo } from "../fixture/session"
 
-const it = testEffect(LayerNode.compile(LayerNode.group([SessionNs.node, MessageV2.node, SessionProjector.node])))
+const it = testEffect(
+  LayerNode.compile(LayerNode.group([SessionNs.node, MessageV2.node, SessionProjector.node, EventV2Bridge.node])),
+)
 
 const withSession = <A, E, R>(
   fn: (input: { session: SessionNs.Interface; sessionID: SessionID }) => Effect.Effect<A, E, R>,
@@ -20,7 +24,7 @@ const withSession = <A, E, R>(
   Effect.acquireUseRelease(
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
-      const created = yield* session.create({})
+      const created = yield* materializeTestSessionInfo({ time: 0 })
       return { session, sessionID: created.id }
     }),
     fn,
@@ -34,8 +38,9 @@ const fill = Effect.fn("Test.fill")(function* (
   time = (i: number) => Date.now() + i,
 ) {
   const session = yield* SessionNs.Service
-  const ids = [] as MessageID[]
-  for (let i = 0; i < count; i++) {
+  const existing = yield* session.messages({ sessionID })
+  const ids = existing.map((message) => message.info.id)
+  for (let i = existing.length; i < count; i++) {
     const id = MessageID.ascending()
     ids.push(id)
     yield* session.updateMessage({
@@ -175,11 +180,11 @@ describe("MessageV2.page", () => {
     ),
   )
 
-  it.instance("returns empty items for session with no messages", () =>
+  it.instance("returns the genuine first interaction for a newly materialized session", () =>
     withSession(({ sessionID }) =>
       Effect.gen(function* () {
         const result = yield* MessageV2.page({ sessionID, limit: 10 })
-        expect(result.items).toEqual([])
+        expect(result.items).toHaveLength(1)
         expect(result.more).toBe(false)
         expect(result.cursor).toBeUndefined()
       }),
@@ -224,7 +229,7 @@ describe("MessageV2.page", () => {
   it.instance("hydrates multiple parts per message", () =>
     withSession(({ session, sessionID }) =>
       Effect.gen(function* () {
-        const [id] = yield* fill(sessionID, 1)
+        const id = yield* addUser(sessionID, "first")
 
         yield* session.updatePart({
           id: PartID.ascending(),
@@ -235,8 +240,8 @@ describe("MessageV2.page", () => {
         })
 
         const result = yield* MessageV2.page({ sessionID, limit: 10 })
-        expect(result.items).toHaveLength(1)
-        expect(result.items[0].parts).toHaveLength(2)
+        expect(result.items).toHaveLength(2)
+        expect(result.items.find((item) => item.info.id === id)?.parts).toHaveLength(2)
       }),
     ),
   )
@@ -274,8 +279,8 @@ describe("MessageV2.page", () => {
   it.instance("does not return messages from other sessions", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
-      const a = yield* session.create({})
-      const b = yield* session.create({})
+      const a = yield* materializeTestSessionInfo({ time: 0 })
+      const b = yield* materializeTestSessionInfo({ time: 0 })
       yield* fill(a.id, 3)
       yield* fill(b.id, 2)
 
@@ -318,11 +323,11 @@ describe("MessageV2.stream", () => {
     ),
   )
 
-  it.instance("yields nothing for empty session", () =>
+  it.instance("yields the genuine first interaction for a newly materialized session", () =>
     withSession(({ sessionID }) =>
       Effect.gen(function* () {
         const items = yield* MessageV2.stream(sessionID)
-        expect(items).toHaveLength(0)
+        expect(items).toHaveLength(1)
       }),
     ),
   )
@@ -382,7 +387,7 @@ describe("MessageV2.parts", () => {
   it.instance("returns parts for a message", () =>
     withSession(({ sessionID }) =>
       Effect.gen(function* () {
-        const [id] = yield* fill(sessionID, 1)
+        const id = yield* addUser(sessionID, "m0")
 
         const result = yield* MessageV2.parts(id)
         expect(result).toHaveLength(1)
@@ -406,7 +411,7 @@ describe("MessageV2.parts", () => {
   it.instance("returns multiple parts in order", () =>
     withSession(({ session, sessionID }) =>
       Effect.gen(function* () {
-        const [id] = yield* fill(sessionID, 1)
+        const id = yield* addUser(sessionID, "m0")
 
         yield* session.updatePart({
           id: PartID.ascending(),
@@ -457,7 +462,7 @@ describe("MessageV2.get", () => {
   it.instance("returns message with hydrated parts", () =>
     withSession(({ sessionID }) =>
       Effect.gen(function* () {
-        const [id] = yield* fill(sessionID, 1)
+        const id = yield* addUser(sessionID, "m0")
 
         const result = yield* MessageV2.get({ sessionID, messageID: id })
         expect(result.info.id).toBe(id)
@@ -483,8 +488,8 @@ describe("MessageV2.get", () => {
   it.instance("scopes by session id", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
-      const a = yield* session.create({})
-      const b = yield* session.create({})
+      const a = yield* materializeTestSessionInfo({ time: 0 })
+      const b = yield* materializeTestSessionInfo({ time: 0 })
       const [id] = yield* fill(a.id, 1)
 
       const error = yield* Effect.flip(MessageV2.get({ sessionID: b.id, messageID: id }))
@@ -501,7 +506,7 @@ describe("MessageV2.get", () => {
   it.instance("returns message with multiple parts", () =>
     withSession(({ session, sessionID }) =>
       Effect.gen(function* () {
-        const [id] = yield* fill(sessionID, 1)
+        const id = yield* addUser(sessionID, "first")
 
         yield* session.updatePart({
           id: PartID.ascending(),
@@ -659,7 +664,7 @@ describe("MessageV2.filterCompacted", () => {
         yield* addUser(sessionID, "world")
 
         const result = MessageV2.filterCompacted(yield* MessageV2.stream(sessionID))
-        expect(result).toHaveLength(2)
+        expect(result).toHaveLength(3)
       }),
     ),
   )
@@ -679,7 +684,7 @@ describe("MessageV2.filterCompacted", () => {
 
         const result = MessageV2.filterCompacted(yield* MessageV2.stream(sessionID))
         // Error assistant doesn't add to completed, so compaction boundary never triggers
-        expect(result).toHaveLength(3)
+        expect(result).toHaveLength(4)
       }),
     ),
   )
@@ -695,7 +700,7 @@ describe("MessageV2.filterCompacted", () => {
         yield* addUser(sessionID, "next")
 
         const result = MessageV2.filterCompacted(yield* MessageV2.stream(sessionID))
-        expect(result).toHaveLength(3)
+        expect(result).toHaveLength(4)
       }),
     ),
   )
@@ -754,7 +759,7 @@ describe("MessageV2.filterCompacted", () => {
   it.instance("fork remaps compaction tail_start_id for filterCompacted", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
-      const created = yield* session.create({})
+      const created = yield* materializeTestSessionInfo({ time: 0 })
 
       const u1 = yield* addUser(created.id, "first")
       const a1 = yield* addAssistant(created.id, u1, { finish: "end_turn" })
@@ -800,9 +805,9 @@ describe("MessageV2.filterCompacted", () => {
       const parentFiltered = MessageV2.filterCompacted(yield* MessageV2.stream(created.id))
       expect(parentFiltered.map((item) => item.info.id)).toEqual([c1, s1, u2, a2, u3, a3])
 
-      const forked = yield* session.fork({ sessionID: created.id })
+      const forked = yield* materializeTestSessionInfo({ fork: { sourceSessionID: created.id } })
       const childFiltered = MessageV2.filterCompacted(yield* MessageV2.stream(forked.id))
-      expect(childFiltered).toHaveLength(parentFiltered.length)
+      expect(childFiltered).toHaveLength(parentFiltered.length + 1)
 
       const tailPart = childFiltered.flatMap((m) => m.parts).find((p) => p.type === "compaction")
       expect(tailPart?.type).toBe("compaction")

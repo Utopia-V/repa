@@ -12,7 +12,7 @@ import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
 import { Location } from "@opencode-ai/core/location"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { WorkspaceV2 } from "@opencode-ai/core/workspace"
-import { eq } from "drizzle-orm"
+import { eq, inArray } from "drizzle-orm"
 import { location } from "./fixture/location"
 import { testEffect } from "./lib/effect"
 
@@ -1297,6 +1297,80 @@ describe("EventV2", () => {
       expect(
         yield* db.select().from(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, aggregateID)).all(),
       ).toEqual([])
+    }),
+  )
+
+  it.effect("removes an aggregate closure atomically and publishes only after the whole commit", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateIDs = [EventV2.ID.create(), EventV2.ID.create()]
+      const visibility = new Array<boolean>()
+      yield* db.run("CREATE TABLE IF NOT EXISTS event_remove_many_probe (aggregate_id text PRIMARY KEY)")
+      yield* db.run("DELETE FROM event_remove_many_probe")
+      yield* Effect.forEach(
+        aggregateIDs,
+        (aggregateID) =>
+          Effect.gen(function* () {
+            yield* db.run(`INSERT INTO event_remove_many_probe (aggregate_id) VALUES ('${aggregateID}')`)
+            yield* events.publish(SyncMessage, { id: aggregateID, text: "seed" })
+          }),
+        { discard: true },
+      )
+      yield* events.listen((event) => {
+        if ((event.data as { text?: string }).text !== "deleted") return Effect.void
+        return Effect.gen(function* () {
+          const [probes, stored, sequences] = yield* Effect.all([
+            db.all("SELECT aggregate_id FROM event_remove_many_probe"),
+            db.select().from(EventTable).where(inArray(EventTable.aggregate_id, aggregateIDs)).all(),
+            db.select().from(EventSequenceTable).where(inArray(EventSequenceTable.aggregate_id, aggregateIDs)).all(),
+          ])
+          visibility.push(probes.length === 0 && stored.length === 0 && sequences.length === 0)
+        }).pipe(Effect.orDie)
+      })
+
+      const result = yield* events.removeMany(
+        aggregateIDs,
+        (tx) => tx.run("DELETE FROM event_remove_many_probe").pipe(Effect.orDie, Effect.as("removed" as const)),
+        aggregateIDs.map((aggregateID) => ({
+          definition: SyncMessage,
+          data: { id: aggregateID, text: "deleted" },
+        })),
+      )
+
+      expect(result).toBe("removed")
+      expect(visibility).toEqual([true, true])
+    }),
+  )
+
+  it.effect("rolls back the whole aggregate closure and preserves a caller domain failure", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const { db } = yield* Database.Service
+      const aggregateIDs = [EventV2.ID.create(), EventV2.ID.create()]
+      yield* Effect.forEach(
+        aggregateIDs,
+        (aggregateID) => events.publish(SyncMessage, { id: aggregateID, text: "seed" }),
+        { discard: true },
+      )
+
+      const error = yield* Effect.flip(
+        events.removeMany(aggregateIDs, (tx) =>
+          tx
+            .delete(EventTable)
+            .where(eq(EventTable.aggregate_id, aggregateIDs[0]!))
+            .run()
+            .pipe(Effect.orDie, Effect.andThen(Effect.fail("cleanup_failed" as const))),
+        ),
+      )
+
+      expect(error).toBe("cleanup_failed")
+      expect(
+        yield* db.select().from(EventTable).where(inArray(EventTable.aggregate_id, aggregateIDs)).all(),
+      ).toHaveLength(2)
+      expect(
+        yield* db.select().from(EventSequenceTable).where(inArray(EventSequenceTable.aggregate_id, aggregateIDs)).all(),
+      ).toHaveLength(2)
     }),
   )
 

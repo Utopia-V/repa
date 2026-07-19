@@ -11,6 +11,12 @@ export type SelectedModel = {
   modelID: ModelV2.ID
 }
 
+export type ForkDraft = {
+  sourceSessionID: string
+  sourceEventSequence: number
+  cutoffMessageID?: string
+}
+
 export type KnownMessagePartMetadata = {
   messageId: string
   partId: string
@@ -29,6 +35,8 @@ export type Info = {
   model?: SelectedModel
   variant?: string
   modeId?: string
+  materialized: boolean
+  fork?: ForkDraft
   knownParts: ReadonlyMap<string, KnownMessagePartMetadata>
 }
 
@@ -40,6 +48,8 @@ export type StoreInput = {
   model?: SelectedModel
   variant?: string
   modeId?: string
+  materialized?: boolean
+  fork?: ForkDraft
 }
 
 export type RecordPartMetadataInput = {
@@ -80,6 +90,7 @@ export type Interface = {
     sessionId: string,
     modeId: string | undefined,
   ) => Effect.Effect<Info, ACPError.SessionNotFoundError>
+  readonly markMaterialized: (sessionId: string) => Effect.Effect<Info, ACPError.SessionNotFoundError>
   readonly getMode: (sessionId: string) => Effect.Effect<string | undefined, ACPError.SessionNotFoundError>
   readonly recordPartMetadata: (
     input: RecordPartMetadataInput,
@@ -167,8 +178,8 @@ const layer = Layer.effect(
     })
 
     return Service.of({
-      create: store,
-      load: store,
+      create: (input) => store({ ...input, materialized: input.materialized ?? false }),
+      load: (input) => store({ ...input, materialized: input.materialized ?? true }),
       list: Effect.fn("ACP.Session.list")(function* (cwd?: string) {
         return [...(yield* Ref.get(sessions)).values()]
           .filter((session) => !cwd || session.cwd === cwd)
@@ -187,6 +198,9 @@ const layer = Layer.effect(
         return (yield* get(sessionId)).variant
       }),
       setMode,
+      markMaterialized: Effect.fn("ACP.Session.markMaterialized")((sessionId) =>
+        update(sessionId, (session) => ({ ...session, materialized: true, fork: undefined })),
+      ),
       getMode: Effect.fn("ACP.Session.getMode")(function* (sessionId) {
         return (yield* get(sessionId)).modeId
       }),
@@ -212,6 +226,8 @@ function makeSession(input: StoreInput): Info {
     model: input.model,
     variant: input.variant,
     modeId: input.modeId,
+    materialized: input.materialized ?? false,
+    fork: input.fork ? { ...input.fork } : undefined,
     knownParts: new Map(),
   }
 }
@@ -221,6 +237,7 @@ function snapshot(session: Info): Info {
     ...session,
     mcpServers: [...session.mcpServers],
     createdAt: new Date(session.createdAt),
+    fork: session.fork ? { ...session.fork } : undefined,
     knownParts: new Map(session.knownParts),
   }
 }

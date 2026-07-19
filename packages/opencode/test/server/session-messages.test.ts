@@ -8,12 +8,16 @@ import { MessageV2 } from "../../src/session/message-v2"
 
 import { MessageID, PartID, type SessionID } from "../../src/session/schema"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
+import { materializeTestSession } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { httpApiLayer, requestInDirectory } from "./httpapi-layer"
+import { EventV2Bridge } from "@/event-v2-bridge"
 
-const it = testEffect(Layer.mergeAll(LayerNode.compile(SessionNs.node), httpApiLayer))
+const it = testEffect(
+  Layer.mergeAll(LayerNode.compile(LayerNode.group([SessionNs.node, EventV2Bridge.node])), httpApiLayer),
+)
 
 const model = {
   providerID: ProviderV2.ID.make("test"),
@@ -41,9 +45,9 @@ const withoutWatcher = <A, E, R>(effect: Effect.Effect<A, E, R>) => {
   )
 }
 
-const sessionScoped = Effect.acquireRelease(SessionNs.use.create({}), (session) =>
-  SessionNs.use.remove(session.id).pipe(Effect.ignore),
-)
+const sessionScoped = Effect.acquireRelease(materializeTestSession(), (seeded) =>
+  SessionNs.use.remove(seeded.info.id).pipe(Effect.ignore),
+).pipe(Effect.map((seeded) => ({ ...seeded.info, initialMessageID: seeded.user.id })))
 
 const fill = Effect.fn("SessionMessagesTest.fill")(function* (
   sessionID: SessionID,
@@ -120,7 +124,7 @@ describe("session messages endpoint", () => {
         const res = yield* request(`/session/${session.id}/message`)
         expect(res.status).toBe(200)
         const body = yield* json<SessionV1.WithParts[]>(res)
-        expect(body.map((item) => item.info.id)).toEqual(ids)
+        expect(body.map((item) => item.info.id)).toEqual([session.initialMessageID, ...ids])
       }),
     ),
     { git: true },
@@ -172,7 +176,7 @@ describe("session messages endpoint", () => {
         expect(res.status).toBe(200)
         const body = yield* json<unknown[]>(res)
         expect(Array.isArray(body)).toBe(true)
-        expect(body).toHaveLength(1)
+        expect(body).toHaveLength(2)
       }),
     ),
     { git: true },

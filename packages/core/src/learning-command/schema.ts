@@ -1,4 +1,5 @@
 import { Schema } from "effect"
+import type { Turn } from "@opencode-ai/schema/turn"
 import { ArtifactSchema } from "../artifact/schema"
 import type { CourseID, RevisionID, Selection, SelectionAcceptanceEffectID, SelectionAcceptanceInput } from "../course"
 import { Identifier } from "../id/id"
@@ -24,6 +25,8 @@ export type AuthorizationBasis = typeof AuthorizationBasis.Type
 
 export type InvocationEnvelope = {
   readonly occurrenceID: OccurrenceID
+  readonly turnID: Turn.ID
+  readonly inputID: Turn.InputID
   readonly sessionID: SessionSchema.ID
   readonly parentUserMessageID: MessageID
   readonly assistantMessageID: MessageID

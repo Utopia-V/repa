@@ -3,10 +3,14 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Effect, Layer } from "effect"
 import { Session } from "@/session/session"
 import { TestInstance } from "../fixture/fixture"
+import { materializeTestSessionInfo } from "../fixture/session"
 import { testEffect } from "../lib/effect"
 import { httpApiLayer, requestInDirectory } from "./httpapi-layer"
+import { EventV2Bridge } from "@/event-v2-bridge"
 
-const it = testEffect(Layer.mergeAll(LayerNode.compile(Session.node), httpApiLayer))
+const it = testEffect(
+  Layer.mergeAll(LayerNode.compile(LayerNode.group([Session.node, EventV2Bridge.node])), httpApiLayer),
+)
 
 describe("tui.selectSession endpoint", () => {
   it.instance(
@@ -14,7 +18,7 @@ describe("tui.selectSession endpoint", () => {
     () =>
       Effect.gen(function* () {
         const tmp = yield* TestInstance
-        const session = yield* Session.use.create({})
+        const session = yield* materializeTestSessionInfo()
 
         const response = yield* requestInDirectory("/tui/select-session", tmp.directory, {
           method: "POST",

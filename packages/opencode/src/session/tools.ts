@@ -49,6 +49,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
   bypassAgentCheck: boolean
   messages: SessionV1.WithParts[]
   promptOps: TaskPromptOps
+  authority: readonly Permission.AuthorityLayer[]
 }) {
   const tools: Record<string, AITool> = {}
   const run = yield* EffectBridge.make()
@@ -67,6 +68,21 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
       abort: options.abortSignal!,
       messageID: input.processor.message.id,
       callID: options.toolCallId,
+      interaction: {
+        turnID: toolCall.turnID,
+        inputID: toolCall.inputID,
+        assistantMessageID: toolCall.assistantMessageID,
+        ...(toolCall.causalOccurrenceID ? { causalOccurrenceID: toolCall.causalOccurrenceID } : {}),
+        candidate: {
+          partID: toolCall.partID,
+          callID: toolCall.callID,
+          emissionOrdinal: toolCall.emissionOrdinal,
+        },
+        permission: {
+          ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+          authority: input.authority,
+        },
+      },
       extra: {
         model: input.model,
         bypassAgentCheck: input.bypassAgentCheck,
@@ -97,6 +113,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
             sessionID: input.session.id,
             tool: { messageID: input.processor.message.id, callID: options.toolCallId },
             ruleset: Permission.merge(input.agent.permission, input.session.permission ?? []),
+            authority: input.authority,
           })
           .pipe(Effect.orDie),
     }
@@ -107,6 +124,7 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     providerID: input.model.providerID,
     agent: input.agent,
     permission: input.session.permission,
+    authority: input.authority,
   })) {
     const schema = ProviderTransform.schema(input.model, ToolJsonSchema.fromTool(item))
     const prepareLearningCommand = learningCommandPreparation(item)
@@ -415,7 +433,11 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     })
   }
 
-  const mcpTools = yield* mcp.tools()
+  const mcpTools = Permission.visibleTools(
+    yield* mcp.tools(),
+    Permission.merge(input.agent.permission, input.session.permission ?? []),
+    input.authority,
+  )
   for (const key of Object.keys(mcpTools)) {
     assertExternalToolID(key, "mcp")
     assertExternalContentToolID(key, "mcp")

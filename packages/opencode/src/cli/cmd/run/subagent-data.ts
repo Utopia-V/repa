@@ -78,12 +78,13 @@ export function sameSubagentTab(a: FooterSubagentTab | undefined, b: FooterSubag
 
   return (
     a.sessionID === b.sessionID &&
+    a.turnID === b.turnID &&
     a.partID === b.partID &&
     a.callID === b.callID &&
     a.label === b.label &&
     a.description === b.description &&
     a.status === b.status &&
-    a.background === b.background &&
+    a.unavailable === b.unavailable &&
     a.title === b.title &&
     a.toolCalls === b.toolCalls &&
     a.lastUpdatedAt === b.lastUpdatedAt
@@ -293,6 +294,11 @@ function metadata(part: ToolPart, key: string) {
 }
 
 function taskStatus(part: ToolPart): FooterSubagentTab["status"] {
+  const outcome = text(metadata(part, "terminalOutcome"))
+  if (outcome === "completed" || outcome === "failed" || outcome === "interrupted" || outcome === "exhausted") {
+    return outcome
+  }
+
   if (part.state.status === "completed") {
     return "completed"
   }
@@ -308,18 +314,20 @@ function taskStatus(part: ToolPart): FooterSubagentTab["status"] {
   return "running"
 }
 
-function taskTab(part: ToolPart, sessionID: string): FooterSubagentTab {
+function taskTab(part: ToolPart, sessionID: string, unavailable = false): FooterSubagentTab {
   const label = Locale.titlecase(text(part.state.input.subagent_type) ?? "general")
   const description = text(part.state.input.description) ?? stateTitle(part) ?? inputLabel(part.state.input) ?? ""
+  const turnID = text(metadata(part, "childTurnId"))
 
   return {
     sessionID,
+    ...(turnID ? { turnID } : {}),
     partID: part.id,
     callID: part.callID,
     label,
     description,
     status: taskStatus(part),
-    background: metadata(part, "background") === true,
+    ...(unavailable ? { unavailable: true } : {}),
     title: stateTitle(part),
     toolCalls: num(metadata(part, "toolcalls")) ?? num(metadata(part, "toolCalls")) ?? num(metadata(part, "calls")),
     lastUpdatedAt: stateUpdatedAt(part),
@@ -327,7 +335,9 @@ function taskTab(part: ToolPart, sessionID: string): FooterSubagentTab {
 }
 
 function taskSessionID(part: ToolPart) {
-  return text(metadata(part, "sessionId")) ?? text(metadata(part, "sessionID"))
+  return (
+    text(metadata(part, "childSessionId")) ?? text(metadata(part, "sessionId")) ?? text(metadata(part, "sessionID"))
+  )
 }
 
 function syncTaskTab(data: SubagentData, part: ToolPart, children?: Set<string>) {
@@ -340,11 +350,7 @@ function syncTaskTab(data: SubagentData, part: ToolPart, children?: Set<string>)
     return false
   }
 
-  if (children && children.size > 0 && !children.has(sessionID)) {
-    return false
-  }
-
-  const next = taskTab(part, sessionID)
+  const next = taskTab(part, sessionID, children !== undefined && !children.has(sessionID))
   if (sameSubagentTab(data.tabs.get(sessionID), next)) {
     ensureDetail(data, sessionID)
     return false
@@ -797,6 +803,19 @@ export function reduceSubagentData(input: {
   limits: Record<string, number>
 }) {
   const event = input.event
+
+  if (event.type === "session.deleted") {
+    const sessionID = event.properties.sessionID
+    const tab = input.data.tabs.get(sessionID)
+    if (!tab || tab.unavailable) return false
+    input.data.tabs.set(sessionID, { ...tab, unavailable: true })
+    const detail = input.data.details.get(sessionID)
+    if (detail) {
+      detail.data.permissions = []
+      detail.data.questions = []
+    }
+    return true
+  }
 
   if (event.type === "message.part.updated") {
     const part = event.properties.part

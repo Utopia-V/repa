@@ -4,6 +4,7 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import type { MessageV2 } from "../session/message-v2"
 import type { Permission } from "../permission"
 import type { SessionID, MessageID } from "../session/schema"
+import type { Turn } from "@opencode-ai/schema/turn"
 import * as Truncate from "./truncate"
 import { Agent } from "@/agent/agent"
 
@@ -32,6 +33,22 @@ export class InvalidArgumentsError extends Schema.TaggedErrorClass<InvalidArgume
   }
 }
 
+export type Interaction = Readonly<{
+  turnID: Turn.ID
+  inputID: Turn.InputID
+  assistantMessageID: MessageID
+  causalOccurrenceID?: Turn.ModelOperation["causalOccurrenceID"]
+  candidate: Readonly<{
+    partID: SessionV1.PartID
+    callID: string
+    emissionOrdinal: number
+  }>
+  permission: Readonly<{
+    ruleset: Permission.AuthorityLayer["ruleset"]
+    authority: readonly Permission.AuthorityLayer[]
+  }>
+}>
+
 export type Context<M extends Metadata = Metadata> = {
   sessionID: SessionID
   messageID: MessageID
@@ -39,9 +56,11 @@ export type Context<M extends Metadata = Metadata> = {
   abort: AbortSignal
   callID?: string
   extra?: { [key: string]: unknown }
+  /** Program-bound Interaction identity. Utility-only tool execution may omit it. */
+  interaction?: Interaction
   messages: SessionV1.WithParts[]
   metadata(input: { title?: string; metadata?: M }): Effect.Effect<void>
-  ask(input: Omit<Permission.AskInput, "id" | "sessionID" | "tool" | "ruleset">): Effect.Effect<void>
+  ask(input: Omit<Permission.AskInput, "id" | "sessionID" | "tool" | "ruleset" | "authority">): Effect.Effect<void>
 }
 
 export interface ExecuteResult<M extends Metadata = Metadata> {

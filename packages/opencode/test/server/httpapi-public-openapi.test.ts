@@ -357,11 +357,13 @@ describe("PublicApi OpenAPI v2 errors", () => {
     for (const route of [
       ["delete", "/session/{sessionID}"],
       ["patch", "/session/{sessionID}"],
-      ["post", "/session/{sessionID}/fork"],
-      ["post", "/session/{sessionID}/init"],
-      ["post", "/session/{sessionID}/summarize"],
-      ["post", "/session/{sessionID}/message"],
-      ["post", "/session/{sessionID}/command"],
+      ["post", "/session/{sessionID}/turn"],
+      ["get", "/session/{sessionID}/turn"],
+      ["get", "/session/{sessionID}/turn/active"],
+      ["get", "/session/{sessionID}/turn/{turnID}"],
+      ["get", "/session/{sessionID}/turn/{turnID}/await"],
+      ["post", "/session/{sessionID}/turn/{turnID}/steer"],
+      ["post", "/session/{sessionID}/turn/{turnID}/interrupt"],
       ["post", "/session/{sessionID}/shell"],
       ["post", "/session/{sessionID}/revert"],
       ["post", "/session/{sessionID}/unrevert"],
@@ -369,11 +371,26 @@ describe("PublicApi OpenAPI v2 errors", () => {
       ["delete", "/session/{sessionID}/message/{messageID}/part/{partID}"],
       ["patch", "/session/{sessionID}/message/{messageID}/part/{partID}"],
     ] as const) {
-      expect(componentName(responseRef(spec.paths[route[1]]?.[route[0]]?.responses?.["409"]) ?? "")).toBe(
-        "SessionBusyError",
-      )
+      expect(componentNames(spec.paths[route[1]]?.[route[0]]?.responses?.["409"])).toContain("SessionBusyError")
     }
-    expect(spec.paths["/session/{sessionID}/prompt_async"]?.post?.responses?.["409"]).toBeUndefined()
+  })
+
+  test("omits retired standalone released-v1 Session mutation routes", () => {
+    const spec = OpenApi.fromApi(PublicApi) as OpenApiSpec
+
+    for (const path of [
+      "/session/{sessionID}/fork",
+      "/session/{sessionID}/abort",
+      "/session/{sessionID}/init",
+      "/session/{sessionID}/summarize",
+      "/session/{sessionID}/prompt",
+      "/session/{sessionID}/prompt_async",
+      "/session/{sessionID}/command",
+    ]) {
+      expect(spec.paths[path], path).toBeUndefined()
+    }
+    expect(spec.paths["/session"]?.post).toBeUndefined()
+    expect(spec.paths["/session/{sessionID}/message"]?.post).toBeUndefined()
   })
 
   test("documents permission and question not-found errors", () => {

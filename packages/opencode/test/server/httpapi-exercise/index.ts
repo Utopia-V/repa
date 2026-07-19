@@ -19,7 +19,9 @@
  */
 import { Effect } from "effect"
 import { OpenApi } from "effect/unstable/httpapi"
+import { Turn } from "@opencode-ai/schema/turn"
 import { TestLLMServer } from "../../lib/llm-server"
+import { MessageID, SessionID } from "../../../src/session/schema"
 import path from "path"
 import { array, boolean, check, isRecord, message, object, stable } from "./assertions"
 import { controlledPtyInput, http, route } from "./dsl"
@@ -97,9 +99,7 @@ const scenarios: Scenario[] = [
         Effect.gen(function* () {
           object(body)
           check(body.username === "httpapi-global", "global config update should return patched config")
-          const text = yield* Effect.promise(() =>
-            Bun.file(path.join(exerciseConfigDirectory, "repa.jsonc")).text(),
-          )
+          const text = yield* Effect.promise(() => Bun.file(path.join(exerciseConfigDirectory, "repa.jsonc")).text())
           check(text.includes('"username": "httpapi-global"'), "global config update should write isolated config file")
         }),
       "status",
@@ -534,21 +534,6 @@ const scenarios: Scenario[] = [
     .get("/experimental/session", "experimental.session.list")
     .at((ctx) => ({ path: "/experimental/session?roots=false&archived=false", headers: ctx.headers() }))
     .json(200, array),
-  http.protected.get("/experimental/capabilities", "experimental.capabilities.get").json(200, (body) => {
-    check(typeof body === "object" && body !== null, "capabilities should be an object")
-    check("backgroundSubagents" in body, "capabilities should report background subagents")
-  }),
-  http.protected
-    .post("/experimental/session/{sessionID}/background", "experimental.session.background")
-    .mutating()
-    .seeded((ctx) => ctx.session({ title: "Background route owner" }))
-    .at((ctx) => ({
-      path: route("/experimental/session/{sessionID}/background", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-    }))
-    .json(200, (body) => {
-      check(body === false, "background route should be a no-op without running subagents")
-    }),
   http.protected.get("/experimental/resource", "experimental.resource.list").json(),
   http.protected
     .post("/instance/dispose", "instance.dispose")
@@ -1070,19 +1055,6 @@ const scenarios: Scenario[] = [
     .seeded((ctx) => ctx.session({ title: "Status session" }))
     .json(200, object),
   http.protected
-    .post("/session", "session.create")
-    .mutating()
-    .at((ctx) => ({ path: "/session", headers: ctx.headers(), body: { title: "Created session" } }))
-    .json(
-      200,
-      (body, ctx) => {
-        object(body)
-        check(body.title === "Created session", "created session should use requested title")
-        check(body.directory === ctx.directory, "created session should use scenario directory")
-      },
-      "status",
-    ),
-  http.protected
     .get("/session/{sessionID}", "session.get")
     .seeded((ctx) => ctx.session({ title: "Get me" }))
     .at((ctx) => ({ path: route("/session/{sessionID}", { sessionID: ctx.state.id }), headers: ctx.headers() }))
@@ -1124,6 +1096,139 @@ const scenarios: Scenario[] = [
       body: { title: 1 },
     }))
     .status(400),
+  http.protected
+    .get("/session/{sessionID}/fork-basis", "session.fork_basis")
+    .seeded((ctx) => ctx.session({ title: "Fork basis source" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/fork-basis", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body, ctx) => {
+      object(body)
+      check(body.sourceSessionID === ctx.state.id, "fork basis should name the exact source Session")
+      check(typeof body.sourceEventSequence === "number", "fork basis should expose a durable source frontier")
+    }),
+  http.protected
+    .post("/session/{sessionID}/turn", "session.start")
+    .mutating()
+    .seeded(() =>
+      Effect.sync(() => ({
+        sessionID: SessionID.create(),
+        turnID: Turn.ID.create(),
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+      })),
+    )
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/turn", { sessionID: ctx.state.sessionID }),
+      headers: ctx.headers(),
+      body: {
+        turnID: ctx.state.turnID,
+        inputID: ctx.state.inputID,
+        messageID: ctx.state.messageID,
+        agent: "repa",
+        model: { providerID: "test", modelID: "test-model" },
+        limits: { model: 0, tool: 0 },
+        session: { title: "Atomic Turn start" },
+        parts: [{ type: "text", text: "Admit one exact learner Turn." }],
+      },
+    }))
+    .json(
+      200,
+      (body, ctx) => {
+        object(body)
+        check(body.id === ctx.state.turnID, "start should return the exact requested Turn")
+        check(body.sessionID === ctx.state.sessionID, "start should atomically materialize the requested Session")
+      },
+      "status",
+    ),
+  http.protected
+    .get("/session/{sessionID}/turn", "session.turns")
+    .seeded((ctx) => ctx.turnSession({ title: "List exact Turns" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/turn", { sessionID: ctx.state.session.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body, ctx) => {
+      array(body)
+      check(
+        body.some((item) => isRecord(item) && item.id === ctx.state.turn.id),
+        "Turn list should include the admitted fixture Turn",
+      )
+    }),
+  http.protected
+    .get("/session/{sessionID}/turn/active", "session.active_turn")
+    .seeded((ctx) => ctx.turnSession({ title: "Idle exact Turn" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/turn/active", { sessionID: ctx.state.session.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body) => {
+      check(body === null, "a Session whose fixture Turn settled should have no active Turn")
+    }),
+  http.protected
+    .get("/session/{sessionID}/turn/{turnID}", "session.get_turn")
+    .seeded((ctx) => ctx.turnSession({ title: "Get exact Turn" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/turn/{turnID}", {
+        sessionID: ctx.state.session.id,
+        turnID: ctx.state.turn.id,
+      }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body, ctx) => {
+      object(body)
+      check(body.id === ctx.state.turn.id, "get should return only the named Turn")
+      check(body.sessionID === ctx.state.session.id, "get should preserve exact Turn ownership")
+    }),
+  http.protected
+    .get("/session/{sessionID}/turn/{turnID}/await", "session.await_turn")
+    .seeded((ctx) => ctx.turnSession({ title: "Await exact Turn" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/turn/{turnID}/await", {
+        sessionID: ctx.state.session.id,
+        turnID: ctx.state.turn.id,
+      }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body, ctx) => {
+      object(body)
+      check(body.id === ctx.state.turn.id, "await should return the named terminal Turn")
+      check(body.state !== "running", "await should not return before durable terminal settlement")
+    }),
+  http.protected
+    .post("/session/{sessionID}/turn/{turnID}/interrupt", "session.interrupt_turn")
+    .mutating()
+    .seeded((ctx) => ctx.turnSession({ title: "Interrupt replay" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/turn/{turnID}/interrupt", {
+        sessionID: ctx.state.session.id,
+        turnID: ctx.state.turn.id,
+      }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body, ctx) => {
+      object(body)
+      check(body.id === ctx.state.turn.id, "interrupt should replay the exact named terminal Turn")
+      check(body.state !== "running", "terminal interrupt replay should remain terminal")
+    }),
+  http.protected
+    .post("/session/{sessionID}/turn/{turnID}/steer", "session.steer")
+    .mutating()
+    .seeded((ctx) => ctx.turnSession({ title: "Reject terminal steer" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}/turn/{turnID}/steer", {
+        sessionID: ctx.state.session.id,
+        turnID: ctx.state.turn.id,
+      }),
+      headers: ctx.headers(),
+      body: {
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        parts: [{ type: "text", text: "This steer must not retarget another Turn." }],
+      },
+    }))
+    .status(409),
   http.protected
     .delete("/session/{sessionID}", "session.delete")
     .mutating()
@@ -1183,7 +1288,10 @@ const scenarios: Scenario[] = [
     .at((ctx) => ({ path: route("/session/{sessionID}/message", { sessionID: ctx.state.id }), headers: ctx.headers() }))
     .json(200, (body) => {
       array(body)
-      check(body.length === 0, "new session should have no messages")
+      check(
+        body.some((item) => isRecord(item) && isRecord(item.info) && item.info.role === "user"),
+        "strict test Session should expose its first admitted learner presentation",
+      )
     }),
   http.protected
     .get("/session/{sessionID}/message/{messageID}", "session.message")
@@ -1258,7 +1366,10 @@ const scenarios: Scenario[] = [
       Effect.gen(function* () {
         check(body === true, "delete part should return true")
         const messages = yield* ctx.messages(ctx.state.session.id)
-        check(messages[0]?.parts.length === 0, "deleted part should not remain on message")
+        check(
+          messages.find((item) => item.info.id === ctx.state.message.info.id)?.parts.length === 0,
+          "deleted part should not remain on its message",
+        )
       }),
     ),
   http.protected
@@ -1281,154 +1392,12 @@ const scenarios: Scenario[] = [
     .jsonEffect(200, (body, ctx) =>
       Effect.gen(function* () {
         check(body === true, "delete message should return true")
-        check((yield* ctx.messages(ctx.state.session.id)).length === 0, "deleted message should not remain")
+        const messages = yield* ctx.messages(ctx.state.session.id)
+        check(
+          !messages.some((item) => item.info.id === ctx.state.message.info.id),
+          "deleted message should not remain while the first admitted presentation survives",
+        )
       }),
-    ),
-  http.protected
-    .post("/session/{sessionID}/fork", "session.fork")
-    .mutating()
-    .seeded((ctx) => ctx.session({ title: "Fork source" }))
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/fork", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-      body: {},
-    }))
-    .json(
-      200,
-      (body) => {
-        object(body)
-        check(typeof body.id === "string", "fork should return a session")
-      },
-      "status",
-    ),
-  http.protected
-    .post("/session/{sessionID}/abort", "session.abort")
-    .mutating()
-    .seeded((ctx) => ctx.session({ title: "Abort session" }))
-    .at((ctx) => ({ path: route("/session/{sessionID}/abort", { sessionID: ctx.state.id }), headers: ctx.headers() }))
-    .json(200, (body) => {
-      check(body === true, "abort should return true")
-    }),
-  http.protected
-    .post("/session/{sessionID}/abort", "session.abort.missing")
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/abort", { sessionID: "ses_httpapi_missing" }),
-      headers: ctx.headers(),
-    }))
-    .json(200, (body) => {
-      check(body === true, "missing session abort should remain a no-op success")
-    }),
-  http.protected
-    .post("/session/{sessionID}/init", "session.init")
-    .preserveDatabase()
-    .withLlm()
-    .seeded((ctx) =>
-      Effect.gen(function* () {
-        const session = yield* ctx.session({ title: "Init session" })
-        const message = yield* ctx.message(session.id, { text: "initialize" })
-        yield* ctx.llmText("initialized")
-        yield* ctx.llmText("initialized")
-        return { session, message }
-      }),
-    )
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/init", { sessionID: ctx.state.session.id }),
-      headers: ctx.headers(),
-      body: { providerID: "test", modelID: "test-model", messageID: ctx.state.message.info.id },
-    }))
-    .jsonEffect(200, (body, ctx) =>
-      Effect.gen(function* () {
-        check(body === true, "init should return true")
-        yield* ctx.llmWait(1)
-      }),
-    ),
-  http.protected
-    .post("/session/{sessionID}/message", "session.prompt")
-    .preserveDatabase()
-    .withLlm()
-    .seeded((ctx) =>
-      Effect.gen(function* () {
-        const session = yield* ctx.session({ title: "LLM prompt session" })
-        yield* ctx.llmText("fake assistant")
-        yield* ctx.llmText("fake assistant")
-        return session
-      }),
-    )
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/message", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-      body: {
-        agent: "repa",
-        model: { providerID: "test", modelID: "test-model" },
-        parts: [{ type: "text", text: "hello llm" }],
-      },
-    }))
-    .jsonEffect(
-      200,
-      (body, ctx) =>
-        Effect.gen(function* () {
-          object(body)
-          check(isRecord(body.info) && body.info.role === "assistant", "prompt should return assistant message")
-          check(
-            Array.isArray(body.parts) && body.parts.some((part) => isRecord(part) && part.text === "fake assistant"),
-            "assistant message should use fake LLM text",
-          )
-          yield* ctx.llmWait(1)
-        }),
-      "status",
-    ),
-  http.protected
-    .post("/session/{sessionID}/prompt_async", "session.prompt_async")
-    .preserveDatabase()
-    .withLlm()
-    .seeded((ctx) =>
-      Effect.gen(function* () {
-        const session = yield* ctx.session({ title: "Async prompt session" })
-        yield* ctx.llmText("fake async assistant")
-        yield* ctx.llmText("fake async assistant")
-        return session
-      }),
-    )
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/prompt_async", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-      body: {
-        agent: "repa",
-        model: { providerID: "test", modelID: "test-model" },
-        parts: [{ type: "text", text: "hello async" }],
-      },
-    }))
-    .status(204, (ctx) =>
-      Effect.gen(function* () {
-        yield* ctx.llmWait(1)
-      }),
-    ),
-  http.protected
-    .post("/session/{sessionID}/command", "session.command")
-    .preserveDatabase()
-    .withLlm()
-    .seeded((ctx) =>
-      Effect.gen(function* () {
-        const session = yield* ctx.session({ title: "Command session" })
-        yield* ctx.llmText("command done")
-        yield* ctx.llmText("command done")
-        return session
-      }),
-    )
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/command", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-      body: { command: "init", arguments: "", model: "test/test-model" },
-    }))
-    .jsonEffect(
-      200,
-      (body, ctx) =>
-        Effect.gen(function* () {
-          object(body)
-          check(isRecord(body.info) && body.info.role === "assistant", "command should return assistant message")
-          yield* ctx.llmWait(1)
-        }),
-      "status",
     ),
   http.protected
     .post("/session/{sessionID}/shell", "session.shell")
@@ -1450,55 +1419,6 @@ const scenarios: Scenario[] = [
           "shell should return a tool part",
         )
       },
-      "status",
-    ),
-  http.protected
-    .post("/session/{sessionID}/summarize", "session.summarize")
-    .preserveDatabase()
-    .withLlm()
-    .seeded((ctx) =>
-      Effect.gen(function* () {
-        const session = yield* ctx.session({ title: "Summarize session" })
-        yield* ctx.message(session.id, { text: "summarize this work" })
-        const summary = [
-          "## Objective",
-          "- Exercise session summarize.",
-          "",
-          "## Important Details",
-          "- Use fake LLM.",
-          "- Keep route local.",
-          "- Test fixture: test/server/httpapi-exercise/index.ts.",
-          "",
-          "## Work State",
-          "- Completed: Summary generated.",
-          "- Active: (none)",
-          "- Blocked: (none)",
-          "",
-          "## Next Move",
-          "1. (none)",
-        ].join("\n")
-        yield* ctx.llmText(summary)
-        yield* ctx.llmText(summary)
-        return session
-      }),
-    )
-    .at((ctx) => ({
-      path: route("/session/{sessionID}/summarize", { sessionID: ctx.state.id }),
-      headers: ctx.headers(),
-      body: { providerID: "test", modelID: "test-model", auto: false },
-    }))
-    .jsonEffect(
-      200,
-      (body, ctx) =>
-        Effect.gen(function* () {
-          check(body === true, "summarize should return true")
-          const messages = yield* ctx.messages(ctx.state.id)
-          check(
-            messages.some((message) => message.info.role === "assistant" && message.info.summary === true),
-            "summarize should create a summary assistant message",
-          )
-          yield* ctx.llmWait(1)
-        }),
       "status",
     ),
   http.protected
@@ -1615,14 +1535,6 @@ const scenarios: Scenario[] = [
     ),
 ]
 
-const llmScenarios = new Set([
-  "session.init",
-  "session.prompt",
-  "session.prompt_async",
-  "session.command",
-  "session.summarize",
-])
-
 const main = Effect.gen(function* () {
   yield* Effect.addFinalizer(() => Effect.promise(() => disposeApps()).pipe(Effect.andThen(cleanupExercisePaths)))
   const options = parseOptions(Bun.argv.slice(2))
@@ -1631,12 +1543,6 @@ const main = Effect.gen(function* () {
   const selected = selectedScenarios(options, scenarios)
   const missing = effectRoutes.filter((route) => !scenarios.some((scenario) => route === routeKey(scenario)))
   const extra = scenarios.filter((scenario) => !effectRoutes.includes(routeKey(scenario)))
-
-  for (const scenario of scenarios) {
-    if (scenario.kind === "active" && llmScenarios.has(scenario.name) && !scenario.project?.llm) {
-      return yield* Effect.fail(new Error(`${scenario.name} must use TestLLMServer via .withLlm()`))
-    }
-  }
 
   printHeader(options, effectRoutes, selected, missing, extra, {
     database: exerciseDatabasePath,

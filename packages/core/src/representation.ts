@@ -8,6 +8,7 @@ import { ContentRoot } from "./content-root"
 import { ContentRootNTFS } from "./content-root/ntfs"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
+import { LearningFrontier } from "./learning-frontier"
 import { ModelRenditionProfile } from "./representation/model-rendition-profile"
 import { PDFTextProfile } from "./representation/pdf-text-profile"
 import {
@@ -483,6 +484,7 @@ const layer = Layer.effect(
               .run()
               .pipe(Effect.orDie)
             yield* Artifact.requireOrdinaryUseSnapshot(tx, artifact)
+            yield* LearningFrontier.advance(tx, { time: input.timeAuthorized })
             return grantInfo(yield* requireGrantRow(tx, id))
           }),
         )
@@ -563,6 +565,7 @@ const layer = Layer.effect(
                 detail: "The continued-use grant changed during revocation",
               })
             }
+            yield* LearningFrontier.advance(tx, { time: input.timeRevoked })
             return grantInfo(updated)
           }),
         )
@@ -1074,6 +1077,7 @@ function commitAcceptance(
       })
       .run()
       .pipe(Effect.orDie)
+    yield* LearningFrontier.advance(tx, { time: input.timeAccepted })
     return representationInfo(
       yield* requireRepresentationRow(tx, input.candidateRevisionID),
       yield* requireAvailabilityRow(tx, input.candidateRevisionID),
@@ -1151,6 +1155,7 @@ function appendAvailability(
         detail: "Representation availability changed during observation",
       })
     }
+    yield* LearningFrontier.advance(tx, { time: input.timeObserved })
     return updated
   })
 }

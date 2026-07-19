@@ -1659,4 +1659,32 @@ describe("session.message-v2.latest", () => {
     expect(state.tasks).toHaveLength(1)
     expect(state.tasks[0]).toMatchObject({ type: "compaction", auto: true })
   })
+
+  test("fork history minted after a genuine root remains chronologically older", () => {
+    const historicalUserID = MessageID.make("msg_900")
+    const historicalAssistantID = MessageID.make("msg_901")
+    const rootUserID = MessageID.make("msg_100")
+    const historicalUser: SessionV1.WithParts = {
+      info: { ...userInfo(historicalUserID), time: { created: 100 } },
+      parts: [],
+    }
+    const historicalAssistant: SessionV1.WithParts = {
+      info: {
+        ...assistantInfo(historicalAssistantID, historicalUserID),
+        time: { created: 101, completed: 102 },
+        finish: "stop",
+      },
+      parts: [],
+    }
+    const rootUser: SessionV1.WithParts = {
+      info: { ...userInfo(rootUserID), time: { created: 200 } },
+      parts: [],
+    }
+
+    const state = MessageV2.latest([historicalUser, historicalAssistant, rootUser])
+
+    expect(state.user?.id).toBe(rootUserID)
+    expect(state.assistant?.id).toBe(historicalAssistantID)
+    expect(MessageV2.isAfter(state.assistant!, state.user!)).toBe(false)
+  })
 })
