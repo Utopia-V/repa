@@ -6,9 +6,11 @@ import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import {
   AdmittedLearnerOccurrenceTable,
+  LearnerOccurrenceSourceOrderTable,
   LearnerOccurrenceTombstoneTable,
 } from "@opencode-ai/core/learning-command/occurrence.sql"
 import {
@@ -33,26 +35,35 @@ import { Permission } from "@/permission"
 import { Session } from "@/session/session"
 import { expect, test } from "bun:test"
 import { eq, sql } from "drizzle-orm"
-import { Effect, Exit, Fiber, Layer, Schema } from "effect"
+import { Deferred, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { join } from "path"
 import { tmpdir } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 
 const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 const permissionRequests: Permission.AskInput[] = []
+const permissionWaits: Array<{
+  entered: Deferred.Deferred<void>
+  release: Deferred.Deferred<void>
+}> = []
 const permission = Layer.succeed(
   Permission.Service,
   Permission.Service.of({
-    ask: (input) => {
+    ask: (input) => Effect.gen(function* () {
       permissionRequests.push(input)
       const denied = input.ruleset.findLast(
         (rule) =>
           (rule.permission === "*" || rule.permission === input.permission) &&
           (rule.pattern === "*" || input.patterns.includes(rule.pattern)),
       )
-      if (denied?.action === "deny") return Effect.fail(new PermissionV1.DeniedError({ ruleset: input.ruleset }))
-      return Effect.void
-    },
+      if (denied?.action === "deny") {
+        return yield* Effect.fail(new PermissionV1.DeniedError({ ruleset: input.ruleset }))
+      }
+      const wait = permissionWaits.shift()
+      if (!wait) return
+      yield* Deferred.succeed(wait.entered, undefined)
+      yield* Deferred.await(wait.release)
+    }),
     reply: () => Effect.void,
     list: () => Effect.succeed([]),
   }),
@@ -73,6 +84,400 @@ const it = testEffect(
   ]),
 )
 const model = { modelID: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
+
+it.effect("commits retained learning steering with its exact learner-visible acknowledgement", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const time = Date.parse("2026-07-20T02:00:00.000Z")
+    const sourceExcerpt = "across all my learning this week, explain before practice"
+    const input = {
+      action: "create",
+      sourceExcerpt,
+      operativeInstruction: "Explain before asking me to practice.",
+      validUntil: "2026-07-27T02:00:00.000+00:00",
+    }
+    const interaction = yield* seedInteraction(
+      db,
+      "retained-acknowledgement",
+      input,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      { text: sourceExcerpt, time, timeZone: "UTC" },
+    )
+
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      input,
+      interaction.registration,
+    )
+    const result = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      input,
+      context(
+        interaction.registration,
+        "allow",
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      ),
+    )
+
+    expect(result.title).toBe("Retained learning steering")
+    expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    expect(result.output).toContain("Explain before asking me to practice.")
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+    expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 1 })
+    expect(yield* db.get(sql`SELECT count(*) AS count FROM learning_command_receipt WHERE retained_steering_effect_id IS NOT NULL`)).toEqual({ count: 1 })
+    expect(yield* db.transaction((tx) => RetainedSteering.readActiveSnapshot(tx, time + 10_000))).toMatchObject({
+      steeringRevision: 1,
+      items: [{ status: "operative_active", transition: { operativeInstruction: input.operativeInstruction } }],
+    })
+  }),
+)
+
+it.effect("keeps provider observation metadata outside retained invocation identity", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const time = Date.parse("2026-07-20T02:00:00.000Z")
+    const sourceExcerpt = "across all my learning this week, explain before practice"
+    const input = {
+      action: "create",
+      sourceExcerpt,
+      operativeInstruction: "Explain before asking me to practice.",
+      validUntil: "2026-07-27T02:00:00.000+00:00",
+    }
+    const interaction = yield* seedInteraction(
+      db,
+      "retained-provider-metadata",
+      input,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      { text: sourceExcerpt, time, timeZone: "UTC" },
+    )
+    const row = yield* db
+      .select()
+      .from(PartTable)
+      .where(eq(PartTable.id, interaction.registration.partID))
+      .get()
+    if (!row || row.data.type !== "tool") return yield* Effect.die("Expected the retained pending Part")
+    yield* db
+      .update(PartTable)
+      .set({
+        data: {
+          ...row.data,
+          metadata: { openai: { itemId: "fc_real_provider_shape" } },
+        } as (typeof PartTable.$inferInsert)["data"],
+      })
+      .where(eq(PartTable.id, row.id))
+      .run()
+
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      input,
+      interaction.registration,
+    )
+    const result = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      input,
+      context(
+        interaction.registration,
+        "allow",
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      ),
+    )
+
+    expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+    expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 1 })
+  }),
+)
+
+it.effect("reconciles committed retained semantics before capability revoke, source loss, permission wait, cancellation, interruption, and recovery", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    permissionWaits.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const events = yield* EventV2Bridge.Service
+    const time = Date.now()
+    const sourceExcerpt = "across all my learning this week, use worked examples"
+    const input = {
+      action: "create",
+      sourceExcerpt,
+      operativeInstruction: "Use a worked example before independent practice.",
+      validUntil: new Date(time + 7 * 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+    }
+    const interaction = yield* seedInteraction(
+      db,
+      "retained-predecessor-order",
+      input,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      { text: sourceExcerpt, time, timeZone: "UTC" },
+    )
+    const duplicate = yield* insertAssistant(
+      db,
+      interaction,
+      "retained-predecessor-duplicate",
+      input,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    )
+    const conflictInput = { ...input, operativeInstruction: "Use only independent practice." }
+    const conflict = yield* insertAssistant(
+      db,
+      interaction,
+      "retained-predecessor-conflict",
+      conflictInput,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    )
+    const revoked = yield* insertAssistant(
+      db,
+      interaction,
+      "retained-predecessor-revoked",
+      input,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    )
+    const deletedSource = yield* insertAssistant(
+      db,
+      interaction,
+      "retained-predecessor-source-lost",
+      input,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    )
+    const waiting = yield* insertAssistant(
+      db,
+      interaction,
+      "retained-predecessor-permission-wait",
+      input,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      input,
+      interaction.registration,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      input,
+      duplicate,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      conflictInput,
+      conflict,
+    )
+    yield* Effect.forEach([revoked, deletedSource, waiting], (registration) =>
+      runtime.prepareCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        input,
+        registration,
+      ),
+    )
+    const permissionEntered = yield* Deferred.make<void>()
+    const permissionRelease = yield* Deferred.make<void>()
+    permissionWaits.push({ entered: permissionEntered, release: permissionRelease })
+    const cancellation = new AbortController()
+    const waitingExecution = yield* runtime
+      .executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        input,
+        {
+          ...context(waiting, "ask", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+          abort: cancellation.signal,
+        },
+      )
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(permissionEntered)
+    const applied = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      input,
+      context(
+        interaction.registration,
+        "allow",
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      ),
+    )
+    expect(applied.metadata).toMatchObject({ outcome: "applied" })
+    cancellation.abort()
+    yield* Deferred.succeed(permissionRelease, undefined)
+    expect(yield* Fiber.join(waitingExecution)).toMatchObject({
+      title: "Retained learning steering",
+      metadata: { outcome: "already_applied" },
+      output: applied.output,
+    })
+    const requestsAfterApply = permissionRequests.length
+
+    expect(
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        input,
+        context(
+          revoked,
+          "allow",
+          LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+          [{ ruleset: [], absence: "deny" }],
+        ),
+      ),
+    ).toMatchObject({ metadata: { outcome: "already_applied" }, output: applied.output })
+    yield* db
+      .insert(LearnerOccurrenceTombstoneTable)
+      .values({ occurrence_id: interaction.occurrenceID, reason: "source_unavailable", time_deleted: time + 10 })
+      .run()
+    expect(
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        input,
+        context(
+          deletedSource,
+          "deny",
+          LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        ),
+      ),
+    ).toMatchObject({ metadata: { outcome: "already_applied" }, output: applied.output })
+
+    expect(yield* runtime.interrupt(duplicate)).toBe(true)
+    expect(yield* exactPartResult(db, duplicate.partID)).toMatchObject({
+      title: "Retained learning steering",
+      metadata: { outcome: "already_applied" },
+      output: applied.output,
+    })
+    yield* LearningCommandRuntime.recoverAdmitted(events)
+    expect(yield* exactPartResult(db, conflict.partID)).toMatchObject({
+      title: "Retained learning steering not changed",
+      metadata: { outcome: "error", code: "semantic_conflict" },
+    })
+    expect(permissionRequests).toHaveLength(requestsAfterApply)
+    expect(
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        conflictInput,
+        context(conflict, "deny", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+      ),
+    ).toEqual(yield* exactPartResult(db, conflict.partID))
+    expect(permissionRequests).toHaveLength(requestsAfterApply)
+    expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 1 })
+  }),
+)
+
+it.effect("rolls back every retained transition, acknowledgement, frontier, receipt, seal, Part, and event boundary", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    permissionWaits.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const snapshot = (registration: LearningCommandRuntime.Registration, occurrenceID: LearningCommand.OccurrenceID) =>
+      Effect.all({
+        part: db
+          .select({ data: PartTable.data })
+          .from(PartTable)
+          .where(eq(PartTable.id, registration.partID))
+          .get(),
+        invocation: db
+          .select({
+            status: LearningCommandInvocationTable.status,
+            effectID: LearningCommandInvocationTable.retained_steering_effect_id,
+            settlement: LearningCommandInvocationTable.settlement,
+          })
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, registration.partID))
+          .get(),
+        receipts: db.get(sql`
+          SELECT count(*) AS count FROM learning_command_receipt
+          WHERE occurrence_id = ${occurrenceID} AND retained_steering_effect_id IS NOT NULL
+        `),
+        transitions: db.get(sql`
+          SELECT count(*) AS count FROM retained_steering_transition WHERE occurrence_id = ${occurrenceID}
+        `),
+        seals: db.get(sql`
+          SELECT count(*) AS count
+          FROM retained_steering_commit_seal AS seal
+          JOIN retained_steering_transition AS transition ON transition.id = seal.transition_id
+          WHERE transition.occurrence_id = ${occurrenceID}
+        `),
+        state: db.all(sql`
+          SELECT singleton, steering_revision, latest_cut_as_of FROM retained_steering_state ORDER BY singleton
+        `),
+        frontier: db.transaction((tx) => LearningFrontier.read(tx)),
+        tool: db.get(sql`
+          SELECT state, consumed_shared_frontier_sequence, consumed_shared_frontier_time,
+                 resulting_shared_frontier_sequence, resulting_shared_frontier_time
+          FROM turn_tool_invocation WHERE part_id = ${registration.partID}
+        `),
+        sequence: db
+          .select({ seq: EventSequenceTable.seq })
+          .from(EventSequenceTable)
+          .where(eq(EventSequenceTable.aggregate_id, registration.sessionID))
+          .get(),
+        events: db.get(sql`SELECT count(*) AS count FROM event WHERE aggregate_id = ${registration.sessionID}`),
+      })
+
+    const boundaries = [
+      { name: "turn_consumed", clause: "BEFORE UPDATE OF consumed_shared_frontier_sequence ON turn_tool_invocation" },
+      { name: "shared_frontier", clause: "BEFORE INSERT ON learning_shared_frontier" },
+      { name: "transition", clause: "BEFORE INSERT ON retained_steering_transition" },
+      { name: "acknowledgement", clause: "AFTER INSERT ON retained_steering_transition" },
+      { name: "receipt", clause: "BEFORE INSERT ON learning_command_receipt" },
+      { name: "invocation_ack", clause: "BEFORE UPDATE OF settlement ON learning_command_invocation" },
+      { name: "policy_revision", clause: "BEFORE UPDATE OF steering_revision ON retained_steering_state" },
+      { name: "commit_seal", clause: "BEFORE INSERT ON retained_steering_commit_seal" },
+      { name: "turn_resulting", clause: "BEFORE UPDATE OF resulting_shared_frontier_sequence ON turn_tool_invocation" },
+      { name: "part_projection", clause: "BEFORE UPDATE OF data ON part" },
+      { name: "event_sequence", clause: "BEFORE INSERT ON event_sequence" },
+      { name: "part_event", clause: "BEFORE INSERT ON event" },
+    ] as const
+
+    yield* Effect.forEach(
+      boundaries,
+      (boundary, index) =>
+        Effect.gen(function* () {
+          const time = Date.now() + index * 10_000
+          const sourceExcerpt = `across all my learning this week, use rollback example ${index}`
+          const input = {
+            action: "create",
+            sourceExcerpt,
+            operativeInstruction: `Use rollback example ${index} before independent practice.`,
+            validUntil: new Date(time + 7 * 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+          }
+          const interaction = yield* seedInteraction(
+            db,
+            `retained-rollback-${boundary.name}`,
+            input,
+            LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+            { text: sourceExcerpt, time, timeZone: "UTC" },
+          )
+          yield* runtime.prepareCommand(
+            LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+            input,
+            interaction.registration,
+          )
+          const before = yield* snapshot(interaction.registration, interaction.occurrenceID)
+          const trigger = `gate15_rollback_${index}`
+          yield* db.run(
+            sql.raw(
+              `CREATE TEMP TRIGGER ${trigger} ${boundary.clause} BEGIN SELECT RAISE(ABORT, 'gate15 injected rollback'); END`,
+            ),
+          )
+          const result = yield* runtime
+            .executeCommand(
+              LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+              input,
+              context(
+                interaction.registration,
+                "allow",
+                LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+              ),
+            )
+            .pipe(Effect.ensuring(db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger}`)).pipe(Effect.orDie)))
+          expect(result.metadata).toMatchObject({
+            outcome: "error",
+            code: "outcome_unknown",
+            durablySettled: false,
+          })
+          expect(yield* snapshot(interaction.registration, interaction.occurrenceID)).toEqual(before)
+        }),
+      { discard: true },
+    )
+  }),
+)
 
 it.effect("requires an exact once-only default confirmation and keeps authorized no-change effect-free", () =>
   Effect.gen(function* () {
@@ -243,13 +648,55 @@ it.effect("requires an exact once-only default confirmation and keeps authorized
       ),
     ).toBe(true)
     const malformedOccurrenceID = LearningCommand.createOccurrenceID()
+    const malformedMessageID = SessionV1.MessageID.ascending()
+    const malformedPartID = SessionV1.PartID.ascending()
+    const malformedTime = Date.now()
+    yield* db
+      .insert(MessageTable)
+      .values({
+        id: malformedMessageID,
+        session_id: interaction.sessionID,
+        data: userData(malformedTime),
+        time_created: malformedTime,
+        time_updated: malformedTime,
+      })
+      .run()
+    yield* db
+      .insert(PartTable)
+      .values({
+        id: malformedPartID,
+        session_id: interaction.sessionID,
+        message_id: malformedMessageID,
+        data: { type: "text", text: "Malformed navigation source" } as (typeof PartTable.$inferInsert)["data"],
+        time_created: malformedTime,
+        time_updated: malformedTime,
+      })
+      .run()
+    const malformedSourceOrder = yield* db
+      .insert(LearnerOccurrenceSourceOrderTable)
+      .values({
+        occurrence_id: malformedOccurrenceID,
+        origin_session_id: interaction.sessionID,
+        origin_message_id: malformedMessageID,
+        time_allocated: malformedTime,
+        source_temporal_state: "unavailable",
+        source_timezone: null,
+        source_utc_offset_minutes: null,
+        source_temporal_unavailable_reason: "timezone_unavailable",
+      })
+      .returning({ sequence: LearnerOccurrenceSourceOrderTable.sequence })
+      .get()
+    if (!malformedSourceOrder) return yield* Effect.die("Expected a source-order allocation")
     yield* db
       .insert(AdmittedLearnerOccurrenceTable)
       .values({
         id: malformedOccurrenceID,
         origin_session_id: interaction.sessionID,
-        origin_message_id: SessionV1.MessageID.ascending(),
-        time_admitted: Date.now(),
+        origin_message_id: malformedMessageID,
+        time_admitted: malformedTime,
+        source_order: malformedSourceOrder.sequence,
+        source_temporal_state: "unavailable",
+        source_temporal_unavailable_reason: "timezone_unavailable",
       })
       .run()
     const malformed = yield* db
@@ -1102,6 +1549,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       representation_effect_id: null,
       default_navigation_effect_id: preparedDefault.effect.id,
       anchor_navigation_effect_id: null,
+      retained_steering_effect_id: null,
       permission_request_id: defaultPermissionRequestID,
       confirmation_snapshot: preparedDefault.confirmation,
       time_committed: preparedDefault.effect.timeCommitted,
@@ -1152,6 +1600,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       representation_effect_id: null,
       default_navigation_effect_id: null,
       anchor_navigation_effect_id: anchorEffect.id,
+      retained_steering_effect_id: null,
       permission_request_id: null,
       confirmation_snapshot: null,
       time_committed: anchorEffect.timeCommitted,
@@ -2054,6 +2503,226 @@ test("reopens stored success and recovers admitted work without re-execution", a
   )
 })
 
+test("reopens retained steering lineage, cuts, pagination, expiry, acknowledgement, and global sample time", async () => {
+  await using tmp = await tmpdir()
+  const filename = join(tmp.path, "retained-steering-reopen.sqlite")
+  const persisted = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const sourceTime = Date.now() + 60_000
+      const createText = "across all my learning this week, explain before practice"
+      const createInput = {
+        action: "create" as const,
+        sourceExcerpt: createText,
+        operativeInstruction: "Explain before asking me to practice.",
+        validUntil: new Date(sourceTime + 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+      }
+      const created = yield* seedInteraction(
+        db,
+        "retained-reopen-create",
+        createInput,
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        { text: createText, time: sourceTime, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        createInput,
+        created.registration,
+      )
+      const createResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        createInput,
+        context(created.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+      )
+      const createdSnapshot = yield* db.transaction((tx) =>
+        RetainedSteering.readActiveSnapshot(tx, sourceTime + 1),
+      )
+      const createdHead = createdSnapshot.items[0]?.transition
+      if (!createdHead) return yield* Effect.die("Expected the first retained steering head")
+
+      const replacementTime = sourceTime + 1_000
+      const replacementText = "across all my learning this week, prefer worked examples"
+      const replacementInput = {
+        action: "replace" as const,
+        policyID: createdHead.policyID,
+        expectedHeadID: createdHead.id,
+        expectedVersion: createdHead.version,
+        sourceExcerpt: replacementText,
+        operativeInstruction: "Prefer a worked example before independent practice.",
+        validUntil: new Date(sourceTime + 12 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+      }
+      const replaced = yield* seedInteraction(
+        db,
+        "retained-reopen-replace",
+        replacementInput,
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        { text: replacementText, time: replacementTime, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        replacementInput,
+        replaced.registration,
+      )
+      const replacementResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        replacementInput,
+        context(replaced.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+      )
+      const replacementSnapshot = yield* db.transaction((tx) =>
+        RetainedSteering.readActiveSnapshot(tx, replacementTime + 1),
+      )
+      const replacementHead = replacementSnapshot.items[0]?.transition
+      if (!replacementHead) return yield* Effect.die("Expected the replacement retained steering head")
+
+      const retractTime = sourceTime + 2_000
+      const retractText = "across all my learning, remove the worked-example instruction"
+      const retractInput = {
+        action: "retract" as const,
+        policyID: replacementHead.policyID,
+        expectedHeadID: replacementHead.id,
+        expectedVersion: replacementHead.version,
+        sourceExcerpt: retractText,
+      }
+      const pending = yield* seedInteraction(
+        db,
+        "retained-reopen-pending",
+        retractInput,
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        { text: retractText, time: retractTime, timeZone: null },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        retractInput,
+        pending.registration,
+      )
+      const cut = yield* db.transaction((tx) =>
+        RetainedSteering.readCut(tx, pending.registration.assistantMessageID),
+      )
+      if (cut.type !== "available") return yield* Effect.die("Expected the pre-restart retained steering cut")
+      const firstPage = yield* db.transaction((tx) =>
+        RetainedSteering.readHistory(tx, replacementHead.policyID, replacementTime + 1, { limit: 1 }),
+      )
+      if (!firstPage.cursor) return yield* Effect.die("Expected a stable retained steering history cursor")
+
+      return {
+        sourceTime,
+        expiry: replacementHead.validUntil!,
+        policyID: replacementHead.policyID,
+        replacementHead,
+        createInput,
+        createResult,
+        createRegistration: created.registration,
+        replacementInput,
+        replacementResult,
+        replacementRegistration: replaced.registration,
+        pendingRegistration: pending.registration,
+        cut: cut.cut,
+        firstPage,
+      }
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+
+      expect(yield* exactPartResult(db, persisted.createRegistration.partID)).toEqual(persisted.createResult)
+      expect(yield* exactPartResult(db, persisted.replacementRegistration.partID)).toEqual(
+        persisted.replacementResult,
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        persisted.replacementInput,
+        persisted.replacementRegistration,
+      )
+      expect(
+        yield* runtime.executeCommand(
+          LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+          persisted.replacementInput,
+          context(
+            persisted.replacementRegistration,
+            "deny",
+            LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+          ),
+        ),
+      ).toEqual(persisted.replacementResult)
+      expect(yield* exactPartResult(db, persisted.pendingRegistration.partID)).toMatchObject({
+        title: "Retained learning steering not changed",
+        metadata: { outcome: "error", code: "interrupted" },
+      })
+
+      expect(
+        yield* db.transaction((tx) =>
+          RetainedSteering.readPolicy(tx, {
+            policyID: persisted.policyID,
+            asOf: persisted.replacementHead.effectiveFrom! + 1,
+          }),
+        ),
+      ).toMatchObject({
+        steeringRevision: 2,
+        head: {
+          status: "operative_active",
+          transition: {
+            id: persisted.replacementHead.id,
+            version: 2,
+            operativeInstruction: persisted.replacementHead.operativeInstruction,
+          },
+        },
+      })
+      expect(yield* db.transaction((tx) => RetainedSteering.readActiveSnapshot(tx, persisted.expiry))).toMatchObject({
+        steeringRevision: 2,
+        items: [],
+      })
+      expect(
+        yield* db.transaction((tx) =>
+          RetainedSteering.readPolicy(tx, { policyID: persisted.policyID, asOf: persisted.expiry }),
+        ),
+      ).toMatchObject({ head: { status: "operative_expired", transition: { version: 2 } } })
+      expect(yield* db.transaction((tx) => RetainedSteering.readCut(tx, persisted.cut.assistantMessageID))).toEqual({
+        type: "available",
+        cut: persisted.cut,
+      })
+      expect(
+        yield* db.transaction((tx) =>
+          RetainedSteering.readHistory(tx, persisted.policyID, persisted.replacementHead.effectiveFrom! + 1, {
+            limit: 1,
+          }),
+        ),
+      ).toEqual(persisted.firstPage)
+      expect(
+        yield* db.transaction((tx) =>
+          RetainedSteering.readHistory(tx, persisted.policyID, persisted.replacementHead.effectiveFrom! + 1, {
+            limit: 1,
+            cursor: persisted.firstPage.cursor,
+          }),
+        ),
+      ).toMatchObject({
+        throughSteeringRevision: 2,
+        items: [{ transition: { version: 1 } }],
+      })
+      expect(yield* db.transaction((tx) => RetainedSteering.latestCutAsOf(tx))).toBe(persisted.cut.cutAsOf)
+
+      const regressingText = "Continue with an explanation after restart."
+      const regressing = yield* seedInteraction(
+        db,
+        "retained-reopen-regressing-cut",
+        { request: regressingText },
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        { text: regressingText, time: persisted.sourceTime - 1_000, timeZone: "UTC" },
+      )
+      const regressingCut = yield* db.transaction((tx) =>
+        RetainedSteering.readCut(tx, regressing.registration.assistantMessageID),
+      )
+      expect(regressingCut).toMatchObject({
+        type: "available",
+        cut: { cutAsOf: persisted.cut.cutAsOf, throughSteeringRevision: 2 },
+      })
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+})
+
 test("joins only active execution and never replays from a completed cache", async () => {
   await using tmp = await tmpdir()
   const filename = join(tmp.path, "learning-command-single-flight.sqlite")
@@ -2385,13 +3054,14 @@ function insertOrReplaceReceipt(
       id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
       invocation_part_id, capability_identity, capability_version, authorization_basis,
       effect_id, representation_effect_id, default_navigation_effect_id, anchor_navigation_effect_id,
+      retained_steering_effect_id,
       permission_request_id, confirmation_snapshot, time_committed, commit_order
     ) VALUES (
       ${receipt.id}, ${receipt.occurrence_id}, ${receipt.origin_session_id}, ${receipt.origin_message_id},
       ${receipt.assistant_message_id}, ${receipt.invocation_part_id}, ${receipt.capability_identity},
       ${receipt.capability_version}, ${receipt.authorization_basis}, ${receipt.effect_id},
       ${receipt.representation_effect_id}, ${receipt.default_navigation_effect_id},
-      ${receipt.anchor_navigation_effect_id}, ${receipt.permission_request_id},
+      ${receipt.anchor_navigation_effect_id}, ${receipt.retained_steering_effect_id}, ${receipt.permission_request_id},
       ${receipt.confirmation_snapshot === null ? null : JSON.stringify(receipt.confirmation_snapshot)},
       ${receipt.time_committed}, ${receipt.commit_order}
     )
@@ -2517,9 +3187,10 @@ function seedInteraction(
   suffix: string,
   input: Record<string, unknown>,
   toolID: LearningCommandRuntime.PrimaryCapability = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+  options: { readonly text?: string; readonly time?: number; readonly timeZone?: string | null } = {},
 ) {
   return Effect.gen(function* () {
-    const time = Date.now()
+    const time = options.time ?? Date.now()
     const sessionID = SessionSchema.ID.make(`ses_learning_runtime_${suffix}`)
     const userMessageID = SessionV1.MessageID.ascending(`msg_learning_runtime_user_${suffix}`)
     const userPartID = SessionV1.PartID.ascending(`prt_learning_runtime_user_${suffix}`)
@@ -2563,7 +3234,10 @@ function seedInteraction(
         id: userPartID,
         session_id: sessionID,
         message_id: userMessageID,
-        data: { type: "text", text: "Accept this Course View Revision" } as (typeof PartTable.$inferInsert)["data"],
+        data: {
+          type: "text",
+          text: options.text ?? "Accept this Course View Revision",
+        } as (typeof PartTable.$inferInsert)["data"],
         time_created: time,
         time_updated: time,
       })
@@ -2573,7 +3247,7 @@ function seedInteraction(
     const occurrenceID = yield* db.transaction((tx) =>
       Effect.gen(function* () {
         const occurrence = yield* LearningCommand.Occurrence.admit(tx, {
-          admission: LearningCommand.LearnerAdmission.interactive(),
+          admission: LearningCommand.LearnerAdmission.interactive({ timeZone: options.timeZone }),
           sessionID,
           messageID: userMessageID,
           timeAdmitted: time,

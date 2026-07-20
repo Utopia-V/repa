@@ -60,6 +60,7 @@ import { SetCourseRouteAnchorTool, SetDefaultCoursePreferenceTool } from "./lear
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { RepresentationConvertTool } from "./representation-convert"
+import { UpdateRetainedLearningSteeringTool } from "./retained-learning-steering"
 import {
   ContentInventoryTool,
   ContentReadTool,
@@ -129,6 +130,7 @@ const layer = Layer.effect(
     const setDefaultCoursePreference = yield* SetDefaultCoursePreferenceTool
     const setCourseRouteAnchor = yield* SetCourseRouteAnchorTool
     const representationConvert = yield* RepresentationConvertTool
+    const updateRetainedLearningSteering = yield* UpdateRetainedLearningSteeringTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
     const contentSearch = yield* ContentSearchTool
@@ -251,6 +253,7 @@ const layer = Layer.effect(
           setDefaultCoursePreference: Tool.init(setDefaultCoursePreference),
           setCourseRouteAnchor: Tool.init(setCourseRouteAnchor),
           representationConvert: Tool.init(representationConvert),
+          updateRetainedLearningSteering: Tool.init(updateRetainedLearningSteering),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
           contentSearch: Tool.init(contentSearch),
@@ -268,6 +271,7 @@ const layer = Layer.effect(
             tool.setDefaultCoursePreference,
             tool.setCourseRouteAnchor,
             tool.representationConvert,
+            tool.updateRetainedLearningSteering,
             tool.contentRoots,
             tool.contentInventory,
             tool.contentSearch,

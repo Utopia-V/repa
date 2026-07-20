@@ -82,19 +82,29 @@ const remove = (id: SessionID) => SessionNs.use.remove(id)
 const admitOccurrence = Effect.fn("test.admitOccurrence")(function* (
   sessionID: SessionID,
   messageID: MessageID,
-  timeAdmitted = Date.now(),
+  timeAdmitted?: number,
 ) {
   const events = yield* EventV2Bridge.Service
   const admitted = yield* events.transaction((tx) =>
-    Occurrence.admit(tx, {
-      admission: LearnerAdmission.interactive(),
-      sessionID,
-      messageID,
-      timeAdmitted,
-    }).pipe(
-      Effect.map((result) => ({ result })),
-      Effect.orDie,
-    ),
+    Effect.gen(function* () {
+      const message = yield* tx
+        .select({ time: MessageTable.time_created })
+        .from(MessageTable)
+        .where(eq(MessageTable.id, messageID))
+        .get()
+        .pipe(Effect.orDie)
+      const sourceTime = timeAdmitted ?? message?.time
+      if (sourceTime === undefined) return yield* Effect.die(`Missing learner message ${messageID}`)
+      return yield* Occurrence.admit(tx, {
+        admission: LearnerAdmission.interactive({ instant: sourceTime }),
+        sessionID,
+        messageID,
+        timeAdmitted: sourceTime,
+      }).pipe(
+        Effect.map((result) => ({ result })),
+        Effect.orDie,
+      )
+    }),
   )
   return admitted.result
 })
@@ -1546,7 +1556,7 @@ describe("Session", () => {
                   commit: () =>
                     Effect.gen(function* () {
                       const occurrence = yield* Occurrence.admit(tx, {
-                        admission: LearnerAdmission.interactive(),
+                        admission: LearnerAdmission.interactive({ instant: message.time.created }),
                         sessionID: targetSessionID,
                         messageID: targetMessageID,
                         timeAdmitted: message.time.created,

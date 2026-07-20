@@ -452,10 +452,10 @@ describe("revert + compact workflow", () => {
           const protectedPart = yield* text(info.id, linked.id, "immutable learner input")
           yield* events.transaction((tx) =>
             Occurrence.admit(tx, {
-              admission: LearnerAdmission.interactive(),
+              admission: LearnerAdmission.interactive({ instant: linked.time.created }),
               sessionID: info.id,
               messageID: linked.id,
-              timeAdmitted: Date.now(),
+              timeAdmitted: linked.time.created,
             }).pipe(
               Effect.map((result) => ({ result })),
               Effect.orDie,
@@ -496,10 +496,10 @@ describe("revert + compact workflow", () => {
           yield* text(info.id, linked.id, "reverted learner input")
           const admitted = yield* events.transaction((tx) =>
             Occurrence.admit(tx, {
-              admission: LearnerAdmission.interactive(),
+              admission: LearnerAdmission.interactive({ instant: linked.time.created }),
               sessionID: info.id,
               messageID: linked.id,
-              timeAdmitted: Date.now(),
+              timeAdmitted: linked.time.created,
             }).pipe(
               Effect.map((result) => ({ result })),
               Effect.orDie,

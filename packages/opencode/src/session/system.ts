@@ -74,7 +74,6 @@ const layer = Layer.effect(
             `  Workspace root: ${ctx.worktree}`,
             `  Workspace uses Git version control: ${ctx.project.vcs === "git" ? "yes" : "no"}`,
             `  Platform: ${process.platform}`,
-            `  Today's date: ${new Date().toDateString()}`,
             `</env>`,
           ].join("\n"),
           references.length === 0

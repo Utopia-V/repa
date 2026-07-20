@@ -6,6 +6,7 @@ import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.s
 import { MessageTable, PartTable, SessionTable } from "../session/sql"
 import type { SessionSchema } from "../session/schema"
 import type { MessageID, PartID } from "../v1/session"
+import type { Cut } from "../retained-steering/schema"
 
 type Json = Record<string, unknown>
 
@@ -131,6 +132,9 @@ export const TurnModelOperationTable = sqliteTable(
     observed_shared_frontier_sequence: integer().notNull(),
     observed_shared_frontier_time: integer().notNull(),
     time_admitted: integer().notNull(),
+    retained_steering_cut: text({ mode: "json" }).$type<Cut>(),
+    retained_steering_cut_fingerprint: text(),
+    retained_steering_cut_as_of: integer(),
     time_settled: integer(),
     candidates_sealed: integer({ mode: "boolean" }).notNull().default(false),
     candidate_count: integer(),
@@ -156,6 +160,10 @@ export const TurnModelOperationTable = sqliteTable(
     check(
       "turn_model_times",
       sql`${table.snapshot_frontier_sequence} >= 0 AND ${table.observed_shared_frontier_sequence} >= ${table.snapshot_frontier_sequence} AND ${table.snapshot_frontier_time} >= 0 AND ${table.observed_shared_frontier_time} >= ${table.snapshot_frontier_time} AND ${table.time_admitted} >= ${table.snapshot_frontier_time} AND ${table.time_admitted} >= ${table.observed_shared_frontier_time}`,
+    ),
+    check(
+      "turn_model_retained_steering_cut_shape",
+      sql`(${table.retained_steering_cut} IS NULL AND ${table.retained_steering_cut_fingerprint} IS NULL AND ${table.retained_steering_cut_as_of} IS NULL) OR (${table.retained_steering_cut} IS NOT NULL AND json_valid(${table.retained_steering_cut}) AND ${table.retained_steering_cut_fingerprint} IS NOT NULL AND length(${table.retained_steering_cut_fingerprint}) = 64 AND ${table.retained_steering_cut_fingerprint} NOT GLOB '*[^0-9a-f]*' AND ${table.retained_steering_cut_as_of} IS NOT NULL AND ${table.retained_steering_cut_as_of} = ${table.time_admitted} AND ${table.retained_steering_cut_as_of} >= ${table.observed_shared_frontier_time})`,
     ),
     check(
       "turn_model_state_shape",

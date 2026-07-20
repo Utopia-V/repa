@@ -23,6 +23,7 @@ import readableRepresentationLineageMigration from "@opencode-ai/core/database/m
 import durableTurnMigration from "@opencode-ai/core/database/migration/repa/20260718134404_gate12_durable_turn"
 import materialMapAlignmentMigration from "@opencode-ai/core/database/migration/repa/20260719104356_material_map_alignment"
 import learnerNavigationMigration from "@opencode-ai/core/database/migration/repa/20260719155243_learner_navigation"
+import retainedSteeringMigration from "@opencode-ai/core/database/migration/repa/20260720113159_gate15_retained_steering"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -35,6 +36,8 @@ import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClien
 import { Database } from "@opencode-ai/core/database/database"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
+import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
 import { tmpdir } from "./fixture/tmpdir"
 
 const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
@@ -286,6 +289,32 @@ function learnerNavigationSchema(db: TestDatabase) {
     )
 }
 
+function retainedSteeringSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE tbl_name IN (
+        'learning_admitted_occurrence', 'learning_occurrence_source_order',
+        'learning_command_invocation', 'learning_command_receipt', 'turn_model_operation',
+        'retained_steering_state', 'retained_steering_policy', 'retained_steering_transition',
+        'retained_steering_commit_seal'
+      )
+        AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: normalizeSchemaDefinition(row.definition),
+        })),
+      ),
+    )
+}
+
 function restoreGate8LearningSchema(db: TestDatabase) {
   return Effect.gen(function* () {
     yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(name)}`), {
@@ -310,6 +339,7 @@ function removeGate13(db: TestDatabase) {
 
 function removeGate14(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* removeGate15(db)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
     yield* db.run(sql`DROP TABLE learning_command_receipt`)
     yield* db.run(sql`DROP TABLE learning_command_invocation`)
@@ -382,6 +412,182 @@ function removeGate14(db: TestDatabase) {
   })
 }
 
+function removeGate15(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+    const triggers = yield* db.all<{ name: string }>(sql`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger'
+        AND (
+          name LIKE 'retained_steering_%'
+          OR name LIKE 'turn_model_retained_steering_%'
+          OR name LIKE 'learning_occurrence_gate15_%'
+          OR name LIKE 'learning_occurrence_source_order_%'
+          OR sql LIKE '%learning_admitted_occurrence%'
+          OR sql LIKE '%turn_model_operation%'
+        )
+    `)
+    yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
+      discard: true,
+    })
+    yield* db.run(sql`DROP TABLE IF EXISTS retained_steering_transition`)
+    yield* db.run(sql`DROP TABLE IF EXISTS retained_steering_commit_seal`)
+    yield* db.run(sql`DROP TABLE IF EXISTS retained_steering_policy`)
+    yield* db.run(sql`DROP TABLE IF EXISTS retained_steering_state`)
+    yield* db.run(sql`DROP TABLE IF EXISTS learning_occurrence_source_order`)
+    yield* db.run(sql.raw(`
+      CREATE TABLE __gate14_learning_admitted_occurrence (
+        id text PRIMARY KEY,
+        origin_session_id text NOT NULL,
+        origin_message_id text NOT NULL,
+        time_admitted integer NOT NULL,
+        UNIQUE(origin_session_id, origin_message_id),
+        CHECK(time_admitted >= 0)
+      )
+    `))
+    yield* db.run(sql.raw(`
+      INSERT INTO __gate14_learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted)
+      SELECT id, origin_session_id, origin_message_id, time_admitted FROM learning_admitted_occurrence
+    `))
+    yield* db.run(sql`DROP TABLE learning_admitted_occurrence`)
+    yield* db.run(sql`ALTER TABLE __gate14_learning_admitted_occurrence RENAME TO learning_admitted_occurrence`)
+    yield* db.run(sql.raw(`
+      CREATE TABLE __gate14_turn_model_operation (
+        assistant_message_id text PRIMARY KEY,
+        turn_id text NOT NULL,
+        session_id text NOT NULL,
+        input_id text NOT NULL,
+        causal_occurrence_id text,
+        ordinal integer NOT NULL,
+        state text DEFAULT 'running' NOT NULL,
+        request_fingerprint text NOT NULL,
+        context_fingerprint text NOT NULL,
+        snapshot_frontier_sequence integer NOT NULL,
+        snapshot_frontier_time integer NOT NULL,
+        observed_shared_frontier_sequence integer NOT NULL,
+        observed_shared_frontier_time integer NOT NULL,
+        time_admitted integer NOT NULL,
+        time_settled integer,
+        candidates_sealed integer DEFAULT false NOT NULL,
+        candidate_count integer,
+        time_candidates_sealed integer,
+        FOREIGN KEY (turn_id) REFERENCES turn(id) ON DELETE CASCADE,
+        FOREIGN KEY (causal_occurrence_id) REFERENCES learning_admitted_occurrence(id) ON DELETE RESTRICT,
+        FOREIGN KEY (turn_id, session_id) REFERENCES turn(id, session_id) ON DELETE CASCADE,
+        FOREIGN KEY (turn_id, input_id) REFERENCES turn_input(turn_id, id) ON DELETE RESTRICT,
+        UNIQUE(turn_id, assistant_message_id),
+        UNIQUE(turn_id, assistant_message_id, session_id),
+        CHECK(ordinal >= 0),
+        CHECK(length(request_fingerprint) = 64 AND length(context_fingerprint) = 64),
+        CHECK(snapshot_frontier_sequence >= 0 AND observed_shared_frontier_sequence >= snapshot_frontier_sequence AND snapshot_frontier_time >= 0 AND observed_shared_frontier_time >= snapshot_frontier_time AND time_admitted >= snapshot_frontier_time AND time_admitted >= observed_shared_frontier_time),
+        CHECK((state = 'running' AND time_settled IS NULL) OR (state IN ('completed', 'failed', 'interrupted') AND time_settled IS NOT NULL AND time_settled >= time_admitted)),
+        CHECK((candidates_sealed = 0 AND candidate_count IS NULL AND time_candidates_sealed IS NULL) OR (candidates_sealed = 1 AND candidate_count IS NOT NULL AND candidate_count >= 0 AND time_candidates_sealed IS NOT NULL AND time_candidates_sealed >= time_admitted))
+      )
+    `))
+    yield* db.run(sql.raw(`
+      INSERT INTO __gate14_turn_model_operation (
+        assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal, state,
+        request_fingerprint, context_fingerprint, snapshot_frontier_sequence, snapshot_frontier_time,
+        observed_shared_frontier_sequence, observed_shared_frontier_time, time_admitted, time_settled,
+        candidates_sealed, candidate_count, time_candidates_sealed
+      ) SELECT
+        assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal, state,
+        request_fingerprint, context_fingerprint, snapshot_frontier_sequence, snapshot_frontier_time,
+        observed_shared_frontier_sequence, observed_shared_frontier_time, time_admitted, time_settled,
+        candidates_sealed, candidate_count, time_candidates_sealed
+      FROM turn_model_operation
+    `))
+    yield* db.run(sql`DROP TABLE turn_model_operation`)
+    yield* db.run(sql`ALTER TABLE __gate14_turn_model_operation RENAME TO turn_model_operation`)
+    yield* db.run(sql`CREATE UNIQUE INDEX turn_model_turn_ordinal_idx ON turn_model_operation (turn_id, ordinal)`)
+    yield* db.run(sql`DROP TABLE learning_command_receipt`)
+    yield* db.run(sql`DROP TABLE learning_command_invocation`)
+    yield* db.run(sql.raw(`
+      CREATE TABLE learning_command_invocation (
+        part_id text PRIMARY KEY,
+        session_id text NOT NULL,
+        parent_user_message_id text NOT NULL,
+        assistant_message_id text NOT NULL,
+        provider_call_id text NOT NULL,
+        occurrence_id text NOT NULL,
+        command_name text NOT NULL,
+        command_version integer NOT NULL,
+        emission_ordinal integer NOT NULL,
+        capability_identity text NOT NULL,
+        capability_version integer NOT NULL,
+        authorization_basis text NOT NULL,
+        input_fingerprint text NOT NULL,
+        status text NOT NULL,
+        effect_id text,
+        representation_effect_id text,
+        default_navigation_effect_id text,
+        anchor_navigation_effect_id text,
+        permission_request_id text,
+        settlement text,
+        time_admitted integer NOT NULL,
+        time_settled integer,
+        settlement_order integer,
+        turn_id text,
+        input_id text,
+        FOREIGN KEY (occurrence_id) REFERENCES learning_admitted_occurrence(id) ON DELETE RESTRICT,
+        FOREIGN KEY (effect_id) REFERENCES course_selection_acceptance_effect(id) ON DELETE RESTRICT,
+        FOREIGN KEY (representation_effect_id) REFERENCES representation_effect(id) ON DELETE RESTRICT,
+        FOREIGN KEY (default_navigation_effect_id) REFERENCES learner_default_course_transition(id) ON DELETE RESTRICT,
+        FOREIGN KEY (anchor_navigation_effect_id) REFERENCES learner_course_route_anchor_transition(id) ON DELETE RESTRICT,
+        UNIQUE(assistant_message_id, provider_call_id),
+        UNIQUE(assistant_message_id, emission_ordinal),
+        CHECK(command_name IN ('accept_course_view_revision', 'representation.convert', 'set_default_course_preference', 'set_course_route_anchor')),
+        CHECK(command_version = 1),
+        CHECK(status IN ('admitted', 'applied', 'already_applied', 'no_change', 'error'))
+      )
+    `))
+    yield* db.run(sql.raw(`
+      CREATE TABLE learning_command_receipt (
+        id text PRIMARY KEY,
+        occurrence_id text NOT NULL,
+        origin_session_id text NOT NULL,
+        origin_message_id text NOT NULL,
+        assistant_message_id text NOT NULL,
+        invocation_part_id text NOT NULL UNIQUE,
+        capability_identity text NOT NULL,
+        capability_version integer NOT NULL,
+        authorization_basis text NOT NULL,
+        effect_id text UNIQUE,
+        representation_effect_id text UNIQUE,
+        default_navigation_effect_id text UNIQUE,
+        anchor_navigation_effect_id text UNIQUE,
+        permission_request_id text,
+        confirmation_snapshot text,
+        time_committed integer NOT NULL,
+        commit_order integer NOT NULL,
+        FOREIGN KEY (occurrence_id) REFERENCES learning_admitted_occurrence(id) ON DELETE RESTRICT,
+        FOREIGN KEY (invocation_part_id) REFERENCES learning_command_invocation(part_id) ON DELETE RESTRICT,
+        FOREIGN KEY (effect_id) REFERENCES course_selection_acceptance_effect(id) ON DELETE RESTRICT,
+        FOREIGN KEY (representation_effect_id) REFERENCES representation_effect(id) ON DELETE RESTRICT,
+        FOREIGN KEY (default_navigation_effect_id) REFERENCES learner_default_course_transition(id) ON DELETE RESTRICT,
+        FOREIGN KEY (anchor_navigation_effect_id) REFERENCES learner_course_route_anchor_transition(id) ON DELETE RESTRICT
+      ) WITHOUT ROWID
+    `))
+    yield* db.run(
+      sql`CREATE UNIQUE INDEX learning_command_invocation_one_mutation_idx ON learning_command_invocation (assistant_message_id) WHERE status = 'applied'`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_invocation_session_owner_idx ON learning_command_invocation (session_id, assistant_message_id, part_id)`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_invocation_occurrence_idx ON learning_command_invocation (occurrence_id, part_id)`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_invocation_admitted_idx ON learning_command_invocation (status, session_id, time_admitted)`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learning_command_receipt_occurrence_idx ON learning_command_receipt (occurrence_id, id)`,
+    )
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 9}`)
+    yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
+  })
+}
+
 describe("DatabaseMigration", () => {
   test("serializes concurrent embedded initialization for one database path", async () => {
     await using tmp = await tmpdir()
@@ -441,6 +647,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
           { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
           { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
+          { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -474,6 +681,179 @@ describe("DatabaseMigration", () => {
           { name: "session_message_session_time_created_id_idx" },
           { name: "session_message_session_type_seq_idx" },
         ])
+      }),
+    )
+  })
+
+  test("builds the same Gate 15 authority from Gate 14 without qualifying legacy sources or model operations", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* retainedSteeringSchema(db)
+
+        yield* removeGate15(db)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 8}`))
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx.run("PRAGMA defer_foreign_keys = ON")
+            yield* tx.run(sql`
+              INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
+              VALUES ('gate14-project', '/learning', 1, 1, '[]')
+            `)
+            yield* tx.run(sql`
+              INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+              VALUES ('gate14-session', 'gate14-project', 'legacy', '/learning', 'Legacy Gate 14', 'test', 1, 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO message (id, session_id, time_created, time_updated, data)
+              VALUES
+                ('msg_gate14_user', 'gate14-session', 1, 1, '{"role":"user"}'),
+                ('msg_gate14_assistant', 'gate14-session', 2, 2,
+                 '{"role":"assistant","parentID":"msg_gate14_user"}')
+            `)
+            yield* tx.run(sql`
+              INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+              VALUES ('prt_gate14_user', 'msg_gate14_user', 'gate14-session', 1, 1,
+                      '{"type":"text","text":"legacy learner input"}')
+            `)
+            yield* tx.run(sql`
+              INSERT INTO learning_admitted_occurrence (
+                id, origin_session_id, origin_message_id, time_admitted
+              ) VALUES ('occ_gate14_legacy', 'gate14-session', 'msg_gate14_user', 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO learning_occurrence_presentation (
+                message_id, session_id, occurrence_id, provenance, content_fingerprint, time_created
+              ) VALUES (
+                'msg_gate14_user', 'gate14-session', 'occ_gate14_legacy', 'origin', ${"a".repeat(64)}, 1
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO turn_input (
+                id, turn_id, session_id, message_id, source, ordinal, occurrence_id,
+                time_admitted, envelope_fingerprint
+              ) VALUES (
+                'input_gate14_legacy', 'turn_gate14_legacy', 'gate14-session', 'msg_gate14_user',
+                'learner_root', 0, 'occ_gate14_legacy', 1, ${"b".repeat(64)}
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO turn_input_presentation (input_id, message_id, session_id)
+              VALUES ('input_gate14_legacy', 'msg_gate14_user', 'gate14-session')
+            `)
+            yield* tx.run(sql`
+              INSERT INTO turn (
+                id, session_id, admission_kind, initial_input_id, current_input_id,
+                model_limit, tool_limit, model_count, tool_count, state, depth,
+                normalized_envelope, envelope_fingerprint, policy_basis, time_admitted, causal_time
+              ) VALUES (
+                'turn_gate14_legacy', 'gate14-session', 'learner', 'input_gate14_legacy',
+                'input_gate14_legacy', 2, 0, 1, 0, 'running', 0, '{}', ${"c".repeat(64)}, '{}', 1, 2
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO turn_model_operation (
+                assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal,
+                state, request_fingerprint, context_fingerprint, snapshot_frontier_sequence,
+                snapshot_frontier_time, observed_shared_frontier_sequence, observed_shared_frontier_time,
+                time_admitted, candidates_sealed
+              ) VALUES (
+                'msg_gate14_assistant', 'turn_gate14_legacy', 'gate14-session', 'input_gate14_legacy',
+                'occ_gate14_legacy', 0, 'running', ${"d".repeat(64)}, ${"e".repeat(64)}, 0, 0, 0, 0, 2, 0
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO turn_model_presentation (assistant_message_id, session_id)
+              VALUES ('msg_gate14_assistant', 'gate14-session')
+            `)
+          }),
+        )
+
+        yield* DatabaseMigration.apply(db)
+
+        expect(yield* retainedSteeringSchema(db)).toEqual(fresh)
+        expect(
+          yield* db.get(sql`
+            SELECT source_order, source_temporal_state, source_timezone, source_utc_offset_minutes,
+                   source_temporal_unavailable_reason
+            FROM learning_admitted_occurrence WHERE id = 'occ_gate14_legacy'
+          `),
+        ).toEqual({
+          source_order: null,
+          source_temporal_state: null,
+          source_timezone: null,
+          source_utc_offset_minutes: null,
+          source_temporal_unavailable_reason: null,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT retained_steering_cut, retained_steering_cut_fingerprint, retained_steering_cut_as_of
+            FROM turn_model_operation WHERE assistant_message_id = 'msg_gate14_assistant'
+          `),
+        ).toEqual({
+          retained_steering_cut: null,
+          retained_steering_cut_fingerprint: null,
+          retained_steering_cut_as_of: null,
+        })
+        expect(yield* db.all(sql`SELECT sequence FROM learning_occurrence_source_order`)).toEqual([])
+        expect(yield* db.all(sql`SELECT id FROM retained_steering_policy`)).toEqual([])
+        expect(yield* db.all(sql`SELECT id FROM retained_steering_transition`)).toEqual([])
+        expect(yield* db.all(sql`SELECT singleton FROM retained_steering_state`)).toEqual([])
+        expect(
+          yield* Effect.flip(
+            db.run(sql`
+              INSERT INTO learning_admitted_occurrence (
+                id, origin_session_id, origin_message_id, time_admitted
+              ) VALUES ('occ_gate15_missing_context', 'gate14-session', 'msg_gate14_assistant', 3)
+            `),
+          ),
+        ).toMatchObject({ _tag: "EffectDrizzleQueryError" })
+
+        const sessionID = SessionSchema.ID.create()
+        const resolvedMessageID = SessionV1.MessageID.ascending("msg_gate15_resolved")
+        const resolvedPartID = SessionV1.PartID.ascending("prt_gate15_resolved")
+        const unavailableMessageID = SessionV1.MessageID.ascending("msg_gate15_unavailable")
+        const unavailablePartID = SessionV1.PartID.ascending("prt_gate15_unavailable")
+        yield* db.run(sql`
+          INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+          VALUES (${sessionID}, 'gate14-project', 'post-upgrade', '/learning', 'Post-upgrade Gate 15', 'test', 9, 9)
+        `)
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES
+            (${resolvedMessageID}, ${sessionID}, 10, 10, '{"role":"user"}'),
+            (${unavailableMessageID}, ${sessionID}, 11, 11, '{"role":"user"}')
+        `)
+        yield* db.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+          VALUES
+            (${resolvedPartID}, ${resolvedMessageID}, ${sessionID}, 10, 10,
+             '{"type":"text","text":"resolved source"}'),
+            (${unavailablePartID}, ${unavailableMessageID}, ${sessionID}, 11, 11,
+             '{"type":"text","text":"unavailable source"}')
+        `)
+        const admitted = yield* db.transaction((tx) =>
+          Effect.all([
+            Occurrence.admit(tx, {
+              admission: LearnerAdmission.interactive({ timeZone: "UTC", instant: 10 }),
+              sessionID,
+              messageID: resolvedMessageID,
+              timeAdmitted: 10,
+            }),
+            Occurrence.admit(tx, {
+              admission: LearnerAdmission.interactive({ timeZone: null, instant: 11 }),
+              sessionID,
+              messageID: unavailableMessageID,
+              timeAdmitted: 11,
+            }),
+          ]),
+        )
+        expect(admitted.map((item) => [item.sourceOrder, item.sourceTemporalContext])).toEqual([
+          [1, { state: "resolved", instant: 10, timeZone: "UTC", utcOffsetMinutes: 0 }],
+          [2, { state: "unavailable", instant: 11, reason: "timezone_unavailable" }],
+        ])
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
       }),
     )
   })
@@ -1693,6 +2073,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 6, id: durableTurnMigration.id },
           { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
           { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
+          { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
         ])
       }),
     )

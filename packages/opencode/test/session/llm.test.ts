@@ -28,6 +28,9 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LayerNodePlatform } from "@opencode-ai/core/effect/app-node-platform"
 import { Database } from "@opencode-ai/core/database/database"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
+import { createOccurrenceID } from "@opencode-ai/core/learning-command/occurrence-schema"
+import { retainedSteeringCut } from "../fixture/retained-steering"
 
 type ConfigModel = NonNullable<NonNullable<ConfigV1.Info["provider"]>[string]["models"]>[string]
 
@@ -85,7 +88,8 @@ const it = testEffect(AppNodeBuilder.build(LayerNode.group([LLM.node, Provider.n
 const nestedRuntimeDatabase = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 
 // LLM.stream returns a Stream, not an Effect, so we can't use the serviceUse proxy.
-const drain = (input: LLM.StreamInput) => LLM.Service.use((svc) => svc.stream(input).pipe(Stream.runDrain))
+const drain = (input: LLM.StreamInput) =>
+  LLM.Service.use((svc) => svc.stream(withRetainedSteeringCut(input)).pipe(Stream.runDrain))
 
 // drainWith builds an isolated runtime so custom replacements fully own LLM and
 // its transitive deps.
@@ -95,13 +99,18 @@ const drainWith = (layer: Layer.Layer<LLM.Service>, input: LLM.StreamInput) =>
     if (!ctx) return yield* Effect.die("InstanceRef not provided")
     return yield* Effect.promise(() =>
       Effect.runPromise(
-        LLM.Service.use((svc) => svc.stream(input).pipe(Stream.runDrain)).pipe(
+        LLM.Service.use((svc) => svc.stream(withRetainedSteeringCut(input)).pipe(Stream.runDrain)).pipe(
           Effect.provide(layer),
           Effect.provideService(InstanceRef, ctx),
         ),
       ),
     )
   })
+
+function withRetainedSteeringCut(input: LLM.StreamInput): LLM.StreamInput {
+  if (input.composition.type !== "interactive" || input.retainedSteeringCut) return input
+  return { ...input, retainedSteeringCut: retainedSteeringCut() }
+}
 
 function llmLayerWithExecutor(
   options: {
@@ -1094,6 +1103,25 @@ describe("session.llm.stream", () => {
     () =>
       Effect.gen(function* () {
         const model = loadFixture("openai", "gpt-5.2").model
+        const cut = retainedSteeringCut({
+          cutAsOf: 2_000,
+          throughSteeringRevision: 1,
+          items: [
+            {
+              ordinal: 0,
+              policyID: RetainedSteering.createPolicyID(),
+              transitionID: RetainedSteering.createTransitionID(),
+              version: 1,
+              sourceOrder: 1,
+              sourceExcerpt: "across all my learning today, do not quiz me",
+              operativeInstruction: "Do not quiz me; continue with a useful explanation or demonstration.",
+              effectiveFrom: 1_000,
+              validUntil: 5_000,
+              steeringRevision: 1,
+            },
+          ],
+        })
+        const renderedCut = RetainedSteering.renderCut(cut)
 
         const responseChunks = [
           {
@@ -1167,6 +1195,7 @@ describe("session.llm.stream", () => {
           system: ["You are a helpful assistant."],
           messages: [{ role: "user", content: "Hello" }],
           tools: {},
+          retainedSteeringCut: cut,
         })
 
         const capture = yield* Effect.promise(() => request)
@@ -1176,9 +1205,127 @@ describe("session.llm.stream", () => {
         expect(body.model).toBe(resolved.api.id)
         expect(body.stream).toBe(true)
         expect((body.reasoning as { effort?: string } | undefined)?.effort).toBe("high")
+        const payload = JSON.stringify(body)
+        expect(payload).toContain(JSON.stringify(renderedCut).slice(1, -1))
+        expect(payload.split("[Repa retained learner steering — protected]")).toHaveLength(2)
+        expect(payload).toContain(cut.fingerprint)
+        expect(payload).toContain("Do not quiz me; continue with a useful explanation or demonstration.")
 
         const maxTokens = body.max_output_tokens as number | undefined
         expect(maxTokens).toBe(undefined) // match codex cli behavior
+      }),
+    { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+  )
+
+  it.instance(
+    "sends an unavailable source-time arm without a host or UTC date and still dispatches",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("openai", "gpt-5.2").model
+        const sourceInstant = Date.parse("2026-07-20T15:59:00.000Z")
+        const cutAsOf = sourceInstant + 2 * 60_000
+        const cut = retainedSteeringCut({
+          cutAsOf,
+          sourceTemporalContext: {
+            state: "unavailable",
+            occurrenceID: createOccurrenceID(),
+            instant: sourceInstant,
+            reason: "timezone_unavailable",
+            sourceOrder: 1,
+          },
+        })
+        const request = waitRequest(
+          "/responses",
+          createEventResponse(
+            [
+              {
+                type: "response.created",
+                response: {
+                  id: "resp-unavailable-time",
+                  created_at: Math.floor(Date.now() / 1000),
+                  model: model.id,
+                  service_tier: null,
+                },
+              },
+              {
+                type: "response.output_item.added",
+                output_index: 0,
+                item: {
+                  type: "message",
+                  id: "item-unavailable-time",
+                  status: "in_progress",
+                  role: "assistant",
+                  content: [],
+                },
+              },
+              {
+                type: "response.content_part.added",
+                item_id: "item-unavailable-time",
+                output_index: 0,
+                content_index: 0,
+                part: { type: "output_text", text: "", annotations: [] },
+              },
+              {
+                type: "response.output_text.delta",
+                item_id: "item-unavailable-time",
+                delta: "We can continue with an explanation.",
+                logprobs: null,
+              },
+              {
+                type: "response.completed",
+                response: {
+                  incomplete_details: null,
+                  usage: {
+                    input_tokens: 1,
+                    input_tokens_details: null,
+                    output_tokens: 1,
+                    output_tokens_details: null,
+                  },
+                  service_tier: null,
+                },
+              },
+            ],
+            true,
+          ),
+        )
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.openai, ModelV2.ID.make(model.id))
+        const sessionID = SessionID.make("session-test-unavailable-source-time")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        yield* drain({
+          user: {
+            id: MessageID.make("msg_user-unavailable-source-time"),
+            sessionID,
+            role: "user",
+            time: { created: sourceInstant },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.openai, modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" },
+          model: resolved,
+          agent,
+          system: ["Continue the learner's current-only request without inventing temporal facts."],
+          messages: [{ role: "user", content: "Please explain this for today; do not retain a timed policy." }],
+          tools: {},
+          retainedSteeringCut: cut,
+        })
+
+        const capture = yield* Effect.promise(() => request)
+        const payload = JSON.stringify(capture.body)
+        expect(capture.url.pathname.endsWith("/responses")).toBe(true)
+        expect(payload).toContain("currentSourceTemporalContext: unavailable (timezone_unavailable)")
+        expect(payload).toContain("Do not derive a date, timezone, or offset")
+        expect(payload).not.toContain(new Date(cutAsOf).toISOString())
+        expect(payload).not.toContain(new Date(sourceInstant).toISOString())
+        expect(payload).not.toContain("Today's date:")
+        expect(payload).not.toContain("\"timeZone\"")
+        expect(payload).not.toContain("\"utcOffsetMinutes\"")
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
   )

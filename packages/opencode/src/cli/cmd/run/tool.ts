@@ -128,6 +128,8 @@ type ToolRegistry = {
 
 type AnyToolRule = ToolRule
 
+const RETAINED_STEERING_TOOL = "update_retained_learning_steering"
+
 function dict(v: unknown): ToolDict {
   if (!v || typeof v !== "object" || Array.isArray(v)) {
     return {}
@@ -1381,6 +1383,7 @@ function runBash(p: ToolProps<typeof BashTool>): ToolInline {
 }
 
 export function toolView(name?: string): ToolView {
+  if (name === RETAINED_STEERING_TOOL) return { output: false, final: true }
   return (
     rule(name)?.view ?? {
       output: true,
@@ -1401,6 +1404,16 @@ export function toolStructuredFinal(commit: StreamCommit): boolean {
 
 export function toolInlineInfo(part: ToolPart): ToolInline {
   const ctx = frame(part)
+  if (ctx.name === RETAINED_STEERING_TOOL) {
+    return {
+      icon: "◇",
+      title: text(ctx.state.title).trim() || "Retained learning steering",
+      mode: "block",
+      ...(ctx.status === "completed" && text(ctx.state.output).trim()
+        ? { body: text(ctx.state.output).trim() }
+        : {}),
+    }
+  }
   const draw = rule(ctx.name)?.run
   try {
     if (draw) {
@@ -1414,6 +1427,12 @@ export function toolInlineInfo(part: ToolPart): ToolInline {
 }
 
 export function toolScroll(phase: ToolPhase, ctx: ToolFrame): string {
+  if (ctx.name === RETAINED_STEERING_TOOL) {
+    if (phase === "start") return "⚙ Updating retained learning steering"
+    if (phase === "progress") return ""
+    if (ctx.status === "error") return fail(ctx)
+    return text(ctx.state.output).trim() || "Retained learning steering acknowledgement unavailable"
+  }
   const draw = rule(ctx.name)?.scroll?.[phase]
   try {
     if (draw) {

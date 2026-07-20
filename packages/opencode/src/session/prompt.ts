@@ -124,7 +124,11 @@ function normalizeTurnEnvelope(value: Record<string, unknown>) {
   return JSON.parse(JSON.stringify(value)) as Record<string, unknown>
 }
 
-type UserWithParts = { readonly info: SessionV1.User; readonly parts: readonly SessionV1.Part[] }
+type UserWithParts = {
+  readonly info: SessionV1.User
+  readonly parts: readonly SessionV1.Part[]
+  readonly learnerAdmission: LearnerAdmission
+}
 
 function learnerContent(message: UserWithParts) {
   return message.parts.map((part) => {
@@ -572,11 +576,12 @@ const layer = Layer.effect(
         storedUser?.model.variant ??
         (ag.variant && full?.variants?.[ag.variant] ? ag.variant : undefined)
 
+      const learnerAdmission = LearnerAdmission.interactive({ instant: storedUser?.time.created ?? Date.now() })
       const info: SessionV1.User = {
         id: input.messageID ?? MessageID.ascending(),
         role: "user",
         sessionID: input.sessionID,
-        time: { created: Date.now() },
+        time: { created: learnerAdmission.capturedTemporalContext!.instant },
         tools: input.tools,
         agent: ag.name,
         model: {
@@ -947,7 +952,7 @@ const layer = Layer.effect(
         })
       }
 
-      return { info, parts }
+      return { info, parts, learnerAdmission }
     }, Effect.scoped)
 
     const createUserMessage = Effect.fn("SessionPrompt.createUserMessage")(function* (
@@ -974,9 +979,10 @@ const layer = Layer.effect(
         })
       }
       return yield* sessions.updateMessageWithParts({
-        ...message,
+        info: message.info,
+        parts: message.parts,
         ...(admission === "interactive" && message.parts.some((part) => part.type === "text" && part.synthetic !== true)
-          ? { admission: "interactive" as const }
+          ? { admission: message.learnerAdmission }
           : {}),
       })
     })
@@ -1161,7 +1167,7 @@ const layer = Layer.effect(
           const commit = () =>
             Effect.gen(function* () {
               const occurrence = yield* Occurrence.admit(tx, {
-                admission: LearnerAdmission.interactive(),
+                admission: input.message.learnerAdmission,
                 sessionID: input.request.sessionID,
                 messageID: input.request.messageID,
                 timeAdmitted: input.message.info.time.created,
@@ -1233,7 +1239,7 @@ const layer = Layer.effect(
           const commit = () =>
             Effect.gen(function* () {
               const occurrence = yield* Occurrence.admit(tx, {
-                admission: LearnerAdmission.interactive(),
+                admission: input.message.learnerAdmission,
                 sessionID: input.request.sessionID,
                 messageID: input.request.messageID,
                 timeAdmitted: input.message.info.time.created,
@@ -1732,19 +1738,19 @@ const layer = Layer.effect(
           if (sealedFrontier.sequence !== snapshotFrontier.sequence || sealedFrontier.time !== snapshotFrontier.time) {
             return "continue" as const
           }
-          const admissionInput = {
-            turnID,
-            sessionID,
-            assistantMessageID: msg.id,
-            requestEnvelope,
-            contextFingerprint,
-            snapshotFrontier,
-            timeAdmitted: msg.time.created,
-          }
           const modelAdmission = yield* Effect.uninterruptible(
             events
               .transaction<{ value?: TurnLifecycle.ModelAdmissionResult }, EventV2.Definition, Turn.Error>((tx) =>
                 Effect.gen(function* () {
+                  const admissionInput = {
+                    turnID,
+                    sessionID,
+                    assistantMessageID: msg.id,
+                    requestEnvelope,
+                    contextFingerprint,
+                    snapshotFrontier,
+                    timeAdmitted: Date.now(),
+                  }
                   const existing = yield* tx
                     .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
                     .from(TurnModelOperationTable)

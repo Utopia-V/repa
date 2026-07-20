@@ -13,6 +13,7 @@ import { Effect, Record } from "effect"
 import { jsonSchema, tool as aiTool, type ModelMessage, type Tool } from "ai"
 import type { Plugin } from "@/plugin"
 import { mergeDeep } from "remeda"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 
 const USER_AGENT = `repa/${InstallationVersion}`
 
@@ -38,6 +39,7 @@ type PrepareInput = {
   readonly flags: RuntimeFlags.Info
   readonly isWorkflow: boolean
   readonly composition: Composition
+  readonly retainedSteeringCut?: RetainedSteering.Cut
 }
 
 export type Prepared = {
@@ -69,6 +71,10 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   }
   const isOpenaiOauth = input.provider.id === "openai" && input.auth?.type === "oauth"
   const interactive = input.composition.type === "interactive"
+  if (interactive && !input.retainedSteeringCut) {
+    return yield* Effect.fail(new Error("Interactive request has no exact retained steering cut"))
+  }
+  const retainedSteering = interactive ? RetainedSteering.renderCut(input.retainedSteeringCut!) : undefined
   const core = interactive ? SystemPrompt.product() : SystemPrompt.internal()
   const task = input.composition.type === "internal" ? SystemPrompt.internalTask(input.composition.purpose) : undefined
   const extensions = (
@@ -79,10 +85,15 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     { sessionID: input.sessionID, model: input.model },
     { system: extensions },
   )
-  const protectedPrompts = new Set([SystemPrompt.product(), SystemPrompt.internal(), ...(task ? [task] : [])])
-  const system = [core, ...(interactive ? input.system : [task]), ...extensions].filter(
+  const protectedPrompts = new Set([
+    SystemPrompt.product(),
+    SystemPrompt.internal(),
+    ...(task ? [task] : []),
+    ...(retainedSteering ? [retainedSteering] : []),
+  ])
+  const system = [core, ...(interactive ? [retainedSteering, ...input.system] : [task]), ...extensions].filter(
     (item, index): item is string =>
-      typeof item === "string" && (index === 0 || (!interactive && index === 1) || !protectedPrompts.has(item)),
+      typeof item === "string" && (index <= 1 || !protectedPrompts.has(item)),
   )
 
   const variant =

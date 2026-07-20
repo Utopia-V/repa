@@ -32,7 +32,23 @@ the complete current candidate, independently confirmed `G14-IE-001` through
 `G14-IE-005` resolved,
 and returned `Accept` with no acceptance-changing finding. Maintainer-authorized
 implementation commit `a6b542d59879f0a4b1111eaef4ad23e446b473d0` fixes the
-accepted snapshot and formally closes Gate 14. Gate 15 has not begun.
+accepted snapshot and formally closes Gate 14. Gate 15's maintainer grill is
+complete. Whole-Gate review run `gate15-whole-20260720-01` returned `Revise` on
+its first contract/theory pass with `G15-CT-001` through `G15-CT-007`; the same
+reviewer's closure pass closed all seven and returned `Revise` solely with
+`G15-CT-008`. The retained reviewer closed that final repair and returned
+`Accept`. The complete contract is implementation authority. Its first
+implementation/evidence pass returned `Revise` with `G15-IE-001` through
+`G15-IE-005`: a recaptured learner-admission time, transaction-final retained
+effect integrity, lifecycle fixtures, predecessor-order counterexamples, and
+retained-specific rollback injection. Its first closure pass closed
+`G15-IE-001` and `G15-IE-003`–`G15-IE-005`, but kept `G15-IE-002` open because
+an unsealed correction could suppress its sealed predecessor while a lower-
+revision cut was inserted in the same transaction. The second repair requires
+every transition through the cut revision to be sealed and lets only a sealed,
+revision-bounded successor suppress its predecessor. Its direct-SQL
+counterexample and focused executor evidence pass in the exact candidate now
+reserved for the same reviewer; no implementation claim is accepted yet.
 Gate 11 remains independently accepted at implementation commit `bdbfa0c05`;
 Gate 12 realizes the existing Roadmap 09 boundary without changing roadmap
 topology.
@@ -56,6 +72,7 @@ topology.
 | 12. [Durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)                         | Makes one admitted learner or synchronous delegated request a durable finite Turn with exact model/tool membership, frozen budgets, child lineage, and one terminal outcome.             | Closed at implementation commit `80f5fa30a`. The same reviewer accepted contract/theory and implementation/evidence after closing `G12-CT-001`–`G12-CT-006` and `G12-IE-001`–`G12-IE-008`. Accepted evidence includes direct-SQL authority attacks, root/child handoff races, non-escalating nested delegation, exact visible-Turn routing, destructive-lifecycle rollback/retention, fork chronology, and the reconciled Windows packaged lifecycle oracle.                                                                  |
 | 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)              | Adds independent immutable material outlines/selectors bound to exact revisions, plus optional neutral many-to-many alignment to exact Course membership.                                | Closed at implementation commit `5e762f833`. Contract/theory and implementation/evidence were accepted by independent review run `gate13-whole-20260719-01`; `G13-CT-001` through `G13-CT-006` and `G13-IE-001` through `G13-IE-003` are closed, with no new acceptance-changing implementation finding.                                                                                                                                                                                                                      |
 | 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)           | Adds an optional learner-controlled default Course preference and one independent route anchor per Course without promoting either into current focus, completion, evidence, or mastery. | Closed at implementation commit `a6b542d59`. Contract/theory was accepted by `gate14-whole-20260719-01`. After the retained implementation reviewer closed `G14-IE-001`–`G14-IE-004`, raised `G14-IE-005`, and later ended in `systemError` without a closure verdict, independent replacement review `gate14-replacement-20260720-01` accepted the complete implementation/evidence candidate and independently confirmed all five findings resolved.                                                                  |
+| 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)                   | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, versioned, correctable Tutor-policy state.                                             | Contract/theory accepted by `gate15-whole-20260720-01` after the retained reviewer closed `G15-CT-001`–`G15-CT-008`. Its implementation reviewer has closed `G15-IE-001` and `G15-IE-003`–`G15-IE-005`; a second `G15-IE-002` repair now makes cut membership sealed and revision-bounded and directly attacks the unsealed-correction window. The exact candidate is reserved for the same reviewer; no implementation claim is accepted yet. |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -109,8 +126,17 @@ settlement substrate, while every learning authority retains ownership of its
 semantic effect identity and state transitions.
 
 The dependency-guided Gate 7–23 decomposition in Roadmap 09 is accepted. Gates
-7–14 are closed. Gate 14's maintainer grill is complete and its proposed
-contract was accepted by independent whole-Gate review run
+7–14 are closed. Gate 15's maintainer grill is complete. Its first independent
+contract/theory verdict was `Revise`; the same reviewer closed those seven
+findings and raised only `G15-CT-008`, then closed that final repair and
+returned `Accept`. The complete contract is implementation authority.
+Its first implementation/evidence pass returned `Revise` with `G15-IE-001`
+through `G15-IE-005`; the first closure pass closed four and kept only
+`G15-IE-002` open. The second integrity repair and its direct-SQL correction
+counterexample now pass with the rest of the exact candidate, which is reserved
+for same-reviewer closure; no implementation claim is accepted yet.
+Gate 14's maintainer grill is complete and
+its proposed contract was accepted by independent whole-Gate review run
 `gate14-whole-20260719-01` after all five acceptance-changing findings and both
 nonblocking strengthenings were closed. The first implementation/evidence
 review found two localized blockers, `G14-IE-001` and `G14-IE-002`; the same
@@ -125,7 +151,7 @@ implementation/evidence review under replacement run
 confirmed `G14-IE-001` through `G14-IE-005` resolved, and found no
 acceptance-changing defect. The failed retained review task returned no verdict
 or closure authority. Commit `a6b542d59` fixes the independently accepted
-snapshot and formally closes Gate 14 without starting Gate 15.
+snapshot and formally closed Gate 14 without starting Gate 15 at that commit.
 Gate 12's grill, contract/theory, implementation, and evidence
 are independently accepted after closing all contract and implementation
 findings. Gate 13's maintainer grill is complete; its first independent
@@ -184,6 +210,7 @@ legacy labs.
 - [Gate 12 durable Turn lifecycle record](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)
 - [Gate 13 Material Map and Course alignment record](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)
 - [Gate 14 learner navigation continuity record](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)
+- [Gate 15 retained scoped steering record](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

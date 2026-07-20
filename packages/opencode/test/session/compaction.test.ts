@@ -35,7 +35,8 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearnerAdmission, Occurrence } from "@opencode-ai/core/learning-command"
 import { materializeTestSessionInfo } from "../fixture/session"
-import { SessionTable } from "@opencode-ai/core/session/sql"
+import { MessageTable, SessionTable } from "@opencode-ai/core/session/sql"
+import { eq } from "drizzle-orm"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -116,15 +117,24 @@ function createUserMessage(sessionID: SessionID, text: string) {
 const admitOccurrence = Effect.fn("test.admitOccurrence")(function* (sessionID: SessionID, messageID: MessageID) {
   const events = yield* EventV2Bridge.Service
   const admitted = yield* events.transaction((tx) =>
-    Occurrence.admit(tx, {
-      admission: LearnerAdmission.interactive(),
-      sessionID,
-      messageID,
-      timeAdmitted: Date.now(),
-    }).pipe(
-      Effect.map((result) => ({ result })),
-      Effect.orDie,
-    ),
+    Effect.gen(function* () {
+      const message = yield* tx
+        .select({ time: MessageTable.time_created })
+        .from(MessageTable)
+        .where(eq(MessageTable.id, messageID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!message) return yield* Effect.die(`Missing learner message ${messageID}`)
+      return yield* Occurrence.admit(tx, {
+        admission: LearnerAdmission.interactive({ instant: message.time }),
+        sessionID,
+        messageID,
+        timeAdmitted: message.time,
+      }).pipe(
+        Effect.map((result) => ({ result })),
+        Effect.orDie,
+      )
+    }),
   )
   return admitted.result
 })

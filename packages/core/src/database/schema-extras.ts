@@ -6,6 +6,7 @@ import { installLearningFrontierConstraints } from "../learning-frontier.sql"
 import { TurnConstraintSchema } from "../turn/constraint-schema"
 import { MaterialMapConstraintSchema } from "../material-map/constraint-schema"
 import { LearnerNavigationConstraintSchema } from "../learner-navigation/constraint-schema"
+import { RetainedSteeringConstraintSchema } from "../retained-steering/constraint-schema"
 
 type Transaction = Parameters<Parameters<Database.Interface["db"]["transaction"]>[0]>[0]
 
@@ -15,5 +16,6 @@ export function install(tx: Transaction) {
     yield* TurnConstraintSchema.install(tx)
     yield* MaterialMapConstraintSchema.install(tx)
     yield* LearnerNavigationConstraintSchema.install(tx)
+    yield* RetainedSteeringConstraintSchema.install(tx)
   })
 }

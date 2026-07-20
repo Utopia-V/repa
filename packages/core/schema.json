@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "9305b2d1-bb6d-44ae-bff2-280aadf4bbc7",
+  "id": "a827a039-4151-4b96-b92f-2ca4d033df41",
   "prevIds": [
-    "d87b1d51-fbaf-4b44-a31a-3e7ed14b8305"
+    "071bdc09-37ed-43d3-9522-cca6157d883f"
   ],
   "ddl": [
     {
@@ -24,6 +24,10 @@
     },
     {
       "name": "learning_occurrence_presentation",
+      "entityType": "tables"
+    },
+    {
+      "name": "learning_occurrence_source_order",
       "entityType": "tables"
     },
     {
@@ -248,6 +252,22 @@
     },
     {
       "name": "representation_revision",
+      "entityType": "tables"
+    },
+    {
+      "name": "retained_steering_commit_seal",
+      "entityType": "tables"
+    },
+    {
+      "name": "retained_steering_policy",
+      "entityType": "tables"
+    },
+    {
+      "name": "retained_steering_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "retained_steering_transition",
       "entityType": "tables"
     },
     {
@@ -503,6 +523,56 @@
       "table": "learning_admitted_occurrence"
     },
     {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_order",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_temporal_state",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_timezone",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_utc_offset_minutes",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_temporal_unavailable_reason",
+      "entityType": "columns",
+      "table": "learning_admitted_occurrence"
+    },
+    {
       "type": "text",
       "notNull": false,
       "autoincrement": false,
@@ -651,6 +721,96 @@
       "name": "time_created",
       "entityType": "columns",
       "table": "learning_occurrence_presentation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": true,
+      "default": null,
+      "generated": null,
+      "name": "sequence",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "origin_session_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "origin_message_id",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_allocated",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_temporal_state",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_timezone",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_utc_offset_minutes",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_temporal_unavailable_reason",
+      "entityType": "columns",
+      "table": "learning_occurrence_source_order"
     },
     {
       "type": "text",
@@ -3834,6 +3994,16 @@
     },
     {
       "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "retained_steering_semantic_fingerprint",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -3879,6 +4049,16 @@
       "default": null,
       "generated": null,
       "name": "anchor_navigation_effect_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "retained_steering_effect_id",
       "entityType": "columns",
       "table": "learning_command_invocation"
     },
@@ -4079,6 +4259,16 @@
       "default": null,
       "generated": null,
       "name": "anchor_navigation_effect_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "retained_steering_effect_id",
       "entityType": "columns",
       "table": "learning_command_receipt"
     },
@@ -6478,6 +6668,356 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "transition_id",
+      "entityType": "columns",
+      "table": "retained_steering_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "retained_steering_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "retained_steering_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "retained_steering_policy"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "retained_steering_policy"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "singleton",
+      "entityType": "columns",
+      "table": "retained_steering_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "steering_revision",
+      "entityType": "columns",
+      "table": "retained_steering_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "latest_cut_as_of",
+      "entityType": "columns",
+      "table": "retained_steering_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_seal_id",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_id",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_id",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "previous_state",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_order",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scope",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_excerpt",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operative_instruction",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "learner_reason",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effective_from",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "valid_until",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "valid_until_source",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "valid_until_normalized",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_timezone",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "boundary_utc_offset_minutes",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_fingerprint",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "steering_revision",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_time",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "acknowledgement_title",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "acknowledgement_body",
+      "entityType": "columns",
+      "table": "retained_steering_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "message"
@@ -8063,6 +8603,36 @@
       "table": "turn_model_operation"
     },
     {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "retained_steering_cut",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "retained_steering_cut_fingerprint",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "retained_steering_cut_as_of",
+      "entityType": "columns",
+      "table": "turn_model_operation"
+    },
+    {
       "type": "integer",
       "notNull": false,
       "autoincrement": false,
@@ -8876,6 +9446,21 @@
       "name": "fk_workspace_project_id_project_id_fk",
       "entityType": "fks",
       "table": "workspace"
+    },
+    {
+      "columns": [
+        "source_order"
+      ],
+      "tableTo": "learning_occurrence_source_order",
+      "columnsTo": [
+        "sequence"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_admitted_occurrence_source_order_learning_occurrence_source_order_sequence_fk",
+      "entityType": "fks",
+      "table": "learning_admitted_occurrence"
     },
     {
       "columns": [
@@ -10304,6 +10889,21 @@
     },
     {
       "columns": [
+        "retained_steering_effect_id"
+      ],
+      "tableTo": "retained_steering_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_invocation_retained_steering_effect_id_retained_steering_transition_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
         "occurrence_id"
       ],
       "tableTo": "learning_admitted_occurrence",
@@ -10389,6 +10989,21 @@
       "onDelete": "RESTRICT",
       "nameExplicit": false,
       "name": "fk_learning_command_receipt_anchor_navigation_effect_id_learner_course_route_anchor_transition_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
+        "retained_steering_effect_id"
+      ],
+      "tableTo": "retained_steering_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_receipt_retained_steering_effect_id_retained_steering_transition_id_fk",
       "entityType": "fks",
       "table": "learning_command_receipt"
     },
@@ -11082,6 +11697,66 @@
       "name": "fk_representation_revision_content_root_id_content_root_grant_episode_id_content_root_binding_id_content_root_binding_episode_id_content_root_grant_version_content_root_grant_episode_content_root_id_id_binding_id_binding_episode_id_ordinal_fk",
       "entityType": "fks",
       "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "commit_seal_id"
+      ],
+      "tableTo": "retained_steering_commit_seal",
+      "columnsTo": [
+        "transition_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_transition_commit_seal_id_retained_steering_commit_seal_transition_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "policy_id"
+      ],
+      "tableTo": "retained_steering_policy",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_transition_policy_id_retained_steering_policy_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "predecessor_id"
+      ],
+      "tableTo": "retained_steering_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_transition_predecessor_id_retained_steering_transition_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_transition_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_transition"
     },
     {
       "columns": [
@@ -11897,6 +12572,15 @@
     },
     {
       "columns": [
+        "sequence"
+      ],
+      "nameExplicit": false,
+      "name": "learning_occurrence_source_order_pk",
+      "table": "learning_occurrence_source_order",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "occurrence_id"
       ],
       "nameExplicit": false,
@@ -12352,6 +13036,42 @@
       "nameExplicit": false,
       "name": "representation_revision_pk",
       "table": "representation_revision",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "transition_id"
+      ],
+      "nameExplicit": false,
+      "name": "retained_steering_commit_seal_pk",
+      "table": "retained_steering_commit_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "retained_steering_policy_pk",
+      "table": "retained_steering_policy",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "singleton"
+      ],
+      "nameExplicit": false,
+      "name": "retained_steering_state_pk",
+      "table": "retained_steering_state",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "retained_steering_transition_pk",
+      "table": "retained_steering_transition",
       "entityType": "pks"
     },
     {
@@ -14018,6 +14738,50 @@
     {
       "columns": [
         {
+          "value": "policy_id",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "retained_steering_history_idx",
+      "entityType": "indexes",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        {
+          "value": "state",
+          "isExpression": false
+        },
+        {
+          "value": "valid_until",
+          "isExpression": false
+        },
+        {
+          "value": "source_order",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "retained_steering_active_idx",
+      "entityType": "indexes",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        {
           "value": "session_id",
           "isExpression": false
         },
@@ -14587,6 +15351,16 @@
     },
     {
       "columns": [
+        "origin_session_id",
+        "origin_message_id"
+      ],
+      "nameExplicit": true,
+      "name": "learning_occurrence_source_order_origin_unique",
+      "entityType": "uniques",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "columns": [
         "set_id",
         "id"
       ],
@@ -15034,6 +15808,15 @@
     },
     {
       "columns": [
+        "retained_steering_effect_id"
+      ],
+      "nameExplicit": true,
+      "name": "learning_command_receipt_retained_steering_effect_unique",
+      "entityType": "uniques",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
         "invocation_part_id"
       ],
       "nameExplicit": true,
@@ -15186,6 +15969,79 @@
       "name": "representation_revision_storage_key_unique",
       "entityType": "uniques",
       "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_commit_seal_receipt_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_commit_seal_invocation_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_commit_seal"
+    },
+    {
+      "columns": [
+        "policy_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_policy_version_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "predecessor_id"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_predecessor_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_occurrence_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "source_order"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_source_order_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "steering_revision"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_revision_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_transition"
+    },
+    {
+      "columns": [
+        "frontier_sequence"
+      ],
+      "nameExplicit": true,
+      "name": "retained_steering_frontier_unique",
+      "entityType": "uniques",
+      "table": "retained_steering_transition"
     },
     {
       "columns": [
@@ -15350,6 +16206,24 @@
     },
     {
       "columns": [
+        "source_order"
+      ],
+      "nameExplicit": false,
+      "name": "learning_admitted_occurrence_source_order_unique",
+      "entityType": "uniques",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "nameExplicit": false,
+      "name": "learning_occurrence_source_order_occurrence_id_unique",
+      "entityType": "uniques",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "columns": [
         "message_id"
       ],
       "nameExplicit": false,
@@ -15360,6 +16234,12 @@
     {
       "value": "\"time_admitted\" >= 0",
       "name": "learning_admitted_occurrence_time_nonnegative",
+      "entityType": "checks",
+      "table": "learning_admitted_occurrence"
+    },
+    {
+      "value": "COALESCE((\"source_order\" IS NULL AND \"source_temporal_state\" IS NULL AND \"source_timezone\" IS NULL AND \"source_utc_offset_minutes\" IS NULL AND \"source_temporal_unavailable_reason\" IS NULL) OR (\"source_order\" IS NOT NULL AND \"source_order\" > 0 AND ((\"source_temporal_state\" = 'resolved' AND \"source_timezone\" IS NOT NULL AND length(\"source_timezone\") > 0 AND \"source_utc_offset_minutes\" IS NOT NULL AND \"source_utc_offset_minutes\" BETWEEN -840 AND 840 AND \"source_temporal_unavailable_reason\" IS NULL) OR (\"source_temporal_state\" = 'unavailable' AND \"source_timezone\" IS NULL AND \"source_utc_offset_minutes\" IS NULL AND \"source_temporal_unavailable_reason\" = 'timezone_unavailable'))), 0)",
+      "name": "learning_admitted_occurrence_source_temporal_shape",
       "entityType": "checks",
       "table": "learning_admitted_occurrence"
     },
@@ -15398,6 +16278,24 @@
       "name": "learning_occurrence_presentation_time_nonnegative",
       "entityType": "checks",
       "table": "learning_occurrence_presentation"
+    },
+    {
+      "value": "\"sequence\" > 0",
+      "name": "learning_occurrence_source_order_positive",
+      "entityType": "checks",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "value": "\"time_allocated\" >= 0",
+      "name": "learning_occurrence_source_order_time_nonnegative",
+      "entityType": "checks",
+      "table": "learning_occurrence_source_order"
+    },
+    {
+      "value": "COALESCE((\"source_temporal_state\" = 'resolved' AND \"source_timezone\" IS NOT NULL AND length(\"source_timezone\") > 0 AND \"source_utc_offset_minutes\" IS NOT NULL AND \"source_utc_offset_minutes\" BETWEEN -840 AND 840 AND \"source_temporal_unavailable_reason\" IS NULL) OR (\"source_temporal_state\" = 'unavailable' AND \"source_timezone\" IS NULL AND \"source_utc_offset_minutes\" IS NULL AND \"source_temporal_unavailable_reason\" = 'timezone_unavailable'), 0)",
+      "name": "learning_occurrence_source_order_temporal_shape",
+      "entityType": "checks",
+      "table": "learning_occurrence_source_order"
     },
     {
       "value": "\"reason\" = 'source_unavailable'",
@@ -15946,7 +16844,7 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "\"command_name\" IN ('accept_course_view_revision', 'representation.convert', 'set_default_course_preference', 'set_course_route_anchor')",
+      "value": "\"command_name\" IN ('accept_course_view_revision', 'representation.convert', 'set_default_course_preference', 'set_course_route_anchor', 'update_retained_learning_steering')",
       "name": "learning_command_invocation_command",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -15976,7 +16874,7 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"command_name\" = 'accept_course_view_revision' AND \"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1) OR (\"command_name\" = 'representation.convert' AND \"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_default_course_preference' AND \"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_course_route_anchor' AND \"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1)",
+      "value": "(\"command_name\" = 'accept_course_view_revision' AND \"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1) OR (\"command_name\" = 'representation.convert' AND \"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_default_course_preference' AND \"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_course_route_anchor' AND \"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1) OR (\"command_name\" = 'update_retained_learning_steering' AND \"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1)",
       "name": "learning_command_invocation_capability_match",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -15994,8 +16892,20 @@
       "table": "learning_command_invocation"
     },
     {
+      "value": "\"command_name\" <> 'update_retained_learning_steering' OR (\"authorization_basis\" = 'learner_request' AND \"turn_id\" IS NOT NULL AND \"input_id\" IS NOT NULL)",
+      "name": "learning_command_invocation_retained_steering_basis",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
       "value": "length(\"input_fingerprint\") = 64",
       "name": "learning_command_invocation_fingerprint",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "(\"command_name\" = 'update_retained_learning_steering' AND \"retained_steering_semantic_fingerprint\" IS NOT NULL AND length(\"retained_steering_semantic_fingerprint\") = 64 AND \"retained_steering_semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*') OR (\"command_name\" <> 'update_retained_learning_steering' AND \"retained_steering_semantic_fingerprint\" IS NULL)",
+      "name": "learning_command_invocation_retained_steering_semantic_fingerprint",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
@@ -16012,13 +16922,13 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
+      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
       "name": "learning_command_invocation_settlement_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"status\" IN ('applied', 'already_applied') AND ((\"command_name\" = 'accept_course_view_revision' AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL) OR (\"command_name\" = 'representation.convert' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL) OR (\"command_name\" = 'set_default_course_preference' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL) OR (\"command_name\" = 'set_course_route_anchor' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL))) OR (\"status\" IN ('admitted', 'no_change', 'error') AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL)",
+      "value": "(\"status\" IN ('applied', 'already_applied') AND ((\"command_name\" = 'accept_course_view_revision' AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'representation.convert' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'set_default_course_preference' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'set_course_route_anchor' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'update_retained_learning_steering' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL))) OR (\"status\" IN ('admitted', 'no_change', 'error') AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL)",
       "name": "learning_command_invocation_effect_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -16054,7 +16964,13 @@
       "table": "learning_command_receipt"
     },
     {
-      "value": "(\"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1 AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"permission_request_id\" IS NOT NULL AND \"confirmation_snapshot\" IS NOT NULL AND json_valid(\"confirmation_snapshot\")) OR (\"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL)",
+      "value": "\"capability_identity\" <> 'update_retained_learning_steering' OR \"authorization_basis\" = 'learner_request'",
+      "name": "learning_command_receipt_retained_steering_basis",
+      "entityType": "checks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "value": "(\"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1 AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NOT NULL AND \"confirmation_snapshot\" IS NOT NULL AND json_valid(\"confirmation_snapshot\")) OR (\"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL)",
       "name": "learning_command_receipt_effect_shape",
       "entityType": "checks",
       "table": "learning_command_receipt"
@@ -16408,6 +17324,78 @@
       "table": "representation_revision"
     },
     {
+      "value": "\"time_created\" >= 0",
+      "name": "retained_steering_policy_time_nonnegative",
+      "entityType": "checks",
+      "table": "retained_steering_policy"
+    },
+    {
+      "value": "\"singleton\" = 1",
+      "name": "retained_steering_state_singleton",
+      "entityType": "checks",
+      "table": "retained_steering_state"
+    },
+    {
+      "value": "\"steering_revision\" >= 0 AND \"latest_cut_as_of\" >= 0",
+      "name": "retained_steering_state_nonnegative",
+      "entityType": "checks",
+      "table": "retained_steering_state"
+    },
+    {
+      "value": "\"commit_seal_id\" = \"id\"",
+      "name": "retained_steering_commit_seal_identity",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "(\"version\" = 1 AND \"predecessor_id\" IS NULL AND \"previous_state\" = 'absent') OR (\"version\" > 1 AND \"predecessor_id\" IS NOT NULL AND \"previous_state\" IN ('operative', 'retracted'))",
+      "name": "retained_steering_chain_shape",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "\"state\" IN ('operative', 'retracted')",
+      "name": "retained_steering_state",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "\"scope\" = 'learning_wide'",
+      "name": "retained_steering_scope",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "COALESCE((\"state\" = 'operative' AND \"operative_instruction\" IS NOT NULL AND length(\"operative_instruction\") > 0 AND \"effective_from\" IS NOT NULL AND \"valid_until\" IS NOT NULL AND \"valid_until_source\" IS NOT NULL AND length(\"valid_until_source\") > 0 AND \"valid_until_normalized\" IS NOT NULL AND length(\"valid_until_normalized\") > 0 AND \"boundary_timezone\" IS NOT NULL AND length(\"boundary_timezone\") > 0 AND \"boundary_utc_offset_minutes\" IS NOT NULL AND \"boundary_utc_offset_minutes\" BETWEEN -840 AND 840 AND \"valid_until\" > \"effective_from\") OR (\"state\" = 'retracted' AND \"operative_instruction\" IS NULL AND \"effective_from\" IS NULL AND \"valid_until\" IS NULL AND \"valid_until_source\" IS NULL AND \"valid_until_normalized\" IS NULL AND \"boundary_timezone\" IS NULL AND \"boundary_utc_offset_minutes\" IS NULL), 0)",
+      "name": "retained_steering_result_shape",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "length(\"source_excerpt\") > 0",
+      "name": "retained_steering_source_excerpt",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "length(\"semantic_fingerprint\") = 64 AND \"semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "retained_steering_fingerprint",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "\"version\" >= 1 AND \"source_order\" >= 1 AND \"steering_revision\" >= 1 AND \"time_committed\" >= 0 AND \"commit_order\" >= 0 AND \"frontier_sequence\" >= 1 AND \"frontier_time\" = \"time_committed\"",
+      "name": "retained_steering_time_order",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
+      "value": "length(\"acknowledgement_title\") > 0 AND length(\"acknowledgement_body\") > 0",
+      "name": "retained_steering_acknowledgement",
+      "entityType": "checks",
+      "table": "retained_steering_transition"
+    },
+    {
       "value": "\"source_event_sequence\" >= 0 AND \"time_created\" >= 0",
       "name": "session_historical_message_time",
       "entityType": "checks",
@@ -16512,6 +17500,12 @@
     {
       "value": "\"snapshot_frontier_sequence\" >= 0 AND \"observed_shared_frontier_sequence\" >= \"snapshot_frontier_sequence\" AND \"snapshot_frontier_time\" >= 0 AND \"observed_shared_frontier_time\" >= \"snapshot_frontier_time\" AND \"time_admitted\" >= \"snapshot_frontier_time\" AND \"time_admitted\" >= \"observed_shared_frontier_time\"",
       "name": "turn_model_times",
+      "entityType": "checks",
+      "table": "turn_model_operation"
+    },
+    {
+      "value": "(\"retained_steering_cut\" IS NULL AND \"retained_steering_cut_fingerprint\" IS NULL AND \"retained_steering_cut_as_of\" IS NULL) OR (\"retained_steering_cut\" IS NOT NULL AND json_valid(\"retained_steering_cut\") AND \"retained_steering_cut_fingerprint\" IS NOT NULL AND length(\"retained_steering_cut_fingerprint\") = 64 AND \"retained_steering_cut_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND \"retained_steering_cut_as_of\" IS NOT NULL AND \"retained_steering_cut_as_of\" = \"time_admitted\" AND \"retained_steering_cut_as_of\" >= \"observed_shared_frontier_time\")",
+      "name": "turn_model_retained_steering_cut_shape",
       "entityType": "checks",
       "table": "turn_model_operation"
     },

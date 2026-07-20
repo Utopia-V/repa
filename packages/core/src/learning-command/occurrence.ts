@@ -14,10 +14,12 @@ import {
   type Error,
   type OccurrenceID,
   type PresentationProvenance,
+  type SourceTemporalContext,
 } from "./occurrence-schema"
 import {
   AdmittedLearnerOccurrenceTable,
   HistoricalLearningToolPresentationTable,
+  LearnerOccurrenceSourceOrderTable,
   LearnerOccurrencePresentationTable,
   LearnerOccurrenceTombstoneTable,
 } from "./occurrence.sql"
@@ -28,6 +30,8 @@ export type Info = {
   readonly originSessionID: SessionSchema.ID
   readonly originMessageID: MessageID
   readonly timeAdmitted: number
+  readonly sourceOrder?: number
+  readonly sourceTemporalContext?: SourceTemporalContext
 }
 
 export type Presentation = {
@@ -87,6 +91,26 @@ export function admit(
     }
 
     const occurrenceID = createOccurrenceID()
+    const sourceTemporalContext = input.admission.temporalContext(input.timeAdmitted)
+    if (!sourceTemporalContext) return yield* invalid("invalid_time")
+    const allocation = yield* tx
+      .insert(LearnerOccurrenceSourceOrderTable)
+      .values({
+        occurrence_id: occurrenceID,
+        origin_session_id: input.sessionID,
+        origin_message_id: input.messageID,
+        time_allocated: input.timeAdmitted,
+        source_temporal_state: sourceTemporalContext.state,
+        source_timezone: sourceTemporalContext.state === "resolved" ? sourceTemporalContext.timeZone : null,
+        source_utc_offset_minutes:
+          sourceTemporalContext.state === "resolved" ? sourceTemporalContext.utcOffsetMinutes : null,
+        source_temporal_unavailable_reason:
+          sourceTemporalContext.state === "unavailable" ? sourceTemporalContext.reason : null,
+      })
+      .returning({ sequence: LearnerOccurrenceSourceOrderTable.sequence })
+      .get()
+      .pipe(Effect.orDie)
+    if (!allocation) return yield* Effect.die("Learner occurrence source order was not allocated")
     yield* tx
       .insert(AdmittedLearnerOccurrenceTable)
       .values({
@@ -94,6 +118,13 @@ export function admit(
         origin_session_id: input.sessionID,
         origin_message_id: input.messageID,
         time_admitted: input.timeAdmitted,
+        source_order: allocation.sequence,
+        source_temporal_state: sourceTemporalContext.state,
+        source_timezone: sourceTemporalContext.state === "resolved" ? sourceTemporalContext.timeZone : null,
+        source_utc_offset_minutes:
+          sourceTemporalContext.state === "resolved" ? sourceTemporalContext.utcOffsetMinutes : null,
+        source_temporal_unavailable_reason:
+          sourceTemporalContext.state === "unavailable" ? sourceTemporalContext.reason : null,
       })
       .run()
       .pipe(Effect.orDie)
@@ -114,6 +145,8 @@ export function admit(
       originSessionID: input.sessionID,
       originMessageID: input.messageID,
       timeAdmitted: input.timeAdmitted,
+      sourceOrder: allocation.sequence,
+      sourceTemporalContext,
     }
   })
 }
@@ -389,6 +422,24 @@ function occurrenceInfo(row: typeof AdmittedLearnerOccurrenceTable.$inferSelect)
     originSessionID: row.origin_session_id,
     originMessageID: row.origin_message_id,
     timeAdmitted: row.time_admitted,
+    ...(row.source_order === null ? {} : { sourceOrder: row.source_order }),
+    ...(row.source_temporal_state === null
+      ? {}
+      : {
+          sourceTemporalContext:
+            row.source_temporal_state === "resolved"
+              ? {
+                  state: "resolved" as const,
+                  instant: row.time_admitted,
+                  timeZone: row.source_timezone!,
+                  utcOffsetMinutes: row.source_utc_offset_minutes!,
+                }
+              : {
+                  state: "unavailable" as const,
+                  instant: row.time_admitted,
+                  reason: row.source_temporal_unavailable_reason!,
+                },
+        }),
   }
 }
 

@@ -1486,10 +1486,10 @@ describe("session HttpApi", () => {
         const message = yield* createTextMessage(session.id, "admitted learner input")
         const admitted = yield* events.transaction((tx) =>
           Occurrence.admit(tx, {
-            admission: LearnerAdmission.interactive(),
+            admission: LearnerAdmission.interactive({ instant: message.info.time.created }),
             sessionID: session.id,
             messageID: message.info.id,
-            timeAdmitted: Date.now(),
+            timeAdmitted: message.info.time.created,
           }).pipe(
             Effect.map((result) => ({ result })),
             Effect.orDie,
@@ -1634,9 +1634,9 @@ describe("session HttpApi", () => {
         const inputID = Turn.InputID.create()
         const admitted = yield* events.transaction((tx) =>
           Effect.gen(function* () {
-            const timeAdmitted = Date.now()
+            const timeAdmitted = user.info.time.created
             const result = yield* Occurrence.admit(tx, {
-              admission: LearnerAdmission.interactive(),
+              admission: LearnerAdmission.interactive({ instant: timeAdmitted }),
               sessionID: session.id,
               messageID: user.info.id,
               timeAdmitted,

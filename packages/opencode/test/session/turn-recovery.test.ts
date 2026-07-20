@@ -269,7 +269,7 @@ function createRoot(db: Db, projectID: string, directory: string, time: number, 
           VALUES (${partID}, ${messageID}, ${sessionID}, ${time}, ${time}, ${JSON.stringify({ type: "text", text: "hello" })})
         `)
         const occurrence = yield* Occurrence.admit(tx, {
-          admission: LearnerAdmission.interactive(),
+          admission: LearnerAdmission.interactive({ instant: time }),
           sessionID,
           messageID,
           timeAdmitted: time,

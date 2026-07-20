@@ -11,6 +11,7 @@ import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import { LearnerOccurrencePresentationTable } from "../learning-command/occurrence.sql"
 import { garbageCollectOccurrences, removeNoEffectInvocationsForSession } from "../learning-command/settlement"
 import { LearningCommandReceiptTable } from "../learning-command/sql"
+import { RetainedSteering } from "../retained-steering"
 import { SessionTable } from "../session/sql"
 import type { SessionSchema } from "../session/schema"
 import type { MessageID, PartID } from "../v1/session"
@@ -424,12 +425,11 @@ export function promoteSteer(tx: Transaction, input: SteerInput): Effect.Effect<
 
 export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effect<ModelAdmissionResult, Turn.Error> {
   return Effect.gen(function* () {
-    const normalizedEnvelope = {
+    const baseEnvelope = {
       request: input.requestEnvelope,
       contextFingerprint: input.contextFingerprint,
       snapshotFrontier: input.snapshotFrontier,
     } satisfies Json
-    const fingerprint = envelopeFingerprint(normalizedEnvelope)
     const existing = yield* tx
       .select()
       .from(TurnModelOperationTable)
@@ -437,6 +437,27 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
       .get()
       .pipe(Effect.orDie)
     if (existing) {
+      const stored = yield* RetainedSteering.readCut(tx, input.assistantMessageID).pipe(
+        Effect.mapError(
+          (error) =>
+            new Turn.IntegrityError({
+              turnID: input.turnID,
+              reason: `Stored retained steering cut is invalid: ${"reason" in error ? error.reason : "database_error"}`,
+            }),
+        ),
+      )
+      if (stored.type !== "available") {
+        return yield* integrity(input.turnID, "Model operation has no available retained steering cut")
+      }
+      const storedCut = stored.cut
+      const contextFingerprint = envelopeFingerprint({
+        baseContextFingerprint: input.contextFingerprint,
+        retainedSteeringCutFingerprint: storedCut.fingerprint,
+      })
+      const fingerprint = envelopeFingerprint({
+        ...baseEnvelope,
+        retainedSteeringCutFingerprint: storedCut.fingerprint,
+      })
       const presentation = yield* tx
         .select({ id: TurnModelPresentationTable.assistant_message_id })
         .from(TurnModelPresentationTable)
@@ -448,7 +469,7 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
         existing.turn_id !== input.turnID ||
         existing.session_id !== input.sessionID ||
         existing.request_fingerprint !== fingerprint ||
-        existing.context_fingerprint !== input.contextFingerprint ||
+        existing.context_fingerprint !== contextFingerprint ||
         existing.snapshot_frontier_sequence !== input.snapshotFrontier.sequence ||
         existing.snapshot_frontier_time !== input.snapshotFrontier.time
       ) {
@@ -463,10 +484,11 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
       storedTurn.exhaustion_counter === "model" &&
       storedTurn.exhaustion_attempt_id === input.assistantMessageID
     ) {
+      const fingerprint = envelopeFingerprint(baseEnvelope)
       if (
         storedTurn.session_id !== input.sessionID ||
         storedTurn.exhaustion_envelope_fingerprint !== fingerprint ||
-        !isDeepStrictEqual(storedTurn.exhaustion_envelope, normalizedEnvelope)
+        !isDeepStrictEqual(storedTurn.exhaustion_envelope, baseEnvelope)
       ) {
         return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
       }
@@ -478,10 +500,49 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
     const latest = yield* LearningFrontier.read(tx)
     const observed = LearningFrontier.merge(input.snapshotFrontier, latest)
     if (turn.model_count >= turn.model_limit) {
-      const terminal = yield* exhaustModel(tx, turn, input, normalizedEnvelope, fingerprint, observed)
+      const terminal = yield* exhaustModel(
+        tx,
+        turn,
+        input,
+        baseEnvelope,
+        envelopeFingerprint(baseEnvelope),
+        observed,
+      )
       return { type: "exhausted", turn: terminal, replay: false }
     }
-    const timeAdmitted = Math.max(input.timeAdmitted, turn.causal_time, observed.time)
+    const cut = yield* RetainedSteering.prepareCut(tx, {
+      turnID: input.turnID,
+      assistantMessageID: input.assistantMessageID,
+      trustedTime: input.timeAdmitted,
+    }).pipe(
+      Effect.mapError(
+        (error) =>
+          new Turn.IntegrityError({
+            turnID: input.turnID,
+            reason: `Retained steering cut preparation failed: ${error.reason}`,
+          }),
+      ),
+    )
+    if (
+      cut.assistantMessageID !== input.assistantMessageID ||
+      cut.sourceTemporalContext.occurrenceID !== current.occurrenceID ||
+      cut.throughSharedFrontier.sequence !== observed.sequence ||
+      cut.throughSharedFrontier.time !== observed.time ||
+      cut.cutAsOf < input.timeAdmitted ||
+      cut.cutAsOf < turn.causal_time ||
+      cut.cutAsOf < observed.time
+    ) {
+      return yield* integrity(input.turnID, "Retained steering cut does not match model admission")
+    }
+    const normalizedEnvelope = {
+      ...baseEnvelope,
+      retainedSteeringCutFingerprint: cut.fingerprint,
+    } satisfies Json
+    const fingerprint = envelopeFingerprint(normalizedEnvelope)
+    const contextFingerprint = envelopeFingerprint({
+      baseContextFingerprint: input.contextFingerprint,
+      retainedSteeringCutFingerprint: cut.fingerprint,
+    })
     yield* tx
       .insert(TurnModelOperationTable)
       .values({
@@ -493,12 +554,15 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
         ordinal: turn.model_count,
         state: "running",
         request_fingerprint: fingerprint,
-        context_fingerprint: input.contextFingerprint,
+        context_fingerprint: contextFingerprint,
         snapshot_frontier_sequence: input.snapshotFrontier.sequence,
         snapshot_frontier_time: input.snapshotFrontier.time,
         observed_shared_frontier_sequence: observed.sequence,
         observed_shared_frontier_time: observed.time,
-        time_admitted: timeAdmitted,
+        time_admitted: cut.cutAsOf,
+        retained_steering_cut: cut,
+        retained_steering_cut_fingerprint: cut.fingerprint,
+        retained_steering_cut_as_of: cut.cutAsOf,
       })
       .run()
       .pipe(Effect.orDie)
@@ -507,6 +571,15 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
       .values({ assistant_message_id: input.assistantMessageID, session_id: input.sessionID })
       .run()
       .pipe(Effect.orDie)
+    yield* RetainedSteering.commitCut(tx, cut).pipe(
+      Effect.mapError(
+        (error) =>
+          new Turn.IntegrityError({
+            turnID: input.turnID,
+            reason: `Retained steering cut commit failed: ${error.reason}`,
+          }),
+      ),
+    )
     const operation = yield* tx
       .select()
       .from(TurnModelOperationTable)

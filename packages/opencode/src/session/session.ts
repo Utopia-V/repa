@@ -477,7 +477,7 @@ export interface Interface {
   readonly updateMessageWithParts: (input: {
     info: SessionV1.Info
     parts: readonly SessionV1.Part[]
-    admission?: "interactive"
+    admission?: LearnerAdmission
     occurrenceSource?: {
       messageID: MessageID
       provenance: "compaction_replay" | "fork_clone"
@@ -958,10 +958,10 @@ const layer: Layer.Layer<
             Effect.gen(function* () {
               if (input.admission) {
                 yield* Occurrence.admit(tx, {
-                  admission: LearnerAdmission.interactive(),
+                  admission: input.admission,
                   sessionID: input.info.sessionID,
                   messageID: input.info.id,
-                  timeAdmitted: time,
+                  timeAdmitted: input.info.time.created,
                 }).pipe(Effect.orDie)
               }
               if (input.occurrenceSource) {

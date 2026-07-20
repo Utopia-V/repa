@@ -110,7 +110,7 @@ export const materializeTestSession = Effect.fn("Test.materializeSession")(funct
       const commit = () =>
         Effect.gen(function* () {
           const occurrence = yield* Occurrence.admit(tx, {
-            admission: LearnerAdmission.interactive(),
+            admission: LearnerAdmission.interactive({ instant: time }),
             sessionID,
             messageID,
             timeAdmitted: time,
@@ -260,7 +260,7 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
       const admitParent = () =>
         Effect.gen(function* () {
           const occurrence = yield* Occurrence.admit(tx, {
-            admission: LearnerAdmission.interactive(),
+            admission: LearnerAdmission.interactive({ instant: time }),
             sessionID: parent.id,
             messageID: parentMessageID,
             timeAdmitted: time,

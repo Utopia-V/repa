@@ -6,6 +6,8 @@ import { ProviderTransform } from "@/provider/transform"
 import { LLMRequestPrep } from "@/session/llm/request"
 import { LLMNative } from "@/session/llm/native-request"
 import { SystemPrompt } from "@/session/system"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
+import { retainedSteeringCut } from "@test/fixture/retained-steering"
 
 const model: Provider.Model = {
   id: "gpt-5-mini",
@@ -49,12 +51,14 @@ type Options = {
   readonly messages?: ModelMessage[]
   readonly tools?: Record<string, Tool>
   readonly toolChoice?: "auto" | "required" | "none"
+  readonly retainedSteeringCut?: RetainedSteering.Cut | null
 }
 
 function prepare(options: Options = {}) {
   const messages: ModelMessage[] = options.messages ?? [{ role: "user", content: "Explain pointers with a diagram." }]
   const providerID = options.providerID ?? model.providerID
   const currentModel = { ...model, providerID, headers: options.modelHeaders ?? {} } as Provider.Model
+  const composition = options.composition ?? { type: "interactive" as const }
   return Effect.runPromise(
     LLMRequestPrep.prepare({
       user: {
@@ -81,7 +85,13 @@ function prepare(options: Options = {}) {
       messages,
       tools: options.tools ?? {},
       toolChoice: options.toolChoice,
-      composition: options.composition ?? { type: "interactive" },
+      composition,
+      retainedSteeringCut:
+        composition.type === "interactive"
+          ? options.retainedSteeringCut === null
+            ? undefined
+            : (options.retainedSteeringCut ?? retainedSteeringCut())
+          : undefined,
       provider: {
         id: providerID,
         name: providerID,
@@ -113,6 +123,27 @@ const text = (message: ModelMessage) => (typeof message.content === "string" ? m
 const occurrences = (value: string, marker: string) => value.split(marker).length - 1
 
 describe("session.llm.request composition", () => {
+  test("keeps the exact retained steering cut protected and present exactly once", async () => {
+    const cut = retainedSteeringCut()
+    const rendered = RetainedSteering.renderCut(cut)
+    const prepared = await prepare({
+      retainedSteeringCut: cut,
+      transform(system) {
+        system.length = 0
+        system.push("PLUGIN_REPLACEMENT", rendered, SystemPrompt.product())
+      },
+    })
+
+    expect(prepared.system.slice(0, 2)).toEqual([SystemPrompt.product(), rendered])
+    expect(occurrences(prepared.system.join("\n"), "[Repa retained learner steering — protected]")).toBe(1)
+    expect(prepared.system).toContain("<learning_context>bounded course context</learning_context>")
+    expect(prepared.system).toContain("PLUGIN_REPLACEMENT")
+  })
+
+  test("fails closed when an interactive operation has no exact retained steering cut", async () => {
+    await expect(prepare({ retainedSteeringCut: null })).rejects.toThrow("no exact retained steering cut")
+  })
+
   test("rejects representation before generic request hooks can inherit caller state", async () => {
     let transformed = false
     let parameterized = false
@@ -260,6 +291,7 @@ describe("session.llm.request composition", () => {
       expect(joined).not.toContain("INTERACTIVE_CALLER_GUIDANCE")
       expect(joined).not.toContain("<learning_context>must-not-cross</learning_context>")
       expect(joined).not.toContain("<repa_product_contract>")
+      expect(joined).not.toContain("[Repa retained learner steering — protected]")
       expect(prepared.tools).toEqual({})
       expect(prepared.toolChoice).toBe("none")
     }

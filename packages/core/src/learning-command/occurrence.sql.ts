@@ -5,6 +5,30 @@ import { MessageTable, PartTable } from "../session/sql"
 import { SessionSchema } from "../session/schema"
 import type { OccurrenceID, PresentationProvenance } from "./occurrence-schema"
 
+export const LearnerOccurrenceSourceOrderTable = sqliteTable(
+  "learning_occurrence_source_order",
+  {
+    sequence: integer().primaryKey({ autoIncrement: true }),
+    occurrence_id: text().$type<OccurrenceID>().notNull().unique(),
+    origin_session_id: text().$type<SessionSchema.ID>().notNull(),
+    origin_message_id: text().$type<MessageID>().notNull(),
+    time_allocated: integer().notNull(),
+    source_temporal_state: text().$type<"resolved" | "unavailable">().notNull(),
+    source_timezone: text(),
+    source_utc_offset_minutes: integer(),
+    source_temporal_unavailable_reason: text().$type<"timezone_unavailable">(),
+  },
+  (table) => [
+    unique("learning_occurrence_source_order_origin_unique").on(table.origin_session_id, table.origin_message_id),
+    check("learning_occurrence_source_order_positive", sql`${table.sequence} > 0`),
+    check("learning_occurrence_source_order_time_nonnegative", sql`${table.time_allocated} >= 0`),
+    check(
+      "learning_occurrence_source_order_temporal_shape",
+      sql`COALESCE((${table.source_temporal_state} = 'resolved' AND ${table.source_timezone} IS NOT NULL AND length(${table.source_timezone}) > 0 AND ${table.source_utc_offset_minutes} IS NOT NULL AND ${table.source_utc_offset_minutes} BETWEEN -840 AND 840 AND ${table.source_temporal_unavailable_reason} IS NULL) OR (${table.source_temporal_state} = 'unavailable' AND ${table.source_timezone} IS NULL AND ${table.source_utc_offset_minutes} IS NULL AND ${table.source_temporal_unavailable_reason} = 'timezone_unavailable'), 0)`,
+    ),
+  ],
+)
+
 export const AdmittedLearnerOccurrenceTable = sqliteTable(
   "learning_admitted_occurrence",
   {
@@ -12,10 +36,22 @@ export const AdmittedLearnerOccurrenceTable = sqliteTable(
     origin_session_id: text().$type<SessionSchema.ID>().notNull(),
     origin_message_id: text().$type<MessageID>().notNull(),
     time_admitted: integer().notNull(),
+    source_order: integer().unique(),
+    source_temporal_state: text().$type<"resolved" | "unavailable">(),
+    source_timezone: text(),
+    source_utc_offset_minutes: integer(),
+    source_temporal_unavailable_reason: text().$type<"timezone_unavailable">(),
   },
   (table) => [
+    foreignKey({ columns: [table.source_order], foreignColumns: [LearnerOccurrenceSourceOrderTable.sequence] }).onDelete(
+      "restrict",
+    ),
     unique("learning_admitted_occurrence_origin_unique").on(table.origin_session_id, table.origin_message_id),
     check("learning_admitted_occurrence_time_nonnegative", sql`${table.time_admitted} >= 0`),
+    check(
+      "learning_admitted_occurrence_source_temporal_shape",
+      sql`COALESCE((${table.source_order} IS NULL AND ${table.source_temporal_state} IS NULL AND ${table.source_timezone} IS NULL AND ${table.source_utc_offset_minutes} IS NULL AND ${table.source_temporal_unavailable_reason} IS NULL) OR (${table.source_order} IS NOT NULL AND ${table.source_order} > 0 AND ((${table.source_temporal_state} = 'resolved' AND ${table.source_timezone} IS NOT NULL AND length(${table.source_timezone}) > 0 AND ${table.source_utc_offset_minutes} IS NOT NULL AND ${table.source_utc_offset_minutes} BETWEEN -840 AND 840 AND ${table.source_temporal_unavailable_reason} IS NULL) OR (${table.source_temporal_state} = 'unavailable' AND ${table.source_timezone} IS NULL AND ${table.source_utc_offset_minutes} IS NULL AND ${table.source_temporal_unavailable_reason} = 'timezone_unavailable'))), 0)`,
+    ),
   ],
 )
 

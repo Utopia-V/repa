@@ -25,6 +25,7 @@ import * as OtelTracer from "@effect/opentelemetry/Tracer"
 import { LLMAISDK } from "./llm/ai-sdk"
 import { LLMNativeRuntime } from "./llm/native-runtime"
 import { LLMRequestPrep } from "./llm/request"
+import type { RetainedSteering } from "@opencode-ai/core/retained-steering"
 
 export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
 
@@ -40,6 +41,7 @@ export type StreamInput = {
   small?: boolean
   tools: Record<string, Tool>
   composition: LLMRequestPrep.Composition
+  retainedSteeringCut?: RetainedSteering.Cut
   retries?: number
   toolChoice?: "auto" | "required" | "none"
 }

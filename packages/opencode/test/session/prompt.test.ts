@@ -7,7 +7,7 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { eq } from "drizzle-orm"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
-import { expect } from "bun:test"
+import { expect, setSystemTime } from "bun:test"
 import { Cause, DateTime, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import path from "path"
 import { fileURLToPath, pathToFileURL } from "url"
@@ -55,19 +55,25 @@ import { Format } from "../../src/format"
 import { TestInstance, tmpdirScoped } from "../fixture/fixture"
 import { materializeTestSession } from "../fixture/session"
 import { awaitWithTimeout, pollWithTimeout, testEffect } from "../lib/effect"
-import { reply, TestLLMServer } from "../lib/llm-server"
+import { httpError, reply, TestLLMServer } from "../lib/llm-server"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/location-services"
 import { InstanceStore } from "@/project/instance-store"
 import { TestConsole } from "effect/testing"
-import { Occurrence } from "@opencode-ai/core/learning-command"
+import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
+import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { TurnInputTable, TurnModelOperationTable, TurnTable } from "@opencode-ai/core/turn/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
+import { entryBody } from "@/cli/cmd/run/entry.body"
+import { toolInlineInfo } from "@/cli/cmd/run/tool"
+import type { StreamCommit } from "@/cli/cmd/run/types"
+import type { ToolPart as SDKToolPart } from "@opencode-ai/sdk/v2"
 
 const summary = Layer.succeed(
   SessionSummary.Service,
@@ -121,6 +127,7 @@ function errorTool(parts: SessionV1.Part[]) {
 }
 
 const contextBuildHooks: Array<() => PromiseLike<void>> = []
+const resourceReadHooks: Array<() => PromiseLike<void>> = []
 
 function makeMcp(instructions: MCP.ServerInstructions[] = []) {
   return Layer.succeed(
@@ -140,7 +147,13 @@ function makeMcp(instructions: MCP.ServerInstructions[] = []) {
       connect: () => Effect.void,
       disconnect: () => Effect.void,
       getPrompt: () => Effect.succeed(undefined),
-      readResource: () => Effect.succeed(undefined),
+      readResource: (_clientName, uri) => {
+        const hook = resourceReadHooks.shift()
+        if (!hook) return Effect.succeed(undefined)
+        return Effect.promise(() => hook()).pipe(
+          Effect.as({ contents: [{ uri, mimeType: "text/plain", text: "delayed source preparation" }] }),
+        )
+      },
       startAuth: () => Effect.die("unexpected MCP auth in prompt-effect tests"),
       authenticate: () => Effect.die("unexpected MCP auth in prompt-effect tests"),
       finishAuth: () => Effect.die("unexpected MCP auth in prompt-effect tests"),
@@ -481,6 +494,24 @@ const addSubtask = (sessionID: SessionID, messageID: MessageID, model = ref) =>
     })
   })
 
+function isoWithTimeZoneOffset(instant: number, timeZone: string) {
+  const value = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset" })
+    .formatToParts(new Date(instant))
+    .find((part) => part.type === "timeZoneName")?.value
+  const match = /^(?:GMT|UTC)([+-])(\d{2}):(\d{2})$/.exec(value ?? "")
+  const offsetMinutes =
+    value === "GMT" || value === "UTC"
+      ? 0
+      : match
+        ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]))
+        : undefined
+  if (offsetMinutes === undefined) throw new Error(`Could not resolve the test timezone offset for ${timeZone}`)
+  const sign = offsetMinutes < 0 ? "-" : "+"
+  const absolute = Math.abs(offsetMinutes)
+  const offset = `${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`
+  return `${new Date(instant + offsetMinutes * 60_000).toISOString().slice(0, -1)}${offset}`
+}
+
 const boot = Effect.fn("test.boot")(function* (input?: { title?: string }) {
   const config = yield* Config.Service
   const prompt = yield* SessionPrompt.Service
@@ -625,6 +656,360 @@ it.instance(
           .all()
           .pipe(Effect.orDie),
       ).toEqual(events)
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+)
+
+it.instance(
+  "persists the one captured source temporal context after asynchronous source preparation advances the clock",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const messageID = MessageID.ascending()
+      const sourceTime = Date.parse("2026-07-20T15:59:59.900Z")
+      const persistedTime = sourceTime + 5_000
+      const expectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const sourcePreparation = () => {
+        setSystemTime(new Date(persistedTime))
+        return Promise.resolve()
+      }
+      resourceReadHooks.push(sourcePreparation)
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          setSystemTime()
+          const index = resourceReadHooks.indexOf(sourcePreparation)
+          if (index >= 0) resourceReadHooks.splice(index, 1)
+        }),
+      )
+      setSystemTime(new Date(sourceTime))
+      yield* llm.text("ordinary continuation after delayed source preparation")
+
+      const started = yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID,
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "single source temporal capture" },
+        parts: [
+          { type: "text", text: "Continue this ordinary learning request." },
+          {
+            type: "file",
+            mime: "text/plain",
+            filename: "delayed.txt",
+            url: "mcp://test/delayed",
+            source: {
+              type: "resource",
+              clientName: "test",
+              uri: "test://delayed",
+              text: { value: "delayed", start: 0, end: 7 },
+            },
+          },
+        ],
+      })
+      const terminal = started.terminal ? started : yield* prompt.awaitTurn(sessionID, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+      const presentation = yield* occurrencePresentation(sessionID, messageID)
+      if (!presentation) return yield* Effect.die("Expected admitted learner occurrence")
+      const occurrence = yield* database.db
+        .select()
+        .from(AdmittedLearnerOccurrenceTable)
+        .where(eq(AdmittedLearnerOccurrenceTable.id, presentation.occurrenceID))
+        .get()
+        .pipe(Effect.orDie)
+      expect(occurrence).toMatchObject({
+        time_admitted: sourceTime,
+        source_temporal_state: "resolved",
+        source_timezone: expectedTimeZone,
+      })
+      expect((yield* sessions.messages({ sessionID }))[0]?.info.time.created).toBe(sourceTime)
+      expect(Date.now()).toBe(persistedTime)
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+)
+
+it.instance(
+  "carries frozen source time through midnight and host-timezone changes for root and promoted steer requests",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const rootInputID = Turn.InputID.create()
+      const steerInputID = Turn.InputID.create()
+      const rootMessageID = MessageID.ascending()
+      const steerMessageID = MessageID.ascending()
+      const steerPartID = PartID.ascending()
+      const steerFilePartID = PartID.ascending()
+      const sourceTime = Date.parse("2026-07-20T15:59:00.000Z")
+      const rootOperationTime = Date.parse("2026-07-20T16:01:00.000Z")
+      const steerSourceTime = rootOperationTime + 1_000
+      const steerOperationTime = rootOperationTime + 2_000
+      const rootResponse = defer<void>()
+      const contextEntered = defer<void>()
+      const contextRelease = defer<void>()
+      const steerSourceEntered = defer<void>()
+      const steerSourceRelease = defer<void>()
+      const originalTimeZone = process.env.TZ
+      const originalResolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions
+      const contextHook = () => {
+        contextEntered.resolve()
+        return contextRelease.promise
+      }
+      const steerSourceHook = () => {
+        steerSourceEntered.resolve()
+        return steerSourceRelease.promise
+      }
+      const unavailableResolvedOptions = function (this: Intl.DateTimeFormat) {
+        return { ...originalResolvedOptions.call(this), timeZone: "" }
+      }
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          setSystemTime()
+          Intl.DateTimeFormat.prototype.resolvedOptions = originalResolvedOptions
+          if (originalTimeZone === undefined) delete process.env.TZ
+          else process.env.TZ = originalTimeZone
+          const index = contextBuildHooks.indexOf(contextHook)
+          if (index >= 0) contextBuildHooks.splice(index, 1)
+          const sourceIndex = resourceReadHooks.indexOf(steerSourceHook)
+          if (sourceIndex >= 0) resourceReadHooks.splice(sourceIndex, 1)
+          contextRelease.resolve()
+          steerSourceRelease.resolve()
+          rootResponse.resolve()
+        }),
+      )
+      process.env.TZ = "Asia/Shanghai"
+      setSystemTime(new Date(sourceTime))
+      contextBuildHooks.push(contextHook)
+      yield* llm.hold("root response", rootResponse.promise)
+      yield* llm.text("response to the promoted steer")
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: rootInputID,
+        messageID: rootMessageID,
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 0 },
+        session: { title: "frozen source temporal carrier" },
+        parts: [{ type: "text", text: "Today, explain this example without a quiz." }],
+      })
+      yield* awaitWithTimeout(
+        Effect.promise(() => contextEntered.promise),
+        "root request did not reach the pre-model context boundary",
+      )
+      process.env.TZ = "America/New_York"
+      setSystemTime(new Date(rootOperationTime))
+      contextRelease.resolve()
+      yield* awaitWithTimeout(llm.wait(1), "root provider request was not dispatched")
+
+      process.env.TZ = "Asia/Shanghai"
+      setSystemTime(new Date(steerSourceTime))
+      resourceReadHooks.push(steerSourceHook)
+      Intl.DateTimeFormat.prototype.resolvedOptions = unavailableResolvedOptions
+      const steer = yield* prompt
+        .steer({
+          sessionID,
+          expectedTurnID: turnID,
+          inputID: steerInputID,
+          messageID: steerMessageID,
+          agent: "repa",
+          model: ref,
+          parts: [
+            { id: steerPartID, type: "text", text: "For this continuation, use a worked example." },
+            {
+              id: steerFilePartID,
+              type: "file",
+              mime: "text/plain",
+              filename: "steer-source.txt",
+              url: "mcp://test/steer-source",
+              source: {
+                type: "resource",
+                clientName: "test",
+                uri: "test://steer-source",
+                text: { value: "steer source", start: 0, end: 12 },
+              },
+            },
+          ],
+        })
+        .pipe(Effect.forkChild)
+      yield* awaitWithTimeout(
+        Effect.promise(() => steerSourceEntered.promise),
+        "promoted steer did not capture its unavailable source-time arm",
+      )
+      Intl.DateTimeFormat.prototype.resolvedOptions = originalResolvedOptions
+      process.env.TZ = "America/New_York"
+      setSystemTime(new Date(steerOperationTime))
+      steerSourceRelease.resolve()
+      rootResponse.resolve()
+      expect((yield* Fiber.join(steer)).id).toBe(steerInputID)
+      yield* awaitWithTimeout(llm.wait(2), "promoted-steer provider request was not dispatched")
+      const terminal = yield* prompt.awaitTurn(sessionID, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+
+      const operations = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, turnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      expect(operations).toHaveLength(2)
+      const cuts = yield* Effect.forEach(operations, (operation) =>
+        database.db.transaction((tx) => RetainedSteering.readCut(tx, operation.assistantMessageID)),
+      )
+      expect(cuts[0]).toMatchObject({
+        type: "available",
+        cut: {
+          cutAsOf: rootOperationTime,
+          sourceTemporalContext: {
+            state: "resolved",
+            instant: sourceTime,
+            timeZone: "Asia/Shanghai",
+            utcOffsetMinutes: 480,
+          },
+        },
+      })
+      expect(cuts[1]).toMatchObject({
+        type: "available",
+        cut: {
+          cutAsOf: steerOperationTime,
+          sourceTemporalContext: {
+            state: "unavailable",
+            instant: steerSourceTime,
+            reason: "timezone_unavailable",
+          },
+        },
+      })
+      if (cuts[0]?.type !== "available" || cuts[1]?.type !== "available") {
+        return yield* Effect.die("Expected both stored source-relative cuts")
+      }
+      const hits = yield* llm.hits
+      expect(hits).toHaveLength(2)
+      const rootPayload = JSON.stringify(hits[0]?.body)
+      const steerPayload = JSON.stringify(hits[1]?.body)
+      expect(rootPayload).toContain(JSON.stringify(RetainedSteering.renderCut(cuts[0].cut)).slice(1, -1))
+      expect(steerPayload).toContain(JSON.stringify(RetainedSteering.renderCut(cuts[1].cut)).slice(1, -1))
+      expect(rootPayload.split("[Repa retained learner steering — protected]")).toHaveLength(2)
+      expect(steerPayload.split("[Repa retained learner steering — protected]")).toHaveLength(2)
+      expect(rootPayload).not.toContain("Today's date:")
+      expect(rootPayload).not.toContain("America/New_York")
+      expect(steerPayload).not.toContain("America/New_York")
+      expect(steerPayload).toContain("Source-relative time is unavailable")
+      expect(steerPayload).not.toContain(new Date(steerOperationTime).toISOString())
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+  30_000,
+)
+
+it.instance(
+  "keeps the retained acknowledgement on the terminal after the following provider operation fails",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const cutFloor = yield* database.db.transaction((tx) => RetainedSteering.latestCutAsOf(tx))
+      const validUntil = isoWithTimeZoneOffset(
+        Math.max(Date.now(), cutFloor) + 60 * 60 * 1_000,
+        Intl.DateTimeFormat().resolvedOptions().timeZone,
+      )
+      const sourceExcerpt = `across all my learning until ${validUntil}, do not quiz me`
+      const input = {
+        action: "create",
+        sourceExcerpt,
+        operativeInstruction: "Do not quiz me; continue with a useful explanation or demonstration.",
+        validUntil,
+      }
+      yield* llm.tool(LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY, input)
+      yield* llm.pushMatch(
+        (hit) => JSON.stringify(hit.body).includes("Learning-wide until"),
+        httpError(400, { error: { message: "post-commit provider failure" } }),
+      )
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 2 },
+        session: {
+          title: "retained acknowledgement after provider failure",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: sourceExcerpt }],
+      })
+      const terminal = yield* prompt.awaitTurn(sessionID, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "failed", reason: "provider_failure" })
+      const hits = yield* llm.hits
+      expect(hits).toHaveLength(2)
+      const operations = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, turnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      expect(operations).toHaveLength(2)
+      const storedCut = yield* database.db.transaction((tx) =>
+        RetainedSteering.readCut(tx, operations[1]!.assistantMessageID),
+      )
+      expect(storedCut.type).toBe("available")
+      if (storedCut.type !== "available") return yield* Effect.die("Expected the post-commit stored cut")
+      const secondPayload = JSON.stringify(hits[1]?.body)
+      expect(secondPayload).toContain(JSON.stringify(RetainedSteering.renderCut(storedCut.cut)).slice(1, -1))
+      expect(secondPayload.split("[Repa retained learner steering — protected]")).toHaveLength(2)
+      expect(secondPayload).toContain(storedCut.cut.fingerprint)
+      expect(secondPayload).toContain("Learning-wide until")
+      expect(secondPayload).toContain(input.operativeInstruction)
+
+      const part = (yield* sessions.messages({ sessionID }))
+        .flatMap((message) => message.parts)
+        .find(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" &&
+            candidate.tool === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        )
+      expect(part?.state.status).toBe("completed")
+      if (!part || part.state.status !== "completed") return yield* Effect.die("Expected committed retained ToolPart")
+      const projected = part as unknown as SDKToolPart
+      expect(toolInlineInfo(projected)).toMatchObject({
+        title: "Retained learning steering",
+        mode: "block",
+        body: expect.stringContaining(input.operativeInstruction),
+      })
+      const final = entryBody({
+        kind: "tool",
+        text: "",
+        phase: "final",
+        source: "tool",
+        tool: part.tool,
+        toolState: "completed",
+        part: projected,
+      } satisfies StreamCommit)
+      expect(final).toEqual({ type: "text", content: part.state.output })
+      expect(JSON.stringify(final)).not.toContain(" completed")
+      expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
+      expect(yield* database.db.transaction((tx) => RetainedSteering.readActive(tx, Date.now()))).toHaveLength(1)
       yield* sessions.remove(sessionID)
     }),
   { config: cfg },

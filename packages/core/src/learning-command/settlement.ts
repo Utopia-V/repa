@@ -2,6 +2,8 @@ import { and, asc, eq, ne, or } from "drizzle-orm"
 import { Effect } from "effect"
 import { Course } from "../course"
 import { LearnerNavigation } from "../learner-navigation"
+import { RetainedSteering } from "../retained-steering"
+import { RetainedSteeringTransitionTable } from "../retained-steering/sql"
 import { CourseRouteAnchorTransitionTable, DefaultCoursePreferenceTransitionTable } from "../learner-navigation/sql"
 import { CourseSelectionAcceptanceEffectTable } from "../course/sql"
 import { RepresentationSchema } from "../representation/schema"
@@ -31,6 +33,7 @@ import {
   type RepresentationAppliedSettlement,
   type RepresentationConvertInvocation,
   type NavigationInvocation,
+  type RetainedSteeringInvocation,
   type SetDefaultCoursePreferenceInvocation,
   type SetCourseRouteAnchorInvocation,
   type ReceiptID,
@@ -54,6 +57,8 @@ export const SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY = "set_default_course_pref
 export const SET_DEFAULT_COURSE_PREFERENCE_VERSION = 1
 export const SET_COURSE_ROUTE_ANCHOR_CAPABILITY = "set_course_route_anchor"
 export const SET_COURSE_ROUTE_ANCHOR_VERSION = 1
+export const UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY = "update_retained_learning_steering"
+export const UPDATE_RETAINED_LEARNING_STEERING_VERSION = 1
 
 type StoredAssistant = Omit<SessionV1.Assistant, "id" | "sessionID">
 type StoredToolPart = Omit<SessionV1.ToolPart, "id" | "sessionID" | "messageID">
@@ -440,6 +445,170 @@ export function settleNavigation(
       settlementOrder: input.settlement.order,
     } as const
     yield* settleInvocation(tx, invocation.part_id, settlement)
+    return { type: "settled" as const, settlement }
+  })
+}
+
+export function reserveRetainedSteering(tx: Transaction, input: RetainedSteeringInvocation) {
+  return Effect.gen(function* () {
+    const fingerprint = retainedSteeringInvocationFingerprint(input)
+    const physical = yield* findPhysical(
+      tx,
+      input,
+      fingerprint,
+      UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    )
+    if (physical) {
+      if (physical.status === "admitted") return { type: "admitted" as const }
+      return { type: "replay" as const, settlement: requireSettlement(physical) }
+    }
+    yield* validateNewEnvelope(tx, input.envelope, {
+      capability: UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      version: UPDATE_RETAINED_LEARNING_STEERING_VERSION,
+    })
+    yield* tx
+      .insert(LearningCommandInvocationTable)
+      .values({
+        part_id: input.envelope.partID,
+        turn_id: input.envelope.turnID,
+        input_id: input.envelope.inputID,
+        session_id: input.envelope.sessionID,
+        parent_user_message_id: input.envelope.parentUserMessageID,
+        assistant_message_id: input.envelope.assistantMessageID,
+        provider_call_id: input.envelope.providerCallID,
+        occurrence_id: input.envelope.occurrenceID,
+        command_name: UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        command_version: UPDATE_RETAINED_LEARNING_STEERING_VERSION,
+        emission_ordinal: input.envelope.emissionOrdinal,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        input_fingerprint: fingerprint,
+        retained_steering_semantic_fingerprint: RetainedSteering.commandFingerprint(input.command),
+        status: "admitted",
+        time_admitted: input.envelope.timeAdmitted,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    const decision = yield* retainedSteeringSemanticDecision(tx, input)
+    return decision.type === "candidate"
+      ? ({ type: "candidate" } as const)
+      : ({ type: "terminal", reason: decision.type } as const)
+  })
+}
+
+export function settleRetainedSteeringReservation(
+  tx: Transaction,
+  input: RetainedSteeringInvocation & { readonly settlement: SettlementMetadata },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireRetainedSteeringPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    yield* RetainedSteering.latestCutAsOf(tx).pipe(
+      Effect.flatMap((latestCutAsOf) => requireMetadataFloor(input.settlement, latestCutAsOf)),
+    )
+    const decision = yield* retainedSteeringSemanticDecision(tx, input)
+    if (decision.type === "candidate") return { type: "candidate" as const }
+    const settlement = yield* retainedSteeringSettlementForDecision(tx, decision, input.settlement)
+    yield* settleInvocation(tx, invocation.part_id, settlement)
+    return { type: "settled" as const, settlement }
+  })
+}
+
+export function settleRetainedSteering(
+  tx: Transaction,
+  input: RetainedSteeringInvocation & {
+    readonly permission: PermissionOutcome
+    readonly settlement: SettlementMetadata
+  },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireRetainedSteeringPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: requireSettlement(invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    yield* RetainedSteering.latestCutAsOf(tx).pipe(
+      Effect.flatMap((latestCutAsOf) => requireMetadataFloor(input.settlement, latestCutAsOf)),
+    )
+    const decision = yield* retainedSteeringSemanticDecision(tx, input)
+    if (decision.type !== "candidate") {
+      const settlement = yield* retainedSteeringSettlementForDecision(tx, decision, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const permissionError = permissionErrorCode(input.permission)
+    if (permissionError) {
+      const settlement = errorSettlement(permissionError, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const occupied = yield* appliedMutation(tx, input.envelope.assistantMessageID)
+    if (occupied) {
+      yield* requireMetadataFloor(input.settlement, occupied.timeSettled ?? 0)
+      const settlement = errorSettlement("context_refresh_required", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const prepared = yield* RetainedSteering.prepareTransition(tx, {
+      occurrenceID: input.envelope.occurrenceID,
+      command: input.command,
+      settlement: input.settlement,
+    }).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (prepared.type === "failure") {
+      const settlement = retainedSteeringErrorSettlement(prepared.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (prepared.value.type === "no_change") {
+      const settlement = {
+        outcome: "no_change",
+        steeringKind: "retained_steering",
+        policyID: prepared.value.policyID,
+        version: prepared.value.version,
+        state: prepared.value.state,
+        acknowledgementTitle: prepared.value.acknowledgementTitle,
+        acknowledgementBody: prepared.value.acknowledgementBody,
+        settlementTime: input.settlement.time,
+        settlementOrder: input.settlement.order,
+      } as const
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const effect = yield* RetainedSteering.applyTransition(tx, prepared.value.value).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (effect.type === "failure") {
+      const settlement = retainedSteeringErrorSettlement(effect.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const receiptID = yield* insertRetainedSteeringReceipt(tx, input, effect.value, input.settlement)
+    const settlement = {
+      outcome: "applied",
+      receiptID,
+      effectID: effect.value.id,
+      policyID: effect.value.policyID,
+      version: effect.value.version,
+      state: effect.value.state,
+      acknowledgementTitle: effect.value.acknowledgementTitle,
+      acknowledgementBody: effect.value.acknowledgementBody,
+      settlementTime: input.settlement.time,
+      settlementOrder: input.settlement.order,
+    } as const
+    yield* settleInvocation(tx, invocation.part_id, settlement)
+    yield* RetainedSteering.sealTransition(tx, {
+      transitionID: effect.value.id,
+      receiptID,
+      invocationPartID: invocation.part_id,
+    })
     return { type: "settled" as const, settlement }
   })
 }
@@ -880,6 +1049,12 @@ export function garbageCollectOccurrences(tx: Transaction, occurrenceIDs: readon
             .get()
             .pipe(Effect.orDie),
           tx
+            .select({ id: RetainedSteeringTransitionTable.id })
+            .from(RetainedSteeringTransitionTable)
+            .where(eq(RetainedSteeringTransitionTable.occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
             .select({ id: CourseSelectionAcceptanceEffectTable.id })
             .from(CourseSelectionAcceptanceEffectTable)
             .where(eq(CourseSelectionAcceptanceEffectTable.occurrence_id, occurrenceID))
@@ -974,6 +1149,17 @@ type NavigationSemanticDecision =
     }
   | { readonly type: "context_refresh_required"; readonly timeSettled: number }
 
+type RetainedSteeringSemanticDecision =
+  | { readonly type: "candidate" }
+  | {
+      readonly type: "already_applied"
+      readonly transition: RetainedSteering.Transition
+    }
+  | {
+      readonly type: "semantic_conflict"
+      readonly transition: RetainedSteering.Transition
+    }
+
 function semanticDecision(tx: Transaction, input: AcceptCourseViewRevisionInvocation): Effect.Effect<SemanticDecision> {
   return Effect.gen(function* () {
     const resolution = yield* Course.resolveSelectionAcceptance(tx, {
@@ -1035,9 +1221,24 @@ function navigationSemanticDecision(
         return { type: "semantic_conflict" as const, resolution }
       }
     }
-    const occupied = yield* appliedMutation(tx, input.envelope.assistantMessageID)
-    if (occupied) {
-      return { type: "context_refresh_required" as const, timeSettled: occupied.timeSettled ?? 0 }
+    return { type: "candidate" as const }
+  })
+}
+
+function retainedSteeringSemanticDecision(
+  tx: Transaction,
+  input: RetainedSteeringInvocation,
+): Effect.Effect<RetainedSteeringSemanticDecision> {
+  return Effect.gen(function* () {
+    const resolution = yield* RetainedSteering.resolveSemantic(tx, {
+      occurrenceID: input.envelope.occurrenceID,
+      fingerprint: RetainedSteering.commandFingerprint(input.command),
+    })
+    if (resolution.type === "already_applied") {
+      return { type: "already_applied" as const, transition: resolution.transition }
+    }
+    if (resolution.type === "semantic_conflict") {
+      return { type: "semantic_conflict" as const, transition: resolution.transition }
     }
     return { type: "candidate" as const }
   })
@@ -1158,15 +1359,54 @@ function navigationSettlementForDecision(
   })
 }
 
+function retainedSteeringSettlementForDecision(
+  tx: Transaction,
+  decision: Exclude<RetainedSteeringSemanticDecision, { readonly type: "candidate" }>,
+  metadata: SettlementMetadata,
+) {
+  if (decision.type === "semantic_conflict") {
+    return requireMetadataFloor(metadata, decision.transition.timeCommitted).pipe(
+      Effect.map(() => errorSettlement("semantic_conflict", metadata, { effectID: decision.transition.id })),
+    )
+  }
+  return Effect.gen(function* () {
+    yield* requireMetadataFloor(metadata, decision.transition.timeCommitted)
+    const receipt = yield* tx
+      .select({ id: LearningCommandReceiptTable.id })
+      .from(LearningCommandReceiptTable)
+      .where(eq(LearningCommandReceiptTable.retained_steering_effect_id, decision.transition.id))
+      .get()
+      .pipe(Effect.orDie)
+    if (!receipt) return yield* Effect.die("Applied retained steering transition has no immutable receipt")
+    return {
+      outcome: "already_applied",
+      receiptID: receipt.id,
+      effectID: decision.transition.id,
+      policyID: decision.transition.policyID,
+      version: decision.transition.version,
+      state: decision.transition.state,
+      acknowledgementTitle: decision.transition.acknowledgementTitle,
+      acknowledgementBody: decision.transition.acknowledgementBody,
+      settlementTime: metadata.time,
+      settlementOrder: metadata.order,
+    } as const
+  })
+}
+
 function findPhysical(
   tx: Transaction,
-  input: AcceptCourseViewRevisionInvocation | RepresentationConvertInvocation | NavigationInvocation,
+  input:
+    | AcceptCourseViewRevisionInvocation
+    | RepresentationConvertInvocation
+    | NavigationInvocation
+    | RetainedSteeringInvocation,
   fingerprint: string,
   commandName:
     | typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY
     | typeof REPRESENTATION_CONVERT_CAPABILITY
     | typeof SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
-    | typeof SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+    | typeof SET_COURSE_ROUTE_ANCHOR_CAPABILITY
+    | typeof UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
 ) {
   return Effect.gen(function* () {
     const row = yield* lookupPhysicalInvocation(tx, input.envelope)
@@ -1211,6 +1451,19 @@ function requireNavigationPhysical(tx: Transaction, input: NavigationInvocation)
   })
 }
 
+function requireRetainedSteeringPhysical(tx: Transaction, input: RetainedSteeringInvocation) {
+  return Effect.gen(function* () {
+    const row = yield* findPhysical(
+      tx,
+      input,
+      retainedSteeringInvocationFingerprint(input),
+      UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    )
+    if (!row) return yield* new InvocationNotFoundError({ partID: input.envelope.partID })
+    return row
+  })
+}
+
 function validateNewEnvelope(
   tx: Transaction,
   envelope: AcceptCourseViewRevisionInvocation["envelope"],
@@ -1220,6 +1473,7 @@ function validateNewEnvelope(
       | typeof REPRESENTATION_CONVERT_CAPABILITY
       | typeof SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
       | typeof SET_COURSE_ROUTE_ANCHOR_CAPABILITY
+      | typeof UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
     readonly version: number
   },
 ) {
@@ -1230,6 +1484,12 @@ function validateNewEnvelope(
     }
     if (envelope.capabilityIdentity !== command.capability || envelope.capabilityVersion !== command.version) {
       return yield* invalidEnvelope("invalid_capability")
+    }
+    if (
+      command.capability === UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY &&
+      envelope.authorizationBasis !== "learner_request"
+    ) {
+      return yield* invalidEnvelope("invalid_authorization_basis")
     }
     const occurrence = yield* tx
       .select()
@@ -1376,6 +1636,31 @@ function navigationInvocationFingerprint(input: NavigationInvocation) {
     .digest("hex")
 }
 
+function retainedSteeringInvocationFingerprint(input: RetainedSteeringInvocation) {
+  return new Bun.CryptoHasher("sha256")
+    .update(
+      JSON.stringify({
+        command: UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        commandVersion: UPDATE_RETAINED_LEARNING_STEERING_VERSION,
+        occurrenceID: input.envelope.occurrenceID,
+        turnID: input.envelope.turnID,
+        inputID: input.envelope.inputID,
+        sessionID: input.envelope.sessionID,
+        parentUserMessageID: input.envelope.parentUserMessageID,
+        assistantMessageID: input.envelope.assistantMessageID,
+        partID: input.envelope.partID,
+        providerCallID: input.envelope.providerCallID,
+        emissionOrdinal: input.envelope.emissionOrdinal,
+        capabilityIdentity: input.envelope.capabilityIdentity,
+        capabilityVersion: input.envelope.capabilityVersion,
+        authorizationBasis: input.envelope.authorizationBasis,
+        timeAdmitted: input.envelope.timeAdmitted,
+        input: input.command,
+      }),
+    )
+    .digest("hex")
+}
+
 function navigationIdentity(input: NavigationInvocation) {
   return input.command.kind === "default_course_preference"
     ? ({
@@ -1446,6 +1731,54 @@ function insertNavigationReceipt(
       .pipe(Effect.orDie)
     return receiptID
   })
+}
+
+function insertRetainedSteeringReceipt(
+  tx: Transaction,
+  input: RetainedSteeringInvocation,
+  effect: RetainedSteering.Transition,
+  metadata: SettlementMetadata,
+) {
+  return Effect.gen(function* () {
+    const occurrence = yield* tx
+      .select()
+      .from(AdmittedLearnerOccurrenceTable)
+      .where(eq(AdmittedLearnerOccurrenceTable.id, input.envelope.occurrenceID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!occurrence) return yield* Effect.die("Applied retained steering command has no admitted occurrence")
+    const receiptID = createReceiptID()
+    yield* tx
+      .insert(LearningCommandReceiptTable)
+      .values({
+        id: receiptID,
+        occurrence_id: occurrence.id,
+        origin_session_id: occurrence.origin_session_id,
+        origin_message_id: occurrence.origin_message_id,
+        assistant_message_id: input.envelope.assistantMessageID,
+        invocation_part_id: input.envelope.partID,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        effect_id: null,
+        representation_effect_id: null,
+        default_navigation_effect_id: null,
+        anchor_navigation_effect_id: null,
+        retained_steering_effect_id: effect.id,
+        permission_request_id: null,
+        confirmation_snapshot: null,
+        time_committed: metadata.time,
+        commit_order: metadata.order,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    return receiptID
+  })
+}
+
+function retainedSteeringErrorSettlement(error: unknown, metadata: SettlementMetadata) {
+  if (error instanceof RetainedSteering.InvalidCommandError) return errorSettlement(error.reason, metadata)
+  return errorSettlement("validation_error", metadata)
 }
 
 function navigationErrorSettlement(error: unknown, metadata: SettlementMetadata) {
@@ -1602,6 +1935,7 @@ function settleInvocation(tx: Transaction, partID: PartID, settlement: Settlemen
         representation_effect_id: effects.representation,
         default_navigation_effect_id: effects.defaultNavigation,
         anchor_navigation_effect_id: effects.anchorNavigation,
+        retained_steering_effect_id: effects.retainedSteering,
         settlement,
         time_settled: settlement.settlementTime,
         settlement_order: settlement.settlementOrder,
@@ -1622,6 +1956,7 @@ function settlementEffects(settlement: Settlement) {
     representation: null,
     defaultNavigation: null,
     anchorNavigation: null,
+    retainedSteering: null,
   }
   if (settlement.outcome === "error" || settlement.outcome === "no_change") return none
   if ("navigationKind" in settlement) {
@@ -1632,6 +1967,9 @@ function settlementEffects(settlement: Settlement) {
   }
   if ("representationRevisionID" in settlement) {
     return { ...none, representation: settlement.effectID }
+  }
+  if ("policyID" in settlement) {
+    return { ...none, retainedSteering: settlement.effectID }
   }
   return { ...none, course: settlement.effectID }
 }

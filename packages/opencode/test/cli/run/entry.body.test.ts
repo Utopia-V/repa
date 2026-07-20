@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test"
 import type { ToolPart } from "@opencode-ai/sdk/v2"
 import { entryBody, entryCanStream, entryDone } from "@/cli/cmd/run/entry.body"
 import type { StreamCommit, ToolSnapshot } from "@/cli/cmd/run/types"
+import { toolInlineInfo } from "@/cli/cmd/run/tool"
+import { LearningCommand } from "@opencode-ai/core/learning-command"
 
 function commit(input: Partial<StreamCommit> & Pick<StreamCommit, "kind" | "text" | "phase" | "source">): StreamCommit {
   return input
@@ -50,6 +52,49 @@ function structured(next: StreamCommit) {
 }
 
 describe("run entry body", () => {
+  test("renders retained steering acknowledgement title and body instead of the generic tool fallback", () => {
+    const part = toolPart(LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY, {
+      status: "completed",
+      input: {
+        action: "create",
+        sourceExcerpt: "across all my learning today, do not quiz me",
+        operativeInstruction: "Do not quiz me; continue with explanation.",
+        validUntil: "2026-07-21T00:00:00+08:00",
+      },
+      output:
+        "Learning-wide until 2026-07-21T00:00:00.000+08:00 [Asia/Shanghai]: Do not quiz me; continue with explanation. You can replace or retract this retained instruction with a later explicit learner direction.",
+      title: "Retained learning steering",
+      metadata: { outcome: "applied" },
+      time: { start: 1, end: 2 },
+    })
+    const final = entryBody(
+      commit({
+        kind: "tool",
+        text: "",
+        phase: "final",
+        source: "tool",
+        tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        toolState: "completed",
+        part,
+      }),
+    )
+
+    expect(toolInlineInfo(part)).toEqual({
+      icon: "◇",
+      title: "Retained learning steering",
+      mode: "block",
+      body:
+        "Learning-wide until 2026-07-21T00:00:00.000+08:00 [Asia/Shanghai]: Do not quiz me; continue with explanation. You can replace or retract this retained instruction with a later explicit learner direction.",
+    })
+    expect(final).toEqual({
+      type: "text",
+      content:
+        "Learning-wide until 2026-07-21T00:00:00.000+08:00 [Asia/Shanghai]: Do not quiz me; continue with explanation. You can replace or retract this retained instruction with a later explicit learner direction.",
+    })
+    expect(JSON.stringify(final)).not.toContain("completed")
+    expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
+  })
+
   test("renders assistant, reasoning, and user entries in their display formats", () => {
     expect(
       entryBody(

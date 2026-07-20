@@ -6,6 +6,7 @@ import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import {
   ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
   removeOccurrencePresentation,
@@ -16,7 +17,7 @@ import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { Turn } from "@opencode-ai/schema/turn"
-import { DateTime, Effect, Exit } from "effect"
+import { Cause, DateTime, Effect, Exit } from "effect"
 import { sql } from "drizzle-orm"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
 
@@ -608,6 +609,13 @@ describe("TurnLifecycle", () => {
             timeAdmitted: 17,
           }),
         )
+        expect(yield* db.transaction((tx) => RetainedSteering.readCut(tx, childAssistantMessageID))).toMatchObject({
+          type: "available",
+          cut: {
+            assistantMessageID: childAssistantMessageID,
+            sourceTemporalContext: { occurrenceID: parent.occurrenceID },
+          },
+        })
         const [command] = yield* addToolCandidates(
           db,
           childSessionID,
@@ -2525,6 +2533,1567 @@ describe("TurnLifecycle", () => {
   })
 })
 
+describe("Gate 15 retained learning steering", () => {
+  test("retains a source-relative policy across Session deletion and freezes half-open model cuts", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const sourceTime = Date.parse("2026-07-20T02:00:00.000Z")
+        const validUntil = Date.parse("2026-07-20T16:00:00.000Z")
+        const sourceExcerpt = "across all my learning today, do not quiz me"
+        const root = yield* createRoot(db, {
+          limits: { model: 2, tool: 1 },
+          time: sourceTime,
+          text: sourceExcerpt,
+          timeZone: "Asia/Shanghai",
+        })
+        const prepared = yield* prepareRetainedInvocation(
+          db,
+          root,
+          {
+            action: "create",
+            sourceExcerpt,
+            operativeInstruction: "Do not quiz me; continue with explanation, demonstration, or guided work.",
+            validUntil: "2026-07-21T00:00:00+08:00",
+          },
+          { time: sourceTime + 1, key: "gate15-create" },
+        )
+        expect(prepared.model).toMatchObject({ type: "admitted", replay: false })
+        const initialCut = yield* db.transaction((tx) =>
+          RetainedSteering.readCut(tx, prepared.assistantMessageID),
+        )
+        expect(initialCut).toMatchObject({
+          type: "available",
+          cut: {
+            cutAsOf: sourceTime + 1,
+            throughSteeringRevision: 0,
+            sourceTemporalContext: {
+              state: "resolved",
+              instant: sourceTime,
+              timeZone: "Asia/Shanghai",
+              utcOffsetMinutes: 480,
+            },
+            items: [],
+          },
+        })
+        if (initialCut.type !== "available") return yield* Effect.die("Expected an available empty cut")
+        expect(RetainedSteering.renderCut(initialCut.cut)).toContain(
+          `${new Date(initialCut.cut.cutAsOf).toISOString()} (active-policy selection only`,
+        )
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))).toEqual({
+          type: "candidate",
+        })
+        const applied = yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            const result = yield* LearningCommand.settleRetainedSteering(tx, {
+              ...prepared.invocation,
+              permission: { type: "allow" },
+              settlement: { time: sourceTime + 5, order: 1 },
+            })
+            if (result.type !== "settled" || result.settlement.outcome !== "applied") {
+              return yield* Effect.die("Expected retained steering to apply")
+            }
+            yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+              partID: prepared.candidate.partID,
+              frontier: yield* LearningFrontier.read(tx),
+            })
+            return result.settlement
+          }),
+        )
+        expect(applied).toMatchObject({
+          version: 1,
+          state: "operative",
+          acknowledgementTitle: "Retained learning steering",
+        })
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleTool(tx, {
+            turnID: root.turnID,
+            partID: prepared.candidate.partID,
+            state: "completed",
+            time: sourceTime + 6,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settle(tx, {
+            turnID: root.turnID,
+            outcome: "completed",
+            reason: "normal",
+            time: sourceTime + 7,
+          }),
+        )
+
+        expect(yield* db.transaction((tx) => RetainedSteering.readActiveSnapshot(tx, validUntil - 1))).toMatchObject({
+          steeringRevision: 1,
+          items: [
+            {
+              effectID: applied.effectID,
+              receiptID: applied.receiptID,
+              status: "operative_active",
+              transition: {
+                policyID: applied.policyID,
+                effectiveFrom: sourceTime,
+                validUntil,
+                validUntilNormalized: "2026-07-21T00:00:00.000+08:00",
+                boundaryTimeZone: "Asia/Shanghai",
+              },
+            },
+          ],
+        })
+        expect((yield* db.transaction((tx) => RetainedSteering.readActive(tx, validUntil))).length).toBe(0)
+        expect((yield* db.transaction((tx) => RetainedSteering.readActive(tx, validUntil + 1))).length).toBe(0)
+
+        yield* db.transaction((tx) =>
+          TurnLifecycle.deleteSessionTree(tx, {
+            rootSessionID: root.sessionID,
+            sessionIDs: [root.sessionID],
+            timeDeleted: sourceTime + 8,
+          }),
+        )
+        expect(yield* db.transaction((tx) => RetainedSteering.readCut(tx, prepared.assistantMessageID))).toEqual({
+          type: "source_unavailable",
+          assistantMessageID: prepared.assistantMessageID,
+          turnID: root.turnID,
+          causalOccurrenceID: root.occurrenceID,
+        })
+        expect(
+          yield* db.transaction((tx) =>
+            RetainedSteering.readPolicy(tx, { policyID: applied.policyID, asOf: sourceTime + 9 }),
+          ),
+        ).toMatchObject({
+          head: {
+            effectID: applied.effectID,
+            receiptID: applied.receiptID,
+            status: "operative_active",
+            source: { availability: { state: "source_unavailable", timeDeleted: sourceTime + 8 } },
+          },
+        })
+
+        const beforeExpiry = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: validUntil - 2,
+          text: "Explain one more example.",
+          timeZone: "America/New_York",
+        })
+        const frozen = yield* admitRetainedCut(db, beforeExpiry, {
+          time: validUntil - 1,
+          key: "gate15-before-expiry",
+        })
+        expect(frozen.cut).toMatchObject({
+          type: "available",
+          cut: {
+            cutAsOf: validUntil - 1,
+            throughSteeringRevision: 1,
+            items: [
+              {
+                ordinal: 0,
+                policyID: applied.policyID,
+                transitionID: applied.effectID,
+                sourceOrder: 1,
+                validUntil,
+              },
+            ],
+          },
+        })
+        const replay = yield* db.transaction((tx) =>
+          TurnLifecycle.admitModel(tx, { ...frozen.request, timeAdmitted: validUntil + 100 }),
+        )
+        expect(replay).toEqual({ ...frozen.result, replay: true })
+        expect(yield* db.transaction((tx) => RetainedSteering.readCut(tx, frozen.assistantMessageID))).toEqual(
+          frozen.cut,
+        )
+
+        const preview = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: validUntil - 10,
+          text: "Continue the explanation.",
+          timeZone: "UTC",
+        })
+        const admittedAtExpiry = yield* admitRetainedCut(db, preview, {
+          time: validUntil,
+          messageTime: validUntil - 5,
+          key: "gate15-admitted-at-expiry",
+        })
+        expect(admittedAtExpiry.cut).toMatchObject({
+          type: "available",
+          cut: { cutAsOf: validUntil, throughSteeringRevision: 1, items: [] },
+        })
+
+        const regressing = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: sourceTime + 100,
+          text: "The wall clock moved backwards; continue.",
+          timeZone: "UTC",
+        })
+        const afterRegression = yield* admitRetainedCut(db, regressing, {
+          time: sourceTime + 101,
+          key: "gate15-regressing-clock",
+        })
+        expect(afterRegression.cut).toMatchObject({
+          type: "available",
+          cut: { cutAsOf: validUntil, throughSteeringRevision: 1, items: [] },
+        })
+      }),
+    )
+  })
+
+  test("keeps ordinary learning live when source timezone is unavailable and rejects only the interval write", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const time = Date.parse("2026-07-20T02:00:00.000Z")
+        const sourceExcerpt = "across all my learning today, do not quiz me"
+        const root = yield* createRoot(db, {
+          limits: { model: 3, tool: 1 },
+          time,
+          text: sourceExcerpt,
+          timeZone: null,
+        })
+        const prepared = yield* prepareRetainedInvocation(
+          db,
+          root,
+          {
+            action: "create",
+            sourceExcerpt,
+            operativeInstruction: "Do not quiz me; continue with another useful learning move.",
+            validUntil: "2026-07-21T00:00:00+08:00",
+          },
+          { time: time + 1, key: "gate15-timezone-unavailable" },
+        )
+        const unavailableCut = yield* db.transaction((tx) =>
+          RetainedSteering.readCut(tx, prepared.assistantMessageID),
+        )
+        expect(unavailableCut).toMatchObject({
+          type: "available",
+          cut: {
+            sourceTemporalContext: {
+              state: "unavailable",
+              instant: time,
+              reason: "timezone_unavailable",
+            },
+            items: [],
+          },
+        })
+        if (unavailableCut.type !== "available") return yield* Effect.die("Expected an available empty cut")
+        const protectedPrompt = RetainedSteering.renderCut(unavailableCut.cut)
+        expect(protectedPrompt).toContain("currentSourceTemporalContext: unavailable (timezone_unavailable)")
+        expect(protectedPrompt).toContain("Do not derive a date, timezone, or offset")
+        expect(protectedPrompt).not.toContain(new Date(unavailableCut.cut.cutAsOf).toISOString())
+        expect(protectedPrompt).not.toContain(`\"instant\":${time}`)
+        expect(protectedPrompt).not.toContain("\"timeZone\"")
+        expect(protectedPrompt).not.toContain("\"utcOffsetMinutes\"")
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))).toEqual({
+          type: "candidate",
+        })
+        const frontierBefore = yield* db.transaction((tx) => LearningFrontier.read(tx))
+        const rejected = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...prepared.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 5, order: 1 },
+          }),
+        )
+        expect(rejected).toMatchObject({
+          type: "settled",
+          settlement: { outcome: "error", code: "temporal_context_unavailable" },
+        })
+        expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontierBefore)
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_policy`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM learning_command_receipt`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT steering_revision FROM retained_steering_state WHERE singleton = 1`)).toEqual({
+          steering_revision: 0,
+        })
+
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleTool(tx, {
+            turnID: root.turnID,
+            partID: prepared.candidate.partID,
+            state: "completed",
+            time: time + 6,
+          }),
+        )
+        const continued = yield* admitRetainedCut(db, root, {
+          time: time + 7,
+          key: "gate15-current-only-continuation",
+        })
+        expect(continued.result).toMatchObject({ type: "admitted", replay: false })
+        expect(continued.cut).toMatchObject({
+          type: "available",
+          cut: {
+            sourceTemporalContext: { state: "unavailable", reason: "timezone_unavailable" },
+            throughSteeringRevision: 0,
+            items: [],
+          },
+        })
+        yield* db.transaction((tx) =>
+          TurnLifecycle.sealCandidateSet(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: continued.assistantMessageID,
+            candidates: [],
+            timeSealed: time + 8,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleModel(tx, {
+            turnID: root.turnID,
+            assistantMessageID: continued.assistantMessageID,
+            state: "completed",
+            time: time + 8,
+          }),
+        )
+        const steer = yield* addLearnerInput(db, root.sessionID, time + 9, { timeZone: null })
+        yield* db.transaction((tx) =>
+          TurnLifecycle.promoteSteer(tx, {
+            sessionID: root.sessionID,
+            expectedTurnID: root.turnID,
+            inputID: steer.inputID,
+            messageID: steer.messageID,
+            occurrenceID: steer.occurrenceID,
+            envelope: steer.envelope,
+            timeAdmitted: time + 9,
+          }),
+        )
+        const steered = yield* admitRetainedCut(db, root, {
+          time: time + 10,
+          key: "gate15-unavailable-steer",
+          parentMessageID: steer.messageID,
+        })
+        expect(steered.result).toMatchObject({ type: "admitted", replay: false })
+        expect(steered.cut).toMatchObject({
+          type: "available",
+          cut: {
+            sourceTemporalContext: {
+              state: "unavailable",
+              occurrenceID: steer.occurrenceID,
+              instant: time + 9,
+              reason: "timezone_unavailable",
+            },
+          },
+        })
+      }),
+    )
+  })
+
+  test("validates explicit offsets against the frozen IANA zone across a daylight-saving boundary", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const sourceTime = Date.parse("2027-03-14T06:00:00.000Z")
+        const validText = "across all my learning until 3:30 after the clock change, use worked examples"
+        const validRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: sourceTime,
+          text: validText,
+          timeZone: "America/New_York",
+        })
+        const valid = yield* prepareRetainedInvocation(
+          db,
+          validRoot,
+          {
+            action: "create",
+            sourceExcerpt: validText,
+            operativeInstruction: "Use a worked example before independent practice.",
+            validUntil: "2027-03-14T03:30:00-04:00",
+          },
+          { time: sourceTime + 1, key: "gate15-dst-valid" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, valid.invocation))
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...valid.invocation,
+              permission: { type: "allow" },
+              settlement: { time: sourceTime + 5, order: 1 },
+            }),
+          ),
+        ).toMatchObject({
+          type: "settled",
+          settlement: {
+            outcome: "applied",
+            acknowledgementBody: expect.stringContaining("2027-03-14T03:30:00.000-04:00 [America/New_York]"),
+          },
+        })
+        const transitionCount = yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)
+        const frontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+
+        const nonexistentText = "across all my learning until the nonexistent 2:30, use diagrams"
+        const nonexistentRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: sourceTime + 10,
+          text: nonexistentText,
+          timeZone: "America/New_York",
+        })
+        const nonexistent = yield* prepareRetainedInvocation(
+          db,
+          nonexistentRoot,
+          {
+            action: "create",
+            sourceExcerpt: nonexistentText,
+            operativeInstruction: "Use diagrams before practice.",
+            validUntil: "2027-03-14T02:30:00-05:00",
+          },
+          { time: sourceTime + 11, key: "gate15-dst-nonexistent" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, nonexistent.invocation))
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...nonexistent.invocation,
+              permission: { type: "allow" },
+              settlement: { time: sourceTime + 15, order: 2 },
+            }),
+          ),
+        ).toMatchObject({ type: "settled", settlement: { outcome: "error", code: "validation_error" } })
+
+        const mismatchText = "across all my learning until 3:30 with this offset, use analogies"
+        const mismatchRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: sourceTime + 20,
+          text: mismatchText,
+          timeZone: "America/New_York",
+        })
+        const mismatch = yield* prepareRetainedInvocation(
+          db,
+          mismatchRoot,
+          {
+            action: "create",
+            sourceExcerpt: mismatchText,
+            operativeInstruction: "Use an analogy before practice.",
+            validUntil: "2027-03-14T03:30:00-05:00",
+          },
+          { time: sourceTime + 21, key: "gate15-dst-offset-mismatch" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, mismatch.invocation))
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...mismatch.invocation,
+              permission: { type: "allow" },
+              settlement: { time: sourceTime + 25, order: 3 },
+            }),
+          ),
+        ).toMatchObject({ type: "settled", settlement: { outcome: "error", code: "validation_error" } })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual(
+          transitionCount,
+        )
+        expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontier)
+      }),
+    )
+  })
+
+  test("keeps one linear policy through replay, correction, retraction, reinstatement, and competing writers", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const time = Date.parse("2026-07-20T02:00:00.000Z")
+        const createText = "across all my learning this week, explain before practice"
+        const root = yield* createRoot(db, {
+          limits: { model: 3, tool: 3 },
+          time,
+          text: createText,
+          timeZone: "UTC",
+        })
+        const created = yield* prepareRetainedInvocation(
+          db,
+          root,
+          {
+            action: "create",
+            sourceExcerpt: createText,
+            operativeInstruction: "Explain before asking me to practice.",
+            validUntil: "2026-07-27T02:00:00+00:00",
+          },
+          { time: time + 1, key: "gate15-linear-create" },
+        )
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, created.invocation))).toEqual({
+          type: "candidate",
+        })
+        const createResult = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...created.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 5, order: 1 },
+          }),
+        )
+        if (createResult.type !== "settled" || createResult.settlement.outcome !== "applied") {
+          return yield* Effect.die("Expected retained policy creation")
+        }
+        const createSettlement = createResult.settlement
+        expect(createSettlement).toMatchObject({ version: 1, state: "operative" })
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, created.invocation))).toEqual({
+          type: "replay",
+          settlement: createSettlement,
+        })
+        yield* settlePreparedTool(db, root, created, time + 6)
+
+        const duplicate = yield* prepareRetainedInvocation(db, root, created.invocation.command, {
+          time: time + 7,
+          key: "gate15-linear-duplicate",
+        })
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, duplicate.invocation))).toEqual({
+          type: "terminal",
+          reason: "already_applied",
+        })
+        const duplicateResult = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteeringReservation(tx, {
+            ...duplicate.invocation,
+            settlement: { time: time + 11, order: 2 },
+          }),
+        )
+        expect(duplicateResult).toMatchObject({
+          type: "settled",
+          settlement: { outcome: "already_applied", effectID: createSettlement.effectID },
+        })
+        yield* settlePreparedTool(db, root, duplicate, time + 12)
+
+        const conflict = yield* prepareRetainedInvocation(
+          db,
+          root,
+          {
+            action: "create",
+            sourceExcerpt: createText,
+            operativeInstruction: "Use only practice questions.",
+            validUntil: "2026-07-27T02:00:00+00:00",
+          },
+          { time: time + 13, key: "gate15-linear-conflict" },
+        )
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, conflict.invocation))).toEqual({
+          type: "terminal",
+          reason: "semantic_conflict",
+        })
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteeringReservation(tx, {
+              ...conflict.invocation,
+              settlement: { time: time + 17, order: 3 },
+            }),
+          ),
+        ).toMatchObject({
+          type: "settled",
+          settlement: { outcome: "error", code: "semantic_conflict", detail: { effectID: createSettlement.effectID } },
+        })
+
+        const replacementText = "across all my learning this week, prefer visual examples"
+        const replacementRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 20,
+          text: replacementText,
+          timeZone: "UTC",
+        })
+        const replacementCommand = {
+          action: "replace" as const,
+          policyID: createSettlement.policyID,
+          expectedHeadID: createSettlement.effectID,
+          expectedVersion: 1,
+          sourceExcerpt: replacementText,
+          operativeInstruction: "Prefer visual examples when they help.",
+          validUntil: "2026-07-28T02:00:00+00:00",
+        }
+        const replacement = yield* prepareRetainedInvocation(db, replacementRoot, replacementCommand, {
+          time: time + 21,
+          key: "gate15-linear-replace",
+        })
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, replacement.invocation))
+        const replacementResult = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...replacement.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 25, order: 4 },
+          }),
+        )
+        if (replacementResult.type !== "settled" || replacementResult.settlement.outcome !== "applied") {
+          return yield* Effect.die("Expected retained policy replacement")
+        }
+        const replacementSettlement = replacementResult.settlement
+        expect(replacementSettlement).toMatchObject({ policyID: createSettlement.policyID, version: 2 })
+
+        const noChangeRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 30,
+          text: replacementText,
+          timeZone: "UTC",
+        })
+        const noChange = yield* prepareRetainedInvocation(
+          db,
+          noChangeRoot,
+          {
+            ...replacementCommand,
+            expectedHeadID: replacementSettlement.effectID,
+            expectedVersion: 2,
+          },
+          { time: time + 31, key: "gate15-linear-no-change" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, noChange.invocation))
+        expect(
+          yield* db.all(sql`
+            SELECT transition.id
+            FROM retained_steering_transition AS transition
+            JOIN learning_command_receipt AS receipt ON receipt.retained_steering_effect_id = transition.id
+            JOIN learning_command_invocation AS committed ON committed.part_id = receipt.invocation_part_id
+            WHERE transition.policy_id = ${createSettlement.policyID}
+              AND transition.version = 2
+              AND committed.status = 'applied'
+              AND committed.retained_steering_effect_id = transition.id
+              AND NOT EXISTS (
+                SELECT 1 FROM retained_steering_transition AS successor
+                JOIN learning_command_receipt AS successor_receipt
+                  ON successor_receipt.retained_steering_effect_id = successor.id
+                JOIN learning_command_invocation AS successor_invocation
+                  ON successor_invocation.part_id = successor_receipt.invocation_part_id
+                WHERE successor.predecessor_id = transition.id
+                  AND successor_invocation.status = 'applied'
+                  AND successor_invocation.retained_steering_effect_id = successor.id
+              )
+          `),
+        ).toEqual([{ id: replacementSettlement.effectID }])
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...noChange.invocation,
+              permission: { type: "allow" },
+              settlement: { time: time + 35, order: 5 },
+            }),
+          ),
+        ).toMatchObject({
+          type: "settled",
+          settlement: { outcome: "no_change", policyID: createSettlement.policyID, version: 2 },
+        })
+
+        const staleRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 40,
+          text: replacementText,
+          timeZone: "UTC",
+        })
+        const stale = yield* prepareRetainedInvocation(db, staleRoot, replacementCommand, {
+          time: time + 41,
+          key: "gate15-linear-stale",
+        })
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, stale.invocation))
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...stale.invocation,
+              permission: { type: "allow" },
+              settlement: { time: time + 45, order: 6 },
+            }),
+          ),
+        ).toMatchObject({ type: "settled", settlement: { outcome: "error", code: "stale" } })
+
+        const retractText = "across all my learning, remove that visual-example instruction"
+        const retractRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 50,
+          text: retractText,
+          timeZone: null,
+        })
+        const retractCommand = {
+          action: "retract" as const,
+          policyID: createSettlement.policyID,
+          expectedHeadID: replacementSettlement.effectID,
+          expectedVersion: 2,
+          sourceExcerpt: retractText,
+        }
+        const retraction = yield* prepareRetainedInvocation(db, retractRoot, retractCommand, {
+          time: time + 51,
+          key: "gate15-linear-retract",
+        })
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, retraction.invocation))
+        const retractResult = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...retraction.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 55, order: 7 },
+          }),
+        )
+        if (retractResult.type !== "settled" || retractResult.settlement.outcome !== "applied") {
+          return yield* Effect.die("Expected retained policy retraction")
+        }
+        const retractSettlement = retractResult.settlement
+        expect(retractSettlement).toMatchObject({ version: 3, state: "retracted" })
+
+        const retractNoChangeRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 60,
+          text: retractText,
+          timeZone: null,
+        })
+        const retractNoChange = yield* prepareRetainedInvocation(
+          db,
+          retractNoChangeRoot,
+          { ...retractCommand, expectedHeadID: retractSettlement.effectID, expectedVersion: 3 },
+          { time: time + 61, key: "gate15-linear-retract-no-change" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, retractNoChange.invocation))
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...retractNoChange.invocation,
+              permission: { type: "allow" },
+              settlement: { time: time + 65, order: 8 },
+            }),
+          ),
+        ).toMatchObject({ type: "settled", settlement: { outcome: "no_change", state: "retracted", version: 3 } })
+
+        const reinstateText = "across all my learning this week, restore visual examples"
+        const reinstateRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 70,
+          text: reinstateText,
+          timeZone: "UTC",
+        })
+        const reinstateCommand = {
+          action: "replace" as const,
+          policyID: createSettlement.policyID,
+          expectedHeadID: retractSettlement.effectID,
+          expectedVersion: 3,
+          sourceExcerpt: reinstateText,
+          operativeInstruction: "Prefer visual examples when they help.",
+          validUntil: "2026-07-29T02:00:00+00:00",
+        }
+        const reinstatement = yield* prepareRetainedInvocation(db, reinstateRoot, reinstateCommand, {
+          time: time + 71,
+          key: "gate15-linear-reinstate",
+        })
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, reinstatement.invocation))
+        const reinstateResult = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...reinstatement.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 75, order: 9 },
+          }),
+        )
+        if (reinstateResult.type !== "settled" || reinstateResult.settlement.outcome !== "applied") {
+          return yield* Effect.die("Expected retained policy reinstatement")
+        }
+        const reinstateSettlement = reinstateResult.settlement
+        expect(reinstateSettlement).toMatchObject({ version: 4, state: "operative" })
+
+        const firstWriterText = "across all my learning this week, use diagrams first"
+        const secondWriterText = "across all my learning this week, use analogies first"
+        const firstWriterRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 80,
+          text: firstWriterText,
+          timeZone: "UTC",
+        })
+        const secondWriterRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 81,
+          text: secondWriterText,
+          timeZone: "UTC",
+        })
+        const firstWriter = yield* prepareRetainedInvocation(
+          db,
+          firstWriterRoot,
+          {
+            action: "replace",
+            policyID: createSettlement.policyID,
+            expectedHeadID: reinstateSettlement.effectID,
+            expectedVersion: 4,
+            sourceExcerpt: firstWriterText,
+            operativeInstruction: "Use diagrams before analogies.",
+            validUntil: "2026-07-30T02:00:00+00:00",
+          },
+          { time: time + 82, key: "gate15-linear-writer-a" },
+        )
+        const secondWriter = yield* prepareRetainedInvocation(
+          db,
+          secondWriterRoot,
+          {
+            action: "replace",
+            policyID: createSettlement.policyID,
+            expectedHeadID: reinstateSettlement.effectID,
+            expectedVersion: 4,
+            sourceExcerpt: secondWriterText,
+            operativeInstruction: "Use analogies before diagrams.",
+            validUntil: "2026-07-30T02:00:00+00:00",
+          },
+          { time: time + 86, key: "gate15-linear-writer-b" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, firstWriter.invocation))
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, secondWriter.invocation))
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...firstWriter.invocation,
+              permission: { type: "allow" },
+              settlement: { time: time + 90, order: 10 },
+            }),
+          ),
+        ).toMatchObject({ type: "settled", settlement: { outcome: "applied", version: 5 } })
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...secondWriter.invocation,
+              permission: { type: "allow" },
+              settlement: { time: time + 91, order: 11 },
+            }),
+          ),
+        ).toMatchObject({ type: "settled", settlement: { outcome: "error", code: "stale" } })
+
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_policy`)).toEqual({ count: 1 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 5 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM learning_command_receipt WHERE retained_steering_effect_id IS NOT NULL`)).toEqual({ count: 5 })
+        expect(yield* db.get(sql`SELECT steering_revision FROM retained_steering_state WHERE singleton = 1`)).toEqual({
+          steering_revision: 5,
+        })
+        expect(
+          yield* db.all(sql`
+            SELECT version, source_order FROM retained_steering_transition
+            WHERE policy_id = ${createSettlement.policyID} ORDER BY version
+          `),
+        ).toEqual([
+          { version: 1, source_order: 1 },
+          { version: 2, source_order: 2 },
+          { version: 3, source_order: 5 },
+          { version: 4, source_order: 7 },
+          { version: 5, source_order: 8 },
+        ])
+      }),
+    )
+  })
+
+  test("floors delayed command settlement through a later cut before validating its interval", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const time = Date.parse("2026-07-20T02:00:00.000Z")
+        const validUntil = time + 60_000
+        const laterCut = time + 120_000
+        const sourceExcerpt = "across all my learning until 02:01 UTC, do not quiz me"
+        const earlier = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time,
+          text: sourceExcerpt,
+          timeZone: "UTC",
+        })
+        const prepared = yield* prepareRetainedInvocation(
+          db,
+          earlier,
+          {
+            action: "create",
+            sourceExcerpt,
+            operativeInstruction: "Do not quiz me; continue with explanation.",
+            validUntil: new Date(validUntil).toISOString().replace("Z", "+00:00"),
+          },
+          { time: time + 1, key: "gate15-delayed-command" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))
+
+        const later = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: laterCut - 1,
+          text: "Continue the explanation after the clock moved backwards.",
+          timeZone: "UTC",
+        })
+        const sampled = yield* admitRetainedCut(db, later, {
+          time: laterCut,
+          key: "gate15-later-cut-before-delayed-settlement",
+        })
+        expect(sampled.cut).toMatchObject({
+          type: "available",
+          cut: { cutAsOf: laterCut, throughSteeringRevision: 0, items: [] },
+        })
+
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteering(tx, {
+              ...prepared.invocation,
+              permission: { type: "allow" },
+              settlement: { time: laterCut, order: 1 },
+            }),
+          ),
+        ).toMatchObject({ type: "settled", settlement: { outcome: "error", code: "validation_error" } })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT steering_revision, latest_cut_as_of FROM retained_steering_state`)).toEqual({
+          steering_revision: 0,
+          latest_cut_as_of: laterCut,
+        })
+        expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual({ sequence: 0, time: 0 })
+      }),
+    )
+  })
+
+  test("requires a transaction-final retained effect seal and rejects a stale cut before that seal", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const time = Date.parse("2026-07-20T02:00:00.000Z")
+        const sourceExcerpt = "across all my learning this week, explain before practice"
+        const root = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time,
+          text: sourceExcerpt,
+          timeZone: "UTC",
+        })
+        const prepared = yield* prepareRetainedInvocation(
+          db,
+          root,
+          {
+            action: "create",
+            sourceExcerpt,
+            operativeInstruction: "Explain before asking me to practice.",
+            validUntil: "2026-07-27T02:00:00+00:00",
+          },
+          { time: time + 1, key: "gate15-commit-seal" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))
+
+        const incomplete = yield* db
+          .transaction((tx) =>
+            Effect.gen(function* () {
+              const candidate = yield* RetainedSteering.prepareTransition(tx, {
+                occurrenceID: prepared.invocation.envelope.occurrenceID,
+                command: prepared.invocation.command,
+                settlement: { time: time + 5, order: 1 },
+              })
+              if (candidate.type !== "candidate") return yield* Effect.die("Expected a retained transition candidate")
+              return yield* RetainedSteering.applyTransition(tx, candidate.value)
+            }),
+          )
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(incomplete)).toBe(true)
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_policy`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_commit_seal`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT steering_revision FROM retained_steering_state WHERE singleton = 1`)).toEqual({
+          steering_revision: 0,
+        })
+        expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual({ sequence: 0, time: 0 })
+
+        const sampled = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: time + 2,
+          text: "Continue with a worked example.",
+          timeZone: "UTC",
+        })
+        const sampledAssistantMessageID = yield* addAssistantMessage(
+          db,
+          sampled.sessionID,
+          sampled.messageID,
+          time + 3,
+        )
+        const receiptID = "receipt_gate15_commit_seal_attack"
+        const attack = yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            const candidate = yield* RetainedSteering.prepareTransition(tx, {
+              occurrenceID: prepared.invocation.envelope.occurrenceID,
+              command: prepared.invocation.command,
+              settlement: { time: time + 5, order: 1 },
+            })
+            if (candidate.type !== "candidate") return yield* Effect.die("Expected a retained transition candidate")
+            const effect = yield* RetainedSteering.applyTransition(tx, candidate.value)
+            const settlement = {
+              outcome: "applied",
+              receiptID,
+              effectID: effect.id,
+              policyID: effect.policyID,
+              version: effect.version,
+              state: effect.state,
+              acknowledgementTitle: effect.acknowledgementTitle,
+              acknowledgementBody: effect.acknowledgementBody,
+              settlementTime: time + 5,
+              settlementOrder: 1,
+            }
+            yield* tx.run(sql`
+              INSERT INTO learning_command_receipt (
+                id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+                invocation_part_id, capability_identity, capability_version, authorization_basis,
+                retained_steering_effect_id, time_committed, commit_order
+              )
+              SELECT
+                ${receiptID}, occurrence_id, session_id, parent_user_message_id, assistant_message_id,
+                part_id, capability_identity, capability_version, authorization_basis,
+                ${effect.id}, ${time + 5}, 1
+              FROM learning_command_invocation
+              WHERE part_id = ${prepared.candidate.partID}
+            `)
+            yield* tx.run(sql`
+              UPDATE learning_command_invocation
+              SET status = 'applied', retained_steering_effect_id = ${effect.id},
+                  settlement = ${JSON.stringify(settlement)}, time_settled = ${time + 5}, settlement_order = 1
+              WHERE part_id = ${prepared.candidate.partID}
+            `)
+            yield* tx.run(sql`
+              UPDATE retained_steering_state
+              SET steering_revision = ${effect.steeringRevision}
+              WHERE singleton = 1
+            `)
+            const frontier = yield* LearningFrontier.read(tx)
+            const source = yield* tx.get<{
+              source_order: number
+              source_temporal_state: "resolved"
+              source_timezone: string
+              source_utc_offset_minutes: number
+            }>(sql`
+              SELECT source_order, source_temporal_state, source_timezone, source_utc_offset_minutes
+              FROM learning_admitted_occurrence WHERE id = ${sampled.occurrenceID}
+            `)
+            if (!source) return yield* Effect.die("Expected the sampled source temporal context")
+            const staleBase = {
+              schemaVersion: 1,
+              assistantMessageID: sampledAssistantMessageID,
+              cutAsOf: time + 6,
+              throughSteeringRevision: effect.steeringRevision,
+              throughSharedFrontier: frontier,
+              sourceTemporalContext: {
+                occurrenceID: sampled.occurrenceID,
+                sourceOrder: source.source_order,
+                state: source.source_temporal_state,
+                instant: time + 2,
+                timeZone: source.source_timezone,
+                utcOffsetMinutes: source.source_utc_offset_minutes,
+              },
+              items: [],
+            }
+            const staleFingerprint = new Bun.CryptoHasher("sha256")
+              .update(JSON.stringify(staleBase))
+              .digest("hex")
+            const staleCut = { ...staleBase, renderedBytes: 0, fingerprint: staleFingerprint }
+            const cutAttempt = yield* tx
+              .run(sql`
+                INSERT INTO turn_model_operation (
+                  assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal,
+                  state, request_fingerprint, context_fingerprint, snapshot_frontier_sequence,
+                  snapshot_frontier_time, observed_shared_frontier_sequence, observed_shared_frontier_time,
+                  time_admitted, retained_steering_cut, retained_steering_cut_fingerprint,
+                  retained_steering_cut_as_of, candidates_sealed
+                ) VALUES (
+                  ${sampledAssistantMessageID}, ${sampled.turnID}, ${sampled.sessionID}, ${sampled.inputID},
+                  ${sampled.occurrenceID}, 0, 'running', ${fingerprint("stale-cut-request")},
+                  ${fingerprint("stale-cut-context")}, ${frontier.sequence}, ${frontier.time},
+                  ${frontier.sequence}, ${frontier.time}, ${time + 6}, ${JSON.stringify(staleCut)},
+                  ${staleFingerprint}, ${time + 6}, 0
+                )
+              `)
+              .pipe(Effect.exit)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_commit_seal (transition_id, receipt_id, invocation_part_id)
+              VALUES (${effect.id}, ${receiptID}, ${prepared.candidate.partID})
+            `)
+            return { cutAttempt, effect }
+          }),
+        )
+        expect(Exit.isFailure(attack.cutAttempt)).toBe(true)
+        expect(Exit.isFailure(attack.cutAttempt) ? Cause.pretty(attack.cutAttempt.cause) : "").toContain(
+          "turn_model_retained_steering_cut_snapshot_invalid",
+        )
+        expect(
+          yield* db.get(sql`
+            SELECT assistant_message_id FROM turn_model_operation
+            WHERE assistant_message_id = ${sampledAssistantMessageID}
+          `),
+        ).toBeUndefined()
+        expect(
+          yield* db.get(sql`
+            SELECT transition_id, receipt_id, invocation_part_id
+            FROM retained_steering_commit_seal WHERE transition_id = ${attack.effect.id}
+          `),
+        ).toEqual({
+          transition_id: attack.effect.id,
+          receipt_id: receiptID,
+          invocation_part_id: prepared.candidate.partID,
+        })
+        expect(yield* db.transaction((tx) => RetainedSteering.readActive(tx, time + 6))).toHaveLength(1)
+
+        const correctionSourceExcerpt = "across all my learning this week, start with a worked example"
+        const correctionRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 10,
+          text: correctionSourceExcerpt,
+          timeZone: "UTC",
+        })
+        const correction = yield* prepareRetainedInvocation(
+          db,
+          correctionRoot,
+          {
+            action: "replace",
+            policyID: attack.effect.policyID,
+            expectedHeadID: attack.effect.id,
+            expectedVersion: attack.effect.version,
+            sourceExcerpt: correctionSourceExcerpt,
+            operativeInstruction: "Start with a worked example before asking me to practice.",
+            validUntil: "2026-07-27T02:00:00+00:00",
+          },
+          { time: time + 11, key: "gate15-unsealed-successor" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, correction.invocation))
+
+        const correctionSample = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: time + 12,
+          text: "Continue with the next explanation.",
+          timeZone: "UTC",
+        })
+        const correctionAssistantMessageID = yield* addAssistantMessage(
+          db,
+          correctionSample.sessionID,
+          correctionSample.messageID,
+          time + 13,
+        )
+        const correctionReceiptID = "receipt_gate15_unsealed_successor_attack"
+        const correctionAttack = yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            const candidate = yield* RetainedSteering.prepareTransition(tx, {
+              occurrenceID: correction.invocation.envelope.occurrenceID,
+              command: correction.invocation.command,
+              settlement: { time: time + 15, order: 2 },
+            })
+            if (candidate.type !== "candidate") return yield* Effect.die("Expected a correction candidate")
+            const effect = yield* RetainedSteering.applyTransition(tx, candidate.value)
+            const settlement = {
+              outcome: "applied",
+              receiptID: correctionReceiptID,
+              effectID: effect.id,
+              policyID: effect.policyID,
+              version: effect.version,
+              state: effect.state,
+              acknowledgementTitle: effect.acknowledgementTitle,
+              acknowledgementBody: effect.acknowledgementBody,
+              settlementTime: time + 15,
+              settlementOrder: 2,
+            }
+            yield* tx.run(sql`
+              INSERT INTO learning_command_receipt (
+                id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+                invocation_part_id, capability_identity, capability_version, authorization_basis,
+                retained_steering_effect_id, time_committed, commit_order
+              )
+              SELECT
+                ${correctionReceiptID}, occurrence_id, session_id, parent_user_message_id, assistant_message_id,
+                part_id, capability_identity, capability_version, authorization_basis,
+                ${effect.id}, ${time + 15}, 2
+              FROM learning_command_invocation
+              WHERE part_id = ${correction.candidate.partID}
+            `)
+            yield* tx.run(sql`
+              UPDATE learning_command_invocation
+              SET status = 'applied', retained_steering_effect_id = ${effect.id},
+                  settlement = ${JSON.stringify(settlement)}, time_settled = ${time + 15}, settlement_order = 2
+              WHERE part_id = ${correction.candidate.partID}
+            `)
+            const frontier = yield* LearningFrontier.read(tx)
+            const source = yield* tx.get<{
+              source_order: number
+              source_temporal_state: "resolved"
+              source_timezone: string
+              source_utc_offset_minutes: number
+            }>(sql`
+              SELECT source_order, source_temporal_state, source_timezone, source_utc_offset_minutes
+              FROM learning_admitted_occurrence WHERE id = ${correctionSample.occurrenceID}
+            `)
+            if (!source) return yield* Effect.die("Expected the correction sample temporal context")
+            const staleBase = {
+              schemaVersion: 1,
+              assistantMessageID: correctionAssistantMessageID,
+              cutAsOf: time + 16,
+              throughSteeringRevision: attack.effect.steeringRevision,
+              throughSharedFrontier: frontier,
+              sourceTemporalContext: {
+                occurrenceID: correctionSample.occurrenceID,
+                sourceOrder: source.source_order,
+                state: source.source_temporal_state,
+                instant: time + 12,
+                timeZone: source.source_timezone,
+                utcOffsetMinutes: source.source_utc_offset_minutes,
+              },
+              items: [],
+            }
+            const staleFingerprint = new Bun.CryptoHasher("sha256")
+              .update(JSON.stringify(staleBase))
+              .digest("hex")
+            const staleCut = { ...staleBase, renderedBytes: 0, fingerprint: staleFingerprint }
+            const cutAttempt = yield* tx
+              .run(sql`
+                INSERT INTO turn_model_operation (
+                  assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal,
+                  state, request_fingerprint, context_fingerprint, snapshot_frontier_sequence,
+                  snapshot_frontier_time, observed_shared_frontier_sequence, observed_shared_frontier_time,
+                  time_admitted, retained_steering_cut, retained_steering_cut_fingerprint,
+                  retained_steering_cut_as_of, candidates_sealed
+                ) VALUES (
+                  ${correctionAssistantMessageID}, ${correctionSample.turnID}, ${correctionSample.sessionID},
+                  ${correctionSample.inputID}, ${correctionSample.occurrenceID}, 0, 'running',
+                  ${fingerprint("unsealed-successor-cut-request")}, ${fingerprint("unsealed-successor-cut-context")},
+                  ${frontier.sequence}, ${frontier.time}, ${frontier.sequence}, ${frontier.time}, ${time + 16},
+                  ${JSON.stringify(staleCut)}, ${staleFingerprint}, ${time + 16}, 0
+                )
+              `)
+              .pipe(Effect.exit)
+            yield* tx.run(sql`
+              UPDATE retained_steering_state
+              SET steering_revision = ${effect.steeringRevision}
+              WHERE singleton = 1
+            `)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_commit_seal (transition_id, receipt_id, invocation_part_id)
+              VALUES (${effect.id}, ${correctionReceiptID}, ${correction.candidate.partID})
+            `)
+            return { cutAttempt, effect }
+          }),
+        )
+        expect(Exit.isFailure(correctionAttack.cutAttempt)).toBe(true)
+        expect(
+          Exit.isFailure(correctionAttack.cutAttempt) ? Cause.pretty(correctionAttack.cutAttempt.cause) : "",
+        ).toContain("turn_model_retained_steering_cut_item_invalid")
+        expect(
+          yield* db.get(sql`
+            SELECT assistant_message_id FROM turn_model_operation
+            WHERE assistant_message_id = ${correctionAssistantMessageID}
+          `),
+        ).toBeUndefined()
+        expect(
+          yield* db.get(sql`
+            SELECT transition_id, receipt_id, invocation_part_id
+            FROM retained_steering_commit_seal WHERE transition_id = ${correctionAttack.effect.id}
+          `),
+        ).toEqual({
+          transition_id: correctionAttack.effect.id,
+          receipt_id: correctionReceiptID,
+          invocation_part_id: correction.candidate.partID,
+        })
+        expect(yield* db.transaction((tx) => RetainedSteering.readActive(tx, time + 16))).toMatchObject([
+          {
+            id: correctionAttack.effect.id,
+            version: 2,
+            operativeInstruction: "Start with a worked example before asking me to practice.",
+          },
+        ])
+      }),
+    )
+  })
+
+  test("rejects raw temporal, result, ownership, and retained-history forgery", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const time = Date.parse("2026-07-20T02:00:00.000Z")
+        const sourceExcerpt = "across all my learning this week, explain before practice"
+        const root = yield* createRoot(db, {
+          limits: { model: 2, tool: 2 },
+          time,
+          text: sourceExcerpt,
+          timeZone: "UTC",
+        })
+        const prepared = yield* prepareRetainedInvocation(
+          db,
+          root,
+          {
+            action: "create",
+            sourceExcerpt,
+            operativeInstruction: "Explain before asking me to practice.",
+            validUntil: "2026-07-27T02:00:00+00:00",
+          },
+          { time: time + 1, key: "gate15-raw-authority" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))
+        const result = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...prepared.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 5, order: 1 },
+          }),
+        )
+        if (result.type !== "settled" || result.settlement.outcome !== "applied") {
+          return yield* Effect.die("Expected retained policy creation")
+        }
+        const applied = result.settlement
+        yield* settlePreparedTool(db, root, prepared, time + 6)
+
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`UPDATE retained_steering_transition SET source_excerpt = 'forged' WHERE id = ${applied.effectID}`)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`DELETE FROM learning_command_receipt WHERE id = ${applied.receiptID}`)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+
+        const conflict = yield* prepareRetainedInvocation(
+          db,
+          root,
+          {
+            action: "create",
+            sourceExcerpt,
+            operativeInstruction: "Use only independent practice.",
+            validUntil: "2026-07-27T02:00:00+00:00",
+          },
+          { time: time + 7, key: "gate15-raw-conflict" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, conflict.invocation))
+        const ungroundedConflict = JSON.stringify({
+          outcome: "error",
+          code: "semantic_conflict",
+          settlementTime: time + 11,
+          settlementOrder: 2,
+        })
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`
+                UPDATE learning_command_invocation
+                SET status = 'error', settlement = ${ungroundedConflict},
+                    time_settled = ${time + 11}, settlement_order = 2
+                WHERE part_id = ${conflict.candidate.partID}
+              `)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+        expect(
+          yield* db.transaction((tx) =>
+            LearningCommand.settleRetainedSteeringReservation(tx, {
+              ...conflict.invocation,
+              settlement: { time: time + 11, order: 2 },
+            }),
+          ),
+        ).toMatchObject({
+          type: "settled",
+          settlement: { outcome: "error", code: "semantic_conflict", detail: { effectID: applied.effectID } },
+        })
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`
+                UPDATE learning_command_invocation SET settlement_order = 99
+                WHERE part_id = ${conflict.candidate.partID}
+              `)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+
+        const otherRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 20,
+          text: sourceExcerpt,
+          timeZone: "UTC",
+        })
+        const other = yield* prepareRetainedInvocation(db, otherRoot, prepared.invocation.command, {
+          time: time + 21,
+          key: "gate15-raw-cross-occurrence",
+        })
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, other.invocation))
+        const crossOccurrence = JSON.stringify({
+          outcome: "already_applied",
+          receiptID: applied.receiptID,
+          effectID: applied.effectID,
+          policyID: applied.policyID,
+          version: applied.version,
+          state: applied.state,
+          acknowledgementTitle: applied.acknowledgementTitle,
+          acknowledgementBody: applied.acknowledgementBody,
+          settlementTime: time + 25,
+          settlementOrder: 3,
+        })
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`
+                UPDATE learning_command_invocation
+                SET status = 'already_applied', retained_steering_effect_id = ${applied.effectID},
+                    settlement = ${crossOccurrence}, time_settled = ${time + 25}, settlement_order = 3
+                WHERE part_id = ${other.candidate.partID}
+              `)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+
+        const corruptRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: time + 30,
+          text: "Continue with the retained instruction.",
+          timeZone: "UTC",
+        })
+        const corruptAssistantMessageID = yield* addAssistantMessage(
+          db,
+          corruptRoot.sessionID,
+          corruptRoot.messageID,
+          time + 31,
+        )
+        const frontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+        const preparedCut = yield* db.transaction((tx) =>
+          RetainedSteering.prepareCut(tx, {
+            turnID: corruptRoot.turnID,
+            assistantMessageID: corruptAssistantMessageID,
+            trustedTime: time + 31,
+          }),
+        )
+        const forgedFingerprint = "f".repeat(64)
+        const corruptCut = { ...preparedCut, fingerprint: forgedFingerprint }
+        yield* db.run(sql`
+          INSERT INTO turn_model_operation (
+            assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal, state,
+            request_fingerprint, context_fingerprint, snapshot_frontier_sequence, snapshot_frontier_time,
+            observed_shared_frontier_sequence, observed_shared_frontier_time, time_admitted,
+            retained_steering_cut, retained_steering_cut_fingerprint, retained_steering_cut_as_of,
+            candidates_sealed
+          ) VALUES (
+            ${corruptAssistantMessageID}, ${corruptRoot.turnID}, ${corruptRoot.sessionID}, ${corruptRoot.inputID},
+            ${corruptRoot.occurrenceID}, 0, 'running', ${fingerprint("forged-request")},
+            ${fingerprint("forged-context")}, ${frontier.sequence}, ${frontier.time}, ${frontier.sequence},
+            ${frontier.time}, ${preparedCut.cutAsOf}, ${JSON.stringify(corruptCut)}, ${forgedFingerprint},
+            ${preparedCut.cutAsOf}, 0
+          )
+        `)
+        const corruptRead = yield* db
+          .transaction((tx) => RetainedSteering.readCut(tx, corruptAssistantMessageID))
+          .pipe(Effect.flip)
+        expect(corruptRead).toBeInstanceOf(RetainedSteering.CutIntegrityError)
+        expect(corruptRead.reason).toBe("stored_cut_malformed")
+        expect(
+          yield* db
+            .transaction((tx) =>
+              TurnLifecycle.admitModel(tx, {
+                turnID: corruptRoot.turnID,
+                sessionID: corruptRoot.sessionID,
+                assistantMessageID: corruptAssistantMessageID,
+                requestEnvelope: { prompt: "forged" },
+                contextFingerprint: fingerprint("forged-context"),
+                snapshotFrontier: frontier,
+                timeAdmitted: time + 32,
+              }),
+            )
+            .pipe(Effect.flip),
+        ).toMatchObject({ _tag: "TurnIntegrityError" })
+
+        const orphanMessageID = SessionV1.MessageID.ascending()
+        const orphanPartID = SessionV1.PartID.ascending()
+        const orphanTime = time + 30
+        yield* db.transaction((tx) =>
+          insertUserMessage(tx, root.sessionID, orphanMessageID, orphanPartID, orphanTime, "orphan source"),
+        )
+        const orphan = yield* db.transaction((tx) =>
+          Occurrence.admit(tx, {
+            admission: LearnerAdmission.interactive({ timeZone: "UTC" }),
+            sessionID: root.sessionID,
+            messageID: orphanMessageID,
+            timeAdmitted: orphanTime,
+          }),
+        )
+        if (!orphan.sourceOrder) return yield* Effect.die("Expected an allocated source order")
+        yield* db.transaction((tx) =>
+          removeOccurrencePresentation(tx, { messageID: orphanMessageID, timeDeleted: orphanTime + 1 }),
+        )
+        expect(yield* db.get(sql`SELECT id FROM learning_admitted_occurrence WHERE id = ${orphan.id}`)).toBeUndefined()
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`
+                INSERT INTO learning_admitted_occurrence (
+                  id, origin_session_id, origin_message_id, time_admitted, source_order,
+                  source_temporal_state, source_timezone, source_utc_offset_minutes,
+                  source_temporal_unavailable_reason
+                ) VALUES (
+                  ${orphan.id}, ${root.sessionID}, ${orphanMessageID}, ${orphanTime}, ${orphan.sourceOrder},
+                  'unavailable', NULL, NULL, 'timezone_unavailable'
+                )
+              `)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+        const reusedMessageID = SessionV1.MessageID.ascending()
+        const reusedPartID = SessionV1.PartID.ascending()
+        yield* db.transaction((tx) =>
+          insertUserMessage(tx, root.sessionID, reusedMessageID, reusedPartID, orphanTime, "reused source"),
+        )
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`
+                INSERT INTO learning_admitted_occurrence (
+                  id, origin_session_id, origin_message_id, time_admitted, source_order,
+                  source_temporal_state, source_timezone, source_utc_offset_minutes,
+                  source_temporal_unavailable_reason
+                ) VALUES (
+                  ${LearningCommand.createOccurrenceID()}, ${root.sessionID}, ${reusedMessageID}, ${orphanTime},
+                  ${orphan.sourceOrder}, 'resolved', 'UTC', 0, NULL
+                )
+              `)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+        expect(yield* db.get(sql`SELECT occurrence_id FROM learning_occurrence_source_order WHERE sequence = ${orphan.sourceOrder}`)).toEqual({
+          occurrence_id: orphan.id,
+        })
+      }),
+    )
+  })
+
+  test("renders concurrent contributions by admitted source order even when their tools settle in reverse", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const time = Date.parse("2026-07-20T02:00:00.000Z")
+        const firstText = "across all my learning today, explain before practice"
+        const secondText = "across all my learning today, use visual examples"
+        const firstRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time,
+          text: firstText,
+          timeZone: "UTC",
+        })
+        const secondRoot = yield* createRoot(db, {
+          limits: { model: 1, tool: 1 },
+          time: time + 1,
+          text: secondText,
+          timeZone: "UTC",
+        })
+        const first = yield* prepareRetainedInvocation(
+          db,
+          firstRoot,
+          {
+            action: "create",
+            sourceExcerpt: firstText,
+            operativeInstruction: "Explain before asking me to practice.",
+            validUntil: "2026-07-21T02:00:00+00:00",
+          },
+          { time: time + 2, key: "gate15-first-source" },
+        )
+        const second = yield* prepareRetainedInvocation(
+          db,
+          secondRoot,
+          {
+            action: "create",
+            sourceExcerpt: secondText,
+            operativeInstruction: "Use visual examples when they help.",
+            validUntil: "2026-07-21T02:00:00+00:00",
+          },
+          { time: time + 6, key: "gate15-second-source" },
+        )
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, first.invocation))
+        yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, second.invocation))
+        const secondApplied = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...second.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 10, order: 1 },
+          }),
+        )
+        const firstApplied = yield* db.transaction((tx) =>
+          LearningCommand.settleRetainedSteering(tx, {
+            ...first.invocation,
+            permission: { type: "allow" },
+            settlement: { time: time + 11, order: 2 },
+          }),
+        )
+        expect(secondApplied).toMatchObject({ type: "settled", settlement: { outcome: "applied" } })
+        expect(firstApplied).toMatchObject({ type: "settled", settlement: { outcome: "applied" } })
+
+        const sample = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: time + 12,
+          text: "Teach me graph traversal.",
+          timeZone: "UTC",
+        })
+        const cut = yield* admitRetainedCut(db, sample, { time: time + 13, key: "gate15-source-order" })
+        if (cut.cut.type !== "available") return yield* Effect.die("Expected an available retained steering cut")
+        expect(cut.cut.cut.items.map((item) => [item.sourceOrder, item.operativeInstruction])).toEqual([
+          [1, "Explain before asking me to practice."],
+          [2, "Use visual examples when they help."],
+        ])
+      }),
+    )
+  })
+})
+
 function withDatabase(effect: (db: TestDatabase) => Effect.Effect<void, unknown>) {
   return run(
     Effect.gen(function* () {
@@ -2540,14 +4109,23 @@ function withDatabase(effect: (db: TestDatabase) => Effect.Effect<void, unknown>
   )
 }
 
-function createRoot(db: TestDatabase, input: { readonly limits: Turn.Limits; readonly time: number }) {
+function createRoot(
+  db: TestDatabase,
+  input: {
+    readonly limits: Turn.Limits
+    readonly time: number
+    readonly text?: string
+    readonly timeZone?: string | null
+  },
+) {
   return Effect.gen(function* () {
     const sessionID = SessionSchema.ID.create()
     const turnID = Turn.ID.create()
     const inputID = Turn.InputID.create()
     const messageID = SessionV1.MessageID.ascending()
     const partID = SessionV1.PartID.ascending()
-    const envelope = { kind: "learner", sessionID, inputID, messageID, content: "hello" }
+    const text = input.text ?? "hello"
+    const envelope = { kind: "learner", sessionID, inputID, messageID, content: text }
 
     const admitted = yield* db.transaction((tx) =>
       Effect.gen(function* () {
@@ -2555,9 +4133,9 @@ function createRoot(db: TestDatabase, input: { readonly limits: Turn.Limits; rea
           INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
           VALUES (${sessionID}, ${ProjectV2.ID.global}, 'turn-test', '/', 'Turn test', 'test', ${input.time}, ${input.time})
         `)
-        yield* insertUserMessage(tx, sessionID, messageID, partID, input.time)
+        yield* insertUserMessage(tx, sessionID, messageID, partID, input.time, text)
         const occurrence = yield* Occurrence.admit(tx, {
-          admission: LearnerAdmission.interactive(),
+          admission: LearnerAdmission.interactive({ timeZone: input.timeZone }),
           sessionID,
           messageID,
           timeAdmitted: input.time,
@@ -2604,7 +4182,12 @@ function createRoot(db: TestDatabase, input: { readonly limits: Turn.Limits; rea
   })
 }
 
-function addLearnerInput(db: TestDatabase, sessionID: SessionSchema.ID, time: number) {
+function addLearnerInput(
+  db: TestDatabase,
+  sessionID: SessionSchema.ID,
+  time: number,
+  options: { readonly timeZone?: string | null } = {},
+) {
   return Effect.gen(function* () {
     const inputID = Turn.InputID.create()
     const messageID = SessionV1.MessageID.ascending()
@@ -2614,7 +4197,7 @@ function addLearnerInput(db: TestDatabase, sessionID: SessionSchema.ID, time: nu
       Effect.gen(function* () {
         yield* insertUserMessage(tx, sessionID, messageID, partID, time)
         return (yield* Occurrence.admit(tx, {
-          admission: LearnerAdmission.interactive(),
+          admission: LearnerAdmission.interactive({ timeZone: options.timeZone }),
           sessionID,
           messageID,
           timeAdmitted: time,
@@ -2631,6 +4214,7 @@ function insertUserMessage(
   messageID: SessionV1.MessageID,
   partID: SessionV1.PartID,
   time: number,
+  text = "hello",
 ) {
   return Effect.gen(function* () {
     yield* tx.run(sql`
@@ -2639,7 +4223,7 @@ function insertUserMessage(
     `)
     yield* tx.run(sql`
       INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
-      VALUES (${partID}, ${messageID}, ${sessionID}, ${time}, ${time}, ${JSON.stringify({ type: "text", text: "hello" })})
+      VALUES (${partID}, ${messageID}, ${sessionID}, ${time}, ${time}, ${JSON.stringify({ type: "text", text })})
     `)
   })
 }
@@ -2672,7 +4256,13 @@ function addToolCandidates(
       const partID = SessionV1.PartID.ascending()
       const callID = `call-${name}`
       const tool =
-        name === "A" ? "read" : name === "task" || name === ACCEPT_COURSE_VIEW_REVISION_CAPABILITY ? name : "write"
+        name === "A"
+          ? "read"
+          : name === "task" ||
+              name === ACCEPT_COURSE_VIEW_REVISION_CAPABILITY ||
+              name === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
+            ? name
+            : "write"
       const envelope = { callID, tool, input: { name } }
       yield* db.run(sql`
         INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
@@ -2684,6 +4274,139 @@ function addToolCandidates(
       return { partID, callID, tool, envelope }
     }),
   )
+}
+
+type RootTurn = Effect.Success<ReturnType<typeof createRoot>>
+
+function prepareRetainedInvocation(
+  db: TestDatabase,
+  root: RootTurn,
+  command: RetainedSteering.Command,
+  input: { readonly time: number; readonly key: string },
+) {
+  return Effect.gen(function* () {
+    const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, input.time)
+    const snapshotFrontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+    const modelRequest = {
+      turnID: root.turnID,
+      sessionID: root.sessionID,
+      assistantMessageID,
+      requestEnvelope: { prompt: input.key },
+      contextFingerprint: fingerprint(input.key),
+      snapshotFrontier,
+      timeAdmitted: input.time,
+    }
+    const model = yield* db.transaction((tx) => TurnLifecycle.admitModel(tx, modelRequest))
+    const [candidate] = yield* addToolCandidates(
+      db,
+      root.sessionID,
+      assistantMessageID,
+      [LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY],
+      input.time + 1,
+    )
+    if (!candidate) return yield* Effect.die("Expected retained-steering candidate")
+    yield* db.transaction((tx) =>
+      TurnLifecycle.sealCandidateSet(tx, {
+        turnID: root.turnID,
+        sessionID: root.sessionID,
+        assistantMessageID,
+        candidates: [candidate],
+        timeSealed: input.time + 1,
+      }),
+    )
+    yield* db.transaction((tx) =>
+      TurnLifecycle.settleModel(tx, {
+        turnID: root.turnID,
+        assistantMessageID,
+        state: "completed",
+        time: input.time + 2,
+      }),
+    )
+    yield* db.transaction((tx) =>
+      TurnLifecycle.admitTool(tx, {
+        turnID: root.turnID,
+        sessionID: root.sessionID,
+        assistantMessageID,
+        partID: candidate.partID,
+        timeAdmitted: input.time + 3,
+      }),
+    )
+    return {
+      assistantMessageID,
+      candidate,
+      model,
+      modelRequest,
+      invocation: {
+        envelope: {
+          occurrenceID: root.occurrenceID,
+          turnID: root.turnID,
+          inputID: root.inputID,
+          sessionID: root.sessionID,
+          parentUserMessageID: root.messageID,
+          assistantMessageID,
+          partID: candidate.partID,
+          providerCallID: candidate.callID,
+          emissionOrdinal: 0,
+          capabilityIdentity: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+          capabilityVersion: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_VERSION,
+          authorizationBasis: "learner_request" as const,
+          timeAdmitted: input.time + 3,
+        },
+        command,
+      },
+    }
+  })
+}
+
+type PreparedRetainedInvocation = Effect.Success<ReturnType<typeof prepareRetainedInvocation>>
+
+function settlePreparedTool(
+  db: TestDatabase,
+  root: RootTurn,
+  prepared: PreparedRetainedInvocation,
+  time: number,
+) {
+  return db.transaction((tx) =>
+    TurnLifecycle.settleTool(tx, {
+      turnID: root.turnID,
+      partID: prepared.candidate.partID,
+      state: "completed",
+      time,
+    }),
+  )
+}
+
+function admitRetainedCut(
+  db: TestDatabase,
+  root: RootTurn,
+  input: {
+    readonly time: number
+    readonly key: string
+    readonly messageTime?: number
+    readonly parentMessageID?: SessionV1.MessageID
+  },
+) {
+  return Effect.gen(function* () {
+    const assistantMessageID = yield* addAssistantMessage(
+      db,
+      root.sessionID,
+      input.parentMessageID ?? root.messageID,
+      input.messageTime ?? input.time,
+    )
+    const snapshotFrontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+    const request = {
+      turnID: root.turnID,
+      sessionID: root.sessionID,
+      assistantMessageID,
+      requestEnvelope: { prompt: input.key },
+      contextFingerprint: fingerprint(input.key),
+      snapshotFrontier,
+      timeAdmitted: input.time,
+    }
+    const result = yield* db.transaction((tx) => TurnLifecycle.admitModel(tx, request))
+    const cut = yield* db.transaction((tx) => RetainedSteering.readCut(tx, assistantMessageID))
+    return { assistantMessageID, cut, request, result }
+  })
 }
 
 function seedAcceptableCourseRevision(db: TestDatabase, time: number) {

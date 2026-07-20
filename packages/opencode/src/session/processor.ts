@@ -36,6 +36,7 @@ import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { LLMNativeRuntime } from "./llm/native-runtime"
 
 const DOOM_LOOP_THRESHOLD = 3
@@ -170,6 +171,7 @@ const layer = Layer.effect(
       let modelSettled = false
       let dispatchedToolCallID: string | undefined
       let modelOperation: Turn.ModelOperation | undefined
+      let retainedSteeringCut: RetainedSteering.Cut | undefined
       let activeTools: LLM.StreamInput["tools"] = {}
       let toolController: AbortController | undefined
       let failureReason: FailureReason | undefined
@@ -296,7 +298,26 @@ const layer = Layer.effect(
         if (modelOperation && !isDeepStrictEqual(modelOperation, operation)) {
           return yield* new Turn.AdmissionConflictError({ turnID: operation.turnID })
         }
+        const read = yield* database.db.transaction((tx) => RetainedSteering.readCut(tx, operation.assistantMessageID)).pipe(
+          Effect.mapError(
+            (error) =>
+              new Turn.IntegrityError({
+                turnID: operation.turnID,
+                reason: `Retained steering cut read failed: ${"reason" in error ? error.reason : "database_error"}`,
+              }),
+          ),
+        )
+        if (read.type === "not_found") {
+          return yield* new Turn.IntegrityError({
+            turnID: operation.turnID,
+            reason: "Interactive model operation has no retained steering cut",
+          })
+        }
+        if (read.type === "source_unavailable") {
+          return yield* new Turn.SourceUnavailableError({ turnID: operation.turnID })
+        }
         modelOperation = operation
+        retainedSteeringCut = read.cut
       })
 
       const updateToolCall = Effect.fn("SessionProcessor.updateToolCall")(function* (
@@ -1310,6 +1331,7 @@ const layer = Layer.effect(
             failureReason ??= "provider_failure"
             ctx.assistantMessage.error = error
             ctx.assistantMessage.finish = "error"
+            yield* session.updateMessage(ctx.assistantMessage)
             yield* events.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
             yield* status.set(ctx.sessionID, { type: "idle" })
             return
@@ -1320,6 +1342,8 @@ const layer = Layer.effect(
           return
         }
         ctx.assistantMessage.error = error
+        ctx.assistantMessage.finish = "error"
+        yield* session.updateMessage(ctx.assistantMessage)
         yield* events.publish(Session.Event.Error, {
           sessionID: ctx.assistantMessage.sessionID,
           error: ctx.assistantMessage.error,
@@ -1345,9 +1369,14 @@ const layer = Layer.effect(
                 `Interactive Assistant operation has no exact Turn: ${input.assistantMessage.id}`,
               )
             }
+            if (streamInput.composition.type === "interactive" && !retainedSteeringCut) {
+              throw new ProcessorIntegrityFailure(
+                `Interactive Assistant operation has no exact retained steering cut: ${input.assistantMessage.id}`,
+              )
+            }
             activeTools = streamInput.tools
             toolController = new AbortController()
-            yield* llm.stream(streamInput).pipe(
+            yield* llm.stream({ ...streamInput, retainedSteeringCut }).pipe(
               Stream.tap((event) =>
                 observeFailure(
                   handleEvent(event),

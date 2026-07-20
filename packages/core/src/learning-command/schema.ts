@@ -19,6 +19,7 @@ import type {
   RouteAnchorCommand,
 } from "../learner-navigation/schema"
 import type { OccurrenceID } from "./occurrence-schema"
+import type { RetainedSteering } from "../retained-steering"
 
 export const ReceiptID = Schema.String.check(Schema.isPattern(/^lcr_[0-9A-Za-z]{26}$/)).pipe(
   Schema.brand("LearningCommand.ReceiptID"),
@@ -80,6 +81,8 @@ export type SetCourseRouteAnchorInvocation = {
 }
 
 export type NavigationInvocation = SetDefaultCoursePreferenceInvocation | SetCourseRouteAnchorInvocation
+
+export type RetainedSteeringInvocation = RetainedSteering.Invocation
 
 export type SettlementMetadata = {
   readonly time: number
@@ -200,6 +203,8 @@ export type ErrorCode =
   | "cancelled"
   | "interrupted"
   | "source_unavailable"
+  | "temporal_context_unavailable"
+  | "capacity_exceeded"
   | "ambiguous_content_root"
   | "unsupported_source"
   | "source_too_large"
@@ -221,7 +226,7 @@ export type ErrorSettlement = {
   readonly detail?: {
     readonly entity?: "course" | "view" | "revision" | "selection"
     readonly id?: string
-    readonly effectID?: SelectionAcceptanceEffectID
+    readonly effectID?: SelectionAcceptanceEffectID | RetainedSteering.TransitionID
     readonly acceptedRevisionID?: RevisionID
   }
 }
@@ -236,6 +241,9 @@ export type Settlement =
   | RouteAnchorAppliedSettlement
   | RouteAnchorAlreadyAppliedSettlement
   | NavigationNoChangeSettlement
+  | RetainedSteering.AppliedSettlement
+  | RetainedSteering.AlreadyAppliedSettlement
+  | RetainedSteering.NoChangeSettlement
   | ErrorSettlement
 
 export type PermissionOutcome =
@@ -275,6 +283,7 @@ export class InvalidInvocationEnvelopeError extends Schema.TaggedErrorClass<Inva
       Schema.Literal("missing_call_id"),
       Schema.Literal("invalid_ordinal"),
       Schema.Literal("invalid_capability"),
+      Schema.Literal("invalid_authorization_basis"),
       Schema.Literal("invalid_time"),
       Schema.Literal("wrong_assistant"),
       Schema.Literal("wrong_parent"),
