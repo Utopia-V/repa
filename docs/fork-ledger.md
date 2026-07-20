@@ -804,6 +804,66 @@ supplied no replacement verdict or closure authority.
   Commit `a6b542d59` fixes the accepted implementation provenance;
   `docs/README.md` therefore closes Gate 14 without starting Gate 15.
 
+## 2026-07-20 Gate 15 review acceptance provenance
+
+Current disposition remains owned only by `docs/README.md`. Retained top-level
+reviewer task `019f7eb2-d619-7c12-8665-5709efe62594`, run
+`gate15-whole-20260720-01`, accepted both contract/theory and
+implementation/evidence. It closed `G15-CT-001`–`G15-CT-008` and
+`G15-IE-001`–`G15-IE-005`; no maintainer-owned product decision was reopened
+and no acceptance-changing finding remains.
+
+- Contract review repaired source-relative temporal authority, settlement
+  flooring through the latest cut, predecessor reconciliation order,
+  learning-wide qualification, terminal acknowledgement projection, cut
+  deletion semantics, prompt-only first consumption, and the exhaustive
+  resolved/unavailable source-time union.
+- Implementation review repaired the single pre-preparation learner-admission
+  carrier; transaction-final effect sealing and sealed, revision-bounded cut
+  membership; stale lifecycle fixtures; exact predecessor ordering across
+  permission/cancellation/revoke/source-loss/recovery; and rollback injection
+  at every retained effect, acknowledgement, frontier, receipt, seal, Part, and
+  event boundary.
+- Fresh accepted executor evidence passed 28 Core Turn tests with 269
+  assertions, 28 database-migration tests with 173 assertions, 18 released-v1
+  runtime tests with 240 assertions, and 9 prompt tests with 88 assertions.
+  Both affected package typechecks and migration `--check` passed. Focused
+  compaction, revert, fork-history, fork-start, deletion, fresh recompilation,
+  and restart evidence covered the lifecycle claim.
+- The reviewer independently reproduced the final two-window direct-SQL cut
+  test at 1 test and 16 assertions and the focused Gate-14-to-Gate-15 migration
+  parity case at 1 test and 10 assertions. A cut through an unsealed current
+  revision fails snapshot validation; a lower-revision empty cut cannot let a
+  later unsealed correction suppress its sealed predecessor.
+- Maintainer-authorized real-provider run
+  `gate15-openai-oauth-real-model-01` used the inherited OpenAI OAuth path and
+  `openai/gpt-5.5` for eleven bounded samples. Its secret-free result and empty
+  stderr hashes are
+  `81753B3E4597EB5721AB666D23D851C289C0DC1824E22C6D085EFEBB6EB5F897`
+  and `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855`.
+  It predates the implementation-review repairs; deterministic evidence covers
+  their admission and atomicity seams, and provider lowering was unchanged.
+- Discarded parallel runs sharing one temporary `LearnerHome`, an unrelated
+  272 ms versus 250 ms abort-timing assertion, two later five-second database
+  ownership timeouts, and one source-lifecycle-lock timeout remain explicit
+  non-evidence. Every causally claimed focused or serial suite passed; no Gate
+  15 assertion failure is hidden.
+- The independently accepted snapshot remained at HEAD
+  `18bbc2ef9cfad8c71abde39e5190166f1439e2e5` on branch
+  `codex/opencode-v1.17.18-baseline`, with 49 modified/untracked nonignored
+  physical files and zero staged. Its sorted changed-content manifest SHA-256
+  was `ACEC64527BB8E2DC0C1C77044E7818FA59F971BB87117710596E8971AD13F2F6`;
+  the tracked binary diff Git hash was
+  `b39e1fd51f3b17853095ff54a4538bf13a32426d`. At review close,
+  `docs/README.md` and the Gate record hashed to
+  `BF224268E94AA547499BABE664C030F206A4E491A1B0E075EAC71EDF95D60CC2`
+  and `9498ECD7AA70624FC073AD71B7C7C4FD3B004C4C73956681E5A39782F58B9F4A`.
+  The reviewer made no project-tree, Git, credential, publication, or other
+  durable-system mutation.
+- The maintainer separately authorized integration after review acceptance.
+  Commit `03ea74ec4` fixes the accepted implementation provenance;
+  `docs/README.md` therefore closes Gate 15 without starting Gate 16.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

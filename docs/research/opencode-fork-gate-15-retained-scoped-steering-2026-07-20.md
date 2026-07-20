@@ -1,14 +1,16 @@
 # OpenCode fork Gate 15: retained scoped steering
 
-Status: Maintainer grill complete. The decisions under **Accepted maintainer
-decisions** are accepted product meaning. Independent whole-Gate review run
+Status: Closed. The decisions under **Accepted maintainer decisions** are
+accepted product meaning. Independent whole-Gate review run
 `gate15-whole-20260720-01` returned `Revise` on the first contract/theory pass
 with `G15-CT-001` through `G15-CT-007`. Its closure pass closed those seven
 findings and returned `Revise` solely with `G15-CT-008`; the retained reviewer
 then closed that final repair and returned `Accept`. This complete contract is
-implementation authority. The implementation/evidence candidate and its fresh
-executor evidence are complete and awaiting the retained reviewer's verdict;
-no implementation claim is accepted yet.
+implementation authority. Implementation/evidence review closed
+`G15-IE-001` through `G15-IE-005` after two repair passes and returned `Accept`
+with no acceptance-changing finding remaining. The accepted implementation is
+fixed by maintainer-authorized commit
+`03ea74ec4f760c83060a6da4fa26ecb9519d1468`; Gate 16 has not begun.
 
 Date: 2026-07-20
 
@@ -1120,8 +1122,8 @@ it with an explicit `Accept` verdict for the complete contract/theory layer.
 
 The reviewer left the production checkout unmodified throughout contract
 review. The contract/theory layer is accepted with no finding open and is now
-implementation authority. No implementation/evidence claim is accepted by
-that verdict; the same retained reviewer remains reserved for that later layer.
+implementation authority. That verdict did not pre-accept
+implementation/evidence; the subsequent retained review is recorded below.
 
 The first implementation/evidence pass returned `Revise` with five
 acceptance-changing findings. The executor accepted each finding against the
@@ -1132,21 +1134,21 @@ closure pass closed `G15-IE-001` and `G15-IE-003` through `G15-IE-005`, but kept
 while a lower-revision cut was inserted earlier in the same transaction. The
 executor accepted that counterexample, made both application and SQLite
 membership sealed and revision-bounded, and added the exact correction attack.
-That second repair has not yet received a closure verdict.
+The retained reviewer reproduced both changed focused checks, closed
+`G15-IE-002`, and returned `Accept` with no new acceptance-changing finding.
 
-| Finding | Reviewer state | Repair awaiting closure |
+| Finding | Final reviewer state | Accepted resolution |
 | --- | --- | --- |
 | `G15-IE-001` | Closed | The exact `LearnerAdmission` captured before provider/plugin/file/image preparation crosses `SessionPrompt` into occurrence admission unchanged. Delayed root and promoted-steer tests prove neither instant nor resolved/unavailable timezone state is recaptured at persistence or formal operation entry. |
-| `G15-IE-002` | Repaired again; awaiting closure | Every transition carries a deferred foreign key to a transaction-final commit seal. State revision can advance only after the exact receipt and applied invocation exist; the seal validates their full identity and settlement and is inserted last. Cut insertion additionally requires every transition through its claimed revision to be sealed, counts only sealed effects, and lets only a sealed successor at or below that cut revision suppress a predecessor. A two-stage direct-SQL oracle rejects both a cut through an unsealed current revision and a lower-revision cut hidden by a later unsealed correction, then completes each surrounding effect transaction legally. |
+| `G15-IE-002` | Closed | Every transition carries a deferred foreign key to a transaction-final commit seal. State revision can advance only after the exact receipt and applied invocation exist; the seal validates their full identity and settlement and is inserted last. Cut insertion additionally requires every transition through its claimed revision to be sealed, counts only sealed effects, and lets only a sealed successor at or below that cut revision suppress a predecessor. A two-stage direct-SQL oracle rejects both a cut through an unsealed current revision and a lower-revision cut hidden by a later unsealed correction, then completes each surrounding effect transaction legally. |
 | `G15-IE-003` | Closed | Compaction, fork, revert, recovery, server, and shared Session fixtures reuse the stored learner-message instant when constructing the admission arm. Focused compaction, fork-history/fork-start, protected-revert, fork-survival, deletion, and restart oracles reach and pass the accepted lifecycle behavior. |
 | `G15-IE-004` | Closed | A committed semantic predecessor is exercised across an already-waiting permission, cancellation, capability absence/revocation, source tombstone, explicit interruption, and startup recovery. Duplicate/conflict reconciliation remains before genuinely-new authority and live-state checks. |
 | `G15-IE-005` | Closed | Retained-specific fault injection aborts each new transition, acknowledgement, consumed/resulting Turn frontier, shared frontier, receipt, applied settlement, policy revision, commit seal, ToolPart projection, event sequence, and durable Part-event boundary and proves the exact pre-command snapshot remains. |
 
-## Implementation/evidence candidate
+## Accepted implementation/evidence
 
-This section records the exact repaired candidate resubmitted to the retained
-reviewer. It is executor evidence, not an accepted implementation claim, until
-that reviewer returns an implementation/evidence closure verdict.
+This section records the exact repaired candidate accepted by the retained
+reviewer and fixed by implementation commit `03ea74ec4`.
 
 ### Candidate realization
 
@@ -1265,5 +1267,7 @@ timeout wrapper.
 
 No root-level suite, unrelated package suite, release build, packaged binary,
 HTTP/MCP writer, preview-v2 path, or background runtime is claimed. The
-remaining candidate checks are documentation links/whitespace, exact checkout
-binding, and the retained reviewer's implementation/evidence closure pass.
+retained reviewer accepted the exact checkout binding and closed every
+implementation/evidence finding. The maintainer-authorized local integration
+does not authorize push, merge, publication, cleanup, or Gate 16; Gate 16 has
+not begun.
