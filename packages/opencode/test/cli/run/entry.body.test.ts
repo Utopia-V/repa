@@ -52,6 +52,43 @@ function structured(next: StreamCommit) {
 }
 
 describe("run entry body", () => {
+  test("renders the durable learner Goal acknowledgement instead of generic completion or raw settlement", () => {
+    const acknowledgement =
+      "Stored 2 learner Goals: Operating systems exam readiness; Data structures exam readiness. You can correct either Goal with a later explicit learner direction."
+    const part = toolPart("update_learner_goals", {
+      status: "completed",
+      input: {
+        authorization: "learner_acceptance",
+        operations: [{ action: "create" }, { action: "create" }],
+      },
+      output: acknowledgement,
+      title: "Learner Goals updated",
+      metadata: { outcome: "applied", durablySettled: true },
+      time: { start: 1, end: 2 },
+    })
+    const final = entryBody(
+      commit({
+        kind: "tool",
+        text: "",
+        phase: "final",
+        source: "tool",
+        tool: "update_learner_goals",
+        toolState: "completed",
+        part,
+      }),
+    )
+
+    expect(toolInlineInfo(part)).toEqual({
+      icon: "◇",
+      title: "Learner Goals updated",
+      mode: "block",
+      body: acknowledgement,
+    })
+    expect(final).toEqual({ type: "text", content: acknowledgement })
+    expect(JSON.stringify(final)).not.toContain("completed")
+    expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
+  })
+
   test("renders retained steering acknowledgement title and body instead of the generic tool fallback", () => {
     const part = toolPart(LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY, {
       status: "completed",

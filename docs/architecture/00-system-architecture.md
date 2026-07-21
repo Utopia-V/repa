@@ -122,13 +122,21 @@ The state also changes at different rates:
 | ---------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | slow             | domain foundations, course structure, accepted curricular relations                      | high-inertia; a learner error does not rewrite it                            |
 | medium           | material alignment, progress, activities, observations, evidence, correctable hypotheses | changes after meaningful interactions or source revisions                    |
-| planning horizon | assignments, remaining-work estimates, capacity, cross-day allocations, commitments      | recomputed when time, progress, estimates, or availability changes           |
+| planning horizon | typed Goal/Assignment demands, remaining work, capacity, cross-day allocations, commitments | recomputed when time, progress, estimates, or availability changes           |
 | fast             | current focus, revisits, scoped steering, current learner direction                      | re-evaluated around each Turn                                                |
 | query-time       | due/overdue/expired status and time pressure                                             | derived from stored facts and the current clock; no daemon event is required |
 
 In plain language: the course map changes slowly, multi-day work is rebalanced
 when its inputs change, today's route can change quickly, and “due now” can
 become true simply because time passed.
+
+A cross-day plan consumes a typed planning demand that may reference an exact
+Goal revision or an exact Assignment revision. Goal authority owns intended
+outcome and Goal lifecycle; Assignment authority owns obligation and Assignment
+lifecycle; planning owns accepted estimates, capacity, feasibility, allocation,
+feedback, and recomputation. Exam preparation therefore need not masquerade as
+an Assignment, and admitting an Assignment is not a prerequisite for every
+cross-day plan.
 
 ## Chosen structural style
 
@@ -1252,7 +1260,7 @@ Repa product composition
   sources/artifacts         origins, revisions, representations
   curriculum/materials      Course View, Material Map, exact selectors, alignment
   learner                   progress, activity, evidence, inference
-  agenda                    goals, assignments, revisits, commitments
+  agenda                    goals, assignments, cross-day plans, revisits, commitments
   tutor policy/context      scoped policy and bounded sample composition
   outer capabilities        providers, files, shell, web, MCP, subagents
   terminal                  Repa CLI/TUI projection

@@ -46,6 +46,29 @@ export const CourseTable = sqliteTable(
   ],
 )
 
+export const CourseStateHistoryTable = sqliteTable(
+  "course_state_history",
+  {
+    course_id: text().$type<CourseID>().notNull(),
+    version: integer().notNull(),
+    title: text().notNull(),
+    withdrawal_reason: text().$type<"removed">(),
+    time_updated: integer().notNull(),
+  },
+  (table) => [
+    foreignKey({ columns: [table.course_id], foreignColumns: [CourseTable.id] }).onDelete("restrict"),
+    primaryKey({ columns: [table.course_id, table.version] }),
+    check("course_state_history_version_nonnegative", sql`${table.version} >= 0`),
+    check("course_state_history_title_length", sql`length(trim(${table.title})) BETWEEN 1 AND 200`),
+    check(
+      "course_state_history_withdrawal_reason",
+      sql`${table.withdrawal_reason} IS NULL OR ${table.withdrawal_reason} = 'removed'`,
+    ),
+    check("course_state_history_time_nonnegative", sql`${table.time_updated} >= 0`),
+    index("course_state_history_time_idx").on(table.course_id, table.time_updated, table.version),
+  ],
+)
+
 export const CourseViewTable = sqliteTable(
   "course_view",
   {

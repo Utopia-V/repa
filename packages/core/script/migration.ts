@@ -14,8 +14,11 @@ const registry = path.join(root, "packages/core/src/database/migration.gen.ts")
 const schema = path.join(root, "packages/core/src/database/schema.gen.ts")
 // These text-keyed append-only authorities must not expose SQLite's hidden replacement-conflict key.
 const withoutRowidTables = new Set([
+  "course_state_history",
   "learner_course_route_anchor_transition",
   "learner_default_course_transition",
+  "learner_goal_time_zone",
+  "learner_goal_time_zone_release",
   "learning_command_receipt",
 ])
 const args = parseArgs({

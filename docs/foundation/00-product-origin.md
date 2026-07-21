@@ -50,13 +50,15 @@ time, permission, and persistence; the model may supply the open semantic
 content and decide to write. Legal commitment makes the record part of the
 system, but it does not upgrade a report or inference into stronger evidence.
 
-For ordinary assignments and other substantial real work, the program also
-owns the closed arithmetic of planning: deadlines, estimated remaining work,
-known available capacity, feasibility, allocation across days, completion
-feedback, and recomputation after change. A model or learner may propose the
-estimate, interpret the work, decompose it semantically, or advise on an
-exception; those open judgments become useful inputs only after the Learning
-System retains their source and permits correction. This is not a fixed
+For ordinary substantial planning demands, including assignments and
+Goal-driven work such as exam preparation, the program also owns the closed
+arithmetic of planning: deadlines, estimated remaining work, known available
+capacity, feasibility, allocation across days, completion feedback, and
+recomputation after change. A model or learner may propose the estimate,
+interpret the work, decompose it semantically, or advise on an exception; those
+open judgments become useful inputs only after the Learning System retains
+their source and permits correction. The planning demand references but does
+not merge the Goal or Assignment that gives it meaning. This is not a fixed
 program/model percentage. It prevents a language model from becoming the only
 place where five hours of work and six days of capacity are compared.
 
@@ -121,10 +123,12 @@ Learning is native when it changes the agent's normal behavior rather than appea
   current plan and task sequence remain adaptive.
 - Time can make a review due without creating a new learning observation or a
   durable claim that the learner has forgotten.
-- A substantial assignment can change the plan before it becomes urgent. Its
-  subject or learning context, source/nature, deadline, estimated remaining
-  work, known capacity, and relation to learning determine which facts matter.
-  The behavior is advance allocation and later replanning over days.
+- A substantial planning demand can change the plan before it becomes urgent.
+  It may arise from an Assignment or directly from a Goal such as preparing for
+  an exam; those authorities remain distinct. Its subject or learning context,
+  source/nature, deadline, estimated remaining work, known capacity, and
+  relation to learning determine which facts matter. The behavior is advance
+  allocation and later replanning over days.
   Last-minute rescue after a task has collapsed to a minute-scale deadline
   window is outside Repa's product scope.
 - When a Session produces a relevant durable change, the learner can inspect

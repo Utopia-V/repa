@@ -63,6 +63,7 @@ import { LocationServiceMap, locationServiceMapLayer } from "@opencode-ai/core/l
 import { InstanceStore } from "@/project/instance-store"
 import { TestConsole } from "effect/testing"
 import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
+import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
@@ -1010,6 +1011,93 @@ it.instance(
       expect(JSON.stringify(final)).not.toContain(" completed")
       expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
       expect(yield* database.db.transaction((tx) => RetainedSteering.readActive(tx, Date.now()))).toHaveLength(1)
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+)
+
+it.instance(
+  "keeps the learner Goal acknowledgement after the following provider operation fails",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const source = "Create a durable Goal: Learn operating systems; active; LearnerHome; no conditions; no target."
+      const input = {
+        authorizationBasis: "learner_request" as const,
+        operations: [
+          {
+            type: "create" as const,
+            snapshot: {
+              outcome: "Learn operating systems",
+              conditions: [],
+              scope: { type: "learner_home" as const },
+              target: { type: "absent" as const },
+              fieldBases: {
+                outcome: { type: "authored" as const, sourceExcerpt: "Learn operating systems" },
+                conditions: { type: "authored" as const, sourceExcerpt: "no conditions" },
+                scope: { type: "authored" as const, sourceExcerpt: "LearnerHome" },
+                target: { type: "authored" as const, sourceExcerpt: "no target" },
+                disposition: { type: "authored" as const, sourceExcerpt: "active" },
+              },
+            },
+            disposition: "active" as const,
+          },
+        ],
+      }
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input)
+      yield* llm.error(400, { error: { message: "post-commit provider failure" } })
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 2 },
+        session: {
+          title: "learner Goal acknowledgement after provider failure",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: source }],
+      })
+      const terminal = yield* prompt.awaitTurn(sessionID, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "failed", reason: "provider_failure" })
+      const messages = yield* sessions.messages({ sessionID })
+      const part = messages
+        .flatMap((message) => message.parts)
+        .find(
+          (candidate): candidate is SessionV1.ToolPart =>
+            candidate.type === "tool" && candidate.tool === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        )
+      expect(part?.state.status).toBe("completed")
+      if (!part || part.state.status !== "completed") return yield* Effect.die("Expected committed Goal ToolPart")
+      const projected = part as unknown as SDKToolPart
+      expect(toolInlineInfo(projected)).toMatchObject({
+        title: "Updated learning Goal",
+        mode: "block",
+        body: expect.stringContaining(input.operations[0].snapshot.outcome),
+      })
+      const final = entryBody({
+        kind: "tool",
+        text: "",
+        phase: "final",
+        source: "tool",
+        tool: part.tool,
+        toolState: "completed",
+        part: projected,
+      } satisfies StreamCommit)
+      expect(final).toEqual({ type: "text", content: part.state.output })
+      expect(JSON.stringify(final)).not.toContain(" completed")
+      expect(JSON.stringify(final)).not.toContain('"receiptID"')
+      expect((yield* database.db.transaction((tx) => LearnerGoal.discover(tx, Date.now()))).items).toMatchObject([
+        { head: { outcome: input.operations[0].snapshot.outcome, disposition: { type: "active" } } },
+      ])
       yield* sessions.remove(sessionID)
     }),
   { config: cfg },

@@ -20,6 +20,7 @@ import type {
 } from "../learner-navigation/schema"
 import type { OccurrenceID } from "./occurrence-schema"
 import type { RetainedSteering } from "../retained-steering"
+import type { LearnerGoal } from "../learner-goal"
 
 export const ReceiptID = Schema.String.check(Schema.isPattern(/^lcr_[0-9A-Za-z]{26}$/)).pipe(
   Schema.brand("LearningCommand.ReceiptID"),
@@ -83,6 +84,8 @@ export type SetCourseRouteAnchorInvocation = {
 export type NavigationInvocation = SetDefaultCoursePreferenceInvocation | SetCourseRouteAnchorInvocation
 
 export type RetainedSteeringInvocation = RetainedSteering.Invocation
+
+export type LearnerGoalInvocation = LearnerGoal.Invocation
 
 export type SettlementMetadata = {
   readonly time: number
@@ -224,9 +227,9 @@ export type ErrorSettlement = {
   readonly settlementTime: number
   readonly settlementOrder: number
   readonly detail?: {
-    readonly entity?: "course" | "view" | "revision" | "selection"
+    readonly entity?: "course" | "view" | "revision" | "selection" | "goal"
     readonly id?: string
-    readonly effectID?: SelectionAcceptanceEffectID | RetainedSteering.TransitionID
+    readonly effectID?: SelectionAcceptanceEffectID | RetainedSteering.TransitionID | LearnerGoal.EffectID
     readonly acceptedRevisionID?: RevisionID
   }
 }
@@ -244,6 +247,9 @@ export type Settlement =
   | RetainedSteering.AppliedSettlement
   | RetainedSteering.AlreadyAppliedSettlement
   | RetainedSteering.NoChangeSettlement
+  | LearnerGoal.AppliedSettlement
+  | LearnerGoal.AlreadyAppliedSettlement
+  | LearnerGoal.NoChangeSettlement
   | ErrorSettlement
 
 export type PermissionOutcome =

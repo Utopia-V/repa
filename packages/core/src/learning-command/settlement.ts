@@ -1,8 +1,10 @@
-import { and, asc, eq, ne, or } from "drizzle-orm"
+import { and, asc, eq, ne, or, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import { Course } from "../course"
 import { LearnerNavigation } from "../learner-navigation"
 import { RetainedSteering } from "../retained-steering"
+import { LearnerGoal } from "../learner-goal"
+import { LearnerGoalEffectTable } from "../learner-goal/sql"
 import { RetainedSteeringTransitionTable } from "../retained-steering/sql"
 import { CourseRouteAnchorTransitionTable, DefaultCoursePreferenceTransitionTable } from "../learner-navigation/sql"
 import { CourseSelectionAcceptanceEffectTable } from "../course/sql"
@@ -34,6 +36,7 @@ import {
   type RepresentationConvertInvocation,
   type NavigationInvocation,
   type RetainedSteeringInvocation,
+  type LearnerGoalInvocation,
   type SetDefaultCoursePreferenceInvocation,
   type SetCourseRouteAnchorInvocation,
   type ReceiptID,
@@ -59,6 +62,8 @@ export const SET_COURSE_ROUTE_ANCHOR_CAPABILITY = "set_course_route_anchor"
 export const SET_COURSE_ROUTE_ANCHOR_VERSION = 1
 export const UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY = "update_retained_learning_steering"
 export const UPDATE_RETAINED_LEARNING_STEERING_VERSION = 1
+export const UPDATE_LEARNER_GOALS_CAPABILITY = "update_learner_goals"
+export const UPDATE_LEARNER_GOALS_VERSION = 1
 
 type StoredAssistant = Omit<SessionV1.Assistant, "id" | "sessionID">
 type StoredToolPart = Omit<SessionV1.ToolPart, "id" | "sessionID" | "messageID">
@@ -77,6 +82,15 @@ export type SettlementResult =
 export type RepresentationCandidateDecision =
   | { readonly type: "candidate" }
   | { readonly type: "terminal"; readonly reason: "context_refresh_required" }
+  | { readonly type: "replay"; readonly settlement: Settlement }
+
+export type GoalConfirmationResult =
+  | {
+      readonly type: "confirmation"
+      readonly confirmation: LearnerGoal.ConfirmationSnapshot
+      readonly preparedConfirmation: LearnerGoal.PreparedConfirmation
+    }
+  | { readonly type: "settled"; readonly settlement: Settlement }
   | { readonly type: "replay"; readonly settlement: Settlement }
 
 export type PhysicalInvocation = typeof LearningCommandInvocationTable.$inferSelect
@@ -452,12 +466,7 @@ export function settleNavigation(
 export function reserveRetainedSteering(tx: Transaction, input: RetainedSteeringInvocation) {
   return Effect.gen(function* () {
     const fingerprint = retainedSteeringInvocationFingerprint(input)
-    const physical = yield* findPhysical(
-      tx,
-      input,
-      fingerprint,
-      UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-    )
+    const physical = yield* findPhysical(tx, input, fingerprint, UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY)
     if (physical) {
       if (physical.status === "admitted") return { type: "admitted" as const }
       return { type: "replay" as const, settlement: requireSettlement(physical) }
@@ -611,6 +620,280 @@ export function settleRetainedSteering(
     })
     return { type: "settled" as const, settlement }
   })
+}
+
+export function reserveLearnerGoals(tx: Transaction, input: LearnerGoalInvocation) {
+  return Effect.gen(function* () {
+    const fingerprint = learnerGoalInvocationFingerprint(input)
+    const physical = yield* findPhysical(tx, input, fingerprint, UPDATE_LEARNER_GOALS_CAPABILITY)
+    if (physical) {
+      if (
+        JSON.stringify(physical.goal_command_snapshot) !==
+        JSON.stringify(LearnerGoal.canonicalizeCommand(input.command))
+      ) {
+        return yield* invocationConflict(input.envelope)
+      }
+      if (physical.status === "admitted") return { type: "admitted" as const }
+      return { type: "replay" as const, settlement: yield* authoritativeLearnerGoalSettlement(tx, physical) }
+    }
+    yield* validateNewEnvelope(tx, input.envelope, {
+      capability: UPDATE_LEARNER_GOALS_CAPABILITY,
+      version: UPDATE_LEARNER_GOALS_VERSION,
+    })
+    yield* tx
+      .insert(LearningCommandInvocationTable)
+      .values({
+        part_id: input.envelope.partID,
+        turn_id: input.envelope.turnID,
+        input_id: input.envelope.inputID,
+        session_id: input.envelope.sessionID,
+        parent_user_message_id: input.envelope.parentUserMessageID,
+        assistant_message_id: input.envelope.assistantMessageID,
+        provider_call_id: input.envelope.providerCallID,
+        occurrence_id: input.envelope.occurrenceID,
+        command_name: UPDATE_LEARNER_GOALS_CAPABILITY,
+        command_version: UPDATE_LEARNER_GOALS_VERSION,
+        emission_ordinal: input.envelope.emissionOrdinal,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        input_fingerprint: fingerprint,
+        goal_semantic_fingerprint: LearnerGoal.commandFingerprint(input.command, input.envelope.authorizationBasis),
+        goal_command_snapshot: LearnerGoal.canonicalizeCommand(input.command),
+        permission_request_id: isAcceptedLearnerGoal(input) ? input.permissionRequestID : null,
+        status: "admitted",
+        time_admitted: input.envelope.timeAdmitted,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    const decision = yield* learnerGoalSemanticDecision(tx, input)
+    return decision.type === "candidate"
+      ? ({ type: "candidate" } as const)
+      : ({ type: "terminal", reason: decision.type } as const)
+  })
+}
+
+export function settleLearnerGoalReservation(
+  tx: Transaction,
+  input: LearnerGoalInvocation & { readonly settlement: SettlementMetadata },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireLearnerGoalPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: yield* authoritativeLearnerGoalSettlement(tx, invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    const decision = yield* learnerGoalSemanticDecision(tx, input)
+    if (decision.type === "candidate") return { type: "candidate" as const }
+    const settlement = yield* learnerGoalSettlementForDecision(tx, decision, input.settlement)
+    yield* settleInvocation(tx, invocation.part_id, settlement)
+    return { type: "settled" as const, settlement }
+  })
+}
+
+export function prepareLearnerGoalConfirmation(
+  tx: Transaction,
+  input: LearnerGoalInvocation & { readonly settlement: SettlementMetadata },
+): Effect.Effect<GoalConfirmationResult, Error> {
+  return Effect.gen(function* () {
+    const invocation = yield* requireLearnerGoalPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: yield* authoritativeLearnerGoalSettlement(tx, invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    const decision = yield* learnerGoalSemanticDecision(tx, input)
+    if (decision.type !== "candidate") {
+      const settlement = yield* learnerGoalSettlementForDecision(tx, decision, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (!isAcceptedLearnerGoal(input)) {
+      const settlement = errorSettlement("validation_error", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const occupied = yield* appliedMutation(tx, input.envelope.assistantMessageID)
+    if (occupied) {
+      yield* requireMetadataFloor(input.settlement, occupied.timeSettled ?? 0)
+      const settlement = errorSettlement("context_refresh_required", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const prepared = yield* LearnerGoal.prepareChangeSet(tx, input).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (prepared.type === "failure") {
+      const settlement = learnerGoalErrorSettlement(prepared.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (prepared.value.type === "no_change") {
+      const settlement = learnerGoalNoChangeSettlement(prepared.value, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const confirmation = yield* LearnerGoal.prepareConfirmation(tx, input).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (confirmation.type === "failure") {
+      const settlement = learnerGoalErrorSettlement(confirmation.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (invocation.goal_confirmation_snapshot) return yield* invocationConflict(input.envelope)
+    const snapshot = LearnerGoal.preparedConfirmationSnapshot(confirmation.value)
+    if (!snapshot) return yield* Effect.die("Fresh Learner Goal confirmation proof is unreadable")
+    return {
+      type: "confirmation" as const,
+      confirmation: snapshot,
+      preparedConfirmation: confirmation.value,
+    }
+  })
+}
+
+export function settleLearnerGoals(
+  tx: Transaction,
+  input: LearnerGoalInvocation & {
+    readonly permission: PermissionOutcome
+    readonly settlement: SettlementMetadata
+    readonly displayedConfirmation?: LearnerGoal.ConfirmationSnapshot
+    readonly preparedConfirmation?: LearnerGoal.PreparedConfirmation
+  },
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* requireLearnerGoalPhysical(tx, input)
+    if (invocation.status !== "admitted") {
+      return { type: "replay" as const, settlement: yield* authoritativeLearnerGoalSettlement(tx, invocation) }
+    }
+    yield* requireSettlementMetadata(invocation.time_admitted, input.settlement)
+    const decision = yield* learnerGoalSemanticDecision(tx, input)
+    if (decision.type !== "candidate") {
+      const settlement = yield* learnerGoalSettlementForDecision(tx, decision, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const permissionError = permissionErrorCode(input.permission)
+    if (permissionError) {
+      const settlement = errorSettlement(permissionError, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const occupied = yield* appliedMutation(tx, input.envelope.assistantMessageID)
+    if (occupied) {
+      yield* requireMetadataFloor(input.settlement, occupied.timeSettled ?? 0)
+      const settlement = errorSettlement("context_refresh_required", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const accepted = isAcceptedLearnerGoal(input)
+    if (!accepted && (input.displayedConfirmation || input.preparedConfirmation)) {
+      const settlement = errorSettlement("validation_error", input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const acceptedConfirmation =
+      accepted && input.displayedConfirmation && input.preparedConfirmation
+        ? LearnerGoal.acceptedPreparedConfirmation(input.preparedConfirmation, input, input.displayedConfirmation)
+        : undefined
+    if (accepted) {
+      if (!acceptedConfirmation) {
+        return yield* Effect.fail(
+          new LearnerGoal.IntegrityError({ detail: "learner_goal_prepared_confirmation_invalid" }),
+        )
+      }
+      const confirmation = yield* LearnerGoal.prepareConfirmation(tx, input).pipe(
+        Effect.map((value) => ({ type: "success" as const, value })),
+        Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+      )
+      if (confirmation.type === "failure") {
+        const settlement = learnerGoalErrorSettlement(confirmation.error, input.settlement)
+        yield* settleInvocation(tx, invocation.part_id, settlement)
+        return { type: "settled" as const, settlement }
+      }
+      const currentConfirmation = LearnerGoal.preparedConfirmationSnapshot(confirmation.value)
+      if (!currentConfirmation) return yield* Effect.die("Fresh Learner Goal confirmation proof is unreadable")
+      if (!sameLearnerGoalConfirmation(acceptedConfirmation, currentConfirmation)) {
+        const settlement = errorSettlement("stale", input.settlement)
+        yield* settleInvocation(tx, invocation.part_id, settlement)
+        return { type: "settled" as const, settlement }
+      }
+    }
+    const prepared = yield* LearnerGoal.prepareChangeSet(tx, input).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (prepared.type === "failure") {
+      const settlement = learnerGoalErrorSettlement(prepared.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    if (prepared.value.type === "no_change") {
+      const settlement = learnerGoalNoChangeSettlement(prepared.value, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const effect = yield* LearnerGoal.applyChangeSet(tx, prepared.value.value).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "failure" as const, error })),
+    )
+    if (effect.type === "failure") {
+      const settlement = learnerGoalErrorSettlement(effect.error, input.settlement)
+      yield* settleInvocation(tx, invocation.part_id, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const receiptID = yield* insertLearnerGoalReceipt(
+      tx,
+      input,
+      effect.value,
+      acceptedConfirmation ?? null,
+      input.settlement,
+    )
+    const settlement = {
+      outcome: "applied",
+      goalKind: "learner_goal",
+      receiptID,
+      effectID: effect.value.id,
+      authorizationBasis: effect.value.authorizationBasis,
+      ...(accepted ? { confirmationRequestID: input.permissionRequestID } : {}),
+      operations: effect.value.operations,
+      acknowledgementTitle: effect.value.acknowledgementTitle,
+      acknowledgementBody: effect.value.acknowledgementBody,
+      frontierSequence: effect.value.frontierSequence,
+      settlementTime: input.settlement.time,
+      settlementOrder: input.settlement.order,
+    } as const
+    yield* settleInvocation(tx, invocation.part_id, settlement, acceptedConfirmation)
+    yield* LearnerGoal.sealEffect(tx, {
+      effect: effect.value,
+      receiptID,
+      invocationPartID: invocation.part_id,
+      expectedRevisionSequence: prepared.value.value.revisionSequenceBefore,
+    })
+    return { type: "settled" as const, settlement }
+  })
+}
+
+function sameLearnerGoalConfirmation(
+  displayed: LearnerGoal.ConfirmationSnapshot,
+  current: LearnerGoal.ConfirmationSnapshot,
+) {
+  const semanticBasis = (confirmation: LearnerGoal.ConfirmationSnapshot) => ({
+    ...confirmation,
+    courseBases: confirmation.courseBases.map((course) =>
+      course.admission.type === "carried"
+        ? {
+            operationOrdinal: course.operationOrdinal,
+            revisionRole: course.revisionRole,
+            courseID: course.courseID,
+            courseTitle: course.courseTitle,
+            admission: course.admission,
+          }
+        : course,
+    ),
+  })
+  return JSON.stringify(semanticBasis(displayed)) === JSON.stringify(semanticBasis(current))
 }
 
 /** Call only after Representation.resolveConversion has established a new effect candidate. */
@@ -948,9 +1231,14 @@ export function assertAssistantDeletable(tx: Transaction, assistantMessageID: Me
 }
 
 export function exactSettlement(tx: Transaction, partID: PartID) {
-  return lookupPhysicalInvocationByPart(tx, partID).pipe(
-    Effect.map((row) => (row && row.status !== "admitted" ? row.settlement : undefined)),
-  )
+  return Effect.gen(function* () {
+    const row = yield* lookupPhysicalInvocationByPart(tx, partID)
+    if (!row || row.status === "admitted") return undefined
+    if (row.command_name === UPDATE_LEARNER_GOALS_CAPABILITY) {
+      return yield* authoritativeLearnerGoalSettlement(tx, row)
+    }
+    return row.settlement
+  })
 }
 
 export function removeNoEffectInvocationsForAssistant(tx: Transaction, assistantMessageID: MessageID) {
@@ -1052,6 +1340,12 @@ export function garbageCollectOccurrences(tx: Transaction, occurrenceIDs: readon
             .select({ id: RetainedSteeringTransitionTable.id })
             .from(RetainedSteeringTransitionTable)
             .where(eq(RetainedSteeringTransitionTable.occurrence_id, occurrenceID))
+            .get()
+            .pipe(Effect.orDie),
+          tx
+            .select({ id: LearnerGoalEffectTable.id })
+            .from(LearnerGoalEffectTable)
+            .where(eq(LearnerGoalEffectTable.occurrence_id, occurrenceID))
             .get()
             .pipe(Effect.orDie),
           tx
@@ -1160,6 +1454,13 @@ type RetainedSteeringSemanticDecision =
       readonly transition: RetainedSteering.Transition
     }
 
+type LearnerGoalSemanticDecision =
+  | { readonly type: "candidate" }
+  | { readonly type: "already_applied"; readonly effect: LearnerGoal.EffectRead }
+  | { readonly type: "semantic_conflict"; readonly effect: LearnerGoal.EffectRead }
+  | { readonly type: "semantic_conflict"; readonly acceptedCandidate: true }
+  | { readonly type: "context_refresh_required"; readonly acceptedCandidate: true }
+
 function semanticDecision(tx: Transaction, input: AcceptCourseViewRevisionInvocation): Effect.Effect<SemanticDecision> {
   return Effect.gen(function* () {
     const resolution = yield* Course.resolveSelectionAcceptance(tx, {
@@ -1244,6 +1545,39 @@ function retainedSteeringSemanticDecision(
   })
 }
 
+function learnerGoalSemanticDecision(
+  tx: Transaction,
+  input: LearnerGoalInvocation,
+): Effect.Effect<LearnerGoalSemanticDecision> {
+  return Effect.gen(function* () {
+    const resolution = yield* LearnerGoal.resolveSemantic(tx, {
+      occurrenceID: input.envelope.occurrenceID,
+      command: input.command,
+      authorizationBasis: input.envelope.authorizationBasis,
+    }).pipe(Effect.orDie)
+    if (resolution.type !== "candidate") return resolution
+    const acceptedCandidate = yield* tx
+      .select({ semanticFingerprint: LearningCommandInvocationTable.goal_semantic_fingerprint })
+      .from(LearningCommandInvocationTable)
+      .where(
+        and(
+          eq(LearningCommandInvocationTable.command_name, UPDATE_LEARNER_GOALS_CAPABILITY),
+          eq(LearningCommandInvocationTable.occurrence_id, input.envelope.occurrenceID),
+          eq(LearningCommandInvocationTable.authorization_basis, "learner_acceptance"),
+          ne(LearningCommandInvocationTable.part_id, input.envelope.partID),
+        ),
+      )
+      .orderBy(asc(LearningCommandInvocationTable.time_admitted), asc(LearningCommandInvocationTable.part_id))
+      .get()
+      .pipe(Effect.orDie)
+    if (!acceptedCandidate) return resolution
+    return acceptedCandidate.semanticFingerprint ===
+      LearnerGoal.commandFingerprint(input.command, input.envelope.authorizationBasis)
+      ? ({ type: "context_refresh_required", acceptedCandidate: true } as const)
+      : ({ type: "semantic_conflict", acceptedCandidate: true } as const)
+  })
+}
+
 function settlementForDecision(
   tx: Transaction,
   decision: Exclude<SemanticDecision, { readonly type: "candidate" }>,
@@ -1321,7 +1655,11 @@ function navigationSettlementForDecision(
         .get()
         .pipe(Effect.orDie)
       if (!receipt) return yield* Effect.die("Applied navigation effect has no immutable receipt")
-      if (!receipt.confirmation_snapshot || !receipt.permission_request_id) {
+      if (
+        !receipt.confirmation_snapshot ||
+        !isDefaultConfirmationSnapshot(receipt.confirmation_snapshot) ||
+        !receipt.permission_request_id
+      ) {
         return yield* Effect.die("Default Course effect receipt has no exact confirmation snapshot")
       }
       return {
@@ -1393,20 +1731,76 @@ function retainedSteeringSettlementForDecision(
   })
 }
 
+function learnerGoalSettlementForDecision(
+  tx: Transaction,
+  decision: Exclude<LearnerGoalSemanticDecision, { readonly type: "candidate" }>,
+  metadata: SettlementMetadata,
+) {
+  if ("acceptedCandidate" in decision) {
+    return Effect.succeed(errorSettlement(decision.type, metadata))
+  }
+  if (decision.type === "semantic_conflict") {
+    return requireMetadataFloor(metadata, decision.effect.timeCommitted).pipe(
+      Effect.map(() => errorSettlement("semantic_conflict", metadata, { effectID: decision.effect.effectID })),
+    )
+  }
+  return Effect.gen(function* () {
+    yield* requireMetadataFloor(metadata, decision.effect.timeCommitted)
+    const currentHeads = yield* Effect.forEach(
+      [...new Set(decision.effect.operations.map((operation) => operation.goalID))],
+      (goalID) =>
+        LearnerGoal.readCurrent(tx, goalID, metadata.time).pipe(
+          Effect.orDie,
+          Effect.flatMap((goal) =>
+            goal
+              ? Effect.succeed({ goalID, revisionID: goal.head.id, version: goal.head.version })
+              : Effect.die(`Applied Goal ${goalID} has no current head`),
+          ),
+        ),
+    )
+    return {
+      outcome: "already_applied",
+      goalKind: "learner_goal",
+      receiptID: decision.effect.receiptID,
+      effectID: decision.effect.effectID,
+      authorizationBasis: decision.effect.authorizationBasis,
+      ...(decision.effect.confirmation
+        ? {
+            confirmationRequestID: (yield* tx
+              .select({ permissionRequestID: LearningCommandReceiptTable.permission_request_id })
+              .from(LearningCommandReceiptTable)
+              .where(eq(LearningCommandReceiptTable.goal_effect_id, decision.effect.effectID))
+              .get()
+              .pipe(Effect.orDie))?.permissionRequestID,
+          }
+        : {}),
+      operations: decision.effect.operations,
+      currentHeads,
+      acknowledgementTitle: decision.effect.acknowledgementTitle,
+      acknowledgementBody: decision.effect.acknowledgementBody,
+      frontierSequence: decision.effect.frontierSequence,
+      settlementTime: metadata.time,
+      settlementOrder: metadata.order,
+    } as LearnerGoal.AlreadyAppliedSettlement
+  })
+}
+
 function findPhysical(
   tx: Transaction,
   input:
     | AcceptCourseViewRevisionInvocation
     | RepresentationConvertInvocation
     | NavigationInvocation
-    | RetainedSteeringInvocation,
+    | RetainedSteeringInvocation
+    | LearnerGoalInvocation,
   fingerprint: string,
   commandName:
     | typeof ACCEPT_COURSE_VIEW_REVISION_CAPABILITY
     | typeof REPRESENTATION_CONVERT_CAPABILITY
     | typeof SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
     | typeof SET_COURSE_ROUTE_ANCHOR_CAPABILITY
-    | typeof UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+    | typeof UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
+    | typeof UPDATE_LEARNER_GOALS_CAPABILITY,
 ) {
   return Effect.gen(function* () {
     const row = yield* lookupPhysicalInvocation(tx, input.envelope)
@@ -1464,6 +1858,20 @@ function requireRetainedSteeringPhysical(tx: Transaction, input: RetainedSteerin
   })
 }
 
+function requireLearnerGoalPhysical(tx: Transaction, input: LearnerGoalInvocation) {
+  return Effect.gen(function* () {
+    const row = yield* findPhysical(tx, input, learnerGoalInvocationFingerprint(input), UPDATE_LEARNER_GOALS_CAPABILITY)
+    if (!row) return yield* new InvocationNotFoundError({ partID: input.envelope.partID })
+    if (JSON.stringify(row.goal_command_snapshot) !== JSON.stringify(LearnerGoal.canonicalizeCommand(input.command))) {
+      return yield* invocationConflict(input.envelope)
+    }
+    if (isAcceptedLearnerGoal(input) && row.permission_request_id !== input.permissionRequestID) {
+      return yield* invocationConflict(input.envelope)
+    }
+    return row
+  })
+}
+
 function validateNewEnvelope(
   tx: Transaction,
   envelope: AcceptCourseViewRevisionInvocation["envelope"],
@@ -1474,6 +1882,7 @@ function validateNewEnvelope(
       | typeof SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
       | typeof SET_COURSE_ROUTE_ANCHOR_CAPABILITY
       | typeof UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
+      | typeof UPDATE_LEARNER_GOALS_CAPABILITY
     readonly version: number
   },
 ) {
@@ -1661,6 +2070,32 @@ function retainedSteeringInvocationFingerprint(input: RetainedSteeringInvocation
     .digest("hex")
 }
 
+function learnerGoalInvocationFingerprint(input: LearnerGoalInvocation) {
+  return new Bun.CryptoHasher("sha256")
+    .update(
+      JSON.stringify({
+        command: UPDATE_LEARNER_GOALS_CAPABILITY,
+        commandVersion: UPDATE_LEARNER_GOALS_VERSION,
+        occurrenceID: input.envelope.occurrenceID,
+        turnID: input.envelope.turnID,
+        inputID: input.envelope.inputID,
+        sessionID: input.envelope.sessionID,
+        parentUserMessageID: input.envelope.parentUserMessageID,
+        assistantMessageID: input.envelope.assistantMessageID,
+        partID: input.envelope.partID,
+        providerCallID: input.envelope.providerCallID,
+        emissionOrdinal: input.envelope.emissionOrdinal,
+        capabilityIdentity: input.envelope.capabilityIdentity,
+        capabilityVersion: input.envelope.capabilityVersion,
+        authorizationBasis: input.envelope.authorizationBasis,
+        timeAdmitted: input.envelope.timeAdmitted,
+        semanticFingerprint: LearnerGoal.commandFingerprint(input.command, input.envelope.authorizationBasis),
+        ...(isAcceptedLearnerGoal(input) ? { trusted: { permissionRequestID: input.permissionRequestID } } : {}),
+      }),
+    )
+    .digest("hex")
+}
+
 function navigationIdentity(input: NavigationInvocation) {
   return input.command.kind === "default_course_preference"
     ? ({
@@ -1672,6 +2107,16 @@ function navigationIdentity(input: NavigationInvocation) {
 
 function isDefaultNavigation(input: NavigationInvocation): input is SetDefaultCoursePreferenceInvocation {
   return input.command.kind === "default_course_preference"
+}
+
+function isAcceptedLearnerGoal(input: LearnerGoalInvocation): input is LearnerGoal.AcceptedInvocation {
+  return input.envelope.authorizationBasis === "learner_acceptance"
+}
+
+function isDefaultConfirmationSnapshot(
+  snapshot: LearnerNavigation.DefaultConfirmationSnapshot | LearnerGoal.ConfirmationSnapshot,
+): snapshot is LearnerNavigation.DefaultConfirmationSnapshot {
+  return "permissionRequestID" in snapshot
 }
 
 function navigationTarget(command: SetCourseRouteAnchorInvocation["command"]) {
@@ -1774,6 +2219,84 @@ function insertRetainedSteeringReceipt(
       .pipe(Effect.orDie)
     return receiptID
   })
+}
+
+function insertLearnerGoalReceipt(
+  tx: Transaction,
+  input: LearnerGoalInvocation,
+  effect: LearnerGoal.AppliedEffect,
+  confirmation: LearnerGoal.ConfirmationSnapshot | null,
+  metadata: SettlementMetadata,
+) {
+  return Effect.gen(function* () {
+    const occurrence = yield* tx
+      .select()
+      .from(AdmittedLearnerOccurrenceTable)
+      .where(eq(AdmittedLearnerOccurrenceTable.id, input.envelope.occurrenceID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!occurrence) return yield* Effect.die("Applied learner Goal command has no admitted occurrence")
+    if (
+      (input.envelope.authorizationBasis === "learner_acceptance" && !confirmation) ||
+      (input.envelope.authorizationBasis === "learner_request" && confirmation)
+    ) {
+      return yield* Effect.die("Applied learner Goal command has the wrong confirmation arm")
+    }
+    const receiptID = createReceiptID()
+    yield* tx
+      .insert(LearningCommandReceiptTable)
+      .values({
+        id: receiptID,
+        occurrence_id: occurrence.id,
+        origin_session_id: occurrence.origin_session_id,
+        origin_message_id: occurrence.origin_message_id,
+        assistant_message_id: input.envelope.assistantMessageID,
+        invocation_part_id: input.envelope.partID,
+        capability_identity: input.envelope.capabilityIdentity,
+        capability_version: input.envelope.capabilityVersion,
+        authorization_basis: input.envelope.authorizationBasis,
+        effect_id: null,
+        representation_effect_id: null,
+        default_navigation_effect_id: null,
+        anchor_navigation_effect_id: null,
+        retained_steering_effect_id: null,
+        goal_effect_id: effect.id,
+        permission_request_id: isAcceptedLearnerGoal(input) ? input.permissionRequestID : null,
+        confirmation_snapshot: confirmation,
+        time_committed: metadata.time,
+        commit_order: metadata.order,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    return receiptID
+  })
+}
+
+function learnerGoalNoChangeSettlement(
+  prepared: Extract<LearnerGoal.Preparation, { readonly type: "no_change" }>,
+  metadata: SettlementMetadata,
+): LearnerGoal.NoChangeSettlement {
+  return {
+    outcome: "no_change",
+    goalKind: "learner_goal",
+    operations: prepared.operations,
+    acknowledgementTitle: prepared.acknowledgementTitle,
+    acknowledgementBody: prepared.acknowledgementBody,
+    settlementTime: metadata.time,
+    settlementOrder: metadata.order,
+  }
+}
+
+function learnerGoalErrorSettlement(error: unknown, metadata: SettlementMetadata) {
+  if (!(error instanceof LearnerGoal.InvalidCommandError)) return errorSettlement("validation_error", metadata)
+  if (error.reason === "source_unavailable") return errorSettlement("source_unavailable", metadata)
+  if (error.reason === "temporal_context_unavailable") {
+    return errorSettlement("temporal_context_unavailable", metadata)
+  }
+  if (error.reason === "capacity_exceeded") return errorSettlement("capacity_exceeded", metadata)
+  if (error.reason === "stale" || error.reason === "relation_conflict") return errorSettlement("stale", metadata)
+  if (error.reason === "inactive") return errorSettlement("inactive", metadata)
+  return errorSettlement("validation_error", metadata)
 }
 
 function retainedSteeringErrorSettlement(error: unknown, metadata: SettlementMetadata) {
@@ -1923,7 +2446,12 @@ function representationSettlement(
   return { outcome, ...settlement }
 }
 
-function settleInvocation(tx: Transaction, partID: PartID, settlement: Settlement) {
+function settleInvocation(
+  tx: Transaction,
+  partID: PartID,
+  settlement: Settlement,
+  displayedConfirmation?: LearnerGoal.ConfirmationSnapshot,
+) {
   return Effect.gen(function* () {
     const status = settlement.outcome === "error" ? "error" : settlement.outcome
     const effects = settlementEffects(settlement)
@@ -1936,6 +2464,8 @@ function settleInvocation(tx: Transaction, partID: PartID, settlement: Settlemen
         default_navigation_effect_id: effects.defaultNavigation,
         anchor_navigation_effect_id: effects.anchorNavigation,
         retained_steering_effect_id: effects.retainedSteering,
+        goal_effect_id: effects.learnerGoal,
+        ...(displayedConfirmation ? { goal_confirmation_snapshot: displayedConfirmation } : {}),
         settlement,
         time_settled: settlement.settlementTime,
         settlement_order: settlement.settlementOrder,
@@ -1957,6 +2487,7 @@ function settlementEffects(settlement: Settlement) {
     defaultNavigation: null,
     anchorNavigation: null,
     retainedSteering: null,
+    learnerGoal: null,
   }
   if (settlement.outcome === "error" || settlement.outcome === "no_change") return none
   if ("navigationKind" in settlement) {
@@ -1970,6 +2501,9 @@ function settlementEffects(settlement: Settlement) {
   }
   if ("policyID" in settlement) {
     return { ...none, retainedSteering: settlement.effectID }
+  }
+  if ("goalKind" in settlement) {
+    return { ...none, learnerGoal: settlement.effectID }
   }
   return { ...none, course: settlement.effectID }
 }
@@ -2009,6 +2543,47 @@ function permissionErrorCode(permission: PermissionOutcome): ErrorCode | undefin
 function requireSettlement(row: typeof LearningCommandInvocationTable.$inferSelect): Settlement {
   if (!row.settlement) throw new Error(`Terminal learning invocation ${row.part_id} has no exact settlement`)
   return row.settlement
+}
+
+function authoritativeLearnerGoalSettlement(
+  tx: Transaction,
+  row: typeof LearningCommandInvocationTable.$inferSelect,
+): Effect.Effect<Settlement> {
+  return Effect.gen(function* () {
+    const stored = requireSettlement(row)
+    if (!row.goal_effect_id) return stored
+    const effect = yield* LearnerGoal.readEffect(tx, row.goal_effect_id).pipe(Effect.orDie)
+    if (!effect) return yield* Effect.die(`Terminal Goal invocation ${row.part_id} has no sealed effect`)
+    if (row.status !== "applied") {
+      return {
+        ...stored,
+        receiptID: effect.receiptID,
+        effectID: effect.effectID,
+        authorizationBasis: effect.authorizationBasis,
+        operations: effect.operations,
+        acknowledgementTitle: effect.acknowledgementTitle,
+        acknowledgementBody: effect.acknowledgementBody,
+        frontierSequence: effect.frontierSequence,
+      } as Settlement
+    }
+    if (effect.confirmation && !row.permission_request_id) {
+      return yield* Effect.die(`Accepted Goal invocation ${row.part_id} lost its permission request`)
+    }
+    return {
+      outcome: "applied",
+      goalKind: "learner_goal",
+      receiptID: effect.receiptID,
+      effectID: effect.effectID,
+      authorizationBasis: effect.authorizationBasis,
+      ...(effect.confirmation ? { confirmationRequestID: row.permission_request_id! } : {}),
+      operations: effect.operations,
+      acknowledgementTitle: effect.acknowledgementTitle,
+      acknowledgementBody: effect.acknowledgementBody,
+      frontierSequence: effect.frontierSequence,
+      settlementTime: effect.timeCommitted,
+      settlementOrder: effect.commitOrder,
+    }
+  })
 }
 
 function requireSettlementMetadata(

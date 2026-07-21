@@ -114,9 +114,18 @@ describe("session.system", () => {
     expect(interactive).toContain("terminal-native Learning System")
     expect(interactive).toContain("current request")
     expect(interactive).toContain("not proof of mastery")
+    expect(interactive).toContain("Use update_learner_goals only after explicit learner initiation or acceptance")
+    expect(interactive).toContain("learner_request is a narrow mechanical closure")
+    expect(interactive).toContain("create must explicitly initiate or declare a durable Goal")
+    expect(interactive).toContain("mixes Goal-like wording with teaching cadence")
+    expect(interactive).toContain("uses learner_acceptance")
+    expect(interactive).toContain("keep exact learner wording authored")
+    expect(interactive).toContain("hypothetical, quoted, or negated aspiration")
+    expect(interactive).toContain("ordinary discussion")
     expect(interactive).toContain("coding")
     expect(internal).toContain("<repa_internal_operation>")
     expect(internal).not.toContain("<repa_product_contract>")
+    expect(internal).not.toContain("update_learner_goals")
   })
 
   it.instance("environment describes a neutral learning workspace", () =>

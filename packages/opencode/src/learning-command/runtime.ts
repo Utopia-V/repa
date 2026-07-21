@@ -3,6 +3,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
@@ -20,14 +21,17 @@ import {
   anchorCommand,
   command,
   defaultCommand,
+  learnerGoalCommand,
   normalize,
   normalizeAnchor,
   normalizeDefault,
+  normalizeGoals,
   normalizeSteering,
   retainedSteeringCommand,
   type AcceptCourseViewRevisionInput,
   type SetCourseRouteAnchorInput,
   type SetDefaultCoursePreferenceInput,
+  type UpdateLearnerGoalsInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
 import { LearningCommandPermission } from "./permission"
@@ -69,6 +73,7 @@ export type PrimaryCapability =
   | typeof LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
   | typeof LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY
   | typeof LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
+  | typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
 
 type Canonical =
   | Readonly<{
@@ -87,11 +92,16 @@ type Canonical =
       toolID: typeof LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
       input: UpdateRetainedLearningSteeringInput
     }>
+  | Readonly<{
+      toolID: typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
+      input: UpdateLearnerGoalsInput
+    }>
 
 type Invocation =
   | LearningCommand.AcceptCourseViewRevisionInvocation
   | LearningCommand.NavigationInvocation
   | LearningCommand.RetainedSteeringInvocation
+  | LearnerGoal.Invocation
 
 type Prepared = Readonly<{
   canonical: Canonical
@@ -100,6 +110,10 @@ type Prepared = Readonly<{
 }>
 
 type RetainedExecutionReconciliation =
+  | { readonly type: "candidate" }
+  | { readonly type: "settled"; readonly settlement: LearningCommand.Settlement }
+
+type GoalExecutionReconciliation =
   | { readonly type: "candidate" }
   | { readonly type: "settled"; readonly settlement: LearningCommand.Settlement }
 
@@ -367,6 +381,16 @@ function invocationFromPhysical(physical: LearningCommand.PhysicalInvocation, ca
   if (canonical.toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
     return { envelope, command: retainedSteeringCommand(canonical.input) }
   }
+  if (canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+    const invocation = { envelope, command: learnerGoalCommand(canonical.input) }
+    if (canonical.input.authorizationBasis === "learner_request") {
+      return invocation as LearnerGoal.DirectInvocation
+    }
+    if (!physical.permission_request_id) {
+      throw new Error(`Learner Goal invocation ${physical.part_id} has no stable permission request`)
+    }
+    return { ...invocation, permissionRequestID: physical.permission_request_id } as LearnerGoal.AcceptedInvocation
+  }
   if (canonical.toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
     if (!physical.permission_request_id) {
       throw new Error(`Default Course invocation ${physical.part_id} has no stable permission request`)
@@ -396,9 +420,11 @@ function reserveTransaction(tx: EventV2.Transaction, canonical: Canonical, invoc
       : yield* settlementMetadata(tx, invocation.envelope.sessionID, invocation.envelope.timeAdmitted)
     const settlement = isRetainedSteeringInvocation(invocation)
       ? yield* LearningCommand.settleRetainedSteeringReservation(tx, { ...invocation, settlement: metadata })
-      : isNavigationInvocation(invocation)
-        ? yield* LearningCommand.settleNavigationReservation(tx, { ...invocation, settlement: metadata })
-        : yield* LearningCommand.settleReservation(tx, { ...invocation, settlement: metadata })
+      : isLearnerGoalInvocation(invocation)
+        ? yield* LearningCommand.settleLearnerGoalReservation(tx, { ...invocation, settlement: metadata })
+        : isNavigationInvocation(invocation)
+          ? yield* LearningCommand.settleNavigationReservation(tx, { ...invocation, settlement: metadata })
+          : yield* LearningCommand.settleReservation(tx, { ...invocation, settlement: metadata })
     if (settlement.type === "candidate") return yield* Effect.die("Terminal reservation became a new candidate")
     const part = terminalPart(canonical, invocation.envelope, settlement.settlement)
     return withPartEvent(
@@ -421,6 +447,9 @@ function executePrepared(
   }
   if (isNavigationInvocation(prepared.invocation)) {
     return executeNavigationPrepared(events, permission, prepared.canonical, prepared.invocation, context)
+  }
+  if (isLearnerGoalInvocation(prepared.invocation)) {
+    return executeLearnerGoalsPrepared(events, permission, prepared.canonical, prepared.invocation, context)
   }
   if (prepared.canonical.toolID !== LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
     return Effect.die("Course acceptance invocation has a different canonical command")
@@ -459,7 +488,11 @@ function executePrepared(
           partID: invocation.envelope.partID,
           frontier: consumed,
         })
-        if (isNavigationInvocation(current.invocation) || isRetainedSteeringInvocation(current.invocation)) {
+        if (
+          isNavigationInvocation(current.invocation) ||
+          isRetainedSteeringInvocation(current.invocation) ||
+          isLearnerGoalInvocation(current.invocation)
+        ) {
           return yield* Effect.die("Course acceptance invocation changed command kind")
         }
         const settlement = yield* LearningCommand.settleAcceptance(tx, {
@@ -530,6 +563,220 @@ function executeNavigationPrepared(
   })
 }
 
+function executeLearnerGoalsPrepared(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: Canonical,
+  invocation: LearnerGoal.Invocation,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    if (
+      canonical.toolID !== LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY ||
+      canonical.input.authorizationBasis !== invocation.envelope.authorizationBasis
+    ) {
+      return yield* Effect.die("Learner Goal invocation has a different canonical command")
+    }
+    const reconciled = yield* reconcileLearnerGoalCandidate(events, canonical, invocation)
+    if (reconciled.type === "settled") return exactResult(reconciled.settlement, canonical.toolID)
+    const authority = requirePermissionContext(context)
+    const rule = Permission.evaluateAuthority(
+      invocation.envelope.capabilityIdentity,
+      LearnerGoal.PERMISSION_PATTERN,
+      authority.ruleset,
+      authority.authority,
+    )
+    if (rule.action === "deny") {
+      return yield* commitLearnerGoals(events, canonical, invocation, { type: "deny" })
+    }
+    if (!isAcceptedLearnerGoalInvocation(invocation)) {
+      const permissionOutcome = yield* LearningCommandPermission.ask(
+        permission,
+        {
+          sessionID: invocation.envelope.sessionID,
+          permission: invocation.envelope.capabilityIdentity,
+          patterns: [LearnerGoal.PERMISSION_PATTERN],
+          always: [LearnerGoal.PERMISSION_PATTERN],
+          metadata: {
+            authorizationBasis: invocation.envelope.authorizationBasis,
+            command: invocation.command,
+          },
+          tool: {
+            messageID: invocation.envelope.assistantMessageID,
+            callID: invocation.envelope.providerCallID,
+          },
+          ruleset: authority.ruleset,
+          authority: authority.authority,
+        },
+        context.abort,
+      )
+      return yield* commitLearnerGoals(events, canonical, invocation, permissionOutcome)
+    }
+
+    const prepared = yield* prepareLearnerGoalConfirmation(events, canonical, invocation)
+    if (prepared.type !== "confirmation") return exactResult(prepared.settlement, canonical.toolID)
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        id: invocation.permissionRequestID,
+        requirePrompt: true,
+        sessionID: invocation.envelope.sessionID,
+        permission: invocation.envelope.capabilityIdentity,
+        patterns: [LearnerGoal.PERMISSION_PATTERN],
+        always: [],
+        metadata: {
+          onceOnly: true,
+          authorizationBasis: invocation.envelope.authorizationBasis,
+          confirmation: prepared.confirmation,
+        },
+        tool: {
+          messageID: invocation.envelope.assistantMessageID,
+          callID: invocation.envelope.providerCallID,
+        },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+      },
+      context.abort,
+    )
+    return yield* commitLearnerGoals(
+      events,
+      canonical,
+      invocation,
+      permissionOutcome,
+      prepared.confirmation,
+      prepared.preparedConfirmation,
+    )
+  })
+}
+
+function reconcileLearnerGoalCandidate(
+  events: EventV2.Interface,
+  canonical: Canonical,
+  invocation: LearnerGoal.Invocation,
+) {
+  return events
+    .transaction<GoalExecutionReconciliation, typeof SessionV1.Event.PartUpdated>((tx) =>
+      Effect.gen(function* () {
+        const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
+        if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
+        if (current.settlement) return noEvent({ type: "settled" as const, settlement: current.settlement })
+        if (!isLearnerGoalInvocation(current.invocation)) {
+          return yield* Effect.die("Learner Goal invocation changed command kind")
+        }
+        const settlement = yield* LearningCommand.settleLearnerGoalReservation(tx, {
+          ...current.invocation,
+          settlement: yield* settlementMetadata(
+            tx,
+            current.invocation.envelope.sessionID,
+            current.invocation.envelope.timeAdmitted,
+          ),
+        })
+        if (settlement.type === "candidate") return noEvent({ type: "candidate" as const })
+        if (settlement.type === "replay") {
+          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+          return noEvent({ type: "settled" as const, settlement: settlement.settlement })
+        }
+        return withPartEvent(
+          { type: "settled" as const, settlement: settlement.settlement },
+          terminalPart(canonical, current.invocation.envelope, settlement.settlement),
+          settlement.settlement.settlementTime,
+        )
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function prepareLearnerGoalConfirmation(
+  events: EventV2.Interface,
+  canonical: Canonical,
+  invocation: LearnerGoal.AcceptedInvocation,
+) {
+  return events
+    .transaction<LearningCommand.GoalConfirmationResult, typeof SessionV1.Event.PartUpdated>((tx) =>
+      Effect.gen(function* () {
+        const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
+        if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
+        if (current.settlement) return noEvent({ type: "replay" as const, settlement: current.settlement })
+        if (!isLearnerGoalInvocation(current.invocation) || !isAcceptedLearnerGoalInvocation(current.invocation)) {
+          return yield* Effect.die("Learner Goal acceptance invocation changed command kind")
+        }
+        const prepared = yield* LearningCommand.prepareLearnerGoalConfirmation(tx, {
+          ...current.invocation,
+          settlement: yield* settlementMetadata(
+            tx,
+            current.invocation.envelope.sessionID,
+            current.invocation.envelope.timeAdmitted,
+          ),
+        })
+        if (prepared.type === "replay") {
+          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, prepared.settlement)
+          return noEvent(prepared)
+        }
+        if (prepared.type === "settled") {
+          return withPartEvent(
+            prepared,
+            terminalPart(canonical, current.invocation.envelope, prepared.settlement),
+            prepared.settlement.settlementTime,
+          )
+        }
+        return noEvent(prepared)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function commitLearnerGoals(
+  events: EventV2.Interface,
+  canonical: Canonical,
+  invocation: LearnerGoal.Invocation,
+  permission: LearningCommand.PermissionOutcome,
+  displayedConfirmation?: LearnerGoal.ConfirmationSnapshot,
+  preparedConfirmation?: LearnerGoal.PreparedConfirmation,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
+        if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
+        if (current.settlement) return noEvent(current.settlement)
+        if (!isLearnerGoalInvocation(current.invocation)) {
+          return yield* Effect.die("Learner Goal invocation changed command kind")
+        }
+        yield* TurnLifecycle.consumeToolFrontier(tx, {
+          partID: current.invocation.envelope.partID,
+          frontier: yield* LearningFrontier.read(tx),
+        })
+        const settlement = yield* LearningCommand.settleLearnerGoals(tx, {
+          ...current.invocation,
+          permission,
+          ...(displayedConfirmation ? { displayedConfirmation } : {}),
+          ...(preparedConfirmation ? { preparedConfirmation } : {}),
+          settlement: yield* settlementMetadata(
+            tx,
+            current.invocation.envelope.sessionID,
+            current.invocation.envelope.timeAdmitted,
+          ),
+        })
+        if (settlement.type === "replay") {
+          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+          return noEvent(settlement.settlement)
+        }
+        if (settlement.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: current.invocation.envelope.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        return withPartEvent(
+          settlement.settlement,
+          terminalPart(canonical, current.invocation.envelope, settlement.settlement),
+          settlement.settlement.settlementTime,
+        )
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => exactResult(result.result, canonical.toolID)))
+}
+
 function executeRetainedSteeringPrepared(
   events: EventV2.Interface,
   permission: Permission.Interface,
@@ -541,47 +788,45 @@ function executeRetainedSteeringPrepared(
     if (canonical.toolID !== LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
       return yield* Effect.die("Retained steering invocation has a different canonical command")
     }
-    const reconciled = yield* events.transaction<
-      RetainedExecutionReconciliation,
-      typeof SessionV1.Event.PartUpdated
-    >((tx) =>
-      Effect.gen(function* () {
-        const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
-        if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) return noEvent({ type: "settled" as const, settlement: current.settlement })
-        if (!isRetainedSteeringInvocation(current.invocation)) {
-          return yield* Effect.die("Retained steering invocation changed command kind")
-        }
-        const semantic = yield* RetainedSteering.resolveSemantic(tx, {
-          occurrenceID: current.invocation.envelope.occurrenceID,
-          fingerprint: RetainedSteering.commandFingerprint(current.invocation.command),
-        })
-        if (semantic.type === "candidate") return noEvent({ type: "candidate" as const })
-        yield* TurnLifecycle.consumeToolFrontier(tx, {
-          partID: current.invocation.envelope.partID,
-          frontier: yield* LearningFrontier.read(tx),
-        })
-        const settlement = yield* LearningCommand.settleRetainedSteeringReservation(tx, {
-          ...current.invocation,
-          settlement: yield* retainedSteeringSettlementMetadata(
-            tx,
-            current.invocation.envelope.sessionID,
-            current.invocation.envelope.timeAdmitted,
-          ),
-        })
-        if (settlement.type === "candidate") {
-          return yield* Effect.die("Committed retained steering reconciliation became a new candidate")
-        }
-        if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent({ type: "settled" as const, settlement: settlement.settlement })
-        }
-        return withPartEvent(
-          { type: "settled" as const, settlement: settlement.settlement },
-          terminalPart(canonical, current.invocation.envelope, settlement.settlement),
-          settlement.settlement.settlementTime,
-        )
-      }).pipe(Effect.orDie),
+    const reconciled = yield* events.transaction<RetainedExecutionReconciliation, typeof SessionV1.Event.PartUpdated>(
+      (tx) =>
+        Effect.gen(function* () {
+          const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
+          if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
+          if (current.settlement) return noEvent({ type: "settled" as const, settlement: current.settlement })
+          if (!isRetainedSteeringInvocation(current.invocation)) {
+            return yield* Effect.die("Retained steering invocation changed command kind")
+          }
+          const semantic = yield* RetainedSteering.resolveSemantic(tx, {
+            occurrenceID: current.invocation.envelope.occurrenceID,
+            fingerprint: RetainedSteering.commandFingerprint(current.invocation.command),
+          })
+          if (semantic.type === "candidate") return noEvent({ type: "candidate" as const })
+          yield* TurnLifecycle.consumeToolFrontier(tx, {
+            partID: current.invocation.envelope.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+          const settlement = yield* LearningCommand.settleRetainedSteeringReservation(tx, {
+            ...current.invocation,
+            settlement: yield* retainedSteeringSettlementMetadata(
+              tx,
+              current.invocation.envelope.sessionID,
+              current.invocation.envelope.timeAdmitted,
+            ),
+          })
+          if (settlement.type === "candidate") {
+            return yield* Effect.die("Committed retained steering reconciliation became a new candidate")
+          }
+          if (settlement.type === "replay") {
+            yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+            return noEvent({ type: "settled" as const, settlement: settlement.settlement })
+          }
+          return withPartEvent(
+            { type: "settled" as const, settlement: settlement.settlement },
+            terminalPart(canonical, current.invocation.envelope, settlement.settlement),
+            settlement.settlement.settlementTime,
+          )
+        }).pipe(Effect.orDie),
     )
     if (reconciled.result.type === "settled") {
       return exactResult(reconciled.result.settlement, canonical.toolID)
@@ -915,6 +1160,23 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
         )
       }
     }
+    if (isLearnerGoalInvocation(prepared.invocation)) {
+      const reconciled = yield* LearningCommand.settleLearnerGoalReservation(tx, {
+        ...prepared.invocation,
+        settlement: metadata,
+      })
+      if (reconciled.type !== "candidate") {
+        if (reconciled.type === "replay") {
+          yield* assertTerminalPart(tx, canonical, prepared.invocation.envelope, reconciled.settlement)
+          return noEvent(true)
+        }
+        return withPartEvent(
+          true,
+          terminalPart(canonical, prepared.invocation.envelope, reconciled.settlement),
+          reconciled.settlement.settlementTime,
+        )
+      }
+    }
     const settlement = yield* LearningCommand.recoverInterrupted(tx, {
       partID: registration.partID,
       settlement: metadata,
@@ -940,10 +1202,7 @@ function settlementMetadata(tx: EventV2.Transaction, sessionID: string, floor: n
 
 function retainedSteeringSettlementMetadata(tx: EventV2.Transaction, sessionID: string, floor: number) {
   return Effect.gen(function* () {
-    const [frontier, latestCutAsOf] = yield* Effect.all([
-      LearningFrontier.read(tx),
-      RetainedSteering.latestCutAsOf(tx),
-    ])
+    const [frontier, latestCutAsOf] = yield* Effect.all([LearningFrontier.read(tx), RetainedSteering.latestCutAsOf(tx)])
     return {
       time: Math.max(Date.now(), floor, frontier.time, latestCutAsOf),
       order: yield* EventV2.nextSequence(tx, sessionID),
@@ -991,6 +1250,23 @@ export function exactResult(
   settlement: LearningCommand.Settlement,
   toolID: PrimaryCapability = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
 ): ExactResult {
+  if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+    const acknowledged = "acknowledgementTitle" in settlement ? settlement : undefined
+    return {
+      title: acknowledged?.acknowledgementTitle ?? "Learner Goals not changed",
+      metadata: {
+        command: toolID,
+        commandVersion: capabilityVersion(toolID),
+        outcome: settlement.outcome,
+        ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+        durablySettled: true,
+        truncated: false,
+      },
+      output:
+        acknowledged?.acknowledgementBody ??
+        learnerGoalErrorMessage(settlement.outcome === "error" ? settlement.code : "validation_error"),
+    }
+  }
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
     const acknowledged = "acknowledgementTitle" in settlement ? settlement : undefined
     return {
@@ -1025,6 +1301,28 @@ export function exactResult(
     },
     output: JSON.stringify(settlement),
   }
+}
+
+function learnerGoalErrorMessage(code: LearningCommand.ErrorCode) {
+  if (code === "permission_rejected" || code === "permission_corrected") {
+    return "The learner Goals were not changed because effective permission did not authorize this candidate. Continue from the learner's ordinary interaction or form a corrected candidate from a new learner input."
+  }
+  if (code === "cancelled" || code === "interrupted") {
+    return "The learner Goals were not changed because the operation did not commit."
+  }
+  if (code === "source_unavailable") {
+    return "The learner Goals were not changed because the exact learner source is no longer available."
+  }
+  if (code === "stale" || code === "context_refresh_required") {
+    return "The learner Goals were not changed because an exact Goal or Course basis changed. Re-read the current Goal state before forming a new candidate."
+  }
+  if (code === "semantic_conflict") {
+    return "That learner input already produced a different durable Goal change. Use a new learner input for a correction."
+  }
+  if (code === "temporal_context_unavailable") {
+    return "The learner Goals were not changed because the requested target could not be interpreted from trusted time context."
+  }
+  return "The learner Goals were not changed. Clarify the intended Goal meaning, scope, target, or lifecycle change before trying again."
 }
 
 function retainedSteeringErrorMessage(code: LearningCommand.ErrorCode) {
@@ -1222,6 +1520,9 @@ function canonicalInput(toolID: PrimaryCapability, input: unknown): Canonical {
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
     return { toolID, input: normalizeSteering(input) }
   }
+  if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+    return { toolID, input: normalizeGoals(input) }
+  }
   return { toolID, input: normalizeAnchor(input) }
 }
 
@@ -1238,7 +1539,7 @@ function invocationFor(canonical: Canonical, registration: Registration, timeAdm
     emissionOrdinal: registration.emissionOrdinal,
     capabilityIdentity: canonical.toolID,
     capabilityVersion: capabilityVersion(canonical.toolID),
-    authorizationBasis: authorizationBasis(canonical.toolID),
+    authorizationBasis: authorizationBasis(canonical),
     timeAdmitted,
   }
   if (canonical.toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
@@ -1246,6 +1547,19 @@ function invocationFor(canonical: Canonical, registration: Registration, timeAdm
   }
   if (canonical.toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
     return { envelope, command: retainedSteeringCommand(canonical.input) }
+  }
+  if (canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+    if (canonical.input.authorizationBasis === "learner_acceptance") {
+      return {
+        envelope: { ...envelope, authorizationBasis: "learner_acceptance" },
+        command: learnerGoalCommand(canonical.input),
+        permissionRequestID: stableGoalPermissionRequestID(registration),
+      } satisfies LearnerGoal.AcceptedInvocation
+    }
+    return {
+      envelope: { ...envelope, authorizationBasis: "learner_request" },
+      command: learnerGoalCommand(canonical.input),
+    } satisfies LearnerGoal.DirectInvocation
   }
   if (canonical.toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
     return {
@@ -1270,8 +1584,22 @@ function stableDefaultPermissionRequestID(registration: Registration) {
   return PermissionV1.ID.ascending(`per_${digest.slice(0, 26)}`)
 }
 
+function stableGoalPermissionRequestID(registration: Registration) {
+  const digest = new Bun.CryptoHasher("sha256")
+    .update(
+      JSON.stringify({
+        command: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        partID: registration.partID,
+        callID: registration.callID,
+      }),
+    )
+    .digest("hex")
+  return PermissionV1.ID.ascending(`per_${digest.slice(0, 26)}`)
+}
+
 function reservePrimary(tx: EventV2.Transaction, invocation: Invocation) {
   if (isRetainedSteeringInvocation(invocation)) return LearningCommand.reserveRetainedSteering(tx, invocation)
+  if (isLearnerGoalInvocation(invocation)) return LearningCommand.reserveLearnerGoals(tx, invocation)
   return isNavigationInvocation(invocation)
     ? LearningCommand.reserveNavigation(tx, invocation)
     : LearningCommand.reserveAcceptance(tx, invocation)
@@ -1285,6 +1613,16 @@ function isRetainedSteeringInvocation(
 
 function isNavigationInvocation(invocation: Invocation): invocation is LearningCommand.NavigationInvocation {
   return "kind" in invocation.command
+}
+
+function isLearnerGoalInvocation(invocation: Invocation): invocation is LearnerGoal.Invocation {
+  return "operations" in invocation.command
+}
+
+function isAcceptedLearnerGoalInvocation(
+  invocation: LearnerGoal.Invocation,
+): invocation is LearnerGoal.AcceptedInvocation {
+  return invocation.envelope.authorizationBasis === "learner_acceptance"
 }
 
 function isDefaultNavigationInvocation(
@@ -1311,7 +1649,8 @@ function isPrimaryCapability(value: string): value is PrimaryCapability {
     value === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY ||
     value === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY ||
     value === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY ||
-    value === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
+    value === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY ||
+    value === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
   )
 }
 
@@ -1325,11 +1664,17 @@ function capabilityVersion(toolID: PrimaryCapability) {
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
     return LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_VERSION
   }
+  if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+    return LearningCommand.UPDATE_LEARNER_GOALS_VERSION
+  }
   return LearningCommand.SET_COURSE_ROUTE_ANCHOR_VERSION
 }
 
-function authorizationBasis(toolID: PrimaryCapability): LearningCommand.AuthorizationBasis {
-  return toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
+function authorizationBasis(canonical: Canonical): LearningCommand.AuthorizationBasis {
+  if (canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+    return canonical.input.authorizationBasis
+  }
+  return canonical.toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
     ? "learner_acceptance"
     : "learner_request"
 }
@@ -1351,7 +1696,7 @@ function sameRegistration(
     envelope.assistantMessageID === registration.assistantMessageID &&
     envelope.capabilityIdentity === canonical.toolID &&
     envelope.capabilityVersion === capabilityVersion(canonical.toolID) &&
-    envelope.authorizationBasis === authorizationBasis(canonical.toolID)
+    envelope.authorizationBasis === authorizationBasis(canonical)
   )
 }
 

@@ -137,14 +137,17 @@ learning tools.
   remain a generic harness design decision.
 - The baseline has no background daemon. Due, overdue, and expired meaning is
   derived from durable times and the trusted clock when the application wakes.
-- Treat ordinary substantial assignments as cross-day planning and feedback
-  problems. Last-minute rescue is outside Repa's product scope: do not design,
-  schedule, prioritize, or qualify Learning-System behavior around a task that
-  has already collapsed to a minute-scale deadline window. The program owns
-  accepted workload/capacity/deadline arithmetic, allocation, and recomputation; models
+- Treat ordinary substantial planning demands, whether they arise from an
+  Assignment or directly from a learner Goal such as exam preparation, as
+  cross-day planning and feedback problems. Last-minute rescue is outside
+  Repa's product scope: do not design, schedule, prioritize, or qualify
+  Learning-System behavior around work that has already collapsed to a
+  minute-scale deadline window. The program owns accepted
+  workload/capacity/deadline arithmetic, allocation, and recomputation; models
   may help identify, estimate, semantically decompose, research, explain, and
-  adapt the work. This settles the responsibility boundary, not the final
-  schema or scheduling algorithm.
+  adapt the work. Goal, Assignment, and planning remain separate authorities.
+  This settles the responsibility boundary, not the final schema or scheduling
+  algorithm.
 - A pre-authored course is optional. The same Agent loop may research and
   create a coarse provisional Course View, use it immediately, and later
   correct or supersede it without promoting unsupported relations into hard

@@ -24,6 +24,7 @@ export function isLearningCommandToolID(id: string) {
     id === LearningCommand.REPRESENTATION_CONVERT_CAPABILITY ||
     id === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY ||
     id === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY ||
-    id === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
+    id === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY ||
+    id === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
   )
 }

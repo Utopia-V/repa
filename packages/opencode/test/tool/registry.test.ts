@@ -139,6 +139,12 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("set_course_route_anchor", "mcp")).toThrow(
         "mcp tool ID set_course_route_anchor is reserved by the learning-command runtime",
       )
+      expect(() => assertExternalToolID("update_learner_goals", "custom")).toThrow(
+        "custom tool ID update_learner_goals is reserved by the learning-command runtime",
+      )
+      expect(() => assertExternalToolID("update_learner_goals", "mcp")).toThrow(
+        "mcp tool ID update_learner_goals is reserved by the learning-command runtime",
+      )
     }),
   )
 
@@ -151,6 +157,8 @@ describe("tool.registry", () => {
       expect(ids).toContain("representation.convert")
       expect(ids).toContain("set_default_course_preference")
       expect(ids).toContain("set_course_route_anchor")
+      expect(ids).toContain("update_retained_learning_steering")
+      expect(ids).toContain("update_learner_goals")
     }),
   )
 

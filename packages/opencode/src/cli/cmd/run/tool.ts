@@ -129,6 +129,7 @@ type ToolRegistry = {
 type AnyToolRule = ToolRule
 
 const RETAINED_STEERING_TOOL = "update_retained_learning_steering"
+const LEARNER_GOALS_TOOL = "update_learner_goals"
 
 function dict(v: unknown): ToolDict {
   if (!v || typeof v !== "object" || Array.isArray(v)) {
@@ -1123,6 +1124,66 @@ function permDefaultCoursePreference(p: ToolPermissionProps): ToolPermissionInfo
   }
 }
 
+function permLearnerGoals(p: ToolPermissionProps): ToolPermissionInfo | undefined {
+  const input = dict(p.input)
+  const directCommand = dict(input.command)
+  const directOperations = list(directCommand.operations)
+  if (
+    input.authorizationBasis === "learner_request" &&
+    directOperations.length > 0 &&
+    directOperations.every((operation) => Object.keys(dict(operation)).length > 0)
+  ) {
+    return {
+      icon: "◇",
+      title: `Allow ${directOperations.length} direct learner Goal ${directOperations.length === 1 ? "change" : "changes"}`,
+      lines: [
+        "This exact learner-authored request becomes durable, correctable Goal state.",
+        ...stableCandidateLines(directCommand),
+      ],
+    }
+  }
+
+  const confirmation = dict(p.metadata.confirmation)
+  const schemaVersion = num(confirmation.schemaVersion)
+  const authorizationBasis = text(confirmation.authorizationBasis)
+  const semanticFingerprint = text(confirmation.semanticFingerprint)
+  const command = dict(confirmation.command)
+  const operations = list(command.operations)
+  const goalBases = list(confirmation.goalBases)
+  const courseBases = list(confirmation.courseBases)
+  if (
+    p.metadata.onceOnly !== true ||
+    schemaVersion !== 1 ||
+    authorizationBasis !== "learner_acceptance" ||
+    !/^[0-9a-f]{64}$/.test(semanticFingerprint) ||
+    operations.length === 0 ||
+    operations.some((operation) => Object.keys(dict(operation)).length === 0)
+  ) {
+    return undefined
+  }
+
+  return {
+    icon: "◇",
+    title: `Confirm ${operations.length} durable learner Goal ${operations.length === 1 ? "change" : "changes"}`,
+    lines: [
+      "This exact candidate becomes durable, correctable Goal state; it is not evidence, mastery, priority, or a study schedule.",
+      `Authorization: one-time learner acceptance; semantic fingerprint ${semanticFingerprint}`,
+      "Affected current Goal bases:",
+      ...stableCandidateLines(goalBases),
+      "Course bases and current availability:",
+      ...stableCandidateLines(courseBases),
+      "Complete ordered Goal change set:",
+      ...stableCandidateLines(command),
+    ],
+  }
+}
+
+function stableCandidateLines(value: unknown) {
+  return (JSON.stringify(value, null, 2) ?? "null")
+    .split("\n")
+    .map((line) => `  ${line}`)
+}
+
 const TOOL_RULES = {
   invalid: {
     view: {
@@ -1383,7 +1444,7 @@ function runBash(p: ToolProps<typeof BashTool>): ToolInline {
 }
 
 export function toolView(name?: string): ToolView {
-  if (name === RETAINED_STEERING_TOOL) return { output: false, final: true }
+  if (name === RETAINED_STEERING_TOOL || name === LEARNER_GOALS_TOOL) return { output: false, final: true }
   return (
     rule(name)?.view ?? {
       output: true,
@@ -1404,6 +1465,16 @@ export function toolStructuredFinal(commit: StreamCommit): boolean {
 
 export function toolInlineInfo(part: ToolPart): ToolInline {
   const ctx = frame(part)
+  if (ctx.name === LEARNER_GOALS_TOOL) {
+    return {
+      icon: "◇",
+      title: text(ctx.state.title).trim() || "Learner Goals",
+      mode: "block",
+      ...(ctx.status === "completed" && text(ctx.state.output).trim()
+        ? { body: text(ctx.state.output).trim() }
+        : {}),
+    }
+  }
   if (ctx.name === RETAINED_STEERING_TOOL) {
     return {
       icon: "◇",
@@ -1427,6 +1498,12 @@ export function toolInlineInfo(part: ToolPart): ToolInline {
 }
 
 export function toolScroll(phase: ToolPhase, ctx: ToolFrame): string {
+  if (ctx.name === LEARNER_GOALS_TOOL) {
+    if (phase === "start") return "⚙ Updating Learner Goals"
+    if (phase === "progress") return ""
+    if (ctx.status === "error") return fail(ctx)
+    return text(ctx.state.output).trim() || "Learner Goal acknowledgement unavailable"
+  }
   if (ctx.name === RETAINED_STEERING_TOOL) {
     if (phase === "start") return "⚙ Updating retained learning steering"
     if (phase === "progress") return ""
@@ -1467,6 +1544,9 @@ export function toolPermissionInfo(
 ): ToolPermissionInfo | undefined {
   if (name === "set_default_course_preference") {
     return permDefaultCoursePreference(permission({ input, meta, patterns }))
+  }
+  if (name === LEARNER_GOALS_TOOL) {
+    return permLearnerGoals(permission({ input, meta, patterns }))
   }
 
   const draw = rule(name)?.permission

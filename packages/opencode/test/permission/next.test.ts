@@ -1,4 +1,6 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { test, expect } from "bun:test"
 import os from "os"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
@@ -12,6 +14,7 @@ import { testEffect } from "../lib/effect"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { toolPermissionInfo } from "@/cli/cmd/run/tool"
 
 const noopBootstrap = Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))
 const env = AppNodeBuilder.build(
@@ -888,6 +891,108 @@ it.instance(
       expect(yield* waitForPending(1)).toHaveLength(1)
       yield* rejectAll()
       yield* Fiber.await(second)
+    }),
+  { git: true },
+)
+
+it.instance(
+  "Gate16 accepted Goal confirmations expose the exact candidate and never persist approval",
+  () =>
+    Effect.gen(function* () {
+      const confirmation = {
+        schemaVersion: 1,
+        authorizationBasis: "learner_acceptance",
+        semanticFingerprint: "a".repeat(64),
+        command: {
+          operations: [
+            {
+              type: "create",
+              snapshot: {
+                outcome: "Explain virtual memory under exam conditions",
+                conditions: ["Work one page-replacement example without notes"],
+                scope: { type: "learner_home" },
+                target: { type: "absent" },
+                fieldBases: {
+                  outcome: { type: "accepted" },
+                  conditions: { type: "accepted" },
+                  scope: { type: "accepted" },
+                  target: { type: "accepted" },
+                  disposition: { type: "accepted" },
+                },
+              },
+              disposition: "active",
+            },
+          ],
+        },
+        goalBases: [],
+        courseBases: [],
+      } satisfies LearnerGoal.ConfirmationSnapshot
+      const metadata = {
+        onceOnly: true,
+        authorizationBasis: "learner_acceptance",
+        confirmation,
+      }
+      const permission = yield* Permission.Service
+      const events = yield* EventV2Bridge.Service
+      const responses = new Map<PermissionV1.ID, PermissionV1.Reply>([
+        [PermissionV1.ID.make("per_gate16_goal_confirmation_one"), "always"],
+        [PermissionV1.ID.make("per_gate16_goal_confirmation_two"), "once"],
+      ])
+      const seen: PermissionV1.Request[] = []
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== Permission.Event.Asked.type) return Effect.void
+        const request = event.data as PermissionV1.Request
+        if (request.permission !== LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return Effect.void
+        const surface = toolPermissionInfo(request.permission, { ...request.metadata }, { ...request.metadata }, [
+          ...request.patterns,
+        ])
+        const response = responses.get(request.id)
+
+        expect(response).toBeDefined()
+        expect(request).toMatchObject({
+          permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          patterns: [LearnerGoal.PERMISSION_PATTERN],
+          always: [],
+          metadata,
+        })
+        expect(surface?.title).toBe("Confirm 1 durable learner Goal change")
+        expect(surface?.lines.join("\n")).toContain(confirmation.command.operations[0]!.snapshot.outcome)
+        expect(surface?.lines.join("\n")).toContain(confirmation.command.operations[0]!.snapshot.conditions[0]!)
+        expect(surface?.lines.join("\n")).toContain("one-time learner acceptance")
+        seen.push(request)
+        return permission.reply({ requestID: request.id, reply: response! }).pipe(Effect.orDie)
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      const confirm = (id: PermissionV1.ID, sessionID: SessionID) =>
+        Effect.gen(function* () {
+          yield* permission.ask({
+            id,
+            sessionID,
+            permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            patterns: [LearnerGoal.PERMISSION_PATTERN],
+            metadata,
+            always: [],
+            tool: { messageID: MessageID.ascending(), callID: `call_${id}` },
+            requirePrompt: true,
+            ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+          })
+          expect(yield* permission.list()).toEqual([])
+        })
+
+      yield* confirm(
+        PermissionV1.ID.make("per_gate16_goal_confirmation_one"),
+        SessionID.make("ses_gate16_goal_confirmation_one"),
+      )
+      yield* confirm(
+        PermissionV1.ID.make("per_gate16_goal_confirmation_two"),
+        SessionID.make("ses_gate16_goal_confirmation_two"),
+      )
+
+      expect(seen.map((request) => request.id)).toEqual([
+        PermissionV1.ID.make("per_gate16_goal_confirmation_one"),
+        PermissionV1.ID.make("per_gate16_goal_confirmation_two"),
+      ])
     }),
   { git: true },
 )

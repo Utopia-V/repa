@@ -114,6 +114,17 @@ type ToolCall = {
   registration?: RegisteredToolCall
 }
 
+function assertProviderDoesNotExecuteLearningCommand(
+  input: { name: string; providerExecuted?: boolean },
+  existing?: Pick<ToolCall, "name" | "providerExecuted">,
+) {
+  const name =
+    (input.providerExecuted === true && isLearningCommandToolID(input.name) ? input.name : undefined) ??
+    (existing?.providerExecuted === true && isLearningCommandToolID(existing.name) ? existing.name : undefined)
+  if (!name) return
+  throw new ProcessorIntegrityFailure(`Provider-executed learning command is forbidden: ${name}`)
+}
+
 type LocalTool = LLM.StreamInput["tools"][string] & {
   [ToolCallPreparation]?: ToolCallPreparation
 }
@@ -722,6 +733,7 @@ const layer = Layer.effect(
           }
 
           case "tool-call": {
+            assertProviderDoesNotExecuteLearningCommand(value)
             if (ctx.assistantMessage.summary) {
               throw new ProcessorIntegrityFailure(`Tool call not allowed while generating summary: ${value.name}`)
             }
@@ -773,6 +785,7 @@ const layer = Layer.effect(
 
           case "tool-result": {
             const buffered = ctx.toolcalls[value.id]
+            assertProviderDoesNotExecuteLearningCommand(value, buffered)
             if (!value.providerExecuted && !buffered?.admitted && dispatchedToolCallID !== value.id) {
               throw new ProcessorIntegrityFailure(
                 `Local tool result arrived before FIFO invocation admission: ${value.id}`,
@@ -812,6 +825,10 @@ const layer = Layer.effect(
 
           case "tool-error": {
             const buffered = ctx.toolcalls[value.id]
+            assertProviderDoesNotExecuteLearningCommand(
+              { name: value.name, providerExecuted: buffered?.providerExecuted },
+              buffered,
+            )
             if (!buffered?.admitted && !buffered?.providerExecuted && dispatchedToolCallID !== value.id) {
               throw new ProcessorIntegrityFailure(
                 `Local tool error arrived before FIFO invocation admission: ${value.id}`,

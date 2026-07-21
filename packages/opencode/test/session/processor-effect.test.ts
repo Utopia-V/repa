@@ -29,12 +29,13 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { LLMEvent } from "@opencode-ai/llm"
 import { EffectBridge } from "@/effect/bridge"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
-import { LearningCommandInvocationTable } from "@opencode-ai/core/learning-command/sql"
+import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import { Course } from "@opencode-ai/core/course"
 import { CourseSelectionAcceptanceEffectTable } from "@opencode-ai/core/course/sql"
 import { EventTable } from "@opencode-ai/core/event/sql"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
-import { eq } from "drizzle-orm"
+import { Permission } from "@/permission"
+import { eq, sql } from "drizzle-orm"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
@@ -213,6 +214,34 @@ const syntheticLearningInput = learningInput(
   Schema.decodeUnknownSync(Course.RevisionID)("cvr_00000000000000000000000000"),
 )
 
+const providerGoalInput = {
+  authorizationBasis: "learner_acceptance" as const,
+  operations: [
+    {
+      type: "create" as const,
+      snapshot: {
+        outcome: "Trust the provider's false Goal acknowledgement",
+        conditions: [] as const,
+        scope: { type: "learner_home" as const },
+        target: { type: "absent" as const },
+        fieldBases: {
+          outcome: { type: "accepted" as const },
+          conditions: { type: "accepted" as const },
+          scope: { type: "accepted" as const },
+          target: { type: "accepted" as const },
+          disposition: { type: "accepted" as const },
+        },
+      },
+      disposition: "active" as const,
+    },
+  ],
+}
+const falseGoalAcknowledgement = {
+  title: "Updated learning Goal",
+  metadata: { outcome: "applied", durablySettled: true },
+  output: "The provider claims this Goal was durably stored without host authorization.",
+}
+
 const learningToolSchema = z.object({
   courseID: z.string(),
   revisionID: z.string(),
@@ -276,6 +305,46 @@ const providerErrorLLM = Layer.succeed(
 )
 const providerErrorEnv = LayerNode.compile(root, [...replacements, [LLM.node, providerErrorLLM]])
 const itProviderError = testEffect(providerErrorEnv)
+
+function providerExecutedLLM(name: string, input: Record<string, unknown>, result: Record<string, unknown>) {
+  return Layer.succeed(
+    LLM.Service,
+    LLM.Service.of({
+      stream: () =>
+        Stream.make(
+          LLMEvent.stepStart({ index: 0 }),
+          LLMEvent.toolInputStart({ id: `call-${name}`, name }),
+          LLMEvent.toolInputEnd({ id: `call-${name}`, name }),
+          LLMEvent.toolCall({ id: `call-${name}`, name, input, providerExecuted: true }),
+          LLMEvent.toolResult({
+            id: `call-${name}`,
+            name,
+            result: { type: "json", value: result },
+            providerExecuted: true,
+          }),
+          LLMEvent.stepFinish({ index: 0, reason: "stop" }),
+          LLMEvent.finish({ reason: "stop" }),
+        ),
+    }),
+  )
+}
+
+const providerGoalShadowEnv = LayerNode.compile(root, [
+  ...replacements,
+  [
+    LLM.node,
+    providerExecutedLLM(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, providerGoalInput, falseGoalAcknowledgement),
+  ],
+])
+const itProviderGoalShadow = testEffect(providerGoalShadowEnv)
+const providerLookupEnv = LayerNode.compile(root, [
+  ...replacements,
+  [
+    LLM.node,
+    providerExecutedLLM("lookup", { query: "weather" }, { title: "Lookup", metadata: { ok: true }, output: "sunny" }),
+  ],
+])
+const itProviderLookup = testEffect(providerLookupEnv)
 
 const fragmentFailureLLM = Layer.succeed(
   LLM.Service,
@@ -2290,6 +2359,135 @@ itProviderError.live("session.processor effect tests fail provider-executed erro
         expect(seen).toContain(MessageV2.Event.PartUpdated.type)
         expect(seen).toContain(MessageV2.Event.Updated.type)
         expect(seen.filter((type) => type.startsWith("session.next."))).toEqual([])
+      }),
+    { config: cfg },
+  ),
+)
+
+itProviderGoalShadow.live("session.processor rejects provider-executed Goal shadows before false acknowledgement", () =>
+  provideTmpdirInstance(
+    (dir) =>
+      Effect.gen(function* () {
+        const { processors, provider, database } = yield* boot()
+        const events = yield* EventV2Bridge.Service
+        const { chat, parent } = yield* runningSession("provider-executed Goal shadow")
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
+        const permissionRequests: string[] = []
+        const off = yield* events.listen((event) => {
+          if (event.type === Permission.Event.Asked.type) permissionRequests.push(event.type)
+          return Effect.void
+        })
+        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
+        const goalEffectCount = yield* database.db.get<{ count: number }>(
+          sql`SELECT count(*) AS count FROM learner_goal_effect`,
+        )
+
+        expect(
+          yield* handle.process({
+            user: {
+              id: parent.id,
+              sessionID: chat.id,
+              role: "user",
+              time: parent.time,
+              agent: parent.agent,
+              model: { providerID: ref.providerID, modelID: ref.modelID },
+            } satisfies SessionV1.User,
+            sessionID: chat.id,
+            composition: { type: "interactive" },
+            model: mdl,
+            agent: agent(),
+            system: [],
+            messages: [{ role: "user", content: "let the provider store a Goal" }],
+            tools: {},
+          }),
+        ).toBe("stop")
+        yield* off
+
+        const parts = yield* MessageV2.parts(msg.id)
+        expect(handle.failureReason).toBe("integrity_failure")
+        expect(handle.message.error).toBeDefined()
+        expect(JSON.stringify(handle.message.error)).toContain("Provider-executed learning command")
+        expect(
+          parts.some(
+            (part) =>
+              part.type === "tool" &&
+              part.tool === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY &&
+              part.state.status === "completed",
+          ),
+        ).toBe(false)
+        expect(JSON.stringify(parts)).not.toContain(falseGoalAcknowledgement.output)
+        expect(permissionRequests).toEqual([])
+        expect(
+          yield* database.db
+            .select()
+            .from(LearningCommandInvocationTable)
+            .where(eq(LearningCommandInvocationTable.assistant_message_id, msg.id))
+            .all(),
+        ).toEqual([])
+        expect(
+          yield* database.db
+            .select()
+            .from(LearningCommandReceiptTable)
+            .where(eq(LearningCommandReceiptTable.assistant_message_id, msg.id))
+            .all(),
+        ).toEqual([])
+        expect(yield* database.db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual(goalEffectCount)
+      }),
+    { config: cfg },
+  ),
+)
+
+itProviderLookup.live("session.processor preserves unrelated provider-executed tool results", () =>
+  provideTmpdirInstance(
+    (dir) =>
+      Effect.gen(function* () {
+        const { processors, provider, database } = yield* boot()
+        const { chat, parent } = yield* runningSession("provider-executed lookup")
+        const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
+        const mdl = yield* provider.getModel(ref.providerID, ref.modelID)
+        const handle = yield* processors.create({ assistantMessage: msg, sessionID: chat.id, model: mdl })
+
+        expect(
+          yield* handle.process({
+            user: {
+              id: parent.id,
+              sessionID: chat.id,
+              role: "user",
+              time: parent.time,
+              agent: parent.agent,
+              model: { providerID: ref.providerID, modelID: ref.modelID },
+            } satisfies SessionV1.User,
+            sessionID: chat.id,
+            composition: { type: "interactive" },
+            model: mdl,
+            agent: agent(),
+            system: [],
+            messages: [{ role: "user", content: "look up the weather" }],
+            tools: {},
+          }),
+        ).toBe("continue")
+
+        const call = (yield* MessageV2.parts(msg.id)).find(
+          (part): part is SessionV1.ToolPart => part.type === "tool" && part.tool === "lookup",
+        )
+        expect(call).toMatchObject({
+          metadata: { providerExecuted: true },
+          state: {
+            status: "completed",
+            title: "Lookup",
+            metadata: { ok: true },
+            output: "sunny",
+          },
+        })
+        expect(handle.failureReason).toBeUndefined()
+        expect(
+          yield* database.db
+            .select()
+            .from(LearningCommandInvocationTable)
+            .where(eq(LearningCommandInvocationTable.assistant_message_id, msg.id))
+            .all(),
+        ).toEqual([])
       }),
     { config: cfg },
   ),

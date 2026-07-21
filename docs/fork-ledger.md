@@ -864,6 +864,142 @@ and no acceptance-changing finding remains.
   Commit `03ea74ec4` fixes the accepted implementation provenance;
   `docs/README.md` therefore closes Gate 15 without starting Gate 16.
 
+## 2026-07-21 Gate 16 acceptance and planning-correction provenance
+
+Current disposition remains owned only by `docs/README.md`. Gate 16 entered
+maintainer grill after Gate 15 closed, and that grill is now complete. Its
+record preserves the accepted maintainer decisions, accepted engineering
+contract, implementation, and closing evidence. Whole-Gate review run
+`gate16-whole-20260721-01` returned `Revise`, then closed `G16-CT-001` through
+`G16-CT-004` and returned the new `G16-CT-005` Course-withdrawal defect. The
+executor repaired that boundary; the same reviewer closed it and returned
+`Accept`. The same retained reviewer subsequently closed `G16-IE-001` through
+`G16-IE-013`, accepted the deterministic implementation/evidence candidate,
+and closed the remaining real-provider qualification `G16-IE-U01`. No
+acceptance-changing finding or material unknown remains at the Gate 16
+boundary. The contract/theory snapshot accepted before this final status and
+evidence append had SHA-256
+`F5FEB90F65700CA830CE188628BFA332A08DB49365310B836974040BB5016469`;
+the append records closure and does not revise that contract's meaning.
+
+The maintainer accepted the following correction while pressure-testing Goal
+meaning with final-exam preparation:
+
+- Two Goal-only exam demands can require real cross-day allocation even when no
+  Assignment exists. In the representative case, a learner starts from zero on
+  the 16th, has an operating-systems exam on the 18th and a data-structures exam
+  on the 20th; starting ten days earlier must permit a different recomputed
+  allocation. A static Goal priority cannot represent both situations.
+- The product foundation already assigned deadline, remaining-work, capacity,
+  feasibility, allocation, feedback, and recomputation arithmetic for ordinary
+  assignments **and other substantial real work** to the program. The later
+  Roadmap 09 requirement that Gate 21 first admit an Assignment was therefore a
+  derived narrowing, not accepted product meaning.
+- Goal and Assignment remain separate authorities. Gate 16 supplies exact Goal
+  identity/revision and learner-owned meaning; Assignment supplies obligation
+  identity/revision. Gate 21 retains its number and may consume either as a
+  typed substantial planning demand while owning accepted planning inputs and
+  arithmetic.
+- Gate 16 gains no static priority, scheduler, workload, capacity, or allocation
+  fields from this correction. Gate 21 gains no authority to merge Goal and
+  Assignment or turn every task into an Assignment.
+- Gate 21's bounded pre-contract experiment must cover the no-Assignment exam
+  case at both start times as well as representative Assignment pressure,
+  correction, override, feedback, and recomputation. Gate 23 must qualify
+  Goal-driven as well as Assignment-driven cross-day replanning.
+- No new numbered Gate is introduced now. If Gate 21's later experiment shows
+  that Assignment lifecycle and cross-authority planning need distinct
+  acceptance boundaries, that evidence returns to the roadmap owner rather
+  than silently splitting the Gate.
+
+The maintainer also rejected a single deterministic rule for interpreting
+later pursuit after Goal closure. Real histories may combine abandonment,
+substantial forgetting, mistaken achievement, once-true achievement followed by
+decay, shallow understanding, a raised standard, renewed pursuit, and changed
+purpose. Gate 16 must preserve the learner-accepted interpretation and its
+source; time, current ability, evidence, or wording alone cannot decide whether
+the next effect corrects, revises, resumes, supersedes, or creates a Goal. Model
+clarification is allowed when that difference changes durable history or later
+behavior, but it does not authorize an exhaustive learning-history taxonomy or
+merge learner state into Goal identity.
+
+The derived review candidate makes those decisions concrete as immutable
+linear Goal revisions, optional learner-owned attainment conditions and target
+boundaries, explicit lifecycle dispositions, and learner-accepted supersession
+relations. One bounded atomic Goal change set may carry several independent
+Goal operations from the same learner occurrence, so the OS/data-structures
+exam statement can be accepted without partial persistence or a generic
+transaction language. A conservative direct learner-request arm preserves
+clear learner wording without redundant confirmation; a model-assisted arm
+must display and receive once-only acceptance for the exact complete candidate
+whenever the model adds or changes consequential meaning. Both reuse the
+passed learning-command source, permission, replay, receipt, recovery, and
+atomic-settlement invariants. The proposal deliberately stops before automatic
+context injection, learner state, planning, terminal composition, or an
+integrated product-loop claim.
+
+Fresh top-level reviewer task `019f80b5-58a4-74a1-8530-1405a1e57a25`
+returned the first contract/theory `Revise` verdict without disputing the eight
+maintainer decisions or planning correction. It found that replacement could
+not target an existing Goal, source-head-coupled supersession was silently
+cleared by ordinary correction, byte-equal carry could transfer unauthorized
+terminal or referent-sensitive meaning, and the replay section contradicted
+the passed duplicate/conflict-before-live-state order. The executor repair
+replaces source-head coupling with a complete independently preservable
+disposition, adds exact existing/new replacement-target arms and current
+one-to-one/acyclic validation, records dependency-complete field bases, and
+states one total replay order. On the closure pass, the same reviewer retested
+and closed all four, then found that requiring every Course membership in every
+successor revision to remain active let reversible Course withdrawal block
+learner-owned correction, lifecycle change, and
+replacement. The executor repair now requires active proof only for initial or
+newly added membership; exact predecessor membership remains preservable or
+removable while unavailable, including per-member handling in multi-Course
+scope. The same reviewer retested and closed `G16-CT-005`, found no new
+acceptance-changing contract defect, and returned `Accept`. It reported all
+contract passes left the production checkout and Git state unmodified. The
+implementation/evidence review exercised the exact working-tree candidate and
+repaired canonical command binding, once-only occurrence consumption,
+whole-directive authorization, complete confirmation bases and immutable
+settlement ownership, temporal and identity integrity, closed JSON shapes,
+database frontier protection, provider-shadow rejection, Course-withdrawal
+preservation, raw-SQL construction defenses, and Gate 8–15 migration retention.
+The retained reviewer ultimately accepted all deterministic repairs. Its final
+accepted causal runs included Core learner-Goal `22 pass / 241 expects`, Core
+database migration `29 / 192`, Core Course authority `8 / 67`, and released-v1
+OpenCode learning-command runtime `33 / 420`, plus both affected package
+typechecks, schema/migration parity, and diff checks.
+
+The separately authorized bounded real-provider qualification used
+`openai/gpt-5.5` through the production released-v1 Session, Turn, permission,
+learning-command, receipt, effect, and terminal acknowledgement carriers. It
+proved a direct Goal write, a no-write discussion, four-dimension
+clarification, exact once-only acceptance of an atomic two-Goal change set,
+causal provider/tool linkage, and later exact-CAS correction. The accepted run
+made eight model operations, three applied Goal invocations, three Goals, four
+revisions, and three Goal effects/receipts across three Sessions and five
+normally completed Turns. Its secret-free evidence JSON was 41,272 bytes with
+SHA-256
+`46B59E8CA04A8EFD3502743B2DB1B2112E69E2417846CE907CA92960F09F5601`;
+stderr was empty with SHA-256
+`E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855`.
+The exact qualification script SHA-256 was
+`938654CD3864D0AA67C4F6245F8F4662A49AC9D77E9C3B780993B0C21E509D1B`;
+the pinned provider-catalog snapshot SHA-256 was
+`F71C7EF836ADE8B32C6F629230B05AB593FF2F39C502F2348964AECD79C3D1BD`.
+The isolated raw artifacts were reviewer-inspected and hash-bound, then removed
+after acceptance; they are evidence provenance, not a runtime dependency. This
+stochastic qualification proves model-facing usability and captured production
+path conformance only. Deterministic suites remain authoritative for state,
+authorization, dependency, replay, recovery, and negative behavior.
+
+The correction is propagated through the product foundation, both architecture
+documents, Roadmap 09, `AGENTS.md`, this ledger, the live Gate map, and the
+[Gate 16 learner Goal authority record](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md).
+Older dated statements that Gate 16 had not begun or that described the
+2026-07-17 Assignment-planning route remain historical evidence of their own
+time rather than current disposition.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

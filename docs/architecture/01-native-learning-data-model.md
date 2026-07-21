@@ -417,16 +417,27 @@ actually uses and retain correction provenance.
 ### Agenda
 
 Agenda is an ownership area, not one universal `agenda_item` aggregate. Goals,
-future-attention concerns, assignments, commitments, deferrals, and temporary
-focus have different sources and legal completion meanings. The first planned
-product boundary admits separate Goal, source-linked future-attention/return,
-and Assignment consumers. Generic commitment, deferral, and durable
-detour/rejoin remain recorded, consumer-earned future meanings rather than
-empty baseline record families.
+future-attention concerns, assignments, planning demands, commitments,
+deferrals, and temporary focus have different sources and legal completion
+meanings. The first planned product boundary admits separate Goal,
+source-linked future-attention/return, Assignment, and cross-day planning
+consumers. Cross-day planning may reference an exact Goal or Assignment
+revision without merging their identities or lifecycles. Generic commitment,
+deferral, and durable detour/rejoin remain recorded, consumer-earned future
+meanings rather than empty baseline record families.
 
 Goals may be LearnerHome-wide, Course-scoped, or span several Courses. A Course
 therefore has no mandatory single `goal` field. Immediate Turn intent remains
 Interaction meaning unless it must survive the Session and alter later action.
+
+Goal identity and learner state remain separate even when they interact.
+Elapsed time, abandonment, prior achievement, forgetting, shallow understanding,
+later evidence, or a raised standard does not by itself decide whether later
+intent revises or resumes one Goal or creates another. The program preserves
+the legal choices and their provenance; a model may clarify the semantic case,
+and the learner accepts any consequential interpretation. This does not
+pre-authorize a universal learning-history taxonomy or durable pursuit-episode
+record.
 
 The source-linked future-attention loop remains the first experimentally
 settled Agenda topology: eligible does not mean mandatory, begun, served,
@@ -434,9 +445,10 @@ correct, or mastered. Its native lifecycle is admitted together with
 conditional Tutor purpose and truthful service through the teach-adapt-return
 path, not as an empty storage Gate.
 
-Assignment planning waits for representative multi-day workload, capacity,
-allocation, correction, and recomputation behavior. The withdrawn minute-scale
-emergency schema and its compatibility tombstone are not design inputs.
+Cross-day planning waits for representative Goal-driven and Assignment-driven
+multi-day workload, capacity, allocation, correction, and recomputation
+behavior. The withdrawn minute-scale emergency schema and its compatibility
+tombstone are not design inputs.
 
 ### Tutor policy and context cuts
 
@@ -478,7 +490,8 @@ but each family first appears only with a demonstrated consumer:
 | cross-Session learner intent    | Goal identity and revision                 | learner-owned source, scope, correction, and supersession; no automatic attainment inference                                                                                |
 | retained learner direction      | scoped steering policy                     | source-linked applicability and correction projected through an exact policy revision                                                                                       |
 | future return                   | future-attention concern and service       | eligibility, conditional purpose, and complete source-aligned service remain distinct                                                                                       |
-| substantial real work           | Assignment and allocation                  | obligation, workload, capacity, infeasibility, and recomputation without model-owned arithmetic                                                                             |
+| substantial obligation          | Assignment identity and revision           | obligation and its correction remain distinct from Goal identity and planning arithmetic                                                                                    |
+| substantial cross-day work      | planning demand and allocation              | references an exact Goal or Assignment revision; accepted workload, capacity, progress, infeasibility, learner override, and recomputation use program-owned arithmetic      |
 
 An accepted Gate may establish any causally sound subset whose invariants and
 integration boundary are real. This document neither authorizes empty future
@@ -547,8 +560,10 @@ does not select one answer yet:
   continuity; and
 - retention, evidence aggregation, review scheduling, and long-horizon planning
   algorithms;
-- exact Goal lifecycle fields beyond source, scope, revision, correction, and
-  supersession;
+- exact Goal persistence fields and transition encoding beneath the accepted
+  outcome, optional attainment conditions and target time, source, scope,
+  revision, correction, achievement, abandonment, and supersession meanings;
+- cross-day planning-demand encoding across exact Goal and Assignment revisions;
 - additional steering scopes and multiple-candidate Agenda arbitration;
 - whether a future consumer earns generic commitment, deferral, or durable
   detour/rejoin records; and

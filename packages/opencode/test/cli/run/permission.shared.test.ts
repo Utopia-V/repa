@@ -267,6 +267,84 @@ describe("run permission shared", () => {
     expect(withoutWorkingView.lines[2]).not.toContain("N".repeat(120))
   })
 
+  test("shows the complete once-only learner Goal candidate", () => {
+    const confirmation = {
+      schemaVersion: 1,
+      authorizationBasis: "learner_acceptance",
+      semanticFingerprint: "a".repeat(64),
+      command: {
+        operations: [
+          {
+            type: "create",
+            snapshot: {
+              outcome: "Pass the operating-systems exam",
+              conditions: ["Explain virtual memory without notes"],
+              scope: {
+                type: "courses",
+                courses: [{ courseID: "crs_os", basis: { type: "new", expectedCourseVersion: 7 } }],
+              },
+              target: {
+                type: "local_date",
+                date: "2026-09-01",
+                timeZone: "Asia/Shanghai",
+                sourceExpression: "before the September exam",
+                normalizationBasis: "source_temporal_context",
+              },
+              fieldBases: {
+                outcome: { type: "authored", sourceExcerpt: "pass my operating-systems exam" },
+                conditions: { type: "accepted" },
+                scope: { type: "accepted" },
+                target: { type: "accepted" },
+                disposition: { type: "accepted" },
+              },
+            },
+            disposition: "active",
+          },
+        ],
+      },
+      goalBases: [],
+      courseBases: [
+        {
+          courseID: "crs_os",
+          courseTitle: "Operating Systems",
+          operationOrdinal: 0,
+          revisionRole: "source",
+          admission: { type: "new", courseVersion: 7, courseTimeUpdated: 1_774_000_000_000 },
+          availability: { state: "available", title: "Operating Systems" },
+        },
+      ],
+    }
+    const info = permissionInfo(
+      req({
+        permission: "update_learner_goals",
+        metadata: { onceOnly: true, confirmation },
+      }),
+    )
+
+    expect(info.title).toBe("Confirm 1 durable learner Goal change")
+    expect(info.lines.join("\n")).toContain("one-time learner acceptance")
+    expect(info.lines.join("\n")).toContain('"Pass the operating-systems exam"')
+    expect(info.lines.join("\n")).toContain('"Explain virtual memory without notes"')
+    expect(info.lines.join("\n")).toContain('"crs_os"')
+    expect(info.lines.join("\n")).toContain('"2026-09-01"')
+    expect(info.lines.join("\n")).toContain('"authored"')
+    expect(info.lines.join("\n")).toContain('"active"')
+    expect(info.lines.join("\n")).toContain("durable, correctable Goal state")
+
+    const direct = permissionInfo(
+      req({
+        permission: "update_learner_goals",
+        metadata: {
+          authorizationBasis: "learner_request",
+          command: confirmation.command,
+        },
+      }),
+    )
+    expect(direct.title).toBe("Allow 1 direct learner Goal change")
+    expect(direct.lines.join("\n")).toContain('"Pass the operating-systems exam"')
+    expect(direct.lines.join("\n")).toContain("learner-authored request")
+  })
+
   test("formats always-allow copy for wildcard and explicit patterns", () => {
     expect(permissionAlwaysLines(req({ permission: "bash", always: ["*"] }))).toEqual([
       "This will allow bash until Repa is restarted.",

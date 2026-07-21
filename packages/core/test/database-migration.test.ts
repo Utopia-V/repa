@@ -8,6 +8,7 @@ import { Effect, Layer } from "effect"
 import { eq, inArray, sql } from "drizzle-orm"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "@opencode-ai/core/database/admission"
+import { DatabaseSchemaExtras } from "@opencode-ai/core/database/schema-extras"
 import sessionUsageMigration from "@opencode-ai/core/database/migration/20260510033149_session_usage"
 import normalizeStoragePathsMigration from "@opencode-ai/core/database/migration/20260601010001_normalize_storage_paths"
 import sessionMessageProjectionOrderMigration from "@opencode-ai/core/database/migration/20260603040000_session_message_projection_order"
@@ -24,6 +25,7 @@ import durableTurnMigration from "@opencode-ai/core/database/migration/repa/2026
 import materialMapAlignmentMigration from "@opencode-ai/core/database/migration/repa/20260719104356_material_map_alignment"
 import learnerNavigationMigration from "@opencode-ai/core/database/migration/repa/20260719155243_learner_navigation"
 import retainedSteeringMigration from "@opencode-ai/core/database/migration/repa/20260720113159_gate15_retained_steering"
+import learnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260720200330_gate16_learner_goals"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -151,7 +153,10 @@ function courseSchema(db: TestDatabase) {
       sql`
       SELECT type, name, tbl_name AS tableName, sql AS definition
       FROM sqlite_master
-      WHERE tbl_name LIKE 'course%' AND name NOT LIKE 'sqlite_autoindex_%'
+      WHERE tbl_name LIKE 'course%'
+        AND tbl_name <> 'course_state_history'
+        AND name NOT LIKE 'course_state_history_%'
+        AND name NOT LIKE 'sqlite_autoindex_%'
       ORDER BY type, name
     `,
     )
@@ -315,6 +320,65 @@ function retainedSteeringSchema(db: TestDatabase) {
     )
 }
 
+function learnerGoalSchema(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_master
+      WHERE (tbl_name LIKE 'learner_goal%'
+        OR tbl_name = 'course_state_history'
+        OR name LIKE 'course_state_history_%'
+        OR tbl_name IN ('learning_command_invocation', 'learning_command_receipt'))
+        AND name NOT LIKE 'sqlite_autoindex_%'
+      ORDER BY type, name
+    `,
+    )
+    .pipe(Effect.map((rows) => rows.map((row) => ({ ...row, definition: normalizeSchemaDefinition(row.definition) }))))
+}
+
+function dropCourseStateHistory(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql`DROP TRIGGER IF EXISTS course_state_history_capture_insert`)
+    yield* db.run(sql`DROP TRIGGER IF EXISTS course_state_history_capture_update`)
+    yield* db.run(sql`DROP TABLE IF EXISTS course_state_history`)
+  })
+}
+
+function dropGate16(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+    const triggers = yield* db.all<{ name: string }>(sql`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger'
+        AND (name LIKE 'learner_goal_%' OR name LIKE 'course_state_history_%')
+    `)
+    yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
+      discard: true,
+    })
+    for (const table of [
+      "learner_goal_state_guard",
+      "learner_goal_commit_seal",
+      "learner_goal_effect_operation",
+      "learner_goal_supersession",
+      "learner_goal_field_basis",
+      "learner_goal_course_scope",
+      "learner_goal_condition",
+      "learner_goal_revision",
+      "learner_goal_time_zone",
+      "learner_goal_time_zone_release",
+      "learner_goal_effect",
+      "learner_goal",
+      "learner_goal_state",
+      "course_state_history",
+    ]) {
+      yield* db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(table)}`)
+    }
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 10}`)
+    yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
+  })
+}
+
 function restoreGate8LearningSchema(db: TestDatabase) {
   return Effect.gen(function* () {
     yield* Effect.forEach(learningCommandTables, (name) => db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(name)}`), {
@@ -414,6 +478,7 @@ function removeGate14(db: TestDatabase) {
 
 function removeGate15(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* dropGate16(db)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
     const triggers = yield* db.all<{ name: string }>(sql`
       SELECT name FROM sqlite_master
@@ -435,7 +500,8 @@ function removeGate15(db: TestDatabase) {
     yield* db.run(sql`DROP TABLE IF EXISTS retained_steering_policy`)
     yield* db.run(sql`DROP TABLE IF EXISTS retained_steering_state`)
     yield* db.run(sql`DROP TABLE IF EXISTS learning_occurrence_source_order`)
-    yield* db.run(sql.raw(`
+    yield* db.run(
+      sql.raw(`
       CREATE TABLE __gate14_learning_admitted_occurrence (
         id text PRIMARY KEY,
         origin_session_id text NOT NULL,
@@ -444,14 +510,18 @@ function removeGate15(db: TestDatabase) {
         UNIQUE(origin_session_id, origin_message_id),
         CHECK(time_admitted >= 0)
       )
-    `))
-    yield* db.run(sql.raw(`
+    `),
+    )
+    yield* db.run(
+      sql.raw(`
       INSERT INTO __gate14_learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted)
       SELECT id, origin_session_id, origin_message_id, time_admitted FROM learning_admitted_occurrence
-    `))
+    `),
+    )
     yield* db.run(sql`DROP TABLE learning_admitted_occurrence`)
     yield* db.run(sql`ALTER TABLE __gate14_learning_admitted_occurrence RENAME TO learning_admitted_occurrence`)
-    yield* db.run(sql.raw(`
+    yield* db.run(
+      sql.raw(`
       CREATE TABLE __gate14_turn_model_operation (
         assistant_message_id text PRIMARY KEY,
         turn_id text NOT NULL,
@@ -483,8 +553,10 @@ function removeGate15(db: TestDatabase) {
         CHECK((state = 'running' AND time_settled IS NULL) OR (state IN ('completed', 'failed', 'interrupted') AND time_settled IS NOT NULL AND time_settled >= time_admitted)),
         CHECK((candidates_sealed = 0 AND candidate_count IS NULL AND time_candidates_sealed IS NULL) OR (candidates_sealed = 1 AND candidate_count IS NOT NULL AND candidate_count >= 0 AND time_candidates_sealed IS NOT NULL AND time_candidates_sealed >= time_admitted))
       )
-    `))
-    yield* db.run(sql.raw(`
+    `),
+    )
+    yield* db.run(
+      sql.raw(`
       INSERT INTO __gate14_turn_model_operation (
         assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal, state,
         request_fingerprint, context_fingerprint, snapshot_frontier_sequence, snapshot_frontier_time,
@@ -496,13 +568,15 @@ function removeGate15(db: TestDatabase) {
         observed_shared_frontier_sequence, observed_shared_frontier_time, time_admitted, time_settled,
         candidates_sealed, candidate_count, time_candidates_sealed
       FROM turn_model_operation
-    `))
+    `),
+    )
     yield* db.run(sql`DROP TABLE turn_model_operation`)
     yield* db.run(sql`ALTER TABLE __gate14_turn_model_operation RENAME TO turn_model_operation`)
     yield* db.run(sql`CREATE UNIQUE INDEX turn_model_turn_ordinal_idx ON turn_model_operation (turn_id, ordinal)`)
     yield* db.run(sql`DROP TABLE learning_command_receipt`)
     yield* db.run(sql`DROP TABLE learning_command_invocation`)
-    yield* db.run(sql.raw(`
+    yield* db.run(
+      sql.raw(`
       CREATE TABLE learning_command_invocation (
         part_id text PRIMARY KEY,
         session_id text NOT NULL,
@@ -540,8 +614,10 @@ function removeGate15(db: TestDatabase) {
         CHECK(command_version = 1),
         CHECK(status IN ('admitted', 'applied', 'already_applied', 'no_change', 'error'))
       )
-    `))
-    yield* db.run(sql.raw(`
+    `),
+    )
+    yield* db.run(
+      sql.raw(`
       CREATE TABLE learning_command_receipt (
         id text PRIMARY KEY,
         occurrence_id text NOT NULL,
@@ -567,7 +643,8 @@ function removeGate15(db: TestDatabase) {
         FOREIGN KEY (default_navigation_effect_id) REFERENCES learner_default_course_transition(id) ON DELETE RESTRICT,
         FOREIGN KEY (anchor_navigation_effect_id) REFERENCES learner_course_route_anchor_transition(id) ON DELETE RESTRICT
       ) WITHOUT ROWID
-    `))
+    `),
+    )
     yield* db.run(
       sql`CREATE UNIQUE INDEX learning_command_invocation_one_mutation_idx ON learning_command_invocation (assistant_message_id) WHERE status = 'applied'`,
     )
@@ -648,10 +725,11 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
           { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
           { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
+          { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
-        ).toHaveLength(12)
+        ).toHaveLength(13)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'artifact%' ORDER BY name`,
@@ -681,6 +759,440 @@ describe("DatabaseMigration", () => {
           { name: "session_message_session_time_created_id_idx" },
           { name: "session_message_session_type_seq_idx" },
         ])
+      }),
+    )
+  })
+
+  test("builds the same Gate 16 Goal authority from Gate 15 without fabricating Goal state", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const fresh = yield* learnerGoalSchema(db)
+
+        yield* removeGate15(db)
+        yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+        yield* db.transaction((tx) => retainedSteeringMigration.up(tx))
+        yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
+        yield* db.run(sql`
+          INSERT INTO repa_migration (version, id, time_completed)
+          VALUES (${BASELINE_VERSION + 9}, ${retainedSteeringMigration.id}, 1)
+        `)
+        yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 9}`))
+
+        const triggers = yield* db.all<{ name: string }>(sql`
+          SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name
+        `)
+        yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
+          discard: true,
+        })
+        const defaultConfirmation = JSON.stringify({
+          permissionRequestID: "permission_gate16_default",
+          headID: null,
+          version: 0,
+          fromCourseID: null,
+          fromCourseTitle: null,
+          target: {
+            courseID: "crs_gate16",
+            courseTitle: "Gate 16 migration fixture",
+            courseVersion: 0,
+            selectionRevisionID: null,
+            selectionVersion: 0,
+            viewID: null,
+            viewName: null,
+            viewVersion: null,
+            revisionVersion: null,
+          },
+        })
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx.run("PRAGMA defer_foreign_keys = ON")
+            yield* tx.run(sql`
+              INSERT INTO learning_occurrence_source_order (
+                sequence, occurrence_id, origin_session_id, origin_message_id, time_allocated,
+                source_temporal_state, source_timezone, source_utc_offset_minutes
+              ) VALUES
+                (1, 'loc_gate16_course', 'ses_gate16', 'msg_gate16_course', 1, 'resolved', 'UTC', 0),
+                (2, 'loc_gate16_representation', 'ses_gate16', 'msg_gate16_representation', 2, 'resolved', 'UTC', 0),
+                (3, 'loc_gate16_default', 'ses_gate16', 'msg_gate16_default', 3, 'resolved', 'UTC', 0),
+                (4, 'loc_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor', 4, 'resolved', 'UTC', 0),
+                (5, 'loc_gate16_retained', 'ses_gate16', 'msg_gate16_retained', 5, 'resolved', 'UTC', 0),
+                (6, 'loc_gate16_no_change', 'ses_gate16', 'msg_gate16_no_change', 6, 'resolved', 'UTC', 0),
+                (7, 'loc_gate16_error', 'ses_gate16', 'msg_gate16_error', 7, 'resolved', 'UTC', 0),
+                (8, 'loc_gate16_admitted', 'ses_gate16', 'msg_gate16_admitted', 8, 'resolved', 'UTC', 0)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO learning_admitted_occurrence (
+                id, origin_session_id, origin_message_id, time_admitted, source_order,
+                source_temporal_state, source_timezone, source_utc_offset_minutes
+              ) VALUES
+                ('loc_gate16_course', 'ses_gate16', 'msg_gate16_course', 1, 1, 'resolved', 'UTC', 0),
+                ('loc_gate16_representation', 'ses_gate16', 'msg_gate16_representation', 2, 2, 'resolved', 'UTC', 0),
+                ('loc_gate16_default', 'ses_gate16', 'msg_gate16_default', 3, 3, 'resolved', 'UTC', 0),
+                ('loc_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor', 4, 4, 'resolved', 'UTC', 0),
+                ('loc_gate16_retained', 'ses_gate16', 'msg_gate16_retained', 5, 5, 'resolved', 'UTC', 0),
+                ('loc_gate16_no_change', 'ses_gate16', 'msg_gate16_no_change', 6, 6, 'resolved', 'UTC', 0),
+                ('loc_gate16_error', 'ses_gate16', 'msg_gate16_error', 7, 7, 'resolved', 'UTC', 0),
+                ('loc_gate16_admitted', 'ses_gate16', 'msg_gate16_admitted', 8, 8, 'resolved', 'UTC', 0)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO course (id, title, state_version, time_created, time_updated)
+              VALUES ('crs_gate16', 'Gate 16 migration fixture', 0, 1, 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO course_view (id, course_id, name, state_version, time_created, time_updated)
+              VALUES ('view_gate16', 'crs_gate16', 'Gate 16 view', 0, 1, 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO course_view_revision (
+                id, course_id, view_id, revision_number, authorship_basis, time_created
+              ) VALUES ('revision_gate16', 'crs_gate16', 'view_gate16', 1, 'learner_directed', 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO course_view_revision_state (
+                course_id, view_id, revision_id, state_version, time_updated
+              ) VALUES ('crs_gate16', 'view_gate16', 'revision_gate16', 0, 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO course_item (id, course_id, time_created)
+              VALUES ('item_gate16', 'crs_gate16', 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO course_view_revision_item (
+                course_id, view_id, revision_id, item_id, title, preorder_position, depth
+              ) VALUES (
+                'crs_gate16', 'view_gate16', 'revision_gate16', 'item_gate16', 'Gate 16 item', 0, 0
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO course_selection_acceptance_effect (
+                id, occurrence_id, course_id, accepted_revision_id, previous_selection_version,
+                committed_selection_version, time_committed
+              ) VALUES (
+                'effect_gate16_course', 'loc_gate16_course', 'crs_gate16', 'revision_gate16', 0, 1, 11
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO representation_effect (id, operation_identity, semantic_fingerprint, time_committed)
+              VALUES ('effect_gate16_representation', 'gate16-operation', ${"2".repeat(64)}, 12)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO learner_default_course_transition (
+                id, version, previous_course_id, course_id, occurrence_id, permission_request_id,
+                confirmation_snapshot, target_course_version, target_selection_version,
+                time_committed, commit_order, frontier_sequence, frontier_time
+              ) VALUES (
+                'effect_gate16_default', 1, NULL, 'crs_gate16', 'loc_gate16_default',
+                'permission_gate16_default', ${defaultConfirmation}, 0, 0,
+                13, 3, 1, 13
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO learner_course_route_anchor_transition (
+                id, course_id, version, target_view_id, target_revision_id, target_item_id,
+                occurrence_id, target_course_version, target_selection_version, target_view_version,
+                target_revision_version, time_committed, commit_order, frontier_sequence, frontier_time
+              ) VALUES (
+                'effect_gate16_anchor', 'crs_gate16', 1, 'view_gate16', 'revision_gate16',
+                'item_gate16', 'loc_gate16_anchor', 0, 0, 0, 0, 14, 4, 2, 14
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_state (singleton, steering_revision, latest_cut_as_of)
+              VALUES (1, 1, 5)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_policy (id, time_created)
+              VALUES ('policy_gate16', 5)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_transition (
+                id, commit_seal_id, policy_id, version, previous_state, occurrence_id, source_order,
+                state, scope, source_excerpt, operative_instruction, learner_reason, effective_from,
+                valid_until, valid_until_source, valid_until_normalized, boundary_timezone,
+                boundary_utc_offset_minutes, semantic_fingerprint, steering_revision, time_committed,
+                commit_order, frontier_sequence, frontier_time, acknowledgement_title,
+                acknowledgement_body
+              ) VALUES (
+                'effect_gate16_retained', 'effect_gate16_retained', 'policy_gate16', 1, 'absent',
+                'loc_gate16_retained', 5, 'operative', 'learning_wide', 'Keep examples concrete',
+                'Use concrete examples first', 'I learn faster that way', 5, 500,
+                'until the course ends', '1970-01-01T00:08:20.000Z', 'UTC', 0,
+                ${"5".repeat(64)}, 1, 15, 5, 3, 15, 'Preference retained',
+                'Concrete examples will be used first.'
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO learning_command_invocation (
+                part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+                occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+                capability_version, authorization_basis, input_fingerprint,
+                retained_steering_semantic_fingerprint, status, effect_id, representation_effect_id,
+                default_navigation_effect_id, anchor_navigation_effect_id,
+                retained_steering_effect_id, permission_request_id, settlement, time_admitted,
+                time_settled, settlement_order, turn_id, input_id
+              ) VALUES
+                (
+                  'part_gate16_course', 'ses_gate16', 'msg_gate16_course', 'msg_gate16_assistant_course',
+                  'call-gate16-course', 'loc_gate16_course', 'accept_course_view_revision', 1, 0,
+                  'accept_course_view_revision', 1, 'learner_request', ${"1".repeat(64)}, NULL,
+                  'applied', 'effect_gate16_course', NULL, NULL, NULL, NULL, NULL,
+                  '{"outcome":"applied","effectID":"effect_gate16_course"}', 1, 11, 1, NULL, NULL
+                ),
+                (
+                  'part_gate16_representation', 'ses_gate16', 'msg_gate16_representation',
+                  'msg_gate16_assistant_representation', 'call-gate16-representation',
+                  'loc_gate16_representation', 'representation.convert', 1, 0,
+                  'representation.convert', 1, 'learner_request', ${"2".repeat(64)}, NULL,
+                  'applied', NULL, 'effect_gate16_representation', NULL, NULL, NULL, NULL,
+                  '{"outcome":"applied","effectID":"effect_gate16_representation"}', 2, 12, 2,
+                  'turn-gate16-representation', 'input-gate16-representation'
+                ),
+                (
+                  'part_gate16_default', 'ses_gate16', 'msg_gate16_default',
+                  'msg_gate16_assistant_default', 'call-gate16-default', 'loc_gate16_default',
+                  'set_default_course_preference', 1, 0, 'set_default_course_preference', 1,
+                  'learner_acceptance', ${"3".repeat(64)}, NULL, 'applied', NULL, NULL,
+                  'effect_gate16_default', NULL, NULL, 'permission_gate16_default',
+                  '{"outcome":"applied","effectID":"effect_gate16_default"}', 3, 13, 3,
+                  'turn-gate16-default', 'input-gate16-default'
+                ),
+                (
+                  'part_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor',
+                  'msg_gate16_assistant_anchor', 'call-gate16-anchor', 'loc_gate16_anchor',
+                  'set_course_route_anchor', 1, 0, 'set_course_route_anchor', 1, 'learner_request',
+                  ${"4".repeat(64)}, NULL, 'applied', NULL, NULL, NULL, 'effect_gate16_anchor',
+                  NULL, NULL, '{"outcome":"applied","effectID":"effect_gate16_anchor"}',
+                  4, 14, 4, 'turn-gate16-anchor', 'input-gate16-anchor'
+                ),
+                (
+                  'part_gate16_retained', 'ses_gate16', 'msg_gate16_retained',
+                  'msg_gate16_assistant_retained', 'call-gate16-retained', 'loc_gate16_retained',
+                  'update_retained_learning_steering', 1, 0, 'update_retained_learning_steering', 1,
+                  'learner_request', ${"5".repeat(64)}, ${"5".repeat(64)}, 'applied', NULL, NULL,
+                  NULL, NULL, 'effect_gate16_retained', NULL,
+                  '{"outcome":"applied","effectID":"effect_gate16_retained"}', 5, 15, 5,
+                  'turn-gate16-retained', 'input-gate16-retained'
+                ),
+                (
+                  'part_gate16_replay', 'ses_gate16', 'msg_gate16_representation',
+                  'msg_gate16_assistant_replay', 'call-gate16-replay', 'loc_gate16_representation',
+                  'representation.convert', 1, 0, 'representation.convert', 1, 'learner_request',
+                  ${"6".repeat(64)}, NULL, 'already_applied', NULL, 'effect_gate16_representation',
+                  NULL, NULL, NULL, NULL,
+                  '{"outcome":"already_applied","effectID":"effect_gate16_representation"}',
+                  6, 16, 6, NULL, NULL
+                ),
+                (
+                  'part_gate16_no_change', 'ses_gate16', 'msg_gate16_no_change',
+                  'msg_gate16_assistant_no_change', 'call-gate16-no-change', 'loc_gate16_no_change',
+                  'set_course_route_anchor', 1, 0, 'set_course_route_anchor', 1, 'learner_request',
+                  ${"7".repeat(64)}, NULL, 'no_change', NULL, NULL, NULL, NULL, NULL, NULL,
+                  '{"outcome":"no_change"}', 7, 17, 7, 'turn-gate16-no-change',
+                  'input-gate16-no-change'
+                ),
+                (
+                  'part_gate16_error', 'ses_gate16', 'msg_gate16_error',
+                  'msg_gate16_assistant_error', 'call-gate16-error', 'loc_gate16_error',
+                  'update_retained_learning_steering', 1, 0, 'update_retained_learning_steering', 1,
+                  'learner_request', ${"8".repeat(64)}, ${"8".repeat(64)}, 'error', NULL, NULL,
+                  NULL, NULL, NULL, NULL, '{"outcome":"error","code":"validation_error"}',
+                  8, 18, 8, 'turn-gate16-error', 'input-gate16-error'
+                ),
+                (
+                  'part_gate16_admitted', 'ses_gate16', 'msg_gate16_admitted',
+                  'msg_gate16_assistant_admitted', 'call-gate16-admitted', 'loc_gate16_admitted',
+                  'update_retained_learning_steering', 1, 0, 'update_retained_learning_steering', 1,
+                  'learner_request', ${"9".repeat(64)}, ${"9".repeat(64)}, 'admitted', NULL, NULL,
+                  NULL, NULL, NULL, NULL, NULL, 8, NULL, NULL, 'turn-gate16-admitted',
+                  'input-gate16-admitted'
+                )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO learning_command_receipt (
+                id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+                invocation_part_id, capability_identity, capability_version, authorization_basis,
+                effect_id, representation_effect_id, default_navigation_effect_id,
+                anchor_navigation_effect_id, retained_steering_effect_id, permission_request_id,
+                confirmation_snapshot, time_committed, commit_order
+              ) VALUES
+                (
+                  'receipt_gate16_course', 'loc_gate16_course', 'ses_gate16', 'msg_gate16_course',
+                  'msg_gate16_assistant_course', 'part_gate16_course', 'accept_course_view_revision',
+                  1, 'learner_request', 'effect_gate16_course', NULL, NULL, NULL, NULL, NULL, NULL, 11, 1
+                ),
+                (
+                  'receipt_gate16_representation', 'loc_gate16_representation', 'ses_gate16',
+                  'msg_gate16_representation', 'msg_gate16_assistant_representation',
+                  'part_gate16_representation', 'representation.convert', 1, 'learner_request',
+                  NULL, 'effect_gate16_representation', NULL, NULL, NULL, NULL, NULL, 12, 2
+                ),
+                (
+                  'receipt_gate16_default', 'loc_gate16_default', 'ses_gate16', 'msg_gate16_default',
+                  'msg_gate16_assistant_default', 'part_gate16_default',
+                  'set_default_course_preference', 1, 'learner_acceptance', NULL, NULL,
+                  'effect_gate16_default', NULL, NULL, 'permission_gate16_default',
+                  ${defaultConfirmation}, 13, 3
+                ),
+                (
+                  'receipt_gate16_anchor', 'loc_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor',
+                  'msg_gate16_assistant_anchor', 'part_gate16_anchor', 'set_course_route_anchor',
+                  1, 'learner_request', NULL, NULL, NULL, 'effect_gate16_anchor', NULL, NULL, NULL, 14, 4
+                ),
+                (
+                  'receipt_gate16_retained', 'loc_gate16_retained', 'ses_gate16',
+                  'msg_gate16_retained', 'msg_gate16_assistant_retained', 'part_gate16_retained',
+                  'update_retained_learning_steering', 1, 'learner_request', NULL, NULL, NULL,
+                  NULL, 'effect_gate16_retained', NULL, NULL, 15, 5
+                )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_commit_seal (
+                transition_id, receipt_id, invocation_part_id
+              ) VALUES (
+                'effect_gate16_retained', 'receipt_gate16_retained', 'part_gate16_retained'
+              )
+            `)
+          }),
+        )
+        yield* db.transaction((tx) => DatabaseSchemaExtras.install(tx))
+
+        const preservedRows = () =>
+          Effect.all({
+            invocations: db.all<Record<string, unknown>>(sql`
+              SELECT part_id, session_id, parent_user_message_id, assistant_message_id,
+                     provider_call_id, occurrence_id, command_name, command_version,
+                     emission_ordinal, capability_identity, capability_version,
+                     authorization_basis, input_fingerprint,
+                     retained_steering_semantic_fingerprint, status, effect_id,
+                     representation_effect_id, default_navigation_effect_id,
+                     anchor_navigation_effect_id, retained_steering_effect_id,
+                     permission_request_id, settlement, time_admitted, time_settled,
+                     settlement_order, turn_id, input_id
+              FROM learning_command_invocation ORDER BY part_id
+            `),
+            receipts: db.all<Record<string, unknown>>(sql`
+              SELECT id, occurrence_id, origin_session_id, origin_message_id,
+                     assistant_message_id, invocation_part_id, capability_identity,
+                     capability_version, authorization_basis, effect_id,
+                     representation_effect_id, default_navigation_effect_id,
+                     anchor_navigation_effect_id, retained_steering_effect_id,
+                     permission_request_id, confirmation_snapshot, time_committed, commit_order
+              FROM learning_command_receipt ORDER BY id
+            `),
+          })
+        const before = yield* preservedRows()
+        expect(before.invocations).toHaveLength(9)
+        expect(before.receipts).toHaveLength(5)
+        expect(
+          yield* db.all(sql`
+            SELECT status, count(*) AS count
+            FROM learning_command_invocation GROUP BY status ORDER BY status
+          `),
+        ).toEqual([
+          { status: "admitted", count: 1 },
+          { status: "already_applied", count: 1 },
+          { status: "applied", count: 5 },
+          { status: "error", count: 1 },
+          { status: "no_change", count: 1 },
+        ])
+        expect(
+          yield* db.all(sql`
+            SELECT capability_identity, effect_id, representation_effect_id,
+                   default_navigation_effect_id, anchor_navigation_effect_id,
+                   retained_steering_effect_id
+            FROM learning_command_receipt ORDER BY capability_identity
+          `),
+        ).toEqual([
+          {
+            capability_identity: "accept_course_view_revision",
+            effect_id: "effect_gate16_course",
+            representation_effect_id: null,
+            default_navigation_effect_id: null,
+            anchor_navigation_effect_id: null,
+            retained_steering_effect_id: null,
+          },
+          {
+            capability_identity: "representation.convert",
+            effect_id: null,
+            representation_effect_id: "effect_gate16_representation",
+            default_navigation_effect_id: null,
+            anchor_navigation_effect_id: null,
+            retained_steering_effect_id: null,
+          },
+          {
+            capability_identity: "set_course_route_anchor",
+            effect_id: null,
+            representation_effect_id: null,
+            default_navigation_effect_id: null,
+            anchor_navigation_effect_id: "effect_gate16_anchor",
+            retained_steering_effect_id: null,
+          },
+          {
+            capability_identity: "set_default_course_preference",
+            effect_id: null,
+            representation_effect_id: null,
+            default_navigation_effect_id: "effect_gate16_default",
+            anchor_navigation_effect_id: null,
+            retained_steering_effect_id: null,
+          },
+          {
+            capability_identity: "update_retained_learning_steering",
+            effect_id: null,
+            representation_effect_id: null,
+            default_navigation_effect_id: null,
+            anchor_navigation_effect_id: null,
+            retained_steering_effect_id: "effect_gate16_retained",
+          },
+        ])
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+        expect(yield* db.get(sql`PRAGMA integrity_check`)).toEqual({ integrity_check: "ok" })
+        yield* DatabaseMigration.apply(db)
+
+        expect(yield* learnerGoalSchema(db)).toEqual(fresh)
+        expect(yield* preservedRows()).toEqual(before)
+        expect(yield* db.all(sql`SELECT * FROM course_state_history ORDER BY course_id, version`)).toEqual([
+          {
+            course_id: "crs_gate16",
+            version: 0,
+            title: "Gate 16 migration fixture",
+            withdrawal_reason: null,
+            time_updated: 1,
+          },
+        ])
+        expect(yield* db.get(sql`SELECT * FROM learner_goal_time_zone_release`)).toEqual({
+          id: "iana-tzdb-2026c",
+          tzdb_version: "2026c",
+          engine: "timezonecomplete@5.15.1+tzdata@1.0.50",
+          data_sha256: "a4220c6c6efab292e7aac7dbe8d771cfc619e99b9235ed3e54d17445c232f995",
+        })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_time_zone`)).toEqual({ count: 598 })
+        expect(yield* db.all(sql`SELECT id FROM learner_goal`)).toEqual([])
+        expect(yield* db.all(sql`SELECT id FROM learner_goal_revision`)).toEqual([])
+        expect(yield* db.all(sql`SELECT id FROM learner_goal_effect`)).toEqual([])
+        expect(yield* db.all(sql`SELECT effect_id FROM learner_goal_commit_seal`)).toEqual([])
+        expect(
+          yield* db.all(sql`
+            SELECT part_id, goal_semantic_fingerprint, goal_command_snapshot,
+                   goal_confirmation_snapshot, goal_effect_id
+            FROM learning_command_invocation ORDER BY part_id
+          `),
+        ).toEqual(
+          before.invocations.map((row) => ({
+            part_id: row.part_id,
+            goal_semantic_fingerprint: null,
+            goal_command_snapshot: null,
+            goal_confirmation_snapshot: null,
+            goal_effect_id: null,
+          })),
+        )
+        expect(
+          yield* db.all(sql`
+            SELECT id, goal_effect_id FROM learning_command_receipt ORDER BY id
+          `),
+        ).toEqual(before.receipts.map((row) => ({ id: row.id, goal_effect_id: null })))
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+        expect(yield* db.get(sql`PRAGMA integrity_check`)).toEqual({ integrity_check: "ok" })
       }),
     )
   })
@@ -1024,6 +1536,7 @@ describe("DatabaseMigration", () => {
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db, { migrations: [] })
+        yield* dropCourseStateHistory(db)
         yield* Effect.forEach(
           learningCommandTables,
           (name) => db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(name)}`),
@@ -1068,6 +1581,7 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
         const fresh = yield* courseSchema(db)
 
+        yield* dropCourseStateHistory(db)
         yield* Effect.forEach(courseTables, (name) => db.run(sql`DROP TABLE ${sql.identifier(name)}`), {
           discard: true,
         })
@@ -2074,6 +2588,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 7, id: materialMapAlignmentMigration.id },
           { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
           { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
+          { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
         ])
       }),
     )

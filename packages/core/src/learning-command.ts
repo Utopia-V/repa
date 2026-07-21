@@ -24,6 +24,8 @@ export {
   SET_DEFAULT_COURSE_PREFERENCE_VERSION,
   UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
   UPDATE_RETAINED_LEARNING_STEERING_VERSION,
+  UPDATE_LEARNER_GOALS_CAPABILITY,
+  UPDATE_LEARNER_GOALS_VERSION,
   assertAssistantDeletable,
   assertPartDeletable,
   decideRepresentationCandidate,
@@ -41,6 +43,7 @@ export {
   reserveNavigation,
   reserveAcceptance,
   reserveRetainedSteering,
+  reserveLearnerGoals,
   settleRepresentationCandidate,
   settleRepresentationFailure,
   settleRepresentationSuccess,
@@ -50,6 +53,9 @@ export {
   settleReservation,
   settleRetainedSteering,
   settleRetainedSteeringReservation,
+  prepareLearnerGoalConfirmation,
+  settleLearnerGoalReservation,
+  settleLearnerGoals,
 } from "./learning-command/settlement"
 export type {
   AdmittedInvocation,
@@ -58,6 +64,7 @@ export type {
   RepresentationCandidateDecision,
   Reservation,
   SettlementResult,
+  GoalConfirmationResult,
 } from "./learning-command/settlement"
 
 export {
@@ -85,6 +92,7 @@ export type {
   RepresentationConvertCommand,
   RepresentationConvertInvocation,
   RetainedSteeringInvocation,
+  LearnerGoalInvocation,
   NavigationInvocation,
   SetCourseRouteAnchorInvocation,
   SetDefaultCoursePreferenceInvocation,

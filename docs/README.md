@@ -1,6 +1,6 @@
 # Repa documentation
 
-Status: Gates 0–15 are closed. Gate 12's maintainer grill, contract/theory, and
+Status: Gates 0–16 are closed. Gate 12's maintainer grill, contract/theory, and
 implementation/evidence are accepted by the retained independent reviewer;
 all six contract findings and all eight implementation findings are closed.
 Maintainer-authorized implementation commit
@@ -50,7 +50,19 @@ revision-bounded successor suppress its predecessor. The retained reviewer
 accepted that repair, closed `G15-IE-002`, and found no new acceptance-changing
 defect. Maintainer-authorized implementation commit
 `03ea74ec4f760c83060a6da4fa26ecb9519d1468` fixes the accepted snapshot and
-formally closes Gate 15. Gate 16 has not begun.
+formally closes Gate 15. The
+[Gate 16 learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)
+maintainer grill is complete. Its recorded maintainer decisions are accepted
+product meaning. Whole-Gate review run `gate16-whole-20260721-01` returned
+`Revise`, then closed `G16-CT-001` through `G16-CT-004` and returned one new
+`G16-CT-005` Course-withdrawal defect. The same reviewer closed that repair and
+returned `Accept`. The retained reviewer then closed `G16-IE-001` through
+`G16-IE-013`, accepted the deterministic implementation/evidence candidate,
+and finally closed `G16-IE-U01` after the bounded real `openai/gpt-5.5`
+qualification passed through the production Session, Turn, permission,
+learning-command, receipt, effect, and acknowledgement path. No
+acceptance-changing finding or material unknown remains. The accepted
+implementation snapshot in this change formally closes Gate 16.
 Gate 11 remains independently accepted at implementation commit `bdbfa0c05`;
 Gate 12 realizes the existing Roadmap 09 boundary without changing roadmap
 topology.
@@ -75,6 +87,7 @@ topology.
 | 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)              | Adds independent immutable material outlines/selectors bound to exact revisions, plus optional neutral many-to-many alignment to exact Course membership.                                | Closed at implementation commit `5e762f833`. Contract/theory and implementation/evidence were accepted by independent review run `gate13-whole-20260719-01`; `G13-CT-001` through `G13-CT-006` and `G13-IE-001` through `G13-IE-003` are closed, with no new acceptance-changing implementation finding.                                                                                                                                                                                                                      |
 | 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)           | Adds an optional learner-controlled default Course preference and one independent route anchor per Course without promoting either into current focus, completion, evidence, or mastery. | Closed at implementation commit `a6b542d59`. Contract/theory was accepted by `gate14-whole-20260719-01`. After the retained implementation reviewer closed `G14-IE-001`–`G14-IE-004`, raised `G14-IE-005`, and later ended in `systemError` without a closure verdict, independent replacement review `gate14-replacement-20260720-01` accepted the complete implementation/evidence candidate and independently confirmed all five findings resolved.                                                                  |
 | 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)                   | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, versioned, correctable Tutor-policy state.                                             | Closed at implementation commit `03ea74ec4`. Contract/theory and implementation/evidence were accepted by retained review run `gate15-whole-20260720-01` after `G15-CT-001`–`G15-CT-008` and `G15-IE-001`–`G15-IE-005` were closed. Accepted integrity includes a transaction-final seal, a complete sealed cut prefix, seal-backed membership, and revision-bounded successor suppression. |
+| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)                    | Preserves learner-owned intended outcomes across Sessions with explicit admission, revision, correction, optional conditions and target time, and learner-authorized lifecycle meaning. | Closed. Retained whole-Gate review run `gate16-whole-20260721-01` accepted contract/theory and implementation/evidence after closing `G16-CT-001`–`G16-CT-005`, `G16-IE-001`–`G16-IE-013`, and the bounded real-provider qualification `G16-IE-U01`. Deterministic evidence remains authoritative for state, authorization, replay, recovery, and negative behavior; the accepted `openai/gpt-5.5` run qualifies model-facing usability and the production tool path. |
 
 Gate numbers record engineering acceptance; they are not a total dependency
 chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
@@ -128,7 +141,7 @@ settlement substrate, while every learning authority retains ownership of its
 semantic effect identity and state transitions.
 
 The dependency-guided Gate 7–23 decomposition in Roadmap 09 is accepted. Gates
-7–15 are closed. Gate 15's maintainer grill is complete. Its first independent
+7–16 are closed. Gate 15's maintainer grill is complete. Its first independent
 contract/theory verdict was `Revise`; the same reviewer closed those seven
 findings and raised only `G15-CT-008`, then closed that final repair and
 returned `Accept`. The complete contract is implementation authority.
@@ -137,8 +150,17 @@ through `G15-IE-005`; the first closure pass closed four and kept only
 `G15-IE-002` open. The second integrity repair and its direct-SQL correction
 counterexample passed; the retained reviewer closed the final finding and
 returned `Accept` with no new acceptance-changing defect. Commit `03ea74ec4`
-fixes the accepted implementation snapshot and formally closes Gate 15 without
-starting Gate 16.
+fixes the accepted implementation snapshot and formally closes Gate 15. Gate
+16's maintainer grill is complete; its accepted Goal decisions and cross-Gate
+planning correction now have a complete proposed engineering contract.
+Whole-Gate review run `gate16-whole-20260721-01` returned `Revise` with four
+contract findings, closed all four on retest, and returned a new
+Course-withdrawal finding `G16-CT-005`. The same reviewer closed that repair and
+returned `Accept`. Its implementation/evidence passes then found and closed
+`G16-IE-001` through `G16-IE-013`; the same reviewer accepted the deterministic
+candidate, and the final bounded real-provider pass closed `G16-IE-U01` without
+reopening any deterministic finding. Gate 16 is therefore closed by the
+accepted implementation snapshot in this change.
 Gate 14's maintainer grill is complete and
 its proposed contract was accepted by independent whole-Gate review run
 `gate14-whole-20260719-01` after all five acceptance-changing findings and both

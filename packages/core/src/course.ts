@@ -207,13 +207,52 @@ export class PreferenceTargetProof {
 }
 
 export type PreferenceTargetStatus =
-  | { readonly status: "available"; readonly courseID: CourseID; readonly title: string }
+  | {
+      readonly status: "available"
+      readonly courseID: CourseID
+      readonly title: string
+      readonly stateVersion: number
+      readonly timeUpdated: number
+    }
   | {
       readonly status: "unavailable"
       readonly courseID: CourseID
-      readonly cause: "course_not_found" | "course_withdrawn"
-      readonly title?: string
+      readonly cause: "course_not_found"
     }
+  | {
+      readonly status: "unavailable"
+      readonly courseID: CourseID
+      readonly cause: "course_withdrawn"
+      readonly title: string
+      readonly stateVersion: number
+      readonly timeUpdated: number
+    }
+
+export type ActiveOwnerReceipt = Readonly<{
+  courseID: CourseID
+  courseTitle: string
+  courseVersion: number
+  timeUpdated: number
+}>
+
+const activeOwnerProofToken = Symbol("Course.ActiveOwnerProof")
+
+/** Exact active Course-owner state for another authority's bounded reference. */
+export class ActiveOwnerProof {
+  readonly receipt: ActiveOwnerReceipt
+  #courseVersion: number
+
+  constructor(token: symbol, receipt: ActiveOwnerReceipt) {
+    if (token !== activeOwnerProofToken) throw new Error("Course active-owner proofs are owner-issued")
+    this.receipt = Object.freeze({ ...receipt })
+    this.#courseVersion = receipt.courseVersion
+  }
+
+  expectation(token: symbol) {
+    if (token !== activeOwnerProofToken) return
+    return { courseID: this.receipt.courseID, courseVersion: this.#courseVersion }
+  }
+}
 
 export type SelectionAcceptanceInput = {
   readonly courseID: CourseID
@@ -1699,10 +1738,41 @@ export function requirePreferenceTargetProof(tx: Transaction, proof: PreferenceT
   })
 }
 
+export function prepareActiveOwnerProof(
+  tx: Transaction,
+  input: { readonly courseID: CourseID; readonly expectedVersion: number },
+) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(tx, input.courseID, input.expectedVersion, true)
+    return new ActiveOwnerProof(activeOwnerProofToken, {
+      courseID: course.id,
+      courseTitle: course.title,
+      courseVersion: course.state_version,
+      timeUpdated: course.time_updated,
+    })
+  })
+}
+
+export function requireActiveOwnerProof(tx: Transaction, proof: ActiveOwnerProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof ActiveOwnerProof ? proof.expectation(activeOwnerProofToken) : undefined
+    if (!expected) {
+      return yield* new InvalidTransitionError({ detail: "Course active-owner proof is not owner-issued" })
+    }
+    yield* requireCourse(tx, expected.courseID, expected.courseVersion, true)
+    return proof
+  })
+}
+
 export function inspectPreferenceTarget(tx: Transaction, courseID: CourseID) {
   return Effect.gen(function* () {
     const course = yield* tx
-      .select({ title: CourseTable.title, withdrawal_reason: CourseTable.withdrawal_reason })
+      .select({
+        title: CourseTable.title,
+        state_version: CourseTable.state_version,
+        withdrawal_reason: CourseTable.withdrawal_reason,
+        time_updated: CourseTable.time_updated,
+      })
       .from(CourseTable)
       .where(eq(CourseTable.id, courseID))
       .get()
@@ -1720,9 +1790,17 @@ export function inspectPreferenceTarget(tx: Transaction, courseID: CourseID) {
         courseID,
         cause: "course_withdrawn",
         title: course.title,
+        stateVersion: course.state_version,
+        timeUpdated: course.time_updated,
       } satisfies PreferenceTargetStatus
     }
-    return { status: "available", courseID, title: course.title } satisfies PreferenceTargetStatus
+    return {
+      status: "available",
+      courseID,
+      title: course.title,
+      stateVersion: course.state_version,
+      timeUpdated: course.time_updated,
+    } satisfies PreferenceTargetStatus
   })
 }
 

@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "a827a039-4151-4b96-b92f-2ca4d033df41",
+  "id": "60016a3f-093d-4d77-803f-135282c17700",
   "prevIds": [
-    "071bdc09-37ed-43d3-9522-cca6157d883f"
+    "5ea53e31-6ec7-4301-bfef-68eefa2cfde3"
   ],
   "ddl": [
     {
@@ -115,6 +115,10 @@
       "entityType": "tables"
     },
     {
+      "name": "course_state_history",
+      "entityType": "tables"
+    },
+    {
       "name": "course",
       "entityType": "tables"
     },
@@ -164,6 +168,58 @@
     },
     {
       "name": "event",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_commit_seal",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_condition",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_course_scope",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_effect_operation",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_effect",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_field_basis",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_revision",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_state_guard",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_state",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_supersession",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_time_zone_release",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_goal_time_zone",
       "entityType": "tables"
     },
     {
@@ -2674,6 +2730,56 @@
     },
     {
       "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "course_state_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "course_state_history"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "course_state_history"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "withdrawal_reason",
+      "entityType": "columns",
+      "table": "course_state_history"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "course_state_history"
+    },
+    {
+      "type": "text",
       "notNull": false,
       "autoincrement": false,
       "default": null,
@@ -3498,6 +3604,876 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_goal_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "learner_goal_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_goal_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_condition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "learner_goal_condition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "content",
+      "entityType": "columns",
+      "table": "learner_goal_condition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_title",
+      "entityType": "columns",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admission_kind",
+      "entityType": "columns",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admitted_course_version",
+      "entityType": "columns",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admitted_course_time_updated",
+      "entityType": "columns",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "carried_from_revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_kind",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "result_kind",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "goal_id",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "meaning",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "replacement_target_kind",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "replacement_target_goal_id",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "replacement_target_revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "replacement_target_version",
+      "entityType": "columns",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_seal_id",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_order",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_fingerprint",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_basis",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_count",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "change_count",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_time",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "acknowledgement_title",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "acknowledgement_body",
+      "entityType": "columns",
+      "table": "learner_goal_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "field",
+      "entityType": "columns",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_kind",
+      "entityType": "columns",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_excerpt",
+      "entityType": "columns",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "goal_id",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_id",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation_ordinal",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_role",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_order",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scope_kind",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_kind",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_instant",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_local_date",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_timezone",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_timezone_release_id",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_utc_offset_minutes",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_source_expression",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_normalized",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_normalization_basis",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_order",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_time",
+      "entityType": "columns",
+      "table": "learner_goal_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "singleton",
+      "entityType": "columns",
+      "table": "learner_goal_state_guard"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "singleton",
+      "entityType": "columns",
+      "table": "learner_goal_state"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "revision_sequence",
+      "entityType": "columns",
+      "table": "learner_goal_state"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_goal_id",
+      "entityType": "columns",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_goal_id",
+      "entityType": "columns",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "target_revision_id",
+      "entityType": "columns",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_goal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "learner_goal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tzdb_version",
+      "entityType": "columns",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "engine",
+      "entityType": "columns",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "data_sha256",
+      "entityType": "columns",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "release_id",
+      "entityType": "columns",
+      "table": "learner_goal_time_zone"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "name",
+      "entityType": "columns",
+      "table": "learner_goal_time_zone"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "learner_course_route_anchor_transition"
@@ -4004,6 +4980,26 @@
     },
     {
       "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "goal_semantic_fingerprint",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "goal_command_snapshot",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -4068,7 +5064,27 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "goal_effect_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "learning_command_invocation"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "goal_confirmation_snapshot",
       "entityType": "columns",
       "table": "learning_command_invocation"
     },
@@ -4269,6 +5285,16 @@
       "default": null,
       "generated": null,
       "name": "retained_steering_effect_id",
+      "entityType": "columns",
+      "table": "learning_command_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "goal_effect_id",
       "entityType": "columns",
       "table": "learning_command_receipt"
     },
@@ -10287,6 +11313,21 @@
     },
     {
       "columns": [
+        "course_id"
+      ],
+      "tableTo": "course",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_state_history_course_id_course_id_fk",
+      "entityType": "fks",
+      "table": "course_state_history"
+    },
+    {
+      "columns": [
         "course_id",
         "view_id",
         "revision_id"
@@ -10629,6 +11670,368 @@
     },
     {
       "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_condition_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_condition"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_course_scope_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "columns": [
+        "course_id"
+      ],
+      "tableTo": "course",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_course_scope_course_id_course_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "columns": [
+        "carried_from_revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_course_scope_carried_from_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_goal_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_effect_operation_effect_id_learner_goal_effect_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "columns": [
+        "goal_id"
+      ],
+      "tableTo": "learner_goal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_effect_operation_goal_id_learner_goal_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_effect_operation_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "columns": [
+        "replacement_target_goal_id"
+      ],
+      "tableTo": "learner_goal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_effect_operation_replacement_target_goal_id_learner_goal_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "columns": [
+        "replacement_target_revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_effect_operation_replacement_target_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "columns": [
+        "commit_seal_id"
+      ],
+      "tableTo": "learner_goal_commit_seal",
+      "columnsTo": [
+        "effect_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_effect_commit_seal_id_learner_goal_commit_seal_effect_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_effect_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_field_basis_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "columns": [
+        "predecessor_revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_field_basis_predecessor_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "columns": [
+        "goal_id"
+      ],
+      "tableTo": "learner_goal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_revision_goal_id_learner_goal_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "predecessor_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_revision_predecessor_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_goal_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_revision_effect_id_learner_goal_effect_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "target_timezone_release_id",
+        "target_timezone"
+      ],
+      "tableTo": "learner_goal_time_zone",
+      "columnsTo": [
+        "release_id",
+        "name"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_revision_target_timezone_release_id_target_timezone_learner_goal_time_zone_release_id_name_fk",
+      "entityType": "fks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_revision_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "singleton"
+      ],
+      "tableTo": "learner_goal_state",
+      "columnsTo": [
+        "singleton"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_state_guard_singleton_learner_goal_state_singleton_fk",
+      "entityType": "fks",
+      "table": "learner_goal_state_guard"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_supersession_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "columns": [
+        "source_goal_id"
+      ],
+      "tableTo": "learner_goal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_supersession_source_goal_id_learner_goal_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "columns": [
+        "target_goal_id"
+      ],
+      "tableTo": "learner_goal",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_supersession_target_goal_id_learner_goal_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "columns": [
+        "target_revision_id"
+      ],
+      "tableTo": "learner_goal_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_supersession_target_revision_id_learner_goal_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "columns": [
+        "release_id"
+      ],
+      "tableTo": "learner_goal_time_zone_release",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_time_zone_release_id_learner_goal_time_zone_release_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_time_zone"
+    },
+    {
+      "columns": [
         "course_id"
       ],
       "tableTo": "course",
@@ -10904,6 +12307,21 @@
     },
     {
       "columns": [
+        "goal_effect_id"
+      ],
+      "tableTo": "learner_goal_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_invocation_goal_effect_id_learner_goal_effect_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
         "occurrence_id"
       ],
       "tableTo": "learning_admitted_occurrence",
@@ -11004,6 +12422,21 @@
       "onDelete": "RESTRICT",
       "nameExplicit": false,
       "name": "fk_learning_command_receipt_retained_steering_effect_id_retained_steering_transition_id_fk",
+      "entityType": "fks",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
+        "goal_effect_id"
+      ],
+      "tableTo": "learner_goal_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learning_command_receipt_goal_effect_id_learner_goal_effect_id_fk",
       "entityType": "fks",
       "table": "learning_command_receipt"
     },
@@ -12477,6 +13910,16 @@
     },
     {
       "columns": [
+        "course_id",
+        "version"
+      ],
+      "nameExplicit": false,
+      "name": "course_state_history_pk",
+      "entityType": "pks",
+      "table": "course_state_history"
+    },
+    {
+      "columns": [
         "revision_id",
         "item_id"
       ],
@@ -12504,6 +13947,56 @@
       "name": "course_view_revision_mapping_target_pk",
       "entityType": "pks",
       "table": "course_view_revision_mapping_target"
+    },
+    {
+      "columns": [
+        "revision_id",
+        "ordinal"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_condition_pk",
+      "entityType": "pks",
+      "table": "learner_goal_condition"
+    },
+    {
+      "columns": [
+        "revision_id",
+        "course_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_course_scope_pk",
+      "entityType": "pks",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "columns": [
+        "effect_id",
+        "ordinal"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_effect_operation_pk",
+      "entityType": "pks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "columns": [
+        "revision_id",
+        "field"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_field_basis_pk",
+      "entityType": "pks",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "columns": [
+        "release_id",
+        "name"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_time_zone_pk",
+      "entityType": "pks",
+      "table": "learner_goal_time_zone"
     },
     {
       "columns": [
@@ -12847,6 +14340,78 @@
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_commit_seal_pk",
+      "table": "learner_goal_commit_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_effect_pk",
+      "table": "learner_goal_effect",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_revision_pk",
+      "table": "learner_goal_revision",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "singleton"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_state_guard_pk",
+      "table": "learner_goal_state_guard",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "singleton"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_state_pk",
+      "table": "learner_goal_state",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_supersession_pk",
+      "table": "learner_goal_supersession",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_pk",
+      "table": "learner_goal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_time_zone_release_pk",
+      "table": "learner_goal_time_zone_release",
       "entityType": "pks"
     },
     {
@@ -13836,6 +15401,28 @@
     {
       "columns": [
         {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_updated",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "course_state_history_time_idx",
+      "entityType": "indexes",
+      "table": "course_state_history"
+    },
+    {
+      "columns": [
+        {
           "value": "withdrawal_reason",
           "isExpression": false
         },
@@ -14114,6 +15701,108 @@
       "name": "event_aggregate_type_seq_idx",
       "entityType": "indexes",
       "table": "event"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_goal_course_scope_course_idx",
+      "entityType": "indexes",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "columns": [
+        {
+          "value": "goal_id",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_goal_revision_history_idx",
+      "entityType": "indexes",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "effect_id",
+          "isExpression": false
+        },
+        {
+          "value": "operation_ordinal",
+          "isExpression": false
+        },
+        {
+          "value": "revision_role",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_goal_revision_effect_idx",
+      "entityType": "indexes",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "disposition",
+          "isExpression": false
+        },
+        {
+          "value": "revision_order",
+          "isExpression": false
+        },
+        {
+          "value": "goal_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_goal_revision_discovery_idx",
+      "entityType": "indexes",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "target_goal_id",
+          "isExpression": false
+        },
+        {
+          "value": "revision_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_goal_supersession_target_idx",
+      "entityType": "indexes",
+      "table": "learner_goal_supersession"
     },
     {
       "columns": [
@@ -15667,6 +17356,81 @@
     },
     {
       "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_commit_seal_receipt_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_commit_seal_invocation_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_commit_seal"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_effect_occurrence_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_effect"
+    },
+    {
+      "columns": [
+        "frontier_sequence"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_effect_frontier_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_effect"
+    },
+    {
+      "columns": [
+        "goal_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_revision_goal_version_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "predecessor_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_revision_predecessor_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "effect_id",
+        "operation_ordinal",
+        "revision_role"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_revision_effect_role_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
+        "revision_order"
+      ],
+      "nameExplicit": true,
+      "name": "learner_goal_revision_order_unique",
+      "entityType": "uniques",
+      "table": "learner_goal_revision"
+    },
+    {
+      "columns": [
         "course_id",
         "id"
       ],
@@ -15812,6 +17576,15 @@
       ],
       "nameExplicit": true,
       "name": "learning_command_receipt_retained_steering_effect_unique",
+      "entityType": "uniques",
+      "table": "learning_command_receipt"
+    },
+    {
+      "columns": [
+        "goal_effect_id"
+      ],
+      "nameExplicit": true,
+      "name": "learning_command_receipt_goal_effect_unique",
       "entityType": "uniques",
       "table": "learning_command_receipt"
     },
@@ -16664,6 +18437,30 @@
       "table": "course_selection_acceptance_effect"
     },
     {
+      "value": "\"version\" >= 0",
+      "name": "course_state_history_version_nonnegative",
+      "entityType": "checks",
+      "table": "course_state_history"
+    },
+    {
+      "value": "length(trim(\"title\")) BETWEEN 1 AND 200",
+      "name": "course_state_history_title_length",
+      "entityType": "checks",
+      "table": "course_state_history"
+    },
+    {
+      "value": "\"withdrawal_reason\" IS NULL OR \"withdrawal_reason\" = 'removed'",
+      "name": "course_state_history_withdrawal_reason",
+      "entityType": "checks",
+      "table": "course_state_history"
+    },
+    {
+      "value": "\"time_updated\" >= 0",
+      "name": "course_state_history_time_nonnegative",
+      "entityType": "checks",
+      "table": "course_state_history"
+    },
+    {
       "value": "length(trim(\"title\")) BETWEEN 1 AND 200",
       "name": "course_title_length",
       "entityType": "checks",
@@ -16760,6 +18557,228 @@
       "table": "course_working_selection"
     },
     {
+      "value": "\"ordinal\" BETWEEN 0 AND 15",
+      "name": "learner_goal_condition_ordinal",
+      "entityType": "checks",
+      "table": "learner_goal_condition"
+    },
+    {
+      "value": "length(trim(\"content\")) > 0",
+      "name": "learner_goal_condition_content",
+      "entityType": "checks",
+      "table": "learner_goal_condition"
+    },
+    {
+      "value": "length(trim(\"course_title\")) > 0",
+      "name": "learner_goal_course_scope_title",
+      "entityType": "checks",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "value": "(\"admission_kind\" = 'new' AND \"admitted_course_version\" IS NOT NULL AND \"admitted_course_version\" >= 0 AND \"admitted_course_time_updated\" IS NOT NULL AND \"admitted_course_time_updated\" >= 0 AND \"carried_from_revision_id\" IS NULL) OR (\"admission_kind\" = 'carried' AND \"admitted_course_version\" IS NULL AND \"admitted_course_time_updated\" IS NULL AND \"carried_from_revision_id\" IS NOT NULL)",
+      "name": "learner_goal_course_scope_admission",
+      "entityType": "checks",
+      "table": "learner_goal_course_scope"
+    },
+    {
+      "value": "\"ordinal\" BETWEEN 0 AND 7",
+      "name": "learner_goal_effect_operation_ordinal",
+      "entityType": "checks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "value": "\"operation_kind\" IN ('create', 'update', 'replace') AND \"result_kind\" IN ('changed', 'no_change')",
+      "name": "learner_goal_effect_operation_kind",
+      "entityType": "checks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "value": "(\"operation_kind\" = 'update' OR \"result_kind\" = 'changed') AND \"version\" >= 1 AND \"disposition\" IN ('active', 'achieved', 'abandoned', 'superseded') AND json_valid(\"meaning\")",
+      "name": "learner_goal_effect_operation_result",
+      "entityType": "checks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "value": "(\"operation_kind\" = 'replace' AND \"result_kind\" = 'changed' AND \"disposition\" = 'superseded' AND \"replacement_target_kind\" IN ('existing', 'new') AND \"replacement_target_goal_id\" IS NOT NULL AND \"replacement_target_revision_id\" IS NOT NULL AND \"replacement_target_version\" >= 1) OR (\"operation_kind\" <> 'replace' AND \"replacement_target_kind\" IS NULL AND \"replacement_target_goal_id\" IS NULL AND \"replacement_target_revision_id\" IS NULL AND \"replacement_target_version\" IS NULL)",
+      "name": "learner_goal_effect_operation_replacement",
+      "entityType": "checks",
+      "table": "learner_goal_effect_operation"
+    },
+    {
+      "value": "\"commit_seal_id\" = \"id\"",
+      "name": "learner_goal_effect_seal_identity",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'gle_' AND substr(\"id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "learner_goal_effect_identity_format",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "length(\"semantic_fingerprint\") = 64 AND \"semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_goal_effect_fingerprint",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "\"authorization_basis\" IN ('learner_request', 'learner_acceptance')",
+      "name": "learner_goal_effect_authorization",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "json_valid(\"command\")",
+      "name": "learner_goal_effect_command_json",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "\"operation_count\" BETWEEN 1 AND 8 AND \"change_count\" BETWEEN 1 AND \"operation_count\"",
+      "name": "learner_goal_effect_counts",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "\"source_order\" >= 1 AND \"time_committed\" >= 0 AND \"commit_order\" >= 0 AND \"frontier_sequence\" >= 1 AND \"frontier_time\" = \"time_committed\"",
+      "name": "learner_goal_effect_time_order",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "length(\"acknowledgement_title\") > 0 AND length(\"acknowledgement_body\") > 0",
+      "name": "learner_goal_effect_acknowledgement",
+      "entityType": "checks",
+      "table": "learner_goal_effect"
+    },
+    {
+      "value": "\"field\" IN ('outcome', 'conditions', 'scope', 'target', 'disposition')",
+      "name": "learner_goal_field_basis_field",
+      "entityType": "checks",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "value": "(\"basis_kind\" = 'authored' AND \"source_excerpt\" IS NOT NULL AND length(\"source_excerpt\") > 0 AND \"predecessor_revision_id\" IS NULL) OR (\"basis_kind\" = 'accepted' AND \"source_excerpt\" IS NULL AND \"predecessor_revision_id\" IS NULL) OR (\"basis_kind\" = 'carried' AND \"source_excerpt\" IS NULL AND \"predecessor_revision_id\" IS NOT NULL)",
+      "name": "learner_goal_field_basis_shape",
+      "entityType": "checks",
+      "table": "learner_goal_field_basis"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'glr_' AND substr(\"id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "learner_goal_revision_identity_format",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "(\"version\" = 1 AND \"predecessor_id\" IS NULL) OR (\"version\" > 1 AND \"predecessor_id\" IS NOT NULL)",
+      "name": "learner_goal_revision_chain_shape",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "\"revision_role\" IN ('source', 'target')",
+      "name": "learner_goal_revision_role",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "length(trim(\"outcome\")) > 0",
+      "name": "learner_goal_revision_outcome",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "\"scope_kind\" IN ('learner_home', 'courses')",
+      "name": "learner_goal_revision_scope",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "COALESCE((\"target_kind\" = 'absent' AND \"target_instant\" IS NULL AND \"target_local_date\" IS NULL AND \"target_timezone\" IS NULL AND \"target_timezone_release_id\" IS NULL AND \"target_utc_offset_minutes\" IS NULL AND \"target_source_expression\" IS NULL AND \"target_normalized\" IS NULL AND \"target_normalization_basis\" IS NULL) OR (\"target_kind\" = 'instant' AND \"target_instant\" IS NOT NULL AND \"target_instant\" >= 0 AND \"target_local_date\" IS NULL AND \"target_timezone\" IS NULL AND \"target_timezone_release_id\" IS NULL AND \"target_utc_offset_minutes\" BETWEEN -840 AND 840 AND \"target_source_expression\" IS NOT NULL AND length(\"target_source_expression\") > 0 AND \"target_normalized\" IS NOT NULL AND length(\"target_normalized\") > 0 AND round(unixepoch(\"target_normalized\", 'subsec') * 1000) = \"target_instant\" AND \"target_normalization_basis\" = 'explicit_offset') OR (\"target_kind\" = 'local_date' AND \"target_instant\" IS NULL AND \"target_local_date\" GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(\"target_local_date\") = \"target_local_date\" AND \"target_timezone\" IS NOT NULL AND length(\"target_timezone\") > 0 AND \"target_timezone_release_id\" IS NOT NULL AND length(\"target_timezone_release_id\") > 0 AND \"target_utc_offset_minutes\" IS NULL AND \"target_source_expression\" IS NOT NULL AND length(\"target_source_expression\") > 0 AND \"target_normalized\" IS NULL AND \"target_normalization_basis\" IN ('explicit_date', 'source_temporal_context')), 0)",
+      "name": "learner_goal_revision_target",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "\"disposition\" IN ('active', 'achieved', 'abandoned', 'superseded')",
+      "name": "learner_goal_revision_disposition",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "\"version\" >= 1 AND \"operation_ordinal\" BETWEEN 0 AND 7 AND \"source_order\" >= 1 AND \"revision_order\" >= 1 AND \"time_committed\" >= 0 AND \"commit_order\" >= 0 AND \"frontier_sequence\" >= 1 AND \"frontier_time\" = \"time_committed\"",
+      "name": "learner_goal_revision_order",
+      "entityType": "checks",
+      "table": "learner_goal_revision"
+    },
+    {
+      "value": "\"singleton\" = 1",
+      "name": "learner_goal_state_guard_singleton",
+      "entityType": "checks",
+      "table": "learner_goal_state_guard"
+    },
+    {
+      "value": "\"singleton\" = 1",
+      "name": "learner_goal_state_singleton",
+      "entityType": "checks",
+      "table": "learner_goal_state"
+    },
+    {
+      "value": "\"revision_sequence\" >= 0",
+      "name": "learner_goal_state_revision_nonnegative",
+      "entityType": "checks",
+      "table": "learner_goal_state"
+    },
+    {
+      "value": "\"source_goal_id\" <> \"target_goal_id\"",
+      "name": "learner_goal_supersession_distinct",
+      "entityType": "checks",
+      "table": "learner_goal_supersession"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'gol_' AND substr(\"id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "learner_goal_identity_format",
+      "entityType": "checks",
+      "table": "learner_goal"
+    },
+    {
+      "value": "\"time_created\" >= 0",
+      "name": "learner_goal_time_nonnegative",
+      "entityType": "checks",
+      "table": "learner_goal"
+    },
+    {
+      "value": "length(\"id\") > 0",
+      "name": "learner_goal_time_zone_release_id",
+      "entityType": "checks",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "value": "length(\"tzdb_version\") > 0",
+      "name": "learner_goal_time_zone_release_version",
+      "entityType": "checks",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "value": "length(\"engine\") > 0",
+      "name": "learner_goal_time_zone_release_engine",
+      "entityType": "checks",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "value": "length(\"data_sha256\") = 64 AND \"data_sha256\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_goal_time_zone_release_hash",
+      "entityType": "checks",
+      "table": "learner_goal_time_zone_release"
+    },
+    {
+      "value": "length(\"name\") > 0",
+      "name": "learner_goal_time_zone_name",
+      "entityType": "checks",
+      "table": "learner_goal_time_zone"
+    },
+    {
       "value": "(\"version\" = 1 AND \"predecessor_id\" IS NULL AND \"previous_view_id\" IS NULL AND \"previous_revision_id\" IS NULL AND \"previous_item_id\" IS NULL) OR (\"version\" > 1 AND \"predecessor_id\" IS NOT NULL)",
       "name": "learner_course_route_anchor_chain_shape",
       "entityType": "checks",
@@ -16844,7 +18863,7 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "\"command_name\" IN ('accept_course_view_revision', 'representation.convert', 'set_default_course_preference', 'set_course_route_anchor', 'update_retained_learning_steering')",
+      "value": "\"command_name\" IN ('accept_course_view_revision', 'representation.convert', 'set_default_course_preference', 'set_course_route_anchor', 'update_retained_learning_steering', 'update_learner_goals')",
       "name": "learning_command_invocation_command",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -16874,7 +18893,7 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"command_name\" = 'accept_course_view_revision' AND \"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1) OR (\"command_name\" = 'representation.convert' AND \"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_default_course_preference' AND \"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_course_route_anchor' AND \"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1) OR (\"command_name\" = 'update_retained_learning_steering' AND \"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1)",
+      "value": "(\"command_name\" = 'accept_course_view_revision' AND \"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1) OR (\"command_name\" = 'representation.convert' AND \"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_default_course_preference' AND \"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_course_route_anchor' AND \"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1) OR (\"command_name\" = 'update_retained_learning_steering' AND \"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1) OR (\"command_name\" = 'update_learner_goals' AND \"capability_identity\" = 'update_learner_goals' AND \"capability_version\" = 1)",
       "name": "learning_command_invocation_capability_match",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -16910,25 +18929,37 @@
       "table": "learning_command_invocation"
     },
     {
+      "value": "(\"command_name\" = 'update_learner_goals' AND \"goal_semantic_fingerprint\" IS NOT NULL AND length(\"goal_semantic_fingerprint\") = 64 AND \"goal_semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND json_valid(\"goal_command_snapshot\") AND json_type(\"goal_command_snapshot\") = 'object') OR (\"command_name\" <> 'update_learner_goals' AND \"goal_semantic_fingerprint\" IS NULL AND \"goal_command_snapshot\" IS NULL)",
+      "name": "learning_command_invocation_goal_semantic_fingerprint",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
       "value": "\"status\" IN ('admitted', 'applied', 'already_applied', 'no_change', 'error')",
       "name": "learning_command_invocation_status",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"command_name\" = 'set_default_course_preference' AND \"permission_request_id\" IS NOT NULL AND length(\"permission_request_id\") > 0) OR (\"command_name\" <> 'set_default_course_preference' AND \"permission_request_id\" IS NULL)",
+      "value": "(\"command_name\" = 'set_default_course_preference' AND \"permission_request_id\" IS NOT NULL AND length(\"permission_request_id\") > 0) OR (\"command_name\" = 'update_learner_goals' AND ((\"authorization_basis\" = 'learner_acceptance' AND \"permission_request_id\" IS NOT NULL AND length(\"permission_request_id\") > 0) OR (\"authorization_basis\" = 'learner_request' AND \"permission_request_id\" IS NULL))) OR (\"command_name\" NOT IN ('set_default_course_preference', 'update_learner_goals') AND \"permission_request_id\" IS NULL)",
       "name": "learning_command_invocation_permission_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
+      "value": "(\"command_name\" = 'update_learner_goals' AND \"authorization_basis\" = 'learner_acceptance' AND ((\"status\" = 'applied' AND json_valid(\"goal_confirmation_snapshot\")) OR (\"status\" <> 'applied' AND \"goal_confirmation_snapshot\" IS NULL))) OR (\"command_name\" <> 'update_learner_goals' AND \"goal_confirmation_snapshot\" IS NULL) OR (\"command_name\" = 'update_learner_goals' AND \"authorization_basis\" = 'learner_request' AND \"goal_confirmation_snapshot\" IS NULL)",
+      "name": "learning_command_invocation_goal_confirmation_shape",
+      "entityType": "checks",
+      "table": "learning_command_invocation"
+    },
+    {
+      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
       "name": "learning_command_invocation_settlement_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"status\" IN ('applied', 'already_applied') AND ((\"command_name\" = 'accept_course_view_revision' AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'representation.convert' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'set_default_course_preference' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'set_course_route_anchor' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL) OR (\"command_name\" = 'update_retained_learning_steering' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL))) OR (\"status\" IN ('admitted', 'no_change', 'error') AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL)",
+      "value": "(\"status\" IN ('applied', 'already_applied') AND ((\"command_name\" = 'accept_course_view_revision' AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'representation.convert' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'set_default_course_preference' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'set_course_route_anchor' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'update_retained_learning_steering' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'update_learner_goals' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NOT NULL))) OR (\"status\" IN ('admitted', 'no_change', 'error') AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL)",
       "name": "learning_command_invocation_effect_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -16970,7 +19001,7 @@
       "table": "learning_command_receipt"
     },
     {
-      "value": "(\"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1 AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NOT NULL AND \"confirmation_snapshot\" IS NOT NULL AND json_valid(\"confirmation_snapshot\")) OR (\"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL)",
+      "value": "(\"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1 AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NOT NULL AND \"confirmation_snapshot\" IS NOT NULL AND json_valid(\"confirmation_snapshot\")) OR (\"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'update_learner_goals' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NOT NULL AND ((\"authorization_basis\" = 'learner_request' AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"authorization_basis\" = 'learner_acceptance' AND \"permission_request_id\" IS NOT NULL AND \"confirmation_snapshot\" IS NOT NULL AND json_valid(\"confirmation_snapshot\"))))",
       "name": "learning_command_receipt_effect_shape",
       "entityType": "checks",
       "table": "learning_command_receipt"
