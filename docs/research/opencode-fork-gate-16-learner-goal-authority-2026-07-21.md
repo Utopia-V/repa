@@ -1,13 +1,17 @@
 # OpenCode fork Gate 16: learner Goal authority
 
-Status: Reopened only at the natural-language contract/implementation/evidence
-boundary. The decisions under **Accepted maintainer decisions** remain the
+Status: Reopened only at the natural-language implementation/evidence boundary.
+The decisions under **Accepted maintainer decisions** remain the
 intended product boundary, but the contract's raw-SQL closure requirements and
 the accepted implementation contradict its open natural-language admission
 semantics. Corrective integration commit
 `9e91d43c629b66d65c8741e342bca7cf05de5667` closes the independently
-accepted TUI repair described below. The natural-language corrective amendment
-still awaits fresh separate top-level review. Independent review
+accepted TUI repair described below. Fresh separate top-level review task
+`019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` returned `Revise` on the first
+natural-language corrective-contract pass with `G16-RC-001`, then returned
+`Accept` after the revised amendment closed that finding. The amendment below
+is implementation authority; corrective implementation and closing evidence
+remain open. Independent review
 run `gate16-whole-20260721-01` historically closed `G16-CT-001` through
 `G16-CT-005`, `G16-IE-001` through `G16-IE-013`, and the bounded real-provider
 qualification `G16-IE-U01`; commit
@@ -66,13 +70,22 @@ invariants while removing semantic interpretation and acknowledgement
 rendering from SQLite. The direct and accepted-candidate behaviors then require
 focused natural-language counterexamples before Gate 16 may close again.
 
-### Proposed corrective contract amendment — awaiting independent review
+### Accepted corrective contract amendment — implementation/evidence open
 
 The reopen finding exposes one missing provenance arm in addition to the
-invalid parsers. The following amendment is a derived engineering proposal,
-not implementation authority. Under the repository review policy it must close
-in a fresh, separate top-level reviewer task before Gate 16 implementation may
-depend on it:
+invalid parsers. The first corrective review found that the proposal let a
+selected Goal or Course merely appear in a bounded view without proving that
+the view was complete enough to exclude another reasonable referent. Because
+Goal discovery is cursor-bounded and context cuts may omit state, a cropped
+view could otherwise manufacture apparent uniqueness and let an ambiguous
+`learner_request` commit directly. The executor independently verified that
+counterexample against the owner-read and context-cut contracts and accepted
+it as `G16-RC-001`.
+
+The same fresh, separate top-level reviewer retested the following revised
+amendment and returned `Accept`. It is implementation authority for the
+reopened natural-language boundary only; it does not close Gate 16
+implementation/evidence or authorize Gate 17:
 
 - open-language Goal recognition and contextual reference resolution belong to
   the model-assisted command-authoring boundary; neither application code nor
@@ -84,13 +97,38 @@ depend on it:
   command, effective permission, and a visible correctable result;
 - a model may resolve a natural reference such as “我的微积分目标” to an
   exact trusted Goal head without requiring that the learner repeat its
-  internal ID when the bounded current context gives it one sufficiently
-  determinate referent. That resolution remains an inspectable model claim,
-  not a mechanically proved linguistic fact: its basis preserves the exact
-  learner excerpt, the bounded candidate/context view used for resolution, and
-  the selected current identity/version. If several live referents remain
-  plausible, or the operation supplies meaning or a relation not authorized by
-  the learner wording, it uses the existing `learner_acceptance` candidate arm;
+  internal ID when the learner occurrence plus current context gives it one
+  sufficiently determinate referent. That resolution remains an inspectable
+  model claim, not a mechanically proved linguistic fact;
+- every such natural Goal or Course reference binds an immutable typed
+  resolution basis assembled by the runtime from the relevant interaction and
+  Goal/Course owners rather than from a model-supplied candidate list. The
+  basis preserves the exact learner excerpt, source occurrence and context cut,
+  declared owner-query scope, all candidates in that scope with the trusted
+  identities, versions, and dispositions relevant to the operation, explicit
+  completeness or truncation, and the selected identity/version. The bounded
+  scope need not load all LearnerHome state, but it must be causally sufficient
+  for the claimed reference. The model still semantically compares candidates
+  inside that complete scope; a model-supplied structural/query narrowing that
+  excludes owner records, rather than one established by the learner occurrence
+  or trusted context, is itself a consequential interpretation;
+- `learner_request` may use that resolution only when the exact
+  operation-relevant candidate view is complete and untruncated and the model
+  judges that it leaves one sufficiently determinate referent. An incomplete
+  view, a truncated page or context contribution, more than one reasonable
+  referent, or an unauthorized narrowing cannot manufacture direct authority:
+  the Tutor must widen through owner reads, clarify without writing, or use the
+  existing complete `learner_acceptance` candidate arm. The same arm remains
+  required when the operation supplies meaning or a relation not authorized by
+  the learner wording;
+- final settlement revalidates the selected heads and every declared owner
+  scope whose change could alter that candidate universe. A stale or no-longer
+  complete basis creates no new effect. A successful first effect binds the
+  exact resolution basis atomically to its effect, receipt, and settlement as
+  provenance rather than effect identity; physical and semantic replay return
+  that first stored basis and cannot replace it with a later model view. Later
+  owner changes do not rewrite committed history and instead participate in
+  ordinary correction;
 - a new Goal needs a fourth field-basis arm,
   `{ type: "defaulted" }`, so omitted initial values are not falsely recorded
   as learner-authored. It is legal only for a direct version-1 new Goal,
@@ -102,19 +140,26 @@ depend on it:
   migration must not reinterpret historical authored rows;
 - language-independent mechanical checks remain program-owned: authored
   excerpts must occur in the exact source, changed values must match their
-  bases, a resolved Goal or Course must have appeared in the exact bounded
-  resolution view and still match its trusted identity/version, explicit
-  target normalization must be mechanically reproducible, carried fields must
-  match their exact predecessor, and all existing structural, transaction,
-  replay, and dependency-closure rules continue to apply. These checks do not
-  certify that a phrase semantically entailed the selected referent; the
-  stored model-resolution basis and ordinary correction path keep that
-  epistemic limit truthful; and
-- focused evidence must admit clear non-command wording, a title containing
-  `Every Day`, and an unambiguous contextual Goal update without exposing an
-  internal ID; reject illegal `defaulted` uses; preserve the accepted-candidate
-  path; and prove that the primary TUI shows the exact proposal and durable
-  result.
+  bases, a resolution basis must be host-bound and complete for its declared
+  scope, selected Goal/Course heads and relevant owner cuts must remain current,
+  explicit target normalization must be mechanically reproducible, carried
+  fields must match their exact predecessor, and all existing structural,
+  transaction, replay, and dependency-closure rules continue to apply. These
+  checks do not certify that a phrase semantically entailed the selected
+  referent; the stored model-resolution basis and ordinary correction path keep
+  that epistemic limit truthful;
+- deterministic evidence must prove resolution-basis host binding,
+  completeness/truncation and stale-scope behavior, legal `defaulted` shapes,
+  transaction/replay, Session deletion, and truthful TUI settlement. Bounded
+  provider evidence proves only the open semantic behavior: clear non-command
+  wording and a title containing `Every Day` can commit directly; an
+  unambiguous contextual update needs no internal ID; a view hiding another
+  reasonable referent and other ambiguous wording do not write directly;
+  no-write teaching remains usable; and model-expanded meaning reaches the
+  complete accepted-candidate surface; and
+- this command-specific resolution provenance does not authorize automatic
+  Gate 18 context injection, a general semantic resolver, a universal command
+  bus or activity owner, another mode/runtime, or Gate 17 bootstrap behavior.
 
 This record owns the accepted Gate 16 engineering contract and closing
 evidence. Accepted product meaning comes from the product foundation, accepted
@@ -122,8 +167,9 @@ ADRs, architecture, Roadmap 09, and the maintainer decisions below. Storage,
 command, projection, failure, and evidence details remain derived engineering
 decisions rather than product authority. Review run
 `gate16-whole-20260721-01` challenged, repaired, and accepted the historical
-contract recorded below; it does not cover the proposed corrective amendment
-above.
+contract recorded below. Corrective review task
+`019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` independently challenged, revised, and
+accepted the amendment above.
 
 ## Why this Gate exists
 
@@ -1512,9 +1558,11 @@ provider-failure counterexamples. Commit
 `9e91d43c629b66d65c8741e342bca7cf05de5667` closes only the TUI part
 of Gate 16's reopen.
 
-The natural-language admission defect remains open. The earlier **Proposed
-corrective contract amendment — awaiting independent review** is still a
-proposal, not implementation authority. It must pass fresh separate top-level
-contract/theory review before SQL phrase forensics, natural-reference handling,
-or direct/defaulted admission may be implemented. Gate 16 therefore remains
-reopened, and Gate 17 remains paused.
+The natural-language implementation/evidence defect remains open. Fresh
+separate top-level corrective review task
+`019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` first returned `Revise` with
+`G16-RC-001`, then accepted the revised amendment above as implementation
+authority. SQL phrase forensics, natural-reference handling, and
+direct/defaulted admission have not yet been corrected or requalified. Gate 16
+therefore remains reopened at implementation/evidence, and Gate 17 remains
+paused.

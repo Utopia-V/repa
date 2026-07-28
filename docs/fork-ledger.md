@@ -1045,9 +1045,11 @@ physical constraints, natural-language evidence boundary, and primary-TUI
 proposal/result presentation required correction and fresh independent
 closure. Corrective integration
 `9e91d43c629b66d65c8741e342bca7cf05de5667` later closed the
-physical/migration and TUI repairs. The natural-language contract,
-implementation, and evidence boundary remains open, and Gate 17 remains
-blocked on its fresh separate top-level review.
+physical/migration and TUI repairs. Fresh separate top-level review task
+`019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` later accepted the repaired
+natural-language contract as implementation authority. Corrective
+implementation and evidence remain open, and Gate 17 remains paused behind
+that boundary.
 
 ## 2026-07-27 pre-Gate-17 first-principles disposition
 
@@ -1147,9 +1149,10 @@ recorded in the affected Gate records and the global hazard audit. Corrective
 integration commit `9e91d43c629b66d65c8741e342bca7cf05de5667` now fixes
 that combined accepted snapshot. `docs/README.md` owns the resulting closed
 scoped repairs and Gate 16's narrower remaining reopen. Gate 16's
-natural-language corrective amendment has not passed the required fresh
-separate top-level review and is not included in that implementation
-acceptance.
+natural-language corrective amendment later passed fresh separate top-level
+review in task `019fa8a5-eea1-79f0-abd8-50df4f3cdaa0`; that contract
+acceptance is separate from the still-unstarted corrective implementation and
+evidence.
 
 The same Gate 5 candidate also removes default production registration of the
 preview-v2 `customize-opencode` skill while preserving generic v2 configured
@@ -1187,10 +1190,40 @@ causal group.
 This closes the audit record. The later corrective integration
 `9e91d43c629b66d65c8741e342bca7cf05de5667` also closes the accepted
 Gate 5/6/8/10/11/14/15 scoped repairs and Gate 16's TUI repair. Gate 16's
-natural-language contract amendment still awaits fresh separate top-level
-review, and Gate 17 remains unauthorized. Neither the audit verdict nor the
-integration claims release readiness, Gate 18 context implementation, Gate 23
-product-loop proof, or permanent whole-project health.
+natural-language contract amendment later passed fresh separate top-level
+review, while its implementation/evidence and Gate 17 authorization remain
+open. Neither the audit verdict, integration, nor contract acceptance claims
+release readiness, Gate 18 context implementation, Gate 23 product-loop proof,
+or permanent whole-project health.
+
+## 2026-07-28 Gate 16 corrective contract review
+
+Fresh separate top-level reviewer task
+`019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` reviewed only the reopened Gate 16
+natural-language contract. Its first pass returned `Revise` with
+`G16-RC-001`: a cursor- or budget-cropped Goal/Course candidate view could hide
+another reasonable referent while the selected head/version still passed the
+proposed direct-write checks. The executor independently verified the
+counterexample against cursor-bounded Goal discovery and the architecture's
+explicit omission/truncation contract.
+
+The revised amendment binds natural references to immutable, runtime/owner
+produced command-specific resolution provenance: exact source/context cut,
+declared structural query scope, all candidates in that scope, explicit
+completeness/truncation, the selected head, and relevant owner-cut
+revalidation. Only a complete, untruncated operation-relevant view may support
+direct `learner_request`; incomplete or model-cropped views must widen,
+clarify, or use the complete `learner_acceptance` surface. The first effect
+atomically retains that basis as provenance rather than effect identity, and
+replay cannot replace it.
+
+The same reviewer retested the revision and returned `Accept` with no remaining
+acceptance-changing finding. Acceptance is limited to the corrective amendment
+in the Gate 16 record as implementation authority. It does not close
+implementation or evidence, authorize Gate 17 or Gate 18 context injection,
+create a general semantic resolver/command bus, or establish permanent project
+health. No code, provider run, or Gate 17 work occurred during either review
+pass.
 
 ## Historical evidence locators
 

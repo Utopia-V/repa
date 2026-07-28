@@ -24,10 +24,14 @@ settlement ownership; and Gate 8/10/11/14/15/16 primary-TUI presentation were
 independently accepted and durably integrated together at corrective snapshot
 `9e91d43c6`. That integration closes the scoped Gate
 5/6/8/10/11/14/15 repair boundaries and Gate 16's TUI repair only. Gate 16's
-natural-language admission correction is still a proposed contract amendment
-awaiting fresh separate top-level review. The current control point is
-therefore that Gate 16 contract/theory review. Gate 17 grill and derivation
-remain paused behind it.
+fresh separate top-level natural-language contract review returned first-pass
+`Revise` for `G16-RC-001`: a cropped contextual candidate view could
+manufacture apparent uniqueness. The proposal now requires host-bound,
+complete-or-explicitly-truncated command-specific resolution provenance; the
+same reviewer retested the repair and returned `Accept`. That amendment is now
+implementation authority, but Gate 16's corrective implementation and closing
+evidence remain open. The current control point is therefore Gate 16 corrective
+implementation planning. Gate 17 grill and derivation remain paused behind it.
 Documentation reconciliation and inherited-material classification are
 current evidence, not proof against future counterexample. “Accepted” records
 a decision and its provenance; it is not a correctness axiom.
@@ -66,7 +70,7 @@ in the [inherited-material index](inherited/README.md).
 | 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md) | Adds immutable revision-bound material outlines/selectors and optional neutral alignment to exact Course membership. | Closed at the domain-authority boundary at implementation commit `5e762f833`. Hostile arbitrary-SQL evidence is reclassified and the cross-Gate trigger-migration correction is integrated at `9e91d43c6`; Gate 18 still must not use the observation-writing current-use resolver as a pure context read. |
 | 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md) | Adds a learner-controlled default Course preference and independent exact per-Course route anchors. | Closed again at corrective integration `9e91d43c6`. The presenter derives exact readable Course/View/Revision/Item locators from owner snapshots and effects, shows IDs only when needed to disambiguate, and replays the stored historical acknowledgement rather than recomputing it from current state. Commit `a6b542d59` remains historical provenance. |
 | 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md) | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, correctable policy state. | Closed again at corrective integration `9e91d43c6`. The shared presenter preserves committed create/replace/retract instruction, scope, normalized expiry/timezone, state/version, relation, and correction guidance across TUI, direct-run, replay, and later provider failure. Commit `03ea74ec4` remains historical provenance. |
-| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md) | Intended to preserve learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning. | **Reopened only at the natural-language contract/implementation/evidence boundary.** Corrective integration `9e91d43c6` closes the TUI layer: exact owner-produced Goal meaning is shown before approval and after commit without exposing opaque IDs. The proposed natural-language amendment would remove SQL phrase forensics and internal-ID input but still awaits fresh separate top-level contract/theory review. Commit `69433fc78` remains historical provenance, not current full-Gate acceptance. |
+| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md) | Intended to preserve learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning. | **Reopened only at the natural-language implementation/evidence boundary.** Corrective integration `9e91d43c6` closes the TUI layer. Fresh review first returned `Revise` for `G16-RC-001`, then accepted the repaired contract: open semantic interpretation remains model-assisted while direct contextual resolution requires host-bound, complete, untruncated command-specific provenance. Corrective implementation and evidence have not begun. Commit `69433fc78` remains historical provenance, not current full-Gate acceptance. |
 | 17. [Natural-language learning bootstrap draft](research/opencode-fork-gate-17-natural-language-learning-bootstrap-2026-07-22.md) | Candidate boundary for a deliberate natural-language learning bootstrap that may use existing domain commands and teach in the same Turn. | Maintainer grill remains paused. The prior mandatory-`/learn` decision is under first-principles revalidation because the prefix neither resolves new/continue nor owns macro interruption or domain authorization. Request-bound creation/replay, atomic-versus-staged composition, truthful partial settlement, TUI acknowledgement, anchor consequences, and remote-source provenance are required contract inputs; Session topology, queue/steer, macro continuation, and detour/rejoin remain outside this Gate. Implementation is unauthorized. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every

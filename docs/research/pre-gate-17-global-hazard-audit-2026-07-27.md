@@ -7,8 +7,9 @@ was integrated. This is not a claim of permanent whole-project health, release
 readiness, Gate 17 authorization, or a proved integrated learning loop. The
 accepted corrective snapshot was later integrated at
 `9e91d43c629b66d65c8741e342bca7cf05de5667`; Gate 17 grill, contract
-derivation, and implementation remain blocked by Gate 16's separate
-natural-language contract/theory review. This record owns audit method,
+derivation, and implementation remain paused behind Gate 16. Its later separate
+review accepted the natural-language corrective contract, but implementation
+and closing evidence remain open. This record owns audit method,
 findings, and repair disposition; it does not replace product foundations,
 revise an ADR by itself, or make a future Gate contract authoritative.
 
@@ -718,11 +719,12 @@ current evidence with no P0-P3 finding. Their decisive checks included:
 This closes only the audit question stated above. Corrective snapshot
 `9e91d43c629b66d65c8741e342bca7cf05de5667` later integrated the
 accepted Gate 5/6/8/10/11/14/15 repairs and Gate 16's TUI repair. Gate 16's
-natural-language amendment still requires fresh separate top-level
-contract/theory review; Gate 17 still has no accepted engineering contract;
-Gate 18 has not implemented bounded learning context; Gate 23 has not proved
-the integrated product loop; and dormant historical release material still
-blocks any future release-readiness claim until separately disposed.
+natural-language amendment later passed fresh separate top-level review, but
+its implementation/evidence remains open; Gate 17 still has no accepted
+engineering contract; Gate 18 has not implemented bounded learning context;
+Gate 23 has not proved the integrated product loop; and dormant historical
+release material still blocks any future release-readiness claim until
+separately disposed.
 
 ## Confirmed healthy boundaries
 
@@ -742,13 +744,14 @@ blocks any future release-readiness claim until separately disposed.
 ## Current repairs
 
 - `docs/README.md` records the bounded audit closure, the integrated corrective
-  snapshot, and the remaining Gate 16 natural-language review barrier rather
-  than blocking Gate 17 on the now-closed parent health question.
+  snapshot, and the remaining Gate 16 natural-language implementation/evidence
+  barrier rather than blocking Gate 17 on the now-closed parent health question.
 - `AGENTS.md` now distinguishes revision ownership from technical correctness,
   so a later agent cannot use authority order to conceal a falsified decision.
 - Gate 16's volatile status, Gate record, and fork ledger now preserve its
   historical close, record the integrated TUI correction, and keep only the
-  natural-language contract/implementation/evidence boundary reopened.
+  natural-language implementation/evidence boundary reopened after fresh
+  contract acceptance.
 - Gate 5, Gate 8, Gate 10, Gate 11, Gate 14, and Gate 15 records preserve their
   historical reviews and record the common corrective integration that closes
   the falsified build, outward-identity, permission, physical, or primary-TUI
@@ -818,10 +821,11 @@ independently accepted shared-tree snapshot and durably integrates the scoped
 Gate repairs. `docs/README.md` remains the sole current-disposition owner.
 
 Gate 16's natural-language admission repair is deliberately not included in
-that implementation acceptance. Its proposed corrective contract amendment
-still requires fresh separate top-level contract/theory review; only its TUI
-presentation defect is closed by the corrective integration. Gate 17 grill,
-derivation, and implementation remain paused.
+that implementation acceptance. A later fresh separate top-level review
+accepted its corrective contract after closing `G16-RC-001`; only its TUI
+presentation defect is implemented by the corrective integration. The
+natural-language implementation/evidence boundary remains open, and Gate 17
+grill, derivation, and implementation remain paused.
 
 ## Superseded independent falsification close
 
