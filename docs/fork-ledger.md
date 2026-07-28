@@ -40,6 +40,7 @@ reopening one bounded completion claim.
 | 14. Learner navigation continuity        | Learner-controlled default Course preference and independent exact per-Course route anchors with append-only correction and command provenance    | `a6b542d59879f0a4b1111eaef4ad23e446b473d0`                                              | `docs/research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md`     |
 | 15. Retained scoped steering             | Source-linked, scoped, versioned, correctable Tutor-policy state with an exact immutable model-operation cut                                      | `03ea74ec4f760c83060a6da4fa26ecb9519d1468`                                              | `docs/research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md`          |
 | 16. Learner Goal authority               | Learner-owned Goal identity, revision, correction, optional target semantics, and explicitly authorized lifecycle meaning                         | `69433fc78d383bade1d92319eb3153a2cd7c68bd`                                              | `docs/research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md`            |
+| 2026-07-28 cross-Gate correction         | Gate 5/6/8/10/11/14/15 scoped repairs plus Gate 16 TUI repair, authority reconstruction, and inherited-control retirement                         | `9e91d43c629b66d65c8741e342bca7cf05de5667`                                              | `docs/research/pre-gate-17-global-hazard-audit-2026-07-27.md`                         |
 
 Gate 0–3 records and other pre-fork evidence live only in the immutable oracle:
 
@@ -1039,10 +1040,14 @@ Gate 16 is therefore reopened. Commit
 `69433fc78d383bade1d92319eb3153a2cd7c68bd` and review run
 `gate16-whole-20260721-01` remain immutable historical provenance, but their
 close verdict is no longer current. The Goal product boundary remains intended;
-the raw-SQL semantic-forensics requirement, the affected physical constraints,
-the natural-language evidence boundary, and primary-TUI proposal/result
-presentation require correction and fresh independent closure. Gate 17 remains
-blocked while this and the rest of the global audit are unresolved.
+at this reopen point the raw-SQL semantic-forensics requirement, affected
+physical constraints, natural-language evidence boundary, and primary-TUI
+proposal/result presentation required correction and fresh independent
+closure. Corrective integration
+`9e91d43c629b66d65c8741e342bca7cf05de5667` later closed the
+physical/migration and TUI repairs. The natural-language contract,
+implementation, and evidence boundary remains open, and Gate 17 remains
+blocked on its fresh separate top-level review.
 
 ## 2026-07-27 pre-Gate-17 first-principles disposition
 
@@ -1135,23 +1140,24 @@ active workflows, but they remain blockers to any future Repa release-readiness
 claim.
 
 Corrective work begun under the 2026-07-27 audit completed on 2026-07-28:
-working-tree candidates for Gate 5, Gate 6/8, and the shared Gate
+shared-tree corrections for Gate 5, Gate 6/8, and the shared Gate
 8/10/11/14/15/16 TUI presentation boundary passed their original or independent
 reviewers and final focused verification. Their exact candidate evidence is
-recorded in the affected Gate records and the global hazard audit. No commit or
-explicitly frozen snapshot owns that combined candidate yet, so this historical
-close-evidence table deliberately adds no new row or replacement hash.
-`docs/README.md` continues to own the scoped-reopened pending-integration
-disposition. Gate 16's natural-language corrective amendment has not passed the
-required fresh separate top-level review and is not included in the accepted
-implementation candidate.
+recorded in the affected Gate records and the global hazard audit. Corrective
+integration commit `9e91d43c629b66d65c8741e342bca7cf05de5667` now fixes
+that combined accepted snapshot. `docs/README.md` owns the resulting closed
+scoped repairs and Gate 16's narrower remaining reopen. Gate 16's
+natural-language corrective amendment has not passed the required fresh
+separate top-level review and is not included in that implementation
+acceptance.
 
 The same Gate 5 candidate also removes default production registration of the
 preview-v2 `customize-opencode` skill while preserving generic v2 configured
 skills, the explicitly composable hibernated plugin, and released-v1 skill
 discovery/invocation. A separate fresh read-only reviewer accepted this slice
 after focused Core and released-v1 tests passed. This is candidate provenance,
-not a new close hash.
+with its durable integration owned by
+`9e91d43c629b66d65c8741e342bca7cf05de5667`.
 
 ## 2026-07-28 bounded pre-Gate-17 audit closure
 
@@ -1178,11 +1184,12 @@ is classified and fail-closed outside standard discovery roots; rendered Web
 provenance is visible; and every actual untracked file belongs to a recorded
 causal group.
 
-This closes the audit record, not the affected Gate repairs. No new close hash
-is recorded: the accepted cross-Gate candidates remain unstaged and
-uncommitted, Gate 16's natural-language contract amendment still awaits fresh
-separate top-level review, and Gate 17 remains unauthorized. The verdict also
-does not claim release readiness, Gate 18 context implementation, Gate 23
+This closes the audit record. The later corrective integration
+`9e91d43c629b66d65c8741e342bca7cf05de5667` also closes the accepted
+Gate 5/6/8/10/11/14/15 scoped repairs and Gate 16's TUI repair. Gate 16's
+natural-language contract amendment still awaits fresh separate top-level
+review, and Gate 17 remains unauthorized. Neither the audit verdict nor the
+integration claims release readiness, Gate 18 context implementation, Gate 23
 product-loop proof, or permanent whole-project health.
 
 ## Historical evidence locators

@@ -6,13 +6,14 @@ closed on 2026-07-15. Independent top-level reviewer task
 `019f6599-2914-7f02-849d-412862338271` accepted both the corrected contract and
 implementation/evidence after one `Revise` round.
 
-Current status: Scoped-reopened by the 2026-07-27 first-principles audit at the
-active build, outward-identity, permission, and product-surface boundaries.
-Runtime Web routes remain disconnected and the hibernated client source need
-not be deleted. The unstaged corrective candidate described below makes the
-ordinary build terminal-only, corrects reachable schema/network identity, and
-closes the permission counterexamples; its original reviewer accepted it.
-There is not yet a durable integration commit. Current disposition is owned by
+Current status: Closed again at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+first-principles audit had scoped-reopened the active build, outward-identity,
+permission, and product-surface boundaries. Runtime Web routes remain
+disconnected and the hibernated client source need not be deleted. The
+corrective snapshot below makes the ordinary build terminal-only, corrects
+reachable schema/network identity, and closes the accepted permission
+counterexamples. Current disposition is owned by
 [the documentation index](../README.md).
 
 Date: 2026-07-14
@@ -1039,9 +1040,9 @@ OpenCode registries are not active release paths, but they are explicit
 blockers for any future release-readiness claim and must be quarantined or
 rewritten before such a claim.
 
-## 2026-07-28 corrective implementation candidate
+## 2026-07-28 corrective integration
 
-The unstaged working-tree candidate makes terminal-only the ordinary build;
+The corrective snapshot makes terminal-only the ordinary build;
 Web assets require the explicit `--research-embed-web-ui` research flag. It
 removes the upstream docs action and upstream schema writes, identifies active
 provider traffic as Repa or omits the product metadata, keeps ordinary OpenAI
@@ -1079,6 +1080,7 @@ independent. The focused Core and released-v1 skill tests passed serially; an
 unrelated pre-existing policy-location failure from a wider run does not
 establish or weaken this slice.
 
-This records accepted candidate evidence, not a new close commit. Gate status
-remains scoped-reopened pending durable integration, as owned by
-`docs/README.md`.
+Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
+independently accepted shared-tree snapshot and closes this scoped reopen. It
+does not claim release readiness or authorize execution of hibernated upstream
+automation.

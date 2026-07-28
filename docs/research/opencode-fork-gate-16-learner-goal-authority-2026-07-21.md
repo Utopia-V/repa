@@ -1,12 +1,13 @@
 # OpenCode fork Gate 16: learner Goal authority
 
-Status: Reopened by the 2026-07-27 first-principles audit. The decisions under
-**Accepted maintainer decisions** remain the intended product boundary, but the
-contract's raw-SQL closure requirements and the accepted implementation
-contradict its open natural-language admission semantics. The unstaged TUI
-correction described below was accepted by the original TUI reviewer, but the
-natural-language corrective amendment still awaits fresh separate top-level
-review and there is no durable integration commit. Independent review
+Status: Reopened only at the natural-language contract/implementation/evidence
+boundary. The decisions under **Accepted maintainer decisions** remain the
+intended product boundary, but the contract's raw-SQL closure requirements and
+the accepted implementation contradict its open natural-language admission
+semantics. Corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667` closes the independently
+accepted TUI repair described below. The natural-language corrective amendment
+still awaits fresh separate top-level review. Independent review
 run `gate16-whole-20260721-01` historically closed `G16-CT-001` through
 `G16-CT-005`, `G16-IE-001` through `G16-IE-013`, and the bounded real-provider
 qualification `G16-IE-U01`; commit
@@ -1494,9 +1495,9 @@ The primary TUI must also show the exact proposed Goal meaning at approval and
 the durable applied/already-applied/no-effect result after settlement. Trigger
 DDL and predecessor fixtures are governed by the cross-Gate migration repair.
 
-## 2026-07-28 TUI corrective implementation candidate
+## 2026-07-28 TUI corrective integration
 
-The unstaged shared presenter now displays every supported create, update, and
+The corrective shared presenter now displays every supported create, update, and
 replace operation from the exact owner-produced Goal meaning, Course titles and
 availability, field bases, lifecycle, conditions, target, and relations.
 Opaque Goal and Revision identities remain binding data rather than learner
@@ -1507,8 +1508,9 @@ scrollable without hiding the once-only permission controls.
 
 The original TUI reviewer independently accepted the envelope, semantic
 completeness, ID-opacity, scrolling, committed-readback, replay, and
-provider-failure counterexamples. This closes only the TUI part of Gate 16's
-reopen in the working-tree candidate.
+provider-failure counterexamples. Commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667` closes only the TUI part
+of Gate 16's reopen.
 
 The natural-language admission defect remains open. The earlier **Proposed
 corrective contract amendment — awaiting independent review** is still a

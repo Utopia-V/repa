@@ -1,11 +1,12 @@
 # OpenCode fork Gate 15: retained scoped steering
 
-Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
-primary-TUI acknowledgement and affected migration-evidence boundary. The
-source-linked policy identity, correction, expiry, and exact-consumer
-semantics remain accepted. The unstaged corrective candidate described below
-was accepted by the original database and TUI reviewers but has no durable
-integration commit. Historical independent whole-Gate review run
+Status: Closed again at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+first-principles audit had scoped-reopened the primary-TUI acknowledgement and
+affected migration-evidence boundary. The source-linked policy identity,
+correction, expiry, and exact-consumer semantics remain accepted. The
+corrective snapshot described below was accepted by the original database and
+TUI reviewers. Historical independent whole-Gate review run
 `gate15-whole-20260720-01` returned `Revise` on the first contract/theory pass
 with `G15-CT-001` through `G15-CT-007`. Its closure pass closed those seven
 findings and returned `Revise` solely with `G15-CT-008`; the retained reviewer
@@ -1295,9 +1296,9 @@ repair. The implementation currently proves only the finite
 future instructions remain possible later consumers, not already-complete
 cross-session steering coverage.
 
-## 2026-07-28 corrective implementation candidate
+## 2026-07-28 corrective integration
 
-The unstaged shared presenter reconstructs create, replace, and retract
+The corrective shared presenter reconstructs create, replace, and retract
 acknowledgements from the committed effect, predecessor, and current policy
 head. It preserves the exact instruction, finite `learning_wide` scope,
 normalized expiry and timezone, operative/retracted state, version,
@@ -1308,6 +1309,6 @@ the historical acknowledgement from current state.
 
 The original TUI reviewer independently accepted create→replace→retract,
 post-commit observer-failure, carrier-parity, and stale-test-oracle closure.
-This does not claim unimplemented scopes or consumers. It is accepted candidate
-evidence rather than a new close commit, so Gate 15 remains scoped-reopened
-pending durable integration.
+Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
+shared-tree snapshot and closes this scoped reopen. It does not claim
+unimplemented scopes or consumers.

@@ -1,11 +1,12 @@
 # OpenCode fork Gate 14: learner navigation continuity
 
-Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
-primary-TUI confirmation/result and affected migration-evidence boundary. Default
-Course and exact route-anchor identities, transitions, and fail-closed
-semantics remain accepted. The unstaged corrective candidate described below
-was accepted by the original database and TUI reviewers but has no durable
-integration commit. Historical independent review run
+Status: Closed again at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+first-principles audit had scoped-reopened the primary-TUI confirmation/result
+and affected migration-evidence boundary. Default Course and exact route-anchor
+identities, transitions, and fail-closed semantics remain accepted. The
+corrective snapshot described below was accepted by the original database and
+TUI reviewers. Historical independent review run
 `gate14-whole-20260719-01` accepted contract/theory after closing `G14-CT-001`
 through `G14-CT-005` and both nonblocking strengthenings. The contract is
 implementation authority. The maintainer authorized implementation and the
@@ -1053,9 +1054,9 @@ versioned-DDL repair. No product evidence currently falsifies the separate
 default-Course and route-anchor authorities or their exact-revision fail-closed
 rule.
 
-## 2026-07-28 corrective implementation candidate
+## 2026-07-28 corrective integration
 
-The unstaged presenter derives readable Course, View, Revision, and Item
+The corrective presenter derives readable Course, View, Revision, and Item
 locators from the exact owner snapshot and committed effect. It displays an
 opaque identity only when the readable hierarchy cannot disambiguate the
 object, so same-named Courses and otherwise identical route anchors no longer
@@ -1067,5 +1068,6 @@ The domain decoder also rejects recursively malformed usability state and
 partial source/time/order/frontier groups; a null head requires the whole group
 absent and a non-null head requires it complete. The original database and TUI
 reviewers accepted the live-replay, migration, exact-object, once-only, and
-post-commit counterexamples. This is candidate evidence, not a new close
-commit; Gate 14 remains scoped-reopened pending durable integration.
+post-commit counterexamples. Commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
+shared-tree snapshot and closes this scoped reopen.

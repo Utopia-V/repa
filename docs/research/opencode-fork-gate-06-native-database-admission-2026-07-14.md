@@ -5,13 +5,13 @@ runtime-owner claim was later invalidated. Corrected runtime-owner result:
 passed at `16fcb3177`, then invalidated by the sidecar and dangling-symlink
 counterexamples below. The second correction passed at `34588b041`.
 
-Current status: Scoped-reopened by the 2026-07-27 first-principles audit at the
-trigger-DDL migration-lineage and same-version schema-parity boundary. Database
-identity, admission refusal, single physical owner, and transactional migration
-semantics remain accepted. The unstaged corrective candidate described below
-was accepted by the original database reviewer but has no durable integration
-commit. Current disposition is owned by
-[the documentation index](../README.md).
+Current status: Closed again at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+first-principles audit had scoped-reopened the trigger-DDL migration-lineage
+and same-version schema-parity boundary. Database identity, admission refusal,
+single physical owner, and transactional migration semantics remain accepted.
+The corrective snapshot below was accepted by the original database reviewer.
+Current disposition is owned by [the documentation index](../README.md).
 
 Date: 2026-07-14
 
@@ -715,9 +715,9 @@ manifest or equivalent parity check, explicit migrations for behavioral
 changes, and upgrades from real frozen predecessor fixtures. It does not reopen
 database identity, refusal, physical-owner, or transaction rollback semantics.
 
-## 2026-07-28 corrective implementation candidate
+## 2026-07-28 corrective integration
 
-The unstaged candidate freezes v10/v11/v12 schema extras and the real v11 DDL,
+The corrective snapshot freezes v10/v11/v12 schema extras and the real v11 DDL,
 adds an explicit v12 migration and structural manifest, and upgrades a
 six-domain v11 fixture whose rows use identities and Goal shapes that the
 historical application could actually produce. The migration validates all
@@ -733,7 +733,7 @@ counterexamples. Final shared-tree evidence included 34/34 migration tests with
 302 assertions, the Core corrective set, Core typecheck, and the unchanged
 frozen schema/digest checks.
 
-This is accepted working-tree evidence rather than a new Gate 6 close. Database
-identity, refusal, physical ownership, and rollback remain historically
-accepted; the scoped reopen remains until durable integration is recorded by
-the current status owner.
+Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
+independently accepted shared-tree snapshot and closes this scoped reopen.
+Database identity, refusal, physical ownership, and rollback remain
+historically accepted rather than rederived.

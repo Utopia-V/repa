@@ -1,10 +1,12 @@
 # OpenCode fork Gate 11: readable representation lineage
 
-Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
-primary-TUI result-presentation boundary. Representation identity, lineage,
-conversion, source proof, storage, and failure semantics remain accepted.
-The unstaged presenter and failure-vocabulary corrections described below were
-independently accepted but have no durable integration commit.
+Status: Closed again at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+first-principles audit had scoped-reopened the primary-TUI
+result-presentation boundary. Representation identity, lineage, conversion,
+source proof, storage, and failure semantics remain accepted. The presenter
+and failure-vocabulary corrections described below were independently
+accepted.
 Commit `bdbfa0c05` remains the historical closed snapshot. Contract/theory and
 implementation/evidence were independently accepted.
 Whole-Gate review run `gate11-20260717-whole-01` closed findings `G11-CT-001`
@@ -1450,9 +1452,9 @@ supported formats beyond the pinned PDF text-layer path and configured
 supported image/PDF multimodal path, and does not reopen Representation
 authority or conversion semantics.
 
-## 2026-07-28 corrective implementation candidate
+## 2026-07-28 corrective integration
 
-The unstaged shared presenter makes the exact committed Representation outcome
+The corrective shared presenter makes the exact committed Representation outcome
 default-visible in TUI and direct-run and binds it to the completed ToolPart and
 outer settlement envelope. Representation's v12 failure vocabulary is now one
 frozen domain tuple that derives `RepresentationFailureCode`, the recursive
@@ -1462,6 +1464,7 @@ fail-closed and recoverable at the database boundary.
 
 Independent TUI and failure-vocabulary reviewers accepted the presentation and
 single-owner corrections. The final corrective sets and Core/OpenCode
-typechecks passed. This does not broaden format support or producer semantics
-and is not a new close commit; Gate 11 remains scoped-reopened pending durable
-integration.
+typechecks passed. Commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
+shared-tree snapshot and closes this scoped reopen without broadening format
+support or producer semantics.

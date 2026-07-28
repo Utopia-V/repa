@@ -4,9 +4,10 @@ Status: Maintainer grill paused. The 2026-07-27 first-principles audit reopened
 the previously accepted mandatory-`/learn` decision and derived several
 required contract inputs; it does not select a replacement admission form.
 The audit closed only its bounded health and authority-reconstruction question;
-its still-open cross-Gate corrective barrier blocks further grill or design
-derivation. The local engineering contract is incomplete, has not entered
-independent contract/theory review, and is not implementation authority.
+the remaining Gate 16 natural-language contract/theory barrier blocks further
+grill or design derivation. The local engineering contract is incomplete, has
+not entered independent contract/theory review, and is not implementation
+authority.
 
 Date: 2026-07-22
 

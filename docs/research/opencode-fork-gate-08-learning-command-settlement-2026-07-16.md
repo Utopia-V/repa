@@ -1,12 +1,12 @@
 # OpenCode fork Gate 8: learning-command settlement
 
-Status: Scoped-reopened by the 2026-07-27 first-principles audit at the current
-physical shared-substrate dependency and primary-TUI settlement-presentation
-boundaries. The original Course-command
-proof at implementation commit `293ff6892` remains historical acceptance;
-the unstaged corrective candidate described below has been accepted by the
-original database and TUI reviewers but has no durable integration commit.
-The earlier
+Status: Closed again at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+first-principles audit had scoped-reopened the current physical
+shared-substrate dependency and primary-TUI settlement-presentation
+boundaries. The original Course-command proof at implementation commit
+`293ff6892` remains historical acceptance; the corrective snapshot described
+below was accepted by the original database and TUI reviewers. The earlier
 fresh independent top-level contract/theory and implementation/evidence
 reviews both closed with `Accept` on 2026-07-16 after all then-known findings
 were resolved.
@@ -846,9 +846,9 @@ The grill used the current production fork plus these fixed references:
 The fork adapts demonstrated invariants, not reference package topology,
 preview-v2 production authority, oracle tables, or old command APIs.
 
-## 2026-07-28 corrective implementation candidate
+## 2026-07-28 corrective integration
 
-The unstaged candidate separates the physical learning-command ledger from
+The corrective snapshot separates the physical learning-command ledger from
 domain semantics. The physical owner retains admission, invocation, receipt,
 replay, recovery, terminal, and deletion behavior without importing or
 enumerating Course, Representation, Navigation, Retained Steering, or Goal.
@@ -871,5 +871,6 @@ presentation binding, and post-commit visibility. Final shared-tree evidence
 included Core 100/100, Schema 2/2, TUI 26/26, OpenCode 400/400, all four
 affected package typechecks, and `git diff --check`.
 
-This is not a new close commit. The original Course settlement proof remains
-historical acceptance; the scoped reopen remains pending durable integration.
+Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
+independently accepted shared-tree snapshot and closes this scoped reopen. The
+original Course settlement proof remains historical acceptance.

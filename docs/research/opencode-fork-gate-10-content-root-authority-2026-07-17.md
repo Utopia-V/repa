@@ -1,10 +1,11 @@
 # OpenCode fork Gate 10: content-root authority and bounded observation
 
-Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
-primary-TUI permission/result presentation and evidence boundary. The ContentRoot,
-observation, revocation, and mutation-authority semantics remain accepted.
-The unstaged corrective presenter described below was accepted by the original
-TUI reviewer but has no durable integration commit.
+Status: Closed again at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+first-principles audit had scoped-reopened the primary-TUI permission/result
+presentation and evidence boundary. The ContentRoot, observation, revocation,
+and mutation-authority semantics remain accepted. The corrective presenter
+described below was accepted by the original TUI reviewer.
 Commit `fb6ed5763` remains the historical closed snapshot: contract/theory was
 accepted by the required whole-Gate independent reviewer on the fifth pass
 after four `Revise` rounds, and the implementation/evidence layer was accepted
@@ -1427,9 +1428,9 @@ prose fails. The filesystem authority itself is not rederived. The physical
 support proof also remains Windows/NTFS-specific; it must not be cited as
 general cross-platform filesystem closure.
 
-## 2026-07-28 corrective implementation candidate
+## 2026-07-28 corrective integration
 
-The unstaged shared presenter validates the actual one-shot permission envelope
+The corrective shared presenter validates the actual one-shot permission envelope
 and shows the canonical anchor, relative path, create/modify operation, rights,
 lifetime, and warning before approval. The committed result carries both the
 canonical anchor and relative path and remains visible through the primary TUI
@@ -1439,6 +1440,7 @@ generic success.
 
 The original TUI reviewer independently accepted the permission binding,
 canonical-anchor, one-shot, carrier-parity, and post-commit visibility
-counterexamples. This is candidate evidence only; Gate 10 remains
-scoped-reopened pending durable integration, and its existing filesystem
+counterexamples. Commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
+shared-tree snapshot and closes this scoped reopen. The existing filesystem
 authority and Windows/NTFS evidence scope are unchanged.

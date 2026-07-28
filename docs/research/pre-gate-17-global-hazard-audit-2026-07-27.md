@@ -4,12 +4,13 @@ Status: Closed on 2026-07-28 at the bounded pre-Gate-17 project-health,
 authority-reconstruction, inherited-pollution, and working-tree-classification
 boundary. Two fresh read-only passes found no P0-P3 after the renewed evidence
 was integrated. This is not a claim of permanent whole-project health, release
-readiness, completed corrective integration, Gate 17 authorization, or a
-proved integrated learning loop. Gate 17 grill, contract derivation, and
-implementation remain blocked by the corrective barrier recorded in Roadmap
-09. This record owns audit method, findings, and repair disposition; it does
-not replace product foundations, revise an ADR by itself, close implementation
-repairs, or make a future Gate contract authoritative.
+readiness, Gate 17 authorization, or a proved integrated learning loop. The
+accepted corrective snapshot was later integrated at
+`9e91d43c629b66d65c8741e342bca7cf05de5667`; Gate 17 grill, contract
+derivation, and implementation remain blocked by Gate 16's separate
+natural-language contract/theory review. This record owns audit method,
+findings, and repair disposition; it does not replace product foundations,
+revise an ADR by itself, or make a future Gate contract authoritative.
 
 Date: 2026-07-27
 
@@ -714,8 +715,9 @@ current evidence with no P0-P3 finding. Their decisive checks included:
   entrypoints, resolving local action/type references, zero promotional-asset
   references, and a passing `git diff --check`.
 
-This closes only the audit question stated above. The accepted Gate
-5/6/8/10/11/14/15/16 candidates still require durable integration; Gate 16's
+This closes only the audit question stated above. Corrective snapshot
+`9e91d43c629b66d65c8741e342bca7cf05de5667` later integrated the
+accepted Gate 5/6/8/10/11/14/15 repairs and Gate 16's TUI repair. Gate 16's
 natural-language amendment still requires fresh separate top-level
 contract/theory review; Gate 17 still has no accepted engineering contract;
 Gate 18 has not implemented bounded learning context; Gate 23 has not proved
@@ -739,17 +741,18 @@ blocks any future release-readiness claim until separately disposed.
 
 ## Current repairs
 
-- `docs/README.md` records the bounded audit closure and blocks Gate 17 on the
-  resulting existing-owner corrective barrier rather than on the now-closed
-  parent health question.
+- `docs/README.md` records the bounded audit closure, the integrated corrective
+  snapshot, and the remaining Gate 16 natural-language review barrier rather
+  than blocking Gate 17 on the now-closed parent health question.
 - `AGENTS.md` now distinguishes revision ownership from technical correctness,
   so a later agent cannot use authority order to conceal a falsified decision.
 - Gate 16's volatile status, Gate record, and fork ledger now preserve its
-  historical close while marking the TUI implementation/evidence boundary and
-  the natural-language contract/implementation/evidence boundary reopened.
+  historical close, record the integrated TUI correction, and keep only the
+  natural-language contract/implementation/evidence boundary reopened.
 - Gate 5, Gate 8, Gate 10, Gate 11, Gate 14, and Gate 15 records preserve their
-  historical reviews while marking only the falsified build, outward-identity,
-  permission, physical, or primary-TUI layer reopened.
+  historical reviews and record the common corrective integration that closes
+  the falsified build, outward-identity, permission, physical, or primary-TUI
+  layers.
 - Gate 6 and Gate 8 now own the cross-Gate trigger-versioning and
   shared-settlement dependency corrections instead of leaving them as
   ownerless infrastructure risks.
@@ -769,13 +772,13 @@ blocks any future release-readiness claim until separately disposed.
   retained Web documentation declares its inherited status on every directly
   renderable page; and unowned upstream promotional assets are absent.
 
-## Corrective implementation follow-through
+## Corrective integration follow-through
 
 The then-review-complete audit remained the finding owner while implementation
 and independent closure proceeded in the affected existing Gates. The
 resulting work completed on 2026-07-28:
 
-- Gate 5's unstaged candidate makes terminal-only the ordinary build, keeps Web
+- Gate 5's corrective snapshot makes terminal-only the ordinary build, keeps Web
   behind an explicit research-only flag, removes reachable upstream
   help/schema/network identity, hibernates unqualified ChatGPT OAuth while
   retaining OpenAI API-key use, removes default production registration of the
@@ -783,7 +786,7 @@ resulting work completed on 2026-07-28:
   and released-v1 skill mechanisms, and closes the custom-Agent and permission
   counterexamples described above. A separate fresh reviewer accepted that
   skill-surface slice with focused Core and released-v1 evidence.
-- Gate 6/8's unstaged candidate separates a domain-neutral physical ledger from
+- Gate 6/8's corrective snapshot separates a domain-neutral physical ledger from
   domain-owned reservation, effect, seal, and recursive terminal validation;
   freezes v11 trigger/schema evidence; installs an explicit v12 migration and
   manifest; upgrades a six-domain application-reachable fixture; and uses the
@@ -791,7 +794,7 @@ resulting work completed on 2026-07-28:
   original database reviewer closed the domain-dependency, receipt/seal,
   Route-Anchor basis, migration, recursive-payload, blind-cast, and partial
   projection-metadata counterexamples.
-- Gate 8/10/11/14/15/16's unstaged shared semantic presenter is consumed by TUI
+- Gate 8/10/11/14/15/16's corrective shared semantic presenter is consumed by TUI
   and direct-run, fails closed on mismatched envelopes, remains scrollable for
   the maximum legal Goal proposal, and keeps exact committed meaning visible
   after later provider failure. The original TUI reviewer closed all six
@@ -810,15 +813,15 @@ Final shared-tree verification passed the four affected package typechecks,
 Core's 100-test corrective set, Schema's two semantic-presentation tests, TUI's
 26-test corrective set, OpenCode's 400-test corrective set, the ordinary
 terminal-only Windows build and packaged smoke checks, and `git diff --check`.
-The working tree remains unstaged and uncommitted. Consequently these results
-are independently accepted corrective candidates, not durable Gate close
-commits. `docs/README.md` remains the sole current-disposition owner.
+Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` fixes that exact
+independently accepted shared-tree snapshot and durably integrates the scoped
+Gate repairs. `docs/README.md` remains the sole current-disposition owner.
 
 Gate 16's natural-language admission repair is deliberately not included in
 that implementation acceptance. Its proposed corrective contract amendment
 still requires fresh separate top-level contract/theory review; only its TUI
-presentation defect is closed in the candidate. Gate 17 grill, derivation, and
-implementation remain paused.
+presentation defect is closed by the corrective integration. Gate 17 grill,
+derivation, and implementation remain paused.
 
 ## Superseded independent falsification close
 
