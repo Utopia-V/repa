@@ -1,8 +1,11 @@
 # V2 Plugin System Implementation Plan
 
-## Status
+> **Status — inherited preview-v2 implementation plan, not an accepted Repa plan.** This file may explain or guide maintenance of deferred source in this subtree. It does not authorize continuing the implementation, migrating the production plugin surface, or enabling v2; those decisions require an accepted Repa ADR or Gate.
+> Current Repa authority is indexed by the [documentation map](../../../../../docs/README.md).
 
-This document describes the agreed target design for the V2 plugin system. It is an implementation plan, not documentation for the current API.
+## Historical Plan Status
+
+This document records the target design agreed within the inherited preview-v2 effort. It is not documentation for the released API and does not carry Repa implementation or roadmap authority.
 
 ## Goals
 

@@ -3,8 +3,14 @@
 Historical result: Passed at fork implementation commit `6c0b7aa5b`; its
 runtime-owner claim was later invalidated. Corrected runtime-owner result:
 passed at `16fcb3177`, then invalidated by the sidecar and dangling-symlink
-counterexamples below. The second correction passed at `34588b041`. Current
-disposition is owned by
+counterexamples below. The second correction passed at `34588b041`.
+
+Current status: Scoped-reopened by the 2026-07-27 first-principles audit at the
+trigger-DDL migration-lineage and same-version schema-parity boundary. Database
+identity, admission refusal, single physical owner, and transactional migration
+semantics remain accepted. The unstaged corrective candidate described below
+was accepted by the original database reviewer but has no durable integration
+commit. Current disposition is owned by
 [the documentation index](../README.md).
 
 Date: 2026-07-14
@@ -690,3 +696,44 @@ original checkpoint Gate 7 had not begun; its original contract and the other
 unexecuted Gate 7–19 contracts were later superseded. The replacement Gate 7
 Course/View authority is now independently closed, and this runtime correction
 restores its one-owner production prerequisite without changing its design.
+
+## 2026-07-27 first-principles correction
+
+Later Gates placed behavioral trigger DDL outside the generated schema and
+imported mutable current constraint helpers from historical migrations. Fresh
+initialization installs the current helpers, while an existing database already
+at the same `user_version` neither compares nor reinstalls them. A helper change
+can therefore leave fresh and existing databases with different behavior at one
+declared version while both pass integrity and foreign-key checks. Tests that
+downgrade a current schema and reinstall current helpers do not prove a real
+historical upgrade.
+
+This violates Gate 6's forward migration and schema-admission ownership even
+though the defect was introduced by later domain Gates. Gate 6 is
+scoped-reopened for frozen historical trigger DDL, an owned trigger/schema
+manifest or equivalent parity check, explicit migrations for behavioral
+changes, and upgrades from real frozen predecessor fixtures. It does not reopen
+database identity, refusal, physical-owner, or transaction rollback semantics.
+
+## 2026-07-28 corrective implementation candidate
+
+The unstaged candidate freezes v10/v11/v12 schema extras and the real v11 DDL,
+adds an explicit v12 migration and structural manifest, and upgrades a
+six-domain v11 fixture whose rows use identities and Goal shapes that the
+historical application could actually produce. The migration validates all
+terminal rows with the same domain-owned recursive decoders used by live
+replay before it drops the shadow tables. SQLite continues to own receipt,
+seal, effect, time/order, and cross-table equality rather than learner-language
+forensics.
+
+The original database reviewer independently closed fresh/existing parity,
+historical-fixture, Route-Anchor basis, recursive `no_change`/Goal payload,
+unknown-command, blind-cast, and partial Navigation source-metadata
+counterexamples. Final shared-tree evidence included 34/34 migration tests with
+302 assertions, the Core corrective set, Core typecheck, and the unchanged
+frozen schema/digest checks.
+
+This is accepted working-tree evidence rather than a new Gate 6 close. Database
+identity, refusal, physical ownership, and rollback remain historically
+accepted; the scoped reopen remains until durable integration is recorded by
+the current status owner.

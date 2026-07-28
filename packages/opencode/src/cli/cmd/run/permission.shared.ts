@@ -14,6 +14,8 @@
 // permissionInfo() extracts display info (icon, title, lines, diff) from
 // the request, delegating to tool.ts for tool-specific formatting.
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { PermissionReply } from "./types"
 import { toolPath, toolPermissionInfo } from "./tool"
 
@@ -77,8 +79,9 @@ export function createPermissionBodyState(requestID: string): PermissionBodyStat
   }
 }
 
-export function permissionOptions(stage: PermissionStage, onceOnly = false): PermissionOption[] {
+export function permissionOptions(stage: PermissionStage, onceOnly = false, rejectOnly = false): PermissionOption[] {
   if (stage === "permission") {
+    if (rejectOnly) return ["reject"]
     return onceOnly ? ["once", "reject"] : ["once", "always", "reject"]
   }
 
@@ -92,7 +95,7 @@ export function permissionOptions(stage: PermissionStage, onceOnly = false): Per
 export function permissionInfo(request: PermissionRequest): PermissionInfo {
   const pats = patterns(request)
   const input = data(request)
-  const info = toolPermissionInfo(request.permission, input, dict(request.metadata), pats)
+  const info = toolPermissionInfo(request, input)
   if (info) {
     return info
   }
@@ -150,8 +153,13 @@ export function permissionReply(requestID: string, reply: PermissionReply["reply
   }
 }
 
-export function permissionShift(state: PermissionBodyState, dir: -1 | 1, onceOnly = false): PermissionBodyState {
-  const list = permissionOptions(state.stage, onceOnly)
+export function permissionShift(
+  state: PermissionBodyState,
+  dir: -1 | 1,
+  onceOnly = false,
+  rejectOnly = false,
+): PermissionBodyState {
+  const list = permissionOptions(state.stage, onceOnly, rejectOnly)
   if (list.length === 0) {
     return state
   }
@@ -176,12 +184,14 @@ export function permissionRun(
   requestID: string,
   option: PermissionOption,
   onceOnly = false,
+  rejectOnly = false,
 ): PermissionStep {
   if (state.submitting) {
     return { state }
   }
 
   if (state.stage === "permission") {
+    if (rejectOnly && option !== "reject") return { state }
     if (option === "always") {
       if (onceOnly) return { state }
       return {
@@ -227,6 +237,22 @@ export function permissionRun(
     state,
     reply: permissionReply(requestID, "always"),
   }
+}
+
+export function permissionConstraint(request: PermissionRequest) {
+  const promptRequired = PermissionV1.promptRequired(request)
+  const semantic = SemanticPresentation.readProposal(request)
+  if (semantic.type === "invalid") {
+    return { onceOnly: true, rejectOnly: true }
+  }
+  if (
+    promptRequired ||
+    request.metadata.onceOnly === true ||
+    (semantic.type === "valid" && semantic.value.approval === "once_only")
+  ) {
+    return { onceOnly: true, rejectOnly: false }
+  }
+  return { onceOnly: false, rejectOnly: false }
 }
 
 export function permissionReject(state: PermissionBodyState, requestID: string): PermissionReply | undefined {

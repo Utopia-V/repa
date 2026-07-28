@@ -1,7 +1,11 @@
 # OpenCode fork Gate 15: retained scoped steering
 
-Status: Closed. The decisions under **Accepted maintainer decisions** are
-accepted product meaning. Independent whole-Gate review run
+Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
+primary-TUI acknowledgement and affected migration-evidence boundary. The
+source-linked policy identity, correction, expiry, and exact-consumer
+semantics remain accepted. The unstaged corrective candidate described below
+was accepted by the original database and TUI reviewers but has no durable
+integration commit. Historical independent whole-Gate review run
 `gate15-whole-20260720-01` returned `Revise` on the first contract/theory pass
 with `G15-CT-001` through `G15-CT-007`. Its closure pass closed those seven
 findings and returned `Revise` solely with `G15-CT-008`; the retained reviewer
@@ -10,7 +14,9 @@ implementation authority. Implementation/evidence review closed
 `G15-IE-001` through `G15-IE-005` after two repair passes and returned `Accept`
 with no acceptance-changing finding remaining. The accepted implementation is
 fixed by maintainer-authorized commit
-`03ea74ec4f760c83060a6da4fa26ecb9519d1468`; Gate 16 has not begun.
+`03ea74ec4f760c83060a6da4fa26ecb9519d1468`. At that closure point, Gate 16
+had not begun; current disposition is owned by
+[the documentation index](../README.md).
 
 Date: 2026-07-20
 
@@ -1269,5 +1275,39 @@ No root-level suite, unrelated package suite, release build, packaged binary,
 HTTP/MCP writer, preview-v2 path, or background runtime is claimed. The
 retained reviewer accepted the exact checkout binding and closed every
 implementation/evidence finding. The maintainer-authorized local integration
-does not authorize push, merge, publication, cleanup, or Gate 16; Gate 16 has
-not begun.
+does not authorize push, merge, publication, cleanup, or Gate 16. At that
+integration point, Gate 16 had not begun.
+
+## 2026-07-27 first-principles correction
+
+The historical close proved direct-run acknowledgement formatting. In the
+primary TUI, the learning command is rendered as a generic completed tool and
+its output is hidden by default, so the required immediate acknowledgement of
+the committed policy is not reliably visible. A later inspection surface
+cannot substitute for truthful commit-time feedback, especially when provider
+continuation fails after the write.
+
+Gate 15 is therefore scoped-reopened for a shared semantic result projection,
+primary-TUI behavior, and focused evidence. Its trigger and
+migration-equivalence evidence is subject to the cross-Gate versioned-DDL
+repair. The implementation currently proves only the finite
+`learning_wide` contribution. Course-local, Session-local, and conditional
+future instructions remain possible later consumers, not already-complete
+cross-session steering coverage.
+
+## 2026-07-28 corrective implementation candidate
+
+The unstaged shared presenter reconstructs create, replace, and retract
+acknowledgements from the committed effect, predecessor, and current policy
+head. It preserves the exact instruction, finite `learning_wide` scope,
+normalized expiry and timezone, operative/retracted state, version,
+replacement or retraction relation, and correction guidance across TUI,
+direct-run, replay, and later provider failure. The terminal semantic Part is
+created and stored once in the committing transaction; replay does not rewrite
+the historical acknowledgement from current state.
+
+The original TUI reviewer independently accepted create→replace→retract,
+post-commit observer-failure, carrier-parity, and stale-test-oracle closure.
+This does not claim unimplemented scopes or consumers. It is accepted candidate
+evidence rather than a new close commit, so Gate 15 remains scoped-reopened
+pending durable integration.

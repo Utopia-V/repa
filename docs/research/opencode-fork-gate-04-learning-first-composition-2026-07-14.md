@@ -9,13 +9,13 @@ findings were closed, including propagation into owning ADR-0014, and accepted
 the implementation/evidence layer after five implementation findings were
 closed.
 
-Gate 11 extension status: owner correction accepted in independent
+Gate 11 extension result: owner correction was accepted in independent
 contract/theory review run `gate11-20260717-whole-01` after findings
 `G11-CT-001` through `G11-CT-012` closed. The correction below and the Gate 11
-contract were one review horizon. It is implemented in Gate 11's current
-working-tree candidate under separate maintainer authorization; its
-implementation/evidence review has not yet been dispatched. This does not alter
-the truth of the historical three-purpose Gate 4 implementation evidence.
+contract were one review horizon. Gate 11 later passed implementation/evidence
+review and fixed the fourth `representation` purpose at implementation commit
+`bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`. This does not alter the truth of
+the historical three-purpose Gate 4 implementation evidence.
 
 Date: 2026-07-14
 
@@ -602,9 +602,10 @@ and Session-title concurrency now follow that boundary.
 “Only” in the preceding paragraph is the verified implementation snapshot at
 the Gate 4 checkpoints, not a timeless prohibition. The Gate 11 owner correction
 above establishes `representation` as the closed fourth stream purpose with a
-stricter caller-option boundary. It changes no historical evidence. The current
-working-tree candidate implements that member; its carrier evidence remains
-Gate 11 work pending the retained independent implementation/evidence review.
+stricter caller-option boundary. It changes no historical evidence. Gate 11
+later implemented and independently accepted that member at
+`bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`; its carrier evidence belongs to
+Gate 11 rather than the Gate 4 close.
 
 Gate 4 was previously recorded passed at two code checkpoints:
 

@@ -18,11 +18,11 @@ const addPlugin = Effect.fn(function* () {
 })
 
 describe("KiloPlugin", () => {
-  it.effect("is registered so legacy referer headers can be applied", () =>
+  it.effect("is registered so Repa attribution can be applied", () =>
     Effect.sync(() => expect(ProviderPlugins.map((item) => item.id)).toContain(PluginV2.ID.make("kilo"))),
   )
 
-  it.effect("applies legacy referer headers only to kilo", () =>
+  it.effect("applies Repa attribution without an unowned referer only to kilo", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -39,14 +39,13 @@ describe("KiloPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "X-Title": "Repa",
       })
       expect((yield* catalog.provider.get(ProviderV2.ID.openrouter))?.request.headers).toEqual({})
     }),
   )
 
-  it.effect("uses the exact legacy Kilo header casing and set", () =>
+  it.effect("uses the exact Repa title header casing and set", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -61,9 +60,11 @@ describe("KiloPlugin", () => {
       yield* addPlugin()
 
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "X-Title": "Repa",
       })
+      expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).not.toHaveProperty(
+        "HTTP-Referer",
+      )
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).not.toHaveProperty(
         "http-referer",
       )
@@ -72,7 +73,7 @@ describe("KiloPlugin", () => {
     }),
   )
 
-  it.effect("uses the legacy provider-id guard instead of endpoint package matching", () =>
+  it.effect("uses the provider endpoint guard instead of package matching", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -90,8 +91,7 @@ describe("KiloPlugin", () => {
       yield* addPlugin()
 
       expect((yield* catalog.provider.get(ProviderV2.ID.make("kilo")))?.request.headers).toEqual({
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "X-Title": "Repa",
       })
       expect((yield* catalog.provider.get(ProviderV2.ID.make("custom-kilo")))?.request.headers).toEqual({})
     }),

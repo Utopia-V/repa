@@ -1,5 +1,8 @@
 # Remove `packages/opencode/src/storage/db.ts`
 
+> **Status — fork-era engineering migration record, not an active Repa plan.** Completed and pending labels below describe the source effort at the time of writing. Use the current source and `docs/fork-ledger.md` for evidence; this file does not authorize further database replacement, deletion, or migration outside an accepted Repa Gate.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
 ## Goal
 
 Remove all production usages of the legacy `packages/opencode/src/storage/db.ts` module.

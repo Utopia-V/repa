@@ -6,6 +6,8 @@ Filesystem authorization semantics clarified: 2026-07-17
 
 Roadmap completeness and cutover semantics clarified: 2026-07-17
 
+First-principles ownership, provenance, and policy corrections: 2026-07-27
+
 Status: Accepted architecture baseline under ADR-0012, with runtime lineage and
 native persistence amended by ADR-0014. This document is normative for
 ownership, dependency direction, state authority, and failure boundaries.
@@ -106,13 +108,13 @@ Tutor behavior** in response to an autonomous learner and a changing world.
 | ------------------- | ---------------------------------------------------------------------------------------------- |
 | reference signal    | learner-owned goals, deadlines, intended outcomes, and current steering                        |
 | observed system     | learner interactions, materials, assignments, artifacts, time, and external results            |
-| state estimator     | source-aware learner/course/agenda queries; uncertainty remains explicit                       |
+| state estimator     | source-aware learner/Course/Goal/future-attention/planning queries; uncertainty remains explicit |
 | controller          | Tutor composition using hard constraints, current state, learner intent, and model judgment    |
 | actuator            | explanation, demonstration, questions, research, tools, artifact work, and authorized commands |
 | feedback            | later questions, attempts, corrections, completed work, time changes, and learner overrides    |
 
 The controller is receding-horizon: it chooses or proposes a useful current
-move and near-term agenda, observes what happens, and chooses again. It does
+move and near-term constraints or attention, observes what happens, and chooses again. It does
 not compile a whole course into a rigid workflow. This is the same reason plan,
 study, review, and assignment behavior remain policy profiles over one loop.
 
@@ -206,8 +208,8 @@ table in one universal graph.
 | domain foundation     | optional reusable concepts, capabilities, task families, aliases, and reviewed relations                            | that every course or subject needs a populated foundation                                       |
 | course view           | one versioned ordered learning/curricular view, its items, authored order, sparse typed relations, and provenance   | that one learner mastered it or must study an item today                                        |
 | material map          | revision-bound material outline, exact selectors, and optional neutral many-to-many alignment to exact Course items | that exposition order proves prerequisites or that alignment is complete or pedagogically typed |
-| learner record        | route progress, meaningful activities, reports, observations, evidence, correctable hypotheses, and source links    | a single global mastery score or today's plan                                                   |
-| agenda                | learner-owned goals, assignments, deadlines, revisits, commitments, deferrals, temporary focus, and intended rejoin | permanent curriculum structure or learner ability                                               |
+| learner record        | navigation continuity, meaningful activities, reports, observations, evidence, correctable hypotheses, and source links | a single global mastery score or today's plan                                                |
+| agenda family         | composition and discovery across separately owned Goal, future-attention, Assignment, planning, and consumer-earned detour/commitment meanings | one shared lifecycle, transaction, generic record type, permanent curriculum structure, or learner ability |
 | Tutor policy          | hard constraints, policy profiles, scoped learner steering, and future stable defaults                              | a second runtime or evidence about the learner                                                  |
 | current learning view | a bounded query result for one model sample                                                                         | a new source of truth or durable summary that replaces its sources                              |
 
@@ -216,17 +218,18 @@ table in one universal graph.
 ALS-019 requires three distinguishable meanings, but not three fields in one
 table:
 
-- learner/course progress owns the broad route anchor;
-- the agenda may own a temporary current focus; and
-- the same agenda item may name the intended rejoin point.
+- learner navigation continuity owns the broad route anchor;
+- the current Interaction normally owns temporary focus; and
+- a demonstrated cross-Turn consumer may earn a distinct detour/rejoin
+  authority within the agenda family.
 
 The current production slice may physically colocate route-progress storage
 with Course View code. That does not transfer semantic ownership to the
-curricular structure, and a later Agenda slice must not treat the learner's
+curricular structure, and a later detour/rejoin slice must not treat the learner's
 anchor as a course revision.
 
-Target composition derives `activeFocus` from the agenda when a live detour
-exists; otherwise it derives it from route progress. This prevents two durable
+Target composition derives `activeFocus` from an accepted detour when one
+exists; otherwise it derives it from the route anchor. This prevents two durable
 `currentNode` values from drifting while preserving the semantic distinction.
 Production does not yet implement durable detour, intended-rejoin, or derived
 `activeFocus` behavior; they are ownership requirements for a future consumer,
@@ -244,7 +247,8 @@ support several Courses.
 
 An optional durable default Course preference is learner-controlled navigation
 continuity state, not the identity of the only active subject. Invocation
-directory, folder layout, discovered material, Agenda pressure, and model
+directory, folder layout, discovered material, Goal/Assignment/planning
+pressure, future attention, and model
 judgment may surface information or a proposed target, but none may change that
 preference.
 Changing it requires an explicit learner request followed by a visible
@@ -301,8 +305,10 @@ visible in the tool record. No implicit “global” search spans all LearnerHom
 roots or the computer. An unapproved path still follows the ordinary directory
 permission flow.
 
-Repa-owned state, cache, derived-artifact, and system-provided soft-memory
-locations are freely writable by the product within their fixed boundaries.
+Repa-owned state, cache, and derived-artifact locations are freely writable by
+the product within their fixed boundaries. A later system-provided
+soft-memory location would need its own fixed ownership and admission boundary;
+the current baseline does not gain one by naming it here.
 Approval of a user content root does not itself approve mutation. A write under
 a content root or narrower working subtree is evaluated separately and may be
 allowed once, rejected, or permanently allowed for a canonical path scope.
@@ -476,6 +482,21 @@ ContentRoot grant, workspace full control, or computer full access. Repa must
 not claim a workspace or computer containment boundary until its execution
 backend actually enforces that claim on the supported platform.
 
+A machine-owned custom Agent may deliberately receive all capabilities or a
+restricted subset. When a learner selects a restricted subset, its compiled
+policy is default-deny with explicit allows drawn from one authoritative
+capability/permission catalog. An omitted or newly registered capability stays
+denied until explicitly admitted; a stale UI checklist plus a wildcard
+`allow` cannot silently grant durable learning writes or external effects.
+
+Reachable outward identity is product behavior, unlike inherited internal
+package namespaces. Repa-owned config creation or migration does not insert
+upstream product schemas, help surfaces do not present upstream documentation
+as Repa help, and provider/network metadata identifies Repa or remains neutral.
+An exact legacy integration literal may remain only when a third-party provider
+contract demonstrably requires it; that bounded interoperability exception is
+recorded and tested rather than treated as OpenCode product membership.
+
 Directory discovery and semantic interpretation have different owners. The
 program enumerates only authorized paths, applies ignore and size bounds,
 records canonical location, media type and exact content revision, and exposes
@@ -535,8 +556,12 @@ and learning-authority invariants. Retention is decided per behavior, not by
 renaming or copying a command list. Commands such as undo, fork, and compact
 must be audited against already committed learning effects; excluded cloud or
 sharing commands do not re-enter merely because the UI supports them. The
-baseline defines no Repa-specific Tutor slash-command catalog. Such commands
-arrive only when a real repeated product action earns one.
+baseline does not pre-author a general Repa-specific Tutor slash-command
+catalog. A visible control envelope arrives only when a real repeated product
+action earns one. Any retained learning shortcut must be discoverable through
+the primary TUI and preserve trusted admission provenance across carriers. A
+shortcut is not a mode system, a catalog of learning workflows, proof of
+new-versus-continue intent, or domain-write authority.
 
 ## Course, domain, and material ontology
 
@@ -730,8 +755,8 @@ Research and route creation use the same Tutor loop and ordinary Agent
 capabilities; they are not a separate course-builder runtime.
 
 ```text
-learner: "I want to learn X"
--> use the admitted request as the immediate learning intent
+learner: "I want to learn X" (possibly through an explicitly admitted shortcut)
+-> use the admitted deliberate request as the immediate learning intent
 -> optionally inspect local sources and/or research with ordinary read tools
 -> if local material is adopted, admit exact Artifact state
 -> when needed, derive or admit exact Representation and Material Map state
@@ -746,15 +771,23 @@ but neither is a bootstrap prerequisite. Artifact admission and Course/View
 formation retain separate domain ownership while sharing the learning-command
 settlement seam.
 
-The current learner request authorizes a routine, local, reversible working
-route. It does not authorize the model to create verified learner ability or a
-hard curricular blocker.
+A deliberate learner request may authorize a routine, local, reversible
+working route through the owning commands. Whether a prefix is required is a
+product-admission decision rather than an architectural default; syntax alone
+neither grants that authority nor forbids an otherwise exact request. No form
+authorizes the model to create verified learner ability or a hard curricular
+blocker. Ordinary transient web research without an admitted exact remote
+Artifact/snapshot leaves resulting assertions model/Tutor-proposed rather than
+source-grounded.
 
 A model-prior-only outline may be used for orientation when explicitly marked
-provisional. Source-grounded or reviewed assertions have stronger planning
-authority. A later syllabus or curated foundation creates a new course
-revision and an explicit reconciliation from old item identities; it does not
-turn the first outline into hidden truth or silently discard progress.
+provisional. Source grounding or review can justify uses that model prior alone
+cannot, but the basis labels are not a global confidence or planning-authority
+ladder. The exact accepted claim, source authority, relevance, and consuming
+decision determine its legal use. A later syllabus or curated foundation
+creates a new course revision and an explicit reconciliation from old item
+identities; it does not turn the first outline into hidden truth or silently
+discard progress.
 
 Creating a route is optional. A direct learner question may be answered well
 without first constructing a course ontology or persisting a plan.
@@ -794,7 +827,7 @@ The architecture deliberately rejects one overloaded `revision` number.
 | ----------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | Session sequence        | order of durable interaction items in one Session                                                       | learning-state conflict detection                              |
 | commit sequence         | monotonic local order/watermark of committed domain changes                                             | rejecting a command merely because an unrelated course changed |
-| entity version          | optimistic precondition for one mutable goal, agenda item, progress record, or other aggregate          | material content identity                                      |
+| entity version          | optimistic precondition for one mutable Goal, future-attention concern, Assignment, plan, learner record, or other aggregate | material content identity |
 | course-view revision    | immutable identity of one route/structure view                                                          | ordering Session messages                                      |
 | artifact revision       | content identity, normally a digest or source-native immutable revision                                 | learner-state confidence                                       |
 | policy profile revision | identity of selected Tutor defaults and enforced overlays                                               | domain evidence                                                |
@@ -816,7 +849,7 @@ Context construction has three depths:
 
 | Depth                | Typical contents                                                                                                                           | Delivery                                           |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
-| routine current view | relevant goals/course candidates, route anchor/current focus, urgent agenda items, time budget, active steering, compact source references | compiled automatically when relevant               |
+| routine current view | relevant Goals/Course candidates, route anchor/current focus, due future attention, Assignment/planning constraints, time budget, active steering, compact source references | compiled automatically when relevant |
 | current-move detail  | route neighborhood, exact material range, active assignment/revisit, recent activity or evidence that changes the move                     | selected during composition or read through a tool |
 | cold detail          | complete old Sessions, full attempts, superseded interpretations, full course maps, unrelated materials                                    | lazy search/read only                              |
 
@@ -847,20 +880,23 @@ filters the relevant content or read capability from that sample. This reuses
 ordinary context and permission mechanics and does not admit an answer
 classifier or parallel material-loading system.
 
-Context may also contain **soft workspace memory**: a small, scoped file-backed
-contribution for directory conventions, expression/collaboration preferences,
-resource paths, working notes, or maintainer summaries. The LLM may manage this
-content and initiate ordinary file writes. It remains advisory context rather
-than Course, Agenda, Learner Record, or Tutor-policy authority. The host binds
-the canonical root, path, digest, scope, loading reason, expected revision,
-safety policy, and write receipt; a user can inspect, edit, or delete the source
-directly.
+An optional future **soft workspace memory** contribution could carry scoped
+directory conventions, expression/collaboration preferences, resource paths,
+working notes, or maintainer summaries. If a demonstrated consumer earns it,
+the host must bind canonical root, path, digest, scope, loading reason, expected
+revision, safety policy, and write receipt, while keeping the content advisory
+rather than Course, agenda-family, Learner Record, or Tutor-policy authority.
+The current production baseline has no dedicated producer, admission,
+correction, or Context owner for this contribution. Gate 18 must not invent it
+merely because this architecture records the possible boundary. Ordinary
+machine-owned instructions and project-origin untrusted files keep their
+existing harness and Gate 10 meanings.
 
 Only a demonstrated consumer that needs deterministic calculation, legal
 transition, strong conflict detection, permission, or stable learning meaning
 promotes file content through an explicit source-linked domain command. This
-keeps lightweight memory flexible without letting prose silently acquire
-machine authority.
+preserves a future lightweight-memory option without letting prose silently
+acquire machine authority.
 
 This depth policy governs Learning-System contributions and retrieval across
 Sessions; it does not mean silently truncating the active conversation. Within
@@ -868,11 +904,12 @@ one Session, model-visible history remains verbatim while it fits the model
 window. Near a measured context threshold, the harness compacts an older head,
 keeps a recent verbatim tail, and preserves the original durable transcript.
 The compaction result is continuation context with provenance, not a learning
-fact or replacement for Course, Agenda, or learner-record state. Context-limit
+fact or replacement for Course, agenda-family, or learner-record state. Context-limit
 failure and compaction failure remain explicit terminal outcomes.
 
-The first sample in a fresh Session uses the current request, active agenda,
-recent durable focus, and small home-level candidates to resolve scope. If
+The first sample in a fresh Session uses the current request, relevant Goal,
+future-attention, Assignment and planning state, recent durable focus, and
+small home-level candidates to resolve scope. If
 several choices would produce materially different behavior, the context
 contains a bounded candidate list and the Tutor asks or chooses reversibly. It
 does not load every course to avoid one clarification.
@@ -882,8 +919,8 @@ prompt:
 
 - selected facts and compact projections;
 - typed source references and dependency versions;
-- bounded soft-memory contributions with path, digest, scope, and loading
-  reason;
+- future bounded soft-memory contributions only after their own admission and
+  correction owner exists, with path, digest, scope, and loading reason;
 - policy contributions with priority and provenance;
 - the capability set available to this sample; and
 - explicit omissions or truncation when a budget is reached.
@@ -901,22 +938,27 @@ semantic judgment inside that space, including explanation, research, examples,
 route proposals, semantic work decomposition, and interaction-level adaptation.
 The learner owns goals and can steer or interrupt.
 
-Policy resolves in this order:
+Policy resolves per proposed action and applicable scope rather than choosing
+one record-level winner:
 
-1. hard safety, domain legality, and external-effect permission;
-2. the learner's explicit current request;
-3. still-applicable retained learner steering;
-4. real commitments and constraints exposed by the agenda;
-5. the selected policy profile and stable defaults; and
-6. model judgment for the current interaction.
+1. hard safety, domain legality, and external-effect permission always apply;
+2. the learner's explicit current request controls what it actually specifies;
+3. still-applicable retained steering continues to govern non-overlapping
+   behavior and yields locally only to a clearly more specific overlapping
+   current request;
+4. exact Goal, future-attention, Assignment, planning, and other commitments
+   expose real constraints and trade-offs without silently overriding the
+   learner;
+5. the selected policy profile and stable defaults fill remaining policy; and
+6. model judgment realizes the current interaction inside those bounds.
 
-Agenda facts do not always override the learner; they make the trade-off
-visible. A goal change creates or supersedes goal/agenda state and triggers a
-new current view. It does not rewrite the course structure or learner evidence.
+A Goal change creates or supersedes Goal state and causes the current view to
+be recompiled. It does not mutate a generic Agenda record, rewrite Course
+structure, or invent learner evidence.
 
 ALS-021 demonstrates that making a durable reason visible is not equivalent to
 selecting it as the purpose of the current move. In all eight tested
-independent-prediction returns, the eligible Agenda reason survived into the
+independent-prediction returns, the eligible future-attention reason survived into the
 fresh Session, yet the Tutor disclosed the answer before the unaided
 opportunity that the reason required. Candidate state and selected control
 intent therefore need distinct representation in composition.
@@ -938,24 +980,24 @@ leakage in 8/8; candidate exposure alone had produced 0/8. When durable state
 is chosen to govern a move, selected purpose is therefore a real composition
 meaning, not an optional wording convention.
 
-The selection is bounded to the current control interval. Agenda continues to
-own the candidate; Tutor composition owns the active projection; interaction
-owns any completed occurrence. Selection does not address the concern, create
-evidence, or survive into a new Turn merely because the candidate remains
-durable. Material reads and other non-mutating continuation may preserve the
-selection in a newly compiled cut. Failure or interruption ends it without
-inventing service.
+The selection is bounded to the current control interval. The
+future-attention authority continues to own the candidate; Tutor composition
+owns the active projection; interaction owns any completed occurrence.
+Selection does not address the concern, create evidence, or survive into a new
+Turn merely because the candidate remains durable. Material reads and other
+non-mutating continuation may preserve the selection in a newly compiled cut.
+Failure or interruption ends it without inventing service.
 
 ALS-022B/C reject a mandatory universal model selector as the baseline.
 `Agenda candidate | none` produced false provenance and only 12/22 strict
 passes; an exact `current request | candidate | unresolved` source choice still
-passed only 10/18 and ignored Agenda in every generic continuation. The
+passed only 10/18 and ignored the candidate in every generic continuation. The
 production-default model is not the sole authority for that general control
 decision.
 
 ALS-022D supports a simpler bounded topology for the demonstrated
 one-candidate case. Composition filters eligibility and target freshness,
-preserves exact source meaning, and may bind one legal Agenda concern as a
+preserves exact source meaning, and may bind one legal future-attention concern as a
 **conditional default** inside the ordinary realizing sample. The exact
 admitted learner request remains higher priority. An incompatible direct
 request, requested form, completed occurrence, or redirection overrides the
@@ -969,8 +1011,9 @@ settles them. Do not hide a universal scheduler or classifier behind the word
 selection. The tested conditional default also restated one known
 independent-prediction constraint. ALS-022E removed that restatement and strict
 validity fell to 3/8: exact source reason plus default status did not reliably
-stop answer or decisive-rule disclosure. For this demonstrated concern, Agenda
-must preserve an explicit source-bound learner-role constraint equivalent to
+stop answer or decisive-rule disclosure. For this demonstrated concern, the
+future-attention authority must preserve an explicit source-bound learner-role
+constraint equivalent to
 `learner response before Tutor disclosure of answer or decisive hint`, and
 Tutor composition renders it as operative. It affects both realization and
 whether a guided occurrence can truthfully serve the concern. This one earned
@@ -982,7 +1025,7 @@ teaching, or share incidental prose with the persisted assistant answer before
 the program validates and binds source/version/scope. This remains a phase in
 the same finite loop, not another runtime. ALS-022A/D/E also expose a presentation
 defect: current pre-tool and control-rationale text can enter learner-visible
-`outcome.text`; production Tutor prose must not reveal internal Agenda/control
+`outcome.text`; production Tutor prose must not reveal internal selection/control
 vocabulary merely because the model narrated it.
 
 A conversational move such as explaining an idea may happen without a domain
@@ -1002,19 +1045,20 @@ working interpretation such as “the current representation may be the problem�
 can guide the next conversational move without becoming a learner record. If a
 future action genuinely needs durable meaning, its existing authority owns it:
 
-- route progress owns navigation continuity;
-- Agenda owns a specific reason or commitment to return;
+- learner navigation owns navigation continuity;
+- the future-attention authority owns a specific reason or commitment to
+  return;
 - learner history/evidence owns an actual response or artifact and the
   conditions consumed by a later decision; and
 - Session history retains the full explanation and immediate dialogue.
 
-Review is a Tutor move, not one stored object type. A durable revisit is an
-Agenda-owned, source-linked future-attention concern: there is a reason to
+Review is a Tutor move, not one stored object type. A durable revisit is a
+source-linked future-attention concern: there is a reason to
 return to a target under a trigger or time condition. It preserves enough
 bounded meaning to distinguish why the system should return without absorbing
-the old interaction, activity conditions, or learner evidence into Agenda.
-`Future-attention concern` is behavioral language for this Agenda meaning, not
-a required class name or a generic record shared by all future work.
+the old interaction, activity conditions, or learner evidence into that
+authority. `Future-attention concern` is behavioral language, not a required
+class name or a generic record shared by all future work in the agenda family.
 
 Beginning the return does not settle the concern. A later recall, explanation,
 comparison, application, or real task may serve it only through an explicit,
@@ -1024,8 +1068,8 @@ assistant item cannot supply that occurrence. Assistance, result, artifact
 state, and evidence meaning remain with their owning authorities. Serving the
 concern means that the intended future attention occurred; it does not mean the
 learner answered correctly, retained the knowledge, or mastered the target.
-Cancellation or dismissal is an Agenda decision and does not pretend that the
-purpose was served.
+Cancellation or dismissal is a future-attention decision and does not pretend
+that the purpose was served.
 
 Time can make a concern eligible or due without selecting it, beginning it,
 settling it, or claiming that the learner forgot. A failed explanation can also
@@ -1076,7 +1120,8 @@ policy. This is complete mediation metadata, not a plugin platform.
 Generic agent tools can read or change files, search the web, run code, or
 produce artifacts. Their outputs are untrusted observations from the learning
 domain's point of view. Only an explicit learning command may import one of
-those observations into course, material, learner, agenda, or policy state.
+those observations into Course, material, learner, Goal, future-attention,
+Assignment, planning, or policy state.
 
 A learning command is not generic CRUD. It names a meaningful transition and
 owns:
@@ -1100,6 +1145,14 @@ references, versions, and time. Domain payload stays in domain-owned records.
 This is an audit and recovery ledger, not an event store from which the whole
 database must replay.
 
+Consequential permission and settlement meaning has one typed semantic
+projection shared by retained terminal carriers. Before approval, the primary
+TUI shows the exact bound object, scope, operation, lifetime, and material
+warning; an unknown consequential projection fails closed. After settlement,
+committed, already-applied, no-effect, and failed results remain visible even
+if the provider continuation fails. A generic hidden tool-output fallback or a
+later inspection browser cannot satisfy those commit-time obligations.
+
 The receipt and physical invocation settlement form one narrow shared Repa
 substrate across learning commands. That substrate owns trusted invocation,
 replay/conflict handling, execution context, and exact returned settlement.
@@ -1107,6 +1160,29 @@ Each domain authority separately owns the semantic effect address, legal
 transition, entity preconditions, correction, and durable payload. Shared
 settlement therefore does not become a universal learning event or a second
 owner of domain meaning.
+
+Physical dependencies must preserve that direction. Generic invocation and
+receipt storage does not enumerate every command kind, import every domain
+table, or accumulate one nullable foreign key per effect type. A domain-owned
+association binds its typed effect to the generic invocation/receipt while the
+application commits effect, receipt, terminal result, and required projections
+in one transaction. A common executor may compose handlers without becoming a
+second owner of their semantic payload.
+
+Database constraints protect structural invariants of supported application
+transitions: foreign keys, tagged shapes, uniqueness, append-only history,
+version/predecessor relations, and atomic settlement. Arbitrary
+structurally-valid out-of-band SQL is unsupported and is not a security
+boundary; such an actor could remove the constraints themselves. SQLite
+triggers therefore do not parse learner language, reconstruct acknowledgement
+wording, or duplicate the complete application command interpreter.
+
+Trigger DDL is part of the versioned schema even when the table generator does
+not emit it. Historical migrations freeze the exact trigger definitions they
+installed. A trigger change that alters existing behavior receives an explicit
+migration and a fresh-versus-frozen-historical parity check. A current helper
+must not retroactively redefine an old migration or leave two databases at one
+`user_version` with different constraints.
 
 The receipt and the domain records it supports do not inherit Session deletion
 lifecycle. Inherited Session, message, part, and event rows may continue to
@@ -1154,6 +1230,16 @@ complete, typed, correlated items and terminal outcomes. A real learner input,
 synthetic or compaction input, model operation, physical tool invocation,
 context cut, provider completion, tool settlement, and Turn completion remain
 distinct.
+
+While a Turn is running, ordinary submission in the primary TUI is an editable
+local draft for a later root Turn; it is not yet a learner occurrence or a
+durable queue item. Explicit **steer** targets the exact visible running Turn
+and becomes a durable learner input inside that Turn only when the runner
+promotes it at a safe continuation boundary. A target mismatch or terminal
+Turn cannot silently convert it into an admitted steer. These are input
+delivery semantics around model/tool work, not a durable macro-learning
+activity, retained scoped steering, Course route choice, or evidence that a
+request means “new” versus “continue.”
 
 At startup, ambiguous in-flight work is marked interrupted and is not blindly
 redispatched. Exact settled commands replay their receipts; new semantic work
@@ -1217,9 +1303,9 @@ overdue, and expired state from stored times and the trusted clock.
 
 - Material, web, and tool output is untrusted content, never privileged prompt
   policy.
-- Model-written workspace memory is advisory, scoped content. It cannot grant
-  capabilities, override current learner intent or typed policy, or assert
-  learning evidence merely by being loaded.
+- Any future model-written workspace memory is advisory, scoped content. It
+  cannot grant capabilities, override current learner intent or typed policy,
+  or assert learning evidence merely by being loaded.
 - Filesystem tools are confined to declared LearningSpace/workspace roots
   unless the learner grants a broader capability.
 - Provider and model identifiers are runtime metadata, not learning evidence.
@@ -1260,7 +1346,7 @@ Repa product composition
   sources/artifacts         origins, revisions, representations
   curriculum/materials      Course View, Material Map, exact selectors, alignment
   learner                   progress, activity, evidence, inference
-  agenda                    goals, assignments, cross-day plans, revisits, commitments
+  agenda-family composition Goal, future attention, Assignment, planning, later earned commitments
   tutor policy/context      scoped policy and bounded sample composition
   outer capabilities        providers, files, shell, web, MCP, subagents
   terminal                  Repa CLI/TUI projection
@@ -1289,7 +1375,7 @@ layer, or treated as the final package topology.
 | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `run-tutor-turn.ts`, pre-fork CLI/provider adapter, and `interaction/records.ts`                           | retain in the immutable oracle as Turn/context/tool/failure evidence; never import or edit them during fork cutover                     |
 | pre-fork `session_item`, `model_operation`, `tool_invocation`, `system_state`, and `durable_effect` tables | do not migrate or mirror; preserve accepted invariants through the native Session/message/part and domain schemas                       |
-| Course, material, Agenda, policy, and context modules                                                      | port their owned semantics and behavioral tests; rewrite trusted identities, transactions, and foreign keys against the native database |
+| Course, material, agenda-family, policy, and context modules                                               | port each owned semantic and behavioral test; rewrite trusted identities, transactions, and foreign keys against the native database    |
 | pre-fork AI SDK tool bindings                                                                              | leave in the oracle; bind learning capabilities independently through the fork's native tool admission and atomic settlement path       |
 | pre-fork one-string assistant history                                                                      | replace with inherited typed items; never preserve flattened output for compatibility                                                   |
 | pre-fork production tests                                                                                  | classify as invariant or old API; port invariant assertions and leave old-API-only tests as historical oracle evidence                  |
@@ -1354,7 +1440,8 @@ Architecture-level behavioral checks must continue to cover:
 - a fresh Session uses relevant state without transcript replay;
 - context does not eagerly load full courses/materials/history;
 - generic tool output cannot mutate learning state by itself;
-- goal changes alter agenda without rewriting course/evidence;
+- Goal changes recompile dependent views without rewriting Course/evidence or
+  mutating a generic Agenda record;
 - one learner error does not mutate shared curriculum;
 - provisional model routes remain visibly provisional and correctable;
 - stale material selectors fail closed; and

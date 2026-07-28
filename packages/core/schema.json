@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "60016a3f-093d-4d77-803f-135282c17700",
+  "id": "414e1d6b-6036-4871-8282-cd8fe9561655",
   "prevIds": [
-    "5ea53e31-6ec7-4301-bfef-68eefa2cfde3"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -111,6 +111,10 @@
       "entityType": "tables"
     },
     {
+      "name": "course_selection_acceptance_commit_seal",
+      "entityType": "tables"
+    },
+    {
       "name": "course_selection_acceptance_effect",
       "entityType": "tables"
     },
@@ -171,6 +175,10 @@
       "entityType": "tables"
     },
     {
+      "name": "learner_goal_command",
+      "entityType": "tables"
+    },
+    {
       "name": "learner_goal_commit_seal",
       "entityType": "tables"
     },
@@ -228,6 +236,18 @@
     },
     {
       "name": "learner_default_course_transition",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_course_route_anchor_commit_seal",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_default_course_command",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_default_course_commit_seal",
       "entityType": "tables"
     },
     {
@@ -299,6 +319,10 @@
       "entityType": "tables"
     },
     {
+      "name": "representation_command_commit_seal",
+      "entityType": "tables"
+    },
+    {
       "name": "representation_continued_use_grant",
       "entityType": "tables"
     },
@@ -308,6 +332,10 @@
     },
     {
       "name": "representation_revision",
+      "entityType": "tables"
+    },
+    {
+      "name": "retained_steering_command",
       "entityType": "tables"
     },
     {
@@ -2654,6 +2682,36 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "course_selection_acceptance_effect"
@@ -3597,6 +3655,56 @@
       "name": "data",
       "entityType": "columns",
       "table": "event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_goal_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_fingerprint",
+      "entityType": "columns",
+      "table": "learner_goal_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_snapshot",
+      "entityType": "columns",
+      "table": "learner_goal_command"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "learner_goal_command"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "confirmation_snapshot",
+      "entityType": "columns",
+      "table": "learner_goal_command"
     },
     {
       "type": "text",
@@ -4844,6 +4952,86 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "learner_default_course_command"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "part_id",
       "entityType": "columns",
       "table": "learning_command_invocation"
@@ -4970,36 +5158,6 @@
     },
     {
       "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "retained_steering_semantic_fingerprint",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "goal_semantic_fingerprint",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "goal_command_snapshot",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -5014,77 +5172,7 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "effect_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "representation_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "default_navigation_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "anchor_navigation_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "retained_steering_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "goal_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "permission_request_id",
-      "entityType": "columns",
-      "table": "learning_command_invocation"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "goal_confirmation_snapshot",
+      "name": "receipt_id",
       "entityType": "columns",
       "table": "learning_command_invocation"
     },
@@ -5235,86 +5323,6 @@
       "default": null,
       "generated": null,
       "name": "authorization_basis",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "effect_id",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "representation_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "default_navigation_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "anchor_navigation_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "retained_steering_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "goal_effect_id",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "permission_request_id",
-      "entityType": "columns",
-      "table": "learning_command_receipt"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "confirmation_snapshot",
       "entityType": "columns",
       "table": "learning_command_receipt"
     },
@@ -6824,6 +6832,36 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "representation_command_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "representation_command_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "representation_command_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "representation_continued_use_grant"
@@ -7687,6 +7725,26 @@
       "name": "time_accepted",
       "entityType": "columns",
       "table": "representation_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "retained_steering_command"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_fingerprint",
+      "entityType": "columns",
+      "table": "retained_steering_command"
     },
     {
       "type": "text",
@@ -11249,6 +11307,51 @@
     },
     {
       "columns": [
+        "effect_id"
+      ],
+      "tableTo": "course_selection_acceptance_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_selection_acceptance_commit_seal_effect_id_course_selection_acceptance_effect_id_fk",
+      "entityType": "fks",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_selection_acceptance_commit_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_course_selection_acceptance_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "columns": [
         "occurrence_id"
       ],
       "tableTo": "learning_admitted_occurrence",
@@ -11667,6 +11770,66 @@
       "name": "fk_event_aggregate_id_event_sequence_aggregate_id_fk",
       "entityType": "fks",
       "table": "event"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_command_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_command"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_goal_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_commit_seal_effect_id_learner_goal_effect_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_commit_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_goal_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_goal_commit_seal"
     },
     {
       "columns": [
@@ -12217,6 +12380,111 @@
     },
     {
       "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_course_route_anchor_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_course_route_anchor_commit_seal_effect_id_learner_course_route_anchor_transition_id_fk",
+      "entityType": "fks",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_course_route_anchor_commit_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_course_route_anchor_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_command_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_command"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_default_course_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_commit_seal_effect_id_learner_default_course_transition_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_commit_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "columns": [
         "occurrence_id"
       ],
       "tableTo": "learning_admitted_occurrence",
@@ -12227,96 +12495,6 @@
       "onDelete": "RESTRICT",
       "nameExplicit": false,
       "name": "fk_learning_command_invocation_occurrence_id_learning_admitted_occurrence_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "columns": [
-        "effect_id"
-      ],
-      "tableTo": "course_selection_acceptance_effect",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_invocation_effect_id_course_selection_acceptance_effect_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "columns": [
-        "representation_effect_id"
-      ],
-      "tableTo": "representation_effect",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_invocation_representation_effect_id_representation_effect_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "columns": [
-        "default_navigation_effect_id"
-      ],
-      "tableTo": "learner_default_course_transition",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_invocation_default_navigation_effect_id_learner_default_course_transition_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "columns": [
-        "anchor_navigation_effect_id"
-      ],
-      "tableTo": "learner_course_route_anchor_transition",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_invocation_anchor_navigation_effect_id_learner_course_route_anchor_transition_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "columns": [
-        "retained_steering_effect_id"
-      ],
-      "tableTo": "retained_steering_transition",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_invocation_retained_steering_effect_id_retained_steering_transition_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "columns": [
-        "goal_effect_id"
-      ],
-      "tableTo": "learner_goal_effect",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_invocation_goal_effect_id_learner_goal_effect_id_fk",
       "entityType": "fks",
       "table": "learning_command_invocation"
     },
@@ -12347,96 +12525,6 @@
       "onDelete": "RESTRICT",
       "nameExplicit": false,
       "name": "fk_learning_command_receipt_invocation_part_id_learning_command_invocation_part_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "effect_id"
-      ],
-      "tableTo": "course_selection_acceptance_effect",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_receipt_effect_id_course_selection_acceptance_effect_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "representation_effect_id"
-      ],
-      "tableTo": "representation_effect",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_receipt_representation_effect_id_representation_effect_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "default_navigation_effect_id"
-      ],
-      "tableTo": "learner_default_course_transition",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_receipt_default_navigation_effect_id_learner_default_course_transition_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "anchor_navigation_effect_id"
-      ],
-      "tableTo": "learner_course_route_anchor_transition",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_receipt_anchor_navigation_effect_id_learner_course_route_anchor_transition_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "retained_steering_effect_id"
-      ],
-      "tableTo": "retained_steering_transition",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_receipt_retained_steering_effect_id_retained_steering_transition_id_fk",
-      "entityType": "fks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "goal_effect_id"
-      ],
-      "tableTo": "learner_goal_effect",
-      "columnsTo": [
-        "id"
-      ],
-      "onUpdate": "NO ACTION",
-      "onDelete": "RESTRICT",
-      "nameExplicit": false,
-      "name": "fk_learning_command_receipt_goal_effect_id_learner_goal_effect_id_fk",
       "entityType": "fks",
       "table": "learning_command_receipt"
     },
@@ -12922,6 +13010,51 @@
     },
     {
       "columns": [
+        "effect_id"
+      ],
+      "tableTo": "representation_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_command_commit_seal_effect_id_representation_effect_id_fk",
+      "entityType": "fks",
+      "table": "representation_command_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_command_commit_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "representation_command_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_representation_command_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "representation_command_commit_seal"
+    },
+    {
+      "columns": [
         "effective_artifact_id"
       ],
       "tableTo": "artifact",
@@ -13130,6 +13263,66 @@
       "name": "fk_representation_revision_content_root_id_content_root_grant_episode_id_content_root_binding_id_content_root_binding_episode_id_content_root_grant_version_content_root_grant_episode_content_root_id_id_binding_id_binding_episode_id_ordinal_fk",
       "entityType": "fks",
       "table": "representation_revision"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_command_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_command"
+    },
+    {
+      "columns": [
+        "transition_id"
+      ],
+      "tableTo": "retained_steering_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_commit_seal_transition_id_retained_steering_transition_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_commit_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_retained_steering_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "retained_steering_commit_seal"
     },
     {
       "columns": [
@@ -14245,6 +14438,15 @@
     },
     {
       "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": false,
+      "name": "course_selection_acceptance_commit_seal_pk",
+      "table": "course_selection_acceptance_commit_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -14344,6 +14546,15 @@
     },
     {
       "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_goal_command_pk",
+      "table": "learner_goal_command",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "effect_id"
       ],
       "nameExplicit": false,
@@ -14430,6 +14641,33 @@
       "nameExplicit": false,
       "name": "learner_default_course_transition_pk",
       "table": "learner_default_course_transition",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_course_route_anchor_commit_seal_pk",
+      "table": "learner_course_route_anchor_commit_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_default_course_command_pk",
+      "table": "learner_default_course_command",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_default_course_commit_seal_pk",
+      "table": "learner_default_course_commit_seal",
       "entityType": "pks"
     },
     {
@@ -14578,6 +14816,15 @@
     },
     {
       "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": false,
+      "name": "representation_command_commit_seal_pk",
+      "table": "representation_command_commit_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -14601,6 +14848,15 @@
       "nameExplicit": false,
       "name": "representation_revision_pk",
       "table": "representation_revision",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "retained_steering_command_pk",
+      "table": "retained_steering_command",
       "entityType": "pks"
     },
     {
@@ -15963,6 +16219,24 @@
     {
       "columns": [
         {
+          "value": "receipt_id",
+          "isExpression": false
+        },
+        {
+          "value": "part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learning_command_invocation_receipt_idx",
+      "entityType": "indexes",
+      "table": "learning_command_invocation"
+    },
+    {
+      "columns": [
+        {
           "value": "occurrence_id",
           "isExpression": false
         },
@@ -17249,6 +17523,24 @@
     },
     {
       "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": true,
+      "name": "course_selection_acceptance_commit_seal_receipt_unique",
+      "entityType": "uniques",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": true,
+      "name": "course_selection_acceptance_commit_seal_invocation_unique",
+      "entityType": "uniques",
+      "table": "course_selection_acceptance_commit_seal"
+    },
+    {
+      "columns": [
         "occurrence_id",
         "course_id"
       ],
@@ -17516,6 +17808,42 @@
     },
     {
       "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_course_route_anchor_commit_seal_receipt_unique",
+      "entityType": "uniques",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_course_route_anchor_commit_seal_invocation_unique",
+      "entityType": "uniques",
+      "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_default_course_commit_seal_receipt_unique",
+      "entityType": "uniques",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_default_course_commit_seal_invocation_unique",
+      "entityType": "uniques",
+      "table": "learner_default_course_commit_seal"
+    },
+    {
+      "columns": [
         "assistant_message_id",
         "provider_call_id"
       ],
@@ -17533,60 +17861,6 @@
       "name": "learning_command_invocation_assistant_ordinal_unique",
       "entityType": "uniques",
       "table": "learning_command_invocation"
-    },
-    {
-      "columns": [
-        "effect_id"
-      ],
-      "nameExplicit": true,
-      "name": "learning_command_receipt_effect_unique",
-      "entityType": "uniques",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "representation_effect_id"
-      ],
-      "nameExplicit": true,
-      "name": "learning_command_receipt_representation_effect_unique",
-      "entityType": "uniques",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "default_navigation_effect_id"
-      ],
-      "nameExplicit": true,
-      "name": "learning_command_receipt_default_navigation_effect_unique",
-      "entityType": "uniques",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "anchor_navigation_effect_id"
-      ],
-      "nameExplicit": true,
-      "name": "learning_command_receipt_anchor_navigation_effect_unique",
-      "entityType": "uniques",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "retained_steering_effect_id"
-      ],
-      "nameExplicit": true,
-      "name": "learning_command_receipt_retained_steering_effect_unique",
-      "entityType": "uniques",
-      "table": "learning_command_receipt"
-    },
-    {
-      "columns": [
-        "goal_effect_id"
-      ],
-      "nameExplicit": true,
-      "name": "learning_command_receipt_goal_effect_unique",
-      "entityType": "uniques",
-      "table": "learning_command_receipt"
     },
     {
       "columns": [
@@ -17697,6 +17971,24 @@
       "name": "representation_availability_operation_unique",
       "entityType": "uniques",
       "table": "representation_availability_event"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": true,
+      "name": "representation_command_commit_seal_receipt_unique",
+      "entityType": "uniques",
+      "table": "representation_command_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": true,
+      "name": "representation_command_commit_seal_invocation_unique",
+      "entityType": "uniques",
+      "table": "representation_command_commit_seal"
     },
     {
       "columns": [
@@ -18557,6 +18849,30 @@
       "table": "course_working_selection"
     },
     {
+      "value": "length(\"semantic_fingerprint\") = 64 AND \"semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_goal_command_fingerprint",
+      "entityType": "checks",
+      "table": "learner_goal_command"
+    },
+    {
+      "value": "json_valid(\"command_snapshot\") AND json_type(\"command_snapshot\") = 'object'",
+      "name": "learner_goal_command_snapshot",
+      "entityType": "checks",
+      "table": "learner_goal_command"
+    },
+    {
+      "value": "\"permission_request_id\" IS NULL OR length(\"permission_request_id\") > 0",
+      "name": "learner_goal_command_permission",
+      "entityType": "checks",
+      "table": "learner_goal_command"
+    },
+    {
+      "value": "\"confirmation_snapshot\" IS NULL OR (json_valid(\"confirmation_snapshot\") AND json_type(\"confirmation_snapshot\") = 'object')",
+      "name": "learner_goal_command_confirmation",
+      "entityType": "checks",
+      "table": "learner_goal_command"
+    },
+    {
       "value": "\"ordinal\" BETWEEN 0 AND 15",
       "name": "learner_goal_condition_ordinal",
       "entityType": "checks",
@@ -18857,19 +19173,25 @@
       "table": "learner_default_course_transition"
     },
     {
+      "value": "length(\"permission_request_id\") > 0",
+      "name": "learner_default_course_command_permission",
+      "entityType": "checks",
+      "table": "learner_default_course_command"
+    },
+    {
       "value": "length(\"provider_call_id\") > 0",
       "name": "learning_command_invocation_call_nonempty",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "\"command_name\" IN ('accept_course_view_revision', 'representation.convert', 'set_default_course_preference', 'set_course_route_anchor', 'update_retained_learning_steering', 'update_learner_goals')",
-      "name": "learning_command_invocation_command",
+      "value": "length(\"command_name\") > 0",
+      "name": "learning_command_invocation_command_nonempty",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "\"command_version\" = 1",
+      "value": "\"command_version\" >= 1",
       "name": "learning_command_invocation_command_version",
       "entityType": "checks",
       "table": "learning_command_invocation"
@@ -18893,44 +19215,14 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"command_name\" = 'accept_course_view_revision' AND \"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1) OR (\"command_name\" = 'representation.convert' AND \"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_default_course_preference' AND \"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1) OR (\"command_name\" = 'set_course_route_anchor' AND \"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1) OR (\"command_name\" = 'update_retained_learning_steering' AND \"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1) OR (\"command_name\" = 'update_learner_goals' AND \"capability_identity\" = 'update_learner_goals' AND \"capability_version\" = 1)",
-      "name": "learning_command_invocation_capability_match",
-      "entityType": "checks",
-      "table": "learning_command_invocation"
-    },
-    {
       "value": "\"authorization_basis\" IN ('learner_request', 'learner_acceptance')",
       "name": "learning_command_invocation_authorization_basis",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"command_name\" = 'set_default_course_preference' AND \"authorization_basis\" = 'learner_acceptance') OR (\"command_name\" = 'set_course_route_anchor' AND \"authorization_basis\" = 'learner_request') OR \"command_name\" NOT IN ('set_default_course_preference', 'set_course_route_anchor')",
-      "name": "learning_command_invocation_navigation_basis",
-      "entityType": "checks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "value": "\"command_name\" <> 'update_retained_learning_steering' OR (\"authorization_basis\" = 'learner_request' AND \"turn_id\" IS NOT NULL AND \"input_id\" IS NOT NULL)",
-      "name": "learning_command_invocation_retained_steering_basis",
-      "entityType": "checks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "value": "length(\"input_fingerprint\") = 64",
+      "value": "length(\"input_fingerprint\") = 64 AND \"input_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
       "name": "learning_command_invocation_fingerprint",
-      "entityType": "checks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "value": "(\"command_name\" = 'update_retained_learning_steering' AND \"retained_steering_semantic_fingerprint\" IS NOT NULL AND length(\"retained_steering_semantic_fingerprint\") = 64 AND \"retained_steering_semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*') OR (\"command_name\" <> 'update_retained_learning_steering' AND \"retained_steering_semantic_fingerprint\" IS NULL)",
-      "name": "learning_command_invocation_retained_steering_semantic_fingerprint",
-      "entityType": "checks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "value": "(\"command_name\" = 'update_learner_goals' AND \"goal_semantic_fingerprint\" IS NOT NULL AND length(\"goal_semantic_fingerprint\") = 64 AND \"goal_semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND json_valid(\"goal_command_snapshot\") AND json_type(\"goal_command_snapshot\") = 'object') OR (\"command_name\" <> 'update_learner_goals' AND \"goal_semantic_fingerprint\" IS NULL AND \"goal_command_snapshot\" IS NULL)",
-      "name": "learning_command_invocation_goal_semantic_fingerprint",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
@@ -18941,26 +19233,14 @@
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"command_name\" = 'set_default_course_preference' AND \"permission_request_id\" IS NOT NULL AND length(\"permission_request_id\") > 0) OR (\"command_name\" = 'update_learner_goals' AND ((\"authorization_basis\" = 'learner_acceptance' AND \"permission_request_id\" IS NOT NULL AND length(\"permission_request_id\") > 0) OR (\"authorization_basis\" = 'learner_request' AND \"permission_request_id\" IS NULL))) OR (\"command_name\" NOT IN ('set_default_course_preference', 'update_learner_goals') AND \"permission_request_id\" IS NULL)",
-      "name": "learning_command_invocation_permission_shape",
-      "entityType": "checks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "value": "(\"command_name\" = 'update_learner_goals' AND \"authorization_basis\" = 'learner_acceptance' AND ((\"status\" = 'applied' AND json_valid(\"goal_confirmation_snapshot\")) OR (\"status\" <> 'applied' AND \"goal_confirmation_snapshot\" IS NULL))) OR (\"command_name\" <> 'update_learner_goals' AND \"goal_confirmation_snapshot\" IS NULL) OR (\"command_name\" = 'update_learner_goals' AND \"authorization_basis\" = 'learner_request' AND \"goal_confirmation_snapshot\" IS NULL)",
-      "name": "learning_command_invocation_goal_confirmation_shape",
-      "entityType": "checks",
-      "table": "learning_command_invocation"
-    },
-    {
-      "value": "(\"status\" = 'admitted' AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"status\" <> 'admitted' AND \"settlement\" IS NOT NULL AND \"time_settled\" IS NOT NULL AND \"settlement_order\" IS NOT NULL)",
+      "value": "(\"status\" = 'admitted' AND \"receipt_id\" IS NULL AND \"settlement\" IS NULL AND \"time_settled\" IS NULL AND \"settlement_order\" IS NULL) OR (\"status\" <> 'admitted' AND json_valid(\"settlement\") AND json_type(\"settlement\") = 'object' AND json_extract(\"settlement\", '$.outcome') = \"status\" AND json_extract(\"settlement\", '$.settlementTime') = \"time_settled\" AND json_extract(\"settlement\", '$.settlementOrder') = \"settlement_order\")",
       "name": "learning_command_invocation_settlement_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
     {
-      "value": "(\"status\" IN ('applied', 'already_applied') AND ((\"command_name\" = 'accept_course_view_revision' AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'representation.convert' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'set_default_course_preference' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'set_course_route_anchor' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'update_retained_learning_steering' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL AND \"goal_effect_id\" IS NULL) OR (\"command_name\" = 'update_learner_goals' AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NOT NULL))) OR (\"status\" IN ('admitted', 'no_change', 'error') AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL)",
-      "name": "learning_command_invocation_effect_shape",
+      "value": "(\"status\" IN ('applied', 'already_applied') AND \"receipt_id\" IS NOT NULL AND length(\"receipt_id\") > 0 AND json_extract(\"settlement\", '$.receiptID') = \"receipt_id\") OR (\"status\" IN ('admitted', 'no_change', 'error') AND \"receipt_id\" IS NULL AND (\"settlement\" IS NULL OR json_extract(\"settlement\", '$.receiptID') IS NULL))",
+      "name": "learning_command_invocation_receipt_shape",
       "entityType": "checks",
       "table": "learning_command_invocation"
     },
@@ -18985,24 +19265,6 @@
     {
       "value": "\"authorization_basis\" IN ('learner_request', 'learner_acceptance')",
       "name": "learning_command_receipt_authorization_basis",
-      "entityType": "checks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "value": "(\"capability_identity\" = 'set_default_course_preference' AND \"authorization_basis\" = 'learner_acceptance') OR (\"capability_identity\" = 'set_course_route_anchor' AND \"authorization_basis\" = 'learner_request') OR \"capability_identity\" NOT IN ('set_default_course_preference', 'set_course_route_anchor')",
-      "name": "learning_command_receipt_navigation_basis",
-      "entityType": "checks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "value": "\"capability_identity\" <> 'update_retained_learning_steering' OR \"authorization_basis\" = 'learner_request'",
-      "name": "learning_command_receipt_retained_steering_basis",
-      "entityType": "checks",
-      "table": "learning_command_receipt"
-    },
-    {
-      "value": "(\"capability_identity\" = 'accept_course_view_revision' AND \"capability_version\" = 1 AND \"effect_id\" IS NOT NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'representation.convert' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NOT NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'set_default_course_preference' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NOT NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NOT NULL AND \"confirmation_snapshot\" IS NOT NULL AND json_valid(\"confirmation_snapshot\")) OR (\"capability_identity\" = 'set_course_route_anchor' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NOT NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'update_retained_learning_steering' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NOT NULL AND \"goal_effect_id\" IS NULL AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"capability_identity\" = 'update_learner_goals' AND \"capability_version\" = 1 AND \"effect_id\" IS NULL AND \"representation_effect_id\" IS NULL AND \"default_navigation_effect_id\" IS NULL AND \"anchor_navigation_effect_id\" IS NULL AND \"retained_steering_effect_id\" IS NULL AND \"goal_effect_id\" IS NOT NULL AND ((\"authorization_basis\" = 'learner_request' AND \"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"authorization_basis\" = 'learner_acceptance' AND \"permission_request_id\" IS NOT NULL AND \"confirmation_snapshot\" IS NOT NULL AND json_valid(\"confirmation_snapshot\"))))",
-      "name": "learning_command_receipt_effect_shape",
       "entityType": "checks",
       "table": "learning_command_receipt"
     },
@@ -19353,6 +19615,12 @@
       "name": "representation_revision_creation_shape",
       "entityType": "checks",
       "table": "representation_revision"
+    },
+    {
+      "value": "length(\"semantic_fingerprint\") = 64 AND \"semantic_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "retained_steering_command_fingerprint",
+      "entityType": "checks",
+      "table": "retained_steering_command"
     },
     {
       "value": "\"time_created\" >= 0",

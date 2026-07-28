@@ -1,5 +1,8 @@
 # V2 Schema Changelog
 
+> **Status — changelog for inherited preview-v2 source, not Repa's production schema history.** Entries below record experimental source changes and may support maintenance or audit. They do not establish Repa migration, data-retirement, release, or roadmap authority; the released-v1 execution path remains the accepted baseline unless a Repa ADR or Gate explicitly changes it.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
 ## 2026-06-26: Add Finite Session History
 
 - Add `GET /api/session/:sessionID/history` and generated Promise, Effect, and legacy JavaScript client methods.

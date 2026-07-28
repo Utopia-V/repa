@@ -49,6 +49,7 @@ import {
 import {
   RepresentationAvailabilityCurrentTable,
   RepresentationAvailabilityEventTable,
+  RepresentationCommandCommitSealTable,
   RepresentationContinuedUseGrantTable,
   RepresentationEffectTable,
   RepresentationRevisionTable,
@@ -1045,11 +1046,15 @@ function resolveConversionTx(
     const existing = yield* tx
       .select()
       .from(RepresentationEffectTable)
+      .innerJoin(
+        RepresentationCommandCommitSealTable,
+        eq(RepresentationCommandCommitSealTable.effect_id, RepresentationEffectTable.id),
+      )
       .where(eq(RepresentationEffectTable.operation_identity, input.authority.operationIdentity))
       .get()
       .pipe(Effect.orDie)
     if (!existing) return { type: "new", semanticFingerprint: input.semanticFingerprint }
-    if (existing.semantic_fingerprint !== input.semanticFingerprint) {
+    if (existing.representation_effect.semantic_fingerprint !== input.semanticFingerprint) {
       return yield* new ConflictError({
         entity: "effect",
         id: input.authority.operationIdentity,
@@ -1059,7 +1064,7 @@ function resolveConversionTx(
     const revision = yield* tx
       .select({ id: RepresentationRevisionTable.id })
       .from(RepresentationRevisionTable)
-      .where(eq(RepresentationRevisionTable.effect_id, existing.id))
+      .where(eq(RepresentationRevisionTable.effect_id, existing.representation_effect.id))
       .get()
       .pipe(Effect.orDie)
     if (!revision) return yield* Effect.die("Committed Representation effect has no immutable Revision")

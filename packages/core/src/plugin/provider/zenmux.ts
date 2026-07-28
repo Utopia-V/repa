@@ -1,4 +1,5 @@
 import { Effect } from "effect"
+import { InstallationProductName } from "../../installation/version"
 import { define } from "../internal"
 
 export const ZenmuxPlugin = define({
@@ -11,8 +12,7 @@ export const ZenmuxPlugin = define({
           if (item.provider.api.package !== "@ai-sdk/openai-compatible") continue
           if (item.provider.api.url !== "https://zenmux.ai/api/v1") continue
           evt.provider.update(item.provider.id, (provider) => {
-            provider.request.headers["HTTP-Referer"] ??= "https://opencode.ai/"
-            provider.request.headers["X-Title"] ??= "opencode"
+            provider.request.headers["X-Title"] ??= InstallationProductName
           })
         }
       }),

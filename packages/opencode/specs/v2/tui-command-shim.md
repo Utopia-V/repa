@@ -1,5 +1,8 @@
 # TUI Command Shim Removal
 
+> **Status — inherited preview-v2 change proposal, not Repa TUI authority.** This file is retained to explain or maintain deferred source. It does not authorize removing released-v1 behavior, changing Repa's TUI contract, or enabling a preview runtime; those changes require an accepted Repa ADR or Gate.
+> Current Repa authority is indexed by the [documentation map](../../../../docs/README.md).
+
 Problem:
 
 - v1 keeps a deprecated `api.command` TUI plugin shim so older plugins do not fail during initialization

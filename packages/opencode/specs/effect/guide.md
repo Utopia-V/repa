@@ -1,7 +1,7 @@
 # Effect Guide
 
-How we write Effect code in `packages/opencode`. The companion roadmap is
-[`todo.md`](./todo.md).
+How we write Effect code in `packages/opencode`. This is source-local
+maintenance guidance, not a project roadmap or current work queue.
 
 This guide describes the preferred shape for new work and migrations. If a
 legacy file differs, migrate it only when it is already in scope.

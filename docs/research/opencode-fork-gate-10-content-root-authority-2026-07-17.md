@@ -1,11 +1,16 @@
 # OpenCode fork Gate 10: content-root authority and bounded observation
 
-Status: Closed at implementation commit `fb6ed5763`. Contract/theory was
+Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
+primary-TUI permission/result presentation and evidence boundary. The ContentRoot,
+observation, revocation, and mutation-authority semantics remain accepted.
+The unstaged corrective presenter described below was accepted by the original
+TUI reviewer but has no durable integration commit.
+Commit `fb6ed5763` remains the historical closed snapshot: contract/theory was
 accepted by the required whole-Gate independent reviewer on the fifth pass
-after four `Revise` rounds. The implementation/evidence layer was accepted
-after two closure passes, and all Gate 10 review findings were closed before
-the maintainer separately authorized integration. Gate 11 remains outside this
-record.
+after four `Revise` rounds, and the implementation/evidence layer was accepted
+after two closure passes. That review did not establish that the primary TUI
+showed the exact consequential mutation authority it asked the learner to
+approve. Gate 11 remains outside this record.
 
 Date: 2026-07-17
 
@@ -1404,3 +1409,36 @@ Both required Gate 10 review layers are accepted. The maintainer separately
 authorized integration, commit `fb6ed5763` fixes the accepted implementation
 provenance, and Gate 10 is closed. Gate 11 remains outside this record and was
 not begun here.
+
+## 2026-07-27 first-principles correction
+
+The preceding paragraph records the historical close; current disposition is
+owned by [the documentation index](../README.md). The accepted mutation
+contract requires the learner-facing approval to identify the canonical
+anchor, relative path, create/modify operation, lifetime, rights, and warning.
+The backend still binds those exact values, but the primary TUI falls through
+to a generic `Call tool content_mutation` prompt. Direct-run formatting and its
+tests do not prove the primary product surface.
+
+Gate 10 is therefore scoped-reopened only for a shared semantic permission
+and result projection, primary-TUI behavior, and focused evidence over that
+projection. A committed file mutation remains visible even if later provider
+prose fails. The filesystem authority itself is not rederived. The physical
+support proof also remains Windows/NTFS-specific; it must not be cited as
+general cross-platform filesystem closure.
+
+## 2026-07-28 corrective implementation candidate
+
+The unstaged shared presenter validates the actual one-shot permission envelope
+and shows the canonical anchor, relative path, create/modify operation, rights,
+lifetime, and warning before approval. The committed result carries both the
+canonical anchor and relative path and remains visible through the primary TUI
+and direct-run even if provider continuation later fails. Invalid or
+contradictory consequential metadata fails closed instead of falling back to a
+generic success.
+
+The original TUI reviewer independently accepted the permission binding,
+canonical-anchor, one-shot, carrier-parity, and post-commit visibility
+counterexamples. This is candidate evidence only; Gate 10 remains
+scoped-reopened pending durable integration, and its existing filesystem
+authority and Windows/NTFS evidence scope are unchanged.

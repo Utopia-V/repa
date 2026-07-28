@@ -1,11 +1,13 @@
-import { describe, expect } from "bun:test"
-import { eq } from "drizzle-orm"
+import { describe, expect, test } from "bun:test"
+import { eq, sql } from "drizzle-orm"
 import { Effect, Exit, Layer } from "effect"
 import { Course } from "@opencode-ai/core/course"
 import { CourseSelectionAcceptanceEffectTable } from "@opencode-ai/core/course/sql"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
+import { settlePhysicalInvocation } from "@opencode-ai/core/learning-command/physical"
+import { isNavigationSettlement } from "@opencode-ai/core/learner-navigation/learning-command-settlement"
 import {
   AdmittedLearnerOccurrenceTable,
   LearnerOccurrenceTombstoneTable,
@@ -27,6 +29,273 @@ const it = testEffect(LayerNode.compile(LayerNode.group([Course.node, Database.n
 const model = { modelID: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
 
 describe("learning-command settlement storage", () => {
+  test("rejects a partial Navigation projection source group", () => {
+    expect(
+      isNavigationSettlement({
+        outcome: "no_change",
+        navigationKind: "course_route_anchor",
+        current: {
+          kind: "course_route_anchor",
+          courseID: "crs_00000000000000000000000001",
+          headID: null,
+          version: 0,
+          target: null,
+          usability: { usable: false, cause: "absent" },
+          timeCommitted: 1,
+        },
+        settlementTime: 2,
+        settlementOrder: 1,
+      }),
+    ).toBe(false)
+  })
+
+  it.effect("rejects a recursively malformed Navigation no-change settlement on domain replay", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const course = yield* (yield* Course.Service).createCourse({ title: "Malformed navigation replay" })
+      const base = Date.now()
+      const sessionID = SessionSchema.ID.make("ses_navigation_malformed_replay")
+      const parentUserMessageID = SessionV1.MessageID.ascending("msg_navigation_malformed_user")
+      const userPartID = SessionV1.PartID.ascending("prt_navigation_malformed_user")
+      const assistantMessageID = SessionV1.MessageID.ascending("msg_navigation_malformed_assistant")
+      const partID = SessionV1.PartID.ascending("prt_navigation_malformed_tool")
+      const callID = "call-navigation-malformed"
+      yield* seedSession(db, sessionID, base - 2)
+      yield* insertUserPresentation(db, sessionID, parentUserMessageID, userPartID, base)
+      const occurrence = yield* db.transaction((tx) =>
+        Occurrence.admit(tx, {
+          admission: LearningCommand.LearnerAdmission.interactive(),
+          sessionID,
+          messageID: parentUserMessageID,
+          timeAdmitted: base,
+        }),
+      )
+      yield* db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx
+              .insert(MessageTable)
+              .values({
+                id: assistantMessageID,
+                session_id: sessionID,
+                data: assistantData(parentUserMessageID, base + 1),
+                time_created: base + 1,
+                time_updated: base + 1,
+              })
+              .run()
+            yield* tx
+              .insert(PartTable)
+              .values({
+                id: partID,
+                session_id: sessionID,
+                message_id: assistantMessageID,
+                data: toolPartData(callID, LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY),
+                time_created: base + 1,
+                time_updated: base + 1,
+              })
+              .run()
+          }),
+        )
+        .pipe(Effect.orDie)
+      const invocation = {
+        envelope: {
+          occurrenceID: occurrence.id,
+          turnID: Turn.ID.create(),
+          inputID: Turn.InputID.create(),
+          sessionID,
+          parentUserMessageID,
+          assistantMessageID,
+          partID,
+          providerCallID: callID,
+          emissionOrdinal: 0,
+          capabilityIdentity: LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+          capabilityVersion: LearningCommand.SET_COURSE_ROUTE_ANCHOR_VERSION,
+          authorizationBasis: "learner_request" as const,
+          timeAdmitted: base + 2,
+        },
+        command: {
+          kind: "course_route_anchor" as const,
+          courseID: course.id,
+          expectedHeadID: null,
+          expectedVersion: 0,
+          target: null,
+        },
+      }
+      expect(yield* db.transaction((tx) => LearningCommand.reserveNavigation(tx, invocation))).toEqual({
+        type: "candidate",
+      })
+      yield* db.transaction((tx) =>
+        settlePhysicalInvocation(tx, partID, {
+          outcome: "no_change",
+          navigationKind: "course_route_anchor",
+          current: {
+            kind: "course_route_anchor",
+            courseID: course.id,
+            headID: null,
+            version: 0,
+            target: null,
+            usability: {},
+          },
+          settlementTime: base + 3,
+          settlementOrder: 1,
+        }),
+      )
+
+      const replay = yield* db
+        .transaction((tx) => LearningCommand.reserveNavigation(tx, invocation))
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(replay)).toBe(true)
+    }),
+  )
+
+  it.effect("rejects a partial Navigation projection source group on domain replay", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const course = yield* (yield* Course.Service).createCourse({ title: "Partial navigation replay" })
+      const base = Date.now()
+      const sessionID = SessionSchema.ID.make("ses_navigation_partial_replay")
+      const parentUserMessageID = SessionV1.MessageID.ascending("msg_navigation_partial_user")
+      const userPartID = SessionV1.PartID.ascending("prt_navigation_partial_user")
+      const assistantMessageID = SessionV1.MessageID.ascending("msg_navigation_partial_assistant")
+      const partID = SessionV1.PartID.ascending("prt_navigation_partial_tool")
+      const callID = "call-navigation-partial"
+      yield* seedSession(db, sessionID, base - 2)
+      yield* insertUserPresentation(db, sessionID, parentUserMessageID, userPartID, base)
+      const occurrence = yield* db.transaction((tx) =>
+        Occurrence.admit(tx, {
+          admission: LearningCommand.LearnerAdmission.interactive(),
+          sessionID,
+          messageID: parentUserMessageID,
+          timeAdmitted: base,
+        }),
+      )
+      yield* db
+        .transaction((tx) =>
+          Effect.gen(function* () {
+            yield* tx
+              .insert(MessageTable)
+              .values({
+                id: assistantMessageID,
+                session_id: sessionID,
+                data: assistantData(parentUserMessageID, base + 1),
+                time_created: base + 1,
+                time_updated: base + 1,
+              })
+              .run()
+            yield* tx
+              .insert(PartTable)
+              .values({
+                id: partID,
+                session_id: sessionID,
+                message_id: assistantMessageID,
+                data: toolPartData(callID, LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY),
+                time_created: base + 1,
+                time_updated: base + 1,
+              })
+              .run()
+          }),
+        )
+        .pipe(Effect.orDie)
+      const invocation = {
+        envelope: {
+          occurrenceID: occurrence.id,
+          turnID: Turn.ID.create(),
+          inputID: Turn.InputID.create(),
+          sessionID,
+          parentUserMessageID,
+          assistantMessageID,
+          partID,
+          providerCallID: callID,
+          emissionOrdinal: 0,
+          capabilityIdentity: LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+          capabilityVersion: LearningCommand.SET_COURSE_ROUTE_ANCHOR_VERSION,
+          authorizationBasis: "learner_request" as const,
+          timeAdmitted: base + 2,
+        },
+        command: {
+          kind: "course_route_anchor" as const,
+          courseID: course.id,
+          expectedHeadID: null,
+          expectedVersion: 0,
+          target: null,
+        },
+      }
+      expect(yield* db.transaction((tx) => LearningCommand.reserveNavigation(tx, invocation))).toEqual({
+        type: "candidate",
+      })
+      yield* db.transaction((tx) =>
+        settlePhysicalInvocation(tx, partID, {
+          outcome: "no_change",
+          navigationKind: "course_route_anchor",
+          current: {
+            kind: "course_route_anchor",
+            courseID: course.id,
+            headID: null,
+            version: 0,
+            target: null,
+            usability: { usable: false, cause: "absent" },
+            timeCommitted: base + 3,
+          },
+          settlementTime: base + 3,
+          settlementOrder: 1,
+        }),
+      )
+
+      const replay = yield* db
+        .transaction((tx) => LearningCommand.reserveNavigation(tx, invocation))
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(replay)).toBe(true)
+    }),
+  )
+
+  it.effect("rejects learner acceptance as Route Anchor authority without admitting a physical invocation", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const course = yield* (yield* Course.Service).createCourse({ title: "Wrong-basis rollback" })
+      const partID = SessionV1.PartID.ascending("prt_route_anchor_wrong_basis")
+      const error = yield* db
+        .transaction((tx) =>
+          LearningCommand.reserveNavigation(tx, {
+            envelope: {
+              occurrenceID: LearningCommand.createOccurrenceID(),
+              turnID: Turn.ID.create(),
+              inputID: Turn.InputID.create(),
+              sessionID: SessionSchema.ID.make("ses_route_anchor_wrong_basis"),
+              parentUserMessageID: SessionV1.MessageID.ascending("msg_route_anchor_wrong_basis_user"),
+              assistantMessageID: SessionV1.MessageID.ascending("msg_route_anchor_wrong_basis_assistant"),
+              partID,
+              providerCallID: "call-route-anchor-wrong-basis",
+              emissionOrdinal: 0,
+              capabilityIdentity: LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+              capabilityVersion: LearningCommand.SET_COURSE_ROUTE_ANCHOR_VERSION,
+              authorizationBasis: "learner_acceptance",
+              timeAdmitted: Date.now(),
+            },
+            command: {
+              kind: "course_route_anchor",
+              courseID: course.id,
+              expectedHeadID: null,
+              expectedVersion: 0,
+              target: null,
+            },
+          }),
+        )
+        .pipe(Effect.flip)
+
+      expect(error).toMatchObject({
+        _tag: "LearningCommand.InvalidInvocationEnvelopeError",
+        reason: "invalid_authorization_basis",
+      })
+      expect(
+        yield* db
+          .select({ partID: LearningCommandInvocationTable.part_id })
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, partID))
+          .get(),
+      ).toBeUndefined()
+    }),
+  )
+
   it.effect("settles exact Course results with physical-first replay, semantic replay, ABA, and rollback", () =>
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
@@ -185,6 +454,24 @@ describe("learning-command settlement storage", () => {
       expect(yield* db.transaction((tx) => LearningCommand.reserveAcceptance(tx, initial))).toEqual({
         type: "candidate",
       })
+      expect(
+        Exit.isFailure(
+          yield* db
+            .run(sql`
+              UPDATE learning_command_invocation
+              SET status = 'no_change',
+                  settlement = ${JSON.stringify({
+                    outcome: "no_change",
+                    settlementTime: base + 2,
+                    settlementOrder: 1,
+                  })},
+                  time_settled = ${base + 2},
+                  settlement_order = 1
+              WHERE part_id = ${initial.envelope.partID}
+            `)
+            .pipe(Effect.exit),
+        ),
+      ).toBe(true)
       const applied = yield* db.transaction((tx) =>
         LearningCommand.settleAcceptance(tx, {
           ...initial,
@@ -457,6 +744,7 @@ describe("learning-command settlement storage", () => {
         }),
       )
       expect(interrupted).toMatchObject({ settlement: { outcome: "error", code: "interrupted" } })
+      if (interrupted.type !== "settled") throw new Error("Expected the admitted invocation to settle as interrupted")
       expect(yield* db.transaction((tx) => LearningCommand.reserveAcceptance(tx, rolledBackInvocation))).toEqual({
         type: "replay",
         settlement: interrupted.settlement,
@@ -511,6 +799,88 @@ describe("learning-command settlement storage", () => {
         },
       })
       expect((yield* courses.getCourse(course.id)).selection).toEqual({ revisionID: second.revision.id, version: 4 })
+
+      yield* Effect.forEach(
+        [
+          { index: 10, capabilityIdentity: "forged.accept-course", capabilityVersion: 1 },
+          {
+            index: 11,
+            capabilityIdentity: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+            capabilityVersion: 2,
+          },
+        ],
+        (forged) =>
+          Effect.gen(function* () {
+            const time = base + 30 + forged.index
+            const cause = yield* admitUser(forged.index, time)
+            const invocation = yield* insertInvocation(
+              forged.index,
+              cause.messageID,
+              cause.occurrence.id,
+              `call-forged-${forged.index}`,
+              time + 1,
+              command(first.revision.id, second.revision.id, 4),
+            )
+            const effectID = `effect_forged_${forged.index}`
+            const receiptID = `receipt_forged_${forged.index}`
+            yield* db.transaction((tx) =>
+              Effect.gen(function* () {
+                yield* tx.run(sql`
+                  INSERT INTO learning_command_invocation (
+                    part_id, session_id, parent_user_message_id, assistant_message_id,
+                    provider_call_id, occurrence_id, command_name, command_version,
+                    emission_ordinal, capability_identity, capability_version,
+                    authorization_basis, input_fingerprint, status, time_admitted, turn_id, input_id
+                  ) VALUES (
+                    ${invocation.envelope.partID}, ${sessionID}, ${cause.messageID},
+                    ${invocation.envelope.assistantMessageID}, ${invocation.envelope.providerCallID},
+                    ${cause.occurrence.id}, 'accept_course_view_revision', 1, 0,
+                    ${forged.capabilityIdentity}, ${forged.capabilityVersion}, 'learner_acceptance',
+                    ${"f".repeat(64)}, 'admitted', ${time + 1}, ${invocation.envelope.turnID},
+                    ${invocation.envelope.inputID}
+                  )
+                `)
+                yield* tx.run(sql`
+                  INSERT INTO course_selection_acceptance_effect (
+                    id, occurrence_id, course_id, accepted_revision_id, previous_revision_id,
+                    previous_selection_version, committed_selection_version, time_committed
+                  ) VALUES (
+                    ${effectID}, ${cause.occurrence.id}, ${course.id}, ${first.revision.id},
+                    ${second.revision.id}, 4, 5, ${time + 2}
+                  )
+                `)
+                yield* tx.run(sql`
+                  INSERT INTO learning_command_receipt (
+                    id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+                    invocation_part_id, capability_identity, capability_version,
+                    authorization_basis, time_committed, commit_order
+                  ) VALUES (
+                    ${receiptID}, ${cause.occurrence.id}, ${sessionID}, ${cause.messageID},
+                    ${invocation.envelope.assistantMessageID}, ${invocation.envelope.partID},
+                    ${forged.capabilityIdentity}, ${forged.capabilityVersion}, 'learner_acceptance',
+                    ${time + 2}, ${forged.index}
+                  )
+                `)
+                const rejected = yield* tx
+                  .run(sql`
+                    INSERT INTO course_selection_acceptance_commit_seal (
+                      effect_id, receipt_id, invocation_part_id
+                    ) VALUES (${effectID}, ${receiptID}, ${invocation.envelope.partID})
+                  `)
+                  .pipe(Effect.flip)
+                expect(rejected).toBeDefined()
+              }),
+            )
+            expect(
+              yield* db.get(sql`
+                SELECT effect_id
+                FROM course_selection_acceptance_commit_seal
+                WHERE effect_id = ${effectID}
+              `),
+            ).toBeUndefined()
+          }),
+        { discard: true },
+      )
     }),
   )
 
@@ -841,11 +1211,14 @@ function textPartData(text: string): typeof PartTable.$inferInsert.data {
   return { type: "text", text } as typeof PartTable.$inferInsert.data
 }
 
-function toolPartData(callID: string): typeof PartTable.$inferInsert.data {
+function toolPartData(
+  callID: string,
+  tool = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+): typeof PartTable.$inferInsert.data {
   return {
     type: "tool",
     callID,
-    tool: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+    tool,
     state: { status: "pending", input: {}, raw: "{}" },
   } as typeof PartTable.$inferInsert.data
 }

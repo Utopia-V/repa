@@ -1,5 +1,5 @@
 import os from "os"
-import { InstallationVersion } from "../../installation/version"
+import { InstallationUserAgent } from "../../installation/version"
 import { Effect } from "effect"
 import { define } from "../internal"
 import { ProviderV2 } from "../../provider"
@@ -64,7 +64,7 @@ function sdkOptions(options: Record<string, any>) {
     baseURL: expandAccountId(options.baseURL),
     apiKey: process.env.CLOUDFLARE_API_KEY ?? options.apiKey,
     headers: {
-      "User-Agent": `opencode/${InstallationVersion} cloudflare-workers-ai (${os.platform()} ${os.release()}; ${os.arch()})`,
+      "User-Agent": `${InstallationUserAgent} cloudflare-workers-ai (${os.platform()} ${os.release()}; ${os.arch()})`,
       ...options.headers,
     },
     name: providerID,

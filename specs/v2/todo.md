@@ -1,6 +1,9 @@
 # TODO
 
-ok we need to work towards a launch of v2 so we can get out of this rebuild phase
+> **Status — inherited preview-v2 work list, not Repa's launch plan.** This file records an OpenCode rebuild effort and may help explain deferred source in the fork. It does not authorize launching, completing, or migrating Repa to v2; the released-v1 execution path remains the accepted baseline unless a Repa ADR or Gate explicitly changes it.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
+The items below retain their original preview-v2 planning context for source audit and maintenance.
 
 ## Post-Hono cleanup - Kit
 

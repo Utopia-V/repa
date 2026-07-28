@@ -25,7 +25,7 @@ describe("OpenRouterPlugin", () => {
     Effect.sync(() => expect(ProviderPlugins.map((item) => item.id)).toContain(PluginV2.ID.make("openrouter"))),
   )
 
-  it.effect("applies legacy referer headers only to openrouter", () =>
+  it.effect("applies Repa attribution without an unowned referer only to openrouter", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -39,8 +39,7 @@ describe("OpenRouterPlugin", () => {
 
       expect((yield* catalog.provider.get(ProviderV2.ID.openrouter))?.request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "X-Title": "Repa",
       })
       expect((yield* catalog.provider.get(ProviderV2.ID.make("nvidia")))?.request.headers).toEqual({})
     }),

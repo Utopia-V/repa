@@ -15,6 +15,8 @@ import { Plugin } from "../../src/plugin"
 import { Provider } from "../../src/provider/provider"
 import { Skill } from "../../src/skill"
 import { Truncate } from "../../src/tool/truncate"
+import { GeneratedAgentFile } from "@/agent/generated-agent-file"
+import { AgentIdentifier } from "@/agent/identifier"
 
 const agentLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
   LayerNode.compile(
@@ -228,6 +230,32 @@ it.instance(
 )
 
 it.instance(
+  "prototype-property-named custom agent remains an isolated catalog entry",
+  () =>
+    Effect.gen(function* () {
+      const custom = yield* load((svc) => svc.get("constructor"))
+      expect(custom).toBeDefined()
+      expect(custom?.name).toBe("constructor")
+      expect(custom?.description).toBe("Prototype-safe custom agent")
+      expect((Object.prototype as { description?: string }).description).toBeUndefined()
+      expect((yield* load((svc) => svc.list())).some((agent) => agent.name === "constructor")).toBeTrue()
+    }),
+  {
+    config: {
+      agent: Object.fromEntries([
+        [
+          "constructor",
+          {
+            description: "Prototype-safe custom agent",
+            mode: "subagent",
+          },
+        ],
+      ]),
+    },
+  },
+)
+
+it.instance(
   "custom agent config overrides native agent properties",
   () =>
     Effect.gen(function* () {
@@ -357,11 +385,49 @@ it.instance(
     Effect.gen(function* () {
       const build = yield* load((svc) => svc.get("repa"))
       expect(build?.name).toBe("Repa Custom")
+      expect(yield* load((svc) => svc.identifiers())).toContain("repa")
+      expect(yield* load((svc) => svc.identifiers())).not.toContain("Repa Custom")
     }),
   {
     config: {
       agent: {
         repa: { name: "Repa Custom" },
+      },
+    },
+  },
+)
+
+it.instance(
+  "generated identifiers cannot collide with live catalog keys hidden by display names",
+  () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const existingIdentifiers = yield* load((svc) => svc.identifiers())
+      const targetPath = path.join(test.directory, "generated-agents")
+
+      for (const identifier of ["repa", "custom-agent"]) {
+        const error = yield* Effect.promise(() =>
+          GeneratedAgentFile.create({
+            targetPath,
+            identifier,
+            content: identifier,
+            existingIdentifiers,
+          }).then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+        )
+        expect(error).toBeInstanceOf(AgentIdentifier.ConflictError)
+      }
+
+      expect(yield* Effect.promise(() => Bun.file(path.join(targetPath, "repa.md")).exists())).toBeFalse()
+      expect(yield* Effect.promise(() => Bun.file(path.join(targetPath, "custom-agent.md")).exists())).toBeFalse()
+    }),
+  {
+    config: {
+      agent: {
+        repa: { name: "Repa Custom" },
+        "custom-agent": { name: "Visible Custom" },
       },
     },
   },
@@ -646,13 +712,13 @@ description: Permission skill.
 )
 
 it.instance(
-  "project reference directories are allowed for external_directory",
+  "project references do not expand external_directory permission",
   () =>
     Effect.gen(function* () {
       const test = yield* TestInstance
       const build = yield* load((svc) => svc.get("repa"))
       const target = path.resolve(test.directory, "../docs/reference/notes.md")
-      expect(Permission.evaluate("external_directory", target, build!.permission).action).toBe("allow")
+      expect(Permission.evaluate("external_directory", target, build!.permission).action).toBe("ask")
     }),
   {
     git: true,

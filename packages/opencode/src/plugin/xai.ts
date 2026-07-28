@@ -1,7 +1,7 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import { OAUTH_DUMMY_KEY } from "../auth"
 import { createServer } from "http"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationProductID, InstallationUserAgent } from "@opencode-ai/core/installation/version"
 import { OauthCallbackPage } from "@opencode-ai/core/oauth/page"
 
 // Public Grok-CLI OAuth client. xAI's auth server rejects loopback OAuth from
@@ -88,7 +88,7 @@ function authHeaders() {
   return {
     "Content-Type": "application/x-www-form-urlencoded",
     Accept: "application/json",
-    "User-Agent": `opencode/${InstallationVersion}`,
+    "User-Agent": InstallationUserAgent,
   }
 }
 
@@ -123,7 +123,7 @@ export function buildAuthorizeUrl(
 ): string {
   // `plan=generic` opts the consent screen into xAI's generic OAuth plan tier;
   // without it, accounts.x.ai rejects loopback OAuth from non-allowlisted
-  // clients. `referrer=opencode` lets xAI attribute opencode-originated
+  // clients. The referrer lets xAI attribute Repa-originated
   // logins in their OAuth server logs (best-effort attribution while we
   // continue to reuse the Grok-CLI client_id).
   const params = new URLSearchParams({
@@ -136,7 +136,7 @@ export function buildAuthorizeUrl(
     state,
     nonce,
     plan: "generic",
-    referrer: "opencode",
+    referrer: InstallationProductID,
   })
   return `${options.authorizeUrl ?? AUTHORIZE_URL}?${params.toString()}`
 }
@@ -541,7 +541,7 @@ export async function XaiAuthPlugin(input: PluginInput, options: XaiAuthPluginOp
               }
             }
             headers.set("authorization", `Bearer ${currentAuth.access}`)
-            headers.set("User-Agent", `opencode/${InstallationVersion}`)
+            headers.set("User-Agent", InstallationUserAgent)
 
             return fetch(requestInput, { ...init, headers })
           },

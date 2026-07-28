@@ -1,47 +1,36 @@
-# Security
+# Repa security notice
 
-## IMPORTANT
+Status: Limited current safety guidance. This repository does not currently
+publish a supported-version matrix, a security-response SLA, or a dedicated
+public vulnerability-reporting address. Inherited OpenCode contacts, scope
+exclusions, credentials, and response promises are not Repa policy.
 
-We do not accept AI generated security reports. We receive a large number of
-these and we absolutely do not have the resources to review them all. If you
-submit one that will be an automatic ban from the project.
+## Runtime boundary
 
-## Threat Model
+Repa is a local agent system whose enabled capabilities may execute commands,
+read or write files, access networks, and invoke external tools. Permission
+prompts help control intended actions; they are not an operating-system
+security sandbox. Use an appropriately isolated account, container, or virtual
+machine when running against untrusted material or when stronger isolation is
+required.
 
-### Overview
+## Network server
 
-OpenCode is an AI-powered coding assistant that runs locally on your machine. It provides an agent system with access to powerful tools including shell execution, file operations, and web access.
+The retained `repa serve` surface is opt-in. The current server warns when it
+starts without authentication. Set `REPA_SERVER_PASSWORD` to require HTTP Basic
+Authentication; the username defaults to `repa` and can be changed with
+`REPA_SERVER_USERNAME`.
 
-### No Sandbox
+Do not expose the server beyond a trusted local boundary unless authentication
+and the surrounding host/network controls have been deliberately configured.
 
-OpenCode does **not** sandbox the agent. The permission system exists as a UX feature to help users stay aware of what actions the agent is taking - it prompts for confirmation before executing commands, writing files, etc. However, it is not designed to provide security isolation.
+## Reporting
 
-If you need true isolation, run OpenCode inside a Docker container or VM.
+Do not post secrets, private learner or source data, or unredacted exploit
+details in a public issue. Use only a private reporting channel explicitly
+provided by the current repository owner. If no such channel has been
+provided, this repository does not yet define an official reporting route; do
+not infer one from OpenCode history.
 
-### Server Mode
-
-Server mode is opt-in only. When enabled, set `OPENCODE_SERVER_PASSWORD` to require HTTP Basic Auth. Without this, the server runs unauthenticated (with a warning). It is the end user's responsibility to secure the server - any functionality it provides is not a vulnerability.
-
-### Out of Scope
-
-| Category                        | Rationale                                                               |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| **Server access when opted-in** | If you enable server mode, API access is expected behavior              |
-| **Sandbox escapes**             | The permission system is not a sandbox (see above)                      |
-| **LLM provider data handling**  | Data sent to your configured LLM provider is governed by their policies |
-| **MCP server behavior**         | External MCP servers you configure are outside our trust boundary       |
-| **Malicious config files**      | Users control their own config; modifying it is not an attack vector    |
-
----
-
-# Reporting Security Issues
-
-We appreciate your efforts to responsibly disclose your findings, and will make every effort to acknowledge your contributions.
-
-To report a security issue, please use the GitHub Security Advisory ["Report a Vulnerability"](https://github.com/anomalyco/opencode/security/advisories/new) tab.
-
-The team will send a response indicating the next steps in handling your report. After the initial reply to your report, the security team will keep you informed of the progress towards a fix and full announcement, and may ask for additional information or guidance.
-
-## Escalation
-
-If you do not receive an acknowledgement of your report within 6 business days, you may send an email to security@anoma.ly
+For current project status and documentation authority, see
+[docs/README.md](docs/README.md).

@@ -25,6 +25,7 @@ import { useEvent } from "./event"
 import { useSDK } from "./sdk"
 import { useTuiStartup } from "./runtime"
 import { createSimpleContext } from "./helper"
+import { canAutoApprove } from "../util/semantic-presentation"
 import { useExit } from "./exit"
 import { useArgs } from "./args"
 import { batch, onCleanup, onMount } from "solid-js"
@@ -203,7 +204,7 @@ export const {
 
         case "permission.asked": {
           const request = event.properties
-          if (permission.mode === "auto") {
+          if (permission.mode === "auto" && canAutoApprove(request)) {
             void sdk.client.permission.reply({
               requestID: request.id,
               reply: "once",

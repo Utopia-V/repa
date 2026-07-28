@@ -53,6 +53,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { McpCatalog } from "@/mcp/catalog"
 import { AcceptCourseViewRevisionTool } from "./accept-course-view-revision"
 import { assertExternalToolID, learningCommandPreparation } from "./learning-command"
@@ -88,6 +89,7 @@ type State = {
 
 export interface Interface {
   readonly ids: () => Effect.Effect<string[]>
+  readonly permissionCatalog: () => Effect.Effect<string[]>
   readonly all: () => Effect.Effect<Tool.Def[]>
   readonly named: () => Effect.Effect<{ task: TaskDef; read: ReadDef }>
   readonly tools: (model: {
@@ -147,6 +149,7 @@ const layer = Layer.effect(
         const custom: Tool.Def[] = []
 
         function fromPlugin(id: string, def: ToolDefinition): Tool.Def {
+          ConfigPermissionV1.assertOrderedObjectKey(id, "external tool ID")
           // Plugin tools still expose Zod args publicly; keep that compatibility
           // boxed at the registry boundary and give the LLM the original JSON Schema.
           // Normalize missing args to `{}` once — pre-1.14.49 the code was
@@ -312,6 +315,14 @@ const layer = Layer.effect(
       return (yield* all()).map((tool) => tool.id)
     })
 
+    const permissionCatalog: Interface["permissionCatalog"] = Effect.fn("ToolRegistry.permissionCatalog")(function* () {
+      const local = (yield* all())
+        .filter((tool) => tool.id !== InvalidTool.id)
+        .map((tool) => Permission.permissionForTool(tool.id))
+      const remote = Object.keys(yield* mcp.tools()).map(Permission.permissionForTool)
+      return [...new Set([...local, ...remote])].filter((permission) => permission !== "*").sort()
+    })
+
     const describeTask = Effect.fn("ToolRegistry.describeTask")(function* (
       ruleset: PermissionV1.Ruleset,
       authority: readonly Permission.AuthorityLayer[],
@@ -405,7 +416,7 @@ const layer = Layer.effect(
       return { task: s.task, read: s.read }
     })
 
-    return Service.of({ ids, all, named, tools })
+    return Service.of({ ids, permissionCatalog, all, named, tools })
   }),
 )
 

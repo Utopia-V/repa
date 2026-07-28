@@ -29,6 +29,9 @@ import type {
   TerminalStatus,
   RevisionID,
 } from "./schema"
+import type { ReceiptID } from "../learning-command/physical-schema"
+import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../learning-command/sql"
+import type { PartID } from "../v1/session"
 
 export const RepresentationEffectTable = sqliteTable(
   "representation_effect",
@@ -46,6 +49,27 @@ export const RepresentationEffectTable = sqliteTable(
       sql`length(${table.semantic_fingerprint}) = 64 AND ${table.semantic_fingerprint} NOT GLOB '*[^0-9a-f]*'`,
     ),
     check("representation_effect_time_nonnegative", sql`${table.time_committed} >= 0`),
+  ],
+)
+
+export const RepresentationCommandCommitSealTable = sqliteTable(
+  "representation_command_commit_seal",
+  {
+    effect_id: text().$type<EffectID>().primaryKey(),
+    receipt_id: text().$type<ReceiptID>().notNull(),
+    invocation_part_id: text().$type<PartID>().notNull(),
+  },
+  (table) => [
+    foreignKey({ columns: [table.effect_id], foreignColumns: [RepresentationEffectTable.id] }).onDelete("restrict"),
+    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete(
+      "restrict",
+    ),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("restrict"),
+    unique("representation_command_commit_seal_receipt_unique").on(table.receipt_id),
+    unique("representation_command_commit_seal_invocation_unique").on(table.invocation_part_id),
   ],
 )
 

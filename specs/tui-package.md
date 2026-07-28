@@ -1,5 +1,8 @@
 # TUI Package Extraction
 
+> **Status — inherited packaging plan, not Repa TUI architecture authority.** This file records a source-organization effort around the OpenCode TUI. It may inform maintenance of that extraction, but it does not authorize a second CLI/runtime, select Repa's production package topology, or supersede accepted Repa Gates and ADRs.
+> Current Repa authority is indexed by the [documentation map](../docs/README.md).
+
 ## Goal
 
 Move the canonical OpenCode terminal application from

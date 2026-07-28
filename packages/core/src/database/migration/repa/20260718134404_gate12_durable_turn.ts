@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import type { DatabaseMigration } from "../../migration"
-import { installLearningFrontierConstraints } from "../../../learning-frontier.sql"
+import { installLearningFrontierConstraints } from "../../../learning-frontier-constraint-v1"
 import { TurnConstraintSchema } from "../../../turn/constraint-schema"
 import { TurnMigration } from "../../../turn/migration"
 

@@ -1,6 +1,7 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { test, expect } from "bun:test"
 import os from "os"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
@@ -91,6 +92,32 @@ test("an explicit delegation layer denies absent capabilities", () => {
 
   expect(Permission.evaluateAuthority("read", "lesson.md", child, authority).action).toBe("allow")
   expect(Permission.evaluateAuthority("bash", "git status", child, authority).action).toBe("deny")
+})
+
+test("capability identifiers remain case-sensitive through delegated authority and tool visibility", () => {
+  const ruleset = Permission.fromConfig({ "*": "deny", read: "allow" })
+  const authority: Permission.AuthorityLayer[] = [{ ruleset, absence: "deny" }]
+
+  expect(Permission.evaluate("read", "lesson.md", ruleset).action).toBe("allow")
+  expect(Permission.evaluate("READ", "lesson.md", ruleset).action).toBe("deny")
+  expect(
+    Permission.evaluateAuthority(
+      "READ",
+      "lesson.md",
+      [{ permission: "*", pattern: "*", action: "allow" }],
+      authority,
+    ).action,
+  ).toBe("deny")
+  expect(Permission.disabled(["read", "READ"], ruleset)).toEqual(new Set(["READ"]))
+  expect(Object.keys(Permission.visibleTools({ read: true, READ: true }, ruleset))).toEqual(["read"])
+})
+
+test("resource patterns retain platform path case semantics", () => {
+  const action = Permission.evaluate("read", "LESSONS/ONE.MD", [
+    { permission: "read", pattern: "lessons/*", action: "allow" },
+  ]).action
+
+  expect(action).toBe(process.platform === "win32" ? "allow" : "ask")
 })
 
 const reply = (input: Parameters<Permission.Interface["reply"]>[0]) =>
@@ -195,6 +222,44 @@ test("fromConfig - sub-pattern insertion order inside a tool key is preserved", 
   expect(ruleset.map((r) => r.pattern)).toEqual(["*", "git *"])
   expect(Permission.evaluate("bash", "rm foo", ruleset).action).toBe("deny")
   expect(Permission.evaluate("bash", "git status", ruleset).action).toBe("allow")
+})
+
+test("fromConfig - rejects array-index capability and resource keys defensively", () => {
+  expect(() => Permission.fromConfig({ "0": "allow" })).toThrow("permission capability")
+  expect(() => Permission.fromConfig({ task: { "4294967294": "allow" } })).toThrow(
+    'resource pattern for permission "task"',
+  )
+
+  const ruleset = Permission.fromConfig({ "00": "allow", task: { "01": "allow" } })
+  expect(Permission.evaluate("00", "*", ruleset).action).toBe("allow")
+  expect(Permission.evaluate("task", "01", ruleset).action).toBe("allow")
+})
+
+test("explicit rules retain numeric capability and Agent-pattern semantics", () => {
+  const ruleset: PermissionV1.Ruleset = [
+    { permission: "*", pattern: "*", action: "deny" },
+    { permission: "0", pattern: "*", action: "allow" },
+    { permission: "task", pattern: "0", action: "allow" },
+  ]
+
+  expect(Permission.evaluate("0", "*", ruleset).action).toBe("allow")
+  expect(Permission.evaluate("task", "0", ruleset).action).toBe("allow")
+  expect(Object.keys(Permission.visibleTools({ read: true, "0": true }, ruleset))).toEqual(["0"])
+})
+
+test("direct objects and explicit rules retain prototype-named permissions", () => {
+  const prototypeDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, "__proto__")
+  const config = JSON.parse(`{"*":"allow","__proto__":"deny"}`)
+  const ruleset = Permission.fromConfig(config)
+  const explicit: PermissionV1.Ruleset = [
+    { permission: "*", pattern: "*", action: "allow" },
+    { permission: "__proto__", pattern: "*", action: "deny" },
+  ]
+
+  expect(Object.hasOwn(config, "__proto__")).toBeTrue()
+  expect(Permission.evaluate("__proto__", "*", ruleset).action).toBe("deny")
+  expect(Permission.evaluate("__proto__", "*", explicit).action).toBe("deny")
+  expect(Object.getOwnPropertyDescriptor(Object.prototype, "__proto__")).toEqual(prototypeDescriptor)
 })
 
 test("fromConfig - documented fallback-first example", () => {
@@ -623,6 +688,32 @@ it.instance(
 )
 
 it.instance(
+  "ask - reports only case-sensitive capability rules as relevant to a denial",
+  () =>
+    Effect.gen(function* () {
+      const err = yield* fail(
+        ask({
+          sessionID: SessionID.make("session_case_sensitive_denial"),
+          permission: "READ",
+          patterns: ["lesson.md"],
+          metadata: {},
+          always: [],
+          ruleset: [
+            { permission: "*", pattern: "*", action: "deny" },
+            { permission: "read", pattern: "*", action: "allow" },
+          ],
+        }),
+      )
+
+      expect(err).toBeInstanceOf(PermissionV1.DeniedError)
+      if (err instanceof PermissionV1.DeniedError) {
+        expect(err.ruleset).toEqual([{ permission: "*", pattern: "*", action: "deny" }])
+      }
+    }),
+  { git: true },
+)
+
+it.instance(
   "ask - stays pending when action is ask",
   () =>
     Effect.gen(function* () {
@@ -836,14 +927,21 @@ it.instance(
 )
 
 it.instance(
-  "ask - exact one-shot confirmation stays pending despite a preconfigured allow",
+  "ask - requirePrompt publishes a service-owned prompt marker despite a preconfigured allow",
   () =>
     Effect.gen(function* () {
+      const events = yield* EventV2Bridge.Service
+      const published = yield* Deferred.make<PermissionV1.Request>()
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== Permission.Event.Asked.type) return Effect.void
+        return Deferred.succeed(published, event.data as PermissionV1.Request)
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
       const fiber = yield* ask({
         sessionID: SessionID.make("session_content_mutation"),
         permission: "content_mutation",
         patterns: ["modify:C:/materials/note.md"],
-        metadata: { onceOnly: true },
+        metadata: { source: "tool", permissionPromptRequired: false },
         always: [],
         requirePrompt: true,
         ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
@@ -853,8 +951,33 @@ it.instance(
       expect(pending[0]).toMatchObject({
         permission: "content_mutation",
         patterns: ["modify:C:/materials/note.md"],
-        metadata: { onceOnly: true },
+        metadata: { source: "tool", permissionPromptRequired: true },
       })
+      expect((yield* Deferred.await(published)).metadata).toMatchObject({
+        source: "tool",
+        permissionPromptRequired: true,
+      })
+      yield* reply({ requestID: pending[0]!.id, reply: "once" })
+      yield* Fiber.join(fiber)
+    }),
+  { git: true },
+)
+
+it.instance(
+  "ask - strips a tool-spoofed prompt marker when the service does not require one",
+  () =>
+    Effect.gen(function* () {
+      const fiber = yield* ask({
+        sessionID: SessionID.make("session_spoofed_prompt_marker"),
+        permission: "custom_permission",
+        patterns: ["*"],
+        metadata: { permissionPromptRequired: true },
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+
+      const pending = yield* waitForPending(1)
+      expect(pending[0]?.metadata).not.toHaveProperty("permissionPromptRequired")
       yield* reply({ requestID: pending[0]!.id, reply: "once" })
       yield* Fiber.join(fiber)
     }),
@@ -927,10 +1050,47 @@ it.instance(
         goalBases: [],
         courseBases: [],
       } satisfies LearnerGoal.ConfirmationSnapshot
-      const metadata = {
-        onceOnly: true,
-        authorizationBasis: "learner_acceptance",
-        confirmation,
+      const presentationMetadata = (
+        id: PermissionV1.ID,
+        sessionID: SessionID,
+        messageID: MessageID,
+        callID: string,
+      ) => {
+        const operation = confirmation.command.operations[0]!
+        if (operation.type !== "create") throw new Error("Expected the test Goal create operation")
+        const presentation = SemanticPresentation.proposal({
+          kind: "learner_goals",
+          binding: {
+            sessionID,
+            messageID,
+            callID,
+            requestID: id,
+          },
+          authorizationBasis: "learner_acceptance",
+          semanticFingerprint: confirmation.semanticFingerprint,
+          operations: [
+            {
+              type: "create",
+              resultIntent: "create_new_goal",
+              meaning: {
+                ...operation.snapshot,
+                disposition: operation.disposition,
+              },
+            },
+          ],
+          confirmation: {
+            schemaVersion: 1,
+            permissionRequestID: id,
+            goalBases: confirmation.goalBases,
+            courseBases: confirmation.courseBases,
+          },
+        })
+        return {
+          onceOnly: true,
+          authorizationBasis: "learner_acceptance",
+          confirmation,
+          ...SemanticPresentation.metadata(presentation),
+        }
       }
       const permission = yield* Permission.Service
       const events = yield* EventV2Bridge.Service
@@ -943,9 +1103,18 @@ it.instance(
         if (event.type !== Permission.Event.Asked.type) return Effect.void
         const request = event.data as PermissionV1.Request
         if (request.permission !== LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return Effect.void
-        const surface = toolPermissionInfo(request.permission, { ...request.metadata }, { ...request.metadata }, [
-          ...request.patterns,
-        ])
+        const surface = toolPermissionInfo(
+          {
+            id: request.id,
+            sessionID: request.sessionID,
+            permission: request.permission,
+            patterns: [...request.patterns],
+            metadata: { ...request.metadata },
+            always: [...request.always],
+            ...(request.tool ? { tool: { ...request.tool } } : {}),
+          },
+          { ...request.metadata },
+        )
         const response = responses.get(request.id)
 
         expect(response).toBeDefined()
@@ -953,9 +1122,15 @@ it.instance(
           permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
           patterns: [LearnerGoal.PERMISSION_PATTERN],
           always: [],
-          metadata,
+          metadata: {
+            onceOnly: true,
+            authorizationBasis: "learner_acceptance",
+            confirmation,
+            permissionPromptRequired: true,
+          },
         })
-        expect(surface?.title).toBe("Confirm 1 durable learner Goal change")
+        expect(SemanticPresentation.readProposal(request).type).toBe("valid")
+        expect(surface?.title).toBe("Confirm durable learner Goal changes")
         expect(surface?.lines.join("\n")).toContain(confirmation.command.operations[0]!.snapshot.outcome)
         expect(surface?.lines.join("\n")).toContain(confirmation.command.operations[0]!.snapshot.conditions[0]!)
         expect(surface?.lines.join("\n")).toContain("one-time learner acceptance")
@@ -966,14 +1141,16 @@ it.instance(
 
       const confirm = (id: PermissionV1.ID, sessionID: SessionID) =>
         Effect.gen(function* () {
+          const messageID = MessageID.ascending()
+          const callID = `call_${id}`
           yield* permission.ask({
             id,
             sessionID,
             permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
             patterns: [LearnerGoal.PERMISSION_PATTERN],
-            metadata,
+            metadata: presentationMetadata(id, sessionID, messageID, callID),
             always: [],
-            tool: { messageID: MessageID.ascending(), callID: `call_${id}` },
+            tool: { messageID, callID },
             requirePrompt: true,
             ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
           })

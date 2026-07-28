@@ -4,8 +4,9 @@ Move tests that exercise Effect services out of Promise-land and into the
 shared `testEffect` pattern.
 
 This file is guidance, not a live inventory. Before claiming a migration,
-search current `dev` for the exact anti-pattern and update any PR notes
-with what you actually changed.
+inspect the current working tree for the exact anti-pattern and record only
+what the admitted change actually establishes. Do not infer Repa's integration
+base or a broad migration queue from inherited OpenCode branch names.
 
 ## Target Pattern
 

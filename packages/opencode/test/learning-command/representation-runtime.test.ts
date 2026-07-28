@@ -15,6 +15,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { Representation } from "@opencode-ai/core/representation"
 import { RepresentationRevisionTable } from "@opencode-ai/core/representation/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
@@ -105,6 +106,24 @@ test("representation.convert publishes and settles one exact local Representatio
           sourceRevisionID: artifact.source.currentRevisionID,
           producerKind: "local_pdf",
         })
+        expect(
+          SemanticPresentation.readResult({
+            id: interaction.registration.partID,
+            sessionID: interaction.registration.sessionID,
+            messageID: interaction.registration.assistantMessageID,
+            tool: LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
+            callID: interaction.registration.callID,
+            state: { status: "completed", title: applied.title, metadata: applied.metadata },
+          }),
+        ).toMatchObject({
+          type: "valid",
+          value: {
+            phase: "result",
+            capability: LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
+            outcome: "committed",
+            durablySettled: true,
+          },
+        })
         expect(yield* exactPartResult(database.db, interaction.registration.partID)).toEqual(applied)
         expect(yield* database.db.select().from(RepresentationRevisionTable).all()).toHaveLength(1)
         expect(yield* database.db.select().from(LearningCommandReceiptTable).all()).toHaveLength(1)
@@ -115,7 +134,6 @@ test("representation.convert publishes and settles one exact local Representatio
             input_id: interaction.inputID,
             occurrence_id: interaction.occurrenceID,
             status: "applied",
-            effect_id: null,
           },
         ])
         const frontier = yield* database.db.transaction((tx) => LearningFrontier.read(tx))
@@ -192,10 +210,19 @@ test("representation.convert denial and recovery settle without starting or resu
 
         const legacy = yield* seedInteraction(database.db, directory, "legacy-interrupted", deniedInput)
         yield* commands.prepare(deniedInput, legacy.registration)
-        yield* database.db
-          .update(LearningCommandInvocationTable)
-          .set({ turn_id: null, input_id: null })
+        const legacyInvocation = yield* database.db
+          .select()
+          .from(LearningCommandInvocationTable)
           .where(eq(LearningCommandInvocationTable.part_id, legacy.registration.partID))
+          .get()
+        if (!legacyInvocation) return yield* Effect.die("Expected the admitted legacy invocation")
+        yield* database.db
+          .delete(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, legacy.registration.partID))
+          .run()
+        yield* database.db
+          .insert(LearningCommandInvocationTable)
+          .values({ ...legacyInvocation, turn_id: null, input_id: null })
           .run()
         yield* RepresentationCommandRuntime.recoverAdmitted(yield* EventV2Bridge.Service)
         expect(JSON.parse((yield* exactPartResult(database.db, legacy.registration.partID)).output)).toMatchObject({

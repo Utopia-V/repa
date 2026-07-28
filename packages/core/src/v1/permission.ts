@@ -2,7 +2,14 @@ export * as PermissionV1 from "./permission"
 
 import { Schema } from "effect"
 export * from "@opencode-ai/schema/permission-v1"
-import { ID } from "@opencode-ai/schema/permission-v1"
+import { ID, type Request } from "@opencode-ai/schema/permission-v1"
+
+// Permission.Service owns this transport constraint. It does not grant domain authority.
+export const PROMPT_REQUIRED_METADATA_KEY = "permissionPromptRequired"
+
+export function promptRequired(request: Pick<Request, "metadata">) {
+  return request.metadata[PROMPT_REQUIRED_METADATA_KEY] === true
+}
 
 export class RejectedError extends Schema.TaggedErrorClass<RejectedError>()("PermissionRejectedError", {}) {
   override get message() {

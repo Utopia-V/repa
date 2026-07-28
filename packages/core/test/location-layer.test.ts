@@ -19,6 +19,7 @@ import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionRunner } from "@opencode-ai/core/session/runner"
 import { SessionRunnerLocationServiceMap } from "@opencode-ai/core/session/runner/location-service-map"
 import { SessionRunnerModel } from "@opencode-ai/core/session/runner/model"
+import { SkillV2 } from "@opencode-ai/core/skill"
 import { tmpdir } from "./fixture/tmpdir"
 import { testEffect } from "./lib/effect"
 import { toolDefinitions } from "./lib/tool"
@@ -99,6 +100,28 @@ describe("LocationServiceMap", () => {
           expect(Option.isSome(services.model)).toBe(true)
           expect(Option.isSome(services.runner)).toBe(true)
         }).pipe(Effect.provide(SessionRunnerLocationServiceMap.build())),
+      ),
+    ),
+  )
+
+  it.live("does not advertise the hibernated OpenCode configuration skill from production locations", () =>
+    Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (dir) => Effect.promise(() => dir[Symbol.asyncDispose]()),
+    ).pipe(
+      Effect.flatMap((dir) =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const locations = yield* LocationServiceMap.Service
+            const skills = yield* Effect.gen(function* () {
+              const plugins = yield* PluginV2.Service
+              yield* plugins.wait(PluginV2.ID.make("variant"))
+              return yield* (yield* SkillV2.Service).list()
+            }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(dir.path) }))))
+
+            expect(skills.map((skill) => skill.name)).not.toContain("customize-opencode")
+          }),
+        ),
       ),
     ),
   )

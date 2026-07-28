@@ -39,6 +39,7 @@ import {
 } from "./course/schema"
 import {
   CourseItemTable,
+  CourseSelectionAcceptanceCommitSealTable,
   CourseSelectionAcceptanceEffectTable,
   CourseTable,
   CourseViewRevisionItemTable,
@@ -102,6 +103,13 @@ export type MembershipEndpoint = {
   readonly revisionID: RevisionID
   readonly itemID: ItemID
 }
+
+export type PresentationLocator = Readonly<{
+  course: Readonly<{ id: CourseID; title: string; showID: boolean }>
+  view: Readonly<{ id: ViewID; name: string; showID: boolean }>
+  revision: Readonly<{ id: RevisionID; number: number; showID: boolean }>
+  item?: Readonly<{ id: ItemID; title: string; position: number; showID: boolean }>
+}>
 
 export type MembershipSelection =
   | { readonly type: "explicit_exact" }
@@ -284,6 +292,13 @@ export type SelectionAcceptanceResolution =
       readonly relation: "active" | "superseded"
     }
   | { readonly type: "semantic_conflict"; readonly effect: SelectionAcceptanceEffect }
+
+export type SelectionAcceptancePresentation = Readonly<{
+  effect: SelectionAcceptanceEffect
+  currentSelection: Selection
+  relation: "active" | "superseded"
+  locator: PresentationLocator
+}>
 
 export type CourseInfo = {
   readonly id: CourseID
@@ -2010,6 +2025,35 @@ export function prepareMembershipProof(
   })
 }
 
+export function readRevisionPresentationLocator(
+  tx: Transaction,
+  input: { readonly courseID: CourseID; readonly revisionID: RevisionID },
+) {
+  return Effect.gen(function* () {
+    const revision = yield* tx
+      .select({ viewID: CourseViewRevisionTable.view_id })
+      .from(CourseViewRevisionTable)
+      .where(
+        and(
+          eq(CourseViewRevisionTable.course_id, input.courseID),
+          eq(CourseViewRevisionTable.id, input.revisionID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!revision) return yield* new NotFoundError({ entity: "revision", id: input.revisionID })
+    return yield* presentationLocator(tx, {
+      courseID: input.courseID,
+      viewID: revision.viewID,
+      revisionID: input.revisionID,
+    })
+  })
+}
+
+export function readMembershipPresentationLocator(tx: Transaction, endpoint: MembershipEndpoint) {
+  return presentationLocator(tx, endpoint)
+}
+
 export function preparePreferenceTargetProof(tx: Transaction, expected: PreferenceTargetExpectation) {
   return Effect.gen(function* () {
     const course = yield* requireCourse(tx, expected.courseID, expected.courseVersion, true)
@@ -2134,6 +2178,10 @@ export function resolveSelectionAcceptance(
     const row = yield* tx
       .select()
       .from(CourseSelectionAcceptanceEffectTable)
+      .innerJoin(
+        CourseSelectionAcceptanceCommitSealTable,
+        eq(CourseSelectionAcceptanceCommitSealTable.effect_id, CourseSelectionAcceptanceEffectTable.id),
+      )
       .where(
         and(
           eq(CourseSelectionAcceptanceEffectTable.occurrence_id, input.occurrenceID),
@@ -2143,8 +2191,8 @@ export function resolveSelectionAcceptance(
       .get()
       .pipe(Effect.orDie)
     if (!row) return { type: "new" as const }
-    const effect = selectionAcceptanceEffect(row)
-    if (row.accepted_revision_id !== input.revisionID) {
+    const effect = selectionAcceptanceEffect(row.course_selection_acceptance_effect)
+    if (row.course_selection_acceptance_effect.accepted_revision_id !== input.revisionID) {
       return { type: "semantic_conflict" as const, effect }
     }
     const current = yield* requireSelection(tx, input.courseID)
@@ -2155,9 +2203,45 @@ export function resolveSelectionAcceptance(
       currentSelection,
       currentSelectionTime: current.time_updated,
       relation:
-        current.revision_id === row.accepted_revision_id && current.version === row.committed_selection_version
+        current.revision_id === row.course_selection_acceptance_effect.accepted_revision_id &&
+        current.version === row.course_selection_acceptance_effect.committed_selection_version
           ? ("active" as const)
           : ("superseded" as const),
+    }
+  })
+}
+
+export function readSelectionAcceptancePresentation(
+  tx: Transaction,
+  effectID: SelectionAcceptanceEffectID,
+): Effect.Effect<SelectionAcceptancePresentation, Error> {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select({ effect: CourseSelectionAcceptanceEffectTable })
+      .from(CourseSelectionAcceptanceEffectTable)
+      .innerJoin(
+        CourseSelectionAcceptanceCommitSealTable,
+        eq(CourseSelectionAcceptanceCommitSealTable.effect_id, CourseSelectionAcceptanceEffectTable.id),
+      )
+      .where(eq(CourseSelectionAcceptanceEffectTable.id, effectID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!row) {
+      return yield* Effect.die(`Committed Course selection effect ${effectID} is unavailable`)
+    }
+    const effect = selectionAcceptanceEffect(row.effect)
+    const current = yield* requireSelection(tx, effect.courseID)
+    return {
+      effect,
+      currentSelection: selection(current),
+      relation:
+        current.revision_id === effect.revisionID && current.version === effect.committedSelection.version
+          ? "active"
+          : "superseded",
+      locator: yield* readRevisionPresentationLocator(tx, {
+        courseID: effect.courseID,
+        revisionID: effect.revisionID,
+      }),
     }
   })
 }
@@ -2293,6 +2377,73 @@ function selectionAcceptanceEffect(
     committedSelection: { revisionID: row.accepted_revision_id, version: row.committed_selection_version },
     timeCommitted: row.time_committed,
   }
+}
+
+function presentationLocator(
+  tx: Transaction,
+  input: {
+    readonly courseID: CourseID
+    readonly viewID: ViewID
+    readonly revisionID: RevisionID
+    readonly itemID?: ItemID
+  },
+) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(tx, input.courseID)
+    const view = yield* requireView(tx, input.courseID, input.viewID)
+    const revision = yield* requireRevision(tx, input.courseID, input.viewID, input.revisionID)
+    const [sameTitleCourses, sameNameViews] = yield* Effect.all([
+      tx
+        .select({ id: CourseTable.id })
+        .from(CourseTable)
+        .where(eq(CourseTable.title, course.title))
+        .limit(2)
+        .all()
+        .pipe(Effect.orDie),
+      tx
+        .select({ id: CourseViewTable.id })
+        .from(CourseViewTable)
+        .where(and(eq(CourseViewTable.course_id, course.id), eq(CourseViewTable.name, view.name)))
+        .limit(2)
+        .all()
+        .pipe(Effect.orDie),
+    ])
+    const item = input.itemID
+      ? yield* tx
+          .select({
+            id: CourseViewRevisionItemTable.item_id,
+            title: CourseViewRevisionItemTable.title,
+            position: CourseViewRevisionItemTable.preorder_position,
+          })
+          .from(CourseViewRevisionItemTable)
+          .where(
+            and(
+              eq(CourseViewRevisionItemTable.course_id, input.courseID),
+              eq(CourseViewRevisionItemTable.view_id, input.viewID),
+              eq(CourseViewRevisionItemTable.revision_id, input.revisionID),
+              eq(CourseViewRevisionItemTable.item_id, input.itemID),
+            ),
+          )
+          .get()
+          .pipe(Effect.orDie)
+      : undefined
+    if (input.itemID && !item) return yield* new NotFoundError({ entity: "item", id: input.itemID })
+    return {
+      course: { id: course.id, title: course.title, showID: sameTitleCourses.length > 1 },
+      view: { id: view.id, name: view.name, showID: sameNameViews.length > 1 },
+      revision: { id: revision.id, number: revision.revision_number, showID: false },
+      ...(item
+        ? {
+            item: {
+              id: item.id,
+              title: item.title,
+              position: item.position,
+              showID: false,
+            },
+          }
+        : {}),
+    } satisfies PresentationLocator
+  })
 }
 
 function assertSelectionUnchanged(tx: Transaction, selection: SelectionRow) {

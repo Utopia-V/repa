@@ -1,7 +1,10 @@
 import { sql } from "drizzle-orm"
-import { check, foreignKey, index, integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core"
+import { check, foreignKey, index, integer, sqliteTable, text, unique, type AnySQLiteColumn } from "drizzle-orm/sqlite-core"
 import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.sql"
+import type { ReceiptID } from "../learning-command/physical-schema"
+import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../learning-command/sql"
+import type { PartID } from "../v1/session"
 import type { PolicyID, TransitionID } from "./schema"
 
 export const RetainedSteeringStateTable = sqliteTable(
@@ -29,16 +32,21 @@ export const RetainedSteeringPolicyTable = sqliteTable(
   (table) => [check("retained_steering_policy_time_nonnegative", sql`${table.time_created} >= 0`)],
 )
 
-export const RetainedSteeringCommitSealTable = sqliteTable(
-  "retained_steering_commit_seal",
+export const RetainedSteeringCommandTable = sqliteTable(
+  "retained_steering_command",
   {
-    transition_id: text().$type<TransitionID>().primaryKey(),
-    receipt_id: text().notNull(),
-    invocation_part_id: text().notNull(),
+    invocation_part_id: text().$type<PartID>().primaryKey(),
+    semantic_fingerprint: text().notNull(),
   },
   (table) => [
-    unique("retained_steering_commit_seal_receipt_unique").on(table.receipt_id),
-    unique("retained_steering_commit_seal_invocation_unique").on(table.invocation_part_id),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("cascade"),
+    check(
+      "retained_steering_command_fingerprint",
+      sql`length(${table.semantic_fingerprint}) = 64 AND ${table.semantic_fingerprint} NOT GLOB '*[^0-9a-f]*'`,
+    ),
   ],
 )
 
@@ -46,7 +54,10 @@ export const RetainedSteeringTransitionTable = sqliteTable(
   "retained_steering_transition",
   {
     id: text().$type<TransitionID>().primaryKey(),
-    commit_seal_id: text().$type<TransitionID>().notNull(),
+    commit_seal_id: text()
+      .$type<TransitionID>()
+      .notNull()
+      .references((): AnySQLiteColumn => RetainedSteeringCommitSealTable.transition_id, { onDelete: "restrict" }),
     policy_id: text().$type<PolicyID>().notNull(),
     version: integer().notNull(),
     predecessor_id: text().$type<TransitionID>(),
@@ -74,10 +85,6 @@ export const RetainedSteeringTransitionTable = sqliteTable(
     acknowledgement_body: text().notNull(),
   },
   (table) => [
-    foreignKey({
-      columns: [table.commit_seal_id],
-      foreignColumns: [RetainedSteeringCommitSealTable.transition_id],
-    }).onDelete("restrict"),
     foreignKey({ columns: [table.policy_id], foreignColumns: [RetainedSteeringPolicyTable.id] }).onDelete("restrict"),
     foreignKey({ columns: [table.predecessor_id], foreignColumns: [table.id] }).onDelete("restrict"),
     foreignKey({ columns: [table.occurrence_id], foreignColumns: [AdmittedLearnerOccurrenceTable.id] }).onDelete(
@@ -115,5 +122,29 @@ export const RetainedSteeringTransitionTable = sqliteTable(
     ),
     index("retained_steering_history_idx").on(table.policy_id, table.version, table.id),
     index("retained_steering_active_idx").on(table.state, table.valid_until, table.source_order),
+  ],
+)
+
+export const RetainedSteeringCommitSealTable = sqliteTable(
+  "retained_steering_commit_seal",
+  {
+    transition_id: text().$type<TransitionID>().primaryKey(),
+    receipt_id: text().$type<ReceiptID>().notNull(),
+    invocation_part_id: text().$type<PartID>().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.transition_id],
+      foreignColumns: [RetainedSteeringTransitionTable.id],
+    }).onDelete("restrict"),
+    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete(
+      "restrict",
+    ),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("restrict"),
+    unique("retained_steering_commit_seal_receipt_unique").on(table.receipt_id),
+    unique("retained_steering_commit_seal_invocation_unique").on(table.invocation_part_id),
   ],
 )

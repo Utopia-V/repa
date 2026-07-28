@@ -1,10 +1,13 @@
-# opencode VS Code Extension
+# Inherited OpenCode VS Code Extension
 
-A Visual Studio Code extension that integrates [opencode](https://opencode.ai) directly into your development workflow.
+> **Status — retained OpenCode extension outside Repa's TUI baseline.** This README documents the inherited extension and its source-local development workflow. It does not make VS Code a Repa product, install, build, support, or release surface; an accepted Repa ADR or Gate must explicitly admit that scope.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
 
-## Prerequisites
+This retained Visual Studio Code extension was designed to integrate [OpenCode](https://opencode.ai) into a coding workflow.
 
-This extension requires the [opencode CLI](https://opencode.ai) to be installed on your system. Visit [opencode.ai](https://opencode.ai) for installation instructions.
+## Upstream Prerequisite
+
+The inherited extension expects the upstream [OpenCode CLI](https://opencode.ai). This is not a Repa installation requirement or compatibility commitment.
 
 ## Features
 
@@ -13,11 +16,11 @@ This extension requires the [opencode CLI](https://opencode.ai) to be installed 
 - **Context Awareness**: Automatically share your current selection or tab with opencode.
 - **File Reference Shortcuts**: Use `Cmd+Option+K` (Mac) or `Alt+Ctrl+K` (Linux/Windows) to insert file references. For example, `@File#L37-42`.
 
-## Support
+## Historical Upstream Support
 
-This is an early release. If you encounter issues or have feedback, please create an issue at https://github.com/anomalyco/opencode/issues.
+The original early-release instructions directed feedback to the upstream OpenCode issue tracker. That tracker is provenance for this retained extension, not Repa's support channel.
 
-## Development
+## Source-Local Development
 
 1. `code sdks/vscode` - Open the `sdks/vscode` directory in VS Code. **Do not open from repo root.**
 2. `bun install` - Run inside the `sdks/vscode` directory.

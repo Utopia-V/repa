@@ -1,8 +1,11 @@
 # @opencode-ai/slack
 
-Slack bot integration for opencode that creates threaded conversations.
+> **Status — retained OpenCode integration outside Repa's TUI baseline.** This README documents source-local behavior and setup for the inherited Slack bot. It does not authorize connecting, deploying, building, or releasing Slack as a Repa product surface; an accepted Repa ADR or Gate must explicitly admit that scope.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
 
-## Setup
+The retained integration creates OpenCode sessions for threaded Slack conversations.
+
+## Source-Local Setup
 
 1. Create a Slack app at https://api.slack.com/apps
 2. Enable Socket Mode
@@ -17,11 +20,11 @@ Slack bot integration for opencode that creates threaded conversations.
    - `SLACK_SIGNING_SECRET` - Signing Secret from Basic Information
    - `SLACK_APP_TOKEN` - App-Level Token from Basic Information
 
-## Usage
+## Source-Local Usage
 
 ```bash
 # Edit .env with your Slack app credentials
 bun dev
 ```
 
-The bot will respond to messages in channels where it's added, creating separate opencode sessions for each thread.
+When this retained integration is intentionally run, the bot responds to messages in channels where it is added and creates a separate OpenCode session for each thread.

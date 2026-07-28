@@ -1,6 +1,9 @@
 # @opencode-ai/sdk-next
 
-Effect-native scoped OpenCode host for in-process applications. This transitional package will replace the existing generated `@opencode-ai/sdk` after its consumers migrate.
+> **Status — deferred preview-v2 package documentation, not Repa's production SDK plan.** This file may guide source-local maintenance of `packages/sdk-next`. The package's presence does not authorize enabling it, migrating callers, or replacing the released SDK/runtime; those decisions require an accepted Repa ADR or Gate.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
+This package implements an Effect-native scoped OpenCode host for in-process applications. The inherited preview-v2 effort intended it to replace the generated `@opencode-ai/sdk` after consumer migration; Repa has not accepted that replacement as a production direction.
 
 The SDK executes Server's assembled HTTP router in memory. It opens no listener and performs no network I/O, while preserving the same routing, middleware, handlers, codecs, and errors as the network client.
 

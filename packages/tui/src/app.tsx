@@ -59,7 +59,6 @@ import { isDefaultTitle } from "./util/session"
 import { KVProvider, useKV } from "./context/kv"
 import * as Model from "./util/model"
 import { ArgsProvider, useArgs, type Args } from "./context/args"
-import open from "open"
 import { PromptRefProvider, usePromptRef } from "./context/prompt"
 import { TuiConfigProvider, useTuiConfig, type TuiConfig } from "./config"
 import { createTuiApiAdapters } from "./plugin/adapters"
@@ -120,7 +119,6 @@ const appBindingCommands = [
   "theme.switch_mode",
   "theme.mode.lock",
   "help.show",
-  "docs.open",
   "diff.open",
   "app.debug",
   "app.console",
@@ -735,15 +733,6 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         slashName: "help",
         run: () => {
           dialog.replace(() => <DialogHelp />)
-        },
-        category: "System",
-      },
-      {
-        name: "docs.open",
-        title: "Open docs",
-        run: () => {
-          open("https://opencode.ai/docs").catch(() => {})
-          dialog.clear()
         },
         category: "System",
       },

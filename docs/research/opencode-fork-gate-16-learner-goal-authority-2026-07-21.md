@@ -1,12 +1,17 @@
 # OpenCode fork Gate 16: learner Goal authority
 
-Status: Maintainer grill complete. The decisions under **Accepted maintainer
-decisions** are accepted product meaning. Independent whole-Gate review run
-`gate16-whole-20260721-01` has closed `G16-CT-001` through `G16-CT-005` and
-`G16-IE-001` through `G16-IE-013`, then closed the bounded real-provider
-qualification `G16-IE-U01`. It returned final `Accept` for the complete
-contract/theory and implementation/evidence candidate. Gate 16 is closed by the
-accepted implementation snapshot in this change.
+Status: Reopened by the 2026-07-27 first-principles audit. The decisions under
+**Accepted maintainer decisions** remain the intended product boundary, but the
+contract's raw-SQL closure requirements and the accepted implementation
+contradict its open natural-language admission semantics. The unstaged TUI
+correction described below was accepted by the original TUI reviewer, but the
+natural-language corrective amendment still awaits fresh separate top-level
+review and there is no durable integration commit. Independent review
+run `gate16-whole-20260721-01` historically closed `G16-CT-001` through
+`G16-CT-005`, `G16-IE-001` through `G16-IE-013`, and the bounded real-provider
+qualification `G16-IE-U01`; commit
+`69433fc78d383bade1d92319eb3153a2cd7c68bd` remains that historical closed
+snapshot, not current implementation acceptance.
 
 Date: 2026-07-21
 
@@ -28,12 +33,96 @@ composes Goal inspection and correction into the terminal. Gate 23 proves the
 integrated loop, including Goal-driven cross-day replanning. None of those
 consumer behaviors belongs to Gate 16.
 
+## 2026-07-27 reopen finding
+
+The accepted contract says entry is not restricted to `/goal`, any other
+command, or a fixed interaction shape; a clear fully learner-authored Goal may
+commit without redundant confirmation, and the runtime cannot prove full
+natural-language semantics. The implementation nevertheless installs
+`learner_goal_commit_seal_direct_validate`, which:
+
+- accepts direct creation only when learner text begins with one of a fixed
+  English or Chinese command patterns;
+- treats a fixed list of words such as `daily`, `every day`, and `每天` as
+  cadence evidence regardless of their semantic role;
+- scans for fixed negation, scope, target, condition, disposition, correction,
+  and replacement phrases; and
+- requires direct update/replacement text to contain the internal Goal ID and,
+  in several cases, a prescribed rendering of the intended operation.
+
+For example, `请记住我这学期要通过微积分` is a clear learner-authored durable
+outcome but does not match the direct-create whitelist. `读懂小说 Every Day`
+contains a title that the trigger treats as cadence vocabulary. The existing
+tests overwhelmingly use forms such as `/goal ... active LearnerHome goal with
+no conditions and no target`, so they do not falsify this boundary.
+
+This is not merely missing internationalization. A database integrity layer
+has become an unversioned natural-language parser and interaction protocol,
+while an arbitrary out-of-band SQL writer could still drop or bypass the
+triggers. The repair must retain structural ownership, foreign-key, uniqueness,
+version, append-only, atomic-settlement, and application fault-injection
+invariants while removing semantic interpretation and acknowledgement
+rendering from SQLite. The direct and accepted-candidate behaviors then require
+focused natural-language counterexamples before Gate 16 may close again.
+
+### Proposed corrective contract amendment — awaiting independent review
+
+The reopen finding exposes one missing provenance arm in addition to the
+invalid parsers. The following amendment is a derived engineering proposal,
+not implementation authority. Under the repository review policy it must close
+in a fresh, separate top-level reviewer task before Gate 16 implementation may
+depend on it:
+
+- open-language Goal recognition and contextual reference resolution belong to
+  the model-assisted command-authoring boundary; neither application code nor
+  SQLite may decide them from a fixed phrase, locale-specific keyword list, or
+  learner-visible internal Goal ID;
+- the direct `learner_request` arm still binds one exact admitted learner
+  occurrence, exact authored excerpts for every changed learner-supplied
+  meaning, trusted current Goal/Course identities and versions, a closed
+  command, effective permission, and a visible correctable result;
+- a model may resolve a natural reference such as “我的微积分目标” to an
+  exact trusted Goal head without requiring that the learner repeat its
+  internal ID when the bounded current context gives it one sufficiently
+  determinate referent. That resolution remains an inspectable model claim,
+  not a mechanically proved linguistic fact: its basis preserves the exact
+  learner excerpt, the bounded candidate/context view used for resolution, and
+  the selected current identity/version. If several live referents remain
+  plausible, or the operation supplies meaning or a relation not authorized by
+  the learner wording, it uses the existing `learner_acceptance` candidate arm;
+- a new Goal needs a fourth field-basis arm,
+  `{ type: "defaulted" }`, so omitted initial values are not falsely recorded
+  as learner-authored. It is legal only for a direct version-1 new Goal,
+  whether introduced by a create operation or as the new target of a replace
+  operation: empty conditions, LearnerHome scope, absent target, and active
+  disposition. It is illegal for the outcome, accepted candidates, revisions
+  of an existing Goal, clearing or changing a field, and every non-default
+  value. An explicit learner statement equal to a default remains `authored`;
+  migration must not reinterpret historical authored rows;
+- language-independent mechanical checks remain program-owned: authored
+  excerpts must occur in the exact source, changed values must match their
+  bases, a resolved Goal or Course must have appeared in the exact bounded
+  resolution view and still match its trusted identity/version, explicit
+  target normalization must be mechanically reproducible, carried fields must
+  match their exact predecessor, and all existing structural, transaction,
+  replay, and dependency-closure rules continue to apply. These checks do not
+  certify that a phrase semantically entailed the selected referent; the
+  stored model-resolution basis and ordinary correction path keep that
+  epistemic limit truthful; and
+- focused evidence must admit clear non-command wording, a title containing
+  `Every Day`, and an unambiguous contextual Goal update without exposing an
+  internal ID; reject illegal `defaulted` uses; preserve the accepted-candidate
+  path; and prove that the primary TUI shows the exact proposal and durable
+  result.
+
 This record owns the accepted Gate 16 engineering contract and closing
 evidence. Accepted product meaning comes from the product foundation, accepted
 ADRs, architecture, Roadmap 09, and the maintainer decisions below. Storage,
 command, projection, failure, and evidence details remain derived engineering
-decisions rather than product authority; the fresh separate top-level reviewer
-challenged, repaired, and accepted the complete candidate recorded here.
+decisions rather than product authority. Review run
+`gate16-whole-20260721-01` challenged, repaired, and accepted the historical
+contract recorded below; it does not cover the proposed corrective amendment
+above.
 
 ## Why this Gate exists
 
@@ -1009,7 +1098,9 @@ is to falsify static Goal priority and Assignment-only planning.
 Gate 16 must preserve enough exact Goal meaning for Gate 21 to distinguish the
 demands without owning the allocation. Gate 21's bounded experiment must prove
 that accepted input changes cause reproducible recomputation. Gate 23 must later
-exercise that Goal-driven path through the sole production entrypoint.
+exercise that Goal-driven path through the single released-v1 production
+model/Turn spine, including the primary TUI and representative retained
+interactive carriers.
 
 ## Fixed non-implications
 
@@ -1385,3 +1476,43 @@ production-path conformance only. The deterministic suites remain the authority
 for state, authorization, dependency, replay, recovery, and negative behavior.
 The same reviewer returned final `Accept`; no material unknown remains for the
 Gate 16 boundary.
+
+## 2026-07-27 first-principles correction
+
+The last sentence above is historical review provenance, not the current
+disposition. The reopened defect is not confined to SQLite. Application-layer
+direct admission uses a fixed English/Chinese initiation whitelist and keyword
+tests, update/replacement prompts demand that learner wording include an
+internal Goal ID, and closure fixtures predominantly use machine-shaped
+`/goal ...` prose. The SQL trigger then duplicates and strengthens those
+heuristics. Adding more phrases would preserve the false boundary.
+
+Repair must retain structural Goal ownership and transaction invariants while
+moving open semantic interpretation out of SQL, allowing ordinary contextual
+reference without exposing internal IDs, and testing natural counterexamples.
+The primary TUI must also show the exact proposed Goal meaning at approval and
+the durable applied/already-applied/no-effect result after settlement. Trigger
+DDL and predecessor fixtures are governed by the cross-Gate migration repair.
+
+## 2026-07-28 TUI corrective implementation candidate
+
+The unstaged shared presenter now displays every supported create, update, and
+replace operation from the exact owner-produced Goal meaning, Course titles and
+availability, field bases, lifecycle, conditions, target, and relations.
+Opaque Goal and Revision identities remain binding data rather than learner
+copy. The result is generated from the committed Goal revision and settlement
+operations inside the transaction, stored once, and remains visible in TUI and
+direct-run after later provider failure. The maximum legal Goal proposal is
+scrollable without hiding the once-only permission controls.
+
+The original TUI reviewer independently accepted the envelope, semantic
+completeness, ID-opacity, scrolling, committed-readback, replay, and
+provider-failure counterexamples. This closes only the TUI part of Gate 16's
+reopen in the working-tree candidate.
+
+The natural-language admission defect remains open. The earlier **Proposed
+corrective contract amendment — awaiting independent review** is still a
+proposal, not implementation authority. It must pass fresh separate top-level
+contract/theory review before SQL phrase forensics, natural-reference handling,
+or direct/defaulted admission may be implemented. Gate 16 therefore remains
+reopened, and Gate 17 remains paused.

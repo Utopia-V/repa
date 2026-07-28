@@ -47,7 +47,7 @@ jobs:
           node-version: "24"
 
       - name: Setup Bun
-        uses: ./.github/actions/setup-bun
+        uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Configure git identity
         run: |
@@ -108,7 +108,7 @@ jobs:
           node-version: "24.15"
 
       - name: Setup Bun
-        uses: ./.github/actions/setup-bun
+        uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Read Playwright version
         id: playwright-version

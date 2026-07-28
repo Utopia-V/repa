@@ -33,6 +33,7 @@ import { Reference } from "@opencode-ai/core/reference"
 import { Location } from "@opencode-ai/core/location"
 import { PluginV2 } from "@opencode-ai/core/plugin"
 import { SystemPrompt } from "@/session/system"
+import { AgentIdentifier } from "./identifier"
 
 export const Info = Schema.Struct({
   name: Schema.String,
@@ -69,10 +70,10 @@ export class WorkflowModelUnavailableError extends Schema.TaggedErrorClass<Workf
   }
 }
 
-export type GenerationError = Provider.DefaultModelError | WorkflowModelUnavailableError
+export type GenerationError = Provider.DefaultModelError | WorkflowModelUnavailableError | AgentIdentifier.ConflictError
 
 const GeneratedAgent = Schema.Struct({
-  identifier: Schema.String,
+  identifier: AgentIdentifier.Info,
   whenToUse: Schema.String,
   systemPrompt: Schema.String,
 })
@@ -90,6 +91,7 @@ export function generationSystem(extensions: readonly string[]) {
 export interface Interface {
   readonly get: (agent: string) => Effect.Effect<Info | undefined>
   readonly list: () => Effect.Effect<Info[]>
+  readonly identifiers: () => Effect.Effect<string[]>
   readonly defaultInfo: () => Effect.Effect<Info>
   readonly defaultAgent: () => Effect.Effect<string>
   readonly generate: (input: {
@@ -163,7 +165,7 @@ const layer = Layer.effect(
 
         const user = Permission.fromConfig(cfg.permission ?? {})
 
-        const agents: Record<string, Info> = {
+        const agents: Record<string, Info> = Object.assign(Object.create(null) as Record<string, Info>, {
           repa: {
             name: "repa",
             description: "The default learning-first Repa profile for inquiry, teaching, planning, and practical work.",
@@ -305,7 +307,7 @@ const layer = Layer.effect(
             ),
             prompt: PROMPT_SUMMARY,
           },
-        }
+        })
 
         for (const [key, value] of Object.entries(cfg.agent ?? {})) {
           if (value.disable) {
@@ -372,6 +374,10 @@ const layer = Layer.effect(
           )
         })
 
+        const identifiers = Effect.fnUntraced(function* () {
+          return Object.keys(agents)
+        })
+
         const defaultInfo = Effect.fnUntraced(function* () {
           const c = yield* config.get()
           if (c.default_agent) {
@@ -393,6 +399,7 @@ const layer = Layer.effect(
         return {
           get,
           list,
+          identifiers,
           defaultInfo,
           defaultAgent,
         } satisfies State
@@ -405,6 +412,9 @@ const layer = Layer.effect(
       }),
       list: Effect.fn("Agent.list")(function* () {
         return yield* InstanceState.useEffect(state, (s) => s.list())
+      }),
+      identifiers: Effect.fn("Agent.identifiers")(function* () {
+        return yield* InstanceState.useEffect(state, (s) => s.identifiers())
       }),
       defaultInfo: Effect.fn("Agent.defaultInfo")(function* () {
         return yield* InstanceState.useEffect(state, (s) => s.defaultInfo())
@@ -430,7 +440,7 @@ const layer = Layer.effect(
         const extensions: string[] = []
         yield* plugin.trigger("experimental.chat.system.transform", { model: resolved }, { system: extensions })
         const system = generationSystem(extensions)
-        const existing = yield* InstanceState.useEffect(state, (s) => s.list())
+        const existingIdentifiers = yield* InstanceState.useEffect(state, (s) => s.identifiers())
 
         // TODO: clean this up so provider specific logic doesnt bleed over
         const authInfo = yield* auth.get(model.providerID).pipe(Effect.orDie)
@@ -456,7 +466,7 @@ const layer = Layer.effect(
                 )),
             {
               role: "user",
-              content: `Create a specialized Repa agent profile for this request: "${input.description}".\n\nThe following identifiers already exist and must not be reused: ${existing.map((i) => i.name).join(", ")}\nReturn only the JSON object without a Markdown fence.`,
+              content: `Create a specialized Repa agent profile for this request: "${input.description}".\n\nThe following identifiers already exist and must not be reused: ${existingIdentifiers.join(", ")}\nReturn only the JSON object without a Markdown fence.`,
             },
           ],
           model: language,
@@ -466,24 +476,26 @@ const layer = Layer.effect(
           ),
         } satisfies Parameters<typeof generateObject>[0]
 
-        if (isOpenaiOauth) {
-          return yield* Effect.promise(async () => {
-            const result = streamObject({
-              ...params,
-              providerOptions: ProviderTransform.providerOptions(resolved, {
-                instructions: system.join("\n\n"),
-                store: false,
-              }),
-              onError: () => {},
+        const generated = isOpenaiOauth
+          ? yield* Effect.promise(async () => {
+              const result = streamObject({
+                ...params,
+                providerOptions: ProviderTransform.providerOptions(resolved, {
+                  instructions: system.join("\n\n"),
+                  store: false,
+                }),
+                onError: () => {},
+              })
+              for await (const part of result.fullStream) {
+                if (part.type === "error") throw part.error
+              }
+              return result.object
             })
-            for await (const part of result.fullStream) {
-              if (part.type === "error") throw part.error
-            }
-            return result.object
-          })
+          : yield* Effect.promise(() => generateObject(params).then((r) => r.object))
+        if (!AgentIdentifier.isAvailable(generated.identifier, existingIdentifiers)) {
+          return yield* new AgentIdentifier.ConflictError({ identifier: generated.identifier })
         }
-
-        return yield* Effect.promise(() => generateObject(params).then((r) => r.object))
+        return generated
       }),
     })
   }),

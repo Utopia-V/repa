@@ -1,6 +1,32 @@
 # Repository guidance
 
-## Product origin
+## Authority and document routing
+
+- This file owns repository-wide agent working constraints and navigation. It
+  does not own current Gate status, product meaning, runtime selection, or
+  release disposition.
+- `docs/README.md` is the sole current-status map. Product foundations and
+  accepted ADRs own stable product meaning; architecture documents own current
+  system boundaries; the active roadmap owns accepted Gate topology only; the
+  fork ledger owns exact closure, correction, and evidence provenance.
+- Gate contracts, plans, implementation slices, tests, reviews, inherited
+  specifications, and source-local notes derive from those owners. Detail,
+  automatic discovery, or proximity to code does not promote them into product
+  authority.
+- A nested `AGENTS.md` may refine maintenance rules for its subtree but may not
+  change the product baseline, runtime direction, Gate topology, or current
+  disposition. Resolve any conflict in favor of the authority map above and
+  repair the misleading local instruction before continuing consequential
+  work.
+- Tracked OpenCode documentation and preview-v2 material may remain as fork
+  provenance or maintenance evidence. Treat it as non-authoritative unless the
+  current documentation map explicitly admits it for the question at hand.
+
+## Product origin checksum
+
+The following is a compact execution-time projection of the owning product
+documents, not a second specification. If it diverges from the authority map
+above, stop relying on it and repair this projection.
 
 This repository implements a terminal-native agentic learning system. The agent works in a local learning workspace and continuously connects learning goals, course material, teaching, examples, learner questions, practice, review, prerequisite gaps, assignments, deadlines, and time budgets.
 
@@ -38,10 +64,18 @@ learning tools.
 
 ## Project decision ownership
 
-- Product foundation documents, accepted ADRs, and the active roadmap own Repa
-  product meaning. Gate contracts, plans, implementation slices, tests, and
+- Product foundations and accepted ADRs own stable Repa product meaning.
+  Architecture documents own current system boundaries, and the active roadmap
+  owns accepted engineering topology without turning future Gate detail into
+  product truth. Gate contracts, plans, implementation slices, tests, and
   reviews derive from them and do not gain authority through detail or
   completion.
+- Decision ownership preserves current meaning and correction provenance; it
+  does not make an accepted decision technically correct. A product-wide audit
+  may falsify an ADR, Gate, architecture boundary, or maintainer interpretation
+  against Repa's intended learning loop, concrete counterexamples, and sound
+  software-design principles. Revise the owning decision and its dependents
+  rather than using authority order to conceal the defect.
 - For inherited capability disposition, separately decide baseline membership,
   ordinary reachability, startup/build/release participation, and physical
   source removal. Classify independently useful behavior before following the
@@ -57,9 +91,11 @@ learning tools.
   dependents before resuming implementation. Choose the scope that establishes
   the intended stable product boundary without absorbing an adjacent objective.
 
-## Settled constraints
+## Settled-constraint checksum
 
-- The main interaction is a natural-language terminal agent.
+- The main user-facing interaction is the existing natural-language TUI.
+  Direct run, attach, local server, and ACP are retained interaction carriers,
+  not alternate primary product UIs or separate Tutor runtimes.
 - The implementation language/runtime is TypeScript/Bun.
 - Repa is an independent product created from a one-time full-history fork of
   OpenCode `v1.17.18`. The project owns the resulting harness composition,
@@ -154,8 +190,10 @@ learning tools.
   truth.
 - ADR-0012 centers a single-process modular monolith on separate learning
   authorities. Interaction, source/artifact, Course View, Material Map,
-  learner record, Agenda, and Tutor policy must not collapse into the Agent
-  runner, one universal graph/fact table, or prompt memory.
+  learner record, Goal, future attention, Assignment, planning, and Tutor
+  policy must not collapse into the Agent runner, one universal graph/fact
+  table, prompt memory, or one universal Agenda owner. `Agenda` is only a
+  family/composition name unless a concrete consumer earns a narrower owner.
 
 ## Decision-record continuity
 
@@ -190,6 +228,27 @@ learning tools.
 - Do not introduce `manager`, `service`, `repository`, `controller`, or compatibility layers without a concrete boundary they protect.
 - Critical contracts require an explanation of ownership, legal state transitions, persistence, recovery, and failure behavior before implementation.
 - Prompts are not a substitute for domain rules, authorization, or state transitions.
+- The registered default build, startup, and package composition must implement
+  the terminal-only baseline. An opt-out flag does not make excluded Web or
+  Desktop assets absent by default; hibernated source may remain without
+  automatic build or release participation.
+- A restricted custom Agent is default-deny plus explicit allows from one
+  authoritative capability/permission catalog. Omitted or newly registered
+  capabilities must not inherit a wildcard allow from a stale creation UI.
+- Consequential permission proposals and durable settlement results use one
+  typed semantic projection across retained terminal carriers. The primary TUI
+  must show exact bound scope before approval and truthful committed,
+  already-applied, no-effect, or failed state afterward; generic hidden output
+  is not equivalent evidence.
+- SQLite constraints protect structural invariants reachable through supported
+  application transitions; they are not a semantic-forensics boundary against
+  an actor with arbitrary out-of-band SQL, who could also remove the
+  constraints. Keep natural-language interpretation, acknowledgement
+  rendering, and complete application command semantics out of triggers.
+  Every trigger/constraint change that can alter an existing database's
+  behavior must be a versioned migration artifact and tested from a frozen
+  historical fixture, not by downgrading a current schema and reinstalling
+  current helpers.
 - Legacy labs remain in the pre-fork oracle and are not copied here. A current
   gate may authorize a new isolated experiment only with an explicit question
   and deletion condition; production code must not import it. Promote
@@ -491,19 +550,13 @@ const table = sqliteTable("session", {
 
 - Always run `bun typecheck` from package directories (e.g., `packages/opencode`), never `tsc` directly.
 
-## Inherited preview-v2 notes
+## Inherited preview-v2 maintenance
 
-These rules constrain maintenance of inherited preview-v2 files only. They do
-not authorize enabling v2 as Repa's production runtime or maintaining v1 and v2
-as parallel product paths; the settled Repa baseline remains the released-v1
-execution path until a later accepted gate changes it.
-
-- Keep durable prompt admission separate from model execution. `SessionV2.prompt(...)` admits one durable `session_input` row before scheduling advisory `SessionExecution.wake(sessionID)` unless `resume: false` requests admit-only behavior. The serialized runner promotes admitted inputs into visible user messages at safe boundaries.
-- Reusing a Session ID adopts the existing Session. Reusing a prompt message ID reconciles an exact retry only when Session, prompt, and delivery mode match; conflicting reuse fails. Historical projected prompts lazily synthesize promoted inbox records during exact retry.
-- Keep `SessionExecution` process-global and Session-ID based. Its local implementation owns the process-local Session coordinator and discovers placement through `SessionStore` plus `LocationServiceMap.get(session.location)` only when a drain starts; no layer should take a Session ID. V2 interruption targets the active process-local ownership chain for that Session; idle or missing interruption is a no-op.
-- Keep `SessionRunner`, model resolution, tool registry, permissions, and filesystem Location-scoped. Omitted `Location.workspaceID` means implicit-local placement; explicit workspace identity remains reserved for future placement semantics.
-- Preserve one explicit `llm.stream(request)` call per provider turn and reload projected history before durable continuation. Do not bridge through legacy `SessionPrompt.loop(...)` or delegate orchestration to an in-memory tool loop.
-- Keep local Session drains process-local until clustering is implemented. `SessionRunCoordinator` joins explicit same-Session resumes, coalesces prompt wakeups, and allows different Sessions to run concurrently. Advisory wakes drain eligible durable inbox rows only; post-crash continuation recovery requires a separate explicit design before it may retry provider work. A drain has no durable identity or transcript boundary.
-- Keep delivery vocabulary explicit. Prompts steer by default and promote at the next safe provider-turn boundary while the current drain requires continuation. An explicit `queue` input remains pending until the Session would otherwise become idle; promote one queued input at that boundary, then reevaluate continuation before promoting another. Promoting any new user input resets the selected agent's provider-turn allowance; a batch of steers resets it once.
-- Keep EventV2 replay owner claims separate from clustered Session execution ownership.
-- Keep the System Context algebra, registry, and built-ins in `src/system-context`; keep Context Source producers with their observed domains, and keep Session History selection plus Context Epoch persistence Session-owned.
+Preview-v2 source and specifications are retained, hibernated fork material.
+They may be maintained only under an explicitly scoped local instruction and
+may supply individually reviewed implementation evidence. They do not describe
+Repa's current Session semantics, input delivery, queue/steer behavior, tool
+runtime, product roadmap, or release direction. The production baseline remains
+the released-v1 execution path until an accepted product decision and Gate
+contract change it; never infer such a change from preview source shape or
+inherited specifications.

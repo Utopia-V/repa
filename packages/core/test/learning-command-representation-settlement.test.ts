@@ -12,9 +12,16 @@ import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { Representation } from "@opencode-ai/core/representation"
+import { learningCommandStatements } from "@opencode-ai/core/representation/learning-command-constraint-v12"
+import { representationFailureCodesV12 } from "@opencode-ai/core/representation/learning-command-failure-code-v12"
+import { isRepresentationSettlement } from "@opencode-ai/core/representation/learning-command-settlement"
 import { PDFTextProfile } from "@opencode-ai/core/representation/pdf-text-profile"
 import { RepresentationSchema } from "@opencode-ai/core/representation/schema"
-import { RepresentationEffectTable, RepresentationRevisionTable } from "@opencode-ai/core/representation/sql"
+import {
+  RepresentationCommandCommitSealTable,
+  RepresentationEffectTable,
+  RepresentationRevisionTable,
+} from "@opencode-ai/core/representation/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
@@ -28,7 +35,69 @@ import path from "path"
 
 const model = { modelID: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
 
+function acceptRepresentationFailureCode(_code: LearningCommand.RepresentationFailureCode) {}
+
+acceptRepresentationFailureCode("producer_unavailable")
+// @ts-expect-error Temporal context is owned by Retained Steering and Learner Goal, not Representation.
+acceptRepresentationFailureCode("temporal_context_unavailable")
+// @ts-expect-error Capacity exhaustion is owned by Retained Steering and Learner Goal, not Representation.
+acceptRepresentationFailureCode("capacity_exceeded")
+
 describe("Representation learning-command settlement", () => {
+  test("keeps the frozen v12 failure vocabulary shared by validator and trigger", () => {
+    expect(representationFailureCodesV12).toEqual([
+      "semantic_conflict",
+      "context_refresh_required",
+      "permission_rejected",
+      "permission_corrected",
+      "cancelled",
+      "interrupted",
+      "source_unavailable",
+      "ambiguous_content_root",
+      "unsupported_source",
+      "source_too_large",
+      "producer_unavailable",
+      "producer_failed",
+      "producer_timeout",
+      "invalid_producer_output",
+      "publication_failed",
+      "outcome_unknown",
+      "stale",
+      "inactive",
+      "validation_error",
+    ])
+    expect(
+      representationFailureCodesV12.every((code) =>
+        isRepresentationSettlement({
+          outcome: "error",
+          code,
+          settlementTime: 1,
+          settlementOrder: 0,
+        }),
+      ),
+    ).toBeTrue()
+    expect(
+      ["temporal_context_unavailable", "capacity_exceeded"].some((code) =>
+        isRepresentationSettlement({
+          outcome: "error",
+          code,
+          settlementTime: 1,
+          settlementOrder: 0,
+        }),
+      ),
+    ).toBeFalse()
+
+    const trigger = learningCommandStatements.find((statement) =>
+      statement.includes("representation_learning_command_no_effect_validate_v12"),
+    )
+    if (!trigger) throw new Error("The v12 Representation no-effect trigger is missing")
+    const codeList = /json_extract\(NEW\.settlement, '\$\.code'\) IN \(\s*([\s\S]*?)\s*\), 0/.exec(trigger)?.[1]
+    if (!codeList) throw new Error("The v12 Representation no-effect trigger has no failure-code list")
+    expect(Array.from(codeList.matchAll(/'([^']+)'/g), (match) => match[1])).toEqual(
+      [...representationFailureCodesV12],
+    )
+  })
+
   test("keeps semantic address separate from physical delivery and exact payload", () => {
     const occurrenceID = LearningCommand.createOccurrenceID()
     const effectiveArtifactID = createArtifactID()
@@ -218,19 +287,24 @@ describe("Representation learning-command settlement", () => {
           expect(physical).toMatchObject({
             command_name: LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
             status: "applied",
-            effect_id: null,
-            representation_effect_id: applied.representation.effectID,
+            receipt_id: applied.settlement.type === "settled" ? applied.settlement.settlement.receiptID : undefined,
           })
           expect(
             yield* database.db
-              .select()
-              .from(LearningCommandReceiptTable)
-              .where(eq(LearningCommandReceiptTable.representation_effect_id, applied.representation.effectID))
+              .select({
+                occurrenceID: LearningCommandReceiptTable.occurrence_id,
+                effectID: RepresentationCommandCommitSealTable.effect_id,
+              })
+              .from(RepresentationCommandCommitSealTable)
+              .innerJoin(
+                LearningCommandReceiptTable,
+                eq(LearningCommandReceiptTable.id, RepresentationCommandCommitSealTable.receipt_id),
+              )
+              .where(eq(RepresentationCommandCommitSealTable.effect_id, applied.representation.effectID))
               .get(),
           ).toMatchObject({
-            occurrence_id: interaction.invocation.envelope.occurrenceID,
-            effect_id: null,
-            representation_effect_id: applied.representation.effectID,
+            occurrenceID: interaction.invocation.envelope.occurrenceID,
+            effectID: applied.representation.effectID,
           })
           expect(
             yield* database.db.transaction((tx) =>
@@ -238,19 +312,21 @@ describe("Representation learning-command settlement", () => {
             ),
           ).toEqual({ type: "replay", settlement: applied.settlement.settlement })
 
-          const wrongDomainColumn = yield* database.db
+          const terminalRewrite = yield* database.db
             .run(
-              sql`UPDATE learning_command_invocation SET effect_id = representation_effect_id, representation_effect_id = NULL WHERE part_id = ${interaction.invocation.envelope.partID}`,
+              sql`UPDATE learning_command_invocation SET receipt_id = NULL WHERE part_id = ${interaction.invocation.envelope.partID}`,
             )
             .pipe(Effect.exit)
-          expect(Exit.isFailure(wrongDomainColumn)).toBeTrue()
+          expect(Exit.isFailure(terminalRewrite)).toBeTrue()
           expect(
             yield* database.db
-              .select({ representationEffectID: LearningCommandInvocationTable.representation_effect_id })
+              .select({ receiptID: LearningCommandInvocationTable.receipt_id })
               .from(LearningCommandInvocationTable)
               .where(eq(LearningCommandInvocationTable.part_id, interaction.invocation.envelope.partID))
               .get(),
-          ).toEqual({ representationEffectID: applied.representation.effectID })
+          ).toEqual({
+            receiptID: applied.settlement.type === "settled" ? applied.settlement.settlement.receiptID : null,
+          })
 
           const duplicate = yield* seedAssistant(database.db, interaction, ordinary, "duplicate", "local_pdf")
           expect(LearningCommand.representationConversionOperationIdentity(duplicate.invocation)).toBe(
@@ -301,8 +377,12 @@ describe("Representation learning-command settlement", () => {
           expect(
             yield* database.db
               .select({ invocationPartID: LearningCommandReceiptTable.invocation_part_id })
-              .from(LearningCommandReceiptTable)
-              .where(eq(LearningCommandReceiptTable.representation_effect_id, applied.representation.effectID))
+              .from(RepresentationCommandCommitSealTable)
+              .innerJoin(
+                LearningCommandReceiptTable,
+                eq(LearningCommandReceiptTable.id, RepresentationCommandCommitSealTable.receipt_id),
+              )
+              .where(eq(RepresentationCommandCommitSealTable.effect_id, applied.representation.effectID))
               .get(),
           ).toEqual({ invocationPartID: interaction.invocation.envelope.partID })
 
@@ -329,6 +409,26 @@ describe("Representation learning-command settlement", () => {
               LearningCommand.reserveRepresentationConversion(tx, failed.invocation),
             ),
           ).toEqual({ type: "candidate" })
+          const foreignFailure = yield* database.db
+            .transaction((tx) =>
+              LearningCommand.settleRepresentationFailure(tx, {
+                ...failed.invocation,
+                code: "capacity_exceeded" as unknown as LearningCommand.RepresentationFailureCode,
+                settlement: { time: interaction.time + 31, order: 4 },
+              }),
+            )
+            .pipe(Effect.exit)
+          expect(Exit.isFailure(foreignFailure)).toBeTrue()
+          expect(
+            yield* database.db
+              .select({
+                status: LearningCommandInvocationTable.status,
+                settlement: LearningCommandInvocationTable.settlement,
+              })
+              .from(LearningCommandInvocationTable)
+              .where(eq(LearningCommandInvocationTable.part_id, failed.invocation.envelope.partID))
+              .get(),
+          ).toEqual({ status: "admitted", settlement: null })
           const failedSettlement = yield* database.db.transaction((tx) =>
             LearningCommand.settleRepresentationFailure(tx, {
               ...failed.invocation,
@@ -350,13 +450,12 @@ describe("Representation learning-command settlement", () => {
             yield* database.db
               .select({
                 status: LearningCommandInvocationTable.status,
-                courseEffectID: LearningCommandInvocationTable.effect_id,
-                representationEffectID: LearningCommandInvocationTable.representation_effect_id,
+                receiptID: LearningCommandInvocationTable.receipt_id,
               })
               .from(LearningCommandInvocationTable)
               .where(eq(LearningCommandInvocationTable.part_id, failed.invocation.envelope.partID))
               .get(),
-          ).toEqual({ status: "error", courseEffectID: null, representationEffectID: null })
+          ).toEqual({ status: "error", receiptID: null })
           expect(
             yield* database.db.transaction((tx) =>
               LearningCommand.reserveRepresentationConversion(tx, failed.invocation),

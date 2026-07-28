@@ -1,4 +1,4 @@
-import { describe, expect } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { Cause, Deferred, Effect, Fiber, Layer } from "effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { Database } from "@opencode-ai/core/database/database"
@@ -40,6 +40,11 @@ const it = testEffect(
 function setup(rules: PermissionV2.Ruleset = []) {
   return Effect.gen(function* () {
     const { db } = yield* Database.Service
+    yield* db
+      .delete(PermissionTable)
+      .where(eq(PermissionTable.project_id, Project.ID.global))
+      .run()
+      .pipe(Effect.orDie)
     yield* db
       .insert(ProjectTable)
       .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
@@ -102,6 +107,19 @@ function waitForRequest() {
   })
 }
 
+test("PermissionV2 matches action identifiers case-sensitively while preserving resource path semantics", () => {
+  const rules: PermissionV2.Ruleset = [
+    { action: "*", resource: "*", effect: "deny" },
+    { action: "read", resource: "lessons/*", effect: "allow" },
+  ]
+
+  expect(PermissionV2.evaluate("read", "lessons/one.md", rules).effect).toBe("allow")
+  expect(PermissionV2.evaluate("READ", "lessons/one.md", rules).effect).toBe("deny")
+  expect(PermissionV2.evaluate("read", "LESSONS/ONE.MD", rules).effect).toBe(
+    process.platform === "win32" ? "allow" : "deny",
+  )
+})
+
 describe("PermissionV2", () => {
   it.effect("returns the evaluated effect and only queues prompts", () =>
     Effect.gen(function* () {
@@ -150,6 +168,22 @@ describe("PermissionV2", () => {
       const blocked = yield* service.assert(assertion()).pipe(Effect.flip)
       expect(blocked).toBeInstanceOf(PermissionV2.BlockedError)
       expect(yield* service.list()).toEqual([])
+    }),
+  )
+
+  it.effect("reports only case-sensitive action rules as relevant to a block", () =>
+    Effect.gen(function* () {
+      yield* setup([
+        { action: "*", resource: "*", effect: "deny" },
+        { action: "read", resource: "*", effect: "allow" },
+      ])
+      const service = yield* PermissionV2.Service
+      const blocked = yield* service.assert(assertion({ action: "READ" })).pipe(Effect.flip)
+
+      expect(blocked).toBeInstanceOf(PermissionV2.BlockedError)
+      if (blocked instanceof PermissionV2.BlockedError) {
+        expect(blocked.rules).toEqual([{ action: "*", resource: "*", effect: "deny" }])
+      }
     }),
   )
 

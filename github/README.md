@@ -1,8 +1,11 @@
-# opencode GitHub Action
+# Inherited OpenCode GitHub Action
 
-A GitHub Action that integrates [opencode](https://opencode.ai) directly into your GitHub workflow.
+> **Status — retained OpenCode GitHub Action outside Repa's TUI baseline.** This README preserves upstream behavior, installation, and source-local development notes. It does not make the Action, GitHub App, workflows, secrets, or support links a Repa product or release surface; do not install or publish them as Repa without an accepted ADR or Gate.
+> Current Repa authority is indexed by the [documentation map](../docs/README.md).
 
-Mention `/opencode` in your comment, and opencode will execute tasks within your GitHub Actions runner.
+This retained GitHub Action was designed to integrate [OpenCode](https://opencode.ai) into an upstream GitHub workflow.
+
+In that inherited workflow, mentioning `/opencode` in a comment asks OpenCode to execute tasks within a GitHub Actions runner.
 
 ## Features
 
@@ -48,9 +51,9 @@ When commenting on specific lines, opencode receives:
 
 This allows for more targeted requests without needing to specify file paths or line numbers manually.
 
-## Installation
+## Inherited OpenCode Installation
 
-Run the following command in the terminal from your GitHub repo:
+The upstream installation flow used the following command from a GitHub repository. It is retained for source provenance and is not a Repa installation instruction:
 
 ```bash
 opencode github install
@@ -99,11 +102,11 @@ This will walk you through installing the GitHub app, creating the workflow, and
 
 3. Store the API keys in secrets. In your organization or project **settings**, expand **Secrets and variables** on the left and select **Actions**. Add the required API keys.
 
-## Support
+## Historical Upstream Support
 
-This is an early release. If you encounter issues or have feedback, please create an issue at https://github.com/anomalyco/opencode/issues.
+The original early-release instructions directed feedback to the upstream OpenCode issue tracker. That tracker is provenance for this retained Action, not Repa's support channel.
 
-## Development
+## Source-Local Development
 
 To test locally:
 

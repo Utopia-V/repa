@@ -29,7 +29,7 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Install opencode
         run: curl -fsSL https://opencode.ai/install | bash

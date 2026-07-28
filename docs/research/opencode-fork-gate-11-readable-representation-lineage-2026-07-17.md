@@ -1,7 +1,12 @@
 # OpenCode fork Gate 11: readable representation lineage
 
-Status: Closed at implementation commit `bdbfa0c05`. Contract/theory and
-implementation/evidence are independently accepted.
+Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
+primary-TUI result-presentation boundary. Representation identity, lineage,
+conversion, source proof, storage, and failure semantics remain accepted.
+The unstaged presenter and failure-vocabulary corrections described below were
+independently accepted but have no durable integration commit.
+Commit `bdbfa0c05` remains the historical closed snapshot. Contract/theory and
+implementation/evidence were independently accepted.
 Whole-Gate review run `gate11-20260717-whole-01` closed findings `G11-CT-001`
 through `G11-CT-012` and `G11-IE-001` through `G11-IE-003`. Deterministic/local
 evidence, both packaged Windows families, and the maintainer-authorized real
@@ -1428,3 +1433,35 @@ same-context preflight or child review substitutes for those results. The
 maintainer separately authorized integration. Commit `bdbfa0c05` fixes
 implementation provenance, and `docs/README.md` formally closes Gate 11 without
 starting Gate 12.
+
+## 2026-07-27 first-principles correction
+
+The contract explicitly requires a user-visible result that distinguishes
+accepted, declined, unsupported, cancelled, timed out, malformed, stale,
+unavailable, mismatched, and deleted outcomes. In the primary TUI,
+`representation_convert` falls through to the generic completed-tool renderer,
+whose output is hidden by default. A later provider failure can therefore
+conceal an accepted Representation or its exact failure state even though the
+direct-run carrier displays the result.
+
+Gate 11 is scoped-reopened only for the shared semantic result projection,
+primary-TUI behavior, and focused evidence. The repair does not broaden the
+supported formats beyond the pinned PDF text-layer path and configured
+supported image/PDF multimodal path, and does not reopen Representation
+authority or conversion semantics.
+
+## 2026-07-28 corrective implementation candidate
+
+The unstaged shared presenter makes the exact committed Representation outcome
+default-visible in TUI and direct-run and binds it to the completed ToolPart and
+outer settlement envelope. Representation's v12 failure vocabulary is now one
+frozen domain tuple that derives `RepresentationFailureCode`, the recursive
+durable validator, and the final trigger SQL. Cross-domain error codes are
+rejected at compile time, while a forced runtime violation remains
+fail-closed and recoverable at the database boundary.
+
+Independent TUI and failure-vocabulary reviewers accepted the presentation and
+single-owner corrections. The final corrective sets and Core/OpenCode
+typechecks passed. This does not broaden format support or producer semantics
+and is not a new close commit; Gate 11 remains scoped-reopened pending durable
+integration.

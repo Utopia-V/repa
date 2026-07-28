@@ -2,6 +2,7 @@ import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearnerGoalCommandTable, LearnerGoalCommitSealTable } from "@opencode-ai/core/learner-goal/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { LearningCommandInvocationTable } from "@opencode-ai/core/learning-command/sql"
@@ -47,6 +48,7 @@ const targetTimeZone = "Asia/Shanghai"
 
 type CompletedToolPart = SessionV1.ToolPart & { state: SessionV1.ToolStateCompleted }
 type GoalInvocationRow = typeof LearningCommandInvocationTable.$inferSelect
+type GoalEffectID = typeof LearnerGoalCommitSealTable.$inferSelect.effect_id
 
 type ConfirmationExpectation = Readonly<{
   label: string
@@ -156,6 +158,21 @@ try {
             const permission = yield* Permission.Service
 
             const readGoals = (asOf = Date.now()) => database.db.transaction((tx) => LearnerGoal.discover(tx, asOf))
+            const readGoalDomain = (partID: SessionV1.PartID) =>
+              Effect.all({
+                command: database.db
+                  .select()
+                  .from(LearnerGoalCommandTable)
+                  .where(eq(LearnerGoalCommandTable.invocation_part_id, partID))
+                  .get()
+                  .pipe(Effect.orDie),
+                seal: database.db
+                  .select()
+                  .from(LearnerGoalCommitSealTable)
+                  .where(eq(LearnerGoalCommitSealTable.invocation_part_id, partID))
+                  .get()
+                  .pipe(Effect.orDie),
+              })
 
             const courseLayer = LayerNode.compile(Course.node, [
               [Database.node, Layer.succeed(Database.Service, database)],
@@ -181,7 +198,7 @@ try {
               }
               preCommit: {
                 invocationStatus: GoalInvocationRow["status"]
-                goalEffectID: GoalInvocationRow["goal_effect_id"]
+                goalEffectID: GoalEffectID | null
                 ownerGoalCount: number
                 durableDraftPersisted: boolean
               }
@@ -231,13 +248,15 @@ try {
                     .get()
                     .pipe(Effect.orDie)
                   requireEvidence(invocation, `${expected.label} had no admitted invocation`)
+                  const domain = yield* readGoalDomain(invocation.part_id)
+                  requireEvidence(domain.command, `${expected.label} lost its Goal command reservation`)
                   requireEvidence(
                     invocation.session_id === request.sessionID,
                     `${expected.label} invocation changed Session`,
                   )
                   requireEvidence(invocation.status === "admitted", `${expected.label} committed before confirmation`)
                   requireEvidence(
-                    invocation.goal_effect_id === null,
+                    domain.seal === undefined,
                     `${expected.label} had a Goal effect before confirmation`,
                   )
                   requireEvidence(invocation.settlement === null, `${expected.label} settled before confirmation`)
@@ -246,7 +265,7 @@ try {
                     `${expected.label} invocation lost accepted authority`,
                   )
                   requireEvidence(
-                    invocation.permission_request_id === request.id,
+                    domain.command.permission_request_id === request.id,
                     `${expected.label} invocation lost its permission request`,
                   )
                   requireEvidence(
@@ -259,7 +278,7 @@ try {
                     `${expected.label} had a malformed confirmation`,
                   )
                   requireEvidence(
-                    invocation.goal_confirmation_snapshot === null,
+                    domain.command.confirmation_snapshot === null,
                     `${expected.label} persisted a forbidden durable draft before learner approval`,
                   )
                   const owner = yield* readGoals()
@@ -268,10 +287,14 @@ try {
                     `${expected.label} changed Goal owner state before confirmation`,
                   )
                   const surface = toolPermissionInfo(
-                    request.permission,
-                    { ...request.metadata },
-                    { ...request.metadata },
-                    [...request.patterns],
+                    {
+                      ...request,
+                      patterns: [...request.patterns],
+                      always: [...request.always],
+                      metadata: { ...request.metadata },
+                      ...(request.tool ? { tool: { ...request.tool } } : {}),
+                    },
+                    {},
                   )
                   requireEvidence(surface, `${expected.label} had no exact CLI confirmation surface`)
                   const surfaceText = [surface.title, ...surface.lines].join("\n")
@@ -294,9 +317,9 @@ try {
                     },
                     preCommit: {
                       invocationStatus: invocation.status,
-                      goalEffectID: invocation.goal_effect_id,
+                      goalEffectID: null,
                       ownerGoalCount: owner.items.length,
-                      durableDraftPersisted: invocation.goal_confirmation_snapshot !== null,
+                      durableDraftPersisted: domain.command.confirmation_snapshot !== null,
                     },
                     confirmation,
                     surface: { title: surface.title, lines: [...surface.lines] },
@@ -375,6 +398,9 @@ try {
                 .get()
                 .pipe(Effect.orDie)
               requireEvidence(invocation, `tool ${part.id} lost its invocation row`)
+              const domain = yield* readGoalDomain(invocation.part_id)
+              requireEvidence(domain.command, `tool ${part.id} lost its Goal command reservation`)
+              requireEvidence(domain.seal, `tool ${part.id} lost its Goal effect seal`)
               const occurrence = yield* database.db
                 .select()
                 .from(AdmittedLearnerOccurrenceTable)
@@ -399,7 +425,6 @@ try {
               requireEvidence(invocation.capability_identity === capability, `tool ${part.id} changed capability`)
               requireEvidence(invocation.capability_version === 1, `tool ${part.id} changed capability version`)
               requireEvidence(invocation.status === "applied", `tool ${part.id} was not applied`)
-              requireEvidence(invocation.goal_effect_id, `tool ${part.id} lost its Goal effect`)
               requireEvidence(
                 occurrence.origin_session_id === invocation.session_id &&
                   occurrence.origin_message_id === invocation.parent_user_message_id,
@@ -412,11 +437,11 @@ try {
               )
               if (invocation.authorization_basis === "learner_acceptance") {
                 requireEvidence(
-                  invocation.permission_request_id ===
+                  domain.command.permission_request_id ===
                     stableGoalPermissionRequestID(invocation.part_id, invocation.provider_call_id),
                   `tool ${part.id} lost its stable accepted permission path`,
                 )
-                requireEvidence(invocation.goal_confirmation_snapshot, `tool ${part.id} lost its confirmation snapshot`)
+                requireEvidence(domain.command.confirmation_snapshot, `tool ${part.id} lost its confirmation snapshot`)
                 const capture = confirmationCaptures.find(
                   (item) =>
                     item.tool.messageID === invocation.assistant_message_id &&
@@ -424,13 +449,16 @@ try {
                 )
                 requireEvidence(capture, `tool ${part.id} lost its process-local displayed candidate evidence`)
                 requireEvidence(
-                  isDeepStrictEqual(invocation.goal_confirmation_snapshot, capture.confirmation),
+                  isDeepStrictEqual(domain.command.confirmation_snapshot, capture.confirmation),
                   `tool ${part.id} committed a candidate different from the one displayed for acceptance`,
                 )
               } else {
-                requireEvidence(invocation.permission_request_id === null, `tool ${part.id} invented a confirmation ID`)
                 requireEvidence(
-                  invocation.goal_confirmation_snapshot === null,
+                  domain.command.permission_request_id === null,
+                  `tool ${part.id} invented a confirmation ID`,
+                )
+                requireEvidence(
+                  domain.command.confirmation_snapshot === null,
                   `tool ${part.id} invented a confirmation`,
                 )
               }
@@ -448,9 +476,9 @@ try {
                 capability: { identity: invocation.capability_identity, version: invocation.capability_version },
                 authorizationBasis: invocation.authorization_basis,
                 inputFingerprint: invocation.input_fingerprint,
-                semanticFingerprint: invocation.goal_semantic_fingerprint,
-                permissionRequestID: invocation.permission_request_id,
-                effectID: invocation.goal_effect_id,
+                semanticFingerprint: domain.command.semantic_fingerprint,
+                permissionRequestID: domain.command.permission_request_id,
+                effectID: domain.seal.effect_id,
                 status: invocation.status,
               }
             })

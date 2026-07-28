@@ -1,5 +1,8 @@
 # Catalog / Config / Plugin Lifecycle Options
 
+> **Status — inherited preview-v2 design record, not Repa authority.** This file may describe experimental source that exists in the fork as well as unfinished OpenCode plans. Use it only to maintain or audit that deferred source. Replacement, migration, retirement, launch, and default-change language below is not implementation authority for Repa; the released-v1 execution path remains the accepted baseline unless a Repa ADR or Gate explicitly changes it.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
 Status: current core has selected replayable Location-scoped Catalog transforms, aligned with option B. Reload/watch behavior and deferred external plugin activation remain design work; the option comparison below is retained as historical context.
 
 We need to choose where provider/model inputs live and how visible catalog state changes after boot. The designs below compare config, models.dev, auth, plugin activation/disablement, config edits, and policy changes under each option.

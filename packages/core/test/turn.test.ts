@@ -10,7 +10,7 @@ import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import {
   ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
   removeOccurrencePresentation,
-} from "@opencode-ai/core/learning-command/settlement"
+} from "@opencode-ai/core/learning-command"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
@@ -1909,7 +1909,7 @@ describe("TurnLifecycle", () => {
     )
   })
 
-  test("retains exact Turn mappings for an applied learning receipt and collects them only after its owner disappears", async () => {
+  test("retains exact Turn mappings and their durable receipt after the Session owner disappears", async () => {
     await withDatabase((db) =>
       Effect.gen(function* () {
         const course = yield* seedAcceptableCourseRevision(db, 5)
@@ -2029,8 +2029,12 @@ describe("TurnLifecycle", () => {
         ).toEqual({ revision_id: course.revisionID, version: 1 })
         expect(
           yield* db.get(sql`
-            SELECT status, effect_id, time_settled, settlement_order, turn_id, input_id
-            FROM learning_command_invocation WHERE part_id = ${commandCandidate.partID}
+            SELECT invocation.status, seal.effect_id, invocation.time_settled,
+                   invocation.settlement_order, invocation.turn_id, invocation.input_id
+            FROM learning_command_invocation AS invocation
+            JOIN course_selection_acceptance_commit_seal AS seal
+              ON seal.invocation_part_id = invocation.part_id
+            WHERE invocation.part_id = ${commandCandidate.partID}
           `),
         ).toMatchObject({
           status: "applied",
@@ -2056,8 +2060,12 @@ describe("TurnLifecycle", () => {
         ).toEqual({ revision_id: course.revisionID, version: 1 })
         expect(
           yield* db.get(sql`
-            SELECT status, effect_id, time_settled, settlement_order, turn_id, input_id
-            FROM learning_command_invocation WHERE part_id = ${commandCandidate.partID}
+            SELECT invocation.status, seal.effect_id, invocation.time_settled,
+                   invocation.settlement_order, invocation.turn_id, invocation.input_id
+            FROM learning_command_invocation AS invocation
+            JOIN course_selection_acceptance_commit_seal AS seal
+              ON seal.invocation_part_id = invocation.part_id
+            WHERE invocation.part_id = ${commandCandidate.partID}
           `),
         ).toMatchObject({
           status: "applied",
@@ -2069,8 +2077,10 @@ describe("TurnLifecycle", () => {
         })
         expect(
           yield* db.get(sql`
-            SELECT id, effect_id, assistant_message_id, invocation_part_id
-            FROM learning_command_receipt WHERE id = ${applied.receiptID}
+            SELECT receipt.id, seal.effect_id, receipt.assistant_message_id, receipt.invocation_part_id
+            FROM learning_command_receipt AS receipt
+            JOIN course_selection_acceptance_commit_seal AS seal ON seal.receipt_id = receipt.id
+            WHERE receipt.id = ${applied.receiptID}
           `),
         ).toEqual({
           id: applied.receiptID,
@@ -2103,24 +2113,26 @@ describe("TurnLifecycle", () => {
           source: { turnID: root.turnID },
         })
 
-        yield* db.transaction((tx) =>
-          Effect.gen(function* () {
-            // This is not an ordinary Session lifecycle: it simulates retirement
-            // of the final independently owned causal receipt and settlement.
-            yield* tx.run(sql`DELETE FROM learning_command_receipt WHERE id = ${applied.receiptID}`)
-            yield* tx.run(sql`DELETE FROM learning_command_invocation WHERE part_id = ${commandCandidate.partID}`)
-            yield* TurnLifecycle.garbageCollectUnavailableSources(tx, [root.turnID])
-          }),
-        )
-        expect(yield* db.transaction((tx) => TurnLifecycle.lookup(tx, root.turnID))).toEqual({ type: "missing" })
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`DELETE FROM learning_command_receipt WHERE id = ${applied.receiptID}`)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+        yield* db.transaction((tx) => TurnLifecycle.garbageCollectUnavailableSources(tx, [root.turnID]))
+        expect(yield* db.transaction((tx) => TurnLifecycle.lookup(tx, root.turnID))).toMatchObject({
+          type: "source_unavailable",
+          source: { turnID: root.turnID },
+        })
         expect(
           yield* db.get(sql`
             SELECT id FROM course_selection_acceptance_effect WHERE id = ${applied.effectID}
           `),
         ).toEqual({ id: applied.effectID })
-        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_unavailable_source`)).toEqual({ count: 0 })
-        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_unavailable_model`)).toEqual({ count: 0 })
-        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_unavailable_tool`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_unavailable_source`)).toEqual({ count: 1 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_unavailable_model`)).toEqual({ count: 1 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM turn_unavailable_tool`)).toEqual({ count: 1 })
       }),
     )
   })
@@ -3124,21 +3136,23 @@ describe("Gate 15 retained learning steering", () => {
           yield* db.all(sql`
             SELECT transition.id
             FROM retained_steering_transition AS transition
-            JOIN learning_command_receipt AS receipt ON receipt.retained_steering_effect_id = transition.id
+            JOIN retained_steering_commit_seal AS seal ON seal.transition_id = transition.id
+            JOIN learning_command_receipt AS receipt ON receipt.id = seal.receipt_id
             JOIN learning_command_invocation AS committed ON committed.part_id = receipt.invocation_part_id
             WHERE transition.policy_id = ${createSettlement.policyID}
               AND transition.version = 2
               AND committed.status = 'applied'
-              AND committed.retained_steering_effect_id = transition.id
+              AND committed.receipt_id = receipt.id
               AND NOT EXISTS (
                 SELECT 1 FROM retained_steering_transition AS successor
-                JOIN learning_command_receipt AS successor_receipt
-                  ON successor_receipt.retained_steering_effect_id = successor.id
+                JOIN retained_steering_commit_seal AS successor_seal
+                  ON successor_seal.transition_id = successor.id
+                JOIN learning_command_receipt AS successor_receipt ON successor_receipt.id = successor_seal.receipt_id
                 JOIN learning_command_invocation AS successor_invocation
                   ON successor_invocation.part_id = successor_receipt.invocation_part_id
                 WHERE successor.predecessor_id = transition.id
                   AND successor_invocation.status = 'applied'
-                  AND successor_invocation.retained_steering_effect_id = successor.id
+                  AND successor_invocation.receipt_id = successor_receipt.id
               )
           `),
         ).toEqual([{ id: replacementSettlement.effectID }])
@@ -3330,7 +3344,7 @@ describe("Gate 15 retained learning steering", () => {
 
         expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_policy`)).toEqual({ count: 1 })
         expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 5 })
-        expect(yield* db.get(sql`SELECT count(*) AS count FROM learning_command_receipt WHERE retained_steering_effect_id IS NOT NULL`)).toEqual({ count: 5 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_commit_seal`)).toEqual({ count: 5 })
         expect(yield* db.get(sql`SELECT steering_revision FROM retained_steering_state WHERE singleton = 1`)).toEqual({
           steering_revision: 5,
         })
@@ -3410,7 +3424,7 @@ describe("Gate 15 retained learning steering", () => {
     )
   })
 
-  test("requires a transaction-final retained effect seal and rejects a stale cut before that seal", async () => {
+  test("requires a retained effect seal before terminal settlement and rejects a stale cut", async () => {
     await withDatabase((db) =>
       Effect.gen(function* () {
         const time = Date.parse("2026-07-20T02:00:00.000Z")
@@ -3494,25 +3508,39 @@ describe("Gate 15 retained learning steering", () => {
               INSERT INTO learning_command_receipt (
                 id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
                 invocation_part_id, capability_identity, capability_version, authorization_basis,
-                retained_steering_effect_id, time_committed, commit_order
+                time_committed, commit_order
               )
               SELECT
                 ${receiptID}, occurrence_id, session_id, parent_user_message_id, assistant_message_id,
                 part_id, capability_identity, capability_version, authorization_basis,
-                ${effect.id}, ${time + 5}, 1
+                ${time + 5}, 1
               FROM learning_command_invocation
               WHERE part_id = ${prepared.candidate.partID}
             `)
-            yield* tx.run(sql`
+            const prematureTerminal = yield* tx.run(sql`
               UPDATE learning_command_invocation
-              SET status = 'applied', retained_steering_effect_id = ${effect.id},
+              SET status = 'applied', receipt_id = ${receiptID},
                   settlement = ${JSON.stringify(settlement)}, time_settled = ${time + 5}, settlement_order = 1
               WHERE part_id = ${prepared.candidate.partID}
-            `)
+            `).pipe(Effect.exit)
+            expect(Exit.isFailure(prematureTerminal)).toBe(true)
+            expect(Exit.isFailure(prematureTerminal) ? Cause.pretty(prematureTerminal.cause) : "").toContain(
+              "retained_steering_learning_command_terminal_invalid",
+            )
             yield* tx.run(sql`
               UPDATE retained_steering_state
               SET steering_revision = ${effect.steeringRevision}
               WHERE singleton = 1
+            `)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_commit_seal (transition_id, receipt_id, invocation_part_id)
+              VALUES (${effect.id}, ${receiptID}, ${prepared.candidate.partID})
+            `)
+            yield* tx.run(sql`
+              UPDATE learning_command_invocation
+              SET status = 'applied', receipt_id = ${receiptID},
+                  settlement = ${JSON.stringify(settlement)}, time_settled = ${time + 5}, settlement_order = 1
+              WHERE part_id = ${prepared.candidate.partID}
             `)
             const frontier = yield* LearningFrontier.read(tx)
             const source = yield* tx.get<{
@@ -3562,16 +3590,12 @@ describe("Gate 15 retained learning steering", () => {
                 )
               `)
               .pipe(Effect.exit)
-            yield* tx.run(sql`
-              INSERT INTO retained_steering_commit_seal (transition_id, receipt_id, invocation_part_id)
-              VALUES (${effect.id}, ${receiptID}, ${prepared.candidate.partID})
-            `)
             return { cutAttempt, effect }
           }),
         )
         expect(Exit.isFailure(attack.cutAttempt)).toBe(true)
         expect(Exit.isFailure(attack.cutAttempt) ? Cause.pretty(attack.cutAttempt.cause) : "").toContain(
-          "turn_model_retained_steering_cut_snapshot_invalid",
+          "turn_model_retained_steering_cut_item_invalid",
         )
         expect(
           yield* db.get(sql`
@@ -3652,18 +3676,27 @@ describe("Gate 15 retained learning steering", () => {
               INSERT INTO learning_command_receipt (
                 id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
                 invocation_part_id, capability_identity, capability_version, authorization_basis,
-                retained_steering_effect_id, time_committed, commit_order
+                time_committed, commit_order
               )
               SELECT
                 ${correctionReceiptID}, occurrence_id, session_id, parent_user_message_id, assistant_message_id,
                 part_id, capability_identity, capability_version, authorization_basis,
-                ${effect.id}, ${time + 15}, 2
+                ${time + 15}, 2
               FROM learning_command_invocation
               WHERE part_id = ${correction.candidate.partID}
             `)
             yield* tx.run(sql`
+              UPDATE retained_steering_state
+              SET steering_revision = ${effect.steeringRevision}
+              WHERE singleton = 1
+            `)
+            yield* tx.run(sql`
+              INSERT INTO retained_steering_commit_seal (transition_id, receipt_id, invocation_part_id)
+              VALUES (${effect.id}, ${correctionReceiptID}, ${correction.candidate.partID})
+            `)
+            yield* tx.run(sql`
               UPDATE learning_command_invocation
-              SET status = 'applied', retained_steering_effect_id = ${effect.id},
+              SET status = 'applied', receipt_id = ${correctionReceiptID},
                   settlement = ${JSON.stringify(settlement)}, time_settled = ${time + 15}, settlement_order = 2
               WHERE part_id = ${correction.candidate.partID}
             `)
@@ -3715,22 +3748,13 @@ describe("Gate 15 retained learning steering", () => {
                 )
               `)
               .pipe(Effect.exit)
-            yield* tx.run(sql`
-              UPDATE retained_steering_state
-              SET steering_revision = ${effect.steeringRevision}
-              WHERE singleton = 1
-            `)
-            yield* tx.run(sql`
-              INSERT INTO retained_steering_commit_seal (transition_id, receipt_id, invocation_part_id)
-              VALUES (${effect.id}, ${correctionReceiptID}, ${correction.candidate.partID})
-            `)
             return { cutAttempt, effect }
           }),
         )
         expect(Exit.isFailure(correctionAttack.cutAttempt)).toBe(true)
         expect(
           Exit.isFailure(correctionAttack.cutAttempt) ? Cause.pretty(correctionAttack.cutAttempt.cause) : "",
-        ).toContain("turn_model_retained_steering_cut_item_invalid")
+        ).toContain("turn_model_retained_steering_cut_snapshot_invalid")
         expect(
           yield* db.get(sql`
             SELECT assistant_message_id FROM turn_model_operation
@@ -3821,24 +3845,6 @@ describe("Gate 15 retained learning steering", () => {
           { time: time + 7, key: "gate15-raw-conflict" },
         )
         yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, conflict.invocation))
-        const ungroundedConflict = JSON.stringify({
-          outcome: "error",
-          code: "semantic_conflict",
-          settlementTime: time + 11,
-          settlementOrder: 2,
-        })
-        expect(
-          Exit.isFailure(
-            yield* db
-              .run(sql`
-                UPDATE learning_command_invocation
-                SET status = 'error', settlement = ${ungroundedConflict},
-                    time_settled = ${time + 11}, settlement_order = 2
-                WHERE part_id = ${conflict.candidate.partID}
-              `)
-              .pipe(Effect.exit),
-          ),
-        ).toBe(true)
         expect(
           yield* db.transaction((tx) =>
             LearningCommand.settleRetainedSteeringReservation(tx, {
@@ -3889,7 +3895,7 @@ describe("Gate 15 retained learning steering", () => {
             yield* db
               .run(sql`
                 UPDATE learning_command_invocation
-                SET status = 'already_applied', retained_steering_effect_id = ${applied.effectID},
+                SET status = 'already_applied', receipt_id = ${applied.receiptID},
                     settlement = ${crossOccurrence}, time_settled = ${time + 25}, settlement_order = 3
                 WHERE part_id = ${other.candidate.partID}
               `)

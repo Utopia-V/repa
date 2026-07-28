@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 import { define } from "../internal"
 import { Integration } from "../../integration"
+import { InstallationProductID, InstallationProductName } from "../../installation/version"
 
 export const LLMGatewayPlugin = define({
   id: "llmgateway",
@@ -15,9 +16,8 @@ export const LLMGatewayPlugin = define({
           if (item.provider.api.url !== "https://api.llmgateway.io/v1") continue
           if (!(yield* integrations.get(Integration.ID.make(item.provider.id)))) continue
           evt.provider.update(item.provider.id, (provider) => {
-            provider.request.headers["HTTP-Referer"] = "https://opencode.ai/"
-            provider.request.headers["X-Title"] = "opencode"
-            provider.request.headers["X-Source"] = "opencode"
+            provider.request.headers["X-Title"] = InstallationProductName
+            provider.request.headers["X-Source"] = InstallationProductID
           })
         }
       }),

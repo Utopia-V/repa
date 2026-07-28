@@ -1,3 +1,14 @@
+# Inherited OpenCode Web App Guidance
+
+> **Scope — retained source outside Repa's intended TUI baseline.** These
+> instructions apply only when work explicitly admits maintenance of
+> `packages/app`. The registered default binary build does not build or embed
+> this package. An isolated research build may opt in with
+> `--research-embed-web-ui`; that opt-in is not Web-product, startup, deployment,
+> or release authority. Root [AGENTS.md](../../AGENTS.md) routes any deliberate
+> future re-admission; current product authority is indexed by the
+> [documentation map](../../docs/README.md).
+
 ## Priorities
 
 - Prioritise, in this order: stability, simplicity, performance.
@@ -8,6 +19,10 @@
 - NEVER try to restart the app, or the server process, EVER.
 
 ## Local Dev
+
+These are inherited source-maintenance notes, not registered Repa CLI
+contracts. Verify the relevant package scripts and backend reachability before
+using them.
 
 - `opencode dev web` proxies `https://app.opencode.ai`, so local UI/CSS changes will not show there.
 - For local UI changes, run the backend and app dev servers separately.

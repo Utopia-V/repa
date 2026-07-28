@@ -26,7 +26,7 @@ export async function load(dir: string) {
       ...md.data,
       prompt: md.content.trim(),
     }
-    result[config.name] = ConfigParse.schema(ConfigAgentV1.Info, config, item)
+    define(result, config.name, ConfigParse.schema(ConfigAgentV1.Info, config, item))
   }
   return result
 }
@@ -49,11 +49,20 @@ export async function loadMode(dir: string) {
     }
     const parsed = Schema.decodeUnknownExit(ConfigAgentV1.Info)(config, { errors: "all", propertyOrder: "original" })
     if (Exit.isSuccess(parsed)) {
-      result[config.name] = {
+      define(result, config.name, {
         ...parsed.value,
         mode: "primary" as const,
-      }
+      })
     }
   }
   return result
+}
+
+function define(result: Record<string, ConfigAgentV1.Info>, name: string, config: ConfigAgentV1.Info) {
+  Object.defineProperty(result, name, {
+    value: config,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
 }

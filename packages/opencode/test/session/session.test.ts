@@ -4,7 +4,10 @@ import { EventV2 } from "@opencode-ai/core/event"
 import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { Course } from "@opencode-ai/core/course"
-import { CourseSelectionAcceptanceEffectTable } from "@opencode-ai/core/course/sql"
+import {
+  CourseSelectionAcceptanceCommitSealTable,
+  CourseSelectionAcceptanceEffectTable,
+} from "@opencode-ai/core/course/sql"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
 import { Session as SessionNs } from "@/session/session"
 import { SessionRunState } from "@/session/run-state"
@@ -1050,12 +1053,18 @@ describe("Session", () => {
           .get()
           .pipe(Effect.orDie),
       ).toBeUndefined()
-      if (!invocationRow?.effect_id) return
+      const seal = yield* database.db
+        .select()
+        .from(CourseSelectionAcceptanceCommitSealTable)
+        .where(eq(CourseSelectionAcceptanceCommitSealTable.invocation_part_id, tool.id))
+        .get()
+        .pipe(Effect.orDie)
+      if (!seal) return
       expect(
         yield* database.db
           .select()
           .from(LearningCommandReceiptTable)
-          .where(eq(LearningCommandReceiptTable.invocation_part_id, tool.id))
+          .where(eq(LearningCommandReceiptTable.id, seal.receipt_id))
           .get()
           .pipe(Effect.orDie),
       ).toBeDefined()
@@ -1063,7 +1072,7 @@ describe("Session", () => {
         yield* database.db
           .select()
           .from(CourseSelectionAcceptanceEffectTable)
-          .where(eq(CourseSelectionAcceptanceEffectTable.id, invocationRow.effect_id))
+          .where(eq(CourseSelectionAcceptanceEffectTable.id, seal.effect_id))
           .get()
           .pipe(Effect.orDie),
       ).toBeDefined()

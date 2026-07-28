@@ -143,7 +143,7 @@ describe("resolveProviderOptions", () => {
     })
 
     expect(result).toEqual([
-      { label: "OpenAI", value: "openai", hint: "ChatGPT Plus/Pro or API key" },
+      { label: "OpenAI", value: "openai", hint: "API key" },
       { label: "Custom Plugin", value: "custom-plugin", hint: "plugin" },
     ])
   })

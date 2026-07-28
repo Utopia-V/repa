@@ -21,4 +21,4 @@ jobs:
       - name: Close stale issues
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: bun script/github/close-issues.ts
+        run: bun .github/hibernated-workflows/support/github/close-issues.ts

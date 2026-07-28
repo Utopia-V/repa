@@ -66,11 +66,11 @@ For this first interval, `effectiveFrom` is the admitted current instruction;
 `validUntil` is only its expiry and cannot be used as a future activation time.
 An already-operative constraint such as “do not quiz me today” is steering. A
 one-time request or Tutor-authored reason to return to learning work at or
-after a later time is Agenda future attention. It is not encoded as steering
-that happens to expire when the requested work should begin. ALS-021's first
-excluded pilot exposed this model-facing ambiguity; the distinction follows
-the existing policy-versus-Agenda authority boundary rather than adding an
-action taxonomy.
+after a later time belongs to the separate future-attention authority. It is
+not encoded as steering that happens to expire when the requested work should
+begin. ALS-021's first excluded pilot exposed this model-facing ambiguity; the
+distinction follows the policy-versus-future-attention boundary rather than
+adding an action taxonomy or a universal Agenda owner.
 
 The first implementation may retain one time-bounded steering contribution per
 admitted source item. An identical new physical invocation reuses that effect;

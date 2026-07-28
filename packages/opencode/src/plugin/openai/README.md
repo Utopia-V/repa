@@ -1,6 +1,18 @@
 # OpenAI Responses WebSocket
 
-Enabled by default on `local`, `dev`, and `beta`. On `latest` and `prod`, set `REPA_EXPERIMENTAL_WEBSOCKETS=true`.
+> **Status — hibernated ChatGPT OAuth plugin mechanics, not a current built-in
+> Repa path.** `CodexAuthPlugin` is deliberately absent from
+> `packages/opencode/src/plugin/index.ts` while Repa lacks an owned or verified
+> compatible client registration. The low-level source remains for audit and
+> possible explicit maintenance; this page does not make ChatGPT OAuth or its
+> Responses WebSocket pool reachable by default.
+> Current Repa authority is indexed by the
+> [documentation map](../../../../../docs/README.md).
+
+If the plugin is deliberately composed for isolated maintenance, its retained
+channel helper enables WebSockets for `local`, `dev`, and `beta`, while other
+channels require `REPA_EXPERIMENTAL_WEBSOCKETS=true`. That helper behavior is
+not a release or product-support promise.
 
 ## Flow
 

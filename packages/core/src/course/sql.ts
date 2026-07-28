@@ -24,6 +24,9 @@ import type {
 } from "./schema"
 import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.sql"
+import type { ReceiptID } from "../learning-command/physical-schema"
+import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../learning-command/sql"
+import type { PartID } from "../v1/session"
 
 export const CourseTable = sqliteTable(
   "course",
@@ -412,5 +415,29 @@ export const CourseSelectionAcceptanceEffectTable = sqliteTable(
       table.committed_selection_version,
       table.id,
     ),
+  ],
+)
+
+export const CourseSelectionAcceptanceCommitSealTable = sqliteTable(
+  "course_selection_acceptance_commit_seal",
+  {
+    effect_id: text().$type<SelectionAcceptanceEffectID>().primaryKey(),
+    receipt_id: text().$type<ReceiptID>().notNull(),
+    invocation_part_id: text().$type<PartID>().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.effect_id],
+      foreignColumns: [CourseSelectionAcceptanceEffectTable.id],
+    }).onDelete("restrict"),
+    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete(
+      "restrict",
+    ),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("restrict"),
+    unique("course_selection_acceptance_commit_seal_receipt_unique").on(table.receipt_id),
+    unique("course_selection_acceptance_commit_seal_invocation_unique").on(table.invocation_part_id),
   ],
 )

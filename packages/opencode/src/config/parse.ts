@@ -1,13 +1,18 @@
 export * as ConfigParse from "./parse"
 
-import { type ParseError as JsoncParseError, parse as parseJsoncImpl, printParseErrorCode } from "jsonc-parser"
+import {
+  getNodeValue,
+  type ParseError as JsoncParseError,
+  parseTree as parseJsoncTree,
+  printParseErrorCode,
+} from "jsonc-parser"
 import { Cause, Exit, Schema as EffectSchema, SchemaIssue } from "effect"
 import type { DeepMutable } from "@opencode-ai/core/schema"
 import { InvalidError, JsonError } from "@opencode-ai/core/v1/config/error"
 
 export function jsonc(text: string, filepath: string): unknown {
   const errors: JsoncParseError[] = []
-  const data = parseJsoncImpl(text, errors, { allowTrailingComma: true })
+  const tree = parseJsoncTree(text, errors, { allowTrailingComma: true })
   if (errors.length) {
     const lines = text.split("\n")
     const issues = errors
@@ -29,7 +34,7 @@ export function jsonc(text: string, filepath: string): unknown {
     })
   }
 
-  return data
+  return tree ? getNodeValue(tree) : undefined
 }
 
 export function schema<S extends EffectSchema.Decoder<unknown, never>>(

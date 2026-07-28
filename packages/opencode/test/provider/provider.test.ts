@@ -1279,26 +1279,24 @@ it.instance(
 )
 
 it.instance(
-  "hosted nvidia provider adds billing origin header",
+  "hosted nvidia provider identifies Repa without an unowned referer",
   Effect.gen(function* () {
     const providers = yield* list
     expect(providers[ProviderV2.ID.make("nvidia")].options.headers).toEqual({
-      "HTTP-Referer": "https://opencode.ai/",
-      "X-Title": "opencode",
-      "X-BILLING-INVOKE-ORIGIN": "OpenCode",
+      "X-Title": "Repa",
+      "X-BILLING-INVOKE-ORIGIN": "Repa",
     })
   }),
   { config: { provider: { nvidia: { options: { apiKey: "test-api-key" } } } } },
 )
 
 it.instance(
-  "custom nvidia baseURL adds billing origin header",
+  "custom nvidia baseURL identifies Repa without an unowned referer",
   Effect.gen(function* () {
     const providers = yield* list
     expect(providers[ProviderV2.ID.make("nvidia")].options.headers).toEqual({
-      "HTTP-Referer": "https://opencode.ai/",
-      "X-Title": "opencode",
-      "X-BILLING-INVOKE-ORIGIN": "OpenCode",
+      "X-Title": "Repa",
+      "X-BILLING-INVOKE-ORIGIN": "Repa",
     })
   }),
   { config: { provider: { nvidia: { options: { apiKey: "test-api-key", baseURL: "http://localhost:8000/v1" } } } } },
@@ -1933,5 +1931,33 @@ it.instance(
           ),
         )
       }),
+  },
+)
+
+it.instance(
+  "active provider attribution identifies Repa and omits inherited referers",
+  Effect.gen(function* () {
+    const providers = yield* list
+    const titled = ["llmgateway", "openrouter", "vercel", "zenmux", "kilo"]
+
+    for (const id of titled) {
+      const headers = providers[ProviderV2.ID.make(id)].options.headers
+      expect(headers["X-Title"] ?? headers["x-title"]).toBe("Repa")
+      expect(headers["HTTP-Referer"] ?? headers["http-referer"]).toBeUndefined()
+    }
+    expect(providers[ProviderV2.ID.make("llmgateway")].options.headers["X-Source"]).toBe("repa")
+    expect(providers[ProviderV2.ID.make("cerebras")].options.headers).toEqual({
+      "X-Cerebras-3rd-Party-Integration": "repa",
+    })
+  }),
+  {
+    config: {
+      provider: Object.fromEntries(
+        ["llmgateway", "openrouter", "vercel", "zenmux", "cerebras", "kilo"].map((id) => [
+          id,
+          { options: { apiKey: "test-api-key" } },
+        ]),
+      ),
+    },
   },
 )

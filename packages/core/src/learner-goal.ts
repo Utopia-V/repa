@@ -10,7 +10,7 @@ import { LearningFrontier } from "./learning-frontier"
 import { Occurrence } from "./learning-command/occurrence"
 import { AdmittedLearnerOccurrenceTable, LearnerOccurrenceTombstoneTable } from "./learning-command/occurrence.sql"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "./learning-command/sql"
-import type { AuthorizationBasis, SettlementMetadata } from "./learning-command/schema"
+import type { AuthorizationBasis, ReceiptID, SettlementMetadata } from "./learning-command/schema"
 import { MessageTable, PartTable } from "./session/sql"
 import type { SessionSchema } from "./session/schema"
 import type { MessageID, SessionV1 } from "./v1/session"
@@ -45,8 +45,12 @@ import {
   type Operation,
   type OperationResult,
   type PageOptions,
+  type PresentationMeaning,
+  type ProposalPresentation,
+  type ProposalPresentationOperation,
   type Revision,
   type RevisionID,
+  type ResultPresentationOperation,
   type SemanticSnapshot,
   type StoredCourseMembership,
   type Target,
@@ -54,6 +58,7 @@ import {
   type UpdateDisposition,
 } from "./learner-goal/schema"
 import {
+  LearnerGoalCommandTable,
   LearnerGoalCommitSealTable,
   LearnerGoalConditionTable,
   LearnerGoalCourseScopeTable,
@@ -66,6 +71,7 @@ import {
   LearnerGoalTable,
 } from "./learner-goal/sql"
 import { TIME_ZONE_RELEASE_ID, isSupportedTimeZone, localDateAt } from "./learner-goal/time-zone"
+import { isOperationResult } from "./learner-goal/operation-result"
 
 export * from "./learner-goal/schema"
 
@@ -79,11 +85,12 @@ const committedEffect = sql`EXISTS (
     ON goal_receipt.id = goal_seal.receipt_id
   JOIN learning_command_invocation AS goal_invocation
     ON goal_invocation.part_id = goal_seal.invocation_part_id
+  JOIN learner_goal_command AS goal_command
+    ON goal_command.invocation_part_id = goal_invocation.part_id
   WHERE goal_seal.effect_id = ${LearnerGoalEffectTable.id}
-    AND goal_receipt.goal_effect_id = ${LearnerGoalEffectTable.id}
-    AND goal_receipt.invocation_part_id = goal_invocation.part_id
-    AND goal_invocation.goal_effect_id = ${LearnerGoalEffectTable.id}
-    AND goal_invocation.goal_semantic_fingerprint = ${LearnerGoalEffectTable.semantic_fingerprint}
+    AND goal_receipt.invocation_part_id = goal_seal.invocation_part_id
+    AND goal_invocation.receipt_id = goal_receipt.id
+    AND goal_command.semantic_fingerprint = ${LearnerGoalEffectTable.semantic_fingerprint}
     AND goal_invocation.status = 'applied'
 )`
 
@@ -92,10 +99,10 @@ const committedRevision = sql`EXISTS (
   FROM learner_goal_effect AS goal_effect
   JOIN learner_goal_commit_seal AS goal_seal ON goal_seal.effect_id = goal_effect.id
   JOIN learning_command_receipt AS goal_receipt
-    ON goal_receipt.id = goal_seal.receipt_id AND goal_receipt.goal_effect_id = goal_effect.id
+    ON goal_receipt.id = goal_seal.receipt_id
   JOIN learning_command_invocation AS goal_invocation
     ON goal_invocation.part_id = goal_seal.invocation_part_id
-      AND goal_invocation.goal_effect_id = goal_effect.id
+      AND goal_invocation.receipt_id = goal_receipt.id
       AND goal_invocation.status = 'applied'
   WHERE goal_effect.id = ${LearnerGoalRevisionTable.effect_id}
 )`
@@ -107,10 +114,9 @@ const noCommittedSuccessor = sql`NOT EXISTS (
   JOIN learner_goal_commit_seal AS successor_seal ON successor_seal.effect_id = successor_effect.id
   JOIN learning_command_receipt AS successor_receipt
     ON successor_receipt.id = successor_seal.receipt_id
-      AND successor_receipt.goal_effect_id = successor_effect.id
   JOIN learning_command_invocation AS successor_invocation
     ON successor_invocation.part_id = successor_seal.invocation_part_id
-      AND successor_invocation.goal_effect_id = successor_effect.id
+      AND successor_invocation.receipt_id = successor_receipt.id
       AND successor_invocation.status = 'applied'
   WHERE goal_successor.predecessor_id = ${LearnerGoalRevisionTable.id}
 )`
@@ -334,6 +340,298 @@ export function prepareConfirmation(
       goalBases,
       courseBases,
     })
+  })
+}
+
+export function preparePresentation(
+  tx: Transaction,
+  input: {
+    readonly command: Command
+    readonly authorizationBasis: AuthorizationBasis
+    readonly asOf: number
+  },
+): Effect.Effect<ProposalPresentation, InvalidCommandError | IntegrityError> {
+  return Effect.gen(function* () {
+    const operations = yield* Effect.forEach(input.command.operations, (operation) =>
+      proposalPresentationOperation(tx, operation, input.asOf),
+    )
+    return {
+      authorizationBasis: input.authorizationBasis,
+      semanticFingerprint: commandFingerprint(input.command, input.authorizationBasis),
+      operations,
+    }
+  })
+}
+
+export function prepareResultPresentation(
+  tx: Transaction,
+  operations: readonly OperationResult[],
+  asOf: number,
+): Effect.Effect<readonly ResultPresentationOperation[], IntegrityError> {
+  return Effect.forEach(operations, (operation) =>
+    Effect.gen(function* () {
+      const revision = yield* exactRevision(
+        tx,
+        operation.goalID,
+        operation.revisionID,
+        operation.version,
+        asOf,
+      )
+      const supersessionTarget =
+        revision.disposition.type === "superseded" && operation.operation !== "replace"
+          ? yield* exactRevision(
+              tx,
+              revision.disposition.targetGoalID,
+              revision.disposition.targetRevisionID,
+              undefined,
+              asOf,
+            ).pipe(
+              Effect.map((target) => ({
+                goalID: target.goalID,
+                revisionID: target.id,
+                version: target.version,
+                meaning: presentationMeaningFromRevision(target),
+              })),
+            )
+          : undefined
+      const replacementTarget = operation.replacementTarget
+        ? yield* exactRevision(
+            tx,
+            operation.replacementTarget.goalID,
+            operation.replacementTarget.revisionID,
+            operation.replacementTarget.version,
+            asOf,
+          ).pipe(
+            Effect.map((target) => ({
+              type: operation.replacementTarget!.type,
+              goalID: operation.replacementTarget!.goalID,
+              revisionID: operation.replacementTarget!.revisionID,
+              version: operation.replacementTarget!.version,
+              meaning: presentationMeaningFromRevision(target),
+            })),
+          )
+        : undefined
+      return {
+        ordinal: operation.ordinal,
+        operation: operation.operation,
+        result: operation.result,
+        goalID: operation.goalID,
+        revisionID: operation.revisionID,
+        version: operation.version,
+        meaning: presentationMeaningFromRevision(revision),
+        ...(supersessionTarget ? { supersessionTarget } : {}),
+        ...(replacementTarget ? { replacementTarget } : {}),
+      }
+    }),
+  )
+}
+
+function proposalPresentationOperation(
+  tx: Transaction,
+  operation: Operation,
+  asOf: number,
+): Effect.Effect<ProposalPresentationOperation, InvalidCommandError | IntegrityError> {
+  return Effect.gen(function* () {
+    if (operation.type === "create") {
+      return {
+        type: operation.type,
+        resultIntent: "create_new_goal",
+        meaning: yield* presentationMeaningFromSnapshot(tx, operation.snapshot, operation.disposition),
+      }
+    }
+    const source = yield* exactRevision(
+      tx,
+      operation.goalID,
+      operation.expectedHeadID,
+      operation.expectedVersion,
+      asOf,
+    )
+    const sourcePresentation = {
+      goalID: source.goalID,
+      revisionID: source.id,
+      version: source.version,
+      meaning: presentationMeaningFromRevision(source),
+    }
+    if (operation.type === "update") {
+      const supersessionTarget =
+        operation.disposition.type === "superseded"
+          ? yield* exactRevision(
+              tx,
+              operation.disposition.targetGoalID,
+              operation.disposition.targetRevisionID,
+              undefined,
+              asOf,
+            ).pipe(
+              Effect.map((target) => ({
+                goalID: target.goalID,
+                revisionID: target.id,
+                version: target.version,
+                meaning: presentationMeaningFromRevision(target),
+              })),
+            )
+          : undefined
+      return {
+        type: operation.type,
+        resultIntent:
+          operation.disposition.type === "superseded"
+            ? "supersede_with_existing_goal"
+            : "update_existing_goal",
+        goalID: operation.goalID,
+        expectedHeadID: operation.expectedHeadID,
+        expectedVersion: operation.expectedVersion,
+        source: sourcePresentation,
+        meaning: yield* presentationMeaningFromSnapshot(tx, operation.snapshot, operation.disposition.type),
+        ...(supersessionTarget ? { supersessionTarget } : {}),
+      }
+    }
+    const target = operation.target
+    const replacementTarget =
+      target.type === "new"
+        ? {
+            type: "new" as const,
+            meaning: yield* presentationMeaningFromSnapshot(
+              tx,
+              target.snapshot,
+              target.disposition,
+            ),
+          }
+        : yield* exactRevision(
+            tx,
+            target.goalID,
+            target.revisionID,
+            target.version,
+            asOf,
+          ).pipe(
+            Effect.map((revision) => ({
+              type: "existing" as const,
+              goalID: target.goalID,
+              revisionID: target.revisionID,
+              version: target.version,
+              meaning: presentationMeaningFromRevision(revision),
+            })),
+          )
+    return {
+      type: operation.type,
+      resultIntent:
+        target.type === "new" ? "supersede_with_new_goal" : "supersede_with_existing_goal",
+      goalID: operation.goalID,
+      expectedHeadID: operation.expectedHeadID,
+      expectedVersion: operation.expectedVersion,
+      source: sourcePresentation,
+      meaning: yield* presentationMeaningFromSnapshot(tx, operation.snapshot, "superseded"),
+      replacementTarget,
+    }
+  })
+}
+
+function presentationMeaningFromSnapshot(
+  tx: Transaction,
+  snapshot: SemanticSnapshot,
+  disposition: "active" | "achieved" | "abandoned" | "superseded",
+): Effect.Effect<PresentationMeaning, InvalidCommandError> {
+  return Effect.gen(function* () {
+    const scope =
+      snapshot.scope.type === "learner_home"
+        ? ({ type: "learner_home" } as const)
+        : {
+            type: "courses" as const,
+            courses: yield* Effect.forEach(snapshot.scope.courses, (membership) =>
+              Effect.gen(function* () {
+                const availability = yield* Course.inspectPreferenceTarget(tx, membership.courseID)
+                if (membership.basis.type === "new") {
+                  if (availability.status !== "available") return yield* invalid("inactive")
+                  if (availability.stateVersion !== membership.basis.expectedCourseVersion) {
+                    return yield* invalid("stale")
+                  }
+                  return {
+                    courseID: membership.courseID,
+                    courseTitle: availability.title,
+                    basis: membership.basis,
+                    availability: { state: "available" as const, title: availability.title },
+                  }
+                }
+                const stored = yield* storedCourse(
+                  tx,
+                  membership.basis.predecessorRevisionID,
+                  membership.courseID,
+                )
+                if (!stored) return yield* invalid("validation_error")
+                return {
+                  courseID: membership.courseID,
+                  courseTitle: stored.course_title,
+                  basis: membership.basis,
+                  availability:
+                    availability.status === "available"
+                      ? ({ state: "available" as const, title: availability.title })
+                      : ({
+                          state: "unavailable" as const,
+                          cause: availability.cause,
+                          ...("title" in availability ? { title: availability.title } : {}),
+                        } as const),
+                }
+              }),
+            ),
+          }
+    return {
+      outcome: snapshot.outcome,
+      conditions: snapshot.conditions,
+      scope,
+      target: snapshot.target,
+      disposition,
+      fieldBases: snapshot.fieldBases,
+    }
+  })
+}
+
+function presentationMeaningFromRevision(revision: Revision): PresentationMeaning {
+  return {
+    outcome: revision.outcome,
+    conditions: revision.conditions,
+    scope:
+      revision.scope.type === "learner_home"
+        ? { type: "learner_home" }
+        : {
+            type: "courses",
+            courses: revision.scope.courses.map((course) => ({
+              courseID: course.courseID,
+              courseTitle: course.courseTitle,
+              basis:
+                course.admission.type === "new"
+                  ? { type: "new", expectedCourseVersion: course.admission.courseVersion }
+                  : course.admission,
+              availability: course.availability,
+            })),
+          },
+    target: revision.target,
+    disposition: revision.disposition.type,
+    fieldBases: revision.fieldBases,
+  }
+}
+
+function exactRevision(
+  tx: Transaction,
+  goalID: GoalID,
+  revisionID: RevisionID,
+  version: number | undefined,
+  asOf: number,
+): Effect.Effect<Revision, IntegrityError> {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select()
+      .from(LearnerGoalRevisionTable)
+      .where(
+        and(
+          eq(LearnerGoalRevisionTable.goal_id, goalID),
+          eq(LearnerGoalRevisionTable.id, revisionID),
+          committedRevision,
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!row || (version !== undefined && row.version !== version)) {
+      return yield* integrity("Goal presentation revision is unavailable or stale")
+    }
+    return yield* revisionRead(tx, row, asOf)
   })
 }
 
@@ -1101,49 +1399,6 @@ function closedConfirmation(value: unknown): value is ConfirmationSnapshot {
   return courses && new Set(courseKeys).size === courseKeys.length
 }
 
-function closedOperationMeaning(value: unknown): value is OperationResult["meaning"] {
-  if (
-    !isRecord(value) ||
-    !hasKeys(value, ["outcome", "conditions", "scope", "target"]) ||
-    typeof value.outcome !== "string" ||
-    !Array.isArray(value.conditions) ||
-    value.conditions.some((condition) => typeof condition !== "string") ||
-    !isRecord(value.scope) ||
-    !isRecord(value.target)
-  )
-    return false
-  const scope =
-    value.scope.type === "learner_home"
-      ? hasKeys(value.scope, ["type"])
-      : value.scope.type === "courses" &&
-        hasKeys(value.scope, ["type", "courseIDs"]) &&
-        Array.isArray(value.scope.courseIDs) &&
-        value.scope.courseIDs.every((courseID) => typeof courseID === "string")
-  return scope && closedTarget(value.target)
-}
-
-function closedTarget(value: Record<string, unknown>): value is Target {
-  if (value.type === "absent") return hasKeys(value, ["type"])
-  if (value.type === "local_date") {
-    return (
-      hasKeys(value, ["type", "date", "timeZone", "sourceExpression", "normalizationBasis"]) &&
-      typeof value.date === "string" &&
-      typeof value.timeZone === "string" &&
-      typeof value.sourceExpression === "string" &&
-      ["explicit_date", "source_temporal_context"].includes(String(value.normalizationBasis))
-    )
-  }
-  if (value.type !== "instant") return false
-  return (
-    hasKeys(value, ["type", "instant", "sourceExpression", "normalized", "utcOffsetMinutes", "normalizationBasis"]) &&
-    Number.isSafeInteger(value.instant) &&
-    typeof value.sourceExpression === "string" &&
-    typeof value.normalized === "string" &&
-    Number.isInteger(value.utcOffsetMinutes) &&
-    value.normalizationBasis === "explicit_offset"
-  )
-}
-
 function validGoalID(value: unknown): value is GoalID {
   return typeof value === "string" && /^gol_[0-9A-Za-z]{26}$/.test(value)
 }
@@ -1883,8 +2138,8 @@ export function sealEffect(
   tx: Transaction,
   input: {
     readonly effect: AppliedEffect
-    readonly receiptID: string
-    readonly invocationPartID: string
+    readonly receiptID: ReceiptID
+    readonly invocationPartID: SessionV1.PartID
     readonly expectedRevisionSequence: number
   },
 ) {
@@ -2405,9 +2660,11 @@ export function discover(tx: Transaction, asOf: number, filter: DiscoveryFilter 
       FROM learner_goal_revision AS snapshot_successor
       JOIN learner_goal_effect AS snapshot_effect ON snapshot_effect.id = snapshot_successor.effect_id
       JOIN learner_goal_commit_seal AS snapshot_seal ON snapshot_seal.effect_id = snapshot_effect.id
+      JOIN learning_command_receipt AS snapshot_receipt
+        ON snapshot_receipt.id = snapshot_seal.receipt_id
       JOIN learning_command_invocation AS snapshot_invocation
         ON snapshot_invocation.part_id = snapshot_seal.invocation_part_id
-          AND snapshot_invocation.goal_effect_id = snapshot_effect.id
+          AND snapshot_invocation.receipt_id = snapshot_receipt.id
           AND snapshot_invocation.status = 'applied'
       WHERE snapshot_successor.predecessor_id = ${LearnerGoalRevisionTable.id}
         AND snapshot_successor.revision_order <= ${throughRevision}
@@ -2487,7 +2744,7 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
     ) {
       return yield* integrity(`Goal effect ${effect.id} has an invalid semantic address`)
     }
-    const [operations, receipt] = yield* Effect.all([
+    const [operations, authority] = yield* Effect.all([
       tx
         .select()
         .from(LearnerGoalEffectOperationTable)
@@ -2496,27 +2753,41 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
         .all()
         .pipe(Effect.orDie),
       tx
-        .select()
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.goal_effect_id, effect.id))
+        .select({
+          receiptID: LearningCommandReceiptTable.id,
+          invocationPartID: LearningCommandReceiptTable.invocation_part_id,
+          authorizationBasis: LearningCommandInvocationTable.authorization_basis,
+          receiptIDOnInvocation: LearningCommandInvocationTable.receipt_id,
+          commandSnapshot: LearnerGoalCommandTable.command_snapshot,
+          semanticFingerprint: LearnerGoalCommandTable.semantic_fingerprint,
+          confirmation: LearnerGoalCommandTable.confirmation_snapshot,
+        })
+        .from(LearnerGoalCommitSealTable)
+        .innerJoin(
+          LearningCommandReceiptTable,
+          eq(LearningCommandReceiptTable.id, LearnerGoalCommitSealTable.receipt_id),
+        )
+        .innerJoin(
+          LearningCommandInvocationTable,
+          eq(LearningCommandInvocationTable.part_id, LearnerGoalCommitSealTable.invocation_part_id),
+        )
+        .innerJoin(
+          LearnerGoalCommandTable,
+          eq(LearnerGoalCommandTable.invocation_part_id, LearnerGoalCommitSealTable.invocation_part_id),
+        )
+        .where(eq(LearnerGoalCommitSealTable.effect_id, effect.id))
         .get()
         .pipe(Effect.orDie),
     ])
-    if (!receipt || operations.length !== effect.operation_count) {
+    if (!authority || operations.length !== effect.operation_count) {
       return yield* integrity(`Goal effect ${effect.id} lost its receipt or operation set`)
     }
-    const invocation = yield* tx
-      .select()
-      .from(LearningCommandInvocationTable)
-      .where(eq(LearningCommandInvocationTable.part_id, receipt.invocation_part_id))
-      .get()
-      .pipe(Effect.orDie)
     if (
-      !invocation ||
-      !closedCommand(invocation.goal_command_snapshot) ||
-      canonicalJson(invocation.goal_command_snapshot) !== canonicalJson(effect.command) ||
-      invocation.goal_semantic_fingerprint !== effect.semantic_fingerprint ||
-      invocation.authorization_basis !== effect.authorization_basis
+      !closedCommand(authority.commandSnapshot) ||
+      canonicalJson(authority.commandSnapshot) !== canonicalJson(effect.command) ||
+      authority.semanticFingerprint !== effect.semantic_fingerprint ||
+      authority.authorizationBasis !== effect.authorization_basis ||
+      authority.receiptIDOnInvocation !== authority.receiptID
     ) {
       return yield* integrity(`Goal effect ${effect.id} lost its reserved semantic address`)
     }
@@ -2524,13 +2795,13 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
     if (results.some((result) => !result)) {
       return yield* integrity(`Goal effect ${effect.id} has an invalid stored operation result`)
     }
-    const confirmation = receipt.confirmation_snapshot as unknown
+    const confirmation = authority.confirmation as unknown
     if (
       (effect.authorization_basis === "learner_acceptance" &&
         (!closedConfirmation(confirmation) ||
           confirmation.semanticFingerprint !== effect.semantic_fingerprint ||
           canonicalJson(confirmation.command) !== canonicalJson(effect.command) ||
-          canonicalJson(invocation.goal_confirmation_snapshot) !== canonicalJson(confirmation))) ||
+          canonicalJson(authority.confirmation) !== canonicalJson(confirmation))) ||
       (effect.authorization_basis === "learner_request" && confirmation !== null)
     ) {
       return yield* integrity(`Goal effect ${effect.id} has an invalid confirmation basis`)
@@ -2539,7 +2810,7 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
     const acknowledgementResult = renderAcknowledgement(validResults)
     return {
       effectID: effect.id,
-      receiptID: receipt.id,
+      receiptID: authority.receiptID,
       occurrenceID: effect.occurrence_id,
       authorizationBasis: effect.authorization_basis,
       semanticFingerprint: effect.semantic_fingerprint,
@@ -2555,18 +2826,7 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
 }
 
 function operationResultFromRow(row: typeof LearnerGoalEffectOperationTable.$inferSelect): OperationResult | undefined {
-  if (
-    !validGoalID(row.goal_id) ||
-    !validRevisionID(row.revision_id) ||
-    !closedOperationMeaning(row.meaning) ||
-    (row.replacement_target_kind !== null &&
-      (!validGoalID(row.replacement_target_goal_id) ||
-        !validRevisionID(row.replacement_target_revision_id) ||
-        !Number.isSafeInteger(row.replacement_target_version) ||
-        row.replacement_target_version! < 1))
-  )
-    return undefined
-  return {
+  const result = {
     ordinal: row.ordinal,
     operation: row.operation_kind,
     result: row.result_kind,
@@ -2575,10 +2835,7 @@ function operationResultFromRow(row: typeof LearnerGoalEffectOperationTable.$inf
     version: row.version,
     disposition: row.disposition,
     meaning: row.meaning,
-    ...(row.replacement_target_kind &&
-    row.replacement_target_goal_id &&
-    row.replacement_target_revision_id &&
-    row.replacement_target_version
+    ...(row.replacement_target_kind !== null
       ? {
           replacementTarget: {
             type: row.replacement_target_kind,
@@ -2589,6 +2846,7 @@ function operationResultFromRow(row: typeof LearnerGoalEffectOperationTable.$inf
         }
       : {}),
   }
+  return isOperationResult(result) ? result : undefined
 }
 
 function revisionRead(tx: Transaction, row: StoredHead, asOf: number): Effect.Effect<Revision, IntegrityError> {
@@ -2634,8 +2892,12 @@ function revisionRead(tx: Transaction, row: StoredHead, asOf: number): Effect.Ef
         .pipe(Effect.orDie),
       tx
         .select({ id: LearningCommandReceiptTable.id })
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.goal_effect_id, row.effect_id))
+        .from(LearnerGoalCommitSealTable)
+        .innerJoin(
+          LearningCommandReceiptTable,
+          eq(LearningCommandReceiptTable.id, LearnerGoalCommitSealTable.receipt_id),
+        )
+        .where(eq(LearnerGoalCommitSealTable.effect_id, row.effect_id))
         .get()
         .pipe(Effect.orDie),
     ])

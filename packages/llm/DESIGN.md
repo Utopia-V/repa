@@ -1,9 +1,13 @@
 # AI Library Design
 
-> Discussion draft. This document describes the intended replacement for the
-> current private `@opencode-ai/llm` API. Names and exact TypeScript signatures
-> are illustrative until implementation, but the domain boundaries and defaults
-> are deliberate.
+> **Status — exploratory package proposal, not accepted Repa architecture or
+> roadmap.** This document sketches a possible replacement for the current
+> private `@opencode-ai/llm` API. Its names, defaults, domain boundaries, clean
+> break, and migration posture are proposal content, not deliberate Repa
+> defaults or implementation authority. The current package behavior and
+> integration boundary are documented in `packages/llm/AGENTS.md`; current
+> project authority and status are indexed by the
+> [documentation map](../../docs/README.md).
 
 ## Status
 
@@ -1091,9 +1095,11 @@ The redesign intentionally removes or changes these current concepts:
 | `providerExecuted` dispatch check       | Distinct hosted-tool constructors                           |
 | One wrapped `LLMError`                  | Tagged domain error union                                   |
 
-OpenCode should migrate to `generateTurn` / `streamTurn`, preserving its durable
-prompt admission, persistence, permission, tool settlement, and continuation
-boundaries. It should not use the automatic run API for Session orchestration.
+If a future owning decision accepts this proposal, Repa's Session adapter would
+need a turn-level migration that preserves durable prompt admission,
+persistence, permission, tool settlement, and continuation boundaries. This
+document does not authorize that migration or replacement of the current
+default runtime.
 
 ## Remaining Implementation-level Questions
 

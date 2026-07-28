@@ -111,7 +111,7 @@ export function latest<K extends keyof Info>(entries: readonly Entry[], key: K):
 }
 
 export interface Interface {
-  /** Returns location config documents and supplemental directories from lowest to highest priority. */
+  /** Returns the current baseline's machine-global config documents and supplemental directory. */
   readonly entries: () => Effect.Effect<Entry[]>
 }
 

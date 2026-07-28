@@ -10,6 +10,10 @@ roadmap therefore admits the source-linked future-attention lifecycle together
 with its Tutor composition and truthful service consumer rather than creating
 an empty Agenda authority first.
 
+Amendment (2026-07-27): `Agenda` is only a family/composition label. The
+demonstrated concern belongs to the future-attention authority; this ADR does
+not create one shared Goal/Assignment/planning/future-attention lifecycle.
+
 ## Plain-language decision
 
 Repa will not ask a separate classifier model to decide what the Tutor should
@@ -17,11 +21,13 @@ do before every relevant response.
 
 When the program can establish one legal learning concern that should be the
 default for a Turn, it places that concern—unchanged and source-bound—beside
-the learner's exact current request in the model context. The learner's
-explicit current request has higher priority. A generic “continue” lets the
-default guide the Tutor; a direct request, different requested form, completed
-occurrence, cancellation, or redirection can override it without deleting or
-rewriting the concern.
+the learner's exact current request in the model context. Relative to that
+conditional concern, the learner's explicit overlapping current request has
+higher priority; this is not a global policy ordering that erases non-overlapping
+steering or hard constraints. A generic “continue” lets the default guide the
+Tutor; a direct request, different requested form, completed occurrence,
+cancellation, or redirection can override it without deleting or rewriting the
+concern.
 
 The LLM still decides how to explain, question, demonstrate, research, or use
 tools. The program decides what candidates are legal, what exact state they
@@ -29,8 +35,8 @@ came from, how long the default lasts, and what durable effects are allowed.
 
 ## Context
 
-Pre-fork Roadmap 07 established an Agenda-owned, source-linked
-future-attention concern in the behavioral oracle.
+Pre-fork Roadmap 07 established what it then called an Agenda-owned,
+source-linked future-attention concern in the behavioral oracle.
 ALS-021 then showed that durable visibility is not control: the exact reason
 survived a fresh Session, but all eight independent-prediction returns revealed
 the answer before the learner predicted.
@@ -49,7 +55,8 @@ Four focused experiments separated the boundary:
 - ALS-022D removed the selector sample. A sole legal concern became a
   conditional default inside the ordinary realizing sample. Generic
   continuation, direct help, requested comparison form, completed occurrence,
-  and learner redirection passed 10/10 with truthful Agenda state.
+  and learner redirection passed 10/10 with truthful source-concern state
+  (then labeled Agenda).
 - ALS-022E removed ALS-022D's explicit learner-role restatement and retained
   only exact Agenda reason plus conditional-default status. Strict inspection
   fell to 3/8: historical reason alone did not reliably prevent answer or
@@ -100,12 +107,13 @@ The contribution preserves:
 - Turn/control-interval scope;
 - any separately justified operative learner-role constraint; and
 - explicit non-effects: selection/default is not service, evidence, mastery,
-  or Agenda disposition.
+  or future-attention disposition.
 
-The exact current learner request remains higher priority. An incompatible
-explicit request can override the default in the ordinary realizing sample.
-Override does not rewrite the source reason, close the concern, or create a
-durable learner inference. Generic continuation may let the default govern.
+For the overlapping action, the exact current learner request remains higher
+priority than this conditional default. An incompatible explicit request can
+override the default in the ordinary realizing sample. Override does not
+rewrite the source reason, close the concern, or create a durable learner
+inference. Generic continuation may let the default govern.
 
 “Conditional default” is a composition meaning, not a durable domain status.
 The context cut records what the model was given and its priority relation; it
@@ -126,12 +134,12 @@ separate operative learner-role constraint equivalent to:
 learner response before Tutor disclosure of answer or decisive hint
 ```
 
-Agenda is the likely durable owner because the boundary affects both later
-realization and whether a guided occurrence can truthfully serve the concern;
-Tutor composition projects it as operative. This ADR does not define a general
-compiler from arbitrary Agenda `reason` text or authorize a universal pedagogy
-enum. The first production contract remains narrow to the demonstrated
-constraint, source-bound and correctable.
+The future-attention authority is the durable owner because the boundary
+affects both later realization and whether a guided occurrence can truthfully
+serve that exact concern; Tutor composition projects it as operative. This ADR
+does not define a general compiler from arbitrary concern `reason` text or
+authorize a universal pedagogy enum. The first production contract remains
+narrow to the demonstrated constraint, source-bound and correctable.
 
 ### 5. Multiple material candidates remain unresolved
 
@@ -158,16 +166,18 @@ compiled sample of that Turn. It ends on:
 
 The active default may remain process-local because running Turns are not
 resumed after crash. The exact immutable model-operation context cut is the
-durable audit record. Agenda remains the durable cross-Session authority. A
-crash after composition invents no service, address, activity, evidence, or
-mastery; a later Turn recompiles from current state.
+durable audit record. Future attention remains the durable cross-Session
+authority for this concern. A crash after composition invents no service,
+address, activity, evidence, or mastery; a later Turn recompiles from current
+state.
 
 ### 7. Realization and durable effects stay separate
 
 The model owns compatible realization: explanation, example, question,
 representation, research, and tool use. Asking a question or beginning an
 explanation does not address the concern. Only a complete, source-aligned
-occurrence and the existing domain command may change Agenda disposition.
+occurrence and the existing domain command may change future-attention
+disposition.
 
 Internal control terms, concern IDs, precedence reasoning, and pre-tool
 preambles are not Tutor prose merely because a model emitted them. The current
@@ -177,7 +187,7 @@ of the persisted learner-visible answer.
 
 ## Ownership and dependency consequences
 
-- Agenda owns the durable candidate and its lifecycle.
+- The future-attention authority owns the durable candidate and its lifecycle.
 - Tutor composition owns conditional purpose contributions and priority.
 - Interaction owns admitted requests, model-operation context cuts, and
   completed occurrences.
@@ -192,9 +202,9 @@ decision.
 
 ## Consequences
 
-- The production fork admits the narrow Agenda lifecycle and its structured
-  context/service consumer as one vertical product boundary. It does not add a
-  second Agent runtime or a storage-only Agenda Gate.
+- The production fork admits the narrow future-attention lifecycle and its
+  structured context/service consumer as one vertical product boundary. It
+  does not add a second Agent runtime or a storage-only family Gate.
 - A one-candidate default adds no extra provider round trip.
 - Exact current-request override remains available without cancelling future
   attention.
@@ -202,7 +212,7 @@ decision.
   sample saw.
 - Multiple candidates and generic reason compilation stay explicit open
   boundaries rather than hidden heuristics.
-- The first implementation must remain Agenda-specific until another real
+- The first implementation must remain future-attention-specific until another real
   authority consumes the same contribution invariant; no generic manager or
   framework is introduced in advance.
 
@@ -231,7 +241,7 @@ evidence and a truthful fallback.
 Rejected without evidence. Code owns legality and accepted structural policy,
 not an invented taxonomy of every learner request and teaching purpose.
 
-### Durable Agenda engagement/activity
+### Durable active engagement/activity
 
 Rejected because current evidence needs no cross-Turn active-selection state.
 It would create correction, stale-target, crash, and phantom-completion

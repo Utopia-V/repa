@@ -36,7 +36,8 @@ const layer = Layer.effect(
       evaluate: EffectRuntime.fn("Policy.evaluate")(function* (action, resource, fallback) {
         return (
           statements.findLast(
-            (statement) => Wildcard.match(action, statement.action) && Wildcard.match(resource, statement.resource),
+            (statement) =>
+              Wildcard.matchIdentifier(action, statement.action) && Wildcard.match(resource, statement.resource),
           )?.effect ?? fallback
         )
       }),

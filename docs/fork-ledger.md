@@ -27,9 +27,9 @@ reopening one bounded completion claim.
 | 2. Windows baseline                      | Preserved inherited invalid PowerShell test failure                                                                                               | exact upstream tree                                                                     | `docs/research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`         |
 | 2A. Test correction                      | Corrected only the invalid shell test contract                                                                                                    | `a72f507de45788f3fb8556d883cdad919f33db43`                                              | `docs/research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md` |
 | 3. Repa identity                         | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback                                           | `0ffed9f62159b5383b62da73bd270de7f8775e09`                                              | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md`           |
-| 4. Learning-first composition            | Protected released-v1 Repa composition; the hidden-keyed internal-call close claim was later audit-invalidated                                    | `9c7b74f41c6090bc0fa0499c4b1345fa438f0ca6` + `17e25eab2784b8bd71bef7a91effb9ae352bf0ae` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md`        |
-| 5. Inherited product-surface disposition | Recorded terminal-only close; later audit preserved valid disconnections but invalidated v2/provider/CORS completion                              | `25e51861effbddbdb04ae8fe88c4107d34ab91b2`                                              | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
-| 6. Native database admission             | Native Repa database identity and forward lineage; the concrete single-owner implementation claim was later audit-invalidated                     | `6c0b7aa5b`                                                                             | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`         |
+| 4. Learning-first composition            | Original three-purpose close plus corrected composition authority and Gate 11 `representation` carrier                                            | original `9c7b74f41` + `17e25eab2`; corrected close `df61b7adb6c6e2c3f5f7fb46bee3109d0e16b05c` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md`        |
+| 5. Inherited product-surface disposition | Valid inherited-surface disconnections plus corrected v2/provider/CORS completion                                                                 | original `25e51861effbddbdb04ae8fe88c4107d34ab91b2`; corrected close `86332c24651c1222339624704496fae2dd27be10` | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
+| 6. Native database admission             | Native Repa database identity, forward lineage, hardened admission, and restored single-owner runtime boundary                                    | original `6c0b7aa5b`; corrected implementation `34588b04182761e1afaaa80bd3cab6b48929cd9f`; close `6ad48455ee8dc4695e19ed9e28e88dfe43adade7` | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`         |
 | 7. Course and Course View authority      | LearnerHome-owned Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal | `3bd6eb9d4`                                                                             | `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`             |
 | 8. Learning-command settlement           | Stable admitted occurrence, physical replay, causal receipt, exact Course acceptance settlement, and Session lifecycle closure                    | `293ff6892`                                                                             | `docs/research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md`       |
 | 9. Source and Artifact authority         | Stable Artifact identity, exact observed revisions, location/availability history, provenance, and correction without retargeting                 | `41db7c292aaeb83abfafea9236480d006ccabe0f`                                              | `docs/research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md`         |
@@ -38,12 +38,17 @@ reopening one bounded completion claim.
 | 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`                                              | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
 | 13. Material Map and Course alignment    | Immutable revision-bound material outlines and exact selectors plus optional neutral alignment to exact Course membership                         | `5e762f8336b33d7d8365c9bc9204b52f52eba114`                                              | `docs/research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md`            |
 | 14. Learner navigation continuity        | Learner-controlled default Course preference and independent exact per-Course route anchors with append-only correction and command provenance    | `a6b542d59879f0a4b1111eaef4ad23e446b473d0`                                              | `docs/research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md`     |
+| 15. Retained scoped steering             | Source-linked, scoped, versioned, correctable Tutor-policy state with an exact immutable model-operation cut                                      | `03ea74ec4f760c83060a6da4fa26ecb9519d1468`                                              | `docs/research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md`          |
+| 16. Learner Goal authority               | Learner-owned Goal identity, revision, correction, optional target semantics, and explicitly authorized lifecycle meaning                         | `69433fc78d383bade1d92319eb3153a2cd7c68bd`                                              | `docs/research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md`            |
 
-Read a historical record with:
+Gate 0–3 records and other pre-fork evidence live only in the immutable oracle:
 
 ```powershell
-git show repa-prefork-oracle:<historical-record-path>
+git show repa-prefork-oracle:<oracle-record-path>
 ```
+
+Gate 4 and later records live in the current fork and are read directly from
+the paths in this table. Do not route current-fork records through the oracle.
 
 ## 2026-07-17 post-Gate-10 global roadmap audit provenance
 
@@ -881,6 +886,9 @@ boundary. The contract/theory snapshot accepted before this final status and
 evidence append had SHA-256
 `F5FEB90F65700CA830CE188628BFA332A08DB49365310B836974040BB5016469`;
 the append records closure and does not revise that contract's meaning.
+Maintainer-authorized implementation commit
+`69433fc78d383bade1d92319eb3153a2cd7c68bd` fixes the accepted implementation
+and closes Gate 16.
 
 The maintainer accepted the following correction while pressure-testing Goal
 meaning with final-exam preparation:
@@ -988,10 +996,12 @@ The exact qualification script SHA-256 was
 the pinned provider-catalog snapshot SHA-256 was
 `F71C7EF836ADE8B32C6F629230B05AB593FF2F39C502F2348964AECD79C3D1BD`.
 The isolated raw artifacts were reviewer-inspected and hash-bound, then removed
-after acceptance; they are evidence provenance, not a runtime dependency. This
-stochastic qualification proves model-facing usability and captured production
-path conformance only. Deterministic suites remain authoritative for state,
-authorization, dependency, replay, recovery, and negative behavior.
+after acceptance. Their hashes are historical attestations of bytes seen by the
+reviewer; because those bytes were not retained, they are not independently
+inspectable evidence packages. This captured stochastic qualification proves
+model-facing usability and production-path conformance only. Deterministic
+suites remain authoritative for state, authorization, dependency, replay,
+recovery, and negative behavior.
 
 The correction is propagated through the product foundation, both architecture
 documents, Roadmap 09, `AGENTS.md`, this ledger, the live Gate map, and the
@@ -1000,11 +1010,202 @@ Older dated statements that Gate 16 had not begun or that described the
 2026-07-17 Assignment-planning route remain historical evidence of their own
 time rather than current disposition.
 
+## 2026-07-27 Gate 16 first-principles reopen
+
+The pre-Gate-17 global hazard audit falsified Gate 16's implementation and
+closing evidence against its own accepted natural-language contract. The
+contract states that Goal entry is not restricted to `/goal` or any fixed
+interaction shape and that a clear learner-authored Goal may commit without
+redundant confirmation. In contrast,
+`packages/core/src/learner-goal.ts` implements direct admission through a fixed
+English/Chinese initiation whitelist and keyword tests,
+`packages/opencode/src/tool/learner-goal.ts` requires update wording to include
+an internal Goal ID, and
+`packages/core/src/learner-goal/constraint-schema.ts` installs a commit-seal
+trigger that recognizes direct creation, negation, cadence, scope, target,
+condition, disposition, correction, replacement, and no-change intent through
+fixed English/Chinese substrings and templates. Direct update/replacement also
+requires the learner presentation to contain the internal Goal ID.
+
+The focused test corpus primarily uses machine-shaped expressions such as
+`/goal ... active LearnerHome goal with no conditions and no target`; the
+accepted deterministic and provider evidence therefore did not test the
+claimed open natural-language boundary. A clear expression such as
+`请记住我这学期要通过微积分` misses the direct-create whitelist, while a title
+containing `Every Day` can be classified as cadence. This is an
+acceptance-changing behavior defect, not a documentation-only discrepancy.
+
+Gate 16 is therefore reopened. Commit
+`69433fc78d383bade1d92319eb3153a2cd7c68bd` and review run
+`gate16-whole-20260721-01` remain immutable historical provenance, but their
+close verdict is no longer current. The Goal product boundary remains intended;
+the raw-SQL semantic-forensics requirement, the affected physical constraints,
+the natural-language evidence boundary, and primary-TUI proposal/result
+presentation require correction and fresh independent closure. Gate 17 remains
+blocked while this and the rest of the global audit are unresolved.
+
+## 2026-07-27 pre-Gate-17 first-principles disposition
+
+The global audit used Repa's intended learning loop and general software-design
+constraints as the falsification basis. Maintainer acceptance, an ADR, a Gate
+contract, a passing test, or an independent `Accept` verdict retained its
+provenance but was not treated as a correctness axiom. The live method and
+counterexamples are recorded in the
+[pre-Gate-17 global hazard audit](research/pre-gate-17-global-hazard-audit-2026-07-27.md).
+
+The audit changed these historical dispositions:
+
+- **Gate 5:** scoped-reopened at active build, outward-identity, permission,
+  and product-surface composition.
+  `packages/opencode/script/build.ts` builds and embeds `packages/app` unless
+  `--skip-embed-web-ui` is supplied, even though the accepted terminal-only
+  boundary excludes Web from automatic build and current release composition.
+  The primary TUI also opens upstream OpenCode docs as Repa help, Repa config
+  writes upstream schema URLs, and retained provider transports identify Repa
+  requests as OpenCode. Runtime Web routes remain disconnected; retained Web
+  source and internal namespaces are not ordered deleted. The retained
+  custom-Agent creation surface also wildcard-allows capabilities omitted from
+  its stale inherited checklist and therefore requires default-deny
+  catalog-based repair.
+- **Gate 6:** scoped-reopened at trigger-DDL migration lineage and same-version
+  schema parity. Database identity, admission refusal, physical ownership, and
+  transaction rollback remain accepted.
+- **Gate 8:** scoped-reopened at the current physical shared-substrate
+  dependency and primary-TUI result-presentation boundaries. Its original
+  Course-command settlement remains accepted.
+- **Gate 10:** scoped-reopened at primary-TUI permission/result presentation. The
+  backend binds exact content-mutation path, operation, rights, lifetime, and
+  warning, while the primary TUI presents only the generic permission name.
+- **Gate 11:** scoped-reopened at primary-TUI result presentation. Its
+  explicitly user-visible typed conversion outcome is hidden by default.
+- **Gate 14:** scoped-reopened at primary-TUI confirmation/result presentation.
+  The exact default-Course transition snapshot reaches Permission but is not
+  shown by the primary TUI, and navigation results are hidden by default.
+- **Gate 15:** scoped-reopened at primary-TUI acknowledgement. The direct-run
+  carrier formats the exact settlement, while the primary TUI hides generic
+  successful tool output by default. Current implementation proves only the
+  finite `learning_wide` contribution, not every future steering scope.
+- **Gate 16:** reopened as described above; the same TUI proposal/result defect
+  also applies.
+
+The audit also established cross-Gate corrective obligations without
+invalidating every associated domain authority:
+
+- Later Gate 8 extensions inverted its dependency direction. Generic
+  invocation/receipt tables now enumerate domain effects and import their
+  tables. The shared substrate must become domain-neutral before another
+  command family is added, while atomic effect/receipt/terminal settlement is
+  preserved.
+- Gate 13–16 arbitrary-SQL closure evidence is reclassified. SQLite remains
+  responsible for structural invariants, not hostile arbitrary-SQL security,
+  natural-language interpretation, or acknowledgement reconstruction.
+- Trigger definitions imported from mutable current helpers are not frozen
+  historical migrations. Behavioral trigger changes require versioned DDL,
+  same-version parity, and upgrades from real frozen predecessor fixtures.
+- Gate 13 current-use resolution may record a Gate 9 observation and therefore
+  is not a pure context read. Gate 18 must use a non-mutating resolver or an
+  explicitly separate observation stage.
+- A restricted custom Agent currently denies only unselected keys from a stale
+  inherited checklist while runtime defaults retain `"*": "allow"`. One
+  authoritative capability catalog and default-deny restricted profiles are a
+  Gate 5 permission-surface correction before Gate 17.
+- Gate 5's earlier deferral of OpenCode-branded provider attribution to a later
+  identity audit was invalid. Repa-owned config must use a Repa-owned
+  version-correct schema or omit `$schema`; active outward network metadata
+  identifies Repa or is removed unless an exact provider contract requires a
+  recorded and tested compatibility literal.
+- Architecture had promoted soft workspace memory into a normal Context
+  contribution without a production producer, admission/correction owner, or
+  roadmap consumer. It is now an optional consumer-earned future boundary;
+  Gate 18 may not invent it to satisfy the superseded wording.
+
+The final independent falsification pass also rejected the audit's first
+Gate 17 composition generalization. Separate domain ownership does not imply
+separate commits: one bounded explicit local application operation may validate
+and atomically commit several named consequences. Gate 17 must compare that
+shape with staged settlement and refreshed context for external, long-running,
+not-jointly-validatable/authorizable, or result-dependent work. No other Gate
+disposition or corrective-barrier scope changed under that review.
+
+The carrier audit found no shadow interactive Tutor runtime: TUI, direct run,
+attach, ACP, and server paths converge on the released-v1 Session/Turn/model
+spine, while preview-v2 production execution is attached only to a no-op
+layer. Dormant release scripts that still name OpenCode identities are not
+active workflows, but they remain blockers to any future Repa release-readiness
+claim.
+
+Corrective work begun under the 2026-07-27 audit completed on 2026-07-28:
+working-tree candidates for Gate 5, Gate 6/8, and the shared Gate
+8/10/11/14/15/16 TUI presentation boundary passed their original or independent
+reviewers and final focused verification. Their exact candidate evidence is
+recorded in the affected Gate records and the global hazard audit. No commit or
+explicitly frozen snapshot owns that combined candidate yet, so this historical
+close-evidence table deliberately adds no new row or replacement hash.
+`docs/README.md` continues to own the scoped-reopened pending-integration
+disposition. Gate 16's natural-language corrective amendment has not passed the
+required fresh separate top-level review and is not included in the accepted
+implementation candidate.
+
+The same Gate 5 candidate also removes default production registration of the
+preview-v2 `customize-opencode` skill while preserving generic v2 configured
+skills, the explicitly composable hibernated plugin, and released-v1 skill
+discovery/invocation. A separate fresh read-only reviewer accepted this slice
+after focused Core and released-v1 tests passed. This is candidate provenance,
+not a new close hash.
+
+## 2026-07-28 bounded pre-Gate-17 audit closure
+
+The maintainer correction after the first falsification pass restored the
+parent question that originally triggered this work: repeated discussion had
+collapsed new-versus-continuing Course identity, Session continuation, bounded
+context reconstruction, a next-Turn draft, and an exact running-Turn steer.
+The renewed audit therefore checked whether current authority and the actual
+working tree could reconstruct those meanings without inherited OpenCode,
+preview-v2, historical review prose, or source proximity taking product
+authority.
+
+Two fresh read-only passes accepted the renewed result with no P0-P3 finding.
+One followed the authority chain through product, architecture, ADR, roadmap,
+Gate, implementation, and retained-carrier behavior; the other independently
+checked documentation governance, discovery positions, hibernated executable
+support, and physical residue. Together they established the bounded claim
+recorded in the
+[pre-Gate-17 global hazard audit](research/pre-gate-17-global-hazard-audit-2026-07-27.md):
+the previously confusing meanings now have distinct owners; all current
+interactive carriers converge on one released-v1 Session/Turn spine; tracked
+external `.opencode` control has been removed; retained historical automation
+is classified and fail-closed outside standard discovery roots; rendered Web
+provenance is visible; and every actual untracked file belongs to a recorded
+causal group.
+
+This closes the audit record, not the affected Gate repairs. No new close hash
+is recorded: the accepted cross-Gate candidates remain unstaged and
+uncommitted, Gate 16's natural-language contract amendment still awaits fresh
+separate top-level review, and Gate 17 remains unauthorized. The verdict also
+does not claim release readiness, Gate 18 context implementation, Gate 23
+product-loop proof, or permanent whole-project health.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit
 
 `docs/research/opencode-one-time-fork-audit-2026-07-13.md` at the oracle tag.
+
+### Product behavior and dogfood traces
+
+`docs/foundation/03-complete-learning-traces.md` and
+`docs/roadmap/05-first-dogfood-tutor-loop.md` at the oracle tag.
+
+### Experiment ledger
+
+`docs/research/experiment-ledger.md` at the oracle tag. This is the locator for
+the ALS evidence cited by current architecture and ADRs.
+
+### Superseded decisions
+
+`docs/decisions/0001-opencode-reference-strategy.md` and
+`docs/decisions/0011-single-process-tutor-loop-over-mature-mechanics.md` at the
+oracle tag.
 
 ### Conditional-purpose evidence
 

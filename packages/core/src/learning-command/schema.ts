@@ -1,11 +1,6 @@
-import { Schema } from "effect"
-import type { Turn } from "@opencode-ai/schema/turn"
 import { ArtifactSchema } from "../artifact/schema"
 import type { CourseID, RevisionID, Selection, SelectionAcceptanceEffectID, SelectionAcceptanceInput } from "../course"
-import { Identifier } from "../id/id"
 import { RepresentationSchema } from "../representation/schema"
-import { SessionSchema } from "../session/schema"
-import type { MessageID, PartID } from "../v1/session"
 import type { PermissionV1 } from "../v1/permission"
 import type {
   AnchorEffect,
@@ -21,37 +16,26 @@ import type {
 import type { OccurrenceID } from "./occurrence-schema"
 import type { RetainedSteering } from "../retained-steering"
 import type { LearnerGoal } from "../learner-goal"
+import type { InvocationEnvelope, ReceiptID } from "./physical-schema"
 
-export const ReceiptID = Schema.String.check(Schema.isPattern(/^lcr_[0-9A-Za-z]{26}$/)).pipe(
-  Schema.brand("LearningCommand.ReceiptID"),
-)
-export type ReceiptID = typeof ReceiptID.Type
-
-const decodeReceiptID = Schema.decodeUnknownSync(ReceiptID)
-
-export const createReceiptID = () => decodeReceiptID(Identifier.create("lcr", "ascending"))
-
-export const AuthorizationBasis = Schema.Union([
-  Schema.Literal("learner_request"),
-  Schema.Literal("learner_acceptance"),
-])
-export type AuthorizationBasis = typeof AuthorizationBasis.Type
-
-export type InvocationEnvelope = {
-  readonly occurrenceID: OccurrenceID
-  readonly turnID: Turn.ID
-  readonly inputID: Turn.InputID
-  readonly sessionID: SessionSchema.ID
-  readonly parentUserMessageID: MessageID
-  readonly assistantMessageID: MessageID
-  readonly partID: PartID
-  readonly providerCallID: string
-  readonly emissionOrdinal: number
-  readonly capabilityIdentity: string
-  readonly capabilityVersion: number
-  readonly authorizationBasis: AuthorizationBasis
-  readonly timeAdmitted: number
-}
+export {
+  AppliedAssistantImmutableError,
+  AuthorizationBasis,
+  InvalidInvocationEnvelopeError,
+  InvocationConflictError,
+  InvocationNotFoundError,
+  InvocationTranscriptUnavailableError,
+  ReceiptID,
+  SettledPartImmutableError,
+  createReceiptID,
+} from "./physical-schema"
+export type {
+  Error,
+  InvocationEnvelope,
+  PermissionOutcome,
+  PhysicalSettlement,
+  SettlementMetadata,
+} from "./physical-schema"
 
 export type AcceptCourseViewRevisionInvocation = {
   readonly envelope: InvocationEnvelope
@@ -86,11 +70,6 @@ export type NavigationInvocation = SetDefaultCoursePreferenceInvocation | SetCou
 export type RetainedSteeringInvocation = RetainedSteering.Invocation
 
 export type LearnerGoalInvocation = LearnerGoal.Invocation
-
-export type SettlementMetadata = {
-  readonly time: number
-  readonly order: number
-}
 
 export type AppliedSettlement = {
   readonly outcome: "applied"
@@ -252,72 +231,13 @@ export type Settlement =
   | LearnerGoal.NoChangeSettlement
   | ErrorSettlement
 
-export type PermissionOutcome =
-  | { readonly type: "allow" }
-  | { readonly type: "deny" }
-  | { readonly type: "correct" }
-  | { readonly type: "cancel" }
-  | { readonly type: "abort" }
+export type Reservation =
+  | { readonly type: "candidate" }
+  | { readonly type: "terminal"; readonly reason: "already_applied" | "semantic_conflict" | "context_refresh_required" }
+  | { readonly type: "admitted" }
+  | { readonly type: "replay"; readonly settlement: Settlement }
 
-export class InvocationConflictError extends Schema.TaggedErrorClass<InvocationConflictError>()(
-  "LearningCommand.InvocationConflictError",
-  {
-    partID: Schema.String,
-    assistantMessageID: Schema.String,
-    providerCallID: Schema.String,
-  },
-) {}
-
-export class InvocationNotFoundError extends Schema.TaggedErrorClass<InvocationNotFoundError>()(
-  "LearningCommand.InvocationNotFoundError",
-  {
-    partID: Schema.String,
-  },
-) {}
-
-export class InvocationTranscriptUnavailableError extends Schema.TaggedErrorClass<InvocationTranscriptUnavailableError>()(
-  "LearningCommand.InvocationTranscriptUnavailableError",
-  {
-    partID: Schema.String,
-  },
-) {}
-
-export class InvalidInvocationEnvelopeError extends Schema.TaggedErrorClass<InvalidInvocationEnvelopeError>()(
-  "LearningCommand.InvalidInvocationEnvelopeError",
-  {
-    reason: Schema.Union([
-      Schema.Literal("missing_call_id"),
-      Schema.Literal("invalid_ordinal"),
-      Schema.Literal("invalid_capability"),
-      Schema.Literal("invalid_authorization_basis"),
-      Schema.Literal("invalid_time"),
-      Schema.Literal("wrong_assistant"),
-      Schema.Literal("wrong_parent"),
-      Schema.Literal("unreserved_part"),
-      Schema.Literal("historical_part"),
-    ]),
-  },
-) {}
-
-export class SettledPartImmutableError extends Schema.TaggedErrorClass<SettledPartImmutableError>()(
-  "LearningCommand.SettledPartImmutableError",
-  {
-    partID: Schema.String,
-  },
-) {}
-
-export class AppliedAssistantImmutableError extends Schema.TaggedErrorClass<AppliedAssistantImmutableError>()(
-  "LearningCommand.AppliedAssistantImmutableError",
-  {
-    assistantMessageID: Schema.String,
-    partID: Schema.String,
-  },
-) {}
-
-export type Error =
-  | InvocationConflictError
-  | InvocationNotFoundError
-  | InvocationTranscriptUnavailableError
-  | InvalidInvocationEnvelopeError
-  | SettledPartImmutableError
-  | AppliedAssistantImmutableError
+export type SettlementResult =
+  | { readonly type: "candidate" }
+  | { readonly type: "settled"; readonly settlement: Settlement }
+  | { readonly type: "replay"; readonly settlement: Settlement }

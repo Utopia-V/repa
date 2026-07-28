@@ -15,7 +15,8 @@
 import os from "os"
 import path from "path"
 import stripAnsi from "strip-ansi"
-import type { ToolPart } from "@opencode-ai/sdk/v2"
+import type { PermissionRequest, ToolPart } from "@opencode-ai/sdk/v2"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import type * as Tool from "@/tool/tool"
 import type { ApplyPatchTool } from "@/tool/apply_patch"
 import type { ShellTool as BashTool } from "@/tool/shell"
@@ -55,6 +56,7 @@ export type ToolFrame = {
   state: ToolDict
   status: string
   error: string
+  part?: ToolPart
 }
 
 export type ToolInline = {
@@ -1022,168 +1024,6 @@ function permLsp(p: ToolPermissionProps<typeof LspTool>): ToolPermissionInfo {
   }
 }
 
-function permDefaultCoursePreference(p: ToolPermissionProps): ToolPermissionInfo | undefined {
-  const confirmation = dict(p.metadata.confirmation)
-  const permissionRequestID = text(confirmation.permissionRequestID)
-  const headID = confirmation.headID === null ? null : text(confirmation.headID)
-  const version = num(confirmation.version)
-  const fromCourseID = confirmation.fromCourseID === null ? null : text(confirmation.fromCourseID)
-  const fromCourseTitle = confirmation.fromCourseTitle
-  if (
-    !permissionRequestID ||
-    (headID !== null && !headID) ||
-    version === undefined ||
-    !Number.isInteger(version) ||
-    version < 0 ||
-    (version === 0 && headID !== null) ||
-    (version > 0 && headID === null) ||
-    (fromCourseID !== null && !fromCourseID) ||
-    (fromCourseTitle !== null && typeof fromCourseTitle !== "string") ||
-    (fromCourseID === null) !== (fromCourseTitle === null)
-  ) {
-    return undefined
-  }
-
-  const lines = [
-    `Current preference: version ${version}; head ${headID ?? "none"}`,
-    fromCourseID === null
-      ? "From Course: none"
-      : `From Course: "${Locale.truncate(fromCourseTitle ?? "", 80)}" [${fromCourseID}]`,
-  ]
-  if (confirmation.target === null) {
-    return {
-      icon: "◇",
-      title: "Confirm clearing the default Course preference",
-      lines: [...lines, "To Course: none (clear the preference)"],
-    }
-  }
-
-  const target = dict(confirmation.target)
-  const courseID = text(target.courseID)
-  const courseTitle = target.courseTitle
-  const courseVersion = num(target.courseVersion)
-  const selectionVersion = num(target.selectionVersion)
-  const selectionRevisionID = target.selectionRevisionID === null ? null : text(target.selectionRevisionID)
-  const viewID = target.viewID === null ? null : text(target.viewID)
-  const viewName = target.viewName
-  const viewVersion = target.viewVersion === null ? null : num(target.viewVersion)
-  const revisionVersion = target.revisionVersion === null ? null : num(target.revisionVersion)
-  if (
-    !courseID ||
-    typeof courseTitle !== "string" ||
-    courseVersion === undefined ||
-    !Number.isInteger(courseVersion) ||
-    courseVersion < 0 ||
-    selectionVersion === undefined ||
-    !Number.isInteger(selectionVersion) ||
-    selectionVersion < 0 ||
-    (selectionRevisionID !== null && !selectionRevisionID) ||
-    (viewID !== null && !viewID) ||
-    (viewName !== null && typeof viewName !== "string") ||
-    viewVersion === undefined ||
-    revisionVersion === undefined ||
-    (viewVersion !== null && (!Number.isInteger(viewVersion) || viewVersion < 0)) ||
-    (revisionVersion !== null && (!Number.isInteger(revisionVersion) || revisionVersion < 0))
-  ) {
-    return undefined
-  }
-
-  const noWorkingView =
-    selectionRevisionID === null &&
-    viewID === null &&
-    viewName === null &&
-    viewVersion === null &&
-    revisionVersion === null
-  const exactWorkingView =
-    selectionRevisionID !== null &&
-    viewID !== null &&
-    typeof viewName === "string" &&
-    viewVersion !== null &&
-    revisionVersion !== null
-  if (!noWorkingView && !exactWorkingView) {
-    return undefined
-  }
-
-  return {
-    icon: "◇",
-    title:
-      fromCourseID === null
-        ? "Confirm setting the default Course preference"
-        : "Confirm changing the default Course preference",
-    lines: [
-      ...lines,
-      `To Course: "${Locale.truncate(courseTitle, 80)}" [${courseID}]`,
-      `Target Course version: ${courseVersion}; selection version: ${selectionVersion}`,
-      ...(noWorkingView
-        ? ["Working View: none", "Working Revision: none"]
-        : [
-            `Working View: "${Locale.truncate(typeof viewName === "string" ? viewName : "", 80)}" [${viewID}]; version ${viewVersion}`,
-            `Working Revision: ${selectionRevisionID}; version ${revisionVersion}`,
-          ]),
-    ],
-  }
-}
-
-function permLearnerGoals(p: ToolPermissionProps): ToolPermissionInfo | undefined {
-  const input = dict(p.input)
-  const directCommand = dict(input.command)
-  const directOperations = list(directCommand.operations)
-  if (
-    input.authorizationBasis === "learner_request" &&
-    directOperations.length > 0 &&
-    directOperations.every((operation) => Object.keys(dict(operation)).length > 0)
-  ) {
-    return {
-      icon: "◇",
-      title: `Allow ${directOperations.length} direct learner Goal ${directOperations.length === 1 ? "change" : "changes"}`,
-      lines: [
-        "This exact learner-authored request becomes durable, correctable Goal state.",
-        ...stableCandidateLines(directCommand),
-      ],
-    }
-  }
-
-  const confirmation = dict(p.metadata.confirmation)
-  const schemaVersion = num(confirmation.schemaVersion)
-  const authorizationBasis = text(confirmation.authorizationBasis)
-  const semanticFingerprint = text(confirmation.semanticFingerprint)
-  const command = dict(confirmation.command)
-  const operations = list(command.operations)
-  const goalBases = list(confirmation.goalBases)
-  const courseBases = list(confirmation.courseBases)
-  if (
-    p.metadata.onceOnly !== true ||
-    schemaVersion !== 1 ||
-    authorizationBasis !== "learner_acceptance" ||
-    !/^[0-9a-f]{64}$/.test(semanticFingerprint) ||
-    operations.length === 0 ||
-    operations.some((operation) => Object.keys(dict(operation)).length === 0)
-  ) {
-    return undefined
-  }
-
-  return {
-    icon: "◇",
-    title: `Confirm ${operations.length} durable learner Goal ${operations.length === 1 ? "change" : "changes"}`,
-    lines: [
-      "This exact candidate becomes durable, correctable Goal state; it is not evidence, mastery, priority, or a study schedule.",
-      `Authorization: one-time learner acceptance; semantic fingerprint ${semanticFingerprint}`,
-      "Affected current Goal bases:",
-      ...stableCandidateLines(goalBases),
-      "Course bases and current availability:",
-      ...stableCandidateLines(courseBases),
-      "Complete ordered Goal change set:",
-      ...stableCandidateLines(command),
-    ],
-  }
-}
-
-function stableCandidateLines(value: unknown) {
-  return (JSON.stringify(value, null, 2) ?? "null")
-    .split("\n")
-    .map((line) => `  ${line}`)
-}
-
 const TOOL_RULES = {
   invalid: {
     view: {
@@ -1418,6 +1258,7 @@ function frame(part: ToolPart): ToolFrame {
     state,
     status: text(state.status),
     error: text(state.error),
+    part,
   }
 }
 
@@ -1431,6 +1272,7 @@ export function toolFrame(commit: StreamCommit, raw: string): ToolFrame {
     state,
     status: commit.toolState ?? text(state.status),
     error: (commit.toolError ?? "").trim(),
+    ...(commit.part ? { part: commit.part } : {}),
   }
 }
 
@@ -1455,6 +1297,7 @@ export function toolView(name?: string): ToolView {
 
 export function toolStructuredFinal(commit: StreamCommit): boolean {
   const state = commit.toolState ?? commit.part?.state.status
+  if (commit.part && semanticResult(frame(commit.part)).type !== "absent") return false
   return (
     commit.kind === "tool" &&
     commit.phase === "final" &&
@@ -1465,14 +1308,29 @@ export function toolStructuredFinal(commit: StreamCommit): boolean {
 
 export function toolInlineInfo(part: ToolPart): ToolInline {
   const ctx = frame(part)
+  const semantic = semanticResult(ctx)
+  if (semantic.type === "invalid") {
+    return {
+      icon: "!",
+      title: "Consequential result unavailable",
+      mode: "block",
+      body: "Repa could not verify this consequential result. No success is inferred.",
+    }
+  }
+  if (semantic.type === "valid") {
+    return {
+      icon: semantic.value.outcome === "failed" || semantic.value.outcome === "outcome_unknown" ? "!" : "◇",
+      title: `${semantic.value.title} — ${semanticResultStatus(semantic.value.outcome)}`,
+      mode: "block",
+      body: semanticResultBody(semantic.value),
+    }
+  }
   if (ctx.name === LEARNER_GOALS_TOOL) {
     return {
       icon: "◇",
       title: text(ctx.state.title).trim() || "Learner Goals",
       mode: "block",
-      ...(ctx.status === "completed" && text(ctx.state.output).trim()
-        ? { body: text(ctx.state.output).trim() }
-        : {}),
+      ...(ctx.status === "completed" && text(ctx.state.output).trim() ? { body: text(ctx.state.output).trim() } : {}),
     }
   }
   if (ctx.name === RETAINED_STEERING_TOOL) {
@@ -1480,9 +1338,7 @@ export function toolInlineInfo(part: ToolPart): ToolInline {
       icon: "◇",
       title: text(ctx.state.title).trim() || "Retained learning steering",
       mode: "block",
-      ...(ctx.status === "completed" && text(ctx.state.output).trim()
-        ? { body: text(ctx.state.output).trim() }
-        : {}),
+      ...(ctx.status === "completed" && text(ctx.state.output).trim() ? { body: text(ctx.state.output).trim() } : {}),
     }
   }
   const draw = rule(ctx.name)?.run
@@ -1498,6 +1354,13 @@ export function toolInlineInfo(part: ToolPart): ToolInline {
 }
 
 export function toolScroll(phase: ToolPhase, ctx: ToolFrame): string {
+  if (phase === "final") {
+    const semantic = semanticResult(ctx)
+    if (semantic.type === "invalid") {
+      return "Consequential result unavailable: Repa could not verify this result, so no success is inferred."
+    }
+    if (semantic.type === "valid") return semanticResultBody(semantic.value)
+  }
   if (ctx.name === LEARNER_GOALS_TOOL) {
     if (phase === "start") return "⚙ Updating Learner Goals"
     if (phase === "progress") return ""
@@ -1537,28 +1400,60 @@ export function toolScroll(phase: ToolPhase, ctx: ToolFrame): string {
 }
 
 export function toolPermissionInfo(
-  name: string,
+  request: PermissionRequest,
   input: ToolDict,
-  meta: ToolDict,
-  patterns: string[],
 ): ToolPermissionInfo | undefined {
-  if (name === "set_default_course_preference") {
-    return permDefaultCoursePreference(permission({ input, meta, patterns }))
+  const semantic = SemanticPresentation.readProposal(request)
+  if (semantic.type === "invalid") {
+    return {
+      icon: "!",
+      title: "Permission scope unavailable",
+      lines: ["Repa could not verify the exact consequential scope. Reject this request."],
+    }
   }
-  if (name === LEARNER_GOALS_TOOL) {
-    return permLearnerGoals(permission({ input, meta, patterns }))
+  if (semantic.type === "valid") {
+    return {
+      icon: "◇",
+      title: semantic.value.title,
+      lines: [semantic.value.summary, ...semantic.value.facts.map((item) => `${item.label}: ${item.value}`)],
+    }
   }
-
-  const draw = rule(name)?.permission
+  const draw = rule(request.permission)?.permission
   if (!draw) {
     return undefined
   }
 
   try {
-    return draw(permission({ input, meta, patterns }))
+    return draw(permission({ input, meta: request.metadata, patterns: request.patterns }))
   } catch {
     return undefined
   }
+}
+
+function semanticResult(ctx: ToolFrame) {
+  if (ctx.status !== "completed") return { type: "absent" as const }
+  if (!ctx.part) {
+    return SemanticPresentation.requiresResult(ctx.name)
+      ? ({ type: "invalid" as const })
+      : ({ type: "absent" as const })
+  }
+  return SemanticPresentation.readResult(ctx.part)
+}
+
+function semanticResultStatus(outcome: SemanticPresentation.ResultProjection["outcome"]) {
+  if (outcome === "committed") return "Committed"
+  if (outcome === "already_applied") return "Already applied"
+  if (outcome === "no_effect") return "No effect"
+  if (outcome === "outcome_unknown") return "Outcome unknown"
+  return "Failed"
+}
+
+function semanticResultBody(value: SemanticPresentation.ResultProjection) {
+  return [
+    value.summary,
+    ...value.facts.map((item) => `${item.label}: ${item.value}`),
+    `Durable settlement: ${value.durablySettled ? "yes" : "no"}`,
+  ].join("\n")
 }
 
 export function toolSnapshot(commit: StreamCommit, raw: string): ToolSnapshot | undefined {

@@ -6,3 +6,6 @@ declare global {
 export const InstallationVersion = typeof REPA_VERSION === "string" ? REPA_VERSION : "local"
 export const InstallationChannel = typeof REPA_CHANNEL === "string" ? REPA_CHANNEL : "local"
 export const InstallationLocal = InstallationChannel === "local"
+export const InstallationProductID = "repa"
+export const InstallationProductName = "Repa"
+export const InstallationUserAgent = `${InstallationProductID}/${InstallationVersion}`

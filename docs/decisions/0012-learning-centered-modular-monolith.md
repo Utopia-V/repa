@@ -10,6 +10,13 @@ Amendment (2026-07-17): the production fork does not carry the pre-fork
 oracle evidence; native retained steering and other authorities earn their own
 revisions and records through the active roadmap.
 
+Amendment (2026-07-27): `Agenda` is a family and composition label, not a
+universal durable or transactional authority. Goal, future attention,
+Assignment, planning, and any later consumer-earned detour or commitment keep
+their own sources, legal transitions, correction, and failure semantics.
+Semantic separation does not require one package, table, service, or Gate per
+meaning.
+
 ## Context
 
 The initial ADR-0011 runner established a real single-process Tutor loop and
@@ -74,8 +81,8 @@ The architecture keeps these meanings separate:
 - revision-bound material maps and alignments;
 - learner progress, activities, observations, evidence, and correctable
   inference;
-- goals, assignments, deadlines, revisits, commitments, and temporary agenda;
-  and
+- separate Goal, future-attention, Assignment, planning, and any
+  consumer-earned detour or commitment authorities; and
 - Tutor policy and scoped learner steering.
 
 They use typed references and explicit revisions. They are not stored in one
@@ -83,7 +90,8 @@ generic graph, event, fact, or mastery model.
 
 A course view uses a versioned ordered hierarchy with sparse, module-owned,
 typed and provenance-bearing relations. Material structure, learner state, and
-agenda remain separate overlays. A graph database is not selected.
+agenda-family authorities remain separate overlays. A graph database is not
+selected.
 
 A Course may exist before an honest route has been formed. It may retain
 several route-strategy Views and their exact revisions while selecting zero or
@@ -91,8 +99,9 @@ one eligible revision for default navigation and durable targets. Working,
 historical, and candidate are derived relations of exact eligible revisions,
 not stored View lifecycle states. Course creation does not require a fabricated
 placeholder View. A selection is working state, not objective curriculum truth.
-Temporary focus and intended rejoin belong to Interaction or Agenda; they do
-not create a second generic current-item pointer.
+Temporary focus normally belongs to the current Interaction. A demonstrated
+cross-Turn consumer may earn a distinct detour/rejoin authority within the
+agenda family; the family name itself owns no generic current-item pointer.
 
 A Course View is a stable identity for one continuing route strategy. Each
 accepted structure is an immutable revision of that View, while a materially
@@ -135,11 +144,13 @@ The Agent runtime is an outer execution mechanism. It owns one Turn's model
 samples, tool continuation, cancellation, limits, and terminal result. It does
 not own course or learner semantics.
 
-Before every model sample, Tutor composition queries a bounded current learning
-view, policy contributions, source references, dependency versions, and the
-capabilities available to that sample. Exact materials, old Sessions, full
-maps, and detailed evidence remain lazy reads. The resulting context cut is an
-immutable observation, never the state authority.
+Before every admitted interactive Tutor/Agent model sample, Tutor composition
+queries a bounded current learning view, policy contributions, source
+references, dependency versions, and the capabilities available to that
+sample. Exact materials, old Sessions, full maps, and detailed evidence remain
+lazy reads. The resulting context cut is an immutable observation, never the
+state authority. Program-owned internal model operations retain their narrow
+purpose contracts and do not receive the interactive learning view.
 
 The Learning System is a mixed-initiative, receding-horizon controller of its
 own Tutor behavior:
@@ -268,8 +279,9 @@ remote client, background execution requirement, or measured traversal/search
 pressure cannot be handled by the current ownership boundary.
 
 Reconsider a richer domain or learner ontology only when at least one concrete
-Tutor decision cannot be represented honestly by course/material/history/
-agenda state and its source provenance.
+Tutor decision cannot be represented honestly by course/material/history or
+the exact Goal, future-attention, Assignment, planning, or other owning state
+and its source provenance.
 
 Do not reconsider because a framework, graph database, or upstream Agent
 already exposes more machinery.

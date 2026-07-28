@@ -11,7 +11,7 @@ import {
   AdmittedLearnerOccurrenceTable,
   LearnerOccurrenceTombstoneTable,
 } from "./learning-command/occurrence.sql"
-import type { SettlementMetadata } from "./learning-command/schema"
+import type { ReceiptID, SettlementMetadata } from "./learning-command/schema"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "./learning-command/sql"
 import { MessageTable, PartTable } from "./session/sql"
 import type { SessionSchema } from "./session/schema"
@@ -38,6 +38,9 @@ import {
   type Command,
   type Cut,
   type CutItem,
+  type AppliedSettlement,
+  type AlreadyAppliedSettlement,
+  type NoChangeSettlement,
   type PolicyID,
   type PageOptions,
   type PreparedTransition,
@@ -48,6 +51,7 @@ import {
 } from "./retained-steering/schema"
 import { RetainedSteeringCursor } from "./retained-steering/cursor"
 import {
+  RetainedSteeringCommandTable,
   RetainedSteeringCommitSealTable,
   RetainedSteeringPolicyTable,
   RetainedSteeringStateTable,
@@ -63,13 +67,14 @@ const committedTransition = sql`EXISTS (
     ON retained_receipt.id = retained_seal.receipt_id
   JOIN learning_command_invocation AS retained_invocation
     ON retained_invocation.part_id = retained_receipt.invocation_part_id
+  JOIN retained_steering_command AS retained_command
+    ON retained_command.invocation_part_id = retained_invocation.part_id
   WHERE retained_seal.transition_id = ${RetainedSteeringTransitionTable.id}
     AND retained_seal.invocation_part_id = retained_invocation.part_id
-    AND retained_receipt.retained_steering_effect_id = ${RetainedSteeringTransitionTable.id}
     AND retained_receipt.occurrence_id = ${RetainedSteeringTransitionTable.occurrence_id}
     AND retained_invocation.status = 'applied'
-    AND retained_invocation.retained_steering_effect_id = ${RetainedSteeringTransitionTable.id}
-    AND retained_invocation.retained_steering_semantic_fingerprint = ${RetainedSteeringTransitionTable.semantic_fingerprint}
+    AND retained_invocation.receipt_id = retained_receipt.id
+    AND retained_command.semantic_fingerprint = ${RetainedSteeringTransitionTable.semantic_fingerprint}
     AND retained_invocation.authorization_basis = 'learner_request'
 )`
 
@@ -82,12 +87,13 @@ const noCommittedSuccessor = sql`NOT EXISTS (
     ON successor_receipt.id = successor_seal.receipt_id
   JOIN learning_command_invocation AS successor_invocation
     ON successor_invocation.part_id = successor_receipt.invocation_part_id
+  JOIN retained_steering_command AS successor_command
+    ON successor_command.invocation_part_id = successor_invocation.part_id
   WHERE successor.predecessor_id = ${RetainedSteeringTransitionTable.id}
     AND successor_seal.invocation_part_id = successor_invocation.part_id
-    AND successor_receipt.retained_steering_effect_id = successor.id
     AND successor_invocation.status = 'applied'
-    AND successor_invocation.retained_steering_effect_id = successor.id
-    AND successor_invocation.retained_steering_semantic_fingerprint = successor.semantic_fingerprint
+    AND successor_invocation.receipt_id = successor_receipt.id
+    AND successor_command.semantic_fingerprint = successor.semantic_fingerprint
 )`
 
 export * from "./retained-steering/schema"
@@ -117,6 +123,25 @@ export type CutRead =
       causalOccurrenceID?: OccurrenceID
     }>
   | Readonly<{ type: "not_found"; assistantMessageID: MessageID }>
+
+export type ResultTransitionPresentation = Readonly<{
+  state: "operative" | "retracted"
+  status: "operative_active" | "operative_expired" | "retracted"
+  version: number
+  operativeInstruction?: string
+  validUntilNormalized?: string
+  boundaryTimeZone?: string
+  boundaryUtcOffsetMinutes?: number
+}>
+
+export type ResultPresentation = Readonly<{
+  action: "create" | "replace" | "retract"
+  scope: typeof SCOPE
+  effect: ResultTransitionPresentation
+  previous?: ResultTransitionPresentation
+  current: ResultTransitionPresentation
+  relation: "active" | "superseded"
+}>
 
 export function commandFingerprint(command: Command) {
   return digest({ schemaVersion: SCHEMA_VERSION, scope: SCOPE, command })
@@ -292,8 +317,8 @@ export function sealTransition(
   tx: Transaction,
   input: {
     readonly transitionID: TransitionID
-    readonly receiptID: string
-    readonly invocationPartID: string
+    readonly receiptID: ReceiptID
+    readonly invocationPartID: SessionV1.PartID
   },
 ) {
   return Effect.gen(function* () {
@@ -481,6 +506,59 @@ export function readEffect(tx: Transaction, transitionID: TransitionID, asOf: nu
       .get()
       .pipe(Effect.orDie)
     return row ? yield* transitionRead(tx, row, asOf) : undefined
+  })
+}
+
+export function readResultPresentation(
+  tx: Transaction,
+  settlement: AppliedSettlement | AlreadyAppliedSettlement | NoChangeSettlement,
+): Effect.Effect<ResultPresentation> {
+  return Effect.gen(function* () {
+    const effect =
+      settlement.outcome === "no_change"
+        ? (yield* readPolicy(tx, { policyID: settlement.policyID, asOf: settlement.settlementTime })).head
+        : yield* readEffect(tx, settlement.effectID, settlement.settlementTime)
+    if (!effect) {
+      return yield* Effect.die(`Retained steering result lost policy ${settlement.policyID}`)
+    }
+    if (
+      effect.transition.policyID !== settlement.policyID ||
+      effect.transition.version !== settlement.version ||
+      effect.transition.state !== settlement.state ||
+      (settlement.outcome !== "no_change" && effect.receiptID !== settlement.receiptID)
+    ) {
+      return yield* Effect.die(`Retained steering result diverged from committed effect ${effect.effectID}`)
+    }
+    const current = (yield* readPolicy(tx, {
+      policyID: effect.transition.policyID,
+      asOf: settlement.settlementTime,
+    })).head
+    if (!current) {
+      return yield* Effect.die(`Retained steering policy ${effect.transition.policyID} lost its current head`)
+    }
+    const previous = effect.transition.predecessorID
+      ? yield* readEffect(tx, effect.transition.predecessorID, settlement.settlementTime)
+      : undefined
+    if (effect.transition.predecessorID && !previous) {
+      return yield* Effect.die(`Retained steering effect ${effect.effectID} lost its predecessor`)
+    }
+    return {
+      action:
+        settlement.outcome === "no_change"
+          ? effect.transition.state === "retracted"
+            ? "retract"
+            : "replace"
+          : effect.transition.state === "retracted"
+            ? "retract"
+            : effect.transition.predecessorID
+              ? "replace"
+              : "create",
+      scope: effect.transition.scope,
+      effect: resultTransitionPresentation(effect),
+      ...(previous ? { previous: resultTransitionPresentation(previous) } : {}),
+      current: resultTransitionPresentation(current),
+      relation: current.effectID === effect.effectID ? "active" : "superseded",
+    }
   })
 }
 
@@ -1128,22 +1206,27 @@ function transitionRead(
         .select({
           id: LearningCommandReceiptTable.id,
           occurrenceID: LearningCommandReceiptTable.occurrence_id,
-          effectID: LearningCommandReceiptTable.retained_steering_effect_id,
+          effectID: RetainedSteeringCommitSealTable.transition_id,
         })
-        .from(LearningCommandReceiptTable)
+        .from(RetainedSteeringCommitSealTable)
+        .innerJoin(
+          LearningCommandReceiptTable,
+          eq(LearningCommandReceiptTable.id, RetainedSteeringCommitSealTable.receipt_id),
+        )
         .innerJoin(
           LearningCommandInvocationTable,
-          eq(LearningCommandInvocationTable.part_id, LearningCommandReceiptTable.invocation_part_id),
+          eq(LearningCommandInvocationTable.part_id, RetainedSteeringCommitSealTable.invocation_part_id),
+        )
+        .innerJoin(
+          RetainedSteeringCommandTable,
+          eq(RetainedSteeringCommandTable.invocation_part_id, RetainedSteeringCommitSealTable.invocation_part_id),
         )
         .where(
           and(
-            eq(LearningCommandReceiptTable.retained_steering_effect_id, row.id),
+            eq(RetainedSteeringCommitSealTable.transition_id, row.id),
             eq(LearningCommandInvocationTable.status, "applied"),
-            eq(LearningCommandInvocationTable.retained_steering_effect_id, row.id),
-            eq(
-              LearningCommandInvocationTable.retained_steering_semantic_fingerprint,
-              row.semantic_fingerprint,
-            ),
+            eq(LearningCommandInvocationTable.receipt_id, LearningCommandReceiptTable.id),
+            eq(RetainedSteeringCommandTable.semantic_fingerprint, row.semantic_fingerprint),
           ),
         )
         .get()
@@ -1207,6 +1290,24 @@ function transition(row: typeof RetainedSteeringTransitionTable.$inferSelect): T
     frontierSequence: row.frontier_sequence,
     acknowledgementTitle: row.acknowledgement_title,
     acknowledgementBody: row.acknowledgement_body,
+  }
+}
+
+function resultTransitionPresentation(read: TransitionRead): ResultTransitionPresentation {
+  return {
+    state: read.transition.state,
+    status: read.status,
+    version: read.transition.version,
+    ...(read.transition.operativeInstruction
+      ? { operativeInstruction: read.transition.operativeInstruction }
+      : {}),
+    ...(read.transition.validUntilNormalized
+      ? { validUntilNormalized: read.transition.validUntilNormalized }
+      : {}),
+    ...(read.transition.boundaryTimeZone ? { boundaryTimeZone: read.transition.boundaryTimeZone } : {}),
+    ...(read.transition.boundaryUtcOffsetMinutes === undefined
+      ? {}
+      : { boundaryUtcOffsetMinutes: read.transition.boundaryUtcOffsetMinutes }),
   }
 }
 

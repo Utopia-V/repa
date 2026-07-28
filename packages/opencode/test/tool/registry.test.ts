@@ -22,8 +22,13 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
 import { assertExternalToolID } from "@/tool/learning-command"
+import { Permission } from "@/permission"
 
 const configLayer = TestConfig.layer({
+  directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".repa")])),
+})
+const prototypeDenyConfigLayer = TestConfig.layer({
+  get: () => Effect.succeed({ permission: JSON.parse(`{"*":"allow","__proto__":"deny"}`) }),
   directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".repa")])),
 })
 
@@ -58,6 +63,12 @@ const replacements = [
 ] as const
 
 const it = testEffect(LayerNode.compile(root, replacements))
+const withPrototypeDeny = testEffect(
+  LayerNode.compile(root, [
+    [Config.node, prototypeDenyConfigLayer],
+    [RuntimeFlags.node, RuntimeFlags.layer()],
+  ]),
+)
 const withCodeMode = testEffect(
   LayerNode.compile(root, [
     [Config.node, configLayer],
@@ -95,12 +106,135 @@ const withEmptyCodeMode = testEffect(
   ]),
 )
 const withBrokenPlugin = testEffect(LayerNode.compile(root, [...replacements, [Plugin.node, brokenPluginLayer]]))
+const numericPluginLayer = Layer.succeed(
+  Plugin.Service,
+  Plugin.Service.of({
+    init: () => Effect.void,
+    trigger: ((_name: unknown, _input: unknown, output: unknown) =>
+      Effect.succeed(output)) as Plugin.Interface["trigger"],
+    list: () =>
+      Effect.succeed([
+        {
+          tool: {
+            "0": {
+              description: "numeric plugin tool",
+              args: {},
+              execute: async () => "ok",
+            },
+          },
+        },
+      ]),
+  }),
+)
+const withNumericPlugin = testEffect(LayerNode.compile(root, [...replacements, [Plugin.node, numericPluginLayer]]))
+const withNumericMcp = testEffect(
+  LayerNode.compile(root, [
+    ...replacements,
+    [
+      MCP.node,
+      Layer.mock(MCP.Service, {
+        tools: () =>
+          Effect.succeed({
+            "0_0": {
+              def: {
+                name: "0",
+                description: "numeric namespaced MCP tool",
+                inputSchema: { type: "object", properties: {} },
+              } as MCPToolDef,
+              client: {} as MCP.McpTool["client"],
+            },
+          }),
+        clients: () => Effect.succeed({}),
+      }),
+    ],
+  ]),
+)
 
 afterEach(async () => {
   await disposeAllInstances()
 })
 
 describe("tool.registry", () => {
+  withPrototypeDeny.instance("hides a prototype-named custom tool denied by the root permission", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const directory = path.join(test.directory, ".repa", "tool")
+      yield* Effect.promise(() => fs.mkdir(directory, { recursive: true }))
+      yield* Effect.promise(() =>
+        Bun.write(
+          path.join(directory, "__proto__.ts"),
+          [
+            "export default {",
+            "  description: 'prototype-named custom tool',",
+            "  args: {},",
+            "  execute: async () => 'not visible',",
+            "}",
+            "",
+          ].join("\n"),
+        ),
+      )
+
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const agent = yield* agents.defaultInfo()
+      expect(yield* registry.ids()).toContain("__proto__")
+      expect(Permission.evaluate("__proto__", "*", agent.permission).action).toBe("deny")
+      expect(
+        (
+          yield* registry.tools({
+            providerID: ProviderV2.ID.opencode,
+            modelID: ModelV2.ID.make("test"),
+            agent,
+          })
+        ).map((tool) => tool.id),
+      ).not.toContain("__proto__")
+    }),
+  )
+
+  it.instance("rejects an array-index file custom tool before catalog admission", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const directory = path.join(test.directory, ".repa", "tool")
+      yield* Effect.promise(() => fs.mkdir(directory, { recursive: true }))
+      yield* Effect.promise(() =>
+        Bun.write(
+          path.join(directory, "0.ts"),
+          [
+            "export default {",
+            "  description: 'numeric custom tool',",
+            "  args: {},",
+            "  execute: async () => 'ok',",
+            "}",
+            "",
+          ].join("\n"),
+        ),
+      )
+
+      const registry = yield* ToolRegistry.Service
+      const exit = yield* registry.ids().pipe(Effect.exit)
+      expect(Exit.isFailure(exit)).toBeTrue()
+      if (Exit.isSuccess(exit)) return
+      expect(Cause.pretty(exit.cause)).toContain('external tool ID "0" is an ECMAScript array-index property key')
+    }),
+  )
+
+  withNumericPlugin.instance("rejects an array-index plugin tool before catalog admission", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const exit = yield* registry.ids().pipe(Effect.exit)
+      expect(Exit.isFailure(exit)).toBeTrue()
+      if (Exit.isSuccess(exit)) return
+      expect(Cause.pretty(exit.cause)).toContain('external tool ID "0" is an ECMAScript array-index property key')
+    }),
+  )
+
+  withNumericMcp.instance("keeps namespaced numeric MCP tool IDs available", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      expect(yield* registry.permissionCatalog()).toContain("0_0")
+    }),
+  )
+
   it.instance("rejects a custom override of the learning-command capability", () =>
     Effect.gen(function* () {
       const test = yield* TestInstance
@@ -162,6 +296,40 @@ describe("tool.registry", () => {
     }),
   )
 
+  it.instance("derives one permission catalog from active tools", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const catalog = yield* registry.permissionCatalog()
+
+      expect(catalog).toEqual([...catalog].sort())
+      expect(catalog).toContain("accept_course_view_revision")
+      expect(catalog).toContain("update_learner_goals")
+      expect(catalog).toContain("content_mutation")
+      expect(catalog).not.toContain("content_write")
+      expect(catalog).not.toContain("invalid")
+      expect(catalog.filter((permission) => permission === "edit")).toHaveLength(1)
+    }),
+  )
+
+  it.instance("uses the catalog mapping to expose content_write only through content_mutation", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const agent = yield* agents.defaultInfo()
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", content_mutation: "allow" }),
+        },
+      })
+
+      expect(tools.map((tool) => tool.id)).toContain("content_write")
+      expect(tools.map((tool) => tool.id)).not.toContain("content_read")
+    }),
+  )
+
   it.instance("does not expose task_status", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
@@ -220,6 +388,13 @@ describe("tool.registry", () => {
     }),
   )
 
+  withCodeMode.instance("includes connected MCP permissions in the catalog", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      expect(yield* registry.permissionCatalog()).toContain("weather_current")
+    }),
+  )
+
   withEmptyCodeMode.instance("does not expose execute when code mode has no visible tools", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
@@ -234,7 +409,7 @@ describe("tool.registry", () => {
     }),
   )
 
-  it.instance("hides task background parameter unless experimental background subagents are enabled", () =>
+  it.instance("exposes the active task wire schema without detached background input", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
       const agent = yield* Agent.Service
@@ -246,8 +421,10 @@ describe("tool.registry", () => {
         agent: repa,
       })).find((tool) => tool.id === "task")
 
-      expect(task?.jsonSchema).toBeDefined()
-      expect((task?.jsonSchema?.properties as Record<string, unknown> | undefined)?.background).toBeUndefined()
+      if (!task) throw new Error("task tool not found")
+      expect(
+        (ToolJsonSchema.fromTool(task).properties as Record<string, unknown> | undefined)?.background,
+      ).toBeUndefined()
     }),
   )
 

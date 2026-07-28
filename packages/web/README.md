@@ -1,4 +1,9 @@
-# Starlight Starter Kit: Basics
+# Retained OpenCode Starlight Site
+
+> **Status — retained OpenCode web/docs scaffold outside Repa's TUI baseline.** This package may be maintained as inherited Astro/Starlight source, but it is not a Repa product, documentation authority, startup, build, deployment, or release surface. The template links and commands below are source-local references only.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
+The package originated from the Starlight starter kit:
 
 [![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
 
@@ -11,7 +16,7 @@ npm create astro@latest -- --template starlight
 [![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/withastro/starlight&create_from_path=examples/basics)
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fwithastro%2Fstarlight%2Ftree%2Fmain%2Fexamples%2Fbasics&project-name=my-starlight-docs&repository-name=my-starlight-docs)
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+> **Historical template note:** the starter suggested deleting this README after customization. That is not a Repa maintenance instruction.
 
 ## 🚀 Project Structure
 
@@ -36,9 +41,9 @@ Images can be added to `src/assets/` and embedded in Markdown with a relative li
 
 Static assets, like favicons, can be placed in the `public/` directory.
 
-## 🧞 Commands
+## 🧞 Source-Local Commands
 
-All commands are run from the root of the project, from a terminal:
+When this retained package is explicitly in maintenance scope, these commands run from the package root:
 
 | Command                   | Action                                           |
 | :------------------------ | :----------------------------------------------- |

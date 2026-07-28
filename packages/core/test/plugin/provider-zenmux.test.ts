@@ -23,11 +23,11 @@ function required<T>(value: T | undefined): T {
 }
 
 describe("ZenmuxPlugin", () => {
-  it.effect("is registered so legacy referer headers can be applied", () =>
+  it.effect("is registered so Repa attribution can be applied", () =>
     Effect.sync(() => expect(ProviderPlugins.map((item) => item.id)).toContain(PluginV2.ID.make("zenmux"))),
   )
 
-  it.effect("applies the exact legacy Zenmux headers", () =>
+  it.effect("applies a Repa title without inventing a referer", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -41,12 +41,12 @@ describe("ZenmuxPlugin", () => {
       })
       yield* addPlugin()
       const result = required(yield* catalog.provider.get(ProviderV2.ID.make("zenmux")))
-      expect(result.request.headers).toEqual({ "HTTP-Referer": "https://opencode.ai/", "X-Title": "opencode" })
-      expect(Object.keys(result.request.headers).sort()).toEqual(["HTTP-Referer", "X-Title"])
+      expect(result.request.headers).toEqual({ "X-Title": "Repa" })
+      expect(Object.keys(result.request.headers)).toEqual(["X-Title"])
     }),
   )
 
-  it.effect("merges legacy Zenmux headers with existing headers", () =>
+  it.effect("merges Repa attribution with existing headers", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -63,13 +63,12 @@ describe("ZenmuxPlugin", () => {
 
       expect(required(yield* catalog.provider.get(ProviderV2.ID.make("zenmux"))).request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
+        "X-Title": "Repa",
       })
     }),
   )
 
-  it.effect("lets configured Zenmux legacy headers override defaults", () =>
+  it.effect("preserves explicitly configured Zenmux attribution headers", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -91,7 +90,7 @@ describe("ZenmuxPlugin", () => {
     }),
   )
 
-  it.effect("guards legacy Zenmux headers to the exact zenmux provider id", () =>
+  it.effect("guards Zenmux attribution to the exact zenmux provider id", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {

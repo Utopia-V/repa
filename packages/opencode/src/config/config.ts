@@ -226,11 +226,6 @@ const layer = Layer.effect(
       if (!("path" in options)) return data
 
       yield* Effect.promise(() => resolveLoadedPlugins(data, options.path))
-      if (!data.$schema) {
-        data.$schema = "https://opencode.ai/config.json"
-        const updated = text.replace(/^\s*\{/, '{\n  "$schema": "https://opencode.ai/config.json",')
-        yield* fs.writeFileString(options.path, updated).pipe(Effect.catch(() => Effect.void))
-      }
       return data
     })
 
@@ -266,16 +261,6 @@ const layer = Layer.effect(
 
     const loadGlobal = Effect.fnUntraced(function* (env?: Record<string, string>) {
       let result: Info = {}
-      // Seed the default global config with the schema for editor completion, but avoid writing when the user
-      // explicitly routes config through env-provided paths or content.
-      if (!Flag.REPA_CONFIG && !Flag.REPA_CONFIG_DIR && !Flag.REPA_CONFIG_CONTENT) {
-        const file = globalConfigFile()
-        if (!existsSync(file)) {
-          yield* fs
-            .writeWithDirs(file, JSON.stringify({ $schema: "https://opencode.ai/config.json" }, null, 2))
-            .pipe(Effect.catch(() => Effect.void))
-        }
-      }
       result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "repa.json"), env))
       result = mergeConfig(result, yield* loadFile(path.join(Global.Path.config, "repa.jsonc"), env))
 
@@ -531,10 +516,10 @@ const layer = Layer.effect(
           for (const [tool, enabled] of Object.entries(result.tools)) {
             const action: ConfigPermissionV1.Action = enabled ? "allow" : "deny"
             if (tool === "write" || tool === "edit" || tool === "patch") {
-              perms.edit = action
+              definePermission(perms, "edit", action)
               continue
             }
-            perms[tool] = action
+            definePermission(perms, tool, action)
           }
           result.permission = mergeDeep(perms, result.permission ?? {})
         }
@@ -644,6 +629,19 @@ const layer = Layer.effect(
     })
   }),
 )
+
+function definePermission(
+  permission: Record<string, ConfigPermissionV1.Action>,
+  capability: string,
+  action: ConfigPermissionV1.Action,
+) {
+  Object.defineProperty(permission, capability, {
+    value: action,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  })
+}
 
 export const node = LayerNode.make({
   service: Service,

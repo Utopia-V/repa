@@ -29,7 +29,7 @@ jobs:
 
       - name: Setup Bun
         if: steps.team-check.outputs.is_team != 'true'
-        uses: ./.github/actions/setup-bun
+        uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Install dependencies
         if: steps.team-check.outputs.is_team != 'true'
@@ -63,7 +63,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          COMMENT=$(bun script/duplicate-pr.ts -f pr_info.txt "Check the attached file for PR details and search for duplicates")
+          COMMENT=$(bun .github/hibernated-workflows/support/duplicate-pr.ts -f pr_info.txt "Check the attached file for PR details and search for duplicates")
 
           if [ "$COMMENT" != "No duplicate PRs found" ]; then
             gh pr comment "$PR_NUMBER" --body "_The following comment was made by an LLM, it may be inaccurate:_

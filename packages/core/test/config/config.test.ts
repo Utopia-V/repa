@@ -52,6 +52,16 @@ const provider = {
 }
 
 describe("Config", () => {
+  it.effect("describes custom commands without an upstream documentation link", () =>
+    Effect.sync(() => {
+      const schema = JSON.stringify(Schema.toJsonSchemaDocument(ConfigV1.Info))
+      expect(schema).toContain('"description":"Server configuration for repa serve"')
+      expect(schema).toContain('"description":"Custom command configuration"')
+      expect(schema).not.toContain("web commands")
+      expect(schema).not.toContain("opencode.ai/docs/commands")
+    }),
+  )
+
   it.effect("returns the latest defined scalar from priority-ordered documents", () =>
     Effect.sync(() => {
       const entries = [
@@ -227,7 +237,7 @@ describe("Config", () => {
                 .filter((entry) => entry.type === "document")
                 .map((document) => document.info.$schema),
             ).toEqual(["base", "last"])
-          }).pipe(Effect.provide(testLayer(tmp.path)))
+          }).pipe(Effect.provide(testLayer(tmp.path, tmp.path)))
         }),
       ),
     ),
@@ -249,7 +259,7 @@ describe("Config", () => {
             const documents = (yield* config.entries()).filter((entry) => entry.type === "document")
 
             expect(documents).toHaveLength(0)
-          }).pipe(Effect.provide(testLayer(tmp.path)))
+          }).pipe(Effect.provide(testLayer(tmp.path, tmp.path)))
         }),
       ),
     ),
@@ -282,7 +292,7 @@ describe("Config", () => {
               resource: "openai",
             })
             expect(yield* Effect.promise(() => fs.readFile(file, "utf8"))).toBe(contents)
-          }).pipe(Effect.provide(testLayer(tmp.path)))
+          }).pipe(Effect.provide(testLayer(tmp.path, tmp.path)))
         }),
       ),
     ),
@@ -464,7 +474,7 @@ describe("Config", () => {
               "opencode-helicone-session",
               { package: "@my-org/audit-plugin", options: { endpoint: "https://audit.example.com" } },
             ])
-          }).pipe(Effect.provide(testLayer(tmp.path)))
+          }).pipe(Effect.provide(testLayer(tmp.path, tmp.path)))
         }),
       ),
     ),
@@ -500,7 +510,7 @@ describe("Config", () => {
               sdk: { repository: "github.com/example/sdk", branch: "main" },
               shorthand: "github.com/example/docs",
             })
-          }).pipe(Effect.provide(testLayer(tmp.path)))
+          }).pipe(Effect.provide(testLayer(tmp.path, tmp.path)))
         }),
       ),
     ),
@@ -676,7 +686,7 @@ describe("Config", () => {
                 },
               },
             })
-          }).pipe(Effect.provide(testLayer(tmp.path)))
+          }).pipe(Effect.provide(testLayer(tmp.path, tmp.path)))
         }),
       ),
     ),
@@ -700,7 +710,7 @@ describe("Config", () => {
             const documents = (yield* config.entries()).filter((entry) => entry.type === "document")
 
             expect(documents.map((document) => document.info.$schema)).toEqual(["base"])
-          }).pipe(Effect.provide(testLayer(tmp.path)))
+          }).pipe(Effect.provide(testLayer(tmp.path, tmp.path)))
         }),
       ),
     ),
@@ -723,7 +733,7 @@ describe("Config", () => {
               }),
             )
             await fs.writeFile(
-              path.join(tmp.path, "repa.json"),
+              path.join(global, "repa.jsonc"),
               JSON.stringify({
                 experimental: { policies: [{ effect: "allow", action: "provider.use", resource: "openai" }] },
               }),
@@ -740,7 +750,7 @@ describe("Config", () => {
     ),
   )
 
-  it.live("loads global, ancestor, and .repa configuration up to the project boundary", () =>
+  it.live("loads only machine-global configuration and leaves project files undiscovered", () =>
     Effect.acquireRelease(
       Effect.promise(() => tmpdir()),
       (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
@@ -777,27 +787,11 @@ describe("Config", () => {
 
             expect(entries.filter((entry) => entry.type === "directory").map((entry) => entry.path)).toEqual([
               AbsolutePath.make(global),
-              AbsolutePath.make(path.join(root, ".repa")),
-              AbsolutePath.make(path.join(directory, ".repa")),
             ])
-            expect(documents.map((document) => document.info.$schema)).toEqual([
-              "global",
-              "root",
-              "parent",
-              "directory",
-              "root-dot",
-              "directory-dot",
-            ])
+            expect(documents.map((document) => document.info.$schema)).toEqual(["global"])
             expect(entries.map((entry) => (entry.type === "document" ? entry.info.$schema : entry.path))).toEqual([
               "global",
               AbsolutePath.make(global),
-              "root",
-              "parent",
-              "directory",
-              "root-dot",
-              AbsolutePath.make(path.join(root, ".repa")),
-              "directory-dot",
-              AbsolutePath.make(path.join(directory, ".repa")),
             ])
           }).pipe(
             Effect.provide(

@@ -20,11 +20,11 @@ const addPlugin = Effect.fn(function* () {
 })
 
 describe("LLMGatewayPlugin", () => {
-  it.effect("is registered so legacy referer headers can be applied", () =>
+  it.effect("is registered so Repa attribution can be applied", () =>
     Effect.sync(() => expect(ProviderPlugins.map((item) => item.id)).toContain(PluginV2.ID.make("llmgateway"))),
   )
 
-  it.effect("applies legacy referer headers only to enabled llmgateway", () =>
+  it.effect("applies Repa attribution without an unowned referer only to enabled llmgateway", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       const integrations = yield* Integration.Service
@@ -46,15 +46,14 @@ describe("LLMGatewayPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(ProviderV2.ID.make("llmgateway")))?.request.headers).toEqual({
         Existing: "value",
-        "HTTP-Referer": "https://opencode.ai/",
-        "X-Title": "opencode",
-        "X-Source": "opencode",
+        "X-Title": "Repa",
+        "X-Source": "repa",
       })
       expect((yield* catalog.provider.get(ProviderV2.ID.openrouter))?.request.headers).toEqual({})
     }),
   )
 
-  it.effect("does not apply legacy headers to a disabled llmgateway provider", () =>
+  it.effect("does not apply attribution to a disabled llmgateway provider", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       const integrations = yield* Integration.Service

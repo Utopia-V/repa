@@ -1,5 +1,7 @@
 # Core Tool Architecture
 
+> **Scope — deferred preview-v2 source guidance, not Repa runtime authority.** These rules describe the tool implementation in this folder and may guide source-local maintenance. They do not authorize replacing, migrating, or retiring the released-v1 tool path, nor do they make this Core composition Repa's production architecture. Root [AGENTS.md](../../../../AGENTS.md) routes the work; accepted Repa ADRs and the owners indexed by the [documentation map](../../../../docs/README.md) own those decisions.
+
 This folder owns Core's one local tool representation, process and Location registration, effective lookup, and settlement.
 
 ## Representations

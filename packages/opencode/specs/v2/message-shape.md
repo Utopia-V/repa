@@ -1,5 +1,8 @@
 # Message Shape
 
+> **Status — inherited preview-v2 design exploration, not Repa message authority.** This file is retained to explain or maintain deferred source. Its options do not authorize changing released-v1 durable message meaning or enabling a preview runtime; those changes require an accepted Repa ADR or Gate.
+> Current Repa authority is indexed by the [documentation map](../../../../docs/README.md).
+
 Problem:
 
 - stored messages need enough data to replay and resume a session later

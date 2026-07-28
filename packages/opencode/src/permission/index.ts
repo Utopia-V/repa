@@ -57,7 +57,7 @@ interface State {
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
   return (
     orderedRules(...rulesets).findLast(
-      (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
+      (rule) => Wildcard.matchIdentifier(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
     ) ?? {
       action: "ask",
       permission,
@@ -124,7 +124,7 @@ const layer = Layer.effect(
           return yield* new PermissionV1.DeniedError({
             ruleset: [ruleset, ...authority.map((layer) => layer.ruleset)]
               .flat()
-              .filter((rule) => Wildcard.match(request.permission, rule.permission)),
+              .filter((rule) => Wildcard.matchIdentifier(request.permission, rule.permission)),
           })
         }
         if (rule.action === "allow") continue
@@ -139,7 +139,7 @@ const layer = Layer.effect(
         sessionID: request.sessionID,
         permission: request.permission,
         patterns: request.patterns,
-        metadata: request.metadata,
+        metadata: requestMetadata(request.metadata, requirePrompt),
         always: request.always,
         tool: request.tool,
       }
@@ -234,15 +234,27 @@ function expand(pattern: string): string {
   return pattern
 }
 
+function requestMetadata(metadata: PermissionV1.Request["metadata"], requirePrompt: boolean) {
+  const sanitized = Object.fromEntries(
+    Object.entries(metadata).filter(([key]) => key !== PermissionV1.PROMPT_REQUIRED_METADATA_KEY),
+  )
+  if (!requirePrompt) return sanitized
+  return { ...sanitized, [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true }
+}
+
 export function fromConfig(permission: ConfigPermissionV1.Info) {
   const ruleset: PermissionV1.Rule[] = []
   for (const [key, value] of Object.entries(permission)) {
+    ConfigPermissionV1.assertOrderedObjectKey(key, "permission capability")
     if (typeof value === "string") {
       ruleset.push({ permission: key, action: value, pattern: "*" })
       continue
     }
     ruleset.push(
-      ...Object.entries(value).map(([pattern, action]) => ({ permission: key, pattern: expand(pattern), action })),
+      ...Object.entries(value).map(([pattern, action]) => {
+        ConfigPermissionV1.assertOrderedObjectKey(pattern, `resource pattern for permission ${JSON.stringify(key)}`)
+        return { permission: key, pattern: expand(pattern), action }
+      }),
     )
   }
   return ruleset
@@ -252,16 +264,28 @@ export function merge(...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule[] 
   return orderedRules(...rulesets)
 }
 
+const toolPermissions = new Map([
+  ["edit", "edit"],
+  ["write", "edit"],
+  ["apply_patch", "edit"],
+  ["list_mcp_resources", "read"],
+  ["list_mcp_resource_templates", "read"],
+  ["read_mcp_resource", "read"],
+  ["content_write", "content_mutation"],
+])
+
+export function permissionForTool(tool: string) {
+  return toolPermissions.get(tool) ?? tool
+}
+
 export function disabled(
   tools: string[],
   ruleset: PermissionV1.Ruleset,
   authority: readonly AuthorityLayer[] = [],
 ): Set<string> {
-  const edits = ["edit", "write", "apply_patch"]
-  const reads = ["list_mcp_resources", "list_mcp_resource_templates", "read_mcp_resource"]
   return new Set(
     tools.filter((tool) => {
-      const permission = edits.includes(tool) ? "edit" : reads.includes(tool) ? "read" : tool
+      const permission = permissionForTool(tool)
       if (disabledByRules(permission, ruleset, "ask")) return true
       return authority.some((layer) => disabledByRules(permission, layer.ruleset, layer.absence))
     }),
@@ -279,13 +303,13 @@ export function visibleTools<T>(
 
 function evaluateLayer(permission: string, pattern: string, layer: AuthorityLayer): PermissionV1.Rule {
   const matched = orderedRules(layer.ruleset).findLast(
-    (rule) => Wildcard.match(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
+    (rule) => Wildcard.matchIdentifier(permission, rule.permission) && Wildcard.match(pattern, rule.pattern),
   )
   return matched ?? { permission, pattern: "*", action: layer.absence }
 }
 
 function disabledByRules(permission: string, ruleset: PermissionV1.Ruleset, absence: AuthorityLayer["absence"]) {
-  const rule = orderedRules(ruleset).findLast((rule) => Wildcard.match(permission, rule.permission))
+  const rule = orderedRules(ruleset).findLast((rule) => Wildcard.matchIdentifier(permission, rule.permission))
   if (!rule) return absence === "deny"
   return rule.pattern === "*" && rule.action === "deny"
 }

@@ -1,5 +1,7 @@
 # Schema Package Guide
 
+> **Scope — package-local maintenance guidance, not Repa product authority.** This file includes terminology inherited from preview-v2 work. It may guide edits inside `packages/schema`, but it does not select Repa's production runtime, public product surface, architecture, or roadmap. Repa retains the released-v1 execution baseline unless an accepted Repa ADR or Gate explicitly changes it; root [AGENTS.md](../../AGENTS.md) routes the work, while the authority owners indexed by the [documentation map](../../docs/README.md) own that meaning.
+
 `@opencode-ai/schema` owns browser-safe wire and storage contracts shared by protocol, server, core, and generated SDKs. Keep runtime behavior, service layers, side effects, and host-local implementation details in the domain package that owns them.
 
 ## Package Boundary
@@ -9,14 +11,13 @@
 - A domain may keep a minimal public wire contract here when SDK generation needs it, but do not move the broader runtime model into Schema just because an event is public. `plugin.added` is the current example: Schema may own the minimum browser-safe event payload, while plugin runtime behavior stays outside Schema.
 - The root barrel exports canonical current domain contracts. Specialized event modules, manifests, infrastructure modules, and V1 contracts use direct entrypoints instead of becoming first-class root exports.
 
-## Current Versus V1
+## Released Baseline And Preview Contracts
 
-- Current contracts are unversioned: use names like `Session`, `Permission`, `Question`, and identifiers like `Permission.Request`.
-- Legacy contracts retained for active compatibility, persistence, or migration are explicitly `V1`: use names like `SessionV1`, `PermissionV1`, and identifiers like `PermissionV1.Request`.
-- Do not preserve `V2` as the permanent name for the replacement architecture. Remove `V2` from current namespaces, brands, and identifiers as the contracts are normalized.
-- Retained V1 contracts should live under a dedicated `src/v1/` subtree once the V1 isolation PR runs. New/current code must not depend on that subtree.
-- V1 coexistence is temporary. Keep compatibility entrypoints only where migration requires them, and delete the V1 subtree when the legacy runtime is retired.
-- `@opencode-ai/protocol` and `@opencode-ai/sdk-next` are current `/api/...` surfaces.
+- Repa's accepted production baseline uses the released-v1 execution path. A contract's filename, suffix, root export, or unversioned name is source-local evidence and does not make that contract the current Repa product authority.
+- Preview-v2 and `sdk-next` contracts may remain in this package as deferred or experimental source. Maintain their existing identities when making an authorized local fix, but do not generalize preview naming conventions into a production migration.
+- Do not classify released-v1 contracts as legacy, isolate them under `src/v1/`, block new production dependencies on them, or delete them based on this guide. Those changes require an accepted Repa product or engineering decision with an explicit migration and release boundary.
+- Likewise, do not remove `V2` names, promote unversioned preview contracts, or treat `@opencode-ai/protocol` and `@opencode-ai/sdk-next` as successor production surfaces unless the owning Repa ADR or Gate has admitted that transition.
+- When released and preview contracts coexist, preserve distinct schema identities and the compatibility required by actual callers. Resolve broader naming or lifecycle conflicts through the Repa authority chain rather than by assuming that a later-numbered or unversioned contract supersedes another.
 
 ## Events
 

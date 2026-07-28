@@ -4,6 +4,7 @@ import { tmpdir } from "os"
 import path from "path"
 import { Deferred, Effect, Layer, ManagedRuntime } from "effect"
 import { ContentRoot } from "@opencode-ai/core/content-root"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Agent } from "@/agent/agent"
@@ -16,9 +17,7 @@ const windowsTest = process.platform === "win32" ? test : test.skip
 
 function layer() {
   return Layer.mergeAll(
-    LayerNode.compile(ContentRoot.node, [
-      [Database.node, Database.layerFromPath(":memory:").pipe(Layer.orDie)],
-    ]),
+    LayerNode.compile(ContentRoot.node, [[Database.node, Database.layerFromPath(":memory:").pipe(Layer.orDie)]]),
     Layer.mock(Truncate.Service, {
       output: (content: string) => Effect.succeed({ content, truncated: false as const }),
     }),
@@ -131,6 +130,56 @@ describe("ContentRoot model tools", () => {
         metadata: { onceOnly: true, lifetime: "this physical tool invocation" },
       })
       expect(result.metadata).toMatchObject({ onceOnly: true, operation: "modify" })
+      expect(asks[0]!.metadata.semanticPresentationBasis).toMatchObject({
+        basis: {
+          binding: {
+            sessionID: SessionID.make("ses_content_root_tool"),
+            messageID: MessageID.make("msg_content_root_tool"),
+            callID: "call_content_root_tool",
+            partID: "call_content_root_tool",
+          },
+        },
+      })
+      const proposalPresentation = SemanticPresentation.readProposal({
+        id: "per_content_root_tool",
+        sessionID: SessionID.make("ses_content_root_tool"),
+        permission: asks[0]!.permission,
+        patterns: asks[0]!.patterns,
+        always: asks[0]!.always,
+        metadata: {
+          ...asks[0]!.metadata,
+          permissionPromptRequired: true,
+        },
+        tool: {
+          messageID: MessageID.make("msg_content_root_tool"),
+          callID: "call_content_root_tool",
+        },
+      })
+      expect(proposalPresentation).toMatchObject({
+        type: "valid",
+        value: {
+          phase: "proposal",
+          capability: "content_mutation",
+          approval: "once_only",
+        },
+      })
+      const resultPresentation = SemanticPresentation.readResult({
+        id: "call_content_root_tool",
+        sessionID: SessionID.make("ses_content_root_tool"),
+        messageID: MessageID.make("msg_content_root_tool"),
+        tool: "content_write",
+        callID: "call_content_root_tool",
+        state: { status: "completed", title: result.title, metadata: result.metadata },
+      })
+      expect(resultPresentation).toMatchObject({
+        type: "valid",
+        value: {
+          phase: "result",
+          capability: "content_write",
+          outcome: "committed",
+          durablySettled: true,
+        },
+      })
       expect(await readFile(filePath, "utf8")).toBe("confirmed once")
       expect(await runtime.runPromise(roots.listMutationGrants())).toEqual([])
     } finally {
@@ -380,6 +429,34 @@ describe("ContentRoot model tools", () => {
         mutationGrantID: grant.id,
         mutationGrantVersion: 1,
         operation: "create",
+      })
+      expect(result.metadata.semanticPresentationBasis).toMatchObject({
+        basis: {
+          binding: {
+            sessionID: SessionID.make("ses_content_root_tool"),
+            messageID: MessageID.make("msg_content_root_tool"),
+            callID: "call_content_root_tool",
+            partID: "call_content_root_tool",
+          },
+        },
+      })
+      expect(
+        SemanticPresentation.readResult({
+          id: "call_content_root_tool",
+          sessionID: SessionID.make("ses_content_root_tool"),
+          messageID: MessageID.make("msg_content_root_tool"),
+          tool: "content_write",
+          callID: "call_content_root_tool",
+          state: { status: "completed", title: result.title, metadata: result.metadata },
+        }),
+      ).toMatchObject({
+        type: "valid",
+        value: {
+          phase: "result",
+          capability: "content_write",
+          outcome: "committed",
+          durablySettled: true,
+        },
       })
       expect(await readFile(path.join(directory, "notes", "durable.md"), "utf8")).toBe("durable grant write")
 

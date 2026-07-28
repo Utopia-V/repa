@@ -7,6 +7,13 @@
 
 # Customizing opencode
 
+> **Status — built-in content for hibernated preview-v2 Core.** This document
+> may be used only when explicitly maintaining that retained source. Its
+> OpenCode schema, `.opencode` paths, and product names are not Repa's current
+> configuration or skill authority; the released-v1 Repa path does not
+> advertise this skill.
+> Current Repa authority is indexed by the [documentation map](../../../../../docs/README.md).
+
 opencode validates its own config strictly and refuses to start when a field
 is wrong. The shapes below cover the common surface area, but they are a
 **summary, not the source of truth**.

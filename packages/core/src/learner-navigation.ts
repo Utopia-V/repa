@@ -34,7 +34,12 @@ import {
   type RouteAnchorCommand,
   type SourceReceipt,
 } from "./learner-navigation/schema"
-import { CourseRouteAnchorTransitionTable, DefaultCoursePreferenceTransitionTable } from "./learner-navigation/sql"
+import {
+  CourseRouteAnchorTransitionTable,
+  DefaultCoursePreferenceTransitionTable,
+  LearnerCourseRouteAnchorCommitSealTable,
+  LearnerDefaultCourseCommitSealTable,
+} from "./learner-navigation/sql"
 import type { OccurrenceID } from "./learning-command/occurrence-schema"
 import type { PermissionV1 } from "./v1/permission"
 
@@ -83,6 +88,15 @@ export type PreparedAnchor = Readonly<{
   decision: "candidate" | "no_change"
   current: AnchorProjection
   proof?: Course.MembershipProof
+  locator?: Course.PresentationLocator
+}>
+
+export type AnchorResultPresentation = Readonly<{
+  effect?: AnchorEffect
+  effectLocator?: Course.PresentationLocator
+  current: AnchorProjection
+  currentLocator?: Course.PresentationLocator
+  relation?: "active" | "superseded"
 }>
 
 export type DefaultResolution =
@@ -216,8 +230,14 @@ export function prepareAnchorInTransaction(tx: Transaction, command: RouteAnchor
     const head = yield* anchorHead(tx, command.courseID)
     yield* requireAnchorHead(command, head)
     const current = yield* anchorProjection(tx, command.courseID, head)
+    const target = commandTarget(command)
+    const locator = target ? yield* Course.readMembershipPresentationLocator(tx, target) : undefined
     if (sameEndpoint(commandTarget(command), anchorTarget(head))) {
-      return { decision: "no_change", current } satisfies PreparedAnchor
+      return {
+        decision: "no_change",
+        current,
+        ...(locator ? { locator } : {}),
+      } satisfies PreparedAnchor
     }
     if (!command.target) return { decision: "candidate", current } satisfies PreparedAnchor
     const proof = yield* Course.prepareMembershipProof(tx, {
@@ -235,7 +255,7 @@ export function prepareAnchorInTransaction(tx: Transaction, command: RouteAnchor
     ) {
       return yield* staleAnchor(command.courseID)
     }
-    return { decision: "candidate", current, proof } satisfies PreparedAnchor
+    return { decision: "candidate", current, proof, locator: locator! } satisfies PreparedAnchor
   })
 }
 
@@ -292,6 +312,49 @@ export function resolveAnchorEffect(
       effect,
       current,
       relation: current.headID === row.id ? ("active" as const) : ("superseded" as const),
+    }
+  })
+}
+
+export function readAnchorResultPresentation(
+  tx: Transaction,
+  input:
+    | { readonly effectID: AnchorEffectID }
+    | { readonly courseID: Course.CourseID },
+): Effect.Effect<AnchorResultPresentation, Error | Course.Error> {
+  return Effect.gen(function* () {
+    const row =
+      "effectID" in input
+        ? yield* tx
+            .select({ transition: CourseRouteAnchorTransitionTable })
+            .from(CourseRouteAnchorTransitionTable)
+            .innerJoin(
+              LearnerCourseRouteAnchorCommitSealTable,
+              eq(LearnerCourseRouteAnchorCommitSealTable.effect_id, CourseRouteAnchorTransitionTable.id),
+            )
+            .where(eq(CourseRouteAnchorTransitionTable.id, input.effectID))
+            .get()
+            .pipe(Effect.orDie)
+        : undefined
+    if ("effectID" in input && !row) {
+      return yield* Effect.die(`Committed Course route-anchor effect ${input.effectID} is unavailable`)
+    }
+    const effect = row ? anchorEffect(row.transition) : undefined
+    const courseID = effect?.courseID ?? ("courseID" in input ? input.courseID : undefined)
+    if (!courseID) return yield* Effect.die("Course route-anchor result lost its owner Course")
+    const current = yield* readCurrentAnchor(tx, courseID)
+    const effectLocator = effect?.target
+      ? yield* Course.readMembershipPresentationLocator(tx, effect.target)
+      : undefined
+    const currentLocator = current.target
+      ? yield* Course.readMembershipPresentationLocator(tx, current.target)
+      : undefined
+    return {
+      ...(effect ? { effect } : {}),
+      ...(effectLocator ? { effectLocator } : {}),
+      current,
+      ...(currentLocator ? { currentLocator } : {}),
+      ...(effect ? { relation: current.headID === effect.id ? ("active" as const) : ("superseded" as const) } : {}),
     }
   })
 }
@@ -820,16 +883,42 @@ function sourceReceipt(
     | { readonly kind: "anchor"; readonly effectID: AnchorEffectID },
 ) {
   return Effect.gen(function* () {
-    const receipt = yield* tx
-      .select()
-      .from(LearningCommandReceiptTable)
-      .where(
-        input.kind === "default"
-          ? eq(LearningCommandReceiptTable.default_navigation_effect_id, input.effectID)
-          : eq(LearningCommandReceiptTable.anchor_navigation_effect_id, input.effectID),
-      )
-      .get()
-      .pipe(Effect.orDie)
+    const receipt =
+      input.kind === "default"
+        ? yield* tx
+            .select({
+              id: LearningCommandReceiptTable.id,
+              occurrence_id: LearningCommandReceiptTable.occurrence_id,
+              origin_session_id: LearningCommandReceiptTable.origin_session_id,
+              origin_message_id: LearningCommandReceiptTable.origin_message_id,
+              assistant_message_id: LearningCommandReceiptTable.assistant_message_id,
+              invocation_part_id: LearningCommandReceiptTable.invocation_part_id,
+            })
+            .from(LearnerDefaultCourseCommitSealTable)
+            .innerJoin(
+              LearningCommandReceiptTable,
+              eq(LearningCommandReceiptTable.id, LearnerDefaultCourseCommitSealTable.receipt_id),
+            )
+            .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, input.effectID))
+            .get()
+            .pipe(Effect.orDie)
+        : yield* tx
+            .select({
+              id: LearningCommandReceiptTable.id,
+              occurrence_id: LearningCommandReceiptTable.occurrence_id,
+              origin_session_id: LearningCommandReceiptTable.origin_session_id,
+              origin_message_id: LearningCommandReceiptTable.origin_message_id,
+              assistant_message_id: LearningCommandReceiptTable.assistant_message_id,
+              invocation_part_id: LearningCommandReceiptTable.invocation_part_id,
+            })
+            .from(LearnerCourseRouteAnchorCommitSealTable)
+            .innerJoin(
+              LearningCommandReceiptTable,
+              eq(LearningCommandReceiptTable.id, LearnerCourseRouteAnchorCommitSealTable.receipt_id),
+            )
+            .where(eq(LearnerCourseRouteAnchorCommitSealTable.effect_id, input.effectID))
+            .get()
+            .pipe(Effect.orDie)
     if (!receipt) return yield* new IntegrityError({ detail: `Navigation effect ${input.effectID} has no receipt` })
     const tombstone = yield* tx
       .select()

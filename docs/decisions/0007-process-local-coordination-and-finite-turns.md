@@ -24,6 +24,12 @@ After restart, a durable running Turn with no live owner becomes interrupted.
 Pending process-local approval and unpromoted steering are cancelled and are
 not executed or reconstructed. Previously completed durable items remain.
 
+“Steering” in this ADR means an explicit new learner input targeted at the
+exact running Turn. Before promotion it is process-local; after promotion it is
+a durable Turn input. An ordinary editable draft queued for the next root Turn
+has not been admitted at all. Neither mechanism is ADR-0010 retained learning
+policy or a durable macro-activity owner.
+
 Before every additional logical model operation or tool invocation, the owner
 checks finite code-enforced limits. The first slice records separate configured
 limits for model operations and tool invocations. Reaching a limit produces the

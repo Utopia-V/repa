@@ -40,6 +40,9 @@ import { ConfigPluginV1 } from "@opencode-ai/core/v1/config/plugin"
 import { AccountTest } from "../fake/account"
 import { AuthTest } from "../fake/auth"
 import { NpmTest } from "../fake/npm"
+import matter from "gray-matter"
+import { RestrictedAgentPermission } from "@/agent/restricted-permission"
+import { ConfigAgent } from "@/config/agent"
 
 const unexpectedHttp = HttpClient.make((request) =>
   Effect.die(`unexpected http request: ${request.method} ${request.url}`),
@@ -246,139 +249,148 @@ const wellKnown = (input: {
 
 const projectAuthorityIt = process.platform === "win32" ? it.effect : it.effect.skip
 
-projectAuthorityIt("quarantines a complete project-origin canary before effects while preserving pointwise denies", () =>
-  Effect.gen(function* () {
-    const root = yield* tmpdirScoped()
-    const global = yield* tmpdirScoped()
-    const directory = path.join(root, "project")
-    const local = path.join(directory, ".repa")
-    const marker = path.join(root, "project-extension-ran.txt")
-    const project = Object.fromEntries(Object.keys(ConfigV1.Info.fields).map((key) => [key, `project-${key}`])) as Record<
-      string,
-      unknown
-    >
-    project.username = "{env:GATE10_PROJECT_SECRET}"
-    project.provider = { project: { npm: "{file:../outside-secret.txt}", options: { apiKey: "project" } } }
-    project.permission = { read: { "*.env": "deny" }, shell: "allow" }
-    project.tools = { shell: false, write: true }
-    project.agent = { repa: { disable: true }, plan: { disable: true } }
-    project.default_agent = "elevated"
-    project.disabled_providers = ["machine"]
-    project.plugin = ["project-plugin"]
-    project.unknown_effect = { command: "canary" }
+projectAuthorityIt(
+  "quarantines a complete project-origin canary before effects while preserving pointwise denies",
+  () =>
+    Effect.gen(function* () {
+      const root = yield* tmpdirScoped()
+      const global = yield* tmpdirScoped()
+      const directory = path.join(root, "project")
+      const local = path.join(directory, ".repa")
+      const marker = path.join(root, "project-extension-ran.txt")
+      const project = Object.fromEntries(
+        Object.keys(ConfigV1.Info.fields).map((key) => [key, `project-${key}`]),
+      ) as Record<string, unknown>
+      project.username = "{env:GATE10_PROJECT_SECRET}"
+      project.provider = { project: { npm: "{file:../outside-secret.txt}", options: { apiKey: "project" } } }
+      project.permission = { read: { "*.env": "deny" }, shell: "allow" }
+      project.tools = { shell: false, write: true }
+      project.agent = { repa: { disable: true }, plan: { disable: true } }
+      project.default_agent = "elevated"
+      project.disabled_providers = ["machine"]
+      project.plugin = ["project-plugin"]
+      project.unknown_effect = { command: "canary" }
 
-    yield* writeConfigEffect(global, {
-      $schema: "https://opencode.ai/config.json",
-      model: "machine/model",
-      username: "machine-user",
-      default_agent: "repa",
-    })
-    yield* FSUtil.use.writeWithDirs(path.join(directory, "repa.json"), JSON.stringify(project))
-    yield* FSUtil.use.writeWithDirs(
-      path.join(local, "repa.json"),
-      JSON.stringify({ permission: { content_mutation: "deny" }, model: "local/project-model" }),
-    )
-    yield* FSUtil.use.writeFileString(path.join(root, "outside-secret.txt"), "OUTSIDE_SECRET_CANARY")
-    yield* FSUtil.use.writeWithDirs(path.join(local, "package.json"), JSON.stringify({ scripts: { postinstall: "canary" } }))
-    yield* FSUtil.use.writeWithDirs(
-      path.join(local, "plugin", "canary.ts"),
-      `await Bun.write(${JSON.stringify(marker)}, "plugin executed")`,
-    )
-    yield* FSUtil.use.writeWithDirs(path.join(local, "tool", "canary.ts"), "throw new Error('tool imported')")
-    yield* FSUtil.use.writeWithDirs(path.join(local, "command", "canary.md"), "---\ndescription: canary\n---\n!`canary`")
-    yield* FSUtil.use.writeWithDirs(path.join(local, "agent", "canary.md"), "---\nmodel: project/model\n---\ncanary")
-    yield* FSUtil.use.writeWithDirs(path.join(local, "skill", "canary", "SKILL.md"), "---\nname: canary\n---\ncanary")
-    yield* FSUtil.use.writeWithDirs(path.join(local, "themes", "canary.json"), "{}")
-    yield* FSUtil.use.writeWithDirs(
-      path.join(directory, ".agents", "skills", "canary", "SKILL.md"),
-      "---\nname: canary\ndescription: untrusted canary\n---\nRun ./canary.ps1",
-    )
-    yield* FSUtil.use.writeWithDirs(
-      path.join(directory, ".claude", "skills", "canary", "SKILL.md"),
-      "---\nname: claude-canary\ndescription: untrusted canary\n---\nRun ./canary.ps1",
-    )
-    yield* FSUtil.use.writeFileString(path.join(directory, "AGENTS.md"), "Untrusted project instructions")
-    yield* FSUtil.use.writeFileString(path.join(directory, "package.json"), "{}")
+      yield* writeConfigEffect(global, {
+        $schema: "https://opencode.ai/config.json",
+        model: "machine/model",
+        username: "machine-user",
+        default_agent: "repa",
+      })
+      yield* FSUtil.use.writeWithDirs(path.join(directory, "repa.json"), JSON.stringify(project))
+      yield* FSUtil.use.writeWithDirs(
+        path.join(local, "repa.json"),
+        JSON.stringify({ permission: { content_mutation: "deny" }, model: "local/project-model" }),
+      )
+      yield* FSUtil.use.writeFileString(path.join(root, "outside-secret.txt"), "OUTSIDE_SECRET_CANARY")
+      yield* FSUtil.use.writeWithDirs(
+        path.join(local, "package.json"),
+        JSON.stringify({ scripts: { postinstall: "canary" } }),
+      )
+      yield* FSUtil.use.writeWithDirs(
+        path.join(local, "plugin", "canary.ts"),
+        `await Bun.write(${JSON.stringify(marker)}, "plugin executed")`,
+      )
+      yield* FSUtil.use.writeWithDirs(path.join(local, "tool", "canary.ts"), "throw new Error('tool imported')")
+      yield* FSUtil.use.writeWithDirs(
+        path.join(local, "command", "canary.md"),
+        "---\ndescription: canary\n---\n!`canary`",
+      )
+      yield* FSUtil.use.writeWithDirs(path.join(local, "agent", "canary.md"), "---\nmodel: project/model\n---\ncanary")
+      yield* FSUtil.use.writeWithDirs(path.join(local, "skill", "canary", "SKILL.md"), "---\nname: canary\n---\ncanary")
+      yield* FSUtil.use.writeWithDirs(path.join(local, "themes", "canary.json"), "{}")
+      yield* FSUtil.use.writeWithDirs(
+        path.join(directory, ".agents", "skills", "canary", "SKILL.md"),
+        "---\nname: canary\ndescription: untrusted canary\n---\nRun ./canary.ps1",
+      )
+      yield* FSUtil.use.writeWithDirs(
+        path.join(directory, ".claude", "skills", "canary", "SKILL.md"),
+        "---\nname: claude-canary\ndescription: untrusted canary\n---\nRun ./canary.ps1",
+      )
+      yield* FSUtil.use.writeFileString(path.join(directory, "AGENTS.md"), "Untrusted project instructions")
+      yield* FSUtil.use.writeFileString(path.join(directory, "package.json"), "{}")
 
-    return yield* withProcessEnvs(
-      {
-        GATE10_PROJECT_SECRET: "ENV_SECRET_CANARY",
-        REPA_CONFIG: undefined,
-        REPA_CONFIG_DIR: undefined,
-        REPA_CONFIG_CONTENT: undefined,
-      },
-      withGlobalConfigDir(
-        global,
-        Config.Service.use((svc) =>
-          provideCurrentInstance(
-            Effect.gen(function* () {
-              const config = yield* svc.get()
-              const diagnostics = yield* svc.originDiagnostics()
+      return yield* withProcessEnvs(
+        {
+          GATE10_PROJECT_SECRET: "ENV_SECRET_CANARY",
+          REPA_CONFIG: undefined,
+          REPA_CONFIG_DIR: undefined,
+          REPA_CONFIG_CONTENT: undefined,
+        },
+        withGlobalConfigDir(
+          global,
+          Config.Service.use((svc) =>
+            provideCurrentInstance(
+              Effect.gen(function* () {
+                const config = yield* svc.get()
+                const diagnostics = yield* svc.originDiagnostics()
 
-              expect(config.model).toBe("machine/model")
-              expect(config.username).toBe("machine-user")
-              expect(config.default_agent).toBe("repa")
-              expect(config.plugin).toEqual([])
-              expect(config.provider).toBeUndefined()
-              expect(config.disabled_providers).toBeUndefined()
-              expect(config.agent?.elevated).toBeUndefined()
-              expect(Permission.evaluate("read", "lesson.env", config.project_permission_denies ?? []).action).toBe(
-                "deny",
-              )
-              expect(Permission.evaluate("shell", "*", config.project_permission_denies ?? []).action).toBe("deny")
-              expect(
-                Permission.evaluate("content_mutation", "*", config.project_permission_denies ?? []).action,
-              ).toBe("deny")
+                expect(config.model).toBe("machine/model")
+                expect(config.username).toBe("machine-user")
+                expect(config.default_agent).toBe("repa")
+                expect(config.plugin).toEqual([])
+                expect(config.provider).toBeUndefined()
+                expect(config.disabled_providers).toBeUndefined()
+                expect(config.agent?.elevated).toBeUndefined()
+                expect(Permission.evaluate("read", "lesson.env", config.project_permission_denies ?? []).action).toBe(
+                  "deny",
+                )
+                expect(Permission.evaluate("shell", "*", config.project_permission_denies ?? []).action).toBe("deny")
+                expect(
+                  Permission.evaluate("content_mutation", "*", config.project_permission_denies ?? []).action,
+                ).toBe("deny")
 
-              const rootPaths = new Set(
-                diagnostics.filter((item) => item.channel === "main" && item.source.endsWith("repa.json")).map((item) => item.path),
-              )
-              for (const key of Object.keys(ConfigV1.Info.fields)) {
-                if (key === "permission") {
-                  expect(Array.from(rootPaths).some((item) => item.startsWith("permission."))).toBe(true)
-                  continue
+                const rootPaths = new Set(
+                  diagnostics
+                    .filter((item) => item.channel === "main" && item.source.endsWith("repa.json"))
+                    .map((item) => item.path),
+                )
+                for (const key of Object.keys(ConfigV1.Info.fields)) {
+                  if (key === "permission") {
+                    expect(Array.from(rootPaths).some((item) => item.startsWith("permission."))).toBe(true)
+                    continue
+                  }
+                  if (key === "tools") {
+                    expect(Array.from(rootPaths).some((item) => item.startsWith("tools."))).toBe(true)
+                    continue
+                  }
+                  expect(rootPaths.has(key)).toBe(true)
                 }
-                if (key === "tools") {
-                  expect(Array.from(rootPaths).some((item) => item.startsWith("tools."))).toBe(true)
-                  continue
-                }
-                expect(rootPaths.has(key)).toBe(true)
-              }
-              expect(diagnostics.some((item) => item.reason === "substitution_token")).toBe(true)
-              expect(diagnostics.some((item) => item.path === "unknown_effect" && item.reason === "unknown_field")).toBe(
-                true,
-              )
-              expect(
-                diagnostics.some(
-                  (item) => item.path === "model" && item.machineValueActive === true && item.denyApplied === false,
-                ),
-              ).toBe(true)
-              expect(
-                new Set(diagnostics.filter((item) => item.channel === "discovery").map((item) => item.path)),
-              ).toEqual(new Set(Object.keys(ConfigProjectLayer.NonSchemaDisposition)))
-              expect(yield* FSUtil.use.existsSafe(path.join(local, ".gitignore"))).toBe(false)
-              expect(yield* FSUtil.use.existsSafe(path.join(local, "node_modules"))).toBe(false)
-              expect(yield* FSUtil.use.existsSafe(marker)).toBe(false)
-              expect(yield* FSUtil.use.readFileString(path.join(local, "package.json"))).toBe(
-                JSON.stringify({ scripts: { postinstall: "canary" } }),
-              )
-            }),
-            {
-              directory,
-              worktree: directory,
-              project: {
-                id: ProjectV2.ID.make("gate10-project-authority-canary"),
+                expect(diagnostics.some((item) => item.reason === "substitution_token")).toBe(true)
+                expect(
+                  diagnostics.some((item) => item.path === "unknown_effect" && item.reason === "unknown_field"),
+                ).toBe(true)
+                expect(
+                  diagnostics.some(
+                    (item) => item.path === "model" && item.machineValueActive === true && item.denyApplied === false,
+                  ),
+                ).toBe(true)
+                expect(
+                  new Set(diagnostics.filter((item) => item.channel === "discovery").map((item) => item.path)),
+                ).toEqual(new Set(Object.keys(ConfigProjectLayer.NonSchemaDisposition)))
+                expect(yield* FSUtil.use.existsSafe(path.join(local, ".gitignore"))).toBe(false)
+                expect(yield* FSUtil.use.existsSafe(path.join(local, "node_modules"))).toBe(false)
+                expect(yield* FSUtil.use.existsSafe(marker)).toBe(false)
+                expect(yield* FSUtil.use.readFileString(path.join(local, "package.json"))).toBe(
+                  JSON.stringify({ scripts: { postinstall: "canary" } }),
+                )
+              }),
+              {
+                directory,
                 worktree: directory,
-                vcs: "git",
-                time: { created: 0, updated: 0 },
-                sandboxes: [],
+                project: {
+                  id: ProjectV2.ID.make("gate10-project-authority-canary"),
+                  worktree: directory,
+                  vcs: "git",
+                  time: { created: 0, updated: 0 },
+                  sandboxes: [],
+                },
               },
-            },
+            ),
           ),
         ),
-      ),
-    )
-  }),
+      )
+    }),
 )
 
 function withProcessEnv<A, E, R>(key: string, value: string | undefined, effect: Effect.Effect<A, E, R>) {
@@ -458,13 +470,12 @@ it.instance("falls back to generic username when system user info is unavailable
   }),
 )
 
-it.effect("creates global jsonc config with schema when no global configs exist", () =>
+it.effect("does not create a global config when no global configs exist", () =>
   withGlobalConfig({}, ({ dir }) =>
     Effect.gen(function* () {
       yield* Config.use.get().pipe(provideInstanceEffect(dir))
 
-      const content = yield* FSUtil.use.readFileString(path.join(dir, "repa.jsonc"))
-      expect(content).toContain('"$schema": "https://opencode.ai/config.json"')
+      expect(yield* FSUtil.use.existsSafe(path.join(dir, "repa.jsonc"))).toBe(false)
     }).pipe(Effect.provide(testInstanceStoreLayer), Effect.provide(LayerNode.compile(CrossSpawnSpawner.node))),
   ),
 )
@@ -508,11 +519,7 @@ it.instance(
 it.instance("updates config and preserves empty shell sentinel", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
-    yield* writeConfigEffect(
-      test.directory,
-      { $schema: "https://opencode.ai/config.json", shell: "bash" },
-      "repa.json",
-    )
+    yield* writeConfigEffect(test.directory, { $schema: "https://opencode.ai/config.json", shell: "bash" }, "repa.json")
 
     yield* Config.Service.use((svc) => svc.update(ConfigParse.schema(ConfigV1.Info, { shell: "" }, "test:config")))
 
@@ -655,27 +662,32 @@ it.instance("handles environment variable substitution", () =>
   ),
 )
 
-it.instance("preserves env variables when adding $schema to config", () =>
+it.instance("does not rewrite a schema-less config while substituting environment variables", () =>
   withProcessEnv(
     "PRESERVE_VAR",
     "secret_value",
     Effect.gen(function* () {
       const test = yield* TestInstance
-      // Config without $schema - should trigger auto-add
-      yield* FSUtil.use.writeWithDirs(
-        path.join(test.directory, "repa.json"),
-        JSON.stringify({ username: "{env:PRESERVE_VAR}" }),
-      )
+      const content = JSON.stringify({ username: "{env:PRESERVE_VAR}" })
+      yield* FSUtil.use.writeWithDirs(path.join(test.directory, "repa.json"), content)
       const config = yield* Config.use.get()
       expect(config.username).toBe("secret_value")
 
-      // Read the file to verify the env variable was preserved
-      const content = yield* FSUtil.use.readFileString(path.join(test.directory, "repa.json"))
-      expect(content).toContain("{env:PRESERVE_VAR}")
-      expect(content).not.toContain("secret_value")
-      expect(content).toContain("$schema")
+      expect(yield* FSUtil.use.readFileString(path.join(test.directory, "repa.json"))).toBe(content)
     }),
   ),
+)
+
+it.instance("preserves a user-supplied schema URL", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const content = JSON.stringify({ $schema: "https://example.test/repa-schema.json", username: "learner" })
+    yield* FSUtil.use.writeWithDirs(path.join(test.directory, "repa.json"), content)
+
+    const config = yield* Config.use.get()
+    expect(config.$schema).toBe("https://example.test/repa-schema.json")
+    expect(yield* FSUtil.use.readFileString(path.join(test.directory, "repa.json"))).toBe(content)
+  }),
 )
 
 it.instance("handles file inclusion substitution", () =>
@@ -915,6 +927,73 @@ Ordered permissions`,
   }),
 )
 
+it.instance("agent markdown preserves prototype-named restricted permissions through runtime evaluation", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    const permission = RestrictedAgentPermission.compile(["__proto__", "read"], ["__proto__"])
+    yield* FSUtil.use.writeWithDirs(
+      path.join(test.directory, "agent", "prototype-safe.md"),
+      matter.stringify("Prototype-safe permissions", { permission }),
+    )
+
+    const directlyLoaded = yield* Effect.promise(() => ConfigAgent.load(test.directory))
+    const directPermission = directlyLoaded["prototype-safe"]?.permission
+    expect(Object.keys(directPermission ?? {})).toEqual(["*", "__proto__"])
+    expect(Object.hasOwn(directPermission ?? {}, "__proto__")).toBeTrue()
+    expect(Object.getPrototypeOf(directPermission)).toBe(Object.prototype)
+
+    const config = yield* Config.use.get()
+    const loadedPermission = config.agent?.["prototype-safe"]?.permission
+    expect(Object.keys(loadedPermission ?? {})).toEqual(["*", "__proto__"])
+    expect(Object.hasOwn(loadedPermission ?? {}, "__proto__")).toBeTrue()
+    expect(Object.getPrototypeOf(loadedPermission)).toBe(Object.prototype)
+    expect(Object.getPrototypeOf({})).toBe(Object.prototype)
+
+    const ruleset = Permission.fromConfig(loadedPermission ?? {})
+    const authority: Permission.AuthorityLayer[] = [{ ruleset, absence: "deny" }]
+    expect(Permission.evaluate("__proto__", "*", ruleset).action).toBe("allow")
+    expect(Permission.evaluate("read", "*", ruleset).action).toBe("deny")
+    expect(Permission.evaluateAuthority("__proto__", "*", ruleset, authority).action).toBe("allow")
+    expect(Permission.evaluateAuthority("read", "*", ruleset, authority).action).toBe("deny")
+    expect(Permission.disabled(["__proto__", "read", "future"], ruleset)).toEqual(new Set(["read", "future"]))
+    expect(
+      Object.keys(
+        Permission.visibleTools(
+          Object.fromEntries([
+            ["__proto__", true],
+            ["read", true],
+            ["future", true],
+          ]),
+          ruleset,
+        ),
+      ),
+    ).toEqual(["__proto__"])
+  }),
+)
+
+it.instance("loads a prototype-named agent as an own record entry", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    yield* FSUtil.use.writeWithDirs(
+      path.join(test.directory, "agent", "__proto__.md"),
+      `---
+mode: subagent
+---
+Prototype-named agent`,
+    )
+
+    const directlyLoaded = yield* Effect.promise(() => ConfigAgent.load(test.directory))
+    expect(Object.hasOwn(directlyLoaded, "__proto__")).toBeTrue()
+    expect(Object.getPrototypeOf(directlyLoaded)).toBe(Object.prototype)
+    expect(directlyLoaded["__proto__"]?.name).toBe("__proto__")
+
+    const config = yield* Config.use.get()
+    expect(Object.hasOwn(config.agent ?? {}, "__proto__")).toBeTrue()
+    expect(Object.getPrototypeOf(config.agent)).toBe(Object.prototype)
+    expect(config.agent?.["__proto__"]?.prompt).toBe("Prototype-named agent")
+  }),
+)
+
 it.instance("loads agents from the machine config agents directory", () =>
   Effect.gen(function* () {
     const test = yield* TestInstance
@@ -1141,9 +1220,7 @@ it.effect("keeps project plugin arrays out of machine config", () =>
       expect(plugins.some((p) => p.includes("global-plugin-1"))).toBe(true)
       expect(plugins.some((p) => p.includes("global-plugin-2"))).toBe(true)
       expect(plugins.some((p) => p.includes("local-plugin-1"))).toBe(false)
-      expect(
-        plugins.filter((p) => p.includes("global-plugin") || p.includes("local-plugin")).length,
-      ).toBe(2)
+      expect(plugins.filter((p) => p.includes("global-plugin") || p.includes("local-plugin")).length).toBe(2)
     }),
   ),
 )
@@ -1196,10 +1273,7 @@ it.effect("keeps project instruction arrays out of machine config", () =>
       local: { instructions: ["local-instructions.md"] },
     },
     Effect.gen(function* () {
-      expect((yield* Config.use.get()).instructions).toEqual([
-        "global-instructions.md",
-        "shared-rules.md",
-      ])
+      expect((yield* Config.use.get()).instructions).toEqual(["global-instructions.md", "shared-rules.md"])
     }),
   ),
 )
@@ -1262,6 +1336,36 @@ it.effect("keeps machine plugin origins aligned while project plugins remain ine
 )
 
 // Legacy tools migration tests
+
+for (const filename of ["repa.json", "repa.jsonc"]) {
+  it.instance(`root legacy tools preserve an own __proto__ deny from ${filename}`, () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const prototypeDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, "__proto__")
+      const contents = filename.endsWith(".jsonc")
+        ? `{
+            // Legacy root tool permissions retain authored order.
+            "tools": {
+              "*": true,
+              "__proto__": false,
+            },
+          }`
+        : `{"tools":{"*":true,"__proto__":false}}`
+      yield* FSUtil.use.writeWithDirs(path.join(test.directory, filename), contents)
+
+      const config = yield* Config.use.get()
+      const permission = config.permission ?? {}
+      const ruleset = Permission.fromConfig(permission)
+      expect(Object.keys(permission)).toEqual(["*", "__proto__"])
+      expect(Object.hasOwn(permission, "__proto__")).toBeTrue()
+      expect(permission["__proto__"]).toBe("deny")
+      expect(Object.getPrototypeOf(permission)).toBe(Object.prototype)
+      expect(Object.getOwnPropertyDescriptor(Object.prototype, "__proto__")).toEqual(prototypeDescriptor)
+      expect(Permission.evaluate("__proto__", "*", ruleset).action).toBe("deny")
+      expect(Permission.evaluate("read", "*", ruleset).action).toBe("allow")
+    }),
+  )
+}
 
 it.instance("migrates legacy tools config to permissions - allow", () =>
   Effect.gen(function* () {
@@ -1479,6 +1583,111 @@ test("config parser preserves permission order while rejecting unknown top-level
     expect(error.data?.issues?.[0]).toMatchObject({ code: "unrecognized_keys", keys: ["invalid_field"], path: [] })
   }
 })
+
+function expectArrayIndexConfigFailure(parse: () => unknown) {
+  try {
+    parse()
+    throw new Error("expected ordered permission parsing to fail")
+  } catch (error) {
+    const invalid = error as { data?: { issues?: Array<{ message?: string }> } }
+    expect(invalid.data?.issues?.some((issue) => issue.message?.includes("ECMAScript array-index property keys"))).toBe(
+      true,
+    )
+  }
+}
+
+test("raw and JSONC v1 configs preserve safe permission order and reject array-index keys", () => {
+  const raw = ConfigParse.schema(
+    ConfigV1.Info,
+    { permission: { "00": "allow", "*": "deny", "01": "ask" } },
+    "raw",
+  )
+  const jsonc = ConfigParse.schema(
+    ConfigV1.Info,
+    ConfigParse.jsonc(
+      `{
+        "permission": {
+          "00": "allow",
+          "*": "deny",
+          "01": "ask"
+        }
+      }`,
+      "ordered.jsonc",
+    ),
+    "ordered.jsonc",
+  )
+
+  expect(Object.keys(raw.permission ?? {})).toEqual(["00", "*", "01"])
+  expect(Object.keys(jsonc.permission ?? {})).toEqual(["00", "*", "01"])
+  expectArrayIndexConfigFailure(() =>
+    ConfigParse.schema(ConfigV1.Info, { permission: { "0": "allow", "*": "deny" } }, "raw-array-index"),
+  )
+  expectArrayIndexConfigFailure(() =>
+    ConfigParse.schema(
+      ConfigV1.Info,
+      ConfigParse.jsonc(`{ "permission": { "4294967294": "allow", "*": "deny" } }`, "array-index.jsonc"),
+      "array-index.jsonc",
+    ),
+  )
+})
+
+test("raw and JSONC direct permission objects preserve an own __proto__ rule", () => {
+  const prototypeDescriptor = Object.getOwnPropertyDescriptor(Object.prototype, "__proto__")
+  const inputs = [
+    JSON.parse(`{"permission":{"*":"allow","__proto__":"deny"}}`),
+    ConfigParse.jsonc(
+      `{
+        "permission": {
+          "*": "allow",
+          "__proto__": "deny",
+        },
+      }`,
+      "prototype-permission.jsonc",
+    ),
+  ]
+
+  for (const input of inputs) {
+    const permission = ConfigParse.schema(ConfigV1.Info, input, "prototype-permission").permission ?? {}
+    expect(Object.keys(permission)).toEqual(["*", "__proto__"])
+    expect(Object.hasOwn(permission, "__proto__")).toBeTrue()
+    expect(Permission.evaluate("__proto__", "*", Permission.fromConfig(permission)).action).toBe("deny")
+    expect(Object.getPrototypeOf(permission)).toBe(Object.prototype)
+  }
+  expect(Object.getOwnPropertyDescriptor(Object.prototype, "__proto__")).toEqual(prototypeDescriptor)
+})
+
+test("root and Agent legacy tools cannot bypass ordered permission parsing", () => {
+  expectArrayIndexConfigFailure(() =>
+    ConfigParse.schema(ConfigV1.Info, { tools: { "0": true } }, "root-tools"),
+  )
+  expectArrayIndexConfigFailure(() =>
+    ConfigParse.schema(
+      ConfigV1.Info,
+      { agent: { helper: { tools: { "4294967294": true } } } },
+      "agent-tools",
+    ),
+  )
+})
+
+it.instance("gray-matter Agent permissions reject array-index resource patterns", () =>
+  Effect.gen(function* () {
+    const test = yield* TestInstance
+    yield* FSUtil.use.writeWithDirs(
+      path.join(test.directory, "agent", "numeric-task.md"),
+      `---
+permission:
+  task:
+    "0": allow
+---
+Numeric task pattern`,
+    )
+
+    const exit = yield* Effect.promise(() => ConfigAgent.load(test.directory)).pipe(Effect.exit)
+    expect(Exit.isFailure(exit)).toBeTrue()
+    if (Exit.isSuccess(exit)) return
+    expect(Cause.pretty(exit.cause)).toContain("ECMAScript array-index property keys")
+  }),
+)
 
 // MCP config merging tests
 

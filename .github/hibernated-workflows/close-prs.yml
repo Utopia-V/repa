@@ -47,4 +47,4 @@ jobs:
             args+=("--execute")
           fi
 
-          bun script/github/close-prs.ts "${args[@]}"
+          bun .github/hibernated-workflows/support/github/close-prs.ts "${args[@]}"

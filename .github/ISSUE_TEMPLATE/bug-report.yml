@@ -1,36 +1,21 @@
 name: Bug report
-description: Report an issue that should be fixed (avoid pasting giant AI generated summaries or your issue may be closed/ignored)
+description: Report incorrect Repa behavior
+title: "[BUG]: "
 body:
   - type: textarea
     id: description
     attributes:
-      label: Description
-      description: Describe the bug you encountered
-      placeholder: What happened?
+      label: What happened?
+      description: Describe the observed behavior and its impact.
+      placeholder: Tell us what Repa did and what you were trying to do.
     validations:
       required: true
-
-  - type: input
-    id: plugins
-    attributes:
-      label: Plugins
-      description: What plugins are you using?
-    validations:
-      required: false
-
-  - type: input
-    id: opencode-version
-    attributes:
-      label: OpenCode version
-      description: What version of OpenCode are you using?
-    validations:
-      required: false
 
   - type: textarea
     id: reproduce
     attributes:
       label: Steps to reproduce
-      description: How can we reproduce this issue?
+      description: Provide the smallest reliable sequence you know.
       placeholder: |
         1.
         2.
@@ -39,20 +24,26 @@ body:
       required: false
 
   - type: textarea
-    id: screenshot-or-link
+    id: expected
     attributes:
-      label: Screenshot and/or share link
-      description: Run `/share` to get a share link, or attach a screenshot
-      placeholder: Paste link or drag and drop screenshot here
+      label: Expected behavior
+      description: What did you expect Repa to do instead?
+    validations:
+      required: false
+
+  - type: input
+    id: repa-revision
+    attributes:
+      label: Repa revision
+      description: Commit or build identifier, if known.
     validations:
       required: false
 
   - type: input
     id: os
     attributes:
-      label: Operating System
-      description: what OS are you using?
-      placeholder: e.g., macOS 26.0.1, Ubuntu 22.04, Windows 11
+      label: Operating system
+      placeholder: e.g. Windows 11, Ubuntu 24.04, macOS 15
     validations:
       required: false
 
@@ -60,7 +51,14 @@ body:
     id: terminal
     attributes:
       label: Terminal
-      description: what terminal are you using?
-      placeholder: e.g., iTerm2, Ghostty, Alacritty, Windows Terminal
+      placeholder: e.g. Windows Terminal, Ghostty, Alacritty
+    validations:
+      required: false
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Relevant logs or screenshots
+      description: Attach evidence directly and redact secrets, private learner data, and private source material.
     validations:
       required: false

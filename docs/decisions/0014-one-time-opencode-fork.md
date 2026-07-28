@@ -32,7 +32,7 @@ active source/runtime lineage.
 
 The first Repa-owned Tutor loop proved several learning invariants: relevant
 state can cross a fresh Session without transcript replay, a model can initiate
-source-bound learning commands, Course and Agenda meanings remain separate,
+source-bound learning commands, Course and agenda-family meanings remain separate,
 and a later model sample can consume newly committed learning state. It also
 exposed the cost of owning an incomplete generic harness.
 
@@ -115,8 +115,8 @@ worktrees, MCP, and subagents remain available by default when their mechanics
 are sound. Coding-specific prompts, agents, routes, and projections are
 retained only as optional capabilities or are removed when they conflict with
 the learning-native product surface. OpenCode `todo`, project, diff, message,
-or tool data never silently becomes Agenda, Course, learner evidence, or other
-learning authority.
+or tool data never silently becomes Goal, future attention, Assignment,
+planning, Course, learner evidence, or another learning authority.
 
 The ordinary model-visible product identity is replaced rather than layered.
 Every admitted Agent-driven sample, including explicitly named hidden profiles
@@ -125,8 +125,8 @@ accepts the same Learning-System composition inputs. `hidden` and other
 presentation or profile metadata cannot select a narrow sample class. Exact
 prompt rendering may vary for demonstrated provider transport or tool-use
 requirements. The base prompt is not the Tutor. Tutor remains the integrated
-behavior produced by runtime mechanics plus source, Course, learner, Agenda,
-policy, and other bounded learning contributions.
+behavior produced by runtime mechanics plus source, Course, learner,
+agenda-family, policy, and other bounded learning contributions.
 
 Narrow released-v1 stream operations are selected only by a trusted program
 call origin and a closed operation purpose, currently title generation,
@@ -167,9 +167,10 @@ or shadow copy of the inherited Session/tool lifecycle.
 Inherited Session, message, part, permission, and durable interaction-event
 mechanics may become Repa's Interaction authority after their meanings and
 identities are made explicit. Source/artifact, Course View, Material Map,
-learner record, Agenda, and Tutor policy remain separate first-class schemas
-inside the same modular monolith. Learning facts do not enter generic message
-JSON, Session metadata, OpenCode `todo`, or a universal event table.
+learner record, separate Goal/future-attention/Assignment/planning authorities,
+and Tutor policy remain first-class schemas inside the same modular monolith.
+Learning facts do not enter generic message JSON, Session metadata, OpenCode
+`todo`, or a universal event table.
 
 A real learner input, synthetic/compaction input, model sample, tool
 invocation, context cut, and terminal Turn outcome keep distinct durable

@@ -5,6 +5,7 @@ import { Effect, Semaphore } from "effect"
 import type { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { migrations } from "./migration.gen"
 import { DatabaseSchemaExtras } from "./schema-extras"
+import { triggerStatements, viewStatements } from "./schema-extras-v12"
 import schema from "./schema.gen"
 import {
   APPLICATION_ID,
@@ -86,6 +87,40 @@ function checks(db: Database | Transaction, path: string, version: number) {
         observedVersion: version,
       })
     }
+
+    if (version === currentVersion(migrations)) {
+      const expected = new Map(
+        [...viewStatements, ...triggerStatements].map((statement) => {
+          const match = /CREATE (?:TRIGGER|VIEW) IF NOT EXISTS ([^\s]+)/i.exec(statement)
+          if (!match?.[1]) throw new Error("The current SQLite structural manifest has an unnamed object")
+          return [match[1], normalizeSchemaSQL(statement)] as const
+        }),
+      )
+      const observed = yield* db.all<{ name: string; sql: string }>(sql`
+        SELECT name, sql
+        FROM sqlite_schema
+        WHERE type IN ('trigger', 'view')
+        ORDER BY name
+      `)
+      const observedMap = new Map(observed.map((entry) => [entry.name, normalizeSchemaSQL(entry.sql)]))
+      const parity =
+        observed.length === expected.size &&
+        observed.every((entry) => expected.get(entry.name) === normalizeSchemaSQL(entry.sql))
+      if (!parity) {
+        const missing = [...expected.keys()].filter((name) => !observedMap.has(name))
+        const extra = [...observedMap.keys()].filter((name) => !expected.has(name))
+        const changed = [...expected.keys()].filter(
+          (name) => observedMap.has(name) && observedMap.get(name) !== expected.get(name),
+        )
+        return yield* admissionError({
+          path,
+          reason: "corrupt",
+          detail: `The Repa database at ${path} does not match the versioned SQLite structural manifest (missing: ${missing.join(", ") || "none"}; extra: ${extra.join(", ") || "none"}; changed: ${changed.join(", ") || "none"})`,
+          currentVersion: version,
+          observedVersion: version,
+        })
+      }
+    }
   }).pipe(
     Effect.mapError((cause) =>
       cause instanceof DatabaseAdmissionError
@@ -100,6 +135,10 @@ function checks(db: Database | Transaction, path: string, version: number) {
           }),
     ),
   )
+}
+
+function normalizeSchemaSQL(value: string) {
+  return value.replace(/\s+/g, " ").replace(/ IF NOT EXISTS /i, " ").trim().replace(/;$/, "")
 }
 
 function initialize(db: Database, path: string, input: readonly Migration[]) {

@@ -1,7 +1,12 @@
 # OpenCode fork Gate 14: learner navigation continuity
 
-Status: Closed. Independent review run `gate14-whole-20260719-01` accepted
-contract/theory after closing `G14-CT-001`
+Status: Scoped-reopened by the 2026-07-27 first-principles audit at the
+primary-TUI confirmation/result and affected migration-evidence boundary. Default
+Course and exact route-anchor identities, transitions, and fail-closed
+semantics remain accepted. The unstaged corrective candidate described below
+was accepted by the original database and TUI reviewers but has no durable
+integration commit. Historical independent review run
+`gate14-whole-20260719-01` accepted contract/theory after closing `G14-CT-001`
 through `G14-CT-005` and both nonblocking strengthenings. The contract is
 implementation authority. The maintainer authorized implementation and the
 whole-Gate review loop. The first implementation/evidence review returned
@@ -20,7 +25,9 @@ implementation/evidence candidate, independently confirmed `G14-IE-001`
 through `G14-IE-005` resolved, and returned `Accept` with no
 acceptance-changing finding. Implementation/evidence is accepted. The accepted
 implementation is fixed by maintainer-authorized commit
-`a6b542d59879f0a4b1111eaef4ad23e446b473d0`; Gate 15 has not begun.
+`a6b542d59879f0a4b1111eaef4ad23e446b473d0`. At that closure point, Gate 15
+had not begun; current disposition is owned by
+[the documentation index](../README.md).
 
 Date: 2026-07-19
 
@@ -1024,6 +1031,41 @@ implementation/evidence layer under run `gate14-replacement-20260720-01`; its
 only finding, `G14-RR-001`, was low-severity status/provenance bookkeeping and
 was addressed by the pre-integration status reconciliation. The maintainer then
 separately authorized integration. Commit `a6b542d59` fixes the independently
-accepted implementation provenance and formally closes Gate 14. This local
-integration does not authorize push, merge, publication, cleanup, or Gate 15;
-Gate 15 has not begun.
+accepted implementation provenance and formally closes Gate 14. At that
+closure point, this local integration did not authorize push, merge,
+publication, cleanup, or Gate 15. Current disposition is owned by
+[the documentation index](../README.md).
+
+## 2026-07-27 first-principles correction
+
+The historical review established that the exact default-Course snapshot
+reached Permission and that direct-run could format it. The primary TUI,
+however, falls through to a generic
+`Call tool set_default_course_preference` prompt, so it does not show the exact
+from/to Course, working View/Revision, or clear state being authorized.
+Gate 22 cannot retroactively repair an under-specified pre-commit approval.
+
+Gate 14 is therefore scoped-reopened for a shared semantic confirmation
+and result projection, primary-TUI behavior, and focused evidence. Both default
+preference and route-anchor settlement must remain visible after commit. Its
+trigger and migration-equivalence evidence is also subject to the cross-Gate
+versioned-DDL repair. No product evidence currently falsifies the separate
+default-Course and route-anchor authorities or their exact-revision fail-closed
+rule.
+
+## 2026-07-28 corrective implementation candidate
+
+The unstaged presenter derives readable Course, View, Revision, and Item
+locators from the exact owner snapshot and committed effect. It displays an
+opaque identity only when the readable hierarchy cannot disambiguate the
+object, so same-named Courses and otherwise identical route anchors no longer
+produce indistinguishable approvals. Results are generated once inside the
+committing transaction and replay validates the stored typed Part rather than
+recomputing historical meaning from today's owner state.
+
+The domain decoder also rejects recursively malformed usability state and
+partial source/time/order/frontier groups; a null head requires the whole group
+absent and a non-null head requires it complete. The original database and TUI
+reviewers accepted the live-replay, migration, exact-object, once-only, and
+post-commit counterexamples. This is candidate evidence, not a new close
+commit; Gate 14 remains scoped-reopened pending durable integration.

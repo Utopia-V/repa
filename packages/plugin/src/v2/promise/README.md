@@ -1,5 +1,8 @@
 # OpenCode V2 Promise Plugin API
 
+> **Status — preview-v2 package documentation, not a Repa baseline API commitment.** This file may guide maintenance of code inside this `v2` subtree. The API's presence does not authorize enabling it, migrating Repa plugins to it, or treating it as the production plugin surface; those decisions require an accepted Repa ADR or Gate.
+> Current Repa authority is indexed by the [documentation map](../../../../../docs/README.md).
+
 The Promise plugin API is the async/await equivalent of `@opencode-ai/plugin/v2/effect`. It grants plugins the same two in-process capabilities:
 
 - `hook` installs behavior at an OpenCode extension point.

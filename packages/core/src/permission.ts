@@ -77,7 +77,7 @@ export function evaluate(action: string, resource: string, ...rulesets: Permissi
   return (
     rulesets
       .flat()
-      .findLast((rule) => Wildcard.match(action, rule.action) && Wildcard.match(resource, rule.resource)) ?? {
+      .findLast((rule) => Wildcard.matchIdentifier(action, rule.action) && Wildcard.match(resource, rule.resource)) ?? {
       action,
       resource: "*",
       effect: "ask",
@@ -149,7 +149,7 @@ const layer = Layer.effect(
     }
 
     function relevant(input: AssertInput, rules: Permission.Ruleset) {
-      return rules.filter((rule) => Wildcard.match(input.action, rule.action))
+      return rules.filter((rule) => Wildcard.matchIdentifier(input.action, rule.action))
     }
 
     const evaluateInput = EffectRuntime.fnUntraced(function* (input: AssertInput) {

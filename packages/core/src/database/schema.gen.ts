@@ -472,6 +472,16 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`course_selection_acceptance_commit_seal\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`receipt_id\` text NOT NULL CONSTRAINT \`course_selection_acceptance_commit_seal_receipt_unique\` UNIQUE,
+          \`invocation_part_id\` text NOT NULL CONSTRAINT \`course_selection_acceptance_commit_seal_invocation_unique\` UNIQUE,
+          CONSTRAINT \`fk_course_selection_acceptance_commit_seal_effect_id_course_selection_acceptance_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`course_selection_acceptance_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_course_selection_acceptance_commit_seal_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_course_selection_acceptance_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`course_selection_acceptance_effect\` (
           \`id\` text PRIMARY KEY,
           \`occurrence_id\` text NOT NULL,
@@ -686,10 +696,27 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`learner_goal_command\` (
+          \`invocation_part_id\` text PRIMARY KEY,
+          \`semantic_fingerprint\` text NOT NULL,
+          \`command_snapshot\` text NOT NULL,
+          \`permission_request_id\` text,
+          \`confirmation_snapshot\` text,
+          CONSTRAINT \`fk_learner_goal_command_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE CASCADE,
+          CONSTRAINT "learner_goal_command_fingerprint" CHECK(length("semantic_fingerprint") = 64 AND "semantic_fingerprint" NOT GLOB '*[^0-9a-f]*'),
+          CONSTRAINT "learner_goal_command_snapshot" CHECK(json_valid("command_snapshot") AND json_type("command_snapshot") = 'object'),
+          CONSTRAINT "learner_goal_command_permission" CHECK("permission_request_id" IS NULL OR length("permission_request_id") > 0),
+          CONSTRAINT "learner_goal_command_confirmation" CHECK("confirmation_snapshot" IS NULL OR (json_valid("confirmation_snapshot") AND json_type("confirmation_snapshot") = 'object'))
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`learner_goal_commit_seal\` (
           \`effect_id\` text PRIMARY KEY,
           \`receipt_id\` text NOT NULL CONSTRAINT \`learner_goal_commit_seal_receipt_unique\` UNIQUE,
-          \`invocation_part_id\` text NOT NULL CONSTRAINT \`learner_goal_commit_seal_invocation_unique\` UNIQUE
+          \`invocation_part_id\` text NOT NULL CONSTRAINT \`learner_goal_commit_seal_invocation_unique\` UNIQUE,
+          CONSTRAINT \`fk_learner_goal_commit_seal_effect_id_learner_goal_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learner_goal_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learner_goal_commit_seal_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learner_goal_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT
         );
       `)
       yield* tx.run(`
@@ -966,6 +993,34 @@ export default {
         ) WITHOUT ROWID;
       `)
       yield* tx.run(`
+        CREATE TABLE \`learner_course_route_anchor_commit_seal\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`receipt_id\` text NOT NULL CONSTRAINT \`learner_course_route_anchor_commit_seal_receipt_unique\` UNIQUE,
+          \`invocation_part_id\` text NOT NULL CONSTRAINT \`learner_course_route_anchor_commit_seal_invocation_unique\` UNIQUE,
+          CONSTRAINT \`fk_learner_course_route_anchor_commit_seal_effect_id_learner_course_route_anchor_transition_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learner_course_route_anchor_transition\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learner_course_route_anchor_commit_seal_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learner_course_route_anchor_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learner_default_course_command\` (
+          \`invocation_part_id\` text PRIMARY KEY,
+          \`permission_request_id\` text NOT NULL,
+          CONSTRAINT \`fk_learner_default_course_command_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE CASCADE,
+          CONSTRAINT "learner_default_course_command_permission" CHECK(length("permission_request_id") > 0)
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learner_default_course_commit_seal\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`receipt_id\` text NOT NULL CONSTRAINT \`learner_default_course_commit_seal_receipt_unique\` UNIQUE,
+          \`invocation_part_id\` text NOT NULL CONSTRAINT \`learner_default_course_commit_seal_invocation_unique\` UNIQUE,
+          CONSTRAINT \`fk_learner_default_course_commit_seal_effect_id_learner_default_course_transition_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learner_default_course_transition\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learner_default_course_commit_seal_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learner_default_course_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`learning_command_invocation\` (
           \`part_id\` text PRIMARY KEY,
           \`session_id\` text NOT NULL,
@@ -980,18 +1035,8 @@ export default {
           \`capability_version\` integer NOT NULL,
           \`authorization_basis\` text NOT NULL,
           \`input_fingerprint\` text NOT NULL,
-          \`retained_steering_semantic_fingerprint\` text,
-          \`goal_semantic_fingerprint\` text,
-          \`goal_command_snapshot\` text,
           \`status\` text NOT NULL,
-          \`effect_id\` text,
-          \`representation_effect_id\` text,
-          \`default_navigation_effect_id\` text,
-          \`anchor_navigation_effect_id\` text,
-          \`retained_steering_effect_id\` text,
-          \`goal_effect_id\` text,
-          \`permission_request_id\` text,
-          \`goal_confirmation_snapshot\` text,
+          \`receipt_id\` text,
           \`settlement\` text,
           \`time_admitted\` integer NOT NULL,
           \`time_settled\` integer,
@@ -999,32 +1044,19 @@ export default {
           \`turn_id\` text,
           \`input_id\` text,
           CONSTRAINT \`fk_learning_command_invocation_occurrence_id_learning_admitted_occurrence_id_fk\` FOREIGN KEY (\`occurrence_id\`) REFERENCES \`learning_admitted_occurrence\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_invocation_effect_id_course_selection_acceptance_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`course_selection_acceptance_effect\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_invocation_representation_effect_id_representation_effect_id_fk\` FOREIGN KEY (\`representation_effect_id\`) REFERENCES \`representation_effect\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_invocation_default_navigation_effect_id_learner_default_course_transition_id_fk\` FOREIGN KEY (\`default_navigation_effect_id\`) REFERENCES \`learner_default_course_transition\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_invocation_anchor_navigation_effect_id_learner_course_route_anchor_transition_id_fk\` FOREIGN KEY (\`anchor_navigation_effect_id\`) REFERENCES \`learner_course_route_anchor_transition\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_invocation_retained_steering_effect_id_retained_steering_transition_id_fk\` FOREIGN KEY (\`retained_steering_effect_id\`) REFERENCES \`retained_steering_transition\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_invocation_goal_effect_id_learner_goal_effect_id_fk\` FOREIGN KEY (\`goal_effect_id\`) REFERENCES \`learner_goal_effect\`(\`id\`) ON DELETE RESTRICT,
           CONSTRAINT \`learning_command_invocation_assistant_call_unique\` UNIQUE(\`assistant_message_id\`,\`provider_call_id\`),
           CONSTRAINT \`learning_command_invocation_assistant_ordinal_unique\` UNIQUE(\`assistant_message_id\`,\`emission_ordinal\`),
           CONSTRAINT "learning_command_invocation_call_nonempty" CHECK(length("provider_call_id") > 0),
-          CONSTRAINT "learning_command_invocation_command" CHECK("command_name" IN ('accept_course_view_revision', 'representation.convert', 'set_default_course_preference', 'set_course_route_anchor', 'update_retained_learning_steering', 'update_learner_goals')),
-          CONSTRAINT "learning_command_invocation_command_version" CHECK("command_version" = 1),
+          CONSTRAINT "learning_command_invocation_command_nonempty" CHECK(length("command_name") > 0),
+          CONSTRAINT "learning_command_invocation_command_version" CHECK("command_version" >= 1),
           CONSTRAINT "learning_command_invocation_emission_ordinal" CHECK("emission_ordinal" >= 0),
           CONSTRAINT "learning_command_invocation_capability" CHECK(length("capability_identity") > 0),
           CONSTRAINT "learning_command_invocation_capability_version" CHECK("capability_version" >= 1),
-          CONSTRAINT "learning_command_invocation_capability_match" CHECK(("command_name" = 'accept_course_view_revision' AND "capability_identity" = 'accept_course_view_revision' AND "capability_version" = 1) OR ("command_name" = 'representation.convert' AND "capability_identity" = 'representation.convert' AND "capability_version" = 1) OR ("command_name" = 'set_default_course_preference' AND "capability_identity" = 'set_default_course_preference' AND "capability_version" = 1) OR ("command_name" = 'set_course_route_anchor' AND "capability_identity" = 'set_course_route_anchor' AND "capability_version" = 1) OR ("command_name" = 'update_retained_learning_steering' AND "capability_identity" = 'update_retained_learning_steering' AND "capability_version" = 1) OR ("command_name" = 'update_learner_goals' AND "capability_identity" = 'update_learner_goals' AND "capability_version" = 1)),
           CONSTRAINT "learning_command_invocation_authorization_basis" CHECK("authorization_basis" IN ('learner_request', 'learner_acceptance')),
-          CONSTRAINT "learning_command_invocation_navigation_basis" CHECK(("command_name" = 'set_default_course_preference' AND "authorization_basis" = 'learner_acceptance') OR ("command_name" = 'set_course_route_anchor' AND "authorization_basis" = 'learner_request') OR "command_name" NOT IN ('set_default_course_preference', 'set_course_route_anchor')),
-          CONSTRAINT "learning_command_invocation_retained_steering_basis" CHECK("command_name" <> 'update_retained_learning_steering' OR ("authorization_basis" = 'learner_request' AND "turn_id" IS NOT NULL AND "input_id" IS NOT NULL)),
-          CONSTRAINT "learning_command_invocation_fingerprint" CHECK(length("input_fingerprint") = 64),
-          CONSTRAINT "learning_command_invocation_retained_steering_semantic_fingerprint" CHECK(("command_name" = 'update_retained_learning_steering' AND "retained_steering_semantic_fingerprint" IS NOT NULL AND length("retained_steering_semantic_fingerprint") = 64 AND "retained_steering_semantic_fingerprint" NOT GLOB '*[^0-9a-f]*') OR ("command_name" <> 'update_retained_learning_steering' AND "retained_steering_semantic_fingerprint" IS NULL)),
-          CONSTRAINT "learning_command_invocation_goal_semantic_fingerprint" CHECK(("command_name" = 'update_learner_goals' AND "goal_semantic_fingerprint" IS NOT NULL AND length("goal_semantic_fingerprint") = 64 AND "goal_semantic_fingerprint" NOT GLOB '*[^0-9a-f]*' AND json_valid("goal_command_snapshot") AND json_type("goal_command_snapshot") = 'object') OR ("command_name" <> 'update_learner_goals' AND "goal_semantic_fingerprint" IS NULL AND "goal_command_snapshot" IS NULL)),
+          CONSTRAINT "learning_command_invocation_fingerprint" CHECK(length("input_fingerprint") = 64 AND "input_fingerprint" NOT GLOB '*[^0-9a-f]*'),
           CONSTRAINT "learning_command_invocation_status" CHECK("status" IN ('admitted', 'applied', 'already_applied', 'no_change', 'error')),
-          CONSTRAINT "learning_command_invocation_permission_shape" CHECK(("command_name" = 'set_default_course_preference' AND "permission_request_id" IS NOT NULL AND length("permission_request_id") > 0) OR ("command_name" = 'update_learner_goals' AND (("authorization_basis" = 'learner_acceptance' AND "permission_request_id" IS NOT NULL AND length("permission_request_id") > 0) OR ("authorization_basis" = 'learner_request' AND "permission_request_id" IS NULL))) OR ("command_name" NOT IN ('set_default_course_preference', 'update_learner_goals') AND "permission_request_id" IS NULL)),
-          CONSTRAINT "learning_command_invocation_goal_confirmation_shape" CHECK(("command_name" = 'update_learner_goals' AND "authorization_basis" = 'learner_acceptance' AND (("status" = 'applied' AND json_valid("goal_confirmation_snapshot")) OR ("status" <> 'applied' AND "goal_confirmation_snapshot" IS NULL))) OR ("command_name" <> 'update_learner_goals' AND "goal_confirmation_snapshot" IS NULL) OR ("command_name" = 'update_learner_goals' AND "authorization_basis" = 'learner_request' AND "goal_confirmation_snapshot" IS NULL)),
-          CONSTRAINT "learning_command_invocation_settlement_shape" CHECK(("status" = 'admitted' AND "settlement" IS NULL AND "time_settled" IS NULL AND "settlement_order" IS NULL AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL) OR ("status" <> 'admitted' AND "settlement" IS NOT NULL AND "time_settled" IS NOT NULL AND "settlement_order" IS NOT NULL)),
-          CONSTRAINT "learning_command_invocation_effect_shape" CHECK(("status" IN ('applied', 'already_applied') AND (("command_name" = 'accept_course_view_revision' AND "effect_id" IS NOT NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL) OR ("command_name" = 'representation.convert' AND "effect_id" IS NULL AND "representation_effect_id" IS NOT NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL) OR ("command_name" = 'set_default_course_preference' AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NOT NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL) OR ("command_name" = 'set_course_route_anchor' AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NOT NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL) OR ("command_name" = 'update_retained_learning_steering' AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NOT NULL AND "goal_effect_id" IS NULL) OR ("command_name" = 'update_learner_goals' AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NOT NULL))) OR ("status" IN ('admitted', 'no_change', 'error') AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL)),
+          CONSTRAINT "learning_command_invocation_settlement_shape" CHECK(("status" = 'admitted' AND "receipt_id" IS NULL AND "settlement" IS NULL AND "time_settled" IS NULL AND "settlement_order" IS NULL) OR ("status" <> 'admitted' AND json_valid("settlement") AND json_type("settlement") = 'object' AND json_extract("settlement", '$.outcome') = "status" AND json_extract("settlement", '$.settlementTime') = "time_settled" AND json_extract("settlement", '$.settlementOrder') = "settlement_order")),
+          CONSTRAINT "learning_command_invocation_receipt_shape" CHECK(("status" IN ('applied', 'already_applied') AND "receipt_id" IS NOT NULL AND length("receipt_id") > 0 AND json_extract("settlement", '$.receiptID') = "receipt_id") OR ("status" IN ('admitted', 'no_change', 'error') AND "receipt_id" IS NULL AND ("settlement" IS NULL OR json_extract("settlement", '$.receiptID') IS NULL))),
           CONSTRAINT "learning_command_invocation_time_order" CHECK("time_admitted" >= 0 AND ("time_settled" IS NULL OR "time_settled" >= "time_admitted") AND ("settlement_order" IS NULL OR "settlement_order" >= 0))
         );
       `)
@@ -1039,30 +1071,13 @@ export default {
           \`capability_identity\` text NOT NULL,
           \`capability_version\` integer NOT NULL,
           \`authorization_basis\` text NOT NULL,
-          \`effect_id\` text CONSTRAINT \`learning_command_receipt_effect_unique\` UNIQUE,
-          \`representation_effect_id\` text CONSTRAINT \`learning_command_receipt_representation_effect_unique\` UNIQUE,
-          \`default_navigation_effect_id\` text CONSTRAINT \`learning_command_receipt_default_navigation_effect_unique\` UNIQUE,
-          \`anchor_navigation_effect_id\` text CONSTRAINT \`learning_command_receipt_anchor_navigation_effect_unique\` UNIQUE,
-          \`retained_steering_effect_id\` text CONSTRAINT \`learning_command_receipt_retained_steering_effect_unique\` UNIQUE,
-          \`goal_effect_id\` text CONSTRAINT \`learning_command_receipt_goal_effect_unique\` UNIQUE,
-          \`permission_request_id\` text,
-          \`confirmation_snapshot\` text,
           \`time_committed\` integer NOT NULL,
           \`commit_order\` integer NOT NULL,
           CONSTRAINT \`fk_learning_command_receipt_occurrence_id_learning_admitted_occurrence_id_fk\` FOREIGN KEY (\`occurrence_id\`) REFERENCES \`learning_admitted_occurrence\`(\`id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learning_command_receipt_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_receipt_effect_id_course_selection_acceptance_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`course_selection_acceptance_effect\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_receipt_representation_effect_id_representation_effect_id_fk\` FOREIGN KEY (\`representation_effect_id\`) REFERENCES \`representation_effect\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_receipt_default_navigation_effect_id_learner_default_course_transition_id_fk\` FOREIGN KEY (\`default_navigation_effect_id\`) REFERENCES \`learner_default_course_transition\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_receipt_anchor_navigation_effect_id_learner_course_route_anchor_transition_id_fk\` FOREIGN KEY (\`anchor_navigation_effect_id\`) REFERENCES \`learner_course_route_anchor_transition\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_receipt_retained_steering_effect_id_retained_steering_transition_id_fk\` FOREIGN KEY (\`retained_steering_effect_id\`) REFERENCES \`retained_steering_transition\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learning_command_receipt_goal_effect_id_learner_goal_effect_id_fk\` FOREIGN KEY (\`goal_effect_id\`) REFERENCES \`learner_goal_effect\`(\`id\`) ON DELETE RESTRICT,
           CONSTRAINT "learning_command_receipt_capability" CHECK(length("capability_identity") > 0),
           CONSTRAINT "learning_command_receipt_capability_version" CHECK("capability_version" >= 1),
           CONSTRAINT "learning_command_receipt_authorization_basis" CHECK("authorization_basis" IN ('learner_request', 'learner_acceptance')),
-          CONSTRAINT "learning_command_receipt_navigation_basis" CHECK(("capability_identity" = 'set_default_course_preference' AND "authorization_basis" = 'learner_acceptance') OR ("capability_identity" = 'set_course_route_anchor' AND "authorization_basis" = 'learner_request') OR "capability_identity" NOT IN ('set_default_course_preference', 'set_course_route_anchor')),
-          CONSTRAINT "learning_command_receipt_retained_steering_basis" CHECK("capability_identity" <> 'update_retained_learning_steering' OR "authorization_basis" = 'learner_request'),
-          CONSTRAINT "learning_command_receipt_effect_shape" CHECK(("capability_identity" = 'accept_course_view_revision' AND "capability_version" = 1 AND "effect_id" IS NOT NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL AND "permission_request_id" IS NULL AND "confirmation_snapshot" IS NULL) OR ("capability_identity" = 'representation.convert' AND "capability_version" = 1 AND "effect_id" IS NULL AND "representation_effect_id" IS NOT NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL AND "permission_request_id" IS NULL AND "confirmation_snapshot" IS NULL) OR ("capability_identity" = 'set_default_course_preference' AND "capability_version" = 1 AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NOT NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL AND "permission_request_id" IS NOT NULL AND "confirmation_snapshot" IS NOT NULL AND json_valid("confirmation_snapshot")) OR ("capability_identity" = 'set_course_route_anchor' AND "capability_version" = 1 AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NOT NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NULL AND "permission_request_id" IS NULL AND "confirmation_snapshot" IS NULL) OR ("capability_identity" = 'update_retained_learning_steering' AND "capability_version" = 1 AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NOT NULL AND "goal_effect_id" IS NULL AND "permission_request_id" IS NULL AND "confirmation_snapshot" IS NULL) OR ("capability_identity" = 'update_learner_goals' AND "capability_version" = 1 AND "effect_id" IS NULL AND "representation_effect_id" IS NULL AND "default_navigation_effect_id" IS NULL AND "anchor_navigation_effect_id" IS NULL AND "retained_steering_effect_id" IS NULL AND "goal_effect_id" IS NOT NULL AND (("authorization_basis" = 'learner_request' AND "permission_request_id" IS NULL AND "confirmation_snapshot" IS NULL) OR ("authorization_basis" = 'learner_acceptance' AND "permission_request_id" IS NOT NULL AND "confirmation_snapshot" IS NOT NULL AND json_valid("confirmation_snapshot"))))),
           CONSTRAINT "learning_command_receipt_time_order" CHECK("time_committed" >= 0 AND "commit_order" >= 0)
         ) WITHOUT ROWID;
       `)
@@ -1357,6 +1372,16 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`representation_command_commit_seal\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`receipt_id\` text NOT NULL CONSTRAINT \`representation_command_commit_seal_receipt_unique\` UNIQUE,
+          \`invocation_part_id\` text NOT NULL CONSTRAINT \`representation_command_commit_seal_invocation_unique\` UNIQUE,
+          CONSTRAINT \`fk_representation_command_commit_seal_effect_id_representation_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`representation_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_representation_command_commit_seal_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_representation_command_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`representation_continued_use_grant\` (
           \`id\` text PRIMARY KEY,
           \`effective_artifact_id\` text NOT NULL,
@@ -1484,10 +1509,21 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`retained_steering_command\` (
+          \`invocation_part_id\` text PRIMARY KEY,
+          \`semantic_fingerprint\` text NOT NULL,
+          CONSTRAINT \`fk_retained_steering_command_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE CASCADE,
+          CONSTRAINT "retained_steering_command_fingerprint" CHECK(length("semantic_fingerprint") = 64 AND "semantic_fingerprint" NOT GLOB '*[^0-9a-f]*')
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`retained_steering_commit_seal\` (
           \`transition_id\` text PRIMARY KEY,
           \`receipt_id\` text NOT NULL CONSTRAINT \`retained_steering_commit_seal_receipt_unique\` UNIQUE,
-          \`invocation_part_id\` text NOT NULL CONSTRAINT \`retained_steering_commit_seal_invocation_unique\` UNIQUE
+          \`invocation_part_id\` text NOT NULL CONSTRAINT \`retained_steering_commit_seal_invocation_unique\` UNIQUE,
+          CONSTRAINT \`fk_retained_steering_commit_seal_transition_id_retained_steering_transition_id_fk\` FOREIGN KEY (\`transition_id\`) REFERENCES \`retained_steering_transition\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_retained_steering_commit_seal_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_retained_steering_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT
         );
       `)
       yield* tx.run(`
@@ -2161,6 +2197,9 @@ export default {
       )
       yield* tx.run(
         `CREATE INDEX \`learning_command_invocation_admitted_idx\` ON \`learning_command_invocation\` (\`status\`,\`session_id\`,\`time_admitted\`);`,
+      )
+      yield* tx.run(
+        `CREATE INDEX \`learning_command_invocation_receipt_idx\` ON \`learning_command_invocation\` (\`receipt_id\`,\`part_id\`);`,
       )
       yield* tx.run(
         `CREATE INDEX \`learning_command_receipt_occurrence_idx\` ON \`learning_command_receipt\` (\`occurrence_id\`,\`id\`);`,

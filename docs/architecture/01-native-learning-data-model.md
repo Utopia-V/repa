@@ -9,6 +9,8 @@ Date: 2026-07-14
 Roadmap ownership and post-baseline data-lifecycle disposition clarified:
 2026-07-17
 
+First-principles ownership and context-cut corrections: 2026-07-27
+
 Authority: [Product origin](../foundation/00-product-origin.md),
 [ADR-0012](../decisions/0012-learning-centered-modular-monolith.md),
 [ADR-0014](../decisions/0014-one-time-opencode-fork.md), and the
@@ -38,7 +40,7 @@ The design is intentionally between two bad extremes:
   or possible learner inference before a product consumer exists.
 
 The stable target is a learning system whose normal context and actions can use
-Course, material, learner, Agenda, and policy meaning across Sessions. Exact
+Course, material, learner, agenda-family, and policy meaning across Sessions. Exact
 physical schemas are admitted in coherent product slices. Empty future tables
 do not make learning first-class.
 
@@ -52,9 +54,11 @@ Gate design.
 
 ## Decision summary
 
-1. One LearnerHome owns all Courses, learning records, Agenda meaning, and Tutor
-   policy in one database. A LearnerHome may be implicit in the database
-   identity; every table does not need a redundant learner-home foreign key.
+1. One LearnerHome contains all Courses, learning records, Goal,
+   future-attention, Assignment, planning, and Tutor-policy meaning in one
+   database. Those meanings retain separate semantic owners. A LearnerHome may
+   be implicit in the database identity; every table does not need a redundant
+   learner-home foreign key.
 2. Several Courses may be ongoing at once. No global `active` Course status is
    introduced. An optional default Course preference is only a retrieval bias
    for underspecified input such as `continue`.
@@ -105,7 +109,7 @@ flowchart TD
     MAP["Material Map<br/>revision-bound outline and selectors"]
     ALIGN["Course alignment<br/>optional, both revisions bound"]
     ANCHOR["Route anchor<br/>default continuation"]
-    AGENDA["Agenda meaning<br/>goal, future attention, assignment, detour"]
+    AGENDA["Agenda family<br/>separate Goal, future attention, Assignment, planning"]
     LEARNER["Learner record<br/>occurrence, evidence, hypothesis when earned"]
     POLICY["Tutor policy<br/>profiles, constraints, retained steering"]
     IX["Interaction<br/>learner occurrence, model operation, Tool Part"]
@@ -176,8 +180,8 @@ the exact admitted learner occurrence, completed assistant/tool occurrence, or
 other trusted source that gave the write its basis.
 
 Current Session deletion cascades through messages, parts, and the Session
-event aggregate. Durable Course, Course View, material, learner, Agenda, route,
-and policy records are not cascade children of those inherited tables. Their
+event aggregate. Durable Course, Course View, material, learner, agenda-family,
+route, and policy records are not cascade children of those inherited tables. Their
 causal relationship uses a Repa-owned durable receipt that may retain the
 original Interaction identifiers but does not require transcript content to
 survive. Ordinary Session deletion removes the transcript and marks that source
@@ -209,10 +213,11 @@ command, effect, or LearnerHome revision identities.
 The missing cross-cut is one narrow shared command-settlement substrate. It
 owns causal receipts, physical invocation replay/conflict, trusted execution
 envelopes, exact model-visible results, and source-unavailable tombstones. It
-does not own semantic learning effects. Course, source/material, learner,
-Agenda, and policy commands define their own effect addresses, transitions,
-preconditions, and corrections and commit them with the shared settlement in
-one SQLite transaction where all effects are local.
+does not own semantic learning effects. Course, source/material, learner, Goal,
+future-attention, Assignment, planning, and policy commands define their own
+effect addresses, transitions, preconditions, and corrections and commit them
+with the shared settlement in one SQLite transaction where all effects are
+local.
 
 ### Course
 
@@ -230,7 +235,8 @@ An optional default Course preference belongs to learner navigation continuity,
 not to Course lifecycle or Context authority. It changes only through an
 explicit learner-controlled operation. A Turn may load one or several other
 relevant Courses without changing that preference. Current directory, material
-discovery, Agenda pressure, and model preference cannot mutate it implicitly.
+discovery, Goal/Assignment/planning pressure, future attention, and model
+preference cannot mutate it implicitly.
 
 ### Course View
 
@@ -284,7 +290,8 @@ under learner supervision. The Course authority validates exact source and
 target revisions, ownership, uniqueness, and mapping shape before accepting
 the new revision. The learner's instruction can authorize the operation, but
 neither title similarity nor model confidence silently migrates learner
-evidence, Agenda targets, or other downstream records. Gate 7 owns the domain
+evidence, future-attention/Assignment/planning targets, or other downstream
+records. Gate 7 owns the domain
 representation and transition and accepts authorship basis only from a trusted
 application capability, never from model-authored content. Gate 8 later binds
 an LLM-issued invocation and learner acceptance to trusted causal settlement.
@@ -395,12 +402,12 @@ the current Turn's exclusive focus or implies mastery, understanding, or
 completion.
 
 A temporary detour or selected current task normally belongs to the current
-request. A future, demonstrated cross-Turn consumer may earn an Agenda-owned
-detour and intended rejoin point; the first planned product boundary does not
-pre-authorize that generic lifecycle. Context composition derives current focus
-from the request and any live accepted Agenda meaning, falling back to the
-route anchor only when no better target exists. The system never stores two
-competing generic `current_item` fields.
+request. A future, demonstrated cross-Turn consumer may earn a distinct detour
+and intended-rejoin authority within the agenda family; the first planned
+product boundary does not pre-authorize that generic lifecycle. Context
+composition derives current focus from the request and any live accepted
+detour state, falling back to the route anchor only when no better target
+exists. The system never stores two competing generic `current_item` fields.
 
 Other learner records enter as separate source-linked meanings only when a
 future Tutor action consumes them. Reading, receiving an explanation, watching
@@ -414,9 +421,10 @@ Interaction references without creating a general learner ontology. A later
 adaptation path must admit only the modest occurrence/evidence distinctions it
 actually uses and retain correction provenance.
 
-### Agenda
+### Agenda family
 
-Agenda is an ownership area, not one universal `agenda_item` aggregate. Goals,
+Agenda is a family and composition label, not a durable or transactional
+authority and not one universal `agenda_item` aggregate. Goals,
 future-attention concerns, assignments, planning demands, commitments,
 deferrals, and temporary focus have different sources and legal completion
 meanings. The first planned product boundary admits separate Goal,
@@ -440,7 +448,7 @@ pre-authorize a universal learning-history taxonomy or durable pursuit-episode
 record.
 
 The source-linked future-attention loop remains the first experimentally
-settled Agenda topology: eligible does not mean mandatory, begun, served,
+settled future-attention topology: eligible does not mean mandatory, begun, served,
 correct, or mastered. Its native lifecycle is admitted together with
 conditional Tutor purpose and truthful service through the teach-adapt-return
 path, not as an empty storage Gate.
@@ -454,15 +462,17 @@ tombstone are not design inputs.
 
 Tutor composition queries bounded projections from the authorities above. One
 context cut records the exact Interaction position, Course/View revisions,
-material/representation revisions, learner/Agenda entity versions, trusted
-time, policy revision, and granted capabilities actually shown to one model
-sample.
+material/representation revisions, learner, Goal, future-attention,
+Assignment, planning and policy revisions, trusted time, and granted
+capabilities actually shown to one model sample.
 
-The cut is an audit and stale-write precondition. It is not a durable summary
-that can overwrite its sources, and its serialized JSON is not the learning
-database. Detail remains lazy: the ordinary sample receives route neighborhood,
-live constraints, and source references; exact material and old history are
-loaded only for the selected move.
+The cut is an audit manifest and records candidate dependencies for
+command-specific stale checks. It is not itself a universal stale-write
+precondition, a durable summary that can overwrite its sources, or the learning
+database in serialized JSON. Each command checks only the exact revisions it
+actually depends on. Detail remains lazy: the ordinary sample receives route
+neighborhood, live constraints, and source references; exact material and old
+history are loaded only for the selected move.
 
 ## Native structural families
 
@@ -499,9 +509,9 @@ tables nor decides whether Course, material, and continuation belong in one
 Gate or several.
 
 No early native table is created for generic learner activity, evidence,
-mastery, Agenda, Assignment, scheduling, Domain Foundation, embeddings, or a
-universal graph. Those are not omitted from the product; they enter through the
-next behavior that can state their honest meaning and consumer.
+mastery, a universal Agenda item, a generic scheduler, Domain Foundation,
+embeddings, or a universal graph. Specific Assignment and planning authorities
+enter only through behavior that can state their honest meaning and consumer.
 
 ## Migration and command rules
 
@@ -519,8 +529,9 @@ next behavior that can state their honest meaning and consumer.
 - External conversion or filesystem work completes before a short acceptance
   transaction. A crash may leave unreferenced staging bytes, never a database
   reference that falsely claims available accepted content.
-- Generic file, shell, search, or model activity creates no Course, learner, or
-  Agenda fact without a capability-scoped domain command.
+- Generic file, shell, search, or model activity creates no Course, learner,
+  Goal, future-attention, Assignment, planning, or policy fact without a
+  capability-scoped domain command.
 - Corrections preserve old sources and revisions. No command silently retargets
   history to new bytes, a new view, or a different Course item.
 
@@ -550,8 +561,6 @@ or a universal event/graph table to escape the initial shape.
 The following remain implementation questions because current product meaning
 does not select one answer yet:
 
-- whether an existing Session message ID can also be the model-operation
-  identity or a narrow additional record is required;
 - exact table and package names;
 - the first typed Course cross-relation beyond hierarchy and authored order;
 - when a material grouping earns a durable LearningSpace entity rather than
@@ -560,11 +569,9 @@ does not select one answer yet:
   continuity; and
 - retention, evidence aggregation, review scheduling, and long-horizon planning
   algorithms;
-- exact Goal persistence fields and transition encoding beneath the accepted
-  outcome, optional attainment conditions and target time, source, scope,
-  revision, correction, achievement, abandonment, and supersession meanings;
 - cross-day planning-demand encoding across exact Goal and Assignment revisions;
-- additional steering scopes and multiple-candidate Agenda arbitration;
+- additional steering scopes and multiple-candidate future-attention
+  arbitration;
 - whether a future consumer earns generic commitment, deferral, or durable
   detour/rejoin records; and
 - the post-baseline Data Lifecycle representation for selective

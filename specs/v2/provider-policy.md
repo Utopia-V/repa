@@ -1,5 +1,8 @@
 # Policy
 
+> **Status — inherited preview-v2 design record, not Repa authority.** This file may describe experimental source that exists in the fork as well as unfinished OpenCode plans. Use it only to maintain or audit that deferred source. Replacement, migration, retirement, launch, and default-change language below is not implementation authority for Repa; the released-v1 execution path remains the accepted baseline unless a Repa ADR or Gate explicitly changes it.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
 ## Purpose
 
 Policies control whether an operation on a named resource is allowed. They may be authored in configuration files, but policy evaluation is its own runtime concern.
@@ -62,7 +65,11 @@ The `Policy` module owns the shared `Policy.Info` interface, `Policy.Effect` typ
 
 ## Matching
 
-Both `action` and `resource` use opencode's existing wildcard matching behavior.
+`action` is a logical capability identifier and uses case-sensitive wildcard
+matching on every platform. `resource` keeps the existing resource/path
+wildcard behavior, including case-insensitive path matching on Windows. This
+prevents an allowed action such as `provider.use` from also authorizing a
+distinct case variant while preserving native path semantics.
 
 Examples:
 
@@ -89,7 +96,9 @@ Conceptually:
 function evaluate(action: string, resource: string, fallback: Policy.Effect, statements: Policy.Info[]) {
   return (
     statements.findLast(
-      (statement) => Wildcard.match(action, statement.action) && Wildcard.match(resource, statement.resource),
+      (statement) =>
+        Wildcard.matchIdentifier(action, statement.action) &&
+        Wildcard.match(resource, statement.resource),
     )?.effect ?? fallback
   )
 }

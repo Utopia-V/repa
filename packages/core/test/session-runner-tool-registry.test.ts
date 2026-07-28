@@ -94,6 +94,22 @@ describe("ToolRegistry", () => {
     }),
   )
 
+  it.effect("does not let a differently cased capability inherit an exact allow", () =>
+    Effect.gen(function* () {
+      const service = yield* ToolRegistry.Service
+      yield* service.register({ read: make(), READ: make() })
+
+      expect(
+        (
+          yield* toolDefinitions(service, [
+            { action: "*", resource: "*", effect: "deny" },
+            { action: "read", resource: "*", effect: "allow" },
+          ])
+        ).map((definition) => definition.name),
+      ).toEqual(["read"])
+    }),
+  )
+
   it.effect("keeps permission decoration isolated between registrations", () =>
     Effect.gen(function* () {
       const service = yield* ToolRegistry.Service

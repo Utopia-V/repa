@@ -15,6 +15,7 @@ import { PartTable } from "@opencode-ai/core/session/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { Auth } from "@/auth"
 import { Config } from "@/config/config"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -29,6 +30,7 @@ import { isDeepStrictEqual } from "node:util"
 import path from "node:path"
 import { normalizeRepresentation, type RepresentationConvertInput } from "./input"
 import { LearningCommandPermission } from "./permission"
+import { LearningCommandPresentation } from "./presentation"
 import type { ExecuteContext, ExactResult, Registration } from "./runtime"
 
 type Prepared = Readonly<{
@@ -197,7 +199,7 @@ function executePrepared(
   prepared: Prepared,
   context: ExecuteContext,
 ) {
-  if (prepared.settlement) return Effect.succeed(exactResult(prepared.settlement))
+  if (prepared.settlement) return Effect.succeed(exactResult(prepared.settlement, prepared.invocation.envelope))
   return Effect.scoped(
     Effect.gen(function* () {
       const decision = yield* events.transaction((tx) =>
@@ -206,7 +208,9 @@ function executePrepared(
           return noEvent(yield* LearningCommand.decideRepresentationCandidate(tx, prepared.invocation))
         }).pipe(Effect.orDie),
       )
-      if (decision.result.type === "replay") return exactResult(decision.result.settlement)
+      if (decision.result.type === "replay") {
+        return exactResult(decision.result.settlement, prepared.invocation.envelope)
+      }
       if (decision.result.type === "terminal") {
         return yield* settleFailure(events, prepared, "context_refresh_required")
       }
@@ -222,6 +226,7 @@ function executePrepared(
             effectiveArtifactID: prepared.invocation.command.effectiveArtifactID,
             sourceRevisionID: prepared.invocation.command.sourceRevisionID,
             producerKind: prepared.invocation.producerKind,
+            ...SemanticPresentation.metadata(LearningCommandPresentation.representationProposal(prepared.invocation)),
           },
           tool: {
             messageID: prepared.invocation.envelope.assistantMessageID,
@@ -329,7 +334,7 @@ function executePrepared(
           }).pipe(Effect.orDie),
         ),
       ).pipe(Effect.exit)
-      if (Exit.isSuccess(committed)) return exactResult(committed.value.result)
+      if (Exit.isSuccess(committed)) return exactResult(committed.value.result, prepared.invocation.envelope)
       const exact = yield* loadCommittedExactResult(
         events,
         registrationFromEnvelope(prepared.invocation.envelope),
@@ -356,7 +361,11 @@ function settlePermission(
   )
 }
 
-function settleFailure(events: EventV2.Interface, prepared: Prepared, code: LearningCommand.ErrorCode) {
+function settleFailure(
+  events: EventV2.Interface,
+  prepared: Prepared,
+  code: LearningCommand.RepresentationFailureCode,
+) {
   return settleTransaction(events, prepared, (tx, current, metadata) =>
     LearningCommand.settleRepresentationFailure(tx, { ...current.invocation, code, settlement: metadata }),
   )
@@ -400,7 +409,7 @@ function settleTransaction(
         return withPartEvent(result.settlement, part, result.settlement.settlementTime)
       }).pipe(Effect.orDie),
     )
-    .pipe(Effect.map((committed) => exactResult(committed.result)))
+    .pipe(Effect.map((committed) => exactResult(committed.result, prepared.invocation.envelope)))
 }
 
 function consumeFrontier(tx: EventV2.Transaction, partID: SessionV1.PartID) {
@@ -434,7 +443,7 @@ function loadCommittedExactResult(
         if (!canonical) return undefined
         const prepared = yield* loadPhysicalPrepared(tx, canonical, registration)
         if (!prepared?.settlement) return undefined
-        return exactResult(prepared.settlement)
+        return exactResult(prepared.settlement, prepared.invocation.envelope)
       }).pipe(Effect.exit, Effect.map(noEvent)),
     )
     .pipe(Effect.map((result) => result.result))
@@ -524,13 +533,14 @@ function recoverLegacyAdmitted(events: EventV2.Interface, row: LearningCommand.P
         })
         const envelope = terminalEnvelopeFromPhysical(row)
         if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, envelope, settlement.settlement)
+          yield* assertRecoveredTerminalPart(tx, canonical, envelope, settlement.settlement)
           return noEvent(true)
         }
+        const interrupted = requireInterruptedSettlement(settlement.settlement)
         return withPartEvent(
           true,
-          terminalPart(canonical, envelope, settlement.settlement),
-          settlement.settlement.settlementTime,
+          terminalPart(canonical, envelope, interrupted),
+          interrupted.settlementTime,
         )
       }).pipe(Effect.orDie),
     )
@@ -580,11 +590,17 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
       settlement: yield* settlementMetadata(tx, registration.sessionID, prepared.invocation.envelope.timeAdmitted),
     })
     if (settlement.type === "replay") {
-      yield* assertTerminalPart(tx, canonical, prepared.invocation.envelope, settlement.settlement)
+      yield* assertRecoveredTerminalPart(
+        tx,
+        canonical,
+        prepared.invocation.envelope,
+        settlement.settlement,
+      )
       return noEvent(true)
     }
-    const terminal = terminalPart(canonical, prepared.invocation.envelope, settlement.settlement)
-    return withPartEvent(true, terminal, settlement.settlement.settlementTime)
+    const interrupted = requireInterruptedSettlement(settlement.settlement)
+    const terminal = terminalPart(canonical, prepared.invocation.envelope, interrupted)
+    return withPartEvent(true, terminal, interrupted.settlementTime)
   })
 }
 
@@ -670,8 +686,8 @@ function terminalPart(
   envelope: TerminalPartEnvelope,
   settlement: LearningCommand.Settlement,
 ): SessionV1.ToolPart {
-  const result = exactResult(settlement)
-  return {
+  const result = exactResult(settlement, envelope)
+  const part = {
     id: envelope.partID,
     messageID: envelope.assistantMessageID,
     sessionID: envelope.sessionID,
@@ -686,25 +702,40 @@ function terminalPart(
       metadata: result.metadata,
       time: { start: envelope.timeAdmitted, end: settlement.settlementTime },
     },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal learning Part ${envelope.partID} has an invalid semantic result`)
   }
+  return part
 }
 
-export function exactResult(settlement: LearningCommand.Settlement): ExactResult {
+export function exactResult(
+  settlement: LearningCommand.Settlement,
+  envelope: TerminalPartEnvelope,
+): ExactResult {
+  const presentation = LearningCommandPresentation.settlementResult(
+    settlement,
+    LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
+    envelope,
+  )
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Representation settlement has no valid semantic projection")
   return {
-    title: "Readable representation conversion",
+    title: projected.title,
     metadata: {
       command: LearningCommand.REPRESENTATION_CONVERT_CAPABILITY,
       commandVersion: LearningCommand.REPRESENTATION_CONVERT_VERSION,
       outcome: settlement.outcome,
       ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
-      durablySettled: true,
+      durablySettled: projected.durablySettled,
       truncated: false,
+      ...SemanticPresentation.metadata(presentation),
     },
     output: JSON.stringify(settlement),
   }
 }
 
-function failureCode(error: unknown): LearningCommand.ErrorCode {
+function failureCode(error: unknown): LearningCommand.RepresentationFailureCode {
   if (error instanceof RepresentationConversion.Failure) {
     if (error.code === "source_unavailable") return "source_unavailable"
     if (error.code === "ambiguous_content_root") return "ambiguous_content_root"
@@ -808,11 +839,67 @@ function assertTerminalPart(
 ) {
   return readPart(tx, envelope.partID).pipe(
     Effect.flatMap((part) =>
-      isDeepStrictEqual(part, terminalPart(canonical, envelope, settlement))
+      isDeepStrictEqual(part, terminalPart(canonical, envelope, settlement)) &&
+      SemanticPresentation.readResult(part, true).type === "valid"
         ? Effect.void
         : Effect.die(`Terminal learning Part ${envelope.partID} diverged from its exact settlement`),
     ),
   )
+}
+
+function assertRecoveredTerminalPart(
+  tx: EventV2.Transaction,
+  canonical: RepresentationConvertInput,
+  envelope: TerminalPartEnvelope,
+  settlement: LearningCommand.PhysicalSettlement,
+) {
+  return readPart(tx, envelope.partID).pipe(
+    Effect.flatMap((part) =>
+      recoveredPartMatches(canonical, envelope, settlement, part) &&
+      SemanticPresentation.readResult(part, true).type === "valid"
+        ? Effect.void
+        : Effect.die(`Recovered terminal learning Part ${envelope.partID} diverged from its physical settlement`),
+    ),
+  )
+}
+
+function recoveredPartMatches(
+  canonical: RepresentationConvertInput,
+  envelope: TerminalPartEnvelope,
+  settlement: LearningCommand.PhysicalSettlement,
+  part: SessionV1.ToolPart,
+) {
+  if (part.state.status !== "completed") return false
+  const metadata = part.state.metadata
+  return (
+    part.id === envelope.partID &&
+    part.sessionID === envelope.sessionID &&
+    part.messageID === envelope.assistantMessageID &&
+    part.tool === LearningCommand.REPRESENTATION_CONVERT_CAPABILITY &&
+    part.callID === envelope.providerCallID &&
+    isDeepStrictEqual(part.state.input, canonical) &&
+    part.state.time.start === envelope.timeAdmitted &&
+    part.state.time.end === settlement.settlementTime &&
+    typeof metadata === "object" &&
+    metadata !== null &&
+    !Array.isArray(metadata) &&
+    metadata.outcome === settlement.outcome &&
+    (settlement.outcome !== "error" || metadata.code === settlement.code)
+  )
+}
+
+function requireInterruptedSettlement(
+  settlement: LearningCommand.PhysicalSettlement,
+): LearningCommand.ErrorSettlement {
+  if (settlement.outcome !== "error" || settlement.code !== "interrupted") {
+    throw new Error("New physical recovery did not produce the required interrupted settlement")
+  }
+  return {
+    outcome: "error",
+    code: "interrupted",
+    settlementTime: settlement.settlementTime,
+    settlementOrder: settlement.settlementOrder,
+  }
 }
 
 function terminalEnvelopeFromPhysical(physical: LearningCommand.PhysicalInvocation): TerminalPartEnvelope {

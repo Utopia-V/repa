@@ -1,5 +1,8 @@
 # Effect Drizzle SQLite Package
 
+> **Status — fork-era engineering plan and implementation reference, not Repa storage authority.** This file may support maintenance of the local adapter it describes. It does not authorize new database ownership, production migration, or replacement of an accepted Repa persistence boundary without an owning ADR or Gate.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
 ## Goal
 
 Create a small workspace package that vendors the Drizzle `effect-sqlite` adapter shape for our repo. This is not an opencode storage abstraction. It is a local package that ports the Drizzle Effect SQLite implementation so we can use it before/independently of upstream release timing.

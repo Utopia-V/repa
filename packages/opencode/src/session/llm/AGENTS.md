@@ -85,6 +85,8 @@ Both runtimes converge on the same `LLMEvent` stream consumed by the session pro
 Safety boundary:
 
 - AI SDK remains the default.
-- `REPA_EXPERIMENTAL_NATIVE_LLM=true` or the umbrella `REPA_EXPERIMENTAL=true` opts in. Native is not a global replacement.
+- Only `REPA_EXPERIMENTAL_NATIVE_LLM=true` opts in. The umbrella
+  `REPA_EXPERIMENTAL=true` does not enable this transport. Native is not a
+  global replacement.
 - Native execution currently supports OpenAI and Anthropic API-key paths backed by `@ai-sdk/openai`, `@ai-sdk/openai-compatible`, or `@ai-sdk/anthropic` catalog entries.
 - Unsupported providers, OpenAI OAuth, and missing API-key cases fall back to AI SDK.

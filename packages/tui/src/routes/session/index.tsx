@@ -77,6 +77,12 @@ import { useClipboard } from "../../context/clipboard"
 import { nextThinkingMode, reasoningSummary, useThinkingMode, type ThinkingMode } from "../../context/thinking"
 import { getScrollAcceleration } from "../../util/scroll"
 import { collapseToolOutput } from "../../util/collapse-tool-output"
+import {
+  resultPresentation,
+  resultStatus,
+  shouldHideCompletedTool,
+  type ResultRead,
+} from "../../util/semantic-presentation"
 import { usePluginRuntime } from "../../plugin/runtime"
 import { getRevertDiffFiles } from "../../util/revert-diff"
 import { REPA_BASE_MODE, useBindings, useCommandShortcut, useOpencodeKeymap } from "../../keymap"
@@ -1549,13 +1555,10 @@ function TextPart(props: { last: boolean; part: TextPart; message: AssistantMess
 function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMessage }) {
   const ctx = use()
   const display = createMemo(() => toolDisplay(props.part.tool))
+  const semantic = createMemo(() => resultPresentation(props.part))
 
   // Hide tool if showDetails is false and tool completed successfully
-  const shouldHide = createMemo(() => {
-    if (ctx.showDetails()) return false
-    if (props.part.state.status !== "completed") return false
-    return true
-  })
+  const shouldHide = createMemo(() => shouldHideCompletedTool(props.part, ctx.showDetails()))
 
   const toolprops = {
     get metadata() {
@@ -1578,6 +1581,9 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
   return (
     <Show when={!shouldHide()}>
       <Switch>
+        <Match when={semantic().type !== "absent"}>
+          <SemanticToolResult read={semantic()} part={props.part} />
+        </Match>
         <Match when={display() === "bash"}>
           <Shell {...toolprops} />
         </Match>
@@ -1625,6 +1631,37 @@ function ToolPart(props: { last: boolean; part: ToolPart; message: AssistantMess
         </Match>
       </Switch>
     </Show>
+  )
+}
+
+function SemanticToolResult(props: { read: ResultRead; part: ToolPart }) {
+  const { theme } = useTheme()
+  if (props.read.type !== "valid") {
+    return (
+      <BlockTool title="# Consequential result unavailable" part={props.part}>
+        <box gap={1}>
+          <text fg={theme.error}>Repa could not verify this consequential result.</text>
+          <text fg={theme.textMuted}>No committed, already-applied, no-effect, or failed claim is inferred.</text>
+        </box>
+      </BlockTool>
+    )
+  }
+  const status = resultStatus(props.read.value)
+  const failed = props.read.value.outcome === "failed" || props.read.value.outcome === "outcome_unknown"
+  return (
+    <BlockTool title={`# ${props.read.value.title} — ${status}`} part={props.part}>
+      <box gap={1}>
+        <text fg={failed ? theme.error : theme.text}>{props.read.value.summary}</text>
+        <For each={props.read.value.facts}>
+          {(item) => (
+            <text fg={theme.textMuted}>
+              {item.label}: <span style={{ fg: theme.text }}>{item.value}</span>
+            </text>
+          )}
+        </For>
+        <text fg={theme.textMuted}>Durable settlement: {props.read.value.durablySettled ? "yes" : "no"}</text>
+      </box>
+    </BlockTool>
   )
 }
 

@@ -5,7 +5,25 @@ import type { Course } from "../course"
 import { CourseTable, CourseViewRevisionItemTable, CourseViewRevisionTable, CourseViewTable } from "../course/sql"
 import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.sql"
+import type { ReceiptID } from "../learning-command/physical-schema"
+import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../learning-command/sql"
+import type { PartID } from "../v1/session"
 import type { AnchorEffectID, DefaultConfirmationSnapshot, DefaultEffectID } from "./schema"
+
+export const LearnerDefaultCourseCommandTable = sqliteTable(
+  "learner_default_course_command",
+  {
+    invocation_part_id: text().$type<PartID>().primaryKey(),
+    permission_request_id: text().$type<PermissionV1.ID>().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("cascade"),
+    check("learner_default_course_command_permission", sql`length(${table.permission_request_id}) > 0`),
+  ],
+)
 
 export const DefaultCoursePreferenceTransitionTable = sqliteTable(
   "learner_default_course_transition",
@@ -69,6 +87,30 @@ export const DefaultCoursePreferenceTransitionTable = sqliteTable(
     ),
     index("learner_default_course_history_idx").on(table.version, table.id),
     index("learner_default_course_frontier_idx").on(table.frontier_sequence, table.version),
+  ],
+)
+
+export const LearnerDefaultCourseCommitSealTable = sqliteTable(
+  "learner_default_course_commit_seal",
+  {
+    effect_id: text().$type<DefaultEffectID>().primaryKey(),
+    receipt_id: text().$type<ReceiptID>().notNull(),
+    invocation_part_id: text().$type<PartID>().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.effect_id],
+      foreignColumns: [DefaultCoursePreferenceTransitionTable.id],
+    }).onDelete("restrict"),
+    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete(
+      "restrict",
+    ),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("restrict"),
+    unique("learner_default_course_commit_seal_receipt_unique").on(table.receipt_id),
+    unique("learner_default_course_commit_seal_invocation_unique").on(table.invocation_part_id),
   ],
 )
 
@@ -153,5 +195,29 @@ export const CourseRouteAnchorTransitionTable = sqliteTable(
     ),
     index("learner_course_route_anchor_history_idx").on(table.course_id, table.version, table.id),
     index("learner_course_route_anchor_frontier_idx").on(table.frontier_sequence, table.course_id, table.version),
+  ],
+)
+
+export const LearnerCourseRouteAnchorCommitSealTable = sqliteTable(
+  "learner_course_route_anchor_commit_seal",
+  {
+    effect_id: text().$type<AnchorEffectID>().primaryKey(),
+    receipt_id: text().$type<ReceiptID>().notNull(),
+    invocation_part_id: text().$type<PartID>().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.effect_id],
+      foreignColumns: [CourseRouteAnchorTransitionTable.id],
+    }).onDelete("restrict"),
+    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete(
+      "restrict",
+    ),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("restrict"),
+    unique("learner_course_route_anchor_commit_seal_receipt_unique").on(table.receipt_id),
+    unique("learner_course_route_anchor_commit_seal_invocation_unique").on(table.invocation_part_id),
   ],
 )

@@ -5,7 +5,7 @@ on:
     branches:
       - dev
     paths:
-      - packages/containers/**
+      - .github/hibernated-workflows/support/containers/**
       - .github/workflows/containers.yml
       - package.json
   workflow_dispatch:
@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
@@ -39,7 +39,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push containers
-        run: bun ./packages/containers/script/build.ts --push
+        run: bun ./.github/hibernated-workflows/support/containers/script/build.ts --push
         env:
           REGISTRY: ${{ env.REGISTRY }}
           TAG: ${{ env.TAG }}

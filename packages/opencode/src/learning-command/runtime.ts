@@ -1,3 +1,4 @@
+import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -6,6 +7,7 @@ import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { PartTable } from "@opencode-ai/core/session/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
@@ -35,6 +37,7 @@ import {
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
 import { LearningCommandPermission } from "./permission"
+import { LearningCommandPresentation } from "./presentation"
 
 export type Registration = Readonly<{
   turnID: Turn.ID
@@ -107,15 +110,26 @@ type Prepared = Readonly<{
   canonical: Canonical
   invocation: Invocation
   settlement?: LearningCommand.Settlement
+  exact?: ExactResult
 }>
 
 type RetainedExecutionReconciliation =
   | { readonly type: "candidate" }
-  | { readonly type: "settled"; readonly settlement: LearningCommand.Settlement }
+  | { readonly type: "settled"; readonly exact: ExactResult }
 
 type GoalExecutionReconciliation =
   | { readonly type: "candidate" }
-  | { readonly type: "settled"; readonly settlement: LearningCommand.Settlement }
+  | {
+      readonly type: "settled"
+      readonly settlement: LearningCommand.Settlement
+      readonly exact: ExactResult
+    }
+
+type GoalConfirmationPresentationResult =
+  | (Exclude<LearningCommand.GoalConfirmationResult, { readonly type: "confirmation" }> &
+      Readonly<{ exact: ExactResult }>)
+  | (Extract<LearningCommand.GoalConfirmationResult, { readonly type: "confirmation" }> &
+      Readonly<{ presentation: LearnerGoal.ProposalPresentation }>)
 
 type TerminalPartEnvelope = Pick<
   LearningCommand.InvocationEnvelope,
@@ -269,7 +283,13 @@ const layer = Layer.effect(
               if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
               return yield* Effect.failCause(exit.cause)
             }
-            const unknown = outcomeUnknown(canonical.toolID)
+            const unknown = outcomeUnknown(canonical.toolID, {
+              partID: registration.partID,
+              assistantMessageID: registration.assistantMessageID,
+              sessionID: registration.sessionID,
+              providerCallID: registration.callID,
+              timeAdmitted: Date.now(),
+            })
             yield* Deferred.succeed(deferred, unknown).pipe(Effect.ignore)
             if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
             return unknown
@@ -314,7 +334,7 @@ function loadCommittedExactResult(
         if (!canonical) return undefined
         const prepared = yield* loadPhysicalPrepared(tx, canonical, registration)
         if (!prepared?.settlement) return undefined
-        return exactResult(prepared.settlement, canonical.toolID)
+        return prepared.exact ?? (yield* Effect.die("Settled learning command lost its exact terminal result"))
       }).pipe(Effect.exit, Effect.map(noEvent)),
     )
     .pipe(Effect.map((result) => result.result))
@@ -338,7 +358,7 @@ function loadPhysicalPrepared(tx: EventV2.Transaction, canonical: Canonical, reg
       providerCallID: registration.callID,
     })
     if (!physical) return undefined
-    const invocation = invocationFromPhysical(physical, canonical)
+    const invocation = yield* invocationFromPhysical(tx, physical, canonical)
     if (!sameRegistration(invocation.envelope, registration, canonical)) return yield* invocationConflict(registration)
     const reservation = yield* reservePrimary(tx, invocation)
     if (reservation.type === "admitted") {
@@ -346,62 +366,78 @@ function loadPhysicalPrepared(tx: EventV2.Transaction, canonical: Canonical, reg
       return { canonical, invocation } satisfies Prepared
     }
     if (reservation.type === "replay") {
-      yield* assertTerminalPart(tx, canonical, invocation.envelope, reservation.settlement)
-      return { canonical, invocation, settlement: reservation.settlement } satisfies Prepared
+      const part = yield* assertTerminalPart(tx, canonical, invocation.envelope, reservation.settlement)
+      return {
+        canonical,
+        invocation,
+        settlement: reservation.settlement,
+        exact: exactFromPart(part),
+      } satisfies Prepared
     }
     return yield* Effect.die(`Stored learning invocation ${registration.partID} lost its physical reservation`)
   })
 }
 
-function invocationFromPhysical(physical: LearningCommand.PhysicalInvocation, canonical: Canonical): Invocation {
-  if (!physical.turn_id || !physical.input_id) {
-    throw new Error(`Learning invocation ${physical.part_id} predates durable Turn authorization`)
-  }
-  if (physical.command_name !== canonical.toolID) {
-    throw new Error(`Learning invocation ${physical.part_id} changed command identity`)
-  }
-  const envelope = {
-    occurrenceID: physical.occurrence_id,
-    turnID: physical.turn_id,
-    inputID: physical.input_id,
-    sessionID: physical.session_id,
-    parentUserMessageID: physical.parent_user_message_id,
-    assistantMessageID: physical.assistant_message_id,
-    partID: physical.part_id,
-    providerCallID: physical.provider_call_id,
-    emissionOrdinal: physical.emission_ordinal,
-    capabilityIdentity: physical.capability_identity,
-    capabilityVersion: physical.capability_version,
-    authorizationBasis: physical.authorization_basis,
-    timeAdmitted: physical.time_admitted,
-  }
-  if (canonical.toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
-    return { envelope, command: command(canonical.input) }
-  }
-  if (canonical.toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
-    return { envelope, command: retainedSteeringCommand(canonical.input) }
-  }
-  if (canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
-    const invocation = { envelope, command: learnerGoalCommand(canonical.input) }
-    if (canonical.input.authorizationBasis === "learner_request") {
-      return invocation as LearnerGoal.DirectInvocation
+function invocationFromPhysical(
+  tx: EventV2.Transaction,
+  physical: LearningCommand.PhysicalInvocation,
+  canonical: Canonical,
+) {
+  return Effect.gen(function* () {
+    if (!physical.turn_id || !physical.input_id) {
+      return yield* Effect.die(`Learning invocation ${physical.part_id} predates durable Turn authorization`)
     }
-    if (!physical.permission_request_id) {
-      throw new Error(`Learner Goal invocation ${physical.part_id} has no stable permission request`)
+    if (physical.command_name !== canonical.toolID) {
+      return yield* Effect.die(`Learning invocation ${physical.part_id} changed command identity`)
     }
-    return { ...invocation, permissionRequestID: physical.permission_request_id } as LearnerGoal.AcceptedInvocation
-  }
-  if (canonical.toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
-    if (!physical.permission_request_id) {
-      throw new Error(`Default Course invocation ${physical.part_id} has no stable permission request`)
+    const envelope = {
+      occurrenceID: physical.occurrence_id,
+      turnID: physical.turn_id,
+      inputID: physical.input_id,
+      sessionID: physical.session_id,
+      parentUserMessageID: physical.parent_user_message_id,
+      assistantMessageID: physical.assistant_message_id,
+      partID: physical.part_id,
+      providerCallID: physical.provider_call_id,
+      emissionOrdinal: physical.emission_ordinal,
+      capabilityIdentity: physical.capability_identity,
+      capabilityVersion: physical.capability_version,
+      authorizationBasis: physical.authorization_basis,
+      timeAdmitted: physical.time_admitted,
     }
-    return {
-      envelope,
-      command: defaultCommand(canonical.input),
-      permissionRequestID: physical.permission_request_id,
+    if (canonical.toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
+      return { envelope, command: command(canonical.input) } as Invocation
     }
-  }
-  return { envelope, command: anchorCommand(canonical.input) }
+    if (canonical.toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
+      return { envelope, command: retainedSteeringCommand(canonical.input) } as Invocation
+    }
+    if (canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+      const invocation = { envelope, command: learnerGoalCommand(canonical.input) }
+      if (canonical.input.authorizationBasis === "learner_request") {
+        return invocation as LearnerGoal.DirectInvocation
+      }
+      const reservation = yield* LearningCommand.lookupLearnerGoalCommandReservation(tx, physical.part_id)
+      if (!reservation?.permission_request_id) {
+        return yield* Effect.die(`Learner Goal invocation ${physical.part_id} has no stable permission request`)
+      }
+      return {
+        ...invocation,
+        permissionRequestID: reservation.permission_request_id,
+      } as LearnerGoal.AcceptedInvocation
+    }
+    if (canonical.toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
+      const permissionRequestID = yield* LearningCommand.lookupDefaultCoursePermissionRequestID(tx, physical.part_id)
+      if (!permissionRequestID) {
+        return yield* Effect.die(`Default Course invocation ${physical.part_id} has no stable permission request`)
+      }
+      return {
+        envelope,
+        command: defaultCommand(canonical.input),
+        permissionRequestID,
+      } as Invocation
+    }
+    return { envelope, command: anchorCommand(canonical.input) } as Invocation
+  })
 }
 
 function reserveTransaction(tx: EventV2.Transaction, canonical: Canonical, invocation: Invocation) {
@@ -411,8 +447,13 @@ function reserveTransaction(tx: EventV2.Transaction, canonical: Canonical, invoc
       return noEvent({ canonical, invocation } satisfies Prepared)
     }
     if (reservation.type === "replay") {
-      yield* assertTerminalPart(tx, canonical, invocation.envelope, reservation.settlement)
-      return noEvent({ canonical, invocation, settlement: reservation.settlement } satisfies Prepared)
+      const part = yield* assertTerminalPart(tx, canonical, invocation.envelope, reservation.settlement)
+      return noEvent({
+        canonical,
+        invocation,
+        settlement: reservation.settlement,
+        exact: exactFromPart(part),
+      } satisfies Prepared)
     }
 
     const metadata = isRetainedSteeringInvocation(invocation)
@@ -426,9 +467,14 @@ function reserveTransaction(tx: EventV2.Transaction, canonical: Canonical, invoc
           ? yield* LearningCommand.settleNavigationReservation(tx, { ...invocation, settlement: metadata })
           : yield* LearningCommand.settleReservation(tx, { ...invocation, settlement: metadata })
     if (settlement.type === "candidate") return yield* Effect.die("Terminal reservation became a new candidate")
-    const part = terminalPart(canonical, invocation.envelope, settlement.settlement)
+    const part = yield* terminalPart(tx, canonical, invocation.envelope, settlement.settlement)
     return withPartEvent(
-      { canonical, invocation, settlement: settlement.settlement } satisfies Prepared,
+      {
+        canonical,
+        invocation,
+        settlement: settlement.settlement,
+        exact: exactFromPart(part),
+      } satisfies Prepared,
       part,
       settlement.settlement.settlementTime,
     )
@@ -441,7 +487,10 @@ function executePrepared(
   prepared: Prepared,
   context: ExecuteContext,
 ) {
-  if (prepared.settlement) return Effect.succeed(exactResult(prepared.settlement, prepared.canonical.toolID))
+  if (prepared.settlement) {
+    if (!prepared.exact) return Effect.die("Settled learning command lost its exact terminal result")
+    return Effect.succeed(prepared.exact)
+  }
   if (isRetainedSteeringInvocation(prepared.invocation)) {
     return executeRetainedSteeringPrepared(events, permission, prepared.canonical, prepared.invocation, context)
   }
@@ -458,6 +507,12 @@ function executePrepared(
   const invocation = prepared.invocation
   return Effect.gen(function* () {
     const authority = requirePermissionContext(context)
+    const located = yield* events.transaction((tx) =>
+      Course.readRevisionPresentationLocator(tx, {
+        courseID: invocation.command.courseID,
+        revisionID: invocation.command.revisionID,
+      }).pipe(Effect.map(noEvent), Effect.orDie),
+    )
     const permissionOutcome = yield* LearningCommandPermission.ask(
       permission,
       {
@@ -468,6 +523,9 @@ function executePrepared(
         metadata: {
           courseID: invocation.command.courseID,
           revisionID: invocation.command.revisionID,
+          ...SemanticPresentation.metadata(
+            LearningCommandPresentation.acceptCourseProposal(invocation, located.result),
+          ),
         },
         tool: {
           messageID: invocation.envelope.assistantMessageID,
@@ -482,7 +540,10 @@ function executePrepared(
       Effect.gen(function* () {
         const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
         if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) return noEvent(current.settlement)
+        if (current.settlement) {
+          if (!current.exact) return yield* Effect.die("Settled Goal command lost its exact terminal result")
+          return noEvent(current.exact)
+        }
         const consumed = yield* LearningFrontier.read(tx)
         yield* TurnLifecycle.consumeToolFrontier(tx, {
           partID: invocation.envelope.partID,
@@ -505,8 +566,8 @@ function executePrepared(
           ),
         })
         if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent(settlement.settlement)
+          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+          return noEvent(exactFromPart(part))
         }
         if (settlement.settlement.outcome === "applied") {
           yield* TurnLifecycle.recordToolResultingFrontier(tx, {
@@ -514,11 +575,11 @@ function executePrepared(
             frontier: yield* LearningFrontier.read(tx),
           })
         }
-        const part = terminalPart(canonical, current.invocation.envelope, settlement.settlement)
-        return withPartEvent(settlement.settlement, part, settlement.settlement.settlementTime)
+        const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+        return withPartEvent(exactFromPart(part), part, settlement.settlement.settlementTime)
       }).pipe(Effect.orDie),
     )
-    return exactResult(committed.result, canonical.toolID)
+    return committed.result
   })
 }
 
@@ -578,7 +639,7 @@ function executeLearnerGoalsPrepared(
       return yield* Effect.die("Learner Goal invocation has a different canonical command")
     }
     const reconciled = yield* reconcileLearnerGoalCandidate(events, canonical, invocation)
-    if (reconciled.type === "settled") return exactResult(reconciled.settlement, canonical.toolID)
+    if (reconciled.type === "settled") return reconciled.exact
     const authority = requirePermissionContext(context)
     const rule = Permission.evaluateAuthority(
       invocation.envelope.capabilityIdentity,
@@ -590,6 +651,7 @@ function executeLearnerGoalsPrepared(
       return yield* commitLearnerGoals(events, canonical, invocation, { type: "deny" })
     }
     if (!isAcceptedLearnerGoalInvocation(invocation)) {
+      const presentation = yield* prepareLearnerGoalPresentation(events, invocation)
       const permissionOutcome = yield* LearningCommandPermission.ask(
         permission,
         {
@@ -600,6 +662,9 @@ function executeLearnerGoalsPrepared(
           metadata: {
             authorizationBasis: invocation.envelope.authorizationBasis,
             command: invocation.command,
+            ...SemanticPresentation.metadata(
+              LearningCommandPresentation.learnerGoalsProposal(invocation, presentation),
+            ),
           },
           tool: {
             messageID: invocation.envelope.assistantMessageID,
@@ -614,7 +679,7 @@ function executeLearnerGoalsPrepared(
     }
 
     const prepared = yield* prepareLearnerGoalConfirmation(events, canonical, invocation)
-    if (prepared.type !== "confirmation") return exactResult(prepared.settlement, canonical.toolID)
+    if (prepared.type !== "confirmation") return prepared.exact
     const permissionOutcome = yield* LearningCommandPermission.ask(
       permission,
       {
@@ -628,6 +693,13 @@ function executeLearnerGoalsPrepared(
           onceOnly: true,
           authorizationBasis: invocation.envelope.authorizationBasis,
           confirmation: prepared.confirmation,
+            ...SemanticPresentation.metadata(
+              LearningCommandPresentation.learnerGoalsProposal(
+                invocation,
+                prepared.presentation,
+                prepared.confirmation,
+              ),
+            ),
         },
         tool: {
           messageID: invocation.envelope.assistantMessageID,
@@ -659,7 +731,14 @@ function reconcileLearnerGoalCandidate(
       Effect.gen(function* () {
         const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
         if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) return noEvent({ type: "settled" as const, settlement: current.settlement })
+        if (current.settlement) {
+          if (!current.exact) return yield* Effect.die("Settled Goal command lost its exact terminal result")
+          return noEvent({
+            type: "settled" as const,
+            settlement: current.settlement,
+            exact: current.exact,
+          })
+        }
         if (!isLearnerGoalInvocation(current.invocation)) {
           return yield* Effect.die("Learner Goal invocation changed command kind")
         }
@@ -673,12 +752,21 @@ function reconcileLearnerGoalCandidate(
         })
         if (settlement.type === "candidate") return noEvent({ type: "candidate" as const })
         if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent({ type: "settled" as const, settlement: settlement.settlement })
+          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+          return noEvent({
+            type: "settled" as const,
+            settlement: settlement.settlement,
+            exact: exactFromPart(part),
+          })
         }
+        const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
         return withPartEvent(
-          { type: "settled" as const, settlement: settlement.settlement },
-          terminalPart(canonical, current.invocation.envelope, settlement.settlement),
+          {
+            type: "settled" as const,
+            settlement: settlement.settlement,
+            exact: exactFromPart(part),
+          },
+          part,
           settlement.settlement.settlementTime,
         )
       }).pipe(Effect.orDie),
@@ -692,35 +780,66 @@ function prepareLearnerGoalConfirmation(
   invocation: LearnerGoal.AcceptedInvocation,
 ) {
   return events
-    .transaction<LearningCommand.GoalConfirmationResult, typeof SessionV1.Event.PartUpdated>((tx) =>
+    .transaction<GoalConfirmationPresentationResult, typeof SessionV1.Event.PartUpdated>((tx) =>
       Effect.gen(function* () {
         const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
         if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) return noEvent({ type: "replay" as const, settlement: current.settlement })
+        if (current.settlement) {
+          if (!current.exact) return yield* Effect.die("Settled Goal command lost its exact terminal result")
+          return noEvent({
+            type: "replay" as const,
+            settlement: current.settlement,
+            exact: current.exact,
+          })
+        }
         if (!isLearnerGoalInvocation(current.invocation) || !isAcceptedLearnerGoalInvocation(current.invocation)) {
           return yield* Effect.die("Learner Goal acceptance invocation changed command kind")
         }
+        const metadata = yield* settlementMetadata(
+          tx,
+          current.invocation.envelope.sessionID,
+          current.invocation.envelope.timeAdmitted,
+        )
         const prepared = yield* LearningCommand.prepareLearnerGoalConfirmation(tx, {
           ...current.invocation,
-          settlement: yield* settlementMetadata(
-            tx,
-            current.invocation.envelope.sessionID,
-            current.invocation.envelope.timeAdmitted,
-          ),
+          settlement: metadata,
         })
         if (prepared.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, prepared.settlement)
-          return noEvent(prepared)
+          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, prepared.settlement)
+          return noEvent({ ...prepared, exact: exactFromPart(part) })
         }
         if (prepared.type === "settled") {
+          const part = yield* terminalPart(tx, canonical, current.invocation.envelope, prepared.settlement)
           return withPartEvent(
-            prepared,
-            terminalPart(canonical, current.invocation.envelope, prepared.settlement),
+            { ...prepared, exact: exactFromPart(part) },
+            part,
             prepared.settlement.settlementTime,
           )
         }
-        return noEvent(prepared)
+        return noEvent({
+          ...prepared,
+          presentation: yield* LearnerGoal.preparePresentation(tx, {
+            command: current.invocation.command,
+            authorizationBasis: current.invocation.envelope.authorizationBasis,
+            asOf: metadata.time,
+          }),
+        })
       }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function prepareLearnerGoalPresentation(
+  events: EventV2.Interface,
+  invocation: LearnerGoal.DirectInvocation,
+) {
+  return events
+    .transaction((tx) =>
+      LearnerGoal.preparePresentation(tx, {
+        command: invocation.command,
+        authorizationBasis: invocation.envelope.authorizationBasis,
+        asOf: Math.max(Date.now(), invocation.envelope.timeAdmitted),
+      }).pipe(Effect.map(noEvent), Effect.orDie),
     )
     .pipe(Effect.map((result) => result.result))
 }
@@ -738,7 +857,10 @@ function commitLearnerGoals(
       Effect.gen(function* () {
         const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
         if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) return noEvent(current.settlement)
+        if (current.settlement) {
+          if (!current.exact) return yield* Effect.die("Settled Goal command lost its exact terminal result")
+          return noEvent(current.exact)
+        }
         if (!isLearnerGoalInvocation(current.invocation)) {
           return yield* Effect.die("Learner Goal invocation changed command kind")
         }
@@ -758,8 +880,8 @@ function commitLearnerGoals(
           ),
         })
         if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent(settlement.settlement)
+          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+          return noEvent(exactFromPart(part))
         }
         if (settlement.settlement.outcome === "applied") {
           yield* TurnLifecycle.recordToolResultingFrontier(tx, {
@@ -767,14 +889,11 @@ function commitLearnerGoals(
             frontier: yield* LearningFrontier.read(tx),
           })
         }
-        return withPartEvent(
-          settlement.settlement,
-          terminalPart(canonical, current.invocation.envelope, settlement.settlement),
-          settlement.settlement.settlementTime,
-        )
+        const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+        return withPartEvent(exactFromPart(part), part, settlement.settlement.settlementTime)
       }).pipe(Effect.orDie),
     )
-    .pipe(Effect.map((result) => exactResult(result.result, canonical.toolID)))
+    .pipe(Effect.map((result) => result.result))
 }
 
 function executeRetainedSteeringPrepared(
@@ -793,7 +912,10 @@ function executeRetainedSteeringPrepared(
         Effect.gen(function* () {
           const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
           if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-          if (current.settlement) return noEvent({ type: "settled" as const, settlement: current.settlement })
+          if (current.settlement) {
+            if (!current.exact) return yield* Effect.die("Settled retained steering lost its exact terminal result")
+            return noEvent({ type: "settled" as const, exact: current.exact })
+          }
           if (!isRetainedSteeringInvocation(current.invocation)) {
             return yield* Effect.die("Retained steering invocation changed command kind")
           }
@@ -818,18 +940,19 @@ function executeRetainedSteeringPrepared(
             return yield* Effect.die("Committed retained steering reconciliation became a new candidate")
           }
           if (settlement.type === "replay") {
-            yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-            return noEvent({ type: "settled" as const, settlement: settlement.settlement })
+            const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+            return noEvent({ type: "settled" as const, exact: exactFromPart(part) })
           }
+          const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
           return withPartEvent(
-            { type: "settled" as const, settlement: settlement.settlement },
-            terminalPart(canonical, current.invocation.envelope, settlement.settlement),
+            { type: "settled" as const, exact: exactFromPart(part) },
+            part,
             settlement.settlement.settlementTime,
           )
         }).pipe(Effect.orDie),
     )
     if (reconciled.result.type === "settled") {
-      return exactResult(reconciled.result.settlement, canonical.toolID)
+      return reconciled.result.exact
     }
     const authority = requirePermissionContext(context)
     const permissionOutcome = yield* LearningCommandPermission.ask(
@@ -839,7 +962,12 @@ function executeRetainedSteeringPrepared(
         permission: invocation.envelope.capabilityIdentity,
         patterns: [RetainedSteering.SCOPE],
         always: [RetainedSteering.SCOPE],
-        metadata: { action: invocation.command.action, scope: RetainedSteering.SCOPE },
+        metadata: {
+          action: invocation.command.action,
+          scope: RetainedSteering.SCOPE,
+          command: invocation.command,
+          ...SemanticPresentation.metadata(LearningCommandPresentation.retainedSteeringProposal(invocation)),
+        },
         tool: {
           messageID: invocation.envelope.assistantMessageID,
           callID: invocation.envelope.providerCallID,
@@ -853,7 +981,10 @@ function executeRetainedSteeringPrepared(
       Effect.gen(function* () {
         const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
         if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) return noEvent(current.settlement)
+        if (current.settlement) {
+          if (!current.exact) return yield* Effect.die("Settled retained steering lost its exact terminal result")
+          return noEvent(current.exact)
+        }
         if (!isRetainedSteeringInvocation(current.invocation)) {
           return yield* Effect.die("Retained steering invocation changed command kind")
         }
@@ -872,8 +1003,8 @@ function executeRetainedSteeringPrepared(
           ),
         })
         if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent(settlement.settlement)
+          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+          return noEvent(exactFromPart(part))
         }
         if (settlement.settlement.outcome === "applied") {
           yield* TurnLifecycle.recordToolResultingFrontier(tx, {
@@ -881,14 +1012,11 @@ function executeRetainedSteeringPrepared(
             frontier: yield* LearningFrontier.read(tx),
           })
         }
-        return withPartEvent(
-          settlement.settlement,
-          terminalPart(canonical, current.invocation.envelope, settlement.settlement),
-          settlement.settlement.settlementTime,
-        )
+        const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+        return withPartEvent(exactFromPart(part), part, settlement.settlement.settlementTime)
       }).pipe(Effect.orDie),
     )
-    return exactResult(committed.result, canonical.toolID)
+    return committed.result
   })
 }
 
@@ -953,6 +1081,9 @@ function navigationPermissionOutcome(
           onceOnly: true,
           navigationKind: invocation.command.kind,
           confirmation: prepared.value.confirmation,
+          ...SemanticPresentation.metadata(
+            LearningCommandPresentation.defaultCourseProposal(invocation, prepared.value.confirmation),
+          ),
         },
         tool: {
           messageID: invocation.envelope.assistantMessageID,
@@ -964,6 +1095,16 @@ function navigationPermissionOutcome(
       abort,
     )
   }
+  const presentation = isDefaultNavigationInvocation(invocation)
+    ? LearningCommandPresentation.defaultCourseCommandProposal(
+        invocation,
+        prepared.value.decision === "no_change",
+      )
+    : LearningCommandPresentation.routeAnchorProposal(
+        invocation,
+        prepared.value.decision === "no_change",
+        "locator" in prepared.value ? prepared.value.locator : undefined,
+      )
   return LearningCommandPermission.ask(
     permission,
     {
@@ -971,7 +1112,12 @@ function navigationPermissionOutcome(
       permission: invocation.envelope.capabilityIdentity,
       patterns: [navigationPermissionPattern(invocation)],
       always: [navigationPermissionPattern(invocation)],
-      metadata: { navigationKind: invocation.command.kind, noChange: prepared.value.decision === "no_change" },
+      metadata: {
+        navigationKind: invocation.command.kind,
+        noChange: prepared.value.decision === "no_change",
+        command: invocation.command,
+        ...SemanticPresentation.metadata(presentation),
+      },
       tool: {
         messageID: invocation.envelope.assistantMessageID,
         callID: invocation.envelope.providerCallID,
@@ -995,7 +1141,10 @@ function commitNavigation(
       Effect.gen(function* () {
         const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
         if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) return noEvent(current.settlement)
+        if (current.settlement) {
+          if (!current.exact) return yield* Effect.die("Settled navigation command lost its exact terminal result")
+          return noEvent(current.exact)
+        }
         if (!isNavigationInvocation(current.invocation)) {
           return yield* Effect.die("Navigation invocation changed command kind")
         }
@@ -1015,8 +1164,8 @@ function commitNavigation(
           ...(prepared ? { prepared } : {}),
         })
         if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent(settlement.settlement)
+          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+          return noEvent(exactFromPart(part))
         }
         if (settlement.settlement.outcome === "applied") {
           yield* TurnLifecycle.recordToolResultingFrontier(tx, {
@@ -1024,14 +1173,11 @@ function commitNavigation(
             frontier: yield* LearningFrontier.read(tx),
           })
         }
-        return withPartEvent(
-          settlement.settlement,
-          terminalPart(canonical, current.invocation.envelope, settlement.settlement),
-          settlement.settlement.settlementTime,
-        )
+        const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
+        return withPartEvent(exactFromPart(part), part, settlement.settlement.settlementTime)
       }).pipe(Effect.orDie),
     )
-    .pipe(Effect.map((result) => exactResult(result.result, canonical.toolID)))
+    .pipe(Effect.map((result) => result.result))
 }
 
 export function recoverAdmitted(events: EventV2.Interface) {
@@ -1080,13 +1226,14 @@ function recoverLegacyAdmitted(events: EventV2.Interface, row: LearningCommand.P
         })
         const envelope = terminalEnvelopeFromPhysical(row)
         if (settlement.type === "replay") {
-          yield* assertTerminalPart(tx, canonical, envelope, settlement.settlement)
+          yield* assertRecoveredTerminalPart(tx, canonical, envelope, settlement.settlement)
           return noEvent(true)
         }
+        const interrupted = requireInterruptedSettlement(settlement.settlement)
         return withPartEvent(
           true,
-          terminalPart(canonical, envelope, settlement.settlement),
-          settlement.settlement.settlementTime,
+          yield* terminalPart(tx, canonical, envelope, interrupted),
+          interrupted.settlementTime,
         )
       }).pipe(Effect.orDie),
     )
@@ -1155,7 +1302,7 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
         }
         return withPartEvent(
           true,
-          terminalPart(canonical, prepared.invocation.envelope, reconciled.settlement),
+          yield* terminalPart(tx, canonical, prepared.invocation.envelope, reconciled.settlement),
           reconciled.settlement.settlementTime,
         )
       }
@@ -1172,7 +1319,7 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
         }
         return withPartEvent(
           true,
-          terminalPart(canonical, prepared.invocation.envelope, reconciled.settlement),
+          yield* terminalPart(tx, canonical, prepared.invocation.envelope, reconciled.settlement),
           reconciled.settlement.settlementTime,
         )
       }
@@ -1182,11 +1329,17 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
       settlement: metadata,
     })
     if (settlement.type === "replay") {
-      yield* assertTerminalPart(tx, canonical, prepared.invocation.envelope, settlement.settlement)
+      yield* assertRecoveredTerminalPart(
+        tx,
+        canonical,
+        prepared.invocation.envelope,
+        settlement.settlement,
+      )
       return noEvent(true)
     }
-    const terminal = terminalPart(canonical, prepared.invocation.envelope, settlement.settlement)
-    return withPartEvent(true, terminal, settlement.settlement.settlementTime)
+    const interrupted = requireInterruptedSettlement(settlement.settlement)
+    const terminal = yield* terminalPart(tx, canonical, prepared.invocation.envelope, interrupted)
+    return withPartEvent(true, terminal, interrupted.settlementTime)
   })
 }
 
@@ -1223,84 +1376,163 @@ function pendingPart(canonical: Canonical, registration: Registration): SessionV
 }
 
 function terminalPart(
+  tx: EventV2.Transaction,
   canonical: Canonical,
   envelope: TerminalPartEnvelope,
   settlement: LearningCommand.Settlement,
-): SessionV1.ToolPart {
-  const result = exactResult(settlement, canonical.toolID)
-  return {
-    id: envelope.partID,
-    messageID: envelope.assistantMessageID,
-    sessionID: envelope.sessionID,
-    type: "tool",
-    tool: canonical.toolID,
-    callID: envelope.providerCallID,
-    state: {
-      status: "completed",
-      input: canonical.input,
-      output: result.output,
-      title: result.title,
-      metadata: result.metadata,
-      time: { start: envelope.timeAdmitted, end: settlement.settlementTime },
-    },
-  }
+): Effect.Effect<SessionV1.ToolPart, LearnerGoal.IntegrityError> {
+  return Effect.gen(function* () {
+    const goalOperations =
+      canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY &&
+      settlement.outcome !== "error" &&
+      "operations" in settlement
+        ? yield* LearnerGoal.prepareResultPresentation(tx, settlement.operations, settlement.settlementTime)
+        : []
+    const owner = yield* resultOwnerPresentation(tx, canonical.toolID, settlement)
+    const result = exactResult(settlement, canonical.toolID, envelope, goalOperations, owner)
+    const part = {
+      id: envelope.partID,
+      messageID: envelope.assistantMessageID,
+      sessionID: envelope.sessionID,
+      type: "tool",
+      tool: canonical.toolID,
+      callID: envelope.providerCallID,
+      state: {
+        status: "completed",
+        input: canonical.input,
+        output: result.output,
+        title: result.title,
+        metadata: result.metadata,
+        time: { start: envelope.timeAdmitted, end: settlement.settlementTime },
+      },
+    } satisfies SessionV1.ToolPart
+    if (SemanticPresentation.readResult(part, true).type !== "valid") {
+      return yield* Effect.die(`Constructed terminal learning Part ${envelope.partID} has an invalid semantic result`)
+    }
+    return part
+  })
 }
 
 export function exactResult(
   settlement: LearningCommand.Settlement,
   toolID: PrimaryCapability = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+  envelope?: TerminalPartEnvelope,
+  goalOperations: readonly LearnerGoal.ResultPresentationOperation[] = [],
+  owner: LearningCommandPresentation.ResultOwnerPresentation = {},
 ): ExactResult {
+  if (!envelope) throw new Error("Consequential result is missing its terminal ToolPart binding")
   if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
     const acknowledged = "acknowledgementTitle" in settlement ? settlement : undefined
+    const output =
+      acknowledged?.acknowledgementBody ??
+      learnerGoalErrorMessage(settlement.outcome === "error" ? settlement.code : "validation_error")
+    const presentation = LearningCommandPresentation.settlementResult(
+      settlement,
+      toolID,
+      envelope,
+      goalOperations,
+      owner,
+    )
+    const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+    if (!projected) throw new Error("Learner Goal settlement has no valid semantic projection")
     return {
-      title: acknowledged?.acknowledgementTitle ?? "Learner Goals not changed",
+      title: projected.title,
       metadata: {
         command: toolID,
         commandVersion: capabilityVersion(toolID),
         outcome: settlement.outcome,
         ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
-        durablySettled: true,
+        durablySettled: projected.durablySettled,
         truncated: false,
+        ...SemanticPresentation.metadata(presentation),
       },
-      output:
-        acknowledged?.acknowledgementBody ??
-        learnerGoalErrorMessage(settlement.outcome === "error" ? settlement.code : "validation_error"),
+      output,
     }
   }
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) {
     const acknowledged = "acknowledgementTitle" in settlement ? settlement : undefined
+    const output =
+      acknowledged?.acknowledgementBody ??
+      retainedSteeringErrorMessage(settlement.outcome === "error" ? settlement.code : "validation_error")
+    const presentation = LearningCommandPresentation.settlementResult(settlement, toolID, envelope, [], owner)
+    const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+    if (!projected) throw new Error("Retained steering settlement has no valid semantic projection")
     return {
-      title: acknowledged?.acknowledgementTitle ?? "Retained learning steering not changed",
+      title: projected.title,
       metadata: {
         command: toolID,
         commandVersion: capabilityVersion(toolID),
         outcome: settlement.outcome,
         ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
-        durablySettled: true,
+        durablySettled: projected.durablySettled,
         truncated: false,
+        ...SemanticPresentation.metadata(presentation),
       },
-      output:
-        acknowledged?.acknowledgementBody ??
-        retainedSteeringErrorMessage(settlement.outcome === "error" ? settlement.code : "validation_error"),
+      output,
     }
   }
+  const presentation = LearningCommandPresentation.settlementResult(settlement, toolID, envelope, [], owner)
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Learning command settlement has no valid semantic projection")
   return {
-    title:
-      toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY
-        ? "Course view revision acceptance"
-        : toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
-          ? "Default Course preference"
-          : "Course route anchor",
+    title: projected.title,
     metadata: {
       command: toolID,
       commandVersion: capabilityVersion(toolID),
       outcome: settlement.outcome,
       ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
-      durablySettled: true,
+      durablySettled: projected.durablySettled,
       truncated: false,
+      ...SemanticPresentation.metadata(presentation),
     },
     output: JSON.stringify(settlement),
   }
+}
+
+function resultOwnerPresentation(
+  tx: EventV2.Transaction,
+  toolID: PrimaryCapability,
+  settlement: LearningCommand.Settlement,
+): Effect.Effect<LearningCommandPresentation.ResultOwnerPresentation, LearnerGoal.IntegrityError> {
+  if (settlement.outcome === "error") return Effect.succeed({})
+  if (
+    toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY &&
+    "courseID" in settlement &&
+    "revisionID" in settlement &&
+    "effectID" in settlement
+  ) {
+    return Course.readSelectionAcceptancePresentation(tx, settlement.effectID).pipe(
+      Effect.orDie,
+      Effect.map((course) => ({ course })),
+    )
+  }
+  if (
+    toolID === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY &&
+    "navigationKind" in settlement &&
+    settlement.navigationKind === "course_route_anchor"
+  ) {
+    if (!("effectID" in settlement) && !settlement.current.courseID) {
+      return Effect.die("Course route-anchor result lost its owner Course")
+    }
+    const input =
+      "effectID" in settlement
+        ? { effectID: settlement.effectID }
+        : { courseID: settlement.current.courseID! }
+    return LearnerNavigation.readAnchorResultPresentation(tx, input).pipe(
+      Effect.orDie,
+      Effect.map((anchor) => ({ anchor })),
+    )
+  }
+  if (
+    toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY &&
+    "policyID" in settlement &&
+    "state" in settlement
+  ) {
+    return RetainedSteering.readResultPresentation(tx, settlement).pipe(
+      Effect.map((retained) => ({ retained })),
+    )
+  }
+  return Effect.succeed({})
 }
 
 function learnerGoalErrorMessage(code: LearningCommand.ErrorCode) {
@@ -1350,16 +1582,20 @@ function retainedSteeringErrorMessage(code: LearningCommand.ErrorCode) {
   return "The retained learning instruction was not changed. Clarify an explicit learning-wide scope and finite offset-bearing end time."
 }
 
-function outcomeUnknown(toolID: PrimaryCapability): ExactResult {
+function outcomeUnknown(toolID: PrimaryCapability, envelope: TerminalPartEnvelope): ExactResult {
+  const presentation = LearningCommandPresentation.unknownResult(toolID, envelope)
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Unknown learning-command outcome has no valid semantic projection")
   return {
-    title: "Learning command outcome unknown",
+    title: projected.title,
     metadata: {
       command: toolID,
       commandVersion: capabilityVersion(toolID),
       outcome: "error",
       code: "outcome_unknown" satisfies LearningCommand.ErrorCode,
-      durablySettled: false,
+      durablySettled: projected.durablySettled,
       truncated: false,
+      ...SemanticPresentation.metadata(presentation),
     },
     output: JSON.stringify({ outcome: "error", code: "outcome_unknown" }),
   }
@@ -1416,6 +1652,20 @@ function partFromRow(row: typeof PartTable.$inferSelect): SessionV1.ToolPart {
   }) as unknown as SessionV1.ToolPart
 }
 
+function exactFromPart(part: SessionV1.ToolPart): ExactResult {
+  if (part.state.status !== "completed") {
+    throw new Error(`Learning Part ${part.id} is not terminal`)
+  }
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Learning Part ${part.id} has an invalid semantic result`)
+  }
+  return {
+    title: part.state.title,
+    metadata: part.state.metadata,
+    output: part.state.output,
+  }
+}
+
 function assertTerminalPart(
   tx: EventV2.Transaction,
   canonical: Canonical,
@@ -1424,11 +1674,67 @@ function assertTerminalPart(
 ) {
   return readPart(tx, envelope.partID).pipe(
     Effect.flatMap((part) =>
-      isDeepStrictEqual(part, terminalPart(canonical, envelope, settlement))
-        ? Effect.void
+      recoveredPartMatches(canonical, envelope, settlement, part) &&
+      SemanticPresentation.readResult(part, true).type === "valid"
+        ? Effect.succeed(part)
         : Effect.die(`Terminal learning Part ${envelope.partID} diverged from its exact settlement`),
     ),
   )
+}
+
+function assertRecoveredTerminalPart(
+  tx: EventV2.Transaction,
+  canonical: Canonical,
+  envelope: TerminalPartEnvelope,
+  settlement: LearningCommand.PhysicalSettlement,
+) {
+  return readPart(tx, envelope.partID).pipe(
+    Effect.flatMap((part) =>
+      recoveredPartMatches(canonical, envelope, settlement, part) &&
+      SemanticPresentation.readResult(part, true).type === "valid"
+        ? Effect.succeed(part)
+        : Effect.die(`Recovered terminal learning Part ${envelope.partID} diverged from its physical settlement`),
+    ),
+  )
+}
+
+function recoveredPartMatches(
+  canonical: Canonical,
+  envelope: TerminalPartEnvelope,
+  settlement: LearningCommand.PhysicalSettlement,
+  part: SessionV1.ToolPart,
+) {
+  if (part.state.status !== "completed") return false
+  const metadata = part.state.metadata
+  return (
+    part.id === envelope.partID &&
+    part.sessionID === envelope.sessionID &&
+    part.messageID === envelope.assistantMessageID &&
+    part.tool === canonical.toolID &&
+    part.callID === envelope.providerCallID &&
+    isDeepStrictEqual(part.state.input, canonical.input) &&
+    part.state.time.start === envelope.timeAdmitted &&
+    part.state.time.end === settlement.settlementTime &&
+    typeof metadata === "object" &&
+    metadata !== null &&
+    !Array.isArray(metadata) &&
+    metadata.outcome === settlement.outcome &&
+    (settlement.outcome !== "error" || metadata.code === settlement.code)
+  )
+}
+
+function requireInterruptedSettlement(
+  settlement: LearningCommand.PhysicalSettlement,
+): LearningCommand.ErrorSettlement {
+  if (settlement.outcome !== "error" || settlement.code !== "interrupted") {
+    throw new Error("New physical recovery did not produce the required interrupted settlement")
+  }
+  return {
+    outcome: "error",
+    code: "interrupted",
+    settlementTime: settlement.settlementTime,
+    settlementOrder: settlement.settlementOrder,
+  }
 }
 
 function terminalEnvelopeFromPhysical(physical: LearningCommand.PhysicalInvocation): TerminalPartEnvelope {

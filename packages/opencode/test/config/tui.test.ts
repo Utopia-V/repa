@@ -295,10 +295,12 @@ it.instance("migrates tui-specific keys from repa.json when tui.json does not ex
       expect(config.theme).toBe("migrated-theme")
       expect(config.scroll_speed).toBe(5)
       expect(config.keybinds.get("app.exit")?.[0]?.key).toBe("ctrl+q")
-      expect(JSON.parse(yield* fs.readFileString(path.join(test.directory, "tui.json")))).toMatchObject({
+      const migrated = JSON.parse(yield* fs.readFileString(path.join(test.directory, "tui.json")))
+      expect(migrated).toMatchObject({
         theme: "migrated-theme",
         scroll_speed: 5,
       })
+      expect(migrated.$schema).toBeUndefined()
       const server = JSON.parse(yield* fs.readFileString(source))
       expect(server.theme).toBeUndefined()
       expect(server.keybinds).toBeUndefined()

@@ -1,4 +1,4 @@
-# opencode database guide
+# Repa runtime-package guide
 
 ## Database
 
@@ -8,9 +8,9 @@
 ## Development server
 
 - Running `bun dev` from `packages/opencode` starts the live interactive TUI. Do not run it as a blocking foreground command when you need to inspect the result.
-- Start it in `tmux` instead: `tmux new-session -d -s opencode-dev 'bun dev'`.
-- Capture the current TUI output with: `tmux capture-pane -pt opencode-dev`.
-- Stop the session explicitly when done: `tmux kill-session -t opencode-dev`.
+- Use the active harness's managed background terminal or process facility,
+  keep its output reachable, and stop it explicitly when done. `tmux` is one
+  Unix-only option, not the repository-wide process contract.
 
 # Module shape
 
@@ -98,14 +98,26 @@ See `specs/effect/migration.md` for the compact pattern reference and examples.
 
 ## Runtime vs InstanceState
 
-- Use `makeRuntime` (from `src/effect/run-service.ts`) for all services. It returns `{ runPromise, runFork, runCallback }` backed by a shared `memoMap` that deduplicates layers.
+- Use an ordinary Effect service/layer for application services. Use
+  `makeRuntime` (from `src/effect/run-service.ts`) only at an explicit
+  imperative boundary that must enter such a layer from Promise, fork, or
+  callback code; current call sites are evidence for those boundaries, not a
+  facade required around every service.
 - Use `InstanceState` (from `src/effect/instance-state.ts`) for per-directory or per-project state that needs per-instance cleanup. It uses `ScopedCache` keyed by directory — each open project gets its own state, automatically cleaned up on disposal.
 - If two open directories should not share one copy of the service, it needs `InstanceState`.
-- Do the work directly in the `InstanceState.make` closure — `ScopedCache` handles run-once semantics. Don't add fibers, `ensure()` callbacks, or `started` flags on top.
+- Materialize state required by ordinary methods directly in the
+  `InstanceState.make` closure—`ScopedCache` handles run-once semantics. Do not
+  hide required readiness behind another fiber, `ensure()` callback, or
+  `started` flag.
 - Use `Effect.addFinalizer` or `Effect.acquireRelease` inside the `InstanceState.make` closure for cleanup (subscriptions, process teardown, etc.).
-- Use `Effect.forkScoped` inside the closure for background stream consumers — the fiber is interrupted when the instance is disposed.
-- To make a service's `init()` non-blocking, fork `InstanceState.get(state)` at the `init()` call site (e.g. `Effect.forkIn(scope)`), not by forking work inside the `InstanceState.make` closure. Forking inside the closure leaves state incomplete for other methods that read it.
-- `src/project/bootstrap.ts` already wraps every service `init()` in `Effect.forkDetach`, so `init()` is fire-and-forget in production. Keep `init()` methods synchronous internally; the caller controls concurrency.
+- Use `Effect.forkScoped` for genuinely background stream consumers whose
+  incomplete work is not service readiness; the fiber is interrupted when the
+  owning instance is disposed.
+- `src/project/bootstrap.ts` awaits configuration and plugin initialization,
+  then concurrently awaits each service's `init()` materialization. It does not
+  detach those calls. A service that owns continuing background work must bind
+  that work to its own scoped state and return only after the state required by
+  callers is ready.
 
 ## Effect v4 beta API
 

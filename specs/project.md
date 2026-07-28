@@ -1,5 +1,8 @@
 ## project
 
+> **Status — inherited OpenCode design note, not Repa product authority.** This file is retained as evidence about multi-project and worktree mechanics. Its goals and API sketch do not define Repa's learning-space, Session, runtime, or roadmap boundaries; consult root `AGENTS.md`, accepted Repa ADRs/Gates, and `docs/README.md` before applying it.
+> Current Repa authority is indexed by the [documentation map](../docs/README.md).
+
 The goal is to let a single instance of OpenCode run sessions for multiple projects and different worktrees per project.
 
 ### api

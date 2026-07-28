@@ -26,8 +26,11 @@ Session
 
 A `Session` is the long-lived conversation and workspace interaction history.
 A durable `Turn` begins with one admitted user request and groups the resulting
-agent work, including accepted steering, model operations, tool invocations,
-and one terminal outcome.
+agent work, including any explicitly steered learner input promoted into that
+exact running Turn, model operations, tool invocations, and one terminal
+outcome. Here **steer** is a runtime input-delivery operation; it is not
+ADR-0010 retained scoped steering, a durable macro-learning activity, or an
+instruction to classify the request as a new Course or a continuation.
 
 The initial user item and a running Turn are committed before provider work
 begins. A Turn may contain several logical model operations. Model completion

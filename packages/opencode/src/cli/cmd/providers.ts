@@ -257,7 +257,7 @@ export function resolveProviderOptions(input: {
     ).map((item) => ({
       label: item.name,
       value: item.id,
-      hint: item.id === "openai" ? "ChatGPT Plus/Pro or API key" : undefined,
+      hint: item.id === "openai" ? "API key" : undefined,
     })),
     ...input.pluginProviders.map((item) => ({
       label: item.name,
@@ -491,7 +491,7 @@ export const ProvidersLoginCommand = effectCmd({
 
     if (["cloudflare", "cloudflare-ai-gateway"].includes(provider)) {
       yield* Prompt.log.info(
-        "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables. Read more: https://opencode.ai/docs/providers/#cloudflare-ai-gateway",
+        "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables.",
       )
     }
 

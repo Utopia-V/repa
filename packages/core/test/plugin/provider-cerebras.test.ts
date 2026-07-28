@@ -31,7 +31,7 @@ void mock.module("@ai-sdk/cerebras", () => ({
 }))
 
 describe("CerebrasPlugin", () => {
-  it.effect("applies the legacy integration header", () =>
+  it.effect("identifies Repa in the integration header", () =>
     Effect.gen(function* () {
       const catalog = yield* Catalog.Service
       yield* catalog.transform((catalog) => {
@@ -43,7 +43,7 @@ describe("CerebrasPlugin", () => {
       yield* addPlugin()
       expect((yield* catalog.provider.get(ProviderV2.ID.make("cerebras")))?.request.headers).toEqual({
         Existing: "1",
-        "X-Cerebras-3rd-Party-Integration": "opencode",
+        "X-Cerebras-3rd-Party-Integration": "repa",
       })
     }),
   )

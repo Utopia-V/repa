@@ -1,12 +1,15 @@
 # V2 Core Instructions
 
-These notes describe how to work on `packages/core` during the v2 port.
+> **Status — inherited preview-v2 source instructions, not Repa runtime or roadmap authority.** These notes may guide maintenance of the deferred code they describe. They do not authorize continuing the port, enabling v2, or moving released-v1 behavior into Core; the released-v1 execution path remains the accepted baseline unless a Repa ADR or Gate explicitly changes it.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
 
-## Direction
+These notes describe how the inherited OpenCode preview-v2 effort worked on `packages/core`.
 
-Move behavior out of large application services and into plugins. Core services should become small, typed containers that own state, expose simple operations, and trigger hooks where policy or integration-specific logic belongs.
+## Preview-V2 Direction
 
-The target shape is:
+Within that preview design, behavior was intended to move out of large application services and into plugins. Core services were intended to become small, typed containers that own state, expose simple operations, and trigger hooks where policy or integration-specific logic belongs.
+
+The preview target shape was:
 
 - `packages/core` contains domain schemas, typed errors, state containers, events, and plugin hook contracts.
 - Plugins implement provider-specific, config-specific, auth-specific, model-discovery, and generation behavior.

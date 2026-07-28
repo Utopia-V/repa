@@ -2,7 +2,7 @@ import { createStore } from "solid-js/store"
 import { dirname } from "node:path"
 import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Portal, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
-import type { TextareaRenderable } from "@opentui/core"
+import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { useTheme, selectedForeground } from "../../context/theme"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { useSDK } from "../../context/sdk"
@@ -15,6 +15,7 @@ import { getScrollAcceleration } from "../../util/scroll"
 import { useTuiConfig } from "../../config"
 import { REPA_BASE_MODE, useBindings, useCommandShortcut } from "../../keymap"
 import { usePathFormatter } from "../../context/path-format"
+import { isOnceOnlyPermission, permissionPresentation, presentationLines } from "../../util/semantic-presentation"
 
 type PermissionStage = "permission" | "always" | "reject"
 
@@ -107,6 +108,15 @@ function TextBody(props: { title: string; description?: string; icon?: string })
   )
 }
 
+function SemanticBody(props: { lines: readonly string[] }) {
+  const { theme } = useTheme()
+  return (
+    <box paddingLeft={1} gap={1}>
+      <For each={props.lines}>{(line) => <text fg={theme.text}>{line}</text>}</For>
+    </box>
+  )
+}
+
 export function PermissionPrompt(props: { request: PermissionRequest; directory: string }) {
   const sdk = useSDK()
   const sync = useSync()
@@ -116,7 +126,9 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
   const pathFormatter = usePathFormatter()
 
   const session = createMemo(() => sync.data.session.find((s) => s.id === props.request.sessionID))
-  const onceOnly = createMemo(() => props.request.metadata.onceOnly === true)
+  const semantic = createMemo(() => permissionPresentation(props.request))
+  const onceOnly = createMemo(() => isOnceOnlyPermission(props.request))
+  const rejectOnly = createMemo(() => semantic().type === "invalid")
 
   const input = createMemo(() => {
     const tool = props.request.tool
@@ -192,6 +204,30 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
           const info = () => {
             const permission = props.request.permission
             const data = input()
+            const projected = semantic()
+
+            if (projected.type === "valid") {
+              return {
+                icon: "◇",
+                title: projected.value.title,
+                body: <SemanticBody lines={presentationLines(projected.value)} />,
+              }
+            }
+
+            if (projected.type === "invalid") {
+              return {
+                icon: "!",
+                title: "Permission scope unavailable",
+                body: (
+                  <SemanticBody
+                    lines={[
+                      "Repa could not verify the exact consequential scope for this request.",
+                      "The request can only be rejected; no approval will be inferred.",
+                    ]}
+                  />
+                ),
+              }
+            }
 
             if (permission === "edit") {
               const raw = props.request.metadata?.filepath
@@ -399,10 +435,13 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
               title="Permission required"
               header={header()}
               body={current.body}
+              scrollable={semantic().type !== "absent"}
               options={
-                onceOnly()
-                  ? { once: "Allow once", reject: "Reject" }
-                  : { once: "Allow once", always: "Allow always", reject: "Reject" }
+                rejectOnly()
+                  ? { reject: "Reject" }
+                  : onceOnly()
+                    ? { once: "Allow once", reject: "Reject" }
+                    : { once: "Allow once", always: "Allow always", reject: "Reject" }
               }
               escapeKey="reject"
               fullscreen
@@ -527,6 +566,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   options: T
   escapeKey?: keyof T
   fullscreen?: boolean
+  scrollable?: boolean
   onSelect: (option: keyof T) => void
 }) {
   const { theme } = useTheme()
@@ -539,6 +579,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   })
   const narrow = createMemo(() => dimensions().width < 80)
   const fullscreenHint = useCommandShortcut("permission.prompt.fullscreen")
+  let scroll: ScrollBoxRenderable | undefined
 
   useBindings(() => ({
     mode: REPA_BASE_MODE,
@@ -621,6 +662,46 @@ function Prompt<const T extends Record<string, string>>(props: {
         : []),
       ...(props.escapeKey ? tuiConfig.keybinds.get("app.exit") : []),
       ...(props.fullscreen ? tuiConfig.keybinds.get("permission.prompt.fullscreen") : []),
+      ...(props.scrollable
+        ? [
+            {
+              key: "up",
+              desc: "Scroll permission scope up",
+              group: "Permission",
+              cmd: () => scroll?.scrollBy(-1),
+            },
+            {
+              key: "down",
+              desc: "Scroll permission scope down",
+              group: "Permission",
+              cmd: () => scroll?.scrollBy(1),
+            },
+            {
+              key: "pageup",
+              desc: "Scroll permission scope one page up",
+              group: "Permission",
+              cmd: () => scroll?.scrollBy(-(scroll?.height ?? 1)),
+            },
+            {
+              key: "pagedown",
+              desc: "Scroll permission scope one page down",
+              group: "Permission",
+              cmd: () => scroll?.scrollBy(scroll?.height ?? 1),
+            },
+            {
+              key: "home",
+              desc: "Scroll permission scope to the beginning",
+              group: "Permission",
+              cmd: () => scroll?.scrollTo(0),
+            },
+            {
+              key: "end",
+              desc: "Scroll permission scope to the end",
+              group: "Permission",
+              cmd: () => scroll?.scrollTo(scroll?.scrollHeight ?? 0),
+            },
+          ]
+        : []),
     ],
   }))
 
@@ -658,7 +739,23 @@ function Prompt<const T extends Record<string, string>>(props: {
             {props.header}
           </box>
         </Show>
-        {props.body}
+        <Show when={props.scrollable} fallback={props.body}>
+          <scrollbox
+            ref={(value: ScrollBoxRenderable) => {
+              scroll = value
+            }}
+            flexGrow={1}
+            scrollAcceleration={getScrollAcceleration(tuiConfig)}
+            verticalScrollbarOptions={{
+              trackOptions: {
+                backgroundColor: theme.backgroundPanel,
+                foregroundColor: theme.borderActive,
+              },
+            }}
+          >
+            {props.body}
+          </scrollbox>
+        </Show>
       </box>
       <box
         flexDirection={narrow() ? "column" : "row"}
@@ -693,6 +790,11 @@ function Prompt<const T extends Record<string, string>>(props: {
           </For>
         </box>
         <box flexDirection="row" gap={2} flexShrink={0}>
+          <Show when={props.scrollable}>
+            <text fg={theme.text}>
+              {"↑↓/pg/home/end"} <span style={{ fg: theme.textMuted }}>scroll scope</span>
+            </text>
+          </Show>
           <Show when={props.fullscreen}>
             <text fg={theme.text}>
               {fullscreenHint()} <span style={{ fg: theme.textMuted }}>{hint()}</span>

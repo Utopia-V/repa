@@ -23,7 +23,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Run opencode
         uses: anomalyco/opencode/github@2c14fc5586fe0b88e5c04732d2e846769cc35671 # latest

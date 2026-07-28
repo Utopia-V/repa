@@ -1,222 +1,78 @@
 # Repa documentation
 
-Status: Gates 0–16 are closed. Gate 12's maintainer grill, contract/theory, and
-implementation/evidence are accepted by the retained independent reviewer;
-all six contract findings and all eight implementation findings are closed.
-Maintainer-authorized implementation commit
-`80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d` fixes the accepted snapshot and
-formally closes Gate 12. Gate 13's maintainer grill is complete. Independent
-contract/theory review run `gate13-whole-20260719-01` returned `Accept` after
-closing `G13-CT-001` through `G13-CT-006`. The accepted contract is
-implementation authority. The maintainer authorized implementation and the
-whole-Gate review loop. The retained reviewer accepted implementation/evidence
-after closing `G13-IE-001` through `G13-IE-003` and found no new
-acceptance-changing defect. Maintainer-authorized implementation commit
-`5e762f8336b33d7d8365c9bc9204b52f52eba114` fixes the accepted snapshot and
-formally closes Gate 13. Gate 14's maintainer grill is complete. Its
-[learner-navigation contract](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)
-was accepted by whole-Gate independent review run
-`gate14-whole-20260719-01` after closing `G14-CT-001` through
-`G14-CT-005` and both nonblocking strengthenings. The contract is
-implementation authority. The first implementation/evidence review returned
-`Revise` with `G14-IE-001` and `G14-IE-002`. The retained reviewer closed both
-repairs, then returned `Revise` with `G14-IE-003`, a SQLite replacement path
-around protected navigation receipts. It closed that repair, then returned
-`Revise` with `G14-IE-004`, the symmetric incoming-navigation replacement of a
-legacy receipt ID. It closed that repair, then returned `Revise` with
-`G14-IE-005`, covering hidden-`rowid` replacement on all three append-only
-authorities and explicit transition conflict replacement. Its final closure
-turn ended in external `systemError` without a verdict or closure authority.
-Independent replacement review run `gate14-replacement-20260720-01` reviewed
-the complete current candidate, independently confirmed `G14-IE-001` through
-`G14-IE-005` resolved,
-and returned `Accept` with no acceptance-changing finding. Maintainer-authorized
-implementation commit `a6b542d59879f0a4b1111eaef4ad23e446b473d0` fixes the
-accepted snapshot and formally closes Gate 14. Gate 15's maintainer grill is
-complete. Whole-Gate review run `gate15-whole-20260720-01` returned `Revise` on
-its first contract/theory pass with `G15-CT-001` through `G15-CT-007`; the same
-reviewer's closure pass closed all seven and returned `Revise` solely with
-`G15-CT-008`. The retained reviewer closed that final repair and returned
-`Accept`. The complete contract is implementation authority. Its first
-implementation/evidence pass returned `Revise` with `G15-IE-001` through
-`G15-IE-005`: a recaptured learner-admission time, transaction-final retained
-effect integrity, lifecycle fixtures, predecessor-order counterexamples, and
-retained-specific rollback injection. Its first closure pass closed
-`G15-IE-001` and `G15-IE-003`–`G15-IE-005`, but kept `G15-IE-002` open because
-an unsealed correction could suppress its sealed predecessor while a lower-
-revision cut was inserted in the same transaction. The second repair requires
-every transition through the cut revision to be sealed and lets only a sealed,
-revision-bounded successor suppress its predecessor. The retained reviewer
-accepted that repair, closed `G15-IE-002`, and found no new acceptance-changing
-defect. Maintainer-authorized implementation commit
-`03ea74ec4f760c83060a6da4fa26ecb9519d1468` fixes the accepted snapshot and
-formally closes Gate 15. The
-[Gate 16 learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)
-maintainer grill is complete. Its recorded maintainer decisions are accepted
-product meaning. Whole-Gate review run `gate16-whole-20260721-01` returned
-`Revise`, then closed `G16-CT-001` through `G16-CT-004` and returned one new
-`G16-CT-005` Course-withdrawal defect. The same reviewer closed that repair and
-returned `Accept`. The retained reviewer then closed `G16-IE-001` through
-`G16-IE-013`, accepted the deterministic implementation/evidence candidate,
-and finally closed `G16-IE-U01` after the bounded real `openai/gpt-5.5`
-qualification passed through the production Session, Turn, permission,
-learning-command, receipt, effect, and acknowledgement path. No
-acceptance-changing finding or material unknown remains. The accepted
-implementation snapshot in this change formally closes Gate 16.
-Gate 11 remains independently accepted at implementation commit `bdbfa0c05`;
-Gate 12 realizes the existing Roadmap 09 boundary without changing roadmap
-topology.
+Status: the bounded pre-Gate-17 first-principles audit closed on 2026-07-28
+after two fresh read-only passes accepted the reconstructed authority chain,
+macro-semantic separation, default product composition, inherited-material
+classification, and working-tree accounting with no P0-P3 finding. The audit
+began because ordinary discussion had collapsed new-versus-continuing Course
+identity, Session continuation, bounded context reconstruction, a next-Turn
+draft, and an exact running-Turn steer. Closing it means those distinctions and
+their owners can now be rebuilt from the current tree; it does not mean the
+project is permanently healthy, release-ready, or authorized to implement
+Gate 17. Its accepted local findings still scoped-reopen Gate 5 at its active
+build, outward-identity, permission, and product-surface boundaries; Gate 6 at
+trigger migration/version parity; Gate 8 at the current shared-substrate and
+TUI-result boundaries; Gates 10/11/14/15 at their primary-TUI
+implementation/evidence boundaries; and Gate 16 for both TUI and
+natural-language admission defects.
+
+Gate 17 has a maintainer-decision draft, but its engineering contract is
+incomplete, has not passed independent contract/theory review, and authorizes
+no implementation. On 2026-07-28, corrective implementation candidates for
+Gate 5 identity, build, and permission behavior; Gate 6/8 database and
+settlement ownership; and Gate 8/10/11/14/15/16 primary-TUI presentation were
+independently accepted in the unstaged working tree. They are not new close
+commits, so the affected Gates remain scoped-reopened pending durable
+integration. Gate 16's natural-language admission correction is still only a
+proposed contract amendment awaiting fresh separate top-level review. The
+current control point is therefore durable integration of the accepted
+cross-Gate corrective candidates plus Gate 16's separate contract/theory
+review. Gate 17 grill and derivation remain paused behind that barrier.
+Documentation reconciliation and inherited-material classification are
+current evidence, not proof against future counterexample. “Accepted” records
+a decision and its provenance; it is not a correctness axiom.
+The live method and findings are recorded in the
+[pre-Gate-17 global hazard audit](research/pre-gate-17-global-hazard-audit-2026-07-27.md).
+
+This file is the sole owner of volatile Gate disposition and the current
+control point. Stable product meaning belongs to the foundation and accepted
+ADRs; architecture owns the current system boundaries; Roadmap 09 owns Gate
+topology; the fork ledger owns exact close and correction provenance.
+These are revision owners, not immunity from counterexample, contradictory
+evidence, or a causally stronger design derivation.
+
+For a current product or engineering question, begin with this map and follow
+the owning document named here. A full-tree search discovers possible evidence;
+it does not establish authority. Inherited and non-current paths are classified
+in the [inherited-material index](inherited/README.md).
 
 ## Active Gate map
 
-| Gate                                                                                                                      | Product-level result                                                                                                                                                                     | Current disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0. Oracle freeze                                                                                                          | Preserved and classified the pre-fork learning product as evidence rather than a runtime dependency.                                                                                     | Closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 1. Lineage                                                                                                                | Established the exact full-history MIT fork of OpenCode `v1.17.18`.                                                                                                                      | Closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 2/2A. Windows baseline                                                                                                    | Recorded the inherited Windows failure truthfully, then corrected only its invalid test oracle.                                                                                          | Closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 3. Repa identity                                                                                                          | Isolated the Repa executable, paths, configuration, environment, and database identity from OpenCode state.                                                                              | Closed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| 4. Learning-first composition                                                                                             | Gives legitimate released-v1 model calls one Repa product composition and narrow program-owned internal operations.                                                                      | Closed again for the historical three-purpose checkpoint. Gate 11's independently accepted owner correction is implemented at `bdbfa0c05` as the stricter fourth `representation` purpose. Historical carrier, recovery, provider, and Session-title concurrency evidence remains unchanged.                                                                                                                                                                                                                                  |
-| 5. Local product surface                                                                                                  | Makes the current terminal product truthful while retaining useful local capabilities and harmless hibernated source.                                                                    | Closed again. Public preview-v2 execution and its runners are absent from production while their implementation remains hibernated; registered provider and credential surfaces use the truthful outward projection; ambient hosted/Desktop CORS grants are gone; the existing updater hibernation remains intact.                                                                                                                                                                                                            |
-| 6. Native database admission                                                                                              | Owns Repa database admission, forward migration lineage, and the single state-owner boundary.                                                                                            | Closed again. Only a recovered zero-page acquisition state may initialize; arbitrary sidecars cannot promote a page-backed identityless database, and dangling final file symlinks refuse before SQLite open.                                                                                                                                                                                                                                                                                                                 |
-| 7. Course and Course View authority                                                                                       | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal.                                        | Closed. Its contract, schema, migration, implementation, focused evidence, and corrected Gate 6 runtime prerequisite are accepted.                                                                                                                                                                                                                                                                                                                                                                                            |
-| 8. Learning-command settlement                                                                                            | Binds trusted causal and invocation identity to one real Course-owned command.                                                                                                           | Closed. Its [contract and implementation record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md), migration, settlement substrate, Session lifecycle integration, and focused evidence are independently accepted.                                                                                                                                                                                                                                                                                  |
-| 9. [Source and artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md)                | Gives logical sources stable identity, exact observed content revisions, location history, availability, and provenance without making them Course-owned.                                | Closed. Its contract, Core authority, schema, migration, exact correction/read behavior, and focused evidence are independently accepted at implementation commit `41db7c292`.                                                                                                                                                                                                                                                                                                                                                |
-| 10. [Content-root authority and bounded observation](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md) | Gives real local-file discovery and observation an explicitly approved path/object authority before exact bytes enter Gate 9 records.                                                    | Closed. Its contract, ContentRoot authority, local-NTFS verifier, project-origin quarantine, bounded observation, mutation authority, schema/migration, and focused evidence are independently accepted at implementation commit `fb6ed5763`.                                                                                                                                                                                                                                                                                 |
-| 11. [Readable representation lineage](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md)       | Gives one exact Artifact Revision an optional immutable readable derivation with truthful conversion, drift, availability, exact bounded reads, and cleanup semantics.                   | Closed at implementation commit `bdbfa0c05`. Contract/theory and implementation/evidence are independently accepted; all twelve contract findings and all three implementation findings are closed. Accepted evidence includes the inherited OpenAI OAuth configured-model path and both packaged Windows families. The boundary includes one local PDF text-layer producer plus one optional user-configured multimodal-model producer and no baseline Repa-owned OCR. Current Roadmap 09 preserves its number and boundary. |
-| 12. [Durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)                         | Makes one admitted learner or synchronous delegated request a durable finite Turn with exact model/tool membership, frozen budgets, child lineage, and one terminal outcome.             | Closed at implementation commit `80f5fa30a`. The same reviewer accepted contract/theory and implementation/evidence after closing `G12-CT-001`–`G12-CT-006` and `G12-IE-001`–`G12-IE-008`. Accepted evidence includes direct-SQL authority attacks, root/child handoff races, non-escalating nested delegation, exact visible-Turn routing, destructive-lifecycle rollback/retention, fork chronology, and the reconciled Windows packaged lifecycle oracle.                                                                  |
-| 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)              | Adds independent immutable material outlines/selectors bound to exact revisions, plus optional neutral many-to-many alignment to exact Course membership.                                | Closed at implementation commit `5e762f833`. Contract/theory and implementation/evidence were accepted by independent review run `gate13-whole-20260719-01`; `G13-CT-001` through `G13-CT-006` and `G13-IE-001` through `G13-IE-003` are closed, with no new acceptance-changing implementation finding.                                                                                                                                                                                                                      |
-| 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)           | Adds an optional learner-controlled default Course preference and one independent route anchor per Course without promoting either into current focus, completion, evidence, or mastery. | Closed at implementation commit `a6b542d59`. Contract/theory was accepted by `gate14-whole-20260719-01`. After the retained implementation reviewer closed `G14-IE-001`–`G14-IE-004`, raised `G14-IE-005`, and later ended in `systemError` without a closure verdict, independent replacement review `gate14-replacement-20260720-01` accepted the complete implementation/evidence candidate and independently confirmed all five findings resolved.                                                                  |
-| 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)                   | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, versioned, correctable Tutor-policy state.                                             | Closed at implementation commit `03ea74ec4`. Contract/theory and implementation/evidence were accepted by retained review run `gate15-whole-20260720-01` after `G15-CT-001`–`G15-CT-008` and `G15-IE-001`–`G15-IE-005` were closed. Accepted integrity includes a transaction-final seal, a complete sealed cut prefix, seal-backed membership, and revision-bounded successor suppression. |
-| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)                    | Preserves learner-owned intended outcomes across Sessions with explicit admission, revision, correction, optional conditions and target time, and learner-authorized lifecycle meaning. | Closed. Retained whole-Gate review run `gate16-whole-20260721-01` accepted contract/theory and implementation/evidence after closing `G16-CT-001`–`G16-CT-005`, `G16-IE-001`–`G16-IE-013`, and the bounded real-provider qualification `G16-IE-U01`. Deterministic evidence remains authoritative for state, authorization, replay, recovery, and negative behavior; the accepted `openai/gpt-5.5` run qualifies model-facing usability and the production tool path. |
+| Gate | Accepted result | Current disposition |
+| --- | --- | --- |
+| 0. Oracle freeze | Preserved and classified the pre-fork product as immutable evidence, not a runtime dependency. | Closed. |
+| 1. Lineage | Established the full-history MIT fork of OpenCode `v1.17.18`. | Closed. |
+| 2/2A. Windows baseline | Recorded the inherited Windows failure and corrected only the invalid shell-test oracle. | Closed. |
+| 3. Repa identity | Isolated executable, paths, configuration, environment, and database identity from OpenCode state. | Closed. |
+| 4. [Learning-first composition](research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md) | Separates interactive Repa samples from narrow trusted internal model operations. | Closed at corrected implementation commit `df61b7adb`. The later `representation` carrier extension belongs to Gate 11 and is fixed at `bdbfa0c05`. |
+| 5. [Inherited product-surface disposition](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md) | Disconnects excluded inherited product behavior while retaining independently useful local capabilities and harmless hibernated source. | **Scoped-reopened pending durable integration.** The current unstaged candidate makes terminal-only the ordinary build, removes reachable upstream help/schema/network identity and the default preview-v2 `customize-opencode` skill, keeps generic skill mechanisms and OpenAI API-key use while hibernating unqualified ChatGPT OAuth, and independently closes restricted-Agent, generated-identifier, ordered-permission, and prototype-key privilege counterexamples. Commit `86332c246` remains historical provenance; dormant upstream publish/install paths still block a later release-readiness claim. |
+| 6. [Native database admission](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md) | Owns Repa database admission, migration lineage, and the single state-owner boundary. | **Scoped-reopened pending durable integration.** The current unstaged candidate freezes historical trigger/schema evidence, adds an explicit v12 migration and manifest, upgrades a real six-domain v11 fixture, and reuses domain-owned recursive validators during migration. Its original reviewer accepted the correction. Historical corrected implementation remains fixed at `34588b041`. |
+| 7. [Course and Course View authority](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md) | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible withdrawal. | Closed at implementation commit `3bd6eb9d4`. |
+| 8. [Learning-command settlement](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md) | Binds trusted occurrence and physical invocation identity to one real Course-owned semantic effect. | **Scoped-reopened pending durable integration.** The original Course proof at `293ff6892` remains accepted. The current unstaged candidate restores a domain-neutral physical ledger, returns typed settlements only after domain-owned recursive validation, and persists one exact semantic result that remains visible after provider continuation fails; the original database and TUI reviewers accepted those corrections. |
+| 9. [Source and Artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md) | Adds stable Artifact identity, exact observed revisions, location and availability history, provenance, and correction. | Closed at implementation commit `41db7c292`. |
+| 10. [Content-root authority](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md) | Adds approved roots, bounded observation, separate mutation authority, and exact Gate 9 admission. | **Scoped-reopened pending durable integration.** The current unstaged shared presenter shows the exact canonical anchor, relative path, operation, one-shot scope, rights, and warning before approval and keeps the committed result visible afterward. Its original TUI reviewer accepted the correction. Commit `fb6ed5763` remains historical provenance; the domain authority is retained. |
+| 11. [Readable representation lineage](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md) | Adds optional immutable readable derivations with truthful conversion, drift, availability, and bounded-read semantics. | **Scoped-reopened pending durable integration.** The current unstaged shared presenter makes the typed conversion outcome default-visible in TUI and direct-run, while a domain-owned v12 failure-code tuple now keeps the TypeScript API, validator, and trigger vocabulary in parity. Independent review accepted both corrections. Commit `bdbfa0c05` remains the historical closed snapshot. |
+| 12. [Durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md) | Makes one admitted root request begin a finite durable Turn that may later admit exact-target steers, with exact model/tool membership, budgets, child lineage, terminal truth, and recovery. | Closed at implementation commit `80f5fa30a`. Drafts queued for the next Turn remain unadmitted input-delivery state, not macro-learning state. |
+| 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md) | Adds immutable revision-bound material outlines/selectors and optional neutral alignment to exact Course membership. | Closed at the domain-authority boundary at implementation commit `5e762f833`. Hostile arbitrary-SQL evidence is reclassified, cross-Gate trigger migration evidence requires correction, and Gate 18 must not use the observation-writing current-use resolver as a pure context read. |
+| 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md) | Adds a learner-controlled default Course preference and independent exact per-Course route anchors. | **Scoped-reopened pending durable integration.** The current unstaged presenter derives exact readable Course/View/Revision/Item locators from owner snapshots and effects, shows IDs only when needed to disambiguate, and replays the stored historical acknowledgement rather than recomputing it from current state. The original TUI reviewer accepted the correction. Commit `a6b542d59` remains historical provenance. |
+| 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md) | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, correctable policy state. | **Scoped-reopened pending durable integration.** The current unstaged shared presenter preserves committed create/replace/retract instruction, scope, normalized expiry/timezone, state/version, relation, and correction guidance across TUI, direct-run, replay, and later provider failure. The original TUI reviewer accepted the correction. Commit `03ea74ec4` remains historical provenance. |
+| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md) | Intended to preserve learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning. | **Reopened.** The current unstaged TUI correction was independently accepted: exact owner-produced Goal meaning is shown before approval and after commit without exposing opaque IDs. The natural-language defect remains open; its proposed amendment would remove SQL phrase forensics and internal-ID input but still awaits fresh separate top-level contract/theory review. Commit `69433fc78` is historical provenance, not current implementation acceptance. |
+| 17. [Natural-language learning bootstrap draft](research/opencode-fork-gate-17-natural-language-learning-bootstrap-2026-07-22.md) | Candidate boundary for a deliberate natural-language learning bootstrap that may use existing domain commands and teach in the same Turn. | Maintainer grill remains paused. The prior mandatory-`/learn` decision is under first-principles revalidation because the prefix neither resolves new/continue nor owns macro interruption or domain authorization. Request-bound creation/replay, atomic-versus-staged composition, truthful partial settlement, TUI acknowledgement, anchor consequences, and remote-source provenance are required contract inputs; Session topology, queue/steer, macro continuation, and detour/rejoin remain outside this Gate. Implementation is unauthorized. |
 
-Gate numbers record engineering acceptance; they are not a total dependency
-chain. Gate 5 now owns the stable reachable model-carrier set that Gate 4 must
-audit and the state-owning entrypoint set that Gate 6 must cover. Gate 7 has a hard
-dependency on Gate 6's database identity, migration lineage, and one-owner
-runtime invariant, not on a particular lock implementation. The latest Gate 6
-correction restored that runtime prerequisite without reopening Gate 7's own
-contract or implementation.
-
-The database correction now proves initialization from an empty zero-page
-acquisition state rather than from sidecar presence and rejects an unresolved
-final file symlink before SQLite open. Independently, the product-surface
-correction stabilized Gate 5, and Gate 4 has now closed its audit of the final
-released-v1 carrier set. The same independent reviewer accepted both the
-corrected contract/theory and the implementation/evidence. The historical Gate
-4 result separates interactive Agent calls from three trusted internal stream
-purposes; Gate 11's accepted correction is now fixed by implementation commit
-`bdbfa0c05` as the fourth `representation` purpose. Gate 4 rejects
-privileged workflow execution before an internal sample begins, preserves
-explicit hidden-Agent admission without exposing it in discovery, and makes
-profile-loss and recovered-Session failure behavior explicit. Session title
-eligibility and every full-row Session patch now share one per-Session
-serialization owner, closing both stale-snapshot overwrite paths. Gate 8 now
-binds one trusted interactive model invocation and stable admitted learner
-occurrence to an exact Course-owned Revision acceptance. Its shared substrate
-separates physical replay from semantic effect identity, settles exact
-transaction-first Parts, events, and results, preserves truthful
-compaction/fork/deletion lineage, and closes Session lifecycle races without a
-second runner. Independent top-level reviews accepted both its contract/theory
-and implementation/evidence.
-
-Gate 7 now gives the native LearnerHome database its first learning authority.
-Repa can persist several independent Courses; each Course may exist without a
-View, retain stable View identities with immutable linear revisions, preserve
-Course-owned item identity through a closed preserve/split/merge algebra, and
-optionally select one exact eligible Revision. Versioned withdrawal,
-restoration, selection, bounded reads, and same-snapshot composite reads
-enforce the accepted concurrency and recovery rules. The implementation
-remains deliberately below Session, model-command, material, learner-record,
-Agenda, context, and terminal integration.
-
-Accepted grill result so far: define the complete logical skeleton across the
-major learning authorities before Gate decomposition, while leaving full
-physical schemas and local implementation details to the Gates that own them.
-Durable learning state also has an independent lifecycle from Session
-transcripts: ordinary conversation deletion preserves a minimal causal receipt
-and does not cascade into Course, material, learner, Agenda, route, or policy
-state.
-Model-issued learning writes share a narrow causal-receipt and physical-call
-settlement substrate, while every learning authority retains ownership of its
-semantic effect identity and state transitions.
-
-The dependency-guided Gate 7–23 decomposition in Roadmap 09 is accepted. Gates
-7–16 are closed. Gate 15's maintainer grill is complete. Its first independent
-contract/theory verdict was `Revise`; the same reviewer closed those seven
-findings and raised only `G15-CT-008`, then closed that final repair and
-returned `Accept`. The complete contract is implementation authority.
-Its first implementation/evidence pass returned `Revise` with `G15-IE-001`
-through `G15-IE-005`; the first closure pass closed four and kept only
-`G15-IE-002` open. The second integrity repair and its direct-SQL correction
-counterexample passed; the retained reviewer closed the final finding and
-returned `Accept` with no new acceptance-changing defect. Commit `03ea74ec4`
-fixes the accepted implementation snapshot and formally closes Gate 15. Gate
-16's maintainer grill is complete; its accepted Goal decisions and cross-Gate
-planning correction now have a complete proposed engineering contract.
-Whole-Gate review run `gate16-whole-20260721-01` returned `Revise` with four
-contract findings, closed all four on retest, and returned a new
-Course-withdrawal finding `G16-CT-005`. The same reviewer closed that repair and
-returned `Accept`. Its implementation/evidence passes then found and closed
-`G16-IE-001` through `G16-IE-013`; the same reviewer accepted the deterministic
-candidate, and the final bounded real-provider pass closed `G16-IE-U01` without
-reopening any deterministic finding. Gate 16 is therefore closed by the
-accepted implementation snapshot in this change.
-Gate 14's maintainer grill is complete and
-its proposed contract was accepted by independent whole-Gate review run
-`gate14-whole-20260719-01` after all five acceptance-changing findings and both
-nonblocking strengthenings were closed. The first implementation/evidence
-review found two localized blockers, `G14-IE-001` and `G14-IE-002`; the same
-reviewer closed both repairs and then found `G14-IE-003`, an SQLite conflict
-replacement path around receipt immutability. It closed that repair and then
-found `G14-IE-004`, the reverse path where incoming navigation could consume a
-legacy receipt ID. It closed that repair and found `G14-IE-005`, the remaining
-hidden-`rowid` and transition conflict-replacement surfaces. The local
-`WITHOUT ROWID`/transition-guard repair received complete independent
-implementation/evidence review under replacement run
-`gate14-replacement-20260720-01`, which returned `Accept`, independently
-confirmed `G14-IE-001` through `G14-IE-005` resolved, and found no
-acceptance-changing defect. The failed retained review task returned no verdict
-or closure authority. Commit `a6b542d59` fixes the independently accepted
-snapshot and formally closed Gate 14 without starting Gate 15 at that commit.
-Gate 12's grill, contract/theory, implementation, and evidence
-are independently accepted after closing all contract and implementation
-findings. Gate 13's maintainer grill is complete; its first independent
-contract/theory review returned `Accept` after closing all six findings. The
-accepted contract is implementation authority. A maintainer-authorized
-implementation/evidence candidate received three valid localized findings; the
-retained reviewer accepted their repairs and the complete implementation/evidence
-layer. Commit `5e762f833` fixed that accepted Gate 13 snapshot before Gate 14
-began.
-The 2026-07-17 global audit preserved Gate 11 and replaced the
-then-unstarted route after it with Gates 12–23. The revised route adds durable Turn truth,
-natural-language bootstrap, retained steering, Learner Goal, learning-native
-terminal inspection/correction, and final integrated product acceptance while
-keeping selective deep deletion in an explicit post-baseline Data Lifecycle
-capability.
-
-Gate 7 implements the accepted Course and View authority. A Course may exist before
-any honest Course View is available instead of forcing a placeholder route. A
-View is a stable route-strategy identity with immutable revisions, and the
-working selection pins one exact eligible revision rather than following new
-revisions automatically. Candidate, historical, and working are derived per
-Revision rather than stored View lifecycles. Item continuity uses a closed
-preserve/split/merge algebra and exact source membership when another View
-reuses an item. Ordinary removal is reversible withdrawal; every rejection or
-withdrawal that can race with working selection checks the exact target and its
-independent version in the same transaction. Gate 7 records only
-application-bound authorship basis. Gate 8 adds a durable causal receipt for one
-exact non-null acceptance command without changing that creation provenance.
-Non-null withdrawal replacements satisfy the same target-version checks as
-ordinary selection, closing the remaining ABA path. Collection reads are
-cursor-bounded and stably ordered, and multi-query domain reads observe one
-database snapshot rather than assembling impossible mixed states.
-
-This file is the sole owner of volatile active-work status. `AGENTS.md` and the
-roadmap contain stable policy and links rather than copied “next task” state.
-
-This directory is the normative documentation spine carried into the production
-fork. It deliberately excludes the old runtime, bulk research narrative, and
-legacy labs.
+Gate numbers are maintainer-facing acceptance units, not a claim that every
+later Gate depends on every earlier one. Exact close commits, review runs,
+reopen chains, and evidence qualifications live in the
+[fork ledger](fork-ledger.md), not in this status map.
 
 ## Product and architecture
 
@@ -224,19 +80,24 @@ legacy labs.
 - [System architecture](architecture/00-system-architecture.md)
 - [Native learning data model](architecture/01-native-learning-data-model.md)
 - [One-time fork roadmap](roadmap/09-one-time-opencode-fork-baseline.md)
-- [Fork provenance and gate ledger](fork-ledger.md)
-- [Gate 4 learning-first composition record](research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md)
-- [Gate 5 terminal-only surface record](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
-- [Gate 6 native database-admission record](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
-- [Passed Gate 7 Course and Course View authority record](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md)
-- [Passed Gate 8 learning-command settlement record](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md)
-- [Passed Gate 9 source and artifact authority record](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md)
-- [Passed Gate 10 content-root authority and bounded observation record](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md)
-- [Passed Gate 11 readable representation lineage record](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md)
-- [Gate 12 durable Turn lifecycle record](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)
-- [Gate 13 Material Map and Course alignment record](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)
-- [Gate 14 learner navigation continuity record](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)
-- [Gate 15 retained scoped steering record](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)
+- [Fork provenance and Gate ledger](fork-ledger.md)
+
+## Gate records
+
+- [Gate 4 learning-first composition](research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md)
+- [Gate 5 inherited product-surface disposition](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md)
+- [Gate 6 native database admission](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md)
+- [Gate 7 Course and Course View authority](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md)
+- [Gate 8 learning-command settlement](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md)
+- [Gate 9 source and Artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md)
+- [Gate 10 content-root authority](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md)
+- [Gate 11 readable representation lineage](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md)
+- [Gate 12 durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md)
+- [Gate 13 Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)
+- [Gate 14 learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)
+- [Gate 15 retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)
+- [Gate 16 learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)
+- [Gate 17 natural-language learning bootstrap draft](research/opencode-fork-gate-17-natural-language-learning-bootstrap-2026-07-22.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions
@@ -254,18 +115,26 @@ legacy labs.
 - [ADR-0013: conditional current-purpose composition](decisions/0013-conditional-current-purpose-composition.md)
 - [ADR-0014: one-time OpenCode fork](decisions/0014-one-time-opencode-fork.md)
 
-Superseded ADRs 0001 and 0011 remain in the historical oracle and are not active
-instructions.
+Superseded ADRs 0001 and 0011 remain historical evidence:
+
+```powershell
+git show repa-prefork-oracle:docs/decisions/0001-opencode-reference-strategy.md
+git show repa-prefork-oracle:docs/decisions/0011-single-process-tutor-loop-over-mature-mechanics.md
+```
 
 ## Historical oracle
 
-The immutable Git tag `repa-prefork-oracle` points to the final pre-fork
-decision record. Read historical evidence without copying it into production:
+The immutable tag `repa-prefork-oracle` identifies the final pre-fork evidence
+tree. Current-fork Gate records are read directly from this checkout; only
+records that actually live in the oracle use `git show <tag>:<path>`.
+
+Useful historical behavior locators:
 
 ```powershell
-git show repa-prefork-oracle:docs/research/<record>.md
+git show repa-prefork-oracle:docs/foundation/03-complete-learning-traces.md
+git show repa-prefork-oracle:docs/roadmap/05-first-dogfood-tutor-loop.md
+git show repa-prefork-oracle:docs/research/experiment-ledger.md
 ```
 
-The tag is evidence, not a runtime dependency. Do not import old source, invoke
-it as a fallback, dual-write its database, or preserve it behind compatibility
-adapters.
+The oracle is not a runtime dependency, migration target, fallback, or
+compatibility contract.

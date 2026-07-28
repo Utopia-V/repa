@@ -22,13 +22,14 @@ import pkg from "../package.json"
 import corePkg from "../../core/package.json"
 import { limitArguments } from "../src/representation/pdf-worker"
 import { pdfFixture } from "../test/fixture/pdf"
+import { embedResearchWebUI } from "./research-options"
 
 const singleFlag = process.argv.includes("--single")
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
-const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+const embedWebUI = embedResearchWebUI(process.argv)
 
 const createEmbeddedWebUIBundle = async () => {
   console.log(`Building Web UI to embed in the binary`)
@@ -54,7 +55,7 @@ const createEmbeddedWebUIBundle = async () => {
   ].join("\n")
 }
 
-const embeddedFileMap = skipEmbedWebUi ? null : await createEmbeddedWebUIBundle()
+const embeddedFileMap = embedWebUI ? await createEmbeddedWebUIBundle() : null
 
 const allTargets: {
   os: string

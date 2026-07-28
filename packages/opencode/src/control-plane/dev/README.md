@@ -1,16 +1,22 @@
-This is a plugin to simulate a remote environment locally. Add this to `.opencode/opencode.jsonc`:
+# Inherited Control-Plane Development Simulator
+
+> **Status — retained source-local test harness, not Repa deployment architecture.** This plugin simulates an inherited remote-workspace flow for focused maintenance. It does not establish a Repa control plane, background service, remote execution product, startup path, build target, or release surface; an accepted Repa ADR or Gate must explicitly admit any such boundary.
+> Current Repa authority is indexed by the [documentation map](../../../../../docs/README.md).
+
+For explicit source-local investigation of this retained harness, add the
+plugin to a temporary Repa config such as `.repa/repa.jsonc`:
 
 ```json
   "plugin": ["../packages/opencode/src/control-plane/dev/debug-workspace-plugin.ts"],
 ```
 
-In a separate terminal, run a separate OpenCode server. This will act like a remote server and the local instance will proxy all requests to it:
+The inherited workflow then ran a separate OpenCode server in another terminal. It acts as a local stand-in for a remote server while the local instance proxies requests to it:
 
 ```
 ./packages/opencode/script/run-workspace-server
 ```
 
-With the plugin install, you can now run OpenCode and create a `debug` workspace type. This will create a "remote" workspace which talks to the second workspace server started above.
+When intentionally exercising this harness, OpenCode can create a `debug` workspace type that talks to the second workspace server started above.
 
 How this works:
 

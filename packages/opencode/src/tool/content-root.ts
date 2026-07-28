@@ -1,7 +1,9 @@
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { waitForAbort } from "@opencode-ai/core/process"
 import { PositiveInt } from "@opencode-ai/core/schema"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { Effect, Schema } from "effect"
+import { LearningCommandPresentation } from "../learning-command/presentation"
 import { Tool } from "./tool"
 
 export const CONTENT_ROOT_TOOL_IDS = [
@@ -55,11 +57,7 @@ const WriteParameters = Schema.Union([
   }),
 ])
 
-export const ContentRootsTool = Tool.define<
-  typeof RootsParameters,
-  Record<string, unknown>,
-  ContentRoot.Service
->(
+export const ContentRootsTool = Tool.define<typeof RootsParameters, Record<string, unknown>, ContentRoot.Service>(
   "content_roots",
   Effect.gen(function* () {
     const roots = yield* ContentRoot.Service
@@ -156,8 +154,7 @@ export const ContentReadTool = Tool.define<typeof ReadParameters, Record<string,
                 output: JSON.stringify(result, null, 2),
               }
             }
-            const textual =
-              observation.mediaType.startsWith("text/") || observation.mediaType === "application/json"
+            const textual = observation.mediaType.startsWith("text/") || observation.mediaType === "application/json"
             return {
               title: observation.relativePath,
               metadata: {
@@ -212,19 +209,46 @@ export const ContentWriteTool = Tool.define<typeof WriteParameters, Record<strin
               }),
               context.abort,
             )
+            const presentation = LearningCommandPresentation.contentWriteResult({
+              ...contentBinding(context),
+              operation: written.result.operation,
+              anchorPath: written.grant.anchor.canonicalPath,
+              relativePath: written.result.relativePath,
+              byteLength: written.result.byteLength,
+              authority: {
+                type: "mutation_grant",
+                grantID: written.grant.id,
+                grantVersion: written.grant.version,
+              },
+            })
+            const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+            if (!projected) return yield* Effect.die("Content write result has no valid semantic projection")
             return {
-              title: written.result.relativePath,
+              title: projected.title,
               metadata: {
+                command: "content_write",
+                commandVersion: 1,
+                outcome: "applied",
+                durablySettled: true,
                 mutationGrantID: written.grant.id,
                 mutationGrantVersion: written.grant.version,
                 operation: written.result.operation,
                 byteLength: written.result.byteLength,
+                anchorPath: written.grant.anchor.canonicalPath,
+                relativePath: written.result.relativePath,
+                ...SemanticPresentation.metadata(presentation),
               },
               output: `Mediated ${written.result.operation} completed under mutation grant ${written.grant.id}.`,
             }
           }
 
           const proposal = yield* abortable(roots.proposeFileMutation(input.filePath), context.abort)
+          const proposalPresentation = LearningCommandPresentation.contentMutationProposal({
+            ...contentBinding(context),
+            operation: proposal.operation,
+            anchorPath: proposal.anchor.canonicalPath,
+            relativePath: proposal.relativePath,
+          })
           yield* abortable(
             context.ask({
               permission: "content_mutation",
@@ -239,6 +263,7 @@ export const ContentWriteTool = Tool.define<typeof WriteParameters, Record<strin
                 lifetime: "this physical tool invocation",
                 rights: [proposal.operation],
                 warning: "This allows one direct file change only. It does not allow Shell, network, or sibling paths.",
+                ...SemanticPresentation.metadata(proposalPresentation),
               },
             }),
             context.abort,
@@ -254,9 +279,30 @@ export const ContentWriteTool = Tool.define<typeof WriteParameters, Record<strin
             }),
             context.abort,
           )
+          const resultPresentation = LearningCommandPresentation.contentWriteResult({
+            ...contentBinding(context),
+            operation: result.operation,
+            anchorPath: proposal.anchor.canonicalPath,
+            relativePath: result.relativePath,
+            byteLength: result.byteLength,
+            authority: { type: "one_shot" },
+          })
+          const projected = SemanticPresentation.projectResultBasis(resultPresentation.basis)
+          if (!projected) return yield* Effect.die("One-shot content write result has no valid semantic projection")
           return {
-            title: result.relativePath,
-            metadata: { onceOnly: true, operation: result.operation, byteLength: result.byteLength },
+            title: projected.title,
+            metadata: {
+              command: "content_write",
+              commandVersion: 1,
+              outcome: "applied",
+              durablySettled: true,
+              onceOnly: true,
+              operation: result.operation,
+              byteLength: result.byteLength,
+              anchorPath: proposal.anchor.canonicalPath,
+              relativePath: result.relativePath,
+              ...SemanticPresentation.metadata(resultPresentation),
+            },
             output: `One-shot mediated ${result.operation} completed. No durable mutation grant was created.`,
           }
         }).pipe(Effect.orDie),
@@ -272,6 +318,16 @@ export function assertExternalContentToolID(id: string, source: "custom" | "mcp"
 function abortable<A, E, R>(effect: Effect.Effect<A, E, R>, signal: AbortSignal) {
   if (signal.aborted) return waitForAbort(signal)
   return Effect.raceFirst(effect, waitForAbort(signal))
+}
+
+function contentBinding(context: Tool.Context) {
+  if (!context.callID) throw new Error("Consequential content write is missing its tool-call binding")
+  return {
+    sessionID: context.sessionID,
+    messageID: context.messageID,
+    callID: context.callID,
+    partID: context.interaction?.candidate.partID ?? context.callID,
+  }
 }
 
 function admitMutation<A, E, R>(effect: Effect.Effect<A, E, R>, signal: AbortSignal): Effect.Effect<A, E | Error, R> {

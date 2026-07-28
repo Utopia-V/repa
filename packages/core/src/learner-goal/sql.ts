@@ -1,10 +1,23 @@
 import { sql } from "drizzle-orm"
-import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, unique } from "drizzle-orm/sqlite-core"
+import {
+  check,
+  foreignKey,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  unique,
+  type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core"
 import type { Course } from "../course"
 import { CourseTable } from "../course/sql"
 import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.sql"
-import type { AuthorizationBasis } from "../learning-command/schema"
+import type { AuthorizationBasis, ReceiptID } from "../learning-command/physical-schema"
+import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../learning-command/sql"
+import type { PartID } from "../v1/session"
+import type { PermissionV1 } from "../v1/permission"
 import type {
   Command,
   EffectID,
@@ -87,16 +100,36 @@ export const LearnerGoalTable = sqliteTable(
   ],
 )
 
-export const LearnerGoalCommitSealTable = sqliteTable(
-  "learner_goal_commit_seal",
+export const LearnerGoalCommandTable = sqliteTable(
+  "learner_goal_command",
   {
-    effect_id: text().$type<EffectID>().primaryKey(),
-    receipt_id: text().notNull(),
-    invocation_part_id: text().notNull(),
+    invocation_part_id: text().$type<PartID>().primaryKey(),
+    semantic_fingerprint: text().notNull(),
+    command_snapshot: text({ mode: "json" }).$type<Command>().notNull(),
+    permission_request_id: text().$type<PermissionV1.ID>(),
+    confirmation_snapshot: text({ mode: "json" }).$type<import("./schema").ConfirmationSnapshot>(),
   },
   (table) => [
-    unique("learner_goal_commit_seal_receipt_unique").on(table.receipt_id),
-    unique("learner_goal_commit_seal_invocation_unique").on(table.invocation_part_id),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("cascade"),
+    check(
+      "learner_goal_command_fingerprint",
+      sql`length(${table.semantic_fingerprint}) = 64 AND ${table.semantic_fingerprint} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check(
+      "learner_goal_command_snapshot",
+      sql`json_valid(${table.command_snapshot}) AND json_type(${table.command_snapshot}) = 'object'`,
+    ),
+    check(
+      "learner_goal_command_permission",
+      sql`${table.permission_request_id} IS NULL OR length(${table.permission_request_id}) > 0`,
+    ),
+    check(
+      "learner_goal_command_confirmation",
+      sql`${table.confirmation_snapshot} IS NULL OR (json_valid(${table.confirmation_snapshot}) AND json_type(${table.confirmation_snapshot}) = 'object')`,
+    ),
   ],
 )
 
@@ -104,7 +137,10 @@ export const LearnerGoalEffectTable = sqliteTable(
   "learner_goal_effect",
   {
     id: text().$type<EffectID>().primaryKey(),
-    commit_seal_id: text().$type<EffectID>().notNull(),
+    commit_seal_id: text()
+      .$type<EffectID>()
+      .notNull()
+      .references((): AnySQLiteColumn => LearnerGoalCommitSealTable.effect_id, { onDelete: "restrict" }),
     occurrence_id: text().$type<OccurrenceID>().notNull(),
     source_order: integer().notNull(),
     semantic_fingerprint: text().notNull(),
@@ -120,9 +156,6 @@ export const LearnerGoalEffectTable = sqliteTable(
     acknowledgement_body: text().notNull(),
   },
   (table) => [
-    foreignKey({ columns: [table.commit_seal_id], foreignColumns: [LearnerGoalCommitSealTable.effect_id] }).onDelete(
-      "restrict",
-    ),
     foreignKey({ columns: [table.occurrence_id], foreignColumns: [AdmittedLearnerOccurrenceTable.id] }).onDelete(
       "restrict",
     ),
@@ -154,6 +187,27 @@ export const LearnerGoalEffectTable = sqliteTable(
       "learner_goal_effect_acknowledgement",
       sql`length(${table.acknowledgement_title}) > 0 AND length(${table.acknowledgement_body}) > 0`,
     ),
+  ],
+)
+
+export const LearnerGoalCommitSealTable = sqliteTable(
+  "learner_goal_commit_seal",
+  {
+    effect_id: text().$type<EffectID>().primaryKey(),
+    receipt_id: text().$type<ReceiptID>().notNull(),
+    invocation_part_id: text().$type<PartID>().notNull(),
+  },
+  (table) => [
+    foreignKey({ columns: [table.effect_id], foreignColumns: [LearnerGoalEffectTable.id] }).onDelete("restrict"),
+    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete(
+      "restrict",
+    ),
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("restrict"),
+    unique("learner_goal_commit_seal_receipt_unique").on(table.receipt_id),
+    unique("learner_goal_commit_seal_invocation_unique").on(table.invocation_part_id),
   ],
 )
 

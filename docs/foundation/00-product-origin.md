@@ -170,8 +170,8 @@ mechanics. Cloud, marketplace, account, sharing, and other group-product
 surfaces are outside the baseline. Existing local coding capabilities may
 remain available when useful, but learning determines the default Agent
 behavior, context, durable meanings, tools, and interface. A coding concept
-does not become a Course, Agenda item, learner observation, or Tutor policy by
-renaming it.
+does not become a Course, Goal, future-attention concern, Assignment, plan,
+learner observation, or Tutor policy by renaming it.
 
 ADR-0012 still centers the application on one local LearnerHome and separate
 learning authorities inside one modular monolith. The inherited Agent loop is
@@ -188,31 +188,28 @@ failure properties.
 
 ## Deliberately unresolved
 
-The following decisions remain open because source research and focused experiments are still required:
+The following decisions remain open because source research and focused
+experiments are still required. Gates 8 and 12 have already settled the native
+occurrence, invocation, Turn, model-operation, tool-membership, and terminal
+outcome boundary; those decisions are not reopened here.
 
-- The exact native mapping from inherited Session/message/part records to an
-  admitted learner Turn, model operation, physical tool invocation, immutable
-  context cut, and terminal outcome. Their distinct meanings and roadmap owner
-  are settled; the Durable Turn Gate decides the least duplicate
-  representation.
 - Richer shapes whose first-boundary consumer has not earned them: broader
   material acquisition and search, richer learner history and evidence,
-  additional Agenda meanings, and long-horizon review authorities. Ownership
-  and separation are settled; future consumers still decide these unproved
-  local shapes.
+  additional agenda-family meanings, and long-horizon review authorities.
+  Ownership and separation are settled; future consumers still decide these
+  unproved local shapes.
 - The exact selection rules and budgets within the accepted compact-current-
   view plus lazy-detail context architecture.
 - Learner-state representation when a demonstrated future action needs more
   than simple progress, task results, and revisits.
 - The task-selection policy and its explanation contract.
-- The domain-specific persistence layout for learning authorities not yet
-  implemented and their corrections. SQLite and Course authority are native;
-  the first Agenda consumer semantics are accepted, while its production
-  persistence remains consumer-earned.
-- The exact learning-native projection and interaction design over inherited
-  terminal mechanics. The roadmap now has an explicit terminal
-  inspect/correct owner; the TUI framework itself is no longer a blank-page
-  choice.
+- Persistence and correction shapes for learning authorities not yet
+  implemented. Course/View, Artifact, ContentRoot, readable Representation,
+  Material Map/alignment, navigation continuity, retained steering, and Goal
+  are already native; learner record, future attention, Assignment, and
+  planning remain consumer-earned.
+- The exact learning-native context projection and inspect/correct interaction
+  design over the inherited Agent mechanics.
 
 Unresolved does not mean "let AI choose during implementation" or "omit this
 from the record." These are explicit, owned future decisions whose first real

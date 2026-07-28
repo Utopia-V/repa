@@ -1,10 +1,20 @@
-# CodeMode Design and Status
+# CodeMode package design
 
-This is the living design and status document for `@opencode-ai/codemode` and its existing V2 OpenCode adapter.
-It records current behavior, intentional boundaries, durable rationale, and material remaining work.
+Status: the generic `@opencode-ai/codemode` package is a private, host-neutral
+workspace library. Repa's released-v1 adapter is an explicit default-off
+experiment behind `REPA_EXPERIMENTAL_CODE_MODE`; the Core adapter described
+below belongs to hibernated OpenCode preview-v2 source. Neither adapter is a
+current Repa product surface or authority for learning-command identity,
+settlement, permission, recovery, or Gate composition.
 
-Completed implementation history, branch names, test counts, and closed findings belong in git, not here. Remove
-completed work instead of preserving checked-off chronology.
+Current Repa authority is indexed by the
+[documentation map](../../docs/README.md).
+
+This document records the generic package behavior and separates the two
+adapter dispositions. A later production consumer must rederive its own nested
+invocation, authorization, output, retry, and durable-effect contract from the
+owning Repa architecture rather than promoting an adapter shortcut into product
+policy.
 
 Detailed package API documentation lives in [README.md](./README.md). OpenAPI-specific follow-ups live in
 [src/openapi/TODO.md](./src/openapi/TODO.md).
@@ -83,39 +93,28 @@ data, tool failures, limits, timeouts, and execution failures.
 Files and other attachment content stay outside the interpreter. A host may collect them while child tools execute and
 attach them to the outer result, but the program receives only the structured tool output.
 
-### V2 OpenCode adapter
+### Adapter dispositions
 
-This section describes the `v2` branch integration. On `dev`, CodeMode is integrated through
-`packages/opencode/src/tool/code-mode.ts`, where nested MCP calls run the `tool.execute.before` and
-`tool.execute.after` plugin hooks.
+The released-v1 Repa adapter lives in
+`packages/opencode/src/tool/code-mode.ts`. It is registered only when the
+default-off `REPA_EXPERIMENTAL_CODE_MODE` flag is enabled. Its nested MCP calls
+run `tool.execute.before` and `tool.execute.after` plugin hooks. That path is an
+isolated experiment, not ordinary product composition.
 
-CodeMode is integrated into V2 through `packages/core/src/tool/registry.ts` and
-`packages/core/src/tool/execute.ts`:
+The hibernated preview-v2 Core no longer contains its former CodeMode
+`execute` adapter. `packages/core/src/tool/registry.ts` now materializes direct
+tool definitions and settles their exact captured registrations; it does not
+group deferred tools into a CodeMode namespace. The generic package therefore
+has no default preview-v2 production consumer.
 
-- Core has one canonical `Tool` representation. Location-scoped producers register direct or deferred tools through
-  `Tools.Service`.
-- Each model step snapshots effective registrations, applies catalog visibility filtering, and exposes direct tools
-  normally.
-- When visible deferred tools exist, Core reserves and materializes one `execute` tool. Grouped deferred tools become
-  CodeMode namespaces instead of flattened model-facing names.
-- Each nested call checks that its captured registration is still current before dispatching it.
-- Authorization and side-effect ordering remain responsibilities of the leaf tool. Catalog visibility is not execution
-  authorization.
-- Structured child output enters the interpreter. File parts are collected host-side and attached to the outer result.
-- Nested call statuses are returned as final `execute` metadata for the TUI.
-- `execute` is the one model-facing tool invocation. Nested calls reuse its invocation context and do not independently
-  run registry hooks or model-output bounding; this keeps complete intermediate structured values available for
-  in-program filtering. The outer `execute` settlement is the single model-output bounding boundary.
-- Core supplies no CodeMode timeout or tool-call limit. User cancellation interrupts the outer invocation and its
-  supervised children; the outer settlement applies Core's normal output-retention policy.
+Any future consumer must derive its own identity, authorization, settlement,
+output-retention, retry, cancellation, and execution-limit contract. The
+removed adapter's former outer-invocation behavior is not a Repa product
+decision.
 
-MCP tools use this canonical path: they register as grouped tools and are deferred while CodeMode is enabled. Existing
-output schemas are preserved in generated signatures. Direct Core tools remain direct and are not ambient globals
-inside CodeMode.
+## Intentionally unsupported by the generic package
 
-## Intentionally Unsupported
-
-These are product boundaries rather than DSL backlog:
+These are package boundaries rather than Repa product decisions:
 
 - Ambient filesystem, process, environment, network, credential, or application access. External work must go through
   supplied tools.
@@ -137,7 +136,7 @@ represent accurately rather than guessing semantics.
 | Use progressive catalog disclosure plus search.          | Large tool sets should not consume the prompt, but every namespace must remain discoverable and speculative search calls should remain valid.                                                                            |
 | Start tool promises eagerly and supervise them.          | This preserves normal call-time parallelism while giving each call run-once settlement and interruption safety.                                                                                                          |
 | Keep files outside the sandbox value space.              | Models should compose structured data without routing binary payloads through generated code or context.                                                                                                                 |
-| Treat `execute` as the model-facing invocation boundary. | Nested calls are implementation details of one orchestration program. Reusing the outer context and bounding only the final result preserves complete intermediate data without inventing durable child-call identities. |
+| Keep nested identity and settlement host-owned.          | Current adapters may reuse an outer invocation for orchestration, but the generic package does not decide whether a production host needs durable child-call identities, independent authorization, output bounds, retry, or settlement. |
 | Return expected failures as data.                        | Models need actionable diagnostics without exposing private host causes; host interruption and defects must still propagate correctly.                                                                                   |
 | Leave execution-limit defaults to hosts.                 | Appropriate budgets depend on the surrounding product and its own cancellation, retention, and output-bounding policies.                                                                                                 |
 | Skip unsupported OpenAPI operations.                     | Incorrect parameter encoding, authentication, or transport behavior is worse than a precise `skipped` reason.                                                                                                            |

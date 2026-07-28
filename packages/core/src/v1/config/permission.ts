@@ -5,7 +5,29 @@ import { Schema, SchemaGetter } from "effect"
 export const Action = Schema.Literals(["ask", "allow", "deny"]).annotate({ identifier: "PermissionActionConfig" })
 export type Action = Schema.Schema.Type<typeof Action>
 
-export const Object = Schema.Record(Schema.String, Action).annotate({ identifier: "PermissionObjectConfig" })
+export function isArrayIndexPropertyKey(key: string) {
+  const index = Number(key)
+  return Number.isInteger(index) && index >= 0 && index <= 4_294_967_294 && String(index) === key
+}
+
+export function assertOrderedObjectKey(key: string, subject = "permission key") {
+  if (!isArrayIndexPropertyKey(key)) return
+  throw new Error(
+    `${subject} ${JSON.stringify(key)} is an ECMAScript array-index property key and cannot preserve authored order`,
+  )
+}
+
+const orderedObjectKey = Schema.makeFilter<string>((key) =>
+  isArrayIndexPropertyKey(key)
+    ? "ECMAScript array-index property keys cannot preserve authored order in permission objects"
+    : undefined,
+)
+
+export const OrderedObjectKey = Schema.String.check(orderedObjectKey).annotate({
+  identifier: "OrderedPermissionObjectKey",
+})
+
+export const Object = Schema.Record(OrderedObjectKey, Action).annotate({ identifier: "PermissionObjectConfig" })
 export type Object = Schema.Schema.Type<typeof Object>
 
 export const Rule = Schema.Union([Action, Object]).annotate({ identifier: "PermissionRuleConfig" })
@@ -32,7 +54,7 @@ const InputObject = Schema.StructWithRest(
     doom_loop: Schema.optional(Action),
     skill: Schema.optional(Rule),
   }),
-  [Schema.Record(Schema.String, Rule)],
+  [Schema.Record(OrderedObjectKey, Rule)],
 )
 
 const InputSchema = Schema.Union([Action, InputObject])

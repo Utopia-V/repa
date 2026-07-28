@@ -1,5 +1,8 @@
 # Session API
 
+> **Status — inherited preview-v2 design record, not Repa authority.** This file may describe experimental source that exists in the fork as well as unfinished OpenCode plans. Use it only to maintain or audit that deferred source. Replacement, migration, retirement, launch, and default-change language below is not implementation authority for Repa; the released-v1 execution path remains the accepted baseline unless a Repa ADR or Gate explicitly changes it.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
 ## Current V2 Core Slice
 
 The Effect-native core facade treats prompt recording and execution as separate responsibilities:

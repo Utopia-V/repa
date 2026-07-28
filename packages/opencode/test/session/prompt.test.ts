@@ -754,8 +754,12 @@ it.instance(
       const steerMessageID = MessageID.ascending()
       const steerPartID = PartID.ascending()
       const steerFilePartID = PartID.ascending()
-      const sourceTime = Date.parse("2026-07-20T15:59:00.000Z")
-      const rootOperationTime = Date.parse("2026-07-20T16:01:00.000Z")
+      const day = 24 * 60 * 60 * 1_000
+      const shanghaiOffset = 8 * 60 * 60 * 1_000
+      // Keep the midnight scenario ahead of process-wide causal time floors instead of pinning it to a past date.
+      const shanghaiMidnight = Math.ceil((Date.now() + shanghaiOffset) / day) * day - shanghaiOffset
+      const sourceTime = shanghaiMidnight - 60 * 1_000
+      const rootOperationTime = shanghaiMidnight + 60 * 1_000
       const steerSourceTime = rootOperationTime + 1_000
       const steerOperationTime = rootOperationTime + 2_000
       const rootResponse = defer<void>()
@@ -993,11 +997,13 @@ it.instance(
       expect(part?.state.status).toBe("completed")
       if (!part || part.state.status !== "completed") return yield* Effect.die("Expected committed retained ToolPart")
       const projected = part as unknown as SDKToolPart
-      expect(toolInlineInfo(projected)).toMatchObject({
-        title: "Retained learning steering",
+      const inline = toolInlineInfo(projected)
+      expect(inline).toMatchObject({
+        title: "Retained learning steering — Committed",
         mode: "block",
         body: expect.stringContaining(input.operativeInstruction),
       })
+      if (!inline.body) return yield* Effect.die("Expected retained semantic result body")
       const final = entryBody({
         kind: "tool",
         text: "",
@@ -1007,7 +1013,7 @@ it.instance(
         toolState: "completed",
         part: projected,
       } satisfies StreamCommit)
-      expect(final).toEqual({ type: "text", content: part.state.output })
+      expect(final).toEqual({ type: "text", content: inline.body })
       expect(JSON.stringify(final)).not.toContain(" completed")
       expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
       expect(yield* database.db.transaction((tx) => RetainedSteering.readActive(tx, Date.now()))).toHaveLength(1)
@@ -1078,11 +1084,13 @@ it.instance(
       expect(part?.state.status).toBe("completed")
       if (!part || part.state.status !== "completed") return yield* Effect.die("Expected committed Goal ToolPart")
       const projected = part as unknown as SDKToolPart
-      expect(toolInlineInfo(projected)).toMatchObject({
-        title: "Updated learning Goal",
+      const inline = toolInlineInfo(projected)
+      expect(inline).toMatchObject({
+        title: "Updated learning Goal — Committed",
         mode: "block",
         body: expect.stringContaining(input.operations[0].snapshot.outcome),
       })
+      if (!inline.body) return yield* Effect.die("Expected Goal semantic result body")
       const final = entryBody({
         kind: "tool",
         text: "",
@@ -1092,7 +1100,7 @@ it.instance(
         toolState: "completed",
         part: projected,
       } satisfies StreamCommit)
-      expect(final).toEqual({ type: "text", content: part.state.output })
+      expect(final).toEqual({ type: "text", content: inline.body })
       expect(JSON.stringify(final)).not.toContain(" completed")
       expect(JSON.stringify(final)).not.toContain('"receiptID"')
       expect((yield* database.db.transaction((tx) => LearnerGoal.discover(tx, Date.now()))).items).toMatchObject([

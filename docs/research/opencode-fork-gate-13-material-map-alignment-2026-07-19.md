@@ -1,11 +1,17 @@
 # OpenCode fork Gate 13: Material Map and Course alignment
 
-Status: Closed. Contract/theory and implementation/evidence were accepted by
-independent review run `gate13-whole-20260719-01`. `G13-CT-001` through
-`G13-CT-006` and `G13-IE-001` through `G13-IE-003` are closed, with no new
-acceptance-changing implementation finding. The accepted implementation is
-fixed by maintainer-authorized commit
-`5e762f8336b33d7d8365c9bc9204b52f52eba114`; Gate 14 has not begun.
+Status: Closed at the Material Map/alignment domain-authority boundary.
+Contract/theory and implementation/evidence were historically accepted by
+independent review run `gate13-whole-20260719-01`; the accepted implementation
+is fixed by maintainer-authorized commit
+`5e762f8336b33d7d8365c9bc9204b52f52eba114`. The 2026-07-27
+first-principles audit reclassified hostile arbitrary-SQL evidence and found
+that imported current trigger helpers do not prove versioned migration
+equivalence. Those cross-Gate infrastructure claims require correction before
+another schema Gate, but do not by themselves falsify the Map/alignment
+identity and transition semantics. At that closure point, Gate 14 had not
+begun; current disposition is owned by
+[the documentation index](../README.md).
 
 Date: 2026-07-19
 
@@ -1270,3 +1276,18 @@ composition by registering its trusted service/current-use nodes; the focused
 runtime-construction oracle covers that carrier change. It does not change
 packaging, startup policy, or model/provider surfaces, so no broader release
 claim or release build is made.
+
+## 2026-07-27 first-principles qualification
+
+The raw-SQL attacks above prove useful structural invariants only to the extent
+that the application owns the database path. They do not make arbitrary SQL an
+adversarial security boundary: such an actor can remove triggers or replace the
+database. Trigger text imported from a mutable current helper is also not a
+frozen historical migration. The cross-Gate migration repair must therefore
+version behavioral trigger DDL and test a real frozen predecessor fixture.
+
+Current-use resolution may record a Gate 9 Artifact observation. That is valid
+for an explicit observation operation, but it is not a pure read. Gate 18
+context construction must use a pure validation/resolution path or a separately
+authorized observation stage; it may not call the mutating current-use path
+while claiming that context construction performs no domain writes.

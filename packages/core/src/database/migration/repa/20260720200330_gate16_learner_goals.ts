@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { sql } from "drizzle-orm"
 import type { DatabaseMigration } from "../../migration"
-import { DatabaseSchemaExtras } from "../../schema-extras"
+import { install as installSchemaExtrasV11 } from "../../schema-extras-v11"
 
 export default {
   id: "20260720200330_gate16_learner_goals",
@@ -395,7 +395,7 @@ export default {
       yield* tx.run(
         `CREATE INDEX \`learner_goal_supersession_target_idx\` ON \`learner_goal_supersession\` (\`target_goal_id\`,\`revision_id\`);`,
       )
-      yield* DatabaseSchemaExtras.install(tx)
+      yield* installSchemaExtrasV11(tx)
     })
   },
 } satisfies DatabaseMigration.Migration

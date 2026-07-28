@@ -9,7 +9,7 @@ import { Global } from "@opencode-ai/core/global"
 import { createTuiResolvedConfig } from "./fixture/tui-runtime"
 import { createEventSource, createFetch, directory, json } from "./fixture/tui-sdk"
 
-test("startup and command registry omit Console account organization affordances", async () => {
+test("terminal product registry keeps local help while omitting Console account and upstream docs affordances", async () => {
   const state = path.join(process.env.XDG_STATE_HOME!, "repa")
   await mkdir(state, { recursive: true })
   await Bun.write(path.join(state, "kv.json"), "{}")
@@ -46,6 +46,8 @@ test("startup and command registry omit Console account organization affordances
         organizationSlashes: string[]
         providerConnectRegistered: boolean
         localConsoleRegistered: boolean
+        localHelpRegistered: boolean
+        upstreamDocsRegistered: boolean
         consoleRequests: string[]
         providerAuthRequests: string[]
       }
@@ -90,6 +92,8 @@ test("startup and command registry omit Console account organization affordances
       organizationSlashes: slashes.filter((slash) => ["org", "orgs", "switch-org"].includes(slash)),
       providerConnectRegistered: commands.some((command) => command.name === "provider.connect"),
       localConsoleRegistered: commands.some((command) => command.name === "app.console"),
+      localHelpRegistered: commands.some((command) => command.name === "help.show"),
+      upstreamDocsRegistered: commands.some((command) => command.name === "docs.open"),
       consoleRequests: requests.filter((request) => request === "/experimental/console"),
       providerAuthRequests: requests.filter((request) => request === "/provider/auth"),
     }
@@ -107,6 +111,8 @@ test("startup and command registry omit Console account organization affordances
     organizationSlashes: [],
     providerConnectRegistered: true,
     localConsoleRegistered: true,
+    localHelpRegistered: true,
+    upstreamDocsRegistered: false,
     consoleRequests: [],
     providerAuthRequests: ["/provider/auth"],
   })

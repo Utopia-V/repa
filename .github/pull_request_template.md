@@ -1,29 +1,31 @@
-### Issue for this PR
+## Outcome
 
-Closes #
+What problem does this change solve, and what behavior or documented boundary
+does it establish?
 
-### Type of change
+## Authority and scope
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Refactor / code improvement
-- [ ] Documentation
+Which current Repa decision, contract, or observed defect owns the change?
+What is deliberately outside scope?
 
-### What does this PR do?
+Related issue, if any:
 
-Please provide a description of the issue, the changes you made to fix it, and why they work. It is expected that you understand why your changes work and if you do not understand why at least say as much so a maintainer knows how much to value the PR.
+## Verification
 
-**If you paste a large clearly AI generated description here your PR may be IGNORED or CLOSED!**
+List the checks run and the claim each check supports. For visual changes,
+include relevant screenshots or recordings.
 
-### How did you verify your code works?
+## Inherited or deferred material
 
-### Screenshots / recordings
+If this change touches inherited OpenCode, preview-v2, or deferred-surface
+material, explain why it is needed and whether its current product disposition
+remains unchanged.
 
-_If this is a UI change, please include a screenshot or recording._
+## Checklist
 
-### Checklist
-
-- [ ] I have tested my changes locally
-- [ ] I have not included unrelated changes in this PR
-
-_If you do not follow this template your PR will be automatically rejected._
+- [ ] I followed the root and applicable nested `AGENTS.md` instructions.
+- [ ] The change is limited to one coherent boundary and excludes unrelated
+      edits.
+- [ ] Verification is proportional to the behavior or documentation claim.
+- [ ] Inherited or hibernated material is not presented as current Repa product
+      or implementation authority.

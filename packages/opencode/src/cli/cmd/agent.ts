@@ -3,32 +3,16 @@ import * as prompts from "@clack/prompts"
 import { UI } from "../ui"
 import { Global } from "@opencode-ai/core/global"
 import path from "path"
-import fs from "fs/promises"
-import { Filesystem } from "@/util/filesystem"
 import matter from "gray-matter"
 import { EOL } from "os"
 import type { Argv } from "yargs"
 import { Effect } from "effect"
 import { effectCmd } from "../effect-cmd"
+import { RestrictedAgentPermission } from "@/agent/restricted-permission"
+import { GeneratedAgentFile } from "@/agent/generated-agent-file"
+import { AgentIdentifier } from "@/agent/identifier"
 
 type AgentMode = "all" | "primary" | "subagent"
-
-// Permission keys (not raw tool names). Multiple tools can map to a single
-// permission — e.g. write/edit/apply_patch all gate on `edit` — so we configure
-// agents at the permission level to match how the runtime actually enforces it.
-const AVAILABLE_PERMISSIONS = [
-  "bash",
-  "read",
-  "edit",
-  "glob",
-  "grep",
-  "webfetch",
-  "task",
-  "todowrite",
-  "websearch",
-  "lsp",
-  "skill",
-]
 
 const AgentCreateCommand = effectCmd({
   command: "create",
@@ -51,7 +35,7 @@ const AgentCreateCommand = effectCmd({
       .option("permissions", {
         type: "string",
         alias: ["tools"],
-        describe: `comma-separated list of permissions to allow (default: all). Available: "${AVAILABLE_PERMISSIONS.join(", ")}"`,
+        describe: "comma-separated permissions to allow; an empty value denies all",
       })
       .option("model", {
         type: "string",
@@ -62,17 +46,23 @@ const AgentCreateCommand = effectCmd({
     const { InstanceRef } = yield* Effect.promise(() => import("@/effect/instance-ref"))
     const { Agent } = yield* Effect.promise(() => import("../../agent/agent"))
     const { Provider } = yield* Effect.promise(() => import("@/provider/provider"))
+    const { ToolRegistry } = yield* Effect.promise(() => import("@/tool/registry"))
     const maybeCtx = yield* InstanceRef
     if (!maybeCtx) return yield* Effect.die("InstanceRef not provided")
     const ctx = maybeCtx
     const agentSvc = yield* Agent.Service
+    const registry = yield* ToolRegistry.Service
     const runLocalEffect = <A, E>(effect: Effect.Effect<A, E>) =>
       Effect.runPromise(effect.pipe(Effect.provideService(InstanceRef, ctx)))
+    const availablePermissions = yield* registry.permissionCatalog()
+    const selectablePermissions = RestrictedAgentPermission.selectable(availablePermissions)
     yield* Effect.promise(async () => {
       const cliPath = args.path
       const cliDescription = args.description
       const cliMode = args.mode as AgentMode | undefined
       const perms = args.permissions
+      const selectedFromArgs = perms === undefined ? undefined : RestrictedAgentPermission.parse(perms)
+      if (selectedFromArgs) RestrictedAgentPermission.compile(availablePermissions, selectedFromArgs)
 
       const isFullyNonInteractive = cliPath && cliDescription && cliMode && perms !== undefined
 
@@ -138,16 +128,16 @@ const AgentCreateCommand = effectCmd({
 
       // Select permissions to allow
       let selected: string[]
-      if (perms !== undefined) {
-        selected = perms ? perms.split(",").map((t) => t.trim()) : AVAILABLE_PERMISSIONS
+      if (selectedFromArgs) {
+        selected = selectedFromArgs
       } else {
         const result = await prompts.multiselect({
           message: "Select permissions to allow (Space to toggle)",
-          options: AVAILABLE_PERMISSIONS.map((permission) => ({
+          options: selectablePermissions.map((permission) => ({
             label: permission,
             value: permission,
           })),
-          initialValues: AVAILABLE_PERMISSIONS,
+          initialValues: selectablePermissions,
         })
         if (prompts.isCancel(result)) throw new UI.CancelledError()
         selected = result
@@ -183,43 +173,37 @@ const AgentCreateCommand = effectCmd({
         mode = modeResult
       }
 
-      // Build permissions config — deny anything not explicitly selected.
-      const permissions: Record<string, "deny"> = {}
-      for (const permission of AVAILABLE_PERMISSIONS) {
-        if (!selected.includes(permission)) {
-          permissions[permission] = "deny"
-        }
-      }
+      const permissions = RestrictedAgentPermission.compile(availablePermissions, selected)
 
       // Build frontmatter
       const frontmatter: {
         description: string
         mode: AgentMode
-        permission?: Record<string, "deny">
+        permission: RestrictedAgentPermission.Config
       } = {
         description: generated.whenToUse,
         mode,
-      }
-      if (Object.keys(permissions).length > 0) {
-        frontmatter.permission = permissions
+        permission: permissions,
       }
 
       // Write file
       const content = matter.stringify(generated.systemPrompt, frontmatter)
-      const filePath = path.join(targetPath, `${generated.identifier}.md`)
-
-      await fs.mkdir(targetPath, { recursive: true })
-
-      if (await Filesystem.exists(filePath)) {
+      const filePath = await GeneratedAgentFile.create({
+        targetPath,
+        identifier: generated.identifier,
+        content,
+        existingIdentifiers: await runLocalEffect(agentSvc.identifiers()),
+      }).catch((error: unknown) => {
+        if (!(error instanceof GeneratedAgentFile.ExistsError) && !(error instanceof AgentIdentifier.ConflictError)) {
+          throw error
+        }
         if (isFullyNonInteractive) {
-          console.error(`Error: Agent file already exists: ${filePath}`)
+          console.error(`Error: ${error.message}`)
           process.exit(1)
         }
-        prompts.log.error(`Agent file already exists: ${filePath}`)
+        prompts.log.error(error.message)
         throw new UI.CancelledError()
-      }
-
-      await Filesystem.write(filePath, content)
+      })
 
       if (isFullyNonInteractive) {
         console.log(filePath)

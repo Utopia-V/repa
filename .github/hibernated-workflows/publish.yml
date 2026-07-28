@@ -40,11 +40,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Setup git committer
         id: committer
-        uses: ./.github/actions/setup-git-committer
+        uses: ./.github/hibernated-workflows/support/actions/setup-git-committer
         with:
           opencode-app-id: ${{ vars.OPENCODE_APP_ID }}
           opencode-app-secret: ${{ secrets.OPENCODE_APP_SECRET }}
@@ -55,7 +55,7 @@ jobs:
 
       - id: version
         run: |
-          ./script/version.ts
+          ./.github/hibernated-workflows/support/version.ts
         env:
           GH_TOKEN: ${{ steps.committer.outputs.token }}
           OPENCODE_BUMP: ${{ inputs.bump }}
@@ -77,11 +77,11 @@ jobs:
         with:
           fetch-tags: true
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Setup git committer
         id: committer
-        uses: ./.github/actions/setup-git-committer
+        uses: ./.github/hibernated-workflows/support/actions/setup-git-committer
         with:
           opencode-app-id: ${{ vars.OPENCODE_APP_ID }}
           opencode-app-secret: ${{ secrets.OPENCODE_APP_SECRET }}
@@ -140,7 +140,7 @@ jobs:
 
       - name: Setup git committer
         id: committer
-        uses: ./.github/actions/setup-git-committer
+        uses: ./.github/hibernated-workflows/support/actions/setup-git-committer
         with:
           opencode-app-id: ${{ vars.OPENCODE_APP_ID }}
           opencode-app-secret: ${{ secrets.OPENCODE_APP_SECRET }}
@@ -270,7 +270,7 @@ jobs:
         if: runner.os == 'macOS'
         run: echo "${{ secrets.APPLE_API_KEY_PATH }}" > $RUNNER_TEMP/apple-api-key.p8
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
         with:
           install-flags: ${{ matrix.settings.bun_install_flags }}
 
@@ -305,7 +305,7 @@ jobs:
 
       - name: Setup git committer
         id: committer
-        uses: ./.github/actions/setup-git-committer
+        uses: ./.github/hibernated-workflows/support/actions/setup-git-committer
         with:
           opencode-app-id: ${{ vars.OPENCODE_APP_ID }}
           opencode-app-secret: ${{ secrets.OPENCODE_APP_SECRET }}
@@ -416,7 +416,7 @@ jobs:
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -471,7 +471,7 @@ jobs:
 
       - name: Setup git committer
         id: committer
-        uses: ./.github/actions/setup-git-committer
+        uses: ./.github/hibernated-workflows/support/actions/setup-git-committer
         with:
           opencode-app-id: ${{ vars.OPENCODE_APP_ID }}
           opencode-app-secret: ${{ secrets.OPENCODE_APP_SECRET }}
@@ -508,7 +508,7 @@ jobs:
           fi
           gh release upload "v${{ needs.version.outputs.version }}" "${files[@]}" --clobber --repo "${{ needs.version.outputs.repo }}"
 
-      - run: ./script/publish.ts
+      - run: ./.github/hibernated-workflows/support/publish.ts
         env:
           OPENCODE_VERSION: ${{ needs.version.outputs.version }}
           OPENCODE_RELEASE: ${{ needs.version.outputs.release }}

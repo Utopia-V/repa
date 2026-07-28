@@ -1,8 +1,32 @@
 # OpenCode fork Gate 8: learning-command settlement
 
-Status: Passed at implementation commit `293ff6892`. Fresh independent
-top-level contract/theory and implementation/evidence reviews both closed with
-`Accept` on 2026-07-16 after all findings were resolved.
+Status: Scoped-reopened by the 2026-07-27 first-principles audit at the current
+physical shared-substrate dependency and primary-TUI settlement-presentation
+boundaries. The original Course-command
+proof at implementation commit `293ff6892` remains historical acceptance;
+the unstaged corrective candidate described below has been accepted by the
+original database and TUI reviewers but has no durable integration commit.
+The earlier
+fresh independent top-level contract/theory and implementation/evidence
+reviews both closed with `Accept` on 2026-07-16 after all then-known findings
+were resolved.
+
+Post-close extension audit (2026-07-27): the original Course-command proof and
+the shared-substrate product contract remain accepted. Later Gates expanded
+the generic invocation/receipt tables into command unions, per-domain nullable
+effect foreign keys, and a central settlement compositor that imports every
+domain. That physical extension contradicts this Gate's narrow dependency
+direction and must be corrected before another command family is added. The
+repair preserves atomic effect/receipt/terminal settlement and exact replay;
+it moves typed effect association back under each domain rather than reopening
+the product invariant or invalidating the original Course transition.
+
+The same audit found that the primary TUI hides generic completed-tool output
+by default. Gate 8 deliberately proved an exact durable model-visible result
+rather than a complete later inspection UI, but an applied Course transition
+must still remain truthfully visible when provider continuation fails. The
+shared semantic result projection is therefore part of the scoped repair; it
+does not turn Gate 8 into Gate 22's general history browser.
 
 Date: 2026-07-16
 
@@ -821,3 +845,31 @@ The grill used the current production fork plus these fixed references:
 
 The fork adapts demonstrated invariants, not reference package topology,
 preview-v2 production authority, oracle tables, or old command APIs.
+
+## 2026-07-28 corrective implementation candidate
+
+The unstaged candidate separates the physical learning-command ledger from
+domain semantics. The physical owner retains admission, invocation, receipt,
+replay, recovery, terminal, and deletion behavior without importing or
+enumerating Course, Representation, Navigation, Retained Steering, or Goal.
+Each domain owns reservation, effect/seal, legal terminal variants, and a
+recursive decoder before returning a typed settlement. The migration reuses
+those same decoders, and generic recovery returns an honest open
+`PhysicalSettlement`.
+
+One versioned capability-specific semantic Part is now produced inside the
+committing transaction and consumed by TUI and direct-run. Its binding is
+checked against the actual PermissionRequest, completed ToolPart, command,
+outcome, error code, and durable-settlement envelope; a later provider failure
+cannot hide or rewrite the committed result. Representation's v12 failure
+vocabulary has one frozen domain owner from which its public TypeScript type,
+recursive validator, and trigger SQL are derived.
+
+The original database and TUI reviewers independently accepted the corrected
+physical/domain direction, recursive replay and migration validation, exact
+presentation binding, and post-commit visibility. Final shared-tree evidence
+included Core 100/100, Schema 2/2, TUI 26/26, OpenCode 400/400, all four
+affected package typechecks, and `git diff --check`.
+
+This is not a new close commit. The original Course settlement proof remains
+historical acceptance; the scoped reopen remains pending durable integration.

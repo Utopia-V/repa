@@ -34,7 +34,7 @@ jobs:
 
       - name: Setup Bun
         if: steps.author.outputs.skip != 'true'
-        uses: ./.github/actions/setup-bun
+        uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Install opencode
         if: steps.author.outputs.skip != 'true'

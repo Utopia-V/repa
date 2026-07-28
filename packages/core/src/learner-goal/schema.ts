@@ -270,6 +270,116 @@ export type OperationResult = Readonly<{
   }>
 }>
 
+/**
+ * A title-bearing, command-equivalent snapshot for consequential presentation.
+ * It is a trusted rendering input, not a new Goal authority: identities and
+ * versions still bind it to the owning command/revisions, while consumers must
+ * omit those opaque identities from learner-facing prose.
+ */
+export type PresentationCourse = Readonly<{
+  courseID: Course.CourseID
+  courseTitle: string
+  basis:
+    | Readonly<{ type: "new"; expectedCourseVersion: number }>
+    | Readonly<{ type: "carried"; predecessorRevisionID: RevisionID }>
+  availability:
+    | Readonly<{ state: "available"; title: string }>
+    | Readonly<{ state: "unavailable"; cause: "course_not_found" | "course_withdrawn"; title?: string }>
+}>
+
+export type PresentationMeaning = Readonly<{
+  outcome: string
+  conditions: readonly string[]
+  scope:
+    | Readonly<{ type: "learner_home" }>
+    | Readonly<{ type: "courses"; courses: readonly PresentationCourse[] }>
+  target: Target
+  disposition: "active" | "achieved" | "abandoned" | "superseded"
+  fieldBases: FieldBases
+}>
+
+export type ProposalPresentationOperation =
+  | Readonly<{
+      type: "create"
+      resultIntent: "create_new_goal"
+      meaning: PresentationMeaning
+    }>
+  | Readonly<{
+      type: "update"
+      resultIntent: "update_existing_goal" | "supersede_with_existing_goal"
+      goalID: GoalID
+      expectedHeadID: RevisionID
+      expectedVersion: number
+      source: Readonly<{
+        goalID: GoalID
+        revisionID: RevisionID
+        version: number
+        meaning: PresentationMeaning
+      }>
+      meaning: PresentationMeaning
+      supersessionTarget?: Readonly<{
+        goalID: GoalID
+        revisionID: RevisionID
+        version: number
+        meaning: PresentationMeaning
+      }>
+    }>
+  | Readonly<{
+      type: "replace"
+      resultIntent: "supersede_with_existing_goal" | "supersede_with_new_goal"
+      goalID: GoalID
+      expectedHeadID: RevisionID
+      expectedVersion: number
+      source: Readonly<{
+        goalID: GoalID
+        revisionID: RevisionID
+        version: number
+        meaning: PresentationMeaning
+      }>
+      meaning: PresentationMeaning
+      replacementTarget:
+        | Readonly<{
+            type: "existing"
+            goalID: GoalID
+            revisionID: RevisionID
+            version: number
+            meaning: PresentationMeaning
+          }>
+        | Readonly<{
+            type: "new"
+            meaning: PresentationMeaning
+          }>
+    }>
+
+export type ProposalPresentation = Readonly<{
+  authorizationBasis: AuthorizationBasis
+  semanticFingerprint: string
+  operations: readonly ProposalPresentationOperation[]
+}>
+
+export type ResultPresentationOperation = Readonly<{
+  ordinal: number
+  operation: "create" | "update" | "replace"
+  result: "changed" | "no_change"
+  goalID: GoalID
+  revisionID: RevisionID
+  version: number
+  meaning: PresentationMeaning
+  supersessionTarget?: Readonly<{
+    goalID: GoalID
+    revisionID: RevisionID
+    version: number
+    meaning: PresentationMeaning
+  }>
+  replacementTarget?: Readonly<{
+    type: "existing" | "new"
+    goalID: GoalID
+    revisionID: RevisionID
+    version: number
+    meaning: PresentationMeaning
+  }>
+}>
+
 export type AppliedSettlement = Readonly<{
   outcome: "applied"
   goalKind: "learner_goal"

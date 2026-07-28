@@ -1,6 +1,6 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 import type { Model } from "@opencode-ai/sdk/v2"
-import { InstallationVersion } from "@opencode-ai/core/installation/version"
+import { InstallationUserAgent } from "@opencode-ai/core/installation/version"
 import { iife } from "@/util/iife"
 import { setTimeout as sleep } from "node:timers/promises"
 import { CopilotModels } from "./models"
@@ -72,7 +72,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
           {
             ...(provider.options?.headers as Record<string, string> | undefined),
             Authorization: `Bearer ${auth.refresh}`,
-            "User-Agent": `opencode/${InstallationVersion}`,
+            "User-Agent": InstallationUserAgent,
             "X-GitHub-Api-Version": API_VERSION,
           },
           provider.models,
@@ -160,7 +160,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
             const headers: Record<string, string> = {
               "x-initiator": isAgent ? "agent" : "user",
               ...(init?.headers as Record<string, string>),
-              "User-Agent": `opencode/${InstallationVersion}`,
+              "User-Agent": InstallationUserAgent,
               Authorization: `Bearer ${info.refresh}`,
               "Openai-Intent": "conversation-edits",
             }
@@ -236,7 +236,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
               headers: {
                 Accept: "application/json",
                 "Content-Type": "application/json",
-                "User-Agent": `opencode/${InstallationVersion}`,
+                "User-Agent": InstallationUserAgent,
               },
               body: JSON.stringify({
                 client_id: CLIENT_ID,
@@ -266,7 +266,7 @@ export async function CopilotAuthPlugin(input: PluginInput): Promise<Hooks> {
                     headers: {
                       Accept: "application/json",
                       "Content-Type": "application/json",
-                      "User-Agent": `opencode/${InstallationVersion}`,
+                      "User-Agent": InstallationUserAgent,
                     },
                     body: JSON.stringify({
                       client_id: CLIENT_ID,

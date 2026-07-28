@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
 
+// Source-maintenance tool for retained, non-baseline App/UI/Desktop locales.
+// It does not create a Repa localization, Web, Desktop, or release commitment.
+
 import path from "path"
 import { parseArgs } from "util"
 import { pathToFileURL } from "url"
@@ -92,9 +95,9 @@ export function targetFiles(locale: Locale) {
 }
 
 export function glossaryFile(locale: Locale) {
-  if (locale === "zh") return ".opencode/glossary/zh-cn.md"
-  if (locale === "zht") return ".opencode/glossary/zh-tw.md"
-  return `.opencode/glossary/${locale}.md`
+  if (locale === "zh") return "script/translate-app-glossary/zh-cn.md"
+  if (locale === "zht") return "script/translate-app-glossary/zh-tw.md"
+  return `script/translate-app-glossary/${locale}.md`
 }
 
 export function findDrift(source: Dictionary, target: Dictionary) {

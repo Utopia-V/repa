@@ -8,7 +8,8 @@ import { Effect, Layer } from "effect"
 import { eq, inArray, sql } from "drizzle-orm"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "@opencode-ai/core/database/admission"
-import { DatabaseSchemaExtras } from "@opencode-ai/core/database/schema-extras"
+import { install as installSchemaExtrasV10 } from "@opencode-ai/core/database/schema-extras-v10"
+import { install as installSchemaExtrasV11 } from "@opencode-ai/core/database/schema-extras-v11"
 import sessionUsageMigration from "@opencode-ai/core/database/migration/20260510033149_session_usage"
 import normalizeStoragePathsMigration from "@opencode-ai/core/database/migration/20260601010001_normalize_storage_paths"
 import sessionMessageProjectionOrderMigration from "@opencode-ai/core/database/migration/20260603040000_session_message_projection_order"
@@ -26,6 +27,7 @@ import materialMapAlignmentMigration from "@opencode-ai/core/database/migration/
 import learnerNavigationMigration from "@opencode-ai/core/database/migration/repa/20260719155243_learner_navigation"
 import retainedSteeringMigration from "@opencode-ai/core/database/migration/repa/20260720113159_gate15_retained_steering"
 import learnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260720200330_gate16_learner_goals"
+import domainNeutralLearningCommandLedgerMigration from "@opencode-ai/core/database/migration/repa/20260727121200_domain_neutral_learning_command_ledger"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -41,6 +43,7 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
 import { tmpdir } from "./fixture/tmpdir"
+import databaseV11Schema from "./fixture/database-v11-schema"
 
 const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
   Effect.runPromise(
@@ -141,10 +144,837 @@ function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Mig
 function normalizeSchemaDefinition(definition: string | null) {
   return (
     definition
+      ?.replace(/[`"]/g, "")
       ?.replace(/\s+/g, " ")
       .trim()
-      .replace(/^CREATE TABLE [`"]([^`"]+)[`"] /, "CREATE TABLE $1 ") ?? null
+      .replace(/\s*([(),])\s*/g, "$1")
+      .replace(/\blearning_command_invocation\./g, "") ?? null
   )
+}
+
+const databaseV11Migrations = [
+  courseViewAuthorityMigration,
+  learningCommandSettlementMigration,
+  sourceArtifactAuthorityMigration,
+  contentRootAuthorityMigration,
+  readableRepresentationLineageMigration,
+  durableTurnMigration,
+  materialMapAlignmentMigration,
+  learnerNavigationMigration,
+  retainedSteeringMigration,
+  learnerGoalsMigration,
+] as const
+
+function schemaManifestDigest(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string }>(sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_schema
+      WHERE name NOT LIKE 'sqlite_%'
+        AND sql IS NOT NULL
+      ORDER BY type, name
+    `)
+    .pipe(
+      Effect.map((rows) => {
+        const hash = new Bun.CryptoHasher("sha256")
+        hash.update(rows.map((row) => [row.type, row.name, row.tableName, row.definition].join("\u0000")).join("\u0001"))
+        return hash.digest("hex")
+      }),
+    )
+}
+
+function structuralManifest(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; definition: string }>(sql`
+      SELECT type, name, sql AS definition
+      FROM sqlite_schema
+      WHERE type IN ('trigger', 'view')
+      ORDER BY type, name
+    `)
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: normalizeSchemaDefinition(row.definition),
+        })),
+      ),
+    )
+}
+
+type FrozenV11Corruption =
+  | "course_receipt_basis"
+  | "course_command_version"
+  | "course_capability_version"
+  | "representation_revision_basis"
+  | "default_confirmation"
+  | "anchor_receipt_time"
+  | "retained_fingerprint"
+  | "retained_seal"
+  | "goal_confirmation"
+  | "anchor_no_change_payload"
+  | "anchor_no_change_usability"
+  | "anchor_no_change_partial_source"
+  | "goal_operation_meaning"
+  | "goal_replacement_target"
+  | "retained_error_code"
+  | "retained_error_detail"
+
+function initializeDatabaseV11(
+  db: TestDatabase,
+  input?: {
+    receiptCommitOrder?: number
+    settlementReceiptID?: string
+    settlementEffectID?: string
+    corruption?: FrozenV11Corruption
+  },
+) {
+  const receiptCommitOrder = input?.receiptCommitOrder ?? 1
+  const settlement = JSON.stringify({
+    outcome: "applied",
+    receiptID: input?.settlementReceiptID ?? "lcr_00000000000000000000000001",
+    effectID: input?.settlementEffectID ?? "cse_00000000000000000000000001",
+    courseID: "crs_00000000000000000000000001",
+    revisionID: "cvr_00000000000000000000000001",
+    previousSelection: { version: 0 },
+    committedSelection: { revisionID: "cvr_00000000000000000000000001", version: 1 },
+    settlementTime: 11,
+    settlementOrder: 1,
+  })
+  return db.transaction((tx) =>
+    Effect.gen(function* () {
+      yield* databaseV11Schema.up(tx)
+      if (
+        input?.corruption === "course_command_version" ||
+        input?.corruption === "course_capability_version"
+      ) {
+        yield* tx.run("PRAGMA ignore_check_constraints = ON")
+      }
+      yield* tx.run(sql`
+        INSERT INTO learning_occurrence_source_order (
+          sequence, occurrence_id, origin_session_id, origin_message_id, time_allocated,
+          source_temporal_state, source_timezone, source_utc_offset_minutes
+        ) VALUES (
+          1, 'lco_00000000000000000000000001', 'ses_v11', 'msg_v11_course', 1, 'resolved', 'UTC', 0
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO learning_admitted_occurrence (
+          id, origin_session_id, origin_message_id, time_admitted, source_order,
+          source_temporal_state, source_timezone, source_utc_offset_minutes
+        ) VALUES (
+          'lco_00000000000000000000000001', 'ses_v11', 'msg_v11_course', 1, 1, 'resolved', 'UTC', 0
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course (id, title, state_version, time_created, time_updated)
+        VALUES ('crs_00000000000000000000000001', 'Frozen v11 migration fixture', 0, 1, 1)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course_state_history (course_id, version, title, time_updated)
+        VALUES ('crs_00000000000000000000000001', 0, 'Frozen v11 migration fixture', 1)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course_view (id, course_id, name, state_version, time_created, time_updated)
+        VALUES ('cvw_00000000000000000000000001', 'crs_00000000000000000000000001', 'Frozen v11 view', 0, 1, 1)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course_view_revision (
+          id, course_id, view_id, revision_number, authorship_basis, time_created
+        ) VALUES ('cvr_00000000000000000000000001', 'crs_00000000000000000000000001', 'cvw_00000000000000000000000001', 1, 'learner_directed', 1)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course_view_revision_state (
+          course_id, view_id, revision_id, state_version, time_updated
+        ) VALUES ('crs_00000000000000000000000001', 'cvw_00000000000000000000000001', 'cvr_00000000000000000000000001', 0, 1)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course_item (id, course_id, time_created)
+        VALUES ('cit_00000000000000000000000001', 'crs_00000000000000000000000001', 1)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course_view_revision_item (
+          course_id, view_id, revision_id, item_id, title, preorder_position, depth
+        ) VALUES (
+          'crs_00000000000000000000000001', 'cvw_00000000000000000000000001', 'cvr_00000000000000000000000001', 'cit_00000000000000000000000001', 'Frozen v11 item', 0, 0
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO course_selection_acceptance_effect (
+          id, occurrence_id, course_id, accepted_revision_id, previous_selection_version,
+          committed_selection_version, time_committed
+        ) VALUES (
+          'cse_00000000000000000000000001', 'lco_00000000000000000000000001', 'crs_00000000000000000000000001', 'cvr_00000000000000000000000001', 0, 1, 11
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO learning_command_invocation (
+          part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+          occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+          capability_version, authorization_basis, input_fingerprint, status, effect_id,
+          settlement, time_admitted, time_settled, settlement_order
+        ) VALUES (
+          'prt_v11_course', 'ses_v11', 'msg_v11_course', 'msg_v11_assistant_course',
+          'call-v11-course', 'lco_00000000000000000000000001', 'accept_course_view_revision',
+          ${input?.corruption === "course_command_version" ? 2 : 1}, 0,
+          'accept_course_view_revision',
+          ${input?.corruption === "course_capability_version" ? 2 : 1},
+          'learner_request', ${"1".repeat(64)}, 'applied',
+          'cse_00000000000000000000000001',
+          ${settlement},
+          1, 11, 1
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO learning_command_receipt (
+          id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+          invocation_part_id, capability_identity, capability_version, authorization_basis,
+          effect_id, time_committed, commit_order
+        ) VALUES (
+          'lcr_00000000000000000000000001', 'lco_00000000000000000000000001', 'ses_v11', 'msg_v11_course',
+          'msg_v11_assistant_course', 'prt_v11_course', 'accept_course_view_revision',
+          ${input?.corruption === "course_capability_version" ? 2 : 1},
+          ${input?.corruption === "course_receipt_basis" ? "learner_acceptance" : "learner_request"},
+          'cse_00000000000000000000000001', 11, ${receiptCommitOrder}
+        )
+      `)
+      yield* seedFrozenV11LearningHistory(tx, input?.corruption)
+      yield* tx.run("PRAGMA ignore_check_constraints = OFF")
+      yield* installSchemaExtrasV11(tx)
+      yield* tx.run(sql`
+        CREATE TABLE ${sql.identifier("repa_migration")} (
+          version INTEGER PRIMARY KEY,
+          id TEXT NOT NULL UNIQUE,
+          time_completed INTEGER NOT NULL
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO ${sql.identifier("repa_migration")} (version, id, time_completed)
+        VALUES (${BASELINE_VERSION}, ${BASELINE_ID}, 1)
+      `)
+      yield* Effect.forEach(
+        databaseV11Migrations,
+        (migration, index) =>
+          tx.run(sql`
+            INSERT INTO ${sql.identifier("repa_migration")} (version, id, time_completed)
+            VALUES (${BASELINE_VERSION + index + 1}, ${migration.id}, 1)
+          `),
+        { discard: true },
+      )
+      yield* tx.run(sql.raw(`PRAGMA application_id = ${APPLICATION_ID}`))
+      yield* tx.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + databaseV11Migrations.length}`))
+    }),
+  )
+}
+
+function seedFrozenV11LearningHistory(
+  tx: Parameters<DatabaseMigration.Migration["up"]>[0],
+  corruption: FrozenV11Corruption | undefined,
+) {
+  const defaultConfirmation = {
+    permissionRequestID: "permission_v11_default",
+    headID: null,
+    version: 0,
+    fromCourseID: null,
+    fromCourseTitle: null,
+    target: {
+      courseID: "crs_00000000000000000000000001",
+      courseTitle: "Frozen v11 migration fixture",
+      courseVersion: 0,
+      selectionRevisionID: null,
+      selectionVersion: 0,
+      viewID: null,
+      viewName: null,
+      viewVersion: null,
+      revisionVersion: null,
+    },
+  }
+  const defaultReceiptConfirmation =
+    corruption === "default_confirmation"
+      ? { ...defaultConfirmation, target: null }
+      : defaultConfirmation
+  const goalCommand = {
+    operations: [
+      {
+        type: "create",
+        snapshot: {
+          outcome: "Preserve exact v11 migration semantics",
+          conditions: [],
+          scope: { type: "learner_home" },
+          target: { type: "absent" },
+          fieldBases: {
+            outcome: { type: "accepted" },
+            conditions: { type: "accepted" },
+            scope: { type: "accepted" },
+            target: { type: "accepted" },
+            disposition: { type: "accepted" },
+          },
+        },
+        disposition: "active",
+      },
+    ],
+  }
+  const goalMeaning =
+    corruption === "goal_operation_meaning"
+      ? {}
+      : {
+          outcome: "Preserve exact v11 migration semantics",
+          conditions: [],
+          scope: { type: "learner_home" },
+          target: { type: "absent" },
+        }
+  const goalFingerprint = "6".repeat(64)
+  const goalConfirmation = {
+    schemaVersion: 1,
+    authorizationBasis: "learner_acceptance",
+    semanticFingerprint: goalFingerprint,
+    command: goalCommand,
+    goalBases: [],
+    courseBases: [],
+  }
+  const goalInvocationConfirmation =
+    corruption === "goal_confirmation"
+      ? { ...goalConfirmation, semanticFingerprint: "7".repeat(64) }
+      : goalConfirmation
+  const representationSettlement = JSON.stringify({
+    outcome: "applied",
+    receiptID: "lcr_00000000000000000000000002",
+    effectID: "rfx_00000000000000000000000001",
+    representationRevisionID: "rep_00000000000000000000000001",
+    effectiveArtifactID: "art_00000000000000000000000001",
+    sourceRevisionID: "arv_00000000000000000000000001",
+    producerKind: "configured_model",
+    settlementTime: 12,
+    settlementOrder: 2,
+  })
+  const defaultCurrent = {
+    kind: "default_course_preference",
+    headID: "ndp_00000000000000000000000001",
+    version: 1,
+    courseID: "crs_00000000000000000000000001",
+    usability: { usable: true, title: "Frozen v11 migration fixture" },
+    source: {
+      receiptID: "lcr_00000000000000000000000003",
+      occurrenceID: "lco_00000000000000000000000003",
+      originSessionID: "ses_v11",
+      originMessageID: "msg_v11_default",
+      assistantMessageID: "msg_v11_assistant_default",
+      invocationPartID: "prt_v11_default",
+      availability: "available",
+    },
+    timeCommitted: 13,
+    commitOrder: 3,
+    frontierSequence: 1,
+  }
+  const defaultSettlement = JSON.stringify({
+    outcome: "applied",
+    navigationKind: "default_course_preference",
+    receiptID: "lcr_00000000000000000000000003",
+    effectID: "ndp_00000000000000000000000001",
+    effect: {
+      id: "ndp_00000000000000000000000001",
+      occurrenceID: "lco_00000000000000000000000003",
+      previousCourseID: null,
+      courseID: "crs_00000000000000000000000001",
+      previousVersion: 0,
+      version: 1,
+      timeCommitted: 13,
+      commitOrder: 3,
+      frontierSequence: 1,
+    },
+    current: defaultCurrent,
+    confirmation: defaultConfirmation,
+    settlementTime: 13,
+    settlementOrder: 3,
+  })
+  const anchorEffect = {
+    id: "nar_00000000000000000000000001",
+    occurrenceID: "lco_00000000000000000000000004",
+    courseID: "crs_00000000000000000000000001",
+    previousTarget: null,
+    target: {
+      courseID: "crs_00000000000000000000000001",
+      viewID: "cvw_00000000000000000000000001",
+      revisionID: "cvr_00000000000000000000000001",
+      itemID: "cit_00000000000000000000000001",
+    },
+    previousVersion: 0,
+    version: 1,
+    timeCommitted: 14,
+    commitOrder: 4,
+    frontierSequence: 2,
+  }
+  const anchorCurrent = {
+    kind: "course_route_anchor",
+    courseID: "crs_00000000000000000000000001",
+    headID: "nar_00000000000000000000000001",
+    version: 1,
+    target: anchorEffect.target,
+    usability: { usable: true },
+    source: {
+      receiptID: "lcr_00000000000000000000000004",
+      occurrenceID: "lco_00000000000000000000000004",
+      originSessionID: "ses_v11",
+      originMessageID: "msg_v11_anchor",
+      assistantMessageID: "msg_v11_assistant_anchor",
+      invocationPartID: "prt_v11_anchor",
+      availability: "available",
+    },
+    timeCommitted: 14,
+    commitOrder: 4,
+    frontierSequence: 2,
+  }
+  const anchorSettlement = JSON.stringify({
+    outcome: "applied",
+    navigationKind: "course_route_anchor",
+    receiptID: "lcr_00000000000000000000000004",
+    effectID: "nar_00000000000000000000000001",
+    effect: anchorEffect,
+    current: anchorCurrent,
+    settlementTime: 14,
+    settlementOrder: 4,
+  })
+  const noChangeSettlement = JSON.stringify(
+    corruption === "anchor_no_change_payload"
+      ? {
+          outcome: "no_change",
+          navigationKind: "course_route_anchor",
+          settlementTime: 18,
+          settlementOrder: 8,
+        }
+      : {
+          outcome: "no_change",
+          navigationKind: "course_route_anchor",
+          current:
+            corruption === "anchor_no_change_usability"
+              ? { ...anchorCurrent, usability: {} }
+              : corruption === "anchor_no_change_partial_source"
+                ? {
+                    kind: "course_route_anchor",
+                    courseID: "crs_00000000000000000000000001",
+                    headID: null,
+                    version: 0,
+                    target: null,
+                    usability: { usable: false, cause: "absent" },
+                    timeCommitted: 18,
+                  }
+              : anchorCurrent,
+          settlementTime: 18,
+          settlementOrder: 8,
+        },
+  )
+  const errorSettlement = JSON.stringify({
+    outcome: "error",
+    code: corruption === "retained_error_code" ? "invented_domain_failure" : "validation_error",
+    ...(corruption === "retained_error_detail"
+      ? { detail: { effectID: "rst_00000000000000000000000001" } }
+      : {}),
+    settlementTime: 19,
+    settlementOrder: 9,
+  })
+  const retainedSettlement = JSON.stringify({
+    outcome: "applied",
+    receiptID: "lcr_00000000000000000000000005",
+    effectID: "rst_00000000000000000000000001",
+    policyID: "rsp_00000000000000000000000001",
+    version: 1,
+    state: "operative",
+    acknowledgementTitle: "Preference retained",
+    acknowledgementBody: "Concrete examples will be used first.",
+    settlementTime: 15,
+    settlementOrder: 5,
+  })
+  const goalOperation = {
+    ordinal: 0,
+    operation: "create",
+    result: "changed",
+    goalID: "gol_00000000000000000000000001",
+    revisionID: "glr_00000000000000000000000001",
+    version: 1,
+    disposition: "active",
+    meaning: goalMeaning,
+    ...(corruption === "goal_replacement_target" ? { replacementTarget: {} } : {}),
+  }
+  const goalSettlement = JSON.stringify({
+    outcome: "applied",
+    goalKind: "learner_goal",
+    receiptID: "lcr_00000000000000000000000006",
+    effectID: "gle_00000000000000000000000001",
+    authorizationBasis: "learner_acceptance",
+    confirmationRequestID: "permission_v11_goal",
+    frontierSequence: 4,
+    acknowledgementTitle: "Goal recorded",
+    acknowledgementBody: "The migration goal is now part of the learner record.",
+    operations: [goalOperation],
+    settlementTime: 16,
+    settlementOrder: 6,
+  })
+  const replaySettlement = JSON.stringify({
+    ...JSON.parse(representationSettlement),
+    outcome: "already_applied",
+    settlementTime: 17,
+    settlementOrder: 7,
+  })
+
+  return Effect.gen(function* () {
+    yield* tx.run(sql`
+      INSERT INTO learning_occurrence_source_order (
+        sequence, occurrence_id, origin_session_id, origin_message_id, time_allocated,
+        source_temporal_state, source_timezone, source_utc_offset_minutes
+      ) VALUES
+        (2, 'lco_00000000000000000000000002', 'ses_v11', 'msg_v11_representation', 2, 'resolved', 'UTC', 0),
+        (3, 'lco_00000000000000000000000003', 'ses_v11', 'msg_v11_default', 3, 'resolved', 'UTC', 0),
+        (4, 'lco_00000000000000000000000004', 'ses_v11', 'msg_v11_anchor', 4, 'resolved', 'UTC', 0),
+        (5, 'lco_00000000000000000000000005', 'ses_v11', 'msg_v11_retained', 5, 'resolved', 'UTC', 0),
+        (6, 'lco_00000000000000000000000006', 'ses_v11', 'msg_v11_goal', 6, 'resolved', 'UTC', 0),
+        (7, 'lco_00000000000000000000000007', 'ses_v11', 'msg_v11_no_change', 7, 'resolved', 'UTC', 0),
+        (8, 'lco_00000000000000000000000008', 'ses_v11', 'msg_v11_error', 8, 'resolved', 'UTC', 0),
+        (9, 'lco_00000000000000000000000009', 'ses_v11', 'msg_v11_admitted', 9, 'resolved', 'UTC', 0)
+    `)
+    yield* tx.run(sql`
+      INSERT INTO learning_admitted_occurrence (
+        id, origin_session_id, origin_message_id, time_admitted, source_order,
+        source_temporal_state, source_timezone, source_utc_offset_minutes
+      ) VALUES
+        ('lco_00000000000000000000000002', 'ses_v11', 'msg_v11_representation', 2, 2, 'resolved', 'UTC', 0),
+        ('lco_00000000000000000000000003', 'ses_v11', 'msg_v11_default', 3, 3, 'resolved', 'UTC', 0),
+        ('lco_00000000000000000000000004', 'ses_v11', 'msg_v11_anchor', 4, 4, 'resolved', 'UTC', 0),
+        ('lco_00000000000000000000000005', 'ses_v11', 'msg_v11_retained', 5, 5, 'resolved', 'UTC', 0),
+        ('lco_00000000000000000000000006', 'ses_v11', 'msg_v11_goal', 6, 6, 'resolved', 'UTC', 0),
+        ('lco_00000000000000000000000007', 'ses_v11', 'msg_v11_no_change', 7, 7, 'resolved', 'UTC', 0),
+        ('lco_00000000000000000000000008', 'ses_v11', 'msg_v11_error', 8, 8, 'resolved', 'UTC', 0),
+        ('lco_00000000000000000000000009', 'ses_v11', 'msg_v11_admitted', 9, 9, 'resolved', 'UTC', 0)
+    `)
+
+    yield* tx.run(sql`
+      INSERT INTO artifact (
+        id, admission_root_artifact_id, creation_basis, creation_capability_identity,
+        creation_capability_version, disposition_version, lineage_version, correction_hidden,
+        time_created, time_updated
+      ) VALUES (
+        'art_00000000000000000000000001', 'art_00000000000000000000000001', 'learner_instruction', 'fixture', 1, 0, 0, 0, 1, 1
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO artifact_revision (
+        id, recorded_artifact_id, fingerprint_algorithm, fingerprint_digest,
+        byte_length, time_first_observed
+      ) VALUES (
+        'arv_00000000000000000000000001', 'art_00000000000000000000000001', 'sha256', ${"a".repeat(64)}, 1, 1
+      )
+    `)
+    yield* tx.run(sql`INSERT INTO content_root (id, time_created) VALUES ('content_root_v11', 1)`)
+    yield* tx.run(sql`
+      INSERT INTO content_root_binding (
+        id, content_root_id, canonical_path, canonical_path_key, platform, volume_serial,
+        object_id, creation_time, initial_change_time, verifier_version, time_created
+      ) VALUES (
+        'content_binding_v11', 'content_root_v11', 'C:\\v11', 'c:\\v11',
+        'windows_ntfs', 'volume-v11', '0123456789abcdef0123456789abcdef',
+        'creation-v11', 'change-v11', 1, 1
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO content_root_binding_episode (
+        id, content_root_id, binding_id, ordinal, approval_basis, time_started
+      ) VALUES (
+        'content_binding_episode_v11', 'content_root_v11', 'content_binding_v11',
+        1, 'learner approval', 1
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO content_root_grant_episode (
+        id, content_root_id, binding_id, binding_episode_id, ordinal, approval_basis,
+        time_approved, time_updated
+      ) VALUES (
+        'content_grant_episode_v11', 'content_root_v11', 'content_binding_v11',
+        'content_binding_episode_v11', 1, 'learner approval', 1, 1
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO representation_effect (
+        id, operation_identity, semantic_fingerprint, time_committed
+      ) VALUES (
+        'rfx_00000000000000000000000001', 'operation-v11-representation', ${"2".repeat(64)}, 12
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO representation_revision (
+        id, effect_id, source_revision_id, effective_artifact_id, attribution_type,
+        accepted_disposition_version, accepted_lineage_version, source_version,
+        source_media_type, source_digest, source_byte_length, content_root_id,
+        content_root_binding_id, content_root_binding_episode_id,
+        content_root_binding_episode_ordinal, content_root_grant_episode_id,
+        content_root_grant_version, normalized_relative_path, source_object_platform,
+        source_object_verifier_version, source_object_canonical_path,
+        source_object_canonical_path_key, source_object_volume_serial, source_object_id,
+        source_object_creation_time, source_object_change_time, source_object_last_write_time,
+        source_object_size, source_object_kind, source_observed_time, presented_input_digest,
+        presented_input_byte_length, producer_kind, producer_identity, producer_version,
+        provider_id, model_id, task_version, profile, canonicalizer_version,
+        provenance_version, provenance, run_identity, result_boundary, terminal_status,
+        diagnostics, usage, output_media_type, storage_key, output_digest,
+        output_byte_length, profile_record_count, acceptance_basis, creation_basis,
+        creation_identity, authorization_intent, authorization_basis, delivery_mode,
+        causal_occurrence_id, causal_invocation_part_id, time_accepted
+      ) VALUES (
+        'rep_00000000000000000000000001', 'rfx_00000000000000000000000001', 'arv_00000000000000000000000001',
+        'art_00000000000000000000000001', 'recorded', 0, 0, 0, 'application/pdf', ${"a".repeat(64)}, 1,
+        'content_root_v11', 'content_binding_v11', 'content_binding_episode_v11', 1,
+        'content_grant_episode_v11', 1, 'source.pdf', 'windows_ntfs', 1,
+        'C:\\v11\\source.pdf', 'c:\\v11\\source.pdf', 'volume-v11',
+        '0123456789abcdef0123456789abcdef', 'creation-v11', 'change-v11', 'write-v11',
+        1, 'file', 2, ${"a".repeat(64)}, 1, 'configured_model', 'fixture-model', '1',
+        'fixture-provider', 'fixture-model', 1, 'repa.model-rendition.v1', 1, 1, '{}',
+        'run-v11', 'model_schema_v1', 'stop', '[]', '{}', 'text/markdown',
+        'representation-v11.md', ${"b".repeat(64)}, 1, 1, 'model_claimed_rendition',
+        'learning_command', 'operation-v11-representation', 'persistent_readable_access',
+        ${corruption === "representation_revision_basis" ? "learner_acceptance" : "learner_request"},
+        'model_tool', 'lco_00000000000000000000000002', 'prt_v11_representation', 12
+      )
+    `)
+
+    yield* tx.run(sql`
+      INSERT INTO learner_default_course_transition (
+        id, version, previous_course_id, course_id, occurrence_id, permission_request_id,
+        confirmation_snapshot, target_course_version, target_selection_version,
+        time_committed, commit_order, frontier_sequence, frontier_time
+      ) VALUES (
+        'ndp_00000000000000000000000001', 1, NULL, 'crs_00000000000000000000000001', 'lco_00000000000000000000000003',
+        'permission_v11_default', ${JSON.stringify(defaultConfirmation)}, 0, 0, 13, 3, 1, 13
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO learner_course_route_anchor_transition (
+        id, course_id, version, target_view_id, target_revision_id, target_item_id,
+        occurrence_id, target_course_version, target_selection_version, target_view_version,
+        target_revision_version, time_committed, commit_order, frontier_sequence, frontier_time
+      ) VALUES (
+        'nar_00000000000000000000000001', 'crs_00000000000000000000000001', 1, 'cvw_00000000000000000000000001', 'cvr_00000000000000000000000001', 'cit_00000000000000000000000001',
+        'lco_00000000000000000000000004', 0, 0, 0, 0, 14, 4, 2, 14
+      )
+    `)
+
+    yield* tx.run(sql`
+      INSERT INTO retained_steering_commit_seal (transition_id, receipt_id, invocation_part_id)
+      VALUES (
+        'rst_00000000000000000000000001',
+        ${corruption === "retained_seal" ? "lcr_00000000000000000000000001" : "lcr_00000000000000000000000005"},
+        'prt_v11_retained'
+      )
+    `)
+    yield* tx.run(sql`INSERT INTO retained_steering_policy (id, time_created) VALUES ('rsp_00000000000000000000000001', 5)`)
+    yield* tx.run(sql`
+      INSERT INTO retained_steering_state (singleton, steering_revision, latest_cut_as_of)
+      VALUES (1, 1, 0)
+    `)
+    yield* tx.run(sql`
+      INSERT INTO retained_steering_transition (
+        id, commit_seal_id, policy_id, version, previous_state, occurrence_id, source_order,
+        state, scope, source_excerpt, operative_instruction, learner_reason, effective_from,
+        valid_until, valid_until_source, valid_until_normalized, boundary_timezone,
+        boundary_utc_offset_minutes, semantic_fingerprint, steering_revision, time_committed,
+        commit_order, frontier_sequence, frontier_time, acknowledgement_title,
+        acknowledgement_body
+      ) VALUES (
+        'rst_00000000000000000000000001', 'rst_00000000000000000000000001', 'rsp_00000000000000000000000001', 1, 'absent',
+        'lco_00000000000000000000000005', 5, 'operative', 'learning_wide', 'Keep examples concrete',
+        'Use concrete examples first', 'I learn faster that way', 5, 500,
+        'until the course ends', '1970-01-01T00:08:20.000Z', 'UTC', 0,
+        ${"5".repeat(64)}, 1, 15, 5, 3, 15, 'Preference retained',
+        'Concrete examples will be used first.'
+      )
+    `)
+
+    yield* tx.run(sql`
+      INSERT INTO learner_goal_commit_seal (effect_id, receipt_id, invocation_part_id)
+      VALUES (
+        'gle_00000000000000000000000001', 'lcr_00000000000000000000000006', 'prt_v11_goal'
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO learner_goal_effect (
+        id, commit_seal_id, occurrence_id, source_order, semantic_fingerprint,
+        authorization_basis, command, operation_count, change_count, time_committed,
+        commit_order, frontier_sequence, frontier_time, acknowledgement_title,
+        acknowledgement_body
+      ) VALUES (
+        'gle_00000000000000000000000001', 'gle_00000000000000000000000001',
+        'lco_00000000000000000000000006', 6, ${goalFingerprint}, 'learner_acceptance',
+        ${JSON.stringify(goalCommand)}, 1, 1, 16, 6, 4, 16, 'Goal recorded',
+        'The migration goal is now part of the learner record.'
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO learner_goal (id, time_created)
+      VALUES ('gol_00000000000000000000000001', 16)
+    `)
+    yield* tx.run(sql`
+      INSERT INTO learner_goal_revision (
+        id, goal_id, version, effect_id, operation_ordinal, revision_role, occurrence_id,
+        source_order, outcome, scope_kind, target_kind, disposition, revision_order,
+        time_committed, commit_order, frontier_sequence, frontier_time
+      ) VALUES (
+        'glr_00000000000000000000000001', 'gol_00000000000000000000000001', 1,
+        'gle_00000000000000000000000001', 0, 'source', 'lco_00000000000000000000000006', 6,
+        'Preserve exact v11 migration semantics', 'learner_home', 'absent', 'active',
+        1, 16, 6, 4, 16
+      )
+    `)
+    yield* tx.run(sql`
+      INSERT INTO learner_goal_field_basis (
+        revision_id, field, basis_kind
+      ) VALUES
+        ('glr_00000000000000000000000001', 'outcome', 'accepted'),
+        ('glr_00000000000000000000000001', 'conditions', 'accepted'),
+        ('glr_00000000000000000000000001', 'scope', 'accepted'),
+        ('glr_00000000000000000000000001', 'target', 'accepted'),
+        ('glr_00000000000000000000000001', 'disposition', 'accepted')
+    `)
+    yield* tx.run(sql`
+      INSERT INTO learner_goal_effect_operation (
+        effect_id, ordinal, operation_kind, result_kind, goal_id, revision_id,
+        version, disposition, meaning
+      ) VALUES (
+        'gle_00000000000000000000000001', 0, 'create', 'changed',
+        'gol_00000000000000000000000001', 'glr_00000000000000000000000001',
+        1, 'active', ${JSON.stringify(goalMeaning)}
+      )
+    `)
+    yield* tx.run(sql`INSERT INTO learner_goal_state (singleton, revision_sequence) VALUES (1, 1)`)
+    yield* tx.run(sql`INSERT INTO learner_goal_state_guard (singleton) VALUES (1)`)
+
+    yield* tx.run(sql`
+      INSERT INTO learning_command_invocation (
+        part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+        occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+        capability_version, authorization_basis, input_fingerprint,
+        retained_steering_semantic_fingerprint, goal_semantic_fingerprint,
+        goal_command_snapshot, status, effect_id, representation_effect_id,
+        default_navigation_effect_id, anchor_navigation_effect_id,
+        retained_steering_effect_id, goal_effect_id, permission_request_id,
+        goal_confirmation_snapshot, settlement, time_admitted, time_settled,
+        settlement_order, turn_id, input_id
+      ) VALUES
+        (
+          'prt_v11_representation', 'ses_v11', 'msg_v11_representation',
+          'msg_v11_assistant_representation', 'call-v11-representation',
+          'lco_00000000000000000000000002', 'representation.convert', 1, 0,
+          'representation.convert', 1, 'learner_request', ${"2".repeat(64)}, NULL, NULL,
+          NULL, 'applied', NULL, 'rfx_00000000000000000000000001', NULL, NULL, NULL, NULL,
+          NULL, NULL, ${representationSettlement}, 2, 12, 2,
+          'turn-v11-representation', 'input-v11-representation'
+        ),
+        (
+          'prt_v11_default', 'ses_v11', 'msg_v11_default', 'msg_v11_assistant_default',
+          'call-v11-default', 'lco_00000000000000000000000003', 'set_default_course_preference', 1, 0,
+          'set_default_course_preference', 1, 'learner_acceptance', ${"3".repeat(64)},
+          NULL, NULL, NULL, 'applied', NULL, NULL, 'ndp_00000000000000000000000001', NULL, NULL, NULL,
+          'permission_v11_default', NULL, ${defaultSettlement}, 3, 13, 3,
+          'turn-v11-default', 'input-v11-default'
+        ),
+        (
+          'prt_v11_anchor', 'ses_v11', 'msg_v11_anchor', 'msg_v11_assistant_anchor',
+          'call-v11-anchor', 'lco_00000000000000000000000004', 'set_course_route_anchor', 1, 0,
+          'set_course_route_anchor', 1, 'learner_request', ${"4".repeat(64)}, NULL, NULL,
+          NULL, 'applied', NULL, NULL, NULL, 'nar_00000000000000000000000001', NULL, NULL, NULL, NULL,
+          ${anchorSettlement}, 4, 14, 4, 'turn-v11-anchor', 'input-v11-anchor'
+        ),
+        (
+          'prt_v11_retained', 'ses_v11', 'msg_v11_retained', 'msg_v11_assistant_retained',
+          'call-v11-retained', 'lco_00000000000000000000000005', 'update_retained_learning_steering', 1, 0,
+          'update_retained_learning_steering', 1, 'learner_request', ${"5".repeat(64)},
+          ${corruption === "retained_fingerprint" ? "7".repeat(64) : "5".repeat(64)},
+          NULL, NULL, 'applied', NULL, NULL, NULL, NULL, 'rst_00000000000000000000000001', NULL,
+          NULL, NULL, ${retainedSettlement}, 5, 15, 5,
+          'turn-v11-retained', 'input-v11-retained'
+        ),
+        (
+          'prt_v11_goal', 'ses_v11', 'msg_v11_goal', 'msg_v11_assistant_goal',
+          'call-v11-goal', 'lco_00000000000000000000000006', 'update_learner_goals', 1, 0,
+          'update_learner_goals', 1, 'learner_acceptance', ${"6".repeat(64)}, NULL,
+          ${goalFingerprint}, ${JSON.stringify(goalCommand)}, 'applied', NULL, NULL, NULL,
+          NULL, NULL, 'gle_00000000000000000000000001', 'permission_v11_goal',
+          ${JSON.stringify(goalInvocationConfirmation)}, ${goalSettlement}, 6, 16, 6,
+          'turn-v11-goal', 'input-v11-goal'
+        ),
+        (
+          'prt_v11_replay', 'ses_v11', 'msg_v11_representation',
+          'msg_v11_assistant_replay', 'call-v11-replay', 'lco_00000000000000000000000002',
+          'representation.convert', 1, 0, 'representation.convert', 1, 'learner_request',
+          ${"7".repeat(64)}, NULL, NULL, NULL, 'already_applied', NULL,
+          'rfx_00000000000000000000000001', NULL, NULL, NULL, NULL, NULL, NULL,
+          ${replaySettlement}, 7, 17, 7, 'turn-v11-replay', 'input-v11-replay'
+        ),
+        (
+          'prt_v11_no_change', 'ses_v11', 'msg_v11_no_change',
+          'msg_v11_assistant_no_change', 'call-v11-no-change', 'lco_00000000000000000000000007',
+          'set_course_route_anchor', 1, 0, 'set_course_route_anchor', 1,
+          'learner_request', ${"8".repeat(64)}, NULL, NULL, NULL, 'no_change',
+          NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+          ${noChangeSettlement},
+          7, 18, 8, 'turn-v11-no-change', 'input-v11-no-change'
+        ),
+        (
+          'prt_v11_error', 'ses_v11', 'msg_v11_error', 'msg_v11_assistant_error',
+          'call-v11-error', 'lco_00000000000000000000000008', 'update_retained_learning_steering', 1, 0,
+          'update_retained_learning_steering', 1, 'learner_request', ${"9".repeat(64)},
+          ${"9".repeat(64)}, NULL, NULL, 'error', NULL, NULL, NULL, NULL, NULL, NULL,
+          NULL, NULL,
+          ${errorSettlement},
+          8, 19, 9, 'turn-v11-error', 'input-v11-error'
+        ),
+        (
+          'prt_v11_admitted', 'ses_v11', 'msg_v11_admitted',
+          'msg_v11_assistant_admitted', 'call-v11-admitted', 'lco_00000000000000000000000009',
+          'update_retained_learning_steering', 1, 0,
+          'update_retained_learning_steering', 1, 'learner_request', ${"a".repeat(64)},
+          ${"a".repeat(64)}, NULL, NULL, 'admitted', NULL, NULL, NULL, NULL, NULL, NULL,
+          NULL, NULL, NULL, 9, NULL, NULL, 'turn-v11-admitted', 'input-v11-admitted'
+        )
+    `)
+
+    yield* tx.run(sql`
+      INSERT INTO learning_command_receipt (
+        id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+        invocation_part_id, capability_identity, capability_version, authorization_basis,
+        effect_id, representation_effect_id, default_navigation_effect_id,
+        anchor_navigation_effect_id, retained_steering_effect_id, goal_effect_id,
+        permission_request_id, confirmation_snapshot, time_committed, commit_order
+      ) VALUES
+        (
+          'lcr_00000000000000000000000002', 'lco_00000000000000000000000002', 'ses_v11',
+          'msg_v11_representation', 'msg_v11_assistant_representation',
+          'prt_v11_representation', 'representation.convert', 1, 'learner_request',
+          NULL, 'rfx_00000000000000000000000001', NULL, NULL, NULL, NULL, NULL, NULL, 12, 2
+        ),
+        (
+          'lcr_00000000000000000000000003', 'lco_00000000000000000000000003', 'ses_v11', 'msg_v11_default',
+          'msg_v11_assistant_default', 'prt_v11_default',
+          'set_default_course_preference', 1, 'learner_acceptance', NULL, NULL,
+          'ndp_00000000000000000000000001', NULL, NULL, NULL, 'permission_v11_default',
+          ${JSON.stringify(defaultReceiptConfirmation)}, 13, 3
+        ),
+        (
+          'lcr_00000000000000000000000004', 'lco_00000000000000000000000004', 'ses_v11', 'msg_v11_anchor',
+          'msg_v11_assistant_anchor', 'prt_v11_anchor', 'set_course_route_anchor',
+          1, 'learner_request', NULL, NULL, NULL, 'nar_00000000000000000000000001', NULL, NULL,
+          NULL, NULL, ${corruption === "anchor_receipt_time" ? 99 : 14}, 4
+        ),
+        (
+          'lcr_00000000000000000000000005', 'lco_00000000000000000000000005', 'ses_v11', 'msg_v11_retained',
+          'msg_v11_assistant_retained', 'prt_v11_retained',
+          'update_retained_learning_steering', 1, 'learner_request', NULL, NULL,
+          NULL, NULL, 'rst_00000000000000000000000001', NULL, NULL, NULL, 15, 5
+        ),
+        (
+          'lcr_00000000000000000000000006', 'lco_00000000000000000000000006', 'ses_v11', 'msg_v11_goal',
+          'msg_v11_assistant_goal', 'prt_v11_goal', 'update_learner_goals', 1,
+          'learner_acceptance', NULL, NULL, NULL, NULL, NULL,
+          'gle_00000000000000000000000001', 'permission_v11_goal',
+          ${JSON.stringify(goalConfirmation)}, 16, 6
+        )
+    `)
+  })
 }
 
 function courseSchema(db: TestDatabase) {
@@ -348,15 +1178,22 @@ function dropCourseStateHistory(db: TestDatabase) {
 function dropGate16(db: TestDatabase) {
   return Effect.gen(function* () {
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+    yield* db.run(sql`DROP VIEW IF EXISTS learning_command_invocation_constraint_v12`)
+    yield* db.run(sql`DROP VIEW IF EXISTS learning_command_receipt_constraint_v12`)
     const triggers = yield* db.all<{ name: string }>(sql`
-      SELECT name FROM sqlite_master
-      WHERE type = 'trigger'
-        AND (name LIKE 'learner_goal_%' OR name LIKE 'course_state_history_%')
+      SELECT name FROM sqlite_master WHERE type = 'trigger'
     `)
     yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
       discard: true,
     })
     for (const table of [
+      "course_selection_acceptance_commit_seal",
+      "representation_command_commit_seal",
+      "learner_default_course_commit_seal",
+      "learner_course_route_anchor_commit_seal",
+      "learner_default_course_command",
+      "retained_steering_command",
+      "learner_goal_command",
       "learner_goal_state_guard",
       "learner_goal_commit_seal",
       "learner_goal_effect_operation",
@@ -374,6 +1211,7 @@ function dropGate16(db: TestDatabase) {
     ]) {
       yield* db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(table)}`)
     }
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 11}`)
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 10}`)
     yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
   })
@@ -726,10 +1564,11 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
           { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
           { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
+          { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
-        ).toHaveLength(13)
+        ).toHaveLength(14)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'artifact%' ORDER BY name`,
@@ -744,7 +1583,7 @@ describe("DatabaseMigration", () => {
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'representation%' ORDER BY name`,
           ),
-        ).toHaveLength(5)
+        ).toHaveLength(6)
         expect(
           yield* db.all(
             sql`SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('event_aggregate_seq_idx', 'event_aggregate_type_seq_idx', 'session_input_session_pending_seq_idx', 'session_input_session_pending_delivery_seq_idx', 'session_input_session_admitted_seq_idx', 'session_input_session_promoted_seq_idx', 'session_message_session_idx', 'session_message_session_type_idx', 'session_message_session_seq_idx', 'session_message_session_type_seq_idx', 'session_message_session_time_created_id_idx') ORDER BY name`,
@@ -759,6 +1598,449 @@ describe("DatabaseMigration", () => {
           { name: "session_message_session_time_created_id_idx" },
           { name: "session_message_session_type_seq_idx" },
         ])
+      }),
+    )
+  })
+
+  test("upgrades the frozen v11 database and rows to the exact current structural manifest", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV11(db)
+
+        expect(yield* schemaManifestDigest(db)).toBe(
+          "6c8969cb8b0c167c672ca22ec42b1412fb2821b7d5f714a31b17c58705710838",
+        )
+        expect(
+          yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition
+            FROM sqlite_schema
+            WHERE type = 'trigger'
+              AND name = 'learner_goal_commit_seal_acknowledgement_validate'
+          `),
+        ).toBeDefined()
+        expect(
+          yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition
+            FROM sqlite_schema
+            WHERE type = 'table' AND name = 'learning_command_invocation'
+          `),
+        ).toMatchObject({
+          definition: expect.stringContaining("retained_steering_effect_id"),
+        })
+
+        const fresh = yield* makeDb
+        yield* DatabaseMigration.apply(fresh)
+        const freshStructuralManifest = yield* structuralManifest(fresh)
+        const retainedSeal = freshStructuralManifest.find(
+          (entry) => entry.name === "retained_steering_commit_seal_validate_insert_v12",
+        )?.definition
+        expect(retainedSeal).toContain(
+          "invocation.capability_identity = 'update_retained_learning_steering'",
+        )
+        expect(retainedSeal).toContain("invocation.capability_version = 1")
+        const goalSeal = freshStructuralManifest.find(
+          (entry) => entry.name === "learner_goal_commit_seal_validate_insert_v12",
+        )?.definition
+        expect(goalSeal).toContain("invocation.capability_identity = 'update_learner_goals'")
+        expect(goalSeal).toContain("invocation.capability_version = 1")
+        expect(
+          freshStructuralManifest.some(
+            (entry) =>
+              entry.name === "learner_goal_commit_seal_acknowledgement_validate" ||
+              entry.name === "learner_goal_commit_seal_direct_validate",
+          ),
+        ).toBeFalse()
+        expect(
+          freshStructuralManifest.some((entry) => /\b(?:instr|lower|ltrim)\s*\(/i.test(entry.definition ?? "")),
+        ).toBeFalse()
+
+        yield* DatabaseMigration.apply(db, { path: "frozen-v11.db" })
+
+        expect(yield* structuralManifest(db)).toEqual(freshStructuralManifest)
+        expect(
+          yield* db.get(sql`
+            SELECT part_id, status, receipt_id
+            FROM learning_command_invocation
+            WHERE part_id = 'prt_v11_course'
+          `),
+        ).toEqual({
+          part_id: "prt_v11_course",
+          status: "applied",
+          receipt_id: "lcr_00000000000000000000000001",
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT id, invocation_part_id, capability_identity, capability_version,
+                   authorization_basis, time_committed, commit_order
+            FROM learning_command_receipt
+            WHERE id = 'lcr_00000000000000000000000001'
+          `),
+        ).toEqual({
+          id: "lcr_00000000000000000000000001",
+          invocation_part_id: "prt_v11_course",
+          capability_identity: "accept_course_view_revision",
+          capability_version: 1,
+          authorization_basis: "learner_request",
+          time_committed: 11,
+          commit_order: 1,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT effect_id, receipt_id, invocation_part_id
+            FROM course_selection_acceptance_commit_seal
+          `),
+        ).toEqual({
+          effect_id: "cse_00000000000000000000000001",
+          receipt_id: "lcr_00000000000000000000000001",
+          invocation_part_id: "prt_v11_course",
+        })
+        expect(
+          yield* db.all(sql`
+            SELECT status, count(*) AS count
+            FROM learning_command_invocation
+            GROUP BY status
+            ORDER BY status
+          `),
+        ).toEqual([
+          { status: "admitted", count: 1 },
+          { status: "already_applied", count: 1 },
+          { status: "applied", count: 6 },
+          { status: "error", count: 1 },
+          { status: "no_change", count: 1 },
+        ])
+        expect(
+          yield* db.get(sql`
+            SELECT status, receipt_id,
+                   json_extract(settlement, '$.effectID') AS effect_id
+            FROM learning_command_invocation
+            WHERE part_id = 'prt_v11_replay'
+          `),
+        ).toEqual({
+          status: "already_applied",
+          receipt_id: "lcr_00000000000000000000000002",
+          effect_id: "rfx_00000000000000000000000001",
+        })
+        expect(
+          yield* db.all(sql`
+            SELECT 'anchor' AS kind, effect_id, receipt_id, invocation_part_id
+            FROM learner_course_route_anchor_commit_seal
+            UNION ALL
+            SELECT 'course', effect_id, receipt_id, invocation_part_id
+            FROM course_selection_acceptance_commit_seal
+            UNION ALL
+            SELECT 'default', effect_id, receipt_id, invocation_part_id
+            FROM learner_default_course_commit_seal
+            UNION ALL
+            SELECT 'goal', effect_id, receipt_id, invocation_part_id
+            FROM learner_goal_commit_seal
+            UNION ALL
+            SELECT 'representation', effect_id, receipt_id, invocation_part_id
+            FROM representation_command_commit_seal
+            UNION ALL
+            SELECT 'retained', transition_id, receipt_id, invocation_part_id
+            FROM retained_steering_commit_seal
+            ORDER BY kind
+          `),
+        ).toEqual([
+          {
+            kind: "anchor",
+            effect_id: "nar_00000000000000000000000001",
+            receipt_id: "lcr_00000000000000000000000004",
+            invocation_part_id: "prt_v11_anchor",
+          },
+          {
+            kind: "course",
+            effect_id: "cse_00000000000000000000000001",
+            receipt_id: "lcr_00000000000000000000000001",
+            invocation_part_id: "prt_v11_course",
+          },
+          {
+            kind: "default",
+            effect_id: "ndp_00000000000000000000000001",
+            receipt_id: "lcr_00000000000000000000000003",
+            invocation_part_id: "prt_v11_default",
+          },
+          {
+            kind: "goal",
+            effect_id: "gle_00000000000000000000000001",
+            receipt_id: "lcr_00000000000000000000000006",
+            invocation_part_id: "prt_v11_goal",
+          },
+          {
+            kind: "representation",
+            effect_id: "rfx_00000000000000000000000001",
+            receipt_id: "lcr_00000000000000000000000002",
+            invocation_part_id: "prt_v11_representation",
+          },
+          {
+            kind: "retained",
+            effect_id: "rst_00000000000000000000000001",
+            receipt_id: "lcr_00000000000000000000000005",
+            invocation_part_id: "prt_v11_retained",
+          },
+        ])
+        expect(
+          yield* db.get(sql`
+            SELECT effect.authorization_basis, effect.semantic_fingerprint,
+                   operation.operation_kind, operation.result_kind,
+                   command.permission_request_id,
+                   json_extract(command.confirmation_snapshot, '$.semanticFingerprint')
+                     AS confirmation_fingerprint
+            FROM learner_goal_effect AS effect
+            JOIN learner_goal_effect_operation AS operation ON operation.effect_id = effect.id
+            JOIN learner_goal_commit_seal AS seal ON seal.effect_id = effect.id
+            JOIN learner_goal_command AS command
+              ON command.invocation_part_id = seal.invocation_part_id
+            WHERE effect.id = 'gle_00000000000000000000000001'
+          `),
+        ).toEqual({
+          authorization_basis: "learner_acceptance",
+          semantic_fingerprint: "6".repeat(64),
+          operation_kind: "create",
+          result_kind: "changed",
+          permission_request_id: "permission_v11_goal",
+          confirmation_fingerprint: "6".repeat(64),
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT revision.authorization_basis, revision.time_accepted,
+                   effect.time_committed, receipt.time_committed AS receipt_time
+            FROM representation_revision AS revision
+            JOIN representation_effect AS effect ON effect.id = revision.effect_id
+            JOIN representation_command_commit_seal AS seal ON seal.effect_id = effect.id
+            JOIN learning_command_receipt AS receipt ON receipt.id = seal.receipt_id
+            WHERE revision.id = 'rep_00000000000000000000000001'
+          `),
+        ).toEqual({
+          authorization_basis: "learner_request",
+          time_accepted: 12,
+          time_committed: 12,
+          receipt_time: 12,
+        })
+        expect(
+          yield* db.all<{ name: string }>(sql`
+            SELECT name
+            FROM pragma_table_info('learning_command_invocation_constraint_v12')
+            WHERE name IN (
+              'effect_id', 'representation_effect_id', 'default_navigation_effect_id',
+              'anchor_navigation_effect_id', 'retained_steering_effect_id', 'goal_effect_id'
+            )
+            ORDER BY cid
+          `),
+        ).toEqual([
+          { name: "effect_id" },
+          { name: "representation_effect_id" },
+          { name: "default_navigation_effect_id" },
+          { name: "anchor_navigation_effect_id" },
+          { name: "retained_steering_effect_id" },
+          { name: "goal_effect_id" },
+        ])
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+      }),
+    )
+  })
+
+  test("rolls v11 conversion back when historical receipt settlement metadata is inconsistent", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV11(db, { receiptCommitOrder: 99 })
+
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "invalid-v11-receipt.db" }))
+
+        expect(error).toMatchObject({
+          _tag: "DatabaseMigrationError",
+          migrationID: domainNeutralLearningCommandLedgerMigration.id,
+          fromVersion: BASELINE_VERSION + 10,
+          toVersion: BASELINE_VERSION + 11,
+        })
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + 10,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT commit_order
+            FROM learning_command_receipt
+            WHERE id = 'lcr_00000000000000000000000001'
+          `),
+        ).toEqual({ commit_order: 99 })
+        expect(
+          yield* db.get(sql`
+            SELECT name
+            FROM pragma_table_info('learning_command_invocation')
+            WHERE name = 'effect_id'
+          `),
+        ).toEqual({ name: "effect_id" })
+        expect(
+          yield* db.get(sql`
+            SELECT name
+            FROM sqlite_schema
+            WHERE type = 'table' AND name = 'course_selection_acceptance_commit_seal'
+          `),
+        ).toBeUndefined()
+      }),
+    )
+  })
+
+  test("rolls v11 conversion back for nonexistent receipt and wrong typed effect settlement bindings", async () => {
+    for (const fixture of [
+      { path: "missing-v11-receipt.db", settlementReceiptID: "receipt_v11_missing" },
+      { path: "wrong-v11-effect.db", settlementEffectID: "effect_v11_wrong_domain_binding" },
+    ]) {
+      await run(
+        Effect.gen(function* () {
+          const db = yield* makeDb
+          yield* initializeDatabaseV11(db, fixture)
+
+          const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: fixture.path }))
+
+          expect(error).toMatchObject({
+            _tag: "DatabaseMigrationError",
+            migrationID: domainNeutralLearningCommandLedgerMigration.id,
+            fromVersion: BASELINE_VERSION + 10,
+            toVersion: BASELINE_VERSION + 11,
+          })
+          expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+            user_version: BASELINE_VERSION + 10,
+          })
+          expect(
+            yield* db.get(sql`
+              SELECT name
+              FROM pragma_table_info('learning_command_invocation')
+              WHERE name = 'effect_id'
+            `),
+          ).toEqual({ name: "effect_id" })
+          expect(
+            yield* db.get(sql`
+              SELECT name
+              FROM sqlite_schema
+              WHERE type = 'table' AND name = 'course_selection_acceptance_commit_seal'
+            `),
+          ).toBeUndefined()
+        }),
+      )
+    }
+  })
+
+  test("rolls the frozen six-domain v11 fixture back for domain-owned semantic corruption", async () => {
+    for (const fixture of [
+      { corruption: "course_receipt_basis" as const, path: "invalid-v11-course-basis.db" },
+      { corruption: "course_command_version" as const, path: "invalid-v11-command-version.db" },
+      { corruption: "course_capability_version" as const, path: "invalid-v11-capability-version.db" },
+      {
+        corruption: "representation_revision_basis" as const,
+        path: "invalid-v11-representation-basis.db",
+      },
+      { corruption: "default_confirmation" as const, path: "invalid-v11-default-confirmation.db" },
+      { corruption: "anchor_receipt_time" as const, path: "invalid-v11-anchor-time.db" },
+      { corruption: "retained_fingerprint" as const, path: "invalid-v11-retained-effect.db" },
+      { corruption: "retained_seal" as const, path: "invalid-v11-retained-seal.db" },
+      { corruption: "goal_confirmation" as const, path: "invalid-v11-goal-confirmation.db" },
+      {
+        corruption: "anchor_no_change_payload" as const,
+        path: "invalid-v11-anchor-no-change.db",
+      },
+      {
+        corruption: "anchor_no_change_usability" as const,
+        path: "invalid-v11-anchor-no-change-usability.db",
+      },
+      {
+        corruption: "anchor_no_change_partial_source" as const,
+        path: "invalid-v11-anchor-no-change-partial-source.db",
+      },
+      {
+        corruption: "goal_operation_meaning" as const,
+        path: "invalid-v11-goal-operation-meaning.db",
+      },
+      {
+        corruption: "goal_replacement_target" as const,
+        path: "invalid-v11-goal-replacement-target.db",
+      },
+      { corruption: "retained_error_code" as const, path: "invalid-v11-retained-error.db" },
+      {
+        corruption: "retained_error_detail" as const,
+        path: "invalid-v11-retained-error-detail.db",
+      },
+    ]) {
+      await run(
+        Effect.gen(function* () {
+          const db = yield* makeDb
+          yield* initializeDatabaseV11(db, { corruption: fixture.corruption })
+
+          const violatesFrozenCheck =
+            fixture.corruption === "course_command_version" ||
+            fixture.corruption === "course_capability_version"
+          const violatesDomainValidator =
+            fixture.corruption === "anchor_no_change_usability" ||
+            fixture.corruption === "anchor_no_change_partial_source" ||
+            fixture.corruption === "goal_operation_meaning" ||
+            fixture.corruption === "goal_replacement_target"
+          const error = violatesFrozenCheck || violatesDomainValidator
+            ? yield* Effect.flip(
+                db.transaction((tx) => domainNeutralLearningCommandLedgerMigration.up(tx)),
+              )
+            : yield* Effect.flip(DatabaseMigration.apply(db, { path: fixture.path }))
+
+          if (violatesFrozenCheck) {
+            expect(String(error)).toContain("cannot be represented by v12")
+          } else if (violatesDomainValidator) {
+            expect(String(error)).toContain("fail their domain validators")
+          } else {
+            expect(error).toMatchObject({
+              _tag: "DatabaseMigrationError",
+              migrationID: domainNeutralLearningCommandLedgerMigration.id,
+              fromVersion: BASELINE_VERSION + 10,
+              toVersion: BASELINE_VERSION + 11,
+            })
+          }
+          expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+            user_version: BASELINE_VERSION + 10,
+          })
+          expect(
+            yield* db.get(sql`
+              SELECT
+                (SELECT count(*) FROM learning_command_invocation) AS invocations,
+                (SELECT count(*) FROM learning_command_receipt) AS receipts
+            `),
+          ).toEqual({ invocations: 10, receipts: 6 })
+          expect(
+            yield* db.get(sql`
+              SELECT name
+              FROM pragma_table_info('learning_command_invocation')
+              WHERE name = 'goal_effect_id'
+            `),
+          ).toEqual({ name: "goal_effect_id" })
+          expect(
+            yield* db.get(sql`
+              SELECT name FROM sqlite_schema
+              WHERE type = 'table' AND name = 'learner_default_course_command'
+            `),
+          ).toBeUndefined()
+        }),
+      )
+    }
+  })
+
+  test("rejects current-version trigger drift against the versioned structural manifest", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(sql`DROP TRIGGER course_selection_acceptance_commit_seal_validate_insert_v12`)
+        yield* db.run(sql`
+          CREATE TRIGGER course_selection_acceptance_commit_seal_validate_insert_v12
+          BEFORE INSERT ON course_selection_acceptance_commit_seal
+          BEGIN
+            SELECT 1;
+          END
+        `)
+
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "structural-drift.db" }))
+
+        expect(error).toMatchObject({ reason: "corrupt" })
+        if (error._tag !== "DatabaseAdmissionError") return yield* Effect.die("Expected database admission failure")
+        expect(error.detail).toContain("changed: course_selection_acceptance_commit_seal_validate_insert_v12")
       }),
     )
   })
@@ -793,7 +2075,7 @@ describe("DatabaseMigration", () => {
           fromCourseID: null,
           fromCourseTitle: null,
           target: {
-            courseID: "crs_gate16",
+            courseID: "crs_00000000000000000000000011",
             courseTitle: "Gate 16 migration fixture",
             courseVersion: 0,
             selectionRevisionID: null,
@@ -804,6 +2086,144 @@ describe("DatabaseMigration", () => {
             revisionVersion: null,
           },
         })
+        const courseSettlement = JSON.stringify({
+          outcome: "applied",
+          receiptID: "lcr_00000000000000000000000011",
+          effectID: "cse_00000000000000000000000011",
+          courseID: "crs_00000000000000000000000011",
+          revisionID: "cvr_00000000000000000000000011",
+          previousSelection: { version: 0 },
+          committedSelection: { revisionID: "cvr_00000000000000000000000011", version: 1 },
+          settlementTime: 11,
+          settlementOrder: 1,
+        })
+        const representationSettlement = JSON.stringify({
+          outcome: "applied",
+          receiptID: "lcr_00000000000000000000000012",
+          effectID: "rfx_00000000000000000000000011",
+          representationRevisionID: "rep_00000000000000000000000011",
+          effectiveArtifactID: "art_00000000000000000000000011",
+          sourceRevisionID: "arv_00000000000000000000000011",
+          producerKind: "configured_model",
+          settlementTime: 12,
+          settlementOrder: 2,
+        })
+        const defaultCurrent = {
+          kind: "default_course_preference",
+          headID: "ndp_00000000000000000000000011",
+          version: 1,
+          courseID: "crs_00000000000000000000000011",
+          usability: { usable: true, title: "Gate 16 migration fixture" },
+          source: {
+            receiptID: "lcr_00000000000000000000000013",
+            occurrenceID: "lco_00000000000000000000000013",
+            originSessionID: "ses_gate16",
+            originMessageID: "msg_gate16_default",
+            assistantMessageID: "msg_gate16_assistant_default",
+            invocationPartID: "prt_gate16_default",
+            availability: "available",
+          },
+          timeCommitted: 13,
+          commitOrder: 3,
+          frontierSequence: 1,
+        }
+        const defaultSettlement = JSON.stringify({
+          outcome: "applied",
+          navigationKind: "default_course_preference",
+          receiptID: "lcr_00000000000000000000000013",
+          effectID: "ndp_00000000000000000000000011",
+          effect: {
+            id: "ndp_00000000000000000000000011",
+            occurrenceID: "lco_00000000000000000000000013",
+            previousCourseID: null,
+            courseID: "crs_00000000000000000000000011",
+            previousVersion: 0,
+            version: 1,
+            timeCommitted: 13,
+            commitOrder: 3,
+            frontierSequence: 1,
+          },
+          current: defaultCurrent,
+          confirmation: JSON.parse(defaultConfirmation),
+          settlementTime: 13,
+          settlementOrder: 3,
+        })
+        const anchorCurrent = {
+          kind: "course_route_anchor",
+          courseID: "crs_00000000000000000000000011",
+          headID: "nar_00000000000000000000000011",
+          version: 1,
+          target: {
+            courseID: "crs_00000000000000000000000011",
+            viewID: "cvw_00000000000000000000000011",
+            revisionID: "cvr_00000000000000000000000011",
+            itemID: "cit_00000000000000000000000011",
+          },
+          usability: { usable: true },
+          source: {
+            receiptID: "lcr_00000000000000000000000014",
+            occurrenceID: "lco_00000000000000000000000014",
+            originSessionID: "ses_gate16",
+            originMessageID: "msg_gate16_anchor",
+            assistantMessageID: "msg_gate16_assistant_anchor",
+            invocationPartID: "prt_gate16_anchor",
+            availability: "available",
+          },
+          timeCommitted: 14,
+          commitOrder: 4,
+          frontierSequence: 2,
+        }
+        const anchorSettlement = JSON.stringify({
+          outcome: "applied",
+          navigationKind: "course_route_anchor",
+          receiptID: "lcr_00000000000000000000000014",
+          effectID: "nar_00000000000000000000000011",
+          effect: {
+            id: "nar_00000000000000000000000011",
+            occurrenceID: "lco_00000000000000000000000014",
+            courseID: "crs_00000000000000000000000011",
+            previousTarget: null,
+            target: {
+              courseID: "crs_00000000000000000000000011",
+              viewID: "cvw_00000000000000000000000011",
+              revisionID: "cvr_00000000000000000000000011",
+              itemID: "cit_00000000000000000000000011",
+            },
+            previousVersion: 0,
+            version: 1,
+            timeCommitted: 14,
+            commitOrder: 4,
+            frontierSequence: 2,
+          },
+          current: anchorCurrent,
+          settlementTime: 14,
+          settlementOrder: 4,
+        })
+        const noChangeSettlement = JSON.stringify({
+          outcome: "no_change",
+          navigationKind: "course_route_anchor",
+          current: anchorCurrent,
+          settlementTime: 17,
+          settlementOrder: 7,
+        })
+        const retainedSettlement = JSON.stringify({
+          outcome: "applied",
+          receiptID: "lcr_00000000000000000000000015",
+          effectID: "rst_00000000000000000000000011",
+          policyID: "rsp_00000000000000000000000011",
+          version: 1,
+          state: "operative",
+          acknowledgementTitle: "Preference retained",
+          acknowledgementBody: "Concrete examples will be used first.",
+          settlementTime: 15,
+          settlementOrder: 5,
+        })
+        const representationReplaySettlement = JSON.stringify({
+          ...JSON.parse(representationSettlement),
+          outcome: "already_applied",
+          settlementTime: 16,
+          settlementOrder: 6,
+        })
         yield* db.transaction((tx) =>
           Effect.gen(function* () {
             yield* tx.run("PRAGMA defer_foreign_keys = ON")
@@ -812,56 +2232,56 @@ describe("DatabaseMigration", () => {
                 sequence, occurrence_id, origin_session_id, origin_message_id, time_allocated,
                 source_temporal_state, source_timezone, source_utc_offset_minutes
               ) VALUES
-                (1, 'loc_gate16_course', 'ses_gate16', 'msg_gate16_course', 1, 'resolved', 'UTC', 0),
-                (2, 'loc_gate16_representation', 'ses_gate16', 'msg_gate16_representation', 2, 'resolved', 'UTC', 0),
-                (3, 'loc_gate16_default', 'ses_gate16', 'msg_gate16_default', 3, 'resolved', 'UTC', 0),
-                (4, 'loc_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor', 4, 'resolved', 'UTC', 0),
-                (5, 'loc_gate16_retained', 'ses_gate16', 'msg_gate16_retained', 5, 'resolved', 'UTC', 0),
-                (6, 'loc_gate16_no_change', 'ses_gate16', 'msg_gate16_no_change', 6, 'resolved', 'UTC', 0),
-                (7, 'loc_gate16_error', 'ses_gate16', 'msg_gate16_error', 7, 'resolved', 'UTC', 0),
-                (8, 'loc_gate16_admitted', 'ses_gate16', 'msg_gate16_admitted', 8, 'resolved', 'UTC', 0)
+                (1, 'lco_00000000000000000000000011', 'ses_gate16', 'msg_gate16_course', 1, 'resolved', 'UTC', 0),
+                (2, 'lco_00000000000000000000000012', 'ses_gate16', 'msg_gate16_representation', 2, 'resolved', 'UTC', 0),
+                (3, 'lco_00000000000000000000000013', 'ses_gate16', 'msg_gate16_default', 3, 'resolved', 'UTC', 0),
+                (4, 'lco_00000000000000000000000014', 'ses_gate16', 'msg_gate16_anchor', 4, 'resolved', 'UTC', 0),
+                (5, 'lco_00000000000000000000000015', 'ses_gate16', 'msg_gate16_retained', 5, 'resolved', 'UTC', 0),
+                (6, 'lco_00000000000000000000000016', 'ses_gate16', 'msg_gate16_no_change', 6, 'resolved', 'UTC', 0),
+                (7, 'lco_00000000000000000000000017', 'ses_gate16', 'msg_gate16_error', 7, 'resolved', 'UTC', 0),
+                (8, 'lco_00000000000000000000000018', 'ses_gate16', 'msg_gate16_admitted', 8, 'resolved', 'UTC', 0)
             `)
             yield* tx.run(sql`
               INSERT INTO learning_admitted_occurrence (
                 id, origin_session_id, origin_message_id, time_admitted, source_order,
                 source_temporal_state, source_timezone, source_utc_offset_minutes
               ) VALUES
-                ('loc_gate16_course', 'ses_gate16', 'msg_gate16_course', 1, 1, 'resolved', 'UTC', 0),
-                ('loc_gate16_representation', 'ses_gate16', 'msg_gate16_representation', 2, 2, 'resolved', 'UTC', 0),
-                ('loc_gate16_default', 'ses_gate16', 'msg_gate16_default', 3, 3, 'resolved', 'UTC', 0),
-                ('loc_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor', 4, 4, 'resolved', 'UTC', 0),
-                ('loc_gate16_retained', 'ses_gate16', 'msg_gate16_retained', 5, 5, 'resolved', 'UTC', 0),
-                ('loc_gate16_no_change', 'ses_gate16', 'msg_gate16_no_change', 6, 6, 'resolved', 'UTC', 0),
-                ('loc_gate16_error', 'ses_gate16', 'msg_gate16_error', 7, 7, 'resolved', 'UTC', 0),
-                ('loc_gate16_admitted', 'ses_gate16', 'msg_gate16_admitted', 8, 8, 'resolved', 'UTC', 0)
+                ('lco_00000000000000000000000011', 'ses_gate16', 'msg_gate16_course', 1, 1, 'resolved', 'UTC', 0),
+                ('lco_00000000000000000000000012', 'ses_gate16', 'msg_gate16_representation', 2, 2, 'resolved', 'UTC', 0),
+                ('lco_00000000000000000000000013', 'ses_gate16', 'msg_gate16_default', 3, 3, 'resolved', 'UTC', 0),
+                ('lco_00000000000000000000000014', 'ses_gate16', 'msg_gate16_anchor', 4, 4, 'resolved', 'UTC', 0),
+                ('lco_00000000000000000000000015', 'ses_gate16', 'msg_gate16_retained', 5, 5, 'resolved', 'UTC', 0),
+                ('lco_00000000000000000000000016', 'ses_gate16', 'msg_gate16_no_change', 6, 6, 'resolved', 'UTC', 0),
+                ('lco_00000000000000000000000017', 'ses_gate16', 'msg_gate16_error', 7, 7, 'resolved', 'UTC', 0),
+                ('lco_00000000000000000000000018', 'ses_gate16', 'msg_gate16_admitted', 8, 8, 'resolved', 'UTC', 0)
             `)
             yield* tx.run(sql`
               INSERT INTO course (id, title, state_version, time_created, time_updated)
-              VALUES ('crs_gate16', 'Gate 16 migration fixture', 0, 1, 1)
+              VALUES ('crs_00000000000000000000000011', 'Gate 16 migration fixture', 0, 1, 1)
             `)
             yield* tx.run(sql`
               INSERT INTO course_view (id, course_id, name, state_version, time_created, time_updated)
-              VALUES ('view_gate16', 'crs_gate16', 'Gate 16 view', 0, 1, 1)
+              VALUES ('cvw_00000000000000000000000011', 'crs_00000000000000000000000011', 'Gate 16 view', 0, 1, 1)
             `)
             yield* tx.run(sql`
               INSERT INTO course_view_revision (
                 id, course_id, view_id, revision_number, authorship_basis, time_created
-              ) VALUES ('revision_gate16', 'crs_gate16', 'view_gate16', 1, 'learner_directed', 1)
+              ) VALUES ('cvr_00000000000000000000000011', 'crs_00000000000000000000000011', 'cvw_00000000000000000000000011', 1, 'learner_directed', 1)
             `)
             yield* tx.run(sql`
               INSERT INTO course_view_revision_state (
                 course_id, view_id, revision_id, state_version, time_updated
-              ) VALUES ('crs_gate16', 'view_gate16', 'revision_gate16', 0, 1)
+              ) VALUES ('crs_00000000000000000000000011', 'cvw_00000000000000000000000011', 'cvr_00000000000000000000000011', 0, 1)
             `)
             yield* tx.run(sql`
               INSERT INTO course_item (id, course_id, time_created)
-              VALUES ('item_gate16', 'crs_gate16', 1)
+              VALUES ('cit_00000000000000000000000011', 'crs_00000000000000000000000011', 1)
             `)
             yield* tx.run(sql`
               INSERT INTO course_view_revision_item (
                 course_id, view_id, revision_id, item_id, title, preorder_position, depth
               ) VALUES (
-                'crs_gate16', 'view_gate16', 'revision_gate16', 'item_gate16', 'Gate 16 item', 0, 0
+                'crs_00000000000000000000000011', 'cvw_00000000000000000000000011', 'cvr_00000000000000000000000011', 'cit_00000000000000000000000011', 'Gate 16 item', 0, 0
               )
             `)
             yield* tx.run(sql`
@@ -869,12 +2289,101 @@ describe("DatabaseMigration", () => {
                 id, occurrence_id, course_id, accepted_revision_id, previous_selection_version,
                 committed_selection_version, time_committed
               ) VALUES (
-                'effect_gate16_course', 'loc_gate16_course', 'crs_gate16', 'revision_gate16', 0, 1, 11
+                'cse_00000000000000000000000011', 'lco_00000000000000000000000011', 'crs_00000000000000000000000011', 'cvr_00000000000000000000000011', 0, 1, 11
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO artifact (
+                id, admission_root_artifact_id, creation_basis, creation_capability_identity,
+                creation_capability_version, disposition_version, lineage_version,
+                correction_hidden, time_created, time_updated
+              ) VALUES (
+                'art_00000000000000000000000011', 'art_00000000000000000000000011', 'learner_instruction',
+                'gate16-fixture', 1, 0, 0, 0, 1, 1
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO artifact_revision (
+                id, recorded_artifact_id, fingerprint_algorithm, fingerprint_digest,
+                byte_length, time_first_observed
+              ) VALUES (
+                'arv_00000000000000000000000011', 'art_00000000000000000000000011', 'sha256',
+                ${"a".repeat(64)}, 1, 1
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO content_root (id, time_created)
+              VALUES ('content_root_gate16', 1)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO content_root_binding (
+                id, content_root_id, canonical_path, canonical_path_key, platform,
+                volume_serial, object_id, creation_time, initial_change_time,
+                verifier_version, time_created
+              ) VALUES (
+                'content_binding_gate16', 'content_root_gate16', 'C:\\gate16', 'c:\\gate16',
+                'windows_ntfs', 'volume-gate16', '0123456789abcdef0123456789abcdef',
+                'creation-gate16', 'change-gate16', 1, 1
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO content_root_binding_episode (
+                id, content_root_id, binding_id, ordinal, approval_basis, time_started
+              ) VALUES (
+                'content_binding_episode_gate16', 'content_root_gate16',
+                'content_binding_gate16', 1, 'learner approval', 1
+              )
+            `)
+            yield* tx.run(sql`
+              INSERT INTO content_root_grant_episode (
+                id, content_root_id, binding_id, binding_episode_id, ordinal,
+                approval_basis, time_approved, time_updated
+              ) VALUES (
+                'content_grant_episode_gate16', 'content_root_gate16',
+                'content_binding_gate16', 'content_binding_episode_gate16', 1,
+                'learner approval', 1, 1
               )
             `)
             yield* tx.run(sql`
               INSERT INTO representation_effect (id, operation_identity, semantic_fingerprint, time_committed)
-              VALUES ('effect_gate16_representation', 'gate16-operation', ${"2".repeat(64)}, 12)
+              VALUES ('rfx_00000000000000000000000011', 'gate16-operation', ${"2".repeat(64)}, 12)
+            `)
+            yield* tx.run(sql`
+              INSERT INTO representation_revision (
+                id, effect_id, source_revision_id, effective_artifact_id, attribution_type,
+                accepted_disposition_version, accepted_lineage_version, source_version,
+                source_media_type, source_digest, source_byte_length, content_root_id,
+                content_root_binding_id, content_root_binding_episode_id,
+                content_root_binding_episode_ordinal, content_root_grant_episode_id,
+                content_root_grant_version, normalized_relative_path, source_object_platform,
+                source_object_verifier_version, source_object_canonical_path,
+                source_object_canonical_path_key, source_object_volume_serial, source_object_id,
+                source_object_creation_time, source_object_change_time,
+                source_object_last_write_time, source_object_size, source_object_kind,
+                source_observed_time, presented_input_digest, presented_input_byte_length,
+                producer_kind, producer_identity, producer_version, provider_id, model_id,
+                task_version, profile, canonicalizer_version, provenance_version, provenance,
+                run_identity, result_boundary, terminal_status, diagnostics, usage,
+                output_media_type, storage_key, output_digest, output_byte_length,
+                profile_record_count, acceptance_basis, creation_basis, creation_identity,
+                authorization_intent, authorization_basis, delivery_mode,
+                causal_occurrence_id, causal_invocation_part_id, time_accepted
+              ) VALUES (
+                'rep_00000000000000000000000011', 'rfx_00000000000000000000000011',
+                'arv_00000000000000000000000011', 'art_00000000000000000000000011', 'recorded', 0, 0, 0,
+                'application/pdf', ${"a".repeat(64)}, 1, 'content_root_gate16',
+                'content_binding_gate16', 'content_binding_episode_gate16', 1,
+                'content_grant_episode_gate16', 1, 'source.pdf', 'windows_ntfs', 1,
+                'C:\\gate16\\source.pdf', 'c:\\gate16\\source.pdf', 'volume-gate16',
+                '0123456789abcdef0123456789abcdef', 'creation-gate16', 'change-gate16',
+                'write-gate16', 1, 'file', 2, ${"a".repeat(64)}, 1, 'configured_model',
+                'gate16-model', '1', 'gate16-provider', 'gate16-model', 1,
+                'repa.model-rendition.v1', 1, 1, '{}', 'run-gate16', 'model_schema_v1',
+                'stop', '[]', '{}', 'text/markdown', 'representation-gate16.md',
+                ${"b".repeat(64)}, 1, 1, 'model_claimed_rendition', 'learning_command',
+                'gate16-operation', 'persistent_readable_access', 'learner_request',
+                'model_tool', 'lco_00000000000000000000000012', 'prt_gate16_representation', 12
+              )
             `)
             yield* tx.run(sql`
               INSERT INTO learner_default_course_transition (
@@ -882,7 +2391,7 @@ describe("DatabaseMigration", () => {
                 confirmation_snapshot, target_course_version, target_selection_version,
                 time_committed, commit_order, frontier_sequence, frontier_time
               ) VALUES (
-                'effect_gate16_default', 1, NULL, 'crs_gate16', 'loc_gate16_default',
+                'ndp_00000000000000000000000011', 1, NULL, 'crs_00000000000000000000000011', 'lco_00000000000000000000000013',
                 'permission_gate16_default', ${defaultConfirmation}, 0, 0,
                 13, 3, 1, 13
               )
@@ -893,8 +2402,8 @@ describe("DatabaseMigration", () => {
                 occurrence_id, target_course_version, target_selection_version, target_view_version,
                 target_revision_version, time_committed, commit_order, frontier_sequence, frontier_time
               ) VALUES (
-                'effect_gate16_anchor', 'crs_gate16', 1, 'view_gate16', 'revision_gate16',
-                'item_gate16', 'loc_gate16_anchor', 0, 0, 0, 0, 14, 4, 2, 14
+                'nar_00000000000000000000000011', 'crs_00000000000000000000000011', 1, 'cvw_00000000000000000000000011', 'cvr_00000000000000000000000011',
+                'cit_00000000000000000000000011', 'lco_00000000000000000000000014', 0, 0, 0, 0, 14, 4, 2, 14
               )
             `)
             yield* tx.run(sql`
@@ -903,7 +2412,7 @@ describe("DatabaseMigration", () => {
             `)
             yield* tx.run(sql`
               INSERT INTO retained_steering_policy (id, time_created)
-              VALUES ('policy_gate16', 5)
+              VALUES ('rsp_00000000000000000000000011', 5)
             `)
             yield* tx.run(sql`
               INSERT INTO retained_steering_transition (
@@ -914,8 +2423,8 @@ describe("DatabaseMigration", () => {
                 commit_order, frontier_sequence, frontier_time, acknowledgement_title,
                 acknowledgement_body
               ) VALUES (
-                'effect_gate16_retained', 'effect_gate16_retained', 'policy_gate16', 1, 'absent',
-                'loc_gate16_retained', 5, 'operative', 'learning_wide', 'Keep examples concrete',
+                'rst_00000000000000000000000011', 'rst_00000000000000000000000011', 'rsp_00000000000000000000000011', 1, 'absent',
+                'lco_00000000000000000000000015', 5, 'operative', 'learning_wide', 'Keep examples concrete',
                 'Use concrete examples first', 'I learn faster that way', 5, 500,
                 'until the course ends', '1970-01-01T00:08:20.000Z', 'UTC', 0,
                 ${"5".repeat(64)}, 1, 15, 5, 3, 15, 'Preference retained',
@@ -933,75 +2442,82 @@ describe("DatabaseMigration", () => {
                 time_settled, settlement_order, turn_id, input_id
               ) VALUES
                 (
-                  'part_gate16_course', 'ses_gate16', 'msg_gate16_course', 'msg_gate16_assistant_course',
-                  'call-gate16-course', 'loc_gate16_course', 'accept_course_view_revision', 1, 0,
+                  'prt_gate16_course', 'ses_gate16', 'msg_gate16_course', 'msg_gate16_assistant_course',
+                  'call-gate16-course', 'lco_00000000000000000000000011', 'accept_course_view_revision', 1, 0,
                   'accept_course_view_revision', 1, 'learner_request', ${"1".repeat(64)}, NULL,
-                  'applied', 'effect_gate16_course', NULL, NULL, NULL, NULL, NULL,
-                  '{"outcome":"applied","effectID":"effect_gate16_course"}', 1, 11, 1, NULL, NULL
+                  'applied', 'cse_00000000000000000000000011', NULL, NULL, NULL, NULL, NULL,
+                  ${courseSettlement},
+                  1, 11, 1, NULL, NULL
                 ),
                 (
-                  'part_gate16_representation', 'ses_gate16', 'msg_gate16_representation',
+                  'prt_gate16_representation', 'ses_gate16', 'msg_gate16_representation',
                   'msg_gate16_assistant_representation', 'call-gate16-representation',
-                  'loc_gate16_representation', 'representation.convert', 1, 0,
+                  'lco_00000000000000000000000012', 'representation.convert', 1, 0,
                   'representation.convert', 1, 'learner_request', ${"2".repeat(64)}, NULL,
-                  'applied', NULL, 'effect_gate16_representation', NULL, NULL, NULL, NULL,
-                  '{"outcome":"applied","effectID":"effect_gate16_representation"}', 2, 12, 2,
+                  'applied', NULL, 'rfx_00000000000000000000000011', NULL, NULL, NULL, NULL,
+                  ${representationSettlement},
+                  2, 12, 2,
                   'turn-gate16-representation', 'input-gate16-representation'
                 ),
                 (
-                  'part_gate16_default', 'ses_gate16', 'msg_gate16_default',
-                  'msg_gate16_assistant_default', 'call-gate16-default', 'loc_gate16_default',
+                  'prt_gate16_default', 'ses_gate16', 'msg_gate16_default',
+                  'msg_gate16_assistant_default', 'call-gate16-default', 'lco_00000000000000000000000013',
                   'set_default_course_preference', 1, 0, 'set_default_course_preference', 1,
                   'learner_acceptance', ${"3".repeat(64)}, NULL, 'applied', NULL, NULL,
-                  'effect_gate16_default', NULL, NULL, 'permission_gate16_default',
-                  '{"outcome":"applied","effectID":"effect_gate16_default"}', 3, 13, 3,
+                  'ndp_00000000000000000000000011', NULL, NULL, 'permission_gate16_default',
+                  ${defaultSettlement},
+                  3, 13, 3,
                   'turn-gate16-default', 'input-gate16-default'
                 ),
                 (
-                  'part_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor',
-                  'msg_gate16_assistant_anchor', 'call-gate16-anchor', 'loc_gate16_anchor',
+                  'prt_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor',
+                  'msg_gate16_assistant_anchor', 'call-gate16-anchor', 'lco_00000000000000000000000014',
                   'set_course_route_anchor', 1, 0, 'set_course_route_anchor', 1, 'learner_request',
-                  ${"4".repeat(64)}, NULL, 'applied', NULL, NULL, NULL, 'effect_gate16_anchor',
-                  NULL, NULL, '{"outcome":"applied","effectID":"effect_gate16_anchor"}',
+                  ${"4".repeat(64)}, NULL, 'applied', NULL, NULL, NULL, 'nar_00000000000000000000000011',
+                  NULL, NULL,
+                  ${anchorSettlement},
                   4, 14, 4, 'turn-gate16-anchor', 'input-gate16-anchor'
                 ),
                 (
-                  'part_gate16_retained', 'ses_gate16', 'msg_gate16_retained',
-                  'msg_gate16_assistant_retained', 'call-gate16-retained', 'loc_gate16_retained',
+                  'prt_gate16_retained', 'ses_gate16', 'msg_gate16_retained',
+                  'msg_gate16_assistant_retained', 'call-gate16-retained', 'lco_00000000000000000000000015',
                   'update_retained_learning_steering', 1, 0, 'update_retained_learning_steering', 1,
                   'learner_request', ${"5".repeat(64)}, ${"5".repeat(64)}, 'applied', NULL, NULL,
-                  NULL, NULL, 'effect_gate16_retained', NULL,
-                  '{"outcome":"applied","effectID":"effect_gate16_retained"}', 5, 15, 5,
+                  NULL, NULL, 'rst_00000000000000000000000011', NULL,
+                  ${retainedSettlement},
+                  5, 15, 5,
                   'turn-gate16-retained', 'input-gate16-retained'
                 ),
                 (
-                  'part_gate16_replay', 'ses_gate16', 'msg_gate16_representation',
-                  'msg_gate16_assistant_replay', 'call-gate16-replay', 'loc_gate16_representation',
+                  'prt_gate16_replay', 'ses_gate16', 'msg_gate16_representation',
+                  'msg_gate16_assistant_replay', 'call-gate16-replay', 'lco_00000000000000000000000012',
                   'representation.convert', 1, 0, 'representation.convert', 1, 'learner_request',
-                  ${"6".repeat(64)}, NULL, 'already_applied', NULL, 'effect_gate16_representation',
+                  ${"6".repeat(64)}, NULL, 'already_applied', NULL, 'rfx_00000000000000000000000011',
                   NULL, NULL, NULL, NULL,
-                  '{"outcome":"already_applied","effectID":"effect_gate16_representation"}',
+                  ${representationReplaySettlement},
                   6, 16, 6, NULL, NULL
                 ),
                 (
-                  'part_gate16_no_change', 'ses_gate16', 'msg_gate16_no_change',
-                  'msg_gate16_assistant_no_change', 'call-gate16-no-change', 'loc_gate16_no_change',
+                  'prt_gate16_no_change', 'ses_gate16', 'msg_gate16_no_change',
+                  'msg_gate16_assistant_no_change', 'call-gate16-no-change', 'lco_00000000000000000000000016',
                   'set_course_route_anchor', 1, 0, 'set_course_route_anchor', 1, 'learner_request',
                   ${"7".repeat(64)}, NULL, 'no_change', NULL, NULL, NULL, NULL, NULL, NULL,
-                  '{"outcome":"no_change"}', 7, 17, 7, 'turn-gate16-no-change',
+                  ${noChangeSettlement},
+                  7, 17, 7, 'turn-gate16-no-change',
                   'input-gate16-no-change'
                 ),
                 (
-                  'part_gate16_error', 'ses_gate16', 'msg_gate16_error',
-                  'msg_gate16_assistant_error', 'call-gate16-error', 'loc_gate16_error',
+                  'prt_gate16_error', 'ses_gate16', 'msg_gate16_error',
+                  'msg_gate16_assistant_error', 'call-gate16-error', 'lco_00000000000000000000000017',
                   'update_retained_learning_steering', 1, 0, 'update_retained_learning_steering', 1,
                   'learner_request', ${"8".repeat(64)}, ${"8".repeat(64)}, 'error', NULL, NULL,
-                  NULL, NULL, NULL, NULL, '{"outcome":"error","code":"validation_error"}',
+                  NULL, NULL, NULL, NULL,
+                  '{"outcome":"error","code":"validation_error","settlementTime":18,"settlementOrder":8}',
                   8, 18, 8, 'turn-gate16-error', 'input-gate16-error'
                 ),
                 (
-                  'part_gate16_admitted', 'ses_gate16', 'msg_gate16_admitted',
-                  'msg_gate16_assistant_admitted', 'call-gate16-admitted', 'loc_gate16_admitted',
+                  'prt_gate16_admitted', 'ses_gate16', 'msg_gate16_admitted',
+                  'msg_gate16_assistant_admitted', 'call-gate16-admitted', 'lco_00000000000000000000000018',
                   'update_retained_learning_steering', 1, 0, 'update_retained_learning_steering', 1,
                   'learner_request', ${"9".repeat(64)}, ${"9".repeat(64)}, 'admitted', NULL, NULL,
                   NULL, NULL, NULL, NULL, NULL, 8, NULL, NULL, 'turn-gate16-admitted',
@@ -1017,45 +2533,45 @@ describe("DatabaseMigration", () => {
                 confirmation_snapshot, time_committed, commit_order
               ) VALUES
                 (
-                  'receipt_gate16_course', 'loc_gate16_course', 'ses_gate16', 'msg_gate16_course',
-                  'msg_gate16_assistant_course', 'part_gate16_course', 'accept_course_view_revision',
-                  1, 'learner_request', 'effect_gate16_course', NULL, NULL, NULL, NULL, NULL, NULL, 11, 1
+                  'lcr_00000000000000000000000011', 'lco_00000000000000000000000011', 'ses_gate16', 'msg_gate16_course',
+                  'msg_gate16_assistant_course', 'prt_gate16_course', 'accept_course_view_revision',
+                  1, 'learner_request', 'cse_00000000000000000000000011', NULL, NULL, NULL, NULL, NULL, NULL, 11, 1
                 ),
                 (
-                  'receipt_gate16_representation', 'loc_gate16_representation', 'ses_gate16',
+                  'lcr_00000000000000000000000012', 'lco_00000000000000000000000012', 'ses_gate16',
                   'msg_gate16_representation', 'msg_gate16_assistant_representation',
-                  'part_gate16_representation', 'representation.convert', 1, 'learner_request',
-                  NULL, 'effect_gate16_representation', NULL, NULL, NULL, NULL, NULL, 12, 2
+                  'prt_gate16_representation', 'representation.convert', 1, 'learner_request',
+                  NULL, 'rfx_00000000000000000000000011', NULL, NULL, NULL, NULL, NULL, 12, 2
                 ),
                 (
-                  'receipt_gate16_default', 'loc_gate16_default', 'ses_gate16', 'msg_gate16_default',
-                  'msg_gate16_assistant_default', 'part_gate16_default',
+                  'lcr_00000000000000000000000013', 'lco_00000000000000000000000013', 'ses_gate16', 'msg_gate16_default',
+                  'msg_gate16_assistant_default', 'prt_gate16_default',
                   'set_default_course_preference', 1, 'learner_acceptance', NULL, NULL,
-                  'effect_gate16_default', NULL, NULL, 'permission_gate16_default',
+                  'ndp_00000000000000000000000011', NULL, NULL, 'permission_gate16_default',
                   ${defaultConfirmation}, 13, 3
                 ),
                 (
-                  'receipt_gate16_anchor', 'loc_gate16_anchor', 'ses_gate16', 'msg_gate16_anchor',
-                  'msg_gate16_assistant_anchor', 'part_gate16_anchor', 'set_course_route_anchor',
-                  1, 'learner_request', NULL, NULL, NULL, 'effect_gate16_anchor', NULL, NULL, NULL, 14, 4
+                  'lcr_00000000000000000000000014', 'lco_00000000000000000000000014', 'ses_gate16', 'msg_gate16_anchor',
+                  'msg_gate16_assistant_anchor', 'prt_gate16_anchor', 'set_course_route_anchor',
+                  1, 'learner_request', NULL, NULL, NULL, 'nar_00000000000000000000000011', NULL, NULL, NULL, 14, 4
                 ),
                 (
-                  'receipt_gate16_retained', 'loc_gate16_retained', 'ses_gate16',
-                  'msg_gate16_retained', 'msg_gate16_assistant_retained', 'part_gate16_retained',
+                  'lcr_00000000000000000000000015', 'lco_00000000000000000000000015', 'ses_gate16',
+                  'msg_gate16_retained', 'msg_gate16_assistant_retained', 'prt_gate16_retained',
                   'update_retained_learning_steering', 1, 'learner_request', NULL, NULL, NULL,
-                  NULL, 'effect_gate16_retained', NULL, NULL, 15, 5
+                  NULL, 'rst_00000000000000000000000011', NULL, NULL, 15, 5
                 )
             `)
             yield* tx.run(sql`
               INSERT INTO retained_steering_commit_seal (
                 transition_id, receipt_id, invocation_part_id
               ) VALUES (
-                'effect_gate16_retained', 'receipt_gate16_retained', 'part_gate16_retained'
+                'rst_00000000000000000000000011', 'lcr_00000000000000000000000015', 'prt_gate16_retained'
               )
             `)
           }),
         )
-        yield* db.transaction((tx) => DatabaseSchemaExtras.install(tx))
+        yield* db.transaction((tx) => installSchemaExtrasV10(tx))
 
         const preservedRows = () =>
           Effect.all({
@@ -1106,7 +2622,7 @@ describe("DatabaseMigration", () => {
         ).toEqual([
           {
             capability_identity: "accept_course_view_revision",
-            effect_id: "effect_gate16_course",
+            effect_id: "cse_00000000000000000000000011",
             representation_effect_id: null,
             default_navigation_effect_id: null,
             anchor_navigation_effect_id: null,
@@ -1115,7 +2631,7 @@ describe("DatabaseMigration", () => {
           {
             capability_identity: "representation.convert",
             effect_id: null,
-            representation_effect_id: "effect_gate16_representation",
+            representation_effect_id: "rfx_00000000000000000000000011",
             default_navigation_effect_id: null,
             anchor_navigation_effect_id: null,
             retained_steering_effect_id: null,
@@ -1125,14 +2641,14 @@ describe("DatabaseMigration", () => {
             effect_id: null,
             representation_effect_id: null,
             default_navigation_effect_id: null,
-            anchor_navigation_effect_id: "effect_gate16_anchor",
+            anchor_navigation_effect_id: "nar_00000000000000000000000011",
             retained_steering_effect_id: null,
           },
           {
             capability_identity: "set_default_course_preference",
             effect_id: null,
             representation_effect_id: null,
-            default_navigation_effect_id: "effect_gate16_default",
+            default_navigation_effect_id: "ndp_00000000000000000000000011",
             anchor_navigation_effect_id: null,
             retained_steering_effect_id: null,
           },
@@ -1142,7 +2658,7 @@ describe("DatabaseMigration", () => {
             representation_effect_id: null,
             default_navigation_effect_id: null,
             anchor_navigation_effect_id: null,
-            retained_steering_effect_id: "effect_gate16_retained",
+            retained_steering_effect_id: "rst_00000000000000000000000011",
           },
         ])
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
@@ -1150,10 +2666,118 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db)
 
         expect(yield* learnerGoalSchema(db)).toEqual(fresh)
-        expect(yield* preservedRows()).toEqual(before)
+        expect(
+          yield* db.all<Record<string, unknown>>(sql`
+            SELECT part_id, session_id, parent_user_message_id, assistant_message_id,
+                   provider_call_id, occurrence_id, command_name, command_version,
+                   emission_ordinal, capability_identity, capability_version,
+                   authorization_basis, input_fingerprint, status, receipt_id, settlement,
+                   time_admitted, time_settled, settlement_order, turn_id, input_id
+            FROM learning_command_invocation ORDER BY part_id
+          `),
+        ).toEqual(
+          before.invocations.map((row) => ({
+            part_id: row.part_id,
+            session_id: row.session_id,
+            parent_user_message_id: row.parent_user_message_id,
+            assistant_message_id: row.assistant_message_id,
+            provider_call_id: row.provider_call_id,
+            occurrence_id: row.occurrence_id,
+            command_name: row.command_name,
+            command_version: row.command_version,
+            emission_ordinal: row.emission_ordinal,
+            capability_identity: row.capability_identity,
+            capability_version: row.capability_version,
+            authorization_basis: row.authorization_basis,
+            input_fingerprint: row.input_fingerprint,
+            status: row.status,
+            receipt_id:
+              row.status === "applied" || row.status === "already_applied"
+                ? (JSON.parse(row.settlement as string).receiptID as string)
+                : null,
+            settlement: row.settlement,
+            time_admitted: row.time_admitted,
+            time_settled: row.time_settled,
+            settlement_order: row.settlement_order,
+            turn_id: row.turn_id,
+            input_id: row.input_id,
+          })),
+        )
+        expect(
+          yield* db.all<Record<string, unknown>>(sql`
+            SELECT id, occurrence_id, origin_session_id, origin_message_id,
+                   assistant_message_id, invocation_part_id, capability_identity,
+                   capability_version, authorization_basis, time_committed, commit_order
+            FROM learning_command_receipt ORDER BY id
+          `),
+        ).toEqual(
+          before.receipts.map((row) => ({
+            id: row.id,
+            occurrence_id: row.occurrence_id,
+            origin_session_id: row.origin_session_id,
+            origin_message_id: row.origin_message_id,
+            assistant_message_id: row.assistant_message_id,
+            invocation_part_id: row.invocation_part_id,
+            capability_identity: row.capability_identity,
+            capability_version: row.capability_version,
+            authorization_basis: row.authorization_basis,
+            time_committed: row.time_committed,
+            commit_order: row.commit_order,
+          })),
+        )
+        expect(
+          yield* db.all(sql`
+            SELECT 'course' AS kind, effect_id, receipt_id, invocation_part_id
+            FROM course_selection_acceptance_commit_seal
+            UNION ALL
+            SELECT 'representation', effect_id, receipt_id, invocation_part_id
+            FROM representation_command_commit_seal
+            UNION ALL
+            SELECT 'default', effect_id, receipt_id, invocation_part_id
+            FROM learner_default_course_commit_seal
+            UNION ALL
+            SELECT 'anchor', effect_id, receipt_id, invocation_part_id
+            FROM learner_course_route_anchor_commit_seal
+            UNION ALL
+            SELECT 'retained', transition_id, receipt_id, invocation_part_id
+            FROM retained_steering_commit_seal
+            ORDER BY kind
+          `),
+        ).toEqual([
+          {
+            kind: "anchor",
+            effect_id: "nar_00000000000000000000000011",
+            receipt_id: "lcr_00000000000000000000000014",
+            invocation_part_id: "prt_gate16_anchor",
+          },
+          {
+            kind: "course",
+            effect_id: "cse_00000000000000000000000011",
+            receipt_id: "lcr_00000000000000000000000011",
+            invocation_part_id: "prt_gate16_course",
+          },
+          {
+            kind: "default",
+            effect_id: "ndp_00000000000000000000000011",
+            receipt_id: "lcr_00000000000000000000000013",
+            invocation_part_id: "prt_gate16_default",
+          },
+          {
+            kind: "representation",
+            effect_id: "rfx_00000000000000000000000011",
+            receipt_id: "lcr_00000000000000000000000012",
+            invocation_part_id: "prt_gate16_representation",
+          },
+          {
+            kind: "retained",
+            effect_id: "rst_00000000000000000000000011",
+            receipt_id: "lcr_00000000000000000000000015",
+            invocation_part_id: "prt_gate16_retained",
+          },
+        ])
         expect(yield* db.all(sql`SELECT * FROM course_state_history ORDER BY course_id, version`)).toEqual([
           {
-            course_id: "crs_gate16",
+            course_id: "crs_00000000000000000000000011",
             version: 0,
             title: "Gate 16 migration fixture",
             withdrawal_reason: null,
@@ -1171,26 +2795,7 @@ describe("DatabaseMigration", () => {
         expect(yield* db.all(sql`SELECT id FROM learner_goal_revision`)).toEqual([])
         expect(yield* db.all(sql`SELECT id FROM learner_goal_effect`)).toEqual([])
         expect(yield* db.all(sql`SELECT effect_id FROM learner_goal_commit_seal`)).toEqual([])
-        expect(
-          yield* db.all(sql`
-            SELECT part_id, goal_semantic_fingerprint, goal_command_snapshot,
-                   goal_confirmation_snapshot, goal_effect_id
-            FROM learning_command_invocation ORDER BY part_id
-          `),
-        ).toEqual(
-          before.invocations.map((row) => ({
-            part_id: row.part_id,
-            goal_semantic_fingerprint: null,
-            goal_command_snapshot: null,
-            goal_confirmation_snapshot: null,
-            goal_effect_id: null,
-          })),
-        )
-        expect(
-          yield* db.all(sql`
-            SELECT id, goal_effect_id FROM learning_command_receipt ORDER BY id
-          `),
-        ).toEqual(before.receipts.map((row) => ({ id: row.id, goal_effect_id: null })))
+        expect(yield* db.all(sql`SELECT invocation_part_id FROM learner_goal_command`)).toEqual([])
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
         expect(yield* db.get(sql`PRAGMA integrity_check`)).toEqual({ integrity_check: "ok" })
       }),
@@ -1376,9 +2981,6 @@ describe("DatabaseMigration", () => {
         const db = yield* makeDb
         yield* DatabaseMigration.apply(db)
         const fresh = yield* learnerNavigationSchema(db)
-        const freshReceiptUpdateTrigger = fresh.find(
-          (item) => item.name === "learner_navigation_receipt_immutable",
-        )?.definition
         const freshTableStorage = yield* db.all<{ name: string; wr: number }>(sql`
           SELECT name, wr
           FROM pragma_table_list
@@ -1411,33 +3013,24 @@ describe("DatabaseMigration", () => {
         expect(freshAnchorConflictTrigger).toContain("existing.predecessor_id = NEW.predecessor_id")
         expect(freshAnchorConflictTrigger).toContain("existing.occurrence_id = NEW.occurrence_id")
         expect(freshAnchorConflictTrigger).toContain("existing.frontier_sequence = NEW.frontier_sequence")
-        expect(freshReceiptUpdateTrigger).toContain("NEW.default_navigation_effect_id IS NOT NULL")
-        expect(freshReceiptUpdateTrigger).toContain("NEW.anchor_navigation_effect_id IS NOT NULL")
-        const freshReceiptConflictTrigger = fresh.find(
-          (item) => item.name === "learner_navigation_receipt_conflict_forbidden",
+        const freshDefaultSealTrigger = fresh.find(
+          (item) => item.name === "learner_default_course_commit_seal_validate_insert_v12",
         )?.definition
-        expect(freshReceiptConflictTrigger).toContain("NEW.default_navigation_effect_id IS NOT NULL")
-        expect(freshReceiptConflictTrigger).toContain("NEW.anchor_navigation_effect_id IS NOT NULL")
-        expect(freshReceiptConflictTrigger).toContain("existing.id = NEW.id")
-        expect(freshReceiptConflictTrigger).toContain("existing.invocation_part_id = NEW.invocation_part_id")
-        expect(freshReceiptConflictTrigger).toContain(
-          "existing.default_navigation_effect_id = NEW.default_navigation_effect_id",
+        expect(freshDefaultSealTrigger).toContain(
+          "invocation.capability_identity = 'set_default_course_preference'",
         )
-        expect(freshReceiptConflictTrigger).toContain(
-          "existing.anchor_navigation_effect_id = NEW.anchor_navigation_effect_id",
-        )
-        const freshReceiptUpdateConflictTrigger = fresh.find(
-          (item) => item.name === "learner_navigation_receipt_update_conflict_forbidden",
+        expect(freshDefaultSealTrigger).toContain("invocation.capability_version = 1")
+        expect(freshDefaultSealTrigger).toContain("receipt.id = NEW.receipt_id")
+        expect(freshDefaultSealTrigger).toContain("receipt.invocation_part_id = NEW.invocation_part_id")
+        const freshAnchorSealTrigger = fresh.find(
+          (item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12",
         )?.definition
-        expect(freshReceiptUpdateConflictTrigger).toContain("existing.id <> OLD.id")
-        expect(freshReceiptUpdateConflictTrigger).toContain("existing.id = NEW.id")
-        expect(freshReceiptUpdateConflictTrigger).toContain("existing.invocation_part_id = NEW.invocation_part_id")
-        expect(freshReceiptUpdateConflictTrigger).toContain(
-          "existing.default_navigation_effect_id = NEW.default_navigation_effect_id",
+        expect(freshAnchorSealTrigger).toContain(
+          "invocation.capability_identity = 'set_course_route_anchor'",
         )
-        expect(freshReceiptUpdateConflictTrigger).toContain(
-          "existing.anchor_navigation_effect_id = NEW.anchor_navigation_effect_id",
-        )
+        expect(freshAnchorSealTrigger).toContain("invocation.capability_version = 1")
+        expect(freshAnchorSealTrigger).toContain("receipt.id = NEW.receipt_id")
+        expect(freshAnchorSealTrigger).toContain("receipt.invocation_part_id = NEW.invocation_part_id")
 
         yield* removeGate14(db)
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 7}`))
@@ -1488,15 +3081,14 @@ describe("DatabaseMigration", () => {
         expect(
           upgraded.find((item) => item.name === "learner_course_route_anchor_conflict_forbidden")?.definition,
         ).toBe(freshAnchorConflictTrigger)
-        expect(upgraded.find((item) => item.name === "learner_navigation_receipt_immutable")?.definition).toBe(
-          freshReceiptUpdateTrigger,
-        )
-        expect(upgraded.find((item) => item.name === "learner_navigation_receipt_conflict_forbidden")?.definition).toBe(
-          freshReceiptConflictTrigger,
-        )
         expect(
-          upgraded.find((item) => item.name === "learner_navigation_receipt_update_conflict_forbidden")?.definition,
-        ).toBe(freshReceiptUpdateConflictTrigger)
+          upgraded.find((item) => item.name === "learner_default_course_commit_seal_validate_insert_v12")
+            ?.definition,
+        ).toBe(freshDefaultSealTrigger)
+        expect(
+          upgraded.find((item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12")
+            ?.definition,
+        ).toBe(freshAnchorSealTrigger)
         expect(yield* db.all(sql`SELECT id FROM learner_default_course_transition`)).toEqual([])
         expect(yield* db.all(sql`SELECT id FROM learner_course_route_anchor_transition`)).toEqual([])
         expect(yield* db.get(sql`SELECT id, title FROM course WHERE id = 'course_gate13'`)).toEqual({
@@ -1505,8 +3097,7 @@ describe("DatabaseMigration", () => {
         })
         expect(
           yield* db.all(sql`
-            SELECT part_id, command_name, default_navigation_effect_id, anchor_navigation_effect_id,
-                   permission_request_id
+            SELECT part_id, command_name, receipt_id
             FROM learning_command_invocation
             ORDER BY part_id
           `),
@@ -1514,16 +3105,12 @@ describe("DatabaseMigration", () => {
           {
             part_id: "part_gate13_course",
             command_name: "accept_course_view_revision",
-            default_navigation_effect_id: null,
-            anchor_navigation_effect_id: null,
-            permission_request_id: null,
+            receipt_id: null,
           },
           {
             part_id: "part_gate13_representation",
             command_name: "representation.convert",
-            default_navigation_effect_id: null,
-            anchor_navigation_effect_id: null,
-            permission_request_id: null,
+            receipt_id: null,
           },
         ])
         expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
@@ -1566,7 +3153,7 @@ describe("DatabaseMigration", () => {
         })
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
-        ).toHaveLength(11)
+        ).toHaveLength(12)
         expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
           user_version: BASELINE_VERSION + 1,
         })
@@ -1837,7 +3424,7 @@ describe("DatabaseMigration", () => {
         )
         yield* db.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + 4}`))
         yield* db.run(
-          sql`INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted) VALUES ('loc_gate10', 'gate10-session', 'gate10-message', 1)`,
+          sql`INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted) VALUES ('lco_00000000000000000000000021', 'ses_gate10', 'msg_gate10', 1)`,
         )
         yield* db.run(sql`
           INSERT INTO learning_command_invocation (
@@ -1845,37 +3432,37 @@ describe("DatabaseMigration", () => {
             occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
             capability_version, authorization_basis, input_fingerprint, status, time_admitted
           ) VALUES (
-            'part_gate10', 'gate10-session', 'user_gate10', 'assistant_gate10', 'call_gate10',
-            'loc_gate10', 'accept_course_view_revision', 1, 0, 'accept_course_view_revision',
+            'prt_gate10', 'ses_gate10', 'msg_gate10_user', 'msg_gate10_assistant', 'call_gate10',
+            'lco_00000000000000000000000021', 'accept_course_view_revision', 1, 0, 'accept_course_view_revision',
             1, 'learner_request', ${"a".repeat(64)}, 'admitted', 1
           )
         `)
         yield* db.run(sql`PRAGMA foreign_keys = ON`)
         yield* db.run(
-          sql`INSERT INTO course (id, title, state_version, time_created, time_updated) VALUES ('crs_gate10', 'Gate 10 course', 0, 1, 1)`,
+          sql`INSERT INTO course (id, title, state_version, time_created, time_updated) VALUES ('crs_00000000000000000000000021', 'Gate 10 course', 0, 1, 1)`,
         )
         yield* db.run(sql`
           INSERT INTO course_view (id, course_id, name, state_version, time_created, time_updated)
-          VALUES ('view_gate10', 'crs_gate10', 'Gate 10 view', 0, 1, 1)
+          VALUES ('cvw_00000000000000000000000021', 'crs_00000000000000000000000021', 'Gate 10 view', 0, 1, 1)
         `)
         yield* db.run(sql`
           INSERT INTO course_view_revision (
             id, course_id, view_id, revision_number, authorship_basis, time_created
-          ) VALUES ('revision_gate10', 'crs_gate10', 'view_gate10', 1, 'learner_directed', 1)
+          ) VALUES ('cvr_00000000000000000000000021', 'crs_00000000000000000000000021', 'cvw_00000000000000000000000021', 1, 'learner_directed', 1)
         `)
         yield* db.run(sql`
           INSERT INTO course_view_revision_state (course_id, view_id, revision_id, state_version, time_updated)
-          VALUES ('crs_gate10', 'view_gate10', 'revision_gate10', 0, 1)
+          VALUES ('crs_00000000000000000000000021', 'cvw_00000000000000000000000021', 'cvr_00000000000000000000000021', 0, 1)
         `)
         yield* db.run(sql`
           INSERT INTO learning_admitted_occurrence (id, origin_session_id, origin_message_id, time_admitted)
-          VALUES ('loc_gate10_applied', 'gate10-session', 'gate10-message-applied', 1)
+          VALUES ('lco_00000000000000000000000022', 'ses_gate10', 'msg_gate10_applied', 1)
         `)
         yield* db.run(sql`
           INSERT INTO course_selection_acceptance_effect (
             id, occurrence_id, course_id, accepted_revision_id, previous_selection_version,
             committed_selection_version, time_committed
-          ) VALUES ('effect_gate10', 'loc_gate10_applied', 'crs_gate10', 'revision_gate10', 0, 1, 2)
+          ) VALUES ('cse_00000000000000000000000021', 'lco_00000000000000000000000022', 'crs_00000000000000000000000021', 'cvr_00000000000000000000000021', 0, 1, 2)
         `)
         yield* db.run(sql`
           INSERT INTO learning_command_invocation (
@@ -1884,10 +3471,12 @@ describe("DatabaseMigration", () => {
             capability_version, authorization_basis, input_fingerprint, status, effect_id, settlement,
             time_admitted, time_settled, settlement_order
           ) VALUES (
-            'part_gate10_applied', 'gate10-session', 'user_gate10_applied', 'assistant_gate10_applied',
-            'call_gate10_applied', 'loc_gate10_applied', 'accept_course_view_revision', 1, 0,
+            'prt_gate10_applied', 'ses_gate10', 'msg_gate10_applied', 'msg_gate10_assistant_applied',
+            'call_gate10_applied', 'lco_00000000000000000000000022', 'accept_course_view_revision', 1, 0,
             'accept_course_view_revision', 1, 'learner_request', ${"b".repeat(64)}, 'applied',
-            'effect_gate10', '{"outcome":"applied"}', 1, 2, 1
+            'cse_00000000000000000000000021',
+            '{"outcome":"applied","receiptID":"lcr_00000000000000000000000021","effectID":"cse_00000000000000000000000021","courseID":"crs_00000000000000000000000021","revisionID":"cvr_00000000000000000000000021","previousSelection":{"version":0},"committedSelection":{"revisionID":"cvr_00000000000000000000000021","version":1},"settlementTime":2,"settlementOrder":1}',
+            1, 2, 1
           )
         `)
         yield* db.run(sql`
@@ -1896,9 +3485,9 @@ describe("DatabaseMigration", () => {
             invocation_part_id, capability_identity, capability_version, authorization_basis,
             effect_id, time_committed, commit_order
           ) VALUES (
-            'receipt_gate10', 'loc_gate10_applied', 'gate10-session', 'gate10-message-applied',
-            'assistant_gate10_applied', 'part_gate10_applied', 'accept_course_view_revision', 1,
-            'learner_request', 'effect_gate10', 2, 1
+            'lcr_00000000000000000000000021', 'lco_00000000000000000000000022', 'ses_gate10', 'msg_gate10_applied',
+            'msg_gate10_assistant_applied', 'prt_gate10_applied', 'accept_course_view_revision', 1,
+            'learner_request', 'cse_00000000000000000000000021', 2, 1
           )
         `)
         yield* db.run(sql`INSERT INTO content_root (id, time_created) VALUES ('root_gate10', 1)`)
@@ -1942,22 +3531,23 @@ describe("DatabaseMigration", () => {
         expect(yield* db.all(sql`SELECT id FROM representation_revision`)).toEqual([])
         expect(
           yield* db.get(
-            sql`SELECT part_id, status, representation_effect_id, turn_id, input_id FROM learning_command_invocation WHERE part_id = 'part_gate10'`,
+            sql`SELECT part_id, status, receipt_id, turn_id, input_id FROM learning_command_invocation WHERE part_id = 'prt_gate10'`,
           ),
         ).toEqual({
-          part_id: "part_gate10",
+          part_id: "prt_gate10",
           status: "admitted",
-          representation_effect_id: null,
+          receipt_id: null,
           turn_id: null,
           input_id: null,
         })
         expect(
           yield* db.get(sql`
-            SELECT id, invocation_part_id, effect_id
-            FROM learning_command_receipt
-            WHERE id = 'receipt_gate10'
+            SELECT receipt.id, receipt.invocation_part_id, seal.effect_id
+            FROM learning_command_receipt AS receipt
+            JOIN course_selection_acceptance_commit_seal AS seal ON seal.receipt_id = receipt.id
+            WHERE receipt.id = 'lcr_00000000000000000000000021'
           `),
-        ).toEqual({ id: "receipt_gate10", invocation_part_id: "part_gate10_applied", effect_id: "effect_gate10" })
+        ).toEqual({ id: "lcr_00000000000000000000000021", invocation_part_id: "prt_gate10_applied", effect_id: "cse_00000000000000000000000021" })
         expect(
           yield* db.get(sql`
             SELECT content_root_id, binding_id, binding_episode_id, grant_episode_id, disposition
@@ -2589,6 +4179,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 8, id: learnerNavigationMigration.id },
           { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
           { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
+          { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
         ])
       }),
     )

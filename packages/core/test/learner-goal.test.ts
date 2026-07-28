@@ -1,13 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import path from "path"
 import { eq, sql } from "drizzle-orm"
-import { Cause, Effect, Layer, Option } from "effect"
+import { Cause, Effect, Exit, Layer, Option } from "effect"
 import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
-import { LearnerGoalEffectTable, LearnerGoalRevisionTable } from "@opencode-ai/core/learner-goal/sql"
+import {
+  LearnerGoalCommandTable,
+  LearnerGoalCommitSealTable,
+  LearnerGoalEffectTable,
+  LearnerGoalRevisionTable,
+} from "@opencode-ai/core/learner-goal/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { settlePhysicalInvocation } from "@opencode-ai/core/learning-command/physical"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { Project } from "@opencode-ai/core/project"
@@ -36,7 +42,7 @@ const goalFaults = [
   ["field_basis", "BEFORE INSERT ON learner_goal_field_basis"],
   ["supersession", "BEFORE INSERT ON learner_goal_supersession"],
   ["effect_operation", "BEFORE INSERT ON learner_goal_effect_operation"],
-  ["receipt", "BEFORE INSERT ON learning_command_receipt WHEN NEW.goal_effect_id IS NOT NULL"],
+  ["receipt", "BEFORE INSERT ON learning_command_receipt"],
   [
     "invocation_settlement",
     "BEFORE UPDATE OF status ON learning_command_invocation WHEN NEW.command_name = 'update_learner_goals' AND NEW.status = 'applied'",
@@ -45,6 +51,71 @@ const goalFaults = [
 ] as const
 
 describe("learner Goal authority", () => {
+  it.effect("rejects recursively malformed Goal no-change operations on domain replay", () =>
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const sessionID = SessionSchema.ID.create()
+      yield* seedSession(db, sessionID, 1)
+      const validMeaning = {
+        outcome: "Malformed replay",
+        conditions: [],
+        scope: { type: "learner_home" as const },
+        target: { type: "absent" as const },
+      }
+      const variants = [
+        { meaning: {} },
+        { meaning: validMeaning, replacementTarget: {} },
+      ] as const
+
+      yield* Effect.forEach(
+        variants,
+        (variant, index) =>
+          Effect.gen(function* () {
+            const time = 10 + index * 10
+            const invocation = yield* seedInvocation(
+              db,
+              sessionID,
+              9001 + index,
+              `/goal Reject malformed replay ${index}.`,
+              createHomeGoal(`Reject malformed replay ${index}`),
+              time,
+            )
+            expect(yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))).toEqual({
+              type: "candidate",
+            })
+            yield* db.transaction((tx) =>
+              settlePhysicalInvocation(tx, invocation.envelope.partID, {
+                outcome: "no_change",
+                goalKind: "learner_goal",
+                operations: [
+                  {
+                    ordinal: 0,
+                    operation: "create",
+                    result: "no_change",
+                    goalID: LearnerGoal.createGoalID(),
+                    revisionID: LearnerGoal.createRevisionID(),
+                    version: 1,
+                    disposition: "active",
+                    ...variant,
+                  },
+                ],
+                acknowledgementTitle: "Goal unchanged",
+                acknowledgementBody: "No durable Goal changed.",
+                settlementTime: time + 2,
+                settlementOrder: index + 1,
+              }),
+            )
+
+            const replay = yield* db
+              .transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))
+              .pipe(Effect.exit)
+            expect(Exit.isFailure(replay)).toBe(true)
+          }),
+        { discard: true },
+      )
+    }),
+  )
+
   it.effect("commits one atomic multi-Goal effect and keeps all/no-change batches effect-free", () =>
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
@@ -466,6 +537,42 @@ Keep ${retained.goalID} unchanged. (2)
       if (!a1 || !b1) return yield* Effect.die("Expected relation fixture results")
       const relationExcerpt = `replace ${a1.goalID} with ${b1.goalID}`
       const bOutcome = "Goal B corrected"
+      const relatedCommand = {
+        operations: [
+          replacementOperation(a1, b1, relationExcerpt),
+          {
+            type: "update",
+            goalID: b1.goalID,
+            expectedHeadID: b1.revisionID,
+            expectedVersion: b1.version,
+            snapshot: homeSnapshot(bOutcome),
+            disposition: { type: "active" },
+          },
+        ],
+      } as const satisfies LearnerGoal.Command
+      const presentation = yield* db.transaction((tx) =>
+        LearnerGoal.preparePresentation(tx, {
+          command: relatedCommand,
+          authorizationBasis: "learner_request",
+          asOf: 20,
+        }),
+      )
+      expect(presentation.operations).toMatchObject([
+        {
+          type: "replace",
+          source: { version: a1.version, meaning: { outcome: "Goal A", disposition: "active" } },
+          replacementTarget: {
+            type: "existing",
+            version: b1.version,
+            meaning: { outcome: "Goal B", disposition: "active" },
+          },
+        },
+        {
+          type: "update",
+          source: { version: b1.version, meaning: { outcome: "Goal B", disposition: "active" } },
+          meaning: { outcome: bOutcome, disposition: "active" },
+        },
+      ])
       const related = yield* settleDirect(
         db,
         sessionID,
@@ -473,19 +580,7 @@ Keep ${retained.goalID} unchanged. (2)
         `(1)
 ${relationExcerpt}. (2)
 update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and no target.`,
-        {
-          operations: [
-            replacementOperation(a1, b1, relationExcerpt),
-            {
-              type: "update",
-              goalID: b1.goalID,
-              expectedHeadID: b1.revisionID,
-              expectedVersion: b1.version,
-              snapshot: homeSnapshot(bOutcome),
-              disposition: { type: "active" },
-            },
-          ],
-        },
+        relatedCommand,
         20,
       )
       if (related.type !== "settled" || related.settlement.outcome !== "applied") {
@@ -2107,7 +2202,7 @@ ${activeExcerpt}. (2)
     }),
   )
 
-  it.effect("rejects X-confirmed/Y-sealed, extra-clause, and forged-ack raw constructions", () =>
+  it.effect("rejects X-confirmed/Y-sealed and extra-clause raw constructions", () =>
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
       const sessionID = SessionSchema.ID.create()
@@ -2138,13 +2233,6 @@ ${activeExcerpt}. (2)
         }
       })
       expect(rawFailure(extra)).toContain("learner_goal_effect_authorization_invalid")
-
-      const forgedAck = yield* rawSealAttempt(db, direct, { time: 12, order: 1 }, undefined, (prepared) => ({
-        ...prepared,
-        acknowledgementTitle: "Forged title",
-        acknowledgementBody: "Forged body",
-      }))
-      expect(rawFailure(forgedAck)).toContain("learner_goal_commit_seal_acknowledgement_invalid")
 
       const misboundDefault = yield* rawSealAttempt(db, direct, { time: 12, order: 1 }, undefined, (prepared) => {
         const command = prepared.command.operations[0]
@@ -3379,9 +3467,9 @@ ${activeExcerpt}. (2)
         })
         expect(
           yield* db
-            .select({ confirmation: LearningCommandReceiptTable.confirmation_snapshot })
-            .from(LearningCommandReceiptTable)
-            .where(eq(LearningCommandReceiptTable.invocation_part_id, lifecycle.envelope.partID))
+            .select({ confirmation: LearnerGoalCommandTable.confirmation_snapshot })
+            .from(LearnerGoalCommandTable)
+            .where(eq(LearnerGoalCommandTable.invocation_part_id, lifecycle.envelope.partID))
             .get(),
         ).toEqual({ confirmation: lifecyclePrompt.confirmation })
 
@@ -4377,31 +4465,34 @@ function rawSealAttempt(
             capability_identity: invocation.envelope.capabilityIdentity,
             capability_version: invocation.envelope.capabilityVersion,
             authorization_basis: invocation.envelope.authorizationBasis,
-            goal_effect_id: effect.id,
-            permission_request_id: "permissionRequestID" in invocation ? invocation.permissionRequestID : null,
-            confirmation_snapshot: confirmation ?? null,
             time_committed: settlement.time,
             commit_order: settlement.order,
           })
           .run()
-        yield* tx
-          .update(LearningCommandInvocationTable)
-          .set({
-            status: "applied",
-            goal_effect_id: effect.id,
-            ...(confirmation ? { goal_confirmation_snapshot: confirmation } : {}),
-            settlement: terminal,
-            time_settled: settlement.time,
-            settlement_order: settlement.order,
-          })
-          .where(eq(LearningCommandInvocationTable.part_id, invocation.envelope.partID))
-          .run()
+        if (confirmation) {
+          yield* tx
+            .update(LearnerGoalCommandTable)
+            .set({ confirmation_snapshot: confirmation })
+            .where(eq(LearnerGoalCommandTable.invocation_part_id, invocation.envelope.partID))
+            .run()
+        }
         yield* LearnerGoal.sealEffect(tx, {
           effect,
           receiptID,
           invocationPartID: invocation.envelope.partID,
           expectedRevisionSequence: value.revisionSequenceBefore,
         })
+        yield* tx
+          .update(LearningCommandInvocationTable)
+          .set({
+            status: "applied",
+            receipt_id: receiptID,
+            settlement: terminal,
+            time_settled: settlement.time,
+            settlement_order: settlement.order,
+          })
+          .where(eq(LearningCommandInvocationTable.part_id, invocation.envelope.partID))
+          .run()
       }),
     )
     .pipe(Effect.exit)
@@ -4419,9 +4510,13 @@ function invocationConfirmation(db: Database.Interface["db"], partID: SessionV1.
   return db
     .select({
       status: LearningCommandInvocationTable.status,
-      confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
+      confirmation: LearnerGoalCommandTable.confirmation_snapshot,
     })
     .from(LearningCommandInvocationTable)
+    .innerJoin(
+      LearnerGoalCommandTable,
+      eq(LearnerGoalCommandTable.invocation_part_id, LearningCommandInvocationTable.part_id),
+    )
     .where(eq(LearningCommandInvocationTable.part_id, partID))
     .get()
 }
@@ -4440,7 +4535,7 @@ function goalCounts(db: Database.Interface["db"]) {
     receipts: db
       .get<{
         count: number
-      }>(sql`SELECT count(*) AS count FROM learning_command_receipt WHERE goal_effect_id IS NOT NULL`)
+      }>(sql`SELECT count(*) AS count FROM learner_goal_commit_seal`)
       .pipe(Effect.map((row) => row!.count)),
     operations: db
       .get<{ count: number }>(sql`SELECT count(*) AS count FROM learner_goal_effect_operation`)
@@ -4452,7 +4547,7 @@ function goalReadState(db: Database.Interface["db"]) {
   return Effect.all({
     effects: db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`),
     revisions: db.get(sql`SELECT count(*) AS count FROM learner_goal_revision`),
-    receipts: db.get(sql`SELECT count(*) AS count FROM learning_command_receipt WHERE goal_effect_id IS NOT NULL`),
+    receipts: db.get(sql`SELECT count(*) AS count FROM learner_goal_commit_seal`),
     seals: db.get(sql`SELECT count(*) AS count FROM learner_goal_commit_seal`),
     frontier: db.get(sql`SELECT sequence, time_committed FROM learning_shared_frontier WHERE singleton = 1`),
     goalState: db.get(sql`SELECT revision_sequence FROM learner_goal_state WHERE singleton = 1`),
@@ -4472,7 +4567,7 @@ function goalAtomicState(db: Database.Interface["db"]) {
       (SELECT count(*) FROM learner_goal_field_basis) AS field_bases,
       (SELECT count(*) FROM learner_goal_supersession) AS supersessions,
       (SELECT count(*) FROM learner_goal_effect_operation) AS operations,
-      (SELECT count(*) FROM learning_command_receipt WHERE goal_effect_id IS NOT NULL) AS receipts,
+      (SELECT count(*) FROM learner_goal_commit_seal) AS receipts,
       (SELECT count(*) FROM learner_goal_commit_seal) AS seals,
       (SELECT sequence FROM learning_shared_frontier WHERE singleton = 1) AS frontier_sequence,
       (SELECT revision_sequence FROM learner_goal_state WHERE singleton = 1) AS revision_sequence

@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { sql } from "drizzle-orm"
 import type { DatabaseMigration } from "../../migration"
-import { DatabaseSchemaExtras } from "../../schema-extras"
+import { install as installSchemaExtrasV10 } from "../../schema-extras-v10"
 
 export default {
   id: "20260720113159_gate15_retained_steering",
@@ -312,7 +312,7 @@ export default {
       yield* tx.run(
         `CREATE INDEX \`retained_steering_active_idx\` ON \`retained_steering_transition\` (\`state\`,\`valid_until\`,\`source_order\`);`,
       )
-      yield* DatabaseSchemaExtras.install(tx)
+      yield* installSchemaExtrasV10(tx)
     })
   },
 } satisfies DatabaseMigration.Migration

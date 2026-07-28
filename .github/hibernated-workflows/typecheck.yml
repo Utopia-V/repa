@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup Bun
-        uses: ./.github/actions/setup-bun
+        uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Run typecheck
         run: bun typecheck

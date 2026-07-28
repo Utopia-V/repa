@@ -1,8 +1,8 @@
 # Effect Migration Patterns
 
 This is the compact reference for moving code toward the current Effect
-shape. The high-level roadmap is [`todo.md`](./todo.md); examples and
-rules are in [`guide.md`](./guide.md).
+shape when that code is already in scope. Examples and rules are in
+[`guide.md`](./guide.md); this document does not authorize a broad migration.
 
 ## Default Shape
 

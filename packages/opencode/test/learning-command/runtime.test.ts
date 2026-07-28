@@ -1,13 +1,21 @@
 import { Course } from "@opencode-ai/core/course"
-import { CourseSelectionAcceptanceEffectTable } from "@opencode-ai/core/course/sql"
+import {
+  CourseSelectionAcceptanceCommitSealTable,
+  CourseSelectionAcceptanceEffectTable,
+} from "@opencode-ai/core/course/sql"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearnerGoalCommandTable, LearnerGoalCommitSealTable } from "@opencode-ai/core/learner-goal/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
+import {
+  RetainedSteeringCommandTable,
+  RetainedSteeringCommitSealTable,
+} from "@opencode-ai/core/retained-steering/sql"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import {
   AdmittedLearnerOccurrenceTable,
@@ -17,12 +25,16 @@ import {
 import {
   CourseRouteAnchorTransitionTable,
   DefaultCoursePreferenceTransitionTable,
+  LearnerCourseRouteAnchorCommitSealTable,
+  LearnerDefaultCourseCommandTable,
+  LearnerDefaultCourseCommitSealTable,
 } from "@opencode-ai/core/learner-navigation/sql"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
@@ -119,7 +131,9 @@ it.effect("confirms one exact accepted learner Goal candidate and replays its du
     )
 
     expect(permissionRequests).toHaveLength(1)
-    expect(permissionRequests[0]).toMatchObject({
+    const asked = permissionRequests[0]!
+    const askedID = asked.id
+    expect(asked).toMatchObject({
       id: expect.stringMatching(/^per_/),
       permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
       patterns: [LearnerGoal.PERMISSION_PATTERN],
@@ -146,15 +160,53 @@ it.effect("confirms one exact accepted learner Goal candidate and replays its du
         value: () => shownConfirmation,
       }),
     ).toBe(false)
+    if (!askedID || !asked.tool) throw new Error("Expected a fully bound Goal permission request")
+    expect(
+      SemanticPresentation.readProposal({
+        id: askedID,
+        sessionID: asked.sessionID,
+        permission: asked.permission,
+        patterns: asked.patterns,
+        always: asked.always,
+        tool: asked.tool,
+        metadata: {
+          ...asked.metadata,
+          [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true,
+        },
+      }),
+    ).toMatchObject({
+      type: "valid",
+      value: {
+        phase: "proposal",
+        capability: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        approval: "once_only",
+      },
+    })
     expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    expect(
+      SemanticPresentation.readResult({
+        id: interaction.registration.partID,
+        sessionID: interaction.registration.sessionID,
+        messageID: interaction.registration.assistantMessageID,
+        tool: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        callID: interaction.registration.callID,
+        state: { status: "completed", title: result.title, metadata: result.metadata },
+      }),
+    ).toMatchObject({
+      type: "valid",
+      value: {
+        phase: "result",
+        capability: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        outcome: "committed",
+        durablySettled: true,
+      },
+    })
     expect(result.title).toBe("Updated learning Goal")
     expect(result.output).toContain(input.operations[0].snapshot.outcome)
     expect(result.output).toContain("correct")
     expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
     expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 1 })
-    expect(
-      yield* db.get(sql`SELECT count(*) AS count FROM learning_command_receipt WHERE goal_effect_id IS NOT NULL`),
-    ).toEqual({ count: 1 })
+    expect(yield* goalReceiptCount(db)).toEqual({ count: 1 })
     expect((yield* goals.discover(time + 10_000)).items).toMatchObject([
       { head: { outcome: input.operations[0].snapshot.outcome, disposition: { type: "active" } } },
     ])
@@ -224,27 +276,15 @@ it.effect("reconciles committed learner Goal semantics before live authority or 
         WHERE part_id IN (${duplicate.partID}, ${conflict.partID})
       `),
     ).toEqual({ count: 2 })
-    expect(
-      yield* db
-        .select({
-          status: LearningCommandInvocationTable.status,
-          confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
-        })
-        .from(LearningCommandInvocationTable)
-        .where(eq(LearningCommandInvocationTable.part_id, duplicate.partID))
-        .get(),
-    ).toEqual({ status: "already_applied", confirmation: null })
-    expect(
-      yield* db
-        .select({
-          status: LearningCommandInvocationTable.status,
-          confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
-          effectID: LearningCommandInvocationTable.goal_effect_id,
-        })
-        .from(LearningCommandInvocationTable)
-        .where(eq(LearningCommandInvocationTable.part_id, conflict.partID))
-        .get(),
-    ).toEqual({ status: "error", confirmation: null, effectID: null })
+    expect(yield* goalInvocationProjection(db, duplicate.partID)).toMatchObject({
+      status: "already_applied",
+      confirmation: null,
+    })
+    expect(yield* goalInvocationProjection(db, conflict.partID)).toMatchObject({
+      status: "error",
+      confirmation: null,
+      effectID: null,
+    })
 
     const duplicateResult = yield* runtime.executeCommand(
       LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
@@ -283,20 +323,8 @@ it.effect("keeps accepted learner Goal display process-local and rolls back ever
     const snapshot = (registration: LearningCommandRuntime.Registration, occurrenceID: LearningCommand.OccurrenceID) =>
       Effect.all({
         part: db.select({ data: PartTable.data }).from(PartTable).where(eq(PartTable.id, registration.partID)).get(),
-        invocation: db
-          .select({
-            status: LearningCommandInvocationTable.status,
-            effectID: LearningCommandInvocationTable.goal_effect_id,
-            confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
-            settlement: LearningCommandInvocationTable.settlement,
-          })
-          .from(LearningCommandInvocationTable)
-          .where(eq(LearningCommandInvocationTable.part_id, registration.partID))
-          .get(),
-        receipts: db.get(sql`
-          SELECT count(*) AS count FROM learning_command_receipt
-          WHERE occurrence_id = ${occurrenceID} AND goal_effect_id IS NOT NULL
-        `),
+        invocation: goalInvocationProjection(db, registration.partID),
+        receipts: goalReceiptCount(db, occurrenceID),
         effects: db.get(sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${occurrenceID}`),
         goals: db.get(sql`
           SELECT count(DISTINCT goal.id) AS count
@@ -476,16 +504,12 @@ it.effect("effective deny settles an accepted learner Goal before confirmation i
       input,
       context(interaction.registration, "deny", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
     )
-    const invocation = yield* db
-      .select()
-      .from(LearningCommandInvocationTable)
-      .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-      .get()
+    const invocation = yield* goalInvocationProjection(db, interaction.registration.partID)
 
     expect(result.metadata).toMatchObject({ outcome: "error", code: "permission_rejected" })
     expect(permissionRequests).toHaveLength(0)
-    expect(invocation?.goal_confirmation_snapshot).toBeNull()
-    expect(invocation?.goal_effect_id).toBeNull()
+    expect(invocation?.confirmation).toBeNull()
+    expect(invocation?.effectID).toBeNull()
     expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
   }),
 )
@@ -546,23 +570,12 @@ it.effect(
               always: [],
               metadata: { onceOnly: true, authorizationBasis: "learner_acceptance" },
             })
-            expect(
-              yield* db
-                .select({
-                  status: LearningCommandInvocationTable.status,
-                  confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
-                  effectID: LearningCommandInvocationTable.goal_effect_id,
-                })
-                .from(LearningCommandInvocationTable)
-                .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-                .get(),
-            ).toEqual({ status: "error", confirmation: null, effectID: null })
-            expect(
-              yield* db.get(sql`
-              SELECT count(*) AS count FROM learning_command_receipt
-              WHERE occurrence_id = ${interaction.occurrenceID} AND goal_effect_id IS NOT NULL
-            `),
-            ).toEqual({ count: 0 })
+            expect(yield* goalInvocationProjection(db, interaction.registration.partID)).toMatchObject({
+              status: "error",
+              confirmation: null,
+              effectID: null,
+            })
+            expect(yield* goalReceiptCount(db, interaction.occurrenceID)).toEqual({ count: 0 })
             expect(
               yield* db.get(
                 sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
@@ -590,29 +603,13 @@ it.effect("keeps accepted Goal cancellation, interruption, and startup recovery 
       occurrenceID: LearningCommand.OccurrenceID,
     ) =>
       Effect.gen(function* () {
-        expect(
-          yield* db
-            .select({
-              status: LearningCommandInvocationTable.status,
-              confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
-              effectID: LearningCommandInvocationTable.goal_effect_id,
-              settlement: LearningCommandInvocationTable.settlement,
-            })
-            .from(LearningCommandInvocationTable)
-            .where(eq(LearningCommandInvocationTable.part_id, registration.partID))
-            .get(),
-        ).toMatchObject({
+        expect(yield* goalInvocationProjection(db, registration.partID)).toMatchObject({
           status: "error",
           confirmation: null,
           effectID: null,
           settlement: { outcome: "error", code: "interrupted" },
         })
-        expect(
-          yield* db.get(sql`
-            SELECT count(*) AS count FROM learning_command_receipt
-            WHERE occurrence_id = ${occurrenceID} AND goal_effect_id IS NOT NULL
-          `),
-        ).toEqual({ count: 0 })
+        expect(yield* goalReceiptCount(db, occurrenceID)).toEqual({ count: 0 })
         expect(
           yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${occurrenceID}`),
         ).toEqual({ count: 0 })
@@ -642,26 +639,14 @@ it.effect("keeps accepted Goal cancellation, interruption, and startup recovery 
       })
       .pipe(Effect.forkChild)
     yield* Deferred.await(cancelledEntered)
-    expect(
-      yield* db
-        .select({ confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot })
-        .from(LearningCommandInvocationTable)
-        .where(eq(LearningCommandInvocationTable.part_id, cancelled.registration.partID))
-        .get(),
-    ).toEqual({ confirmation: null })
+    expect(yield* goalInvocationProjection(db, cancelled.registration.partID)).toMatchObject({ confirmation: null })
     controller.abort()
     const cancelledResult = yield* Fiber.join(cancelledExecution)
     expect(cancelledResult.metadata).toMatchObject({ outcome: "error", code: "interrupted" })
-    expect(
-      yield* db
-        .select({
-          confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
-          effectID: LearningCommandInvocationTable.goal_effect_id,
-        })
-        .from(LearningCommandInvocationTable)
-        .where(eq(LearningCommandInvocationTable.part_id, cancelled.registration.partID))
-        .get(),
-    ).toEqual({ confirmation: null, effectID: null })
+    expect(yield* goalInvocationProjection(db, cancelled.registration.partID)).toMatchObject({
+      confirmation: null,
+      effectID: null,
+    })
 
     yield* Effect.forEach(
       ["interrupt", "recovery"] as const,
@@ -692,13 +677,9 @@ it.effect("keeps accepted Goal cancellation, interruption, and startup recovery 
             .pipe(Effect.forkChild)
           yield* Deferred.await(entered)
           const requestCount = permissionRequests.length
-          expect(
-            yield* db
-              .select({ confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot })
-              .from(LearningCommandInvocationTable)
-              .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-              .get(),
-          ).toEqual({ confirmation: null })
+          expect(yield* goalInvocationProjection(db, interaction.registration.partID)).toMatchObject({
+            confirmation: null,
+          })
           if (mode === "interrupt") {
             expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
           } else {
@@ -863,14 +844,13 @@ it.effect("spends accepted Goal once-only authority after deny, correct, cancel,
           const sameOccurrenceEffects = yield* db.get(
             sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
           )
-          const sameOccurrenceReceipts = yield* db.get(sql`
-            SELECT count(*) AS count FROM learning_command_receipt
-            WHERE occurrence_id = ${interaction.occurrenceID} AND goal_effect_id IS NOT NULL
-          `)
+          const sameOccurrenceReceipts = yield* goalReceiptCount(db, interaction.occurrenceID)
           const terminalInvocations = yield* db.get(sql`
-              SELECT count(*) AS count FROM learning_command_invocation
-              WHERE part_id IN (${exact.partID}, ${changed.partID}, ${direct.partID})
-                AND status = 'error' AND goal_effect_id IS NULL
+              SELECT count(*) AS count
+              FROM learning_command_invocation AS invocation
+              WHERE invocation.part_id IN (${exact.partID}, ${changed.partID}, ${direct.partID})
+                AND invocation.status = 'error'
+                AND json_extract(invocation.settlement, '$.effectID') IS NULL
           `)
 
           const freshInput = acceptedGoalInput(`Fresh learner correction after ${item.name}`)
@@ -1036,29 +1016,19 @@ it.effect(
           courseBases: [{ courseID: course.id, admission: { type: "new", courseVersion: 0 } }],
         },
       })
-      expect(
-        yield* db
-          .select({ confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot })
-          .from(LearningCommandInvocationTable)
-          .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-          .get(),
-      ).toEqual({ confirmation: null })
+      expect(yield* goalInvocationProjection(db, interaction.registration.partID)).toMatchObject({
+        confirmation: null,
+      })
       yield* courses.withdrawCourse({ courseID: course.id, expectedCourseVersion: 0, expectedSelectionVersion: 0 })
       yield* Deferred.succeed(release, undefined)
       const result = yield* Fiber.join(execution)
 
       expect(result.metadata).toMatchObject({ outcome: "error", code: "inactive", durablySettled: true })
-      expect(
-        yield* db
-          .select({
-            status: LearningCommandInvocationTable.status,
-            confirmation: LearningCommandInvocationTable.goal_confirmation_snapshot,
-            effectID: LearningCommandInvocationTable.goal_effect_id,
-          })
-          .from(LearningCommandInvocationTable)
-          .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-          .get(),
-      ).toEqual({ status: "error", confirmation: null, effectID: null })
+      expect(yield* goalInvocationProjection(db, interaction.registration.partID)).toMatchObject({
+        status: "error",
+        confirmation: null,
+        effectID: null,
+      })
       expect(
         yield* db.get(
           sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
@@ -1092,15 +1062,11 @@ it.effect("retains applied Goal authority and removes no-effect Goal invocations
       context(applied.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
     )
     expect(appliedResult.metadata).toMatchObject({ outcome: "applied" })
-    const appliedInvocation = yield* db
-      .select()
-      .from(LearningCommandInvocationTable)
-      .where(eq(LearningCommandInvocationTable.part_id, applied.registration.partID))
-      .get()
-    if (!appliedInvocation?.goal_effect_id || !appliedInvocation.goal_confirmation_snapshot) {
+    const appliedInvocation = yield* goalInvocationProjection(db, applied.registration.partID)
+    if (!appliedInvocation?.effectID || !appliedInvocation.confirmation) {
       return yield* Effect.die("Expected an applied accepted Goal invocation")
     }
-    yield* settleInteractionTurn(db, applied, appliedInvocation.time_settled ?? Date.now())
+    yield* settleInteractionTurn(db, applied, appliedInvocation.timeSettled ?? Date.now())
 
     const noEffectInput = acceptedGoalInput("Do not retain this rejected Goal")
     const noEffect = yield* seedInteraction(
@@ -1129,26 +1095,31 @@ it.effect("retains applied Goal authority and removes no-effect Goal invocations
     yield* sessions.remove(applied.sessionID)
     yield* sessions.remove(noEffect.sessionID)
 
-    expect(
-      yield* db
-        .select()
-        .from(LearningCommandInvocationTable)
-        .where(eq(LearningCommandInvocationTable.part_id, applied.registration.partID))
-        .get(),
-    ).toMatchObject({
+    expect(yield* goalInvocationProjection(db, applied.registration.partID)).toMatchObject({
       status: "applied",
-      goal_effect_id: appliedInvocation.goal_effect_id,
-      goal_confirmation_snapshot: appliedInvocation.goal_confirmation_snapshot,
+      effectID: appliedInvocation.effectID,
+      confirmation: appliedInvocation.confirmation,
     })
     expect(
       yield* db
-        .select()
+        .select({
+          invocation_part_id: LearningCommandReceiptTable.invocation_part_id,
+          confirmation_snapshot: LearnerGoalCommandTable.confirmation_snapshot,
+        })
         .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.goal_effect_id, appliedInvocation.goal_effect_id))
+        .innerJoin(
+          LearnerGoalCommitSealTable,
+          eq(LearnerGoalCommitSealTable.receipt_id, LearningCommandReceiptTable.id),
+        )
+        .innerJoin(
+          LearnerGoalCommandTable,
+          eq(LearnerGoalCommandTable.invocation_part_id, LearnerGoalCommitSealTable.invocation_part_id),
+        )
+        .where(eq(LearnerGoalCommitSealTable.effect_id, appliedInvocation.effectID))
         .get(),
     ).toMatchObject({
       invocation_part_id: applied.registration.partID,
-      confirmation_snapshot: appliedInvocation.goal_confirmation_snapshot,
+      confirmation_snapshot: appliedInvocation.confirmation,
     })
     expect(
       yield* db
@@ -1158,9 +1129,7 @@ it.effect("retains applied Goal authority and removes no-effect Goal invocations
         .get(),
     ).toMatchObject({ reason: "source_unavailable" })
     expect(
-      (yield* goals.discover(Date.now() + 1)).items.find(
-        (goal) => goal.head.effectID === appliedInvocation.goal_effect_id,
-      ),
+      (yield* goals.discover(Date.now() + 1)).items.find((goal) => goal.head.effectID === appliedInvocation.effectID),
     ).toMatchObject({
       head: {
         outcome: appliedInput.operations[0].snapshot.outcome,
@@ -1358,11 +1327,7 @@ it.effect("rejects a direct learner Goal payload that tries to smuggle accepted 
       input,
       context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
     )
-    const physical = yield* db
-      .select()
-      .from(LearningCommandInvocationTable)
-      .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-      .get()
+    const physical = yield* goalInvocationProjection(db, interaction.registration.partID)
 
     expect(result).toMatchObject({
       title: "Learner Goals not changed",
@@ -1376,7 +1341,7 @@ it.effect("rejects a direct learner Goal payload that tries to smuggle accepted 
     })
     expect(permissionRequests[0]?.requirePrompt).toBeUndefined()
     expect(permissionRequests[0]?.metadata.onceOnly).toBeUndefined()
-    expect(physical).toMatchObject({ goal_confirmation_snapshot: null, goal_effect_id: null })
+    expect(physical).toMatchObject({ confirmation: null, effectID: null })
     expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
   }),
 )
@@ -1518,14 +1483,7 @@ it.effect("rejects revoked, overclaimed, and incomplete direct learner Goal sour
             input,
             context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
           )
-          const invocation = yield* db
-            .select({
-              status: LearningCommandInvocationTable.status,
-              effectID: LearningCommandInvocationTable.goal_effect_id,
-            })
-            .from(LearningCommandInvocationTable)
-            .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-            .get()
+          const invocation = yield* goalInvocationProjection(db, interaction.registration.partID)
           return {
             name: item.name,
             outcome: result.metadata.outcome,
@@ -1535,11 +1493,10 @@ it.effect("rejects revoked, overclaimed, and incomplete direct learner Goal sour
             effects: yield* db.get(
               sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
             ),
-            receipts: yield* db.get(sql`
-            SELECT count(*) AS count FROM learning_command_receipt
-            WHERE occurrence_id = ${interaction.occurrenceID} AND goal_effect_id IS NOT NULL
-          `),
-            invocation,
+            receipts: yield* goalReceiptCount(db, interaction.occurrenceID),
+            invocation: invocation
+              ? { status: invocation.status, effectID: invocation.effectID }
+              : undefined,
           }
         }),
       ),
@@ -1609,9 +1566,7 @@ it.effect("recovers an admitted learner Goal without re-prompting or creating Go
     expect(recovered.output).toContain("did not commit")
     expect(permissionRequests).toHaveLength(0)
     expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
-    expect(
-      yield* db.get(sql`SELECT count(*) AS count FROM learning_command_receipt WHERE goal_effect_id IS NOT NULL`),
-    ).toEqual({ count: 0 })
+    expect(yield* goalReceiptCount(db)).toEqual({ count: 0 })
 
     expect(
       yield* runtime.executeCommand(
@@ -1629,13 +1584,13 @@ it.effect("commits retained learning steering with its exact learner-visible ack
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
     const runtime = yield* LearningCommandRuntime.Service
-    const time = Date.parse("2026-07-20T02:00:00.000Z")
+    const time = Date.now()
     const sourceExcerpt = "across all my learning this week, explain before practice"
     const input = {
       action: "create",
       sourceExcerpt,
       operativeInstruction: "Explain before asking me to practice.",
-      validUntil: "2026-07-27T02:00:00.000+00:00",
+      validUntil: new Date(time + 7 * 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
     }
     const interaction = yield* seedInteraction(
       db,
@@ -1661,15 +1616,197 @@ it.effect("commits retained learning steering with its exact learner-visible ack
     expect(result.output).toContain("Explain before asking me to practice.")
     expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
     expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual({ count: 1 })
-    expect(
-      yield* db.get(
-        sql`SELECT count(*) AS count FROM learning_command_receipt WHERE retained_steering_effect_id IS NOT NULL`,
-      ),
-    ).toEqual({ count: 1 })
+    expect(yield* retainedSteeringReceiptCount(db)).toEqual({ count: 1 })
     expect(yield* db.transaction((tx) => RetainedSteering.readActiveSnapshot(tx, time + 10_000))).toMatchObject({
       steeringRevision: 1,
       items: [{ status: "operative_active", transition: { operativeInstruction: input.operativeInstruction } }],
     })
+  }),
+)
+
+it.effect("preserves owner-produced retained meaning across replacement, retraction, and post-commit notification failure", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const events = yield* EventV2Bridge.Service
+    const runtime = yield* LearningCommandRuntime.Service
+    const sourceTime = Date.now() + 60_000
+    const createText = "across all my learning this week, explain before practice"
+    const createInput = {
+      action: "create" as const,
+      sourceExcerpt: createText,
+      operativeInstruction: "Explain the idea before asking me to practice.",
+      validUntil: new Date(sourceTime + 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+    }
+    const created = yield* seedInteraction(
+      db,
+      "retained-readable-create",
+      createInput,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      { text: createText, time: sourceTime, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      createInput,
+      created.registration,
+    )
+
+    let observerRuns = 0
+    const unsubscribe = yield* events.listen((event) => {
+      if (event.type !== SessionV1.Event.PartUpdated.type) return Effect.void
+      const data = event.data as typeof SessionV1.Event.PartUpdated.data.Type
+      if (data.part.id !== created.registration.partID) return Effect.void
+      if (data.part.type !== "tool" || data.part.state.status !== "completed") return Effect.void
+      return Effect.sync(() => {
+        observerRuns++
+      }).pipe(Effect.andThen(Effect.interrupt))
+    })
+    yield* Effect.addFinalizer(() => unsubscribe)
+
+    const createResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      createInput,
+      context(created.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+    )
+    const createRead = SemanticPresentation.readResult({
+      id: created.registration.partID,
+      sessionID: created.registration.sessionID,
+      messageID: created.registration.assistantMessageID,
+      callID: created.registration.callID,
+      tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      state: { status: "completed", title: createResult.title, metadata: createResult.metadata },
+    })
+    if (createRead.type !== "valid") return yield* Effect.die("Expected a valid retained create presentation")
+    expect(createRead.value.facts).toEqual(
+      expect.arrayContaining([
+        { label: "Scope", value: "learning_wide" },
+        { label: "Instruction", value: createInput.operativeInstruction },
+        { label: "Valid until", value: createInput.validUntil },
+        { label: "Time zone", value: "UTC (+00:00)" },
+        { label: "State", value: "operative" },
+        { label: "Version", value: "1" },
+        {
+          label: "Correction",
+          value: "Replace or retract this retained instruction with a later explicit learner direction.",
+        },
+      ]),
+    )
+    expect(observerRuns).toBe(1)
+    expect(yield* exactPartResult(db, created.registration.partID)).toEqual(createResult)
+    expect(
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        createInput,
+        context(created.registration, "deny", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+      ),
+    ).toEqual(createResult)
+    expect(observerRuns).toBe(1)
+
+    const createdSnapshot = yield* db.transaction((tx) => RetainedSteering.readActiveSnapshot(tx, sourceTime + 1))
+    const createdHead = createdSnapshot.items[0]?.transition
+    if (!createdHead) return yield* Effect.die("Expected the retained create head")
+    const replaceTime = sourceTime + 1_000
+    const replaceText = "across all my learning this week, use a worked example"
+    const replaceInput = {
+      action: "replace" as const,
+      policyID: createdHead.policyID,
+      expectedHeadID: createdHead.id,
+      expectedVersion: createdHead.version,
+      sourceExcerpt: replaceText,
+      operativeInstruction: "Use a worked example before independent practice.",
+      validUntil: new Date(sourceTime + 12 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+    }
+    const replaced = yield* seedInteraction(
+      db,
+      "retained-readable-replace",
+      replaceInput,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      { text: replaceText, time: replaceTime, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      replaceInput,
+      replaced.registration,
+    )
+    const replaceResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      replaceInput,
+      context(replaced.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+    )
+    const replaceRead = SemanticPresentation.readResult({
+      id: replaced.registration.partID,
+      sessionID: replaced.registration.sessionID,
+      messageID: replaced.registration.assistantMessageID,
+      callID: replaced.registration.callID,
+      tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      state: { status: "completed", title: replaceResult.title, metadata: replaceResult.metadata },
+    })
+    if (replaceRead.type !== "valid") return yield* Effect.die("Expected a valid retained replace presentation")
+    expect(replaceRead.value.facts).toEqual(
+      expect.arrayContaining([
+        { label: "Instruction", value: replaceInput.operativeInstruction },
+        { label: "Valid until", value: replaceInput.validUntil },
+        { label: "Time zone", value: "UTC (+00:00)" },
+        {
+          label: "Replaces",
+          value: `version 1: ${createInput.operativeInstruction}`,
+        },
+        { label: "Version", value: "2" },
+        {
+          label: "Correction",
+          value: "Replace or retract this retained instruction with a later explicit learner direction.",
+        },
+      ]),
+    )
+
+    const replacementSnapshot = yield* db.transaction((tx) =>
+      RetainedSteering.readActiveSnapshot(tx, replaceTime + 1),
+    )
+    const replacementHead = replacementSnapshot.items[0]?.transition
+    if (!replacementHead) return yield* Effect.die("Expected the retained replacement head")
+    const retractTime = sourceTime + 2_000
+    const retractText = "across all my learning, remove the worked-example instruction"
+    const retractInput = {
+      action: "retract" as const,
+      policyID: replacementHead.policyID,
+      expectedHeadID: replacementHead.id,
+      expectedVersion: replacementHead.version,
+      sourceExcerpt: retractText,
+    }
+    const retracted = yield* seedInteraction(
+      db,
+      "retained-readable-retract",
+      retractInput,
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      { text: retractText, time: retractTime, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      retractInput,
+      retracted.registration,
+    )
+    const retractResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      retractInput,
+      context(retracted.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+    )
+    const retractRead = SemanticPresentation.readResult({
+      id: retracted.registration.partID,
+      sessionID: retracted.registration.sessionID,
+      messageID: retracted.registration.assistantMessageID,
+      callID: retracted.registration.callID,
+      tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+      state: { status: "completed", title: retractResult.title, metadata: retractResult.metadata },
+    })
+    if (retractRead.type !== "valid") return yield* Effect.die("Expected a valid retained retract presentation")
+    expect(retractRead.value.facts).toEqual(
+      expect.arrayContaining([
+        { label: "Retracted instruction", value: replaceInput.operativeInstruction },
+        { label: "State", value: "retracted" },
+        { label: "Version", value: "3" },
+        { label: "Effect", value: "This retained instruction no longer applies." },
+      ]),
+    )
   }),
 )
 
@@ -1678,13 +1815,13 @@ it.effect("keeps provider observation metadata outside retained invocation ident
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
     const runtime = yield* LearningCommandRuntime.Service
-    const time = Date.parse("2026-07-20T02:00:00.000Z")
+    const time = Date.now()
     const sourceExcerpt = "across all my learning this week, explain before practice"
     const input = {
       action: "create",
       sourceExcerpt,
       operativeInstruction: "Explain before asking me to practice.",
-      validUntil: "2026-07-27T02:00:00.000+00:00",
+      validUntil: new Date(time + 7 * 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
     }
     const interaction = yield* seedInteraction(
       db,
@@ -1852,7 +1989,7 @@ it.effect(
       })
       yield* LearningCommandRuntime.recoverAdmitted(events)
       expect(yield* exactPartResult(db, conflict.partID)).toMatchObject({
-        title: "Retained learning steering not changed",
+        title: "Retained learning steering",
         metadata: { outcome: "error", code: "semantic_conflict" },
       })
       expect(permissionRequests).toHaveLength(requestsAfterApply)
@@ -1882,19 +2019,8 @@ it.effect(
       ) =>
         Effect.all({
           part: db.select({ data: PartTable.data }).from(PartTable).where(eq(PartTable.id, registration.partID)).get(),
-          invocation: db
-            .select({
-              status: LearningCommandInvocationTable.status,
-              effectID: LearningCommandInvocationTable.retained_steering_effect_id,
-              settlement: LearningCommandInvocationTable.settlement,
-            })
-            .from(LearningCommandInvocationTable)
-            .where(eq(LearningCommandInvocationTable.part_id, registration.partID))
-            .get(),
-          receipts: db.get(sql`
-          SELECT count(*) AS count FROM learning_command_receipt
-          WHERE occurrence_id = ${occurrenceID} AND retained_steering_effect_id IS NOT NULL
-        `),
+          invocation: retainedSteeringInvocationProjection(db, registration.partID),
+          receipts: retainedSteeringReceiptCount(db, occurrenceID),
           transitions: db.get(sql`
           SELECT count(*) AS count FROM retained_steering_transition WHERE occurrence_id = ${occurrenceID}
         `),
@@ -2044,8 +2170,24 @@ it.effect("requires an exact once-only default confirmation and keeps authorized
       },
     })
     const receipt = yield* db
-      .select()
+      .select({
+        id: LearningCommandReceiptTable.id,
+        permission_request_id: LearnerDefaultCourseCommandTable.permission_request_id,
+        confirmation_snapshot: DefaultCoursePreferenceTransitionTable.confirmation_snapshot,
+      })
       .from(LearningCommandReceiptTable)
+      .innerJoin(
+        LearnerDefaultCourseCommandTable,
+        eq(LearnerDefaultCourseCommandTable.invocation_part_id, LearningCommandReceiptTable.invocation_part_id),
+      )
+      .innerJoin(
+        LearnerDefaultCourseCommitSealTable,
+        eq(LearnerDefaultCourseCommitSealTable.receipt_id, LearningCommandReceiptTable.id),
+      )
+      .innerJoin(
+        DefaultCoursePreferenceTransitionTable,
+        eq(DefaultCoursePreferenceTransitionTable.id, LearnerDefaultCourseCommitSealTable.effect_id),
+      )
       .where(eq(LearningCommandReceiptTable.invocation_part_id, interaction.registration.partID))
       .get()
     expect(receipt).toMatchObject({
@@ -2154,9 +2296,9 @@ it.effect("requires an exact once-only default confirmation and keeps authorized
     expect(
       Exit.isFailure(
         yield* db
-          .update(LearningCommandReceiptTable)
+          .update(LearnerDefaultCourseCommandTable)
           .set({ permission_request_id: PermissionV1.ID.ascending() })
-          .where(eq(LearningCommandReceiptTable.id, receipt!.id))
+          .where(eq(LearnerDefaultCourseCommandTable.invocation_part_id, interaction.registration.partID))
           .run()
           .pipe(Effect.exit),
       ),
@@ -2444,7 +2586,11 @@ it.effect("keeps route anchors exact to one Course Revision Item and uses ordina
       yield* db
         .select({ time: LearningCommandReceiptTable.time_committed })
         .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.anchor_navigation_effect_id, result.effectID))
+        .innerJoin(
+          LearnerCourseRouteAnchorCommitSealTable,
+          eq(LearnerCourseRouteAnchorCommitSealTable.receipt_id, LearningCommandReceiptTable.id),
+        )
+        .where(eq(LearnerCourseRouteAnchorCommitSealTable.effect_id, result.effectID))
         .get(),
     ).toEqual({ time: newerSharedState.time })
     const settledPartRow = yield* db
@@ -2629,12 +2775,156 @@ it.effect("preserves navigation and its source receipt across whole Session dele
       yield* db
         .select()
         .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.default_navigation_effect_id, applied.effectID))
+        .innerJoin(
+          LearnerDefaultCourseCommitSealTable,
+          eq(LearnerDefaultCourseCommitSealTable.receipt_id, LearningCommandReceiptTable.id),
+        )
+        .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, applied.effectID))
         .get(),
     ).toBeDefined()
     expect(
       yield* db.select().from(PartTable).where(eq(PartTable.id, interaction.registration.partID)).get(),
     ).toBeUndefined()
+  }),
+)
+
+it.effect("renders distinct exact owner locators for otherwise identical Course revisions and route anchors", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const runtime = yield* LearningCommandRuntime.Service
+    const first = yield* seedCourse(courses, "Duplicate algorithms", "Main")
+    const second = yield* seedCourse(courses, "Duplicate algorithms", "Main")
+    const acceptanceCases = [
+      { suffix: "readable-course-first", seeded: first },
+      { suffix: "readable-course-second", seeded: second },
+    ] as const
+    const acceptanceResults = yield* Effect.forEach(acceptanceCases, (item) =>
+      Effect.gen(function* () {
+        const input = acceptance(item.seeded.course.id, item.seeded.view.revision.id)
+        const interaction = yield* seedInteraction(db, item.suffix, input)
+        yield* runtime.prepare(input, interaction.registration)
+        const result = yield* runtime.execute(input, context(interaction.registration, "ask"))
+        return { interaction, result }
+      }),
+    )
+    const acceptanceProposals = acceptanceResults.map((item) => {
+      const request = permissionRequests.find((candidate) => candidate.sessionID === item.interaction.sessionID)
+      if (!request?.tool) throw new Error("Expected a bound Course acceptance request")
+      const read = SemanticPresentation.readProposal({
+        id: request.id ?? "per_course_locator_test",
+        sessionID: request.sessionID,
+        permission: request.permission,
+        patterns: request.patterns,
+        always: request.always,
+        metadata: request.metadata,
+        tool: request.tool,
+      })
+      if (read.type !== "valid") {
+        throw new Error(`Expected a valid Course acceptance presentation: ${JSON.stringify(request)}`)
+      }
+      return read.value
+    })
+    const acceptanceResultProjections = acceptanceResults.map((item) => {
+      const read = SemanticPresentation.readResult({
+        id: item.interaction.registration.partID,
+        sessionID: item.interaction.registration.sessionID,
+        messageID: item.interaction.registration.assistantMessageID,
+        callID: item.interaction.registration.callID,
+        tool: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+        state: { status: "completed", title: item.result.title, metadata: item.result.metadata },
+      })
+      if (read.type !== "valid") throw new Error("Expected a valid Course acceptance result presentation")
+      return read.value
+    })
+    const acceptanceProposalText = acceptanceProposals.map((value) => JSON.stringify(value))
+    const acceptanceResultText = acceptanceResultProjections.map((value) => JSON.stringify(value))
+    expect(acceptanceProposalText[0]).not.toBe(acceptanceProposalText[1])
+    expect(acceptanceResultText[0]).not.toBe(acceptanceResultText[1])
+    expect(acceptanceProposalText[0]).toContain(first.course.id)
+    expect(acceptanceProposalText[1]).toContain(second.course.id)
+    expect(acceptanceResultText[0]).toContain(first.course.id)
+    expect(acceptanceResultText[1]).toContain(second.course.id)
+
+    permissionRequests.length = 0
+    const anchorResults = yield* Effect.forEach(acceptanceCases, (item) =>
+      Effect.gen(function* () {
+        const revisionItems = yield* courses.listRevisionItems(
+          item.seeded.course.id,
+          item.seeded.view.view.id,
+          item.seeded.view.revision.id,
+        )
+        const revisionItem = revisionItems.items[0]
+        if (!revisionItem) return yield* Effect.die("Expected a Course Revision Item")
+        const input = {
+          courseID: item.seeded.course.id,
+          expectedHeadID: null,
+          expectedVersion: 0,
+          target: {
+            viewID: item.seeded.view.view.id,
+            revisionID: item.seeded.view.revision.id,
+            itemID: revisionItem.itemID,
+            courseVersion: 0,
+            selectionVersion: 1,
+            viewVersion: 0,
+            revisionVersion: 0,
+          },
+        }
+        const interaction = yield* seedInteraction(
+          db,
+          `${item.suffix}-anchor`,
+          input,
+          LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+        )
+        yield* runtime.prepareCommand(
+          LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+          input,
+          interaction.registration,
+        )
+        const result = yield* runtime.executeCommand(
+          LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+          input,
+          context(interaction.registration, "ask", LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY),
+        )
+        return { interaction, result }
+      }),
+    )
+    const anchorProposals = anchorResults.map((item) => {
+      const request = permissionRequests.find((candidate) => candidate.sessionID === item.interaction.sessionID)
+      if (!request?.tool) throw new Error("Expected a bound route-anchor request")
+      const read = SemanticPresentation.readProposal({
+        id: request.id ?? "per_anchor_locator_test",
+        sessionID: request.sessionID,
+        permission: request.permission,
+        patterns: request.patterns,
+        always: request.always,
+        metadata: request.metadata,
+        tool: request.tool,
+      })
+      if (read.type !== "valid") throw new Error("Expected a valid route-anchor presentation")
+      return read.value
+    })
+    const anchorResultProjections = anchorResults.map((item) => {
+      const read = SemanticPresentation.readResult({
+        id: item.interaction.registration.partID,
+        sessionID: item.interaction.registration.sessionID,
+        messageID: item.interaction.registration.assistantMessageID,
+        callID: item.interaction.registration.callID,
+        tool: LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+        state: { status: "completed", title: item.result.title, metadata: item.result.metadata },
+      })
+      if (read.type !== "valid") throw new Error("Expected a valid route-anchor result presentation")
+      return read.value
+    })
+    const anchorProposalText = anchorProposals.map((value) => JSON.stringify(value))
+    const anchorResultText = anchorResultProjections.map((value) => JSON.stringify(value))
+    expect(anchorProposalText[0]).not.toBe(anchorProposalText[1])
+    expect(anchorResultText[0]).not.toBe(anchorResultText[1])
+    expect(anchorProposalText[0]).toContain(first.course.id)
+    expect(anchorProposalText[1]).toContain(second.course.id)
+    expect(anchorResultText[0]).toContain(first.course.id)
+    expect(anchorResultText[1]).toContain(second.course.id)
   }),
 )
 
@@ -2735,7 +3025,12 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       .from(LearningCommandReceiptTable)
       .where(eq(LearningCommandReceiptTable.invocation_part_id, interaction.registration.partID))
       .get()
-    if (!originalReceipt?.effect_id) return yield* Effect.die("Expected the legacy receipt fixture")
+    const originalSeal = yield* db
+      .select()
+      .from(CourseSelectionAcceptanceCommitSealTable)
+      .where(eq(CourseSelectionAcceptanceCommitSealTable.invocation_part_id, interaction.registration.partID))
+      .get()
+    if (!originalReceipt || !originalSeal) return yield* Effect.die("Expected the Course receipt fixture")
     const originalInvocation = yield* db
       .select()
       .from(LearningCommandInvocationTable)
@@ -2744,7 +3039,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     const originalEffect = yield* db
       .select()
       .from(CourseSelectionAcceptanceEffectTable)
-      .where(eq(CourseSelectionAcceptanceEffectTable.id, originalReceipt.effect_id))
+      .where(eq(CourseSelectionAcceptanceEffectTable.id, originalSeal.effect_id))
       .get()
     if (!originalInvocation || !originalEffect) return yield* Effect.die("Expected the legacy settlement fixture")
 
@@ -2846,7 +3141,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     }
     yield* db.run(sql.raw("ROLLBACK TO default_transition_rowid_replace"))
     yield* db.run(sql.raw("RELEASE default_transition_rowid_replace"))
-    const defaultInvocation = yield* insertAppliedNavigationInvocation(db, {
+    const defaultInvocation = yield* insertAdmittedNavigationInvocation(db, {
       kind: "default",
       suffix: "default",
       sessionID: interaction.sessionID,
@@ -2854,33 +3149,16 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       occurrenceID: interaction.occurrenceID,
       turnID: interaction.turnID,
       inputID: interaction.inputID,
-      receiptID: originalReceipt!.id,
       effect: preparedDefault.effect,
-      confirmation: preparedDefault.confirmation,
-      courseTitle: course.title,
       permissionRequestID: defaultPermissionRequestID,
     })
     const defaultPromotion = yield* db
-      .update(LearningCommandReceiptTable)
-      .set({
-        occurrence_id: interaction.occurrenceID,
-        origin_session_id: interaction.sessionID,
-        origin_message_id: interaction.userMessageID,
-        assistant_message_id: defaultInvocation.assistantMessageID,
+      .insert(LearnerDefaultCourseCommitSealTable)
+      .values({
+        effect_id: preparedDefault.effect.id,
+        receipt_id: originalReceipt.id,
         invocation_part_id: defaultInvocation.partID,
-        capability_identity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-        capability_version: 1,
-        authorization_basis: "learner_acceptance",
-        effect_id: null,
-        representation_effect_id: null,
-        default_navigation_effect_id: preparedDefault.effect.id,
-        anchor_navigation_effect_id: null,
-        permission_request_id: defaultPermissionRequestID,
-        confirmation_snapshot: preparedDefault.confirmation,
-        time_committed: preparedDefault.effect.timeCommitted,
-        commit_order: preparedDefault.effect.commitOrder,
       })
-      .where(eq(LearningCommandReceiptTable.id, originalReceipt!.id))
       .run()
       .pipe(Effect.exit)
     expect(Exit.isFailure(defaultPromotion)).toBe(true)
@@ -2894,8 +3172,8 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     expect(
       yield* db
         .select()
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.default_navigation_effect_id, preparedDefault.effect.id))
+        .from(LearnerDefaultCourseCommitSealTable)
+        .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, preparedDefault.effect.id))
         .get(),
     ).toBeUndefined()
     expect(
@@ -2991,7 +3269,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     }
     yield* db.run(sql.raw("ROLLBACK TO anchor_transition_rowid_replace"))
     yield* db.run(sql.raw("RELEASE anchor_transition_rowid_replace"))
-    const anchorInvocation = yield* insertAppliedNavigationInvocation(db, {
+    const anchorInvocation = yield* insertAdmittedNavigationInvocation(db, {
       kind: "anchor",
       suffix: "anchor",
       sessionID: interaction.sessionID,
@@ -2999,30 +3277,15 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       occurrenceID: interaction.occurrenceID,
       turnID: interaction.turnID,
       inputID: interaction.inputID,
-      receiptID: originalReceipt!.id,
       effect: anchorEffect,
     })
     const anchorPromotion = yield* db
-      .update(LearningCommandReceiptTable)
-      .set({
-        occurrence_id: interaction.occurrenceID,
-        origin_session_id: interaction.sessionID,
-        origin_message_id: interaction.userMessageID,
-        assistant_message_id: anchorInvocation.assistantMessageID,
+      .insert(LearnerCourseRouteAnchorCommitSealTable)
+      .values({
+        effect_id: anchorEffect.id,
+        receipt_id: originalReceipt.id,
         invocation_part_id: anchorInvocation.partID,
-        capability_identity: LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
-        capability_version: 1,
-        authorization_basis: "learner_request",
-        effect_id: null,
-        representation_effect_id: null,
-        default_navigation_effect_id: null,
-        anchor_navigation_effect_id: anchorEffect.id,
-        permission_request_id: null,
-        confirmation_snapshot: null,
-        time_committed: anchorEffect.timeCommitted,
-        commit_order: anchorEffect.commitOrder,
       })
-      .where(eq(LearningCommandReceiptTable.id, originalReceipt!.id))
       .run()
       .pipe(Effect.exit)
     expect(Exit.isFailure(anchorPromotion)).toBe(true)
@@ -3036,8 +3299,8 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     expect(
       yield* db
         .select()
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.anchor_navigation_effect_id, anchorEffect.id))
+        .from(LearnerCourseRouteAnchorCommitSealTable)
+        .where(eq(LearnerCourseRouteAnchorCommitSealTable.effect_id, anchorEffect.id))
         .get(),
     ).toBeUndefined()
     expect(
@@ -3050,23 +3313,12 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
 
     yield* db.run(sql.raw("SAVEPOINT default_navigation_receipt_replace"))
     const defaultReplacement = yield* insertOrReplaceReceipt(db, {
-      id: originalReceipt.id,
-      occurrence_id: interaction.occurrenceID,
-      origin_session_id: interaction.sessionID,
-      origin_message_id: interaction.userMessageID,
+      ...originalReceipt,
       assistant_message_id: defaultInvocation.assistantMessageID,
       invocation_part_id: defaultInvocation.partID,
       capability_identity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
       capability_version: 1,
       authorization_basis: "learner_acceptance",
-      effect_id: null,
-      representation_effect_id: null,
-      default_navigation_effect_id: preparedDefault.effect.id,
-      anchor_navigation_effect_id: null,
-      retained_steering_effect_id: null,
-      goal_effect_id: null,
-      permission_request_id: defaultPermissionRequestID,
-      confirmation_snapshot: preparedDefault.confirmation,
       time_committed: preparedDefault.effect.timeCommitted,
       commit_order: preparedDefault.effect.commitOrder,
     }).pipe(Effect.exit)
@@ -3078,13 +3330,13 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
         .get(),
       legacyEffectReceipt: yield* db
         .select()
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.effect_id, originalReceipt.effect_id))
+        .from(CourseSelectionAcceptanceCommitSealTable)
+        .where(eq(CourseSelectionAcceptanceCommitSealTable.receipt_id, originalReceipt.id))
         .get(),
       navigationReceipt: yield* db
         .select()
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.default_navigation_effect_id, preparedDefault.effect.id))
+        .from(LearnerDefaultCourseCommitSealTable)
+        .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, preparedDefault.effect.id))
         .get(),
       invocation: yield* db
         .select()
@@ -3094,7 +3346,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       effect: yield* db
         .select()
         .from(CourseSelectionAcceptanceEffectTable)
-        .where(eq(CourseSelectionAcceptanceEffectTable.id, originalReceipt.effect_id))
+        .where(eq(CourseSelectionAcceptanceEffectTable.id, originalSeal.effect_id))
         .get(),
     }
     yield* db.run(sql.raw("ROLLBACK TO default_navigation_receipt_replace"))
@@ -3102,23 +3354,12 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
 
     yield* db.run(sql.raw("SAVEPOINT anchor_navigation_receipt_replace"))
     const anchorReplacement = yield* insertOrReplaceReceipt(db, {
-      id: originalReceipt.id,
-      occurrence_id: interaction.occurrenceID,
-      origin_session_id: interaction.sessionID,
-      origin_message_id: interaction.userMessageID,
+      ...originalReceipt,
       assistant_message_id: anchorInvocation.assistantMessageID,
       invocation_part_id: anchorInvocation.partID,
       capability_identity: LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
       capability_version: 1,
       authorization_basis: "learner_request",
-      effect_id: null,
-      representation_effect_id: null,
-      default_navigation_effect_id: null,
-      anchor_navigation_effect_id: anchorEffect.id,
-      retained_steering_effect_id: null,
-      goal_effect_id: null,
-      permission_request_id: null,
-      confirmation_snapshot: null,
       time_committed: anchorEffect.timeCommitted,
       commit_order: anchorEffect.commitOrder,
     }).pipe(Effect.exit)
@@ -3130,13 +3371,13 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
         .get(),
       legacyEffectReceipt: yield* db
         .select()
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.effect_id, originalReceipt.effect_id))
+        .from(CourseSelectionAcceptanceCommitSealTable)
+        .where(eq(CourseSelectionAcceptanceCommitSealTable.receipt_id, originalReceipt.id))
         .get(),
       navigationReceipt: yield* db
         .select()
-        .from(LearningCommandReceiptTable)
-        .where(eq(LearningCommandReceiptTable.anchor_navigation_effect_id, anchorEffect.id))
+        .from(LearnerCourseRouteAnchorCommitSealTable)
+        .where(eq(LearnerCourseRouteAnchorCommitSealTable.effect_id, anchorEffect.id))
         .get(),
       invocation: yield* db
         .select()
@@ -3146,7 +3387,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       effect: yield* db
         .select()
         .from(CourseSelectionAcceptanceEffectTable)
-        .where(eq(CourseSelectionAcceptanceEffectTable.id, originalReceipt.effect_id))
+        .where(eq(CourseSelectionAcceptanceEffectTable.id, originalSeal.effect_id))
         .get(),
     }
     yield* db.run(sql.raw("ROLLBACK TO anchor_navigation_receipt_replace"))
@@ -3187,14 +3428,14 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     })
     expect(defaultReplacementState).toEqual({
       receipt: originalReceipt,
-      legacyEffectReceipt: originalReceipt,
+      legacyEffectReceipt: originalSeal,
       navigationReceipt: undefined,
       invocation: originalInvocation,
       effect: originalEffect,
     })
     expect(anchorReplacementState).toEqual({
       receipt: originalReceipt,
-      legacyEffectReceipt: originalReceipt,
+      legacyEffectReceipt: originalSeal,
       navigationReceipt: undefined,
       invocation: originalInvocation,
       effect: originalEffect,
@@ -3227,7 +3468,12 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       .from(LearningCommandReceiptTable)
       .where(eq(LearningCommandReceiptTable.invocation_part_id, acceptanceInteraction.registration.partID))
       .get()
-    if (!acceptanceReceipt?.effect_id) return yield* Effect.die("Expected the acceptance receipt fixture")
+    const acceptanceSeal = yield* db
+      .select()
+      .from(CourseSelectionAcceptanceCommitSealTable)
+      .where(eq(CourseSelectionAcceptanceCommitSealTable.invocation_part_id, acceptanceInteraction.registration.partID))
+      .get()
+    if (!acceptanceReceipt || !acceptanceSeal) return yield* Effect.die("Expected the acceptance receipt fixture")
 
     const course = yield* courses.getCourse(seeded.course.id)
     const defaultInput = {
@@ -3264,7 +3510,12 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       .from(LearningCommandReceiptTable)
       .where(eq(LearningCommandReceiptTable.invocation_part_id, defaultInteraction.registration.partID))
       .get()
-    if (!defaultReceipt?.default_navigation_effect_id) return yield* Effect.die("Expected the default receipt fixture")
+    const defaultSeal = yield* db
+      .select()
+      .from(LearnerDefaultCourseCommitSealTable)
+      .where(eq(LearnerDefaultCourseCommitSealTable.invocation_part_id, defaultInteraction.registration.partID))
+      .get()
+    if (!defaultReceipt || !defaultSeal) return yield* Effect.die("Expected the default receipt fixture")
     const defaultInvocation = yield* db
       .select()
       .from(LearningCommandInvocationTable)
@@ -3273,7 +3524,7 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
     const defaultTransition = yield* db
       .select()
       .from(DefaultCoursePreferenceTransitionTable)
-      .where(eq(DefaultCoursePreferenceTransitionTable.id, defaultReceipt.default_navigation_effect_id))
+      .where(eq(DefaultCoursePreferenceTransitionTable.id, defaultSeal.effect_id))
       .get()
     if (!defaultTransition) return yield* Effect.die("Expected the default transition fixture")
     const defaultSource = yield* navigation.currentDefault()
@@ -3310,11 +3561,11 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       yield* db
         .select()
         .from(DefaultCoursePreferenceTransitionTable)
-        .where(eq(DefaultCoursePreferenceTransitionTable.id, defaultReceipt.default_navigation_effect_id))
+        .where(eq(DefaultCoursePreferenceTransitionTable.id, defaultSeal.effect_id))
         .get(),
     ).toEqual(defaultTransition)
     expect(yield* navigation.currentDefault()).toMatchObject({
-      headID: defaultReceipt.default_navigation_effect_id,
+      headID: defaultSeal.effect_id,
       source: { receiptID: defaultReceipt.id },
     })
 
@@ -3363,7 +3614,7 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
         .get(),
     ).toEqual(defaultReceipt)
     expect(yield* navigation.currentDefault()).toMatchObject({
-      headID: defaultReceipt.default_navigation_effect_id,
+      headID: defaultSeal.effect_id,
       source: { receiptID: defaultReceipt.id },
     })
 
@@ -3404,7 +3655,12 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       .from(LearningCommandReceiptTable)
       .where(eq(LearningCommandReceiptTable.invocation_part_id, anchorInteraction.registration.partID))
       .get()
-    if (!anchorReceipt?.anchor_navigation_effect_id) return yield* Effect.die("Expected the anchor receipt fixture")
+    const anchorSeal = yield* db
+      .select()
+      .from(LearnerCourseRouteAnchorCommitSealTable)
+      .where(eq(LearnerCourseRouteAnchorCommitSealTable.invocation_part_id, anchorInteraction.registration.partID))
+      .get()
+    if (!anchorReceipt || !anchorSeal) return yield* Effect.die("Expected the anchor receipt fixture")
     const anchorInvocation = yield* db
       .select()
       .from(LearningCommandInvocationTable)
@@ -3413,7 +3669,7 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
     const anchorTransition = yield* db
       .select()
       .from(CourseRouteAnchorTransitionTable)
-      .where(eq(CourseRouteAnchorTransitionTable.id, anchorReceipt.anchor_navigation_effect_id))
+      .where(eq(CourseRouteAnchorTransitionTable.id, anchorSeal.effect_id))
       .get()
     if (!anchorTransition) return yield* Effect.die("Expected the anchor transition fixture")
     const anchorSource = yield* navigation.currentAnchor(seeded.course.id)
@@ -3450,11 +3706,11 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       yield* db
         .select()
         .from(CourseRouteAnchorTransitionTable)
-        .where(eq(CourseRouteAnchorTransitionTable.id, anchorReceipt.anchor_navigation_effect_id))
+        .where(eq(CourseRouteAnchorTransitionTable.id, anchorSeal.effect_id))
         .get(),
     ).toEqual(anchorTransition)
     expect(yield* navigation.currentAnchor(seeded.course.id)).toMatchObject({
-      headID: anchorReceipt.anchor_navigation_effect_id,
+      headID: anchorSeal.effect_id,
       source: { receiptID: anchorReceipt.id },
     })
 
@@ -3478,7 +3734,7 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
         .get(),
     ).toEqual(anchorReceipt)
     expect(yield* navigation.currentAnchor(seeded.course.id)).toMatchObject({
-      headID: anchorReceipt.anchor_navigation_effect_id,
+      headID: anchorSeal.effect_id,
       source: { receiptID: anchorReceipt.id },
     })
 
@@ -3509,8 +3765,11 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
 
     const stateInput = {
       acceptanceReceipt,
+      acceptanceSeal,
       defaultReceipt,
+      defaultSeal,
       anchorReceipt,
+      anchorSeal,
     }
     const originalState = yield* navigationReplacementState(db, stateInput)
     const tableStorage = yield* db.all<{ name: string; wr: number }>(sql`
@@ -3531,15 +3790,13 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
         INSERT OR REPLACE INTO learning_command_receipt (
           _rowid_, id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
           invocation_part_id, capability_identity, capability_version, authorization_basis,
-          effect_id, representation_effect_id, default_navigation_effect_id, anchor_navigation_effect_id,
-          permission_request_id, confirmation_snapshot, time_committed, commit_order
+          time_committed, commit_order
         )
         SELECT
           (SELECT _rowid_ FROM learning_command_receipt WHERE id = ${defaultReceipt.id}),
           id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
           invocation_part_id, capability_identity, capability_version, authorization_basis,
-          effect_id, representation_effect_id, default_navigation_effect_id, anchor_navigation_effect_id,
-          permission_request_id, confirmation_snapshot, time_committed, commit_order
+          time_committed, commit_order
         FROM learning_command_receipt
         WHERE id = ${acceptanceReceipt.id}
       `,
@@ -3606,6 +3863,24 @@ it.effect("returns the committed exact result when terminal notification interru
 
     const first = yield* runtime.execute(input, context(interaction.registration, "allow"))
     expect(JSON.parse(first.output)).toMatchObject({ outcome: "applied", courseID: course.course.id })
+    expect(
+      SemanticPresentation.readResult({
+        id: interaction.registration.partID,
+        sessionID: interaction.registration.sessionID,
+        messageID: interaction.registration.assistantMessageID,
+        tool: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+        callID: interaction.registration.callID,
+        state: { status: "completed", title: first.title, metadata: first.metadata },
+      }),
+    ).toMatchObject({
+      type: "valid",
+      value: {
+        phase: "result",
+        capability: LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+        outcome: "committed",
+        durablySettled: true,
+      },
+    })
     expect(observerRuns).toBe(1)
     expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(first)
     expect((yield* courses.getCourse(course.course.id)).selection.version).toBe(1)
@@ -3764,10 +4039,19 @@ it.effect("settles permission denial and crash recovery as exact completed Parts
     const legacyInput = acceptance(legacyCourse.course.id, legacyCourse.view.revision.id)
     const legacyInteraction = yield* seedInteraction(db, "legacy-interrupted", legacyInput)
     yield* runtime.prepare(legacyInput, legacyInteraction.registration)
-    yield* db
-      .update(LearningCommandInvocationTable)
-      .set({ turn_id: null, input_id: null })
+    const legacyInvocation = yield* db
+      .select()
+      .from(LearningCommandInvocationTable)
       .where(eq(LearningCommandInvocationTable.part_id, legacyInteraction.registration.partID))
+      .get()
+    if (!legacyInvocation) return yield* Effect.die("Expected admitted legacy invocation fixture")
+    yield* db
+      .delete(LearningCommandInvocationTable)
+      .where(eq(LearningCommandInvocationTable.part_id, legacyInteraction.registration.partID))
+      .run()
+    yield* db
+      .insert(LearningCommandInvocationTable)
+      .values({ ...legacyInvocation, turn_id: null, input_id: null })
       .run()
     yield* LearningCommandRuntime.recoverAdmitted(events)
     expect(JSON.parse((yield* exactPartResult(db, legacyInteraction.registration.partID)).output)).toMatchObject({
@@ -4159,7 +4443,7 @@ test("reopens retained steering lineage, cuts, pagination, expiry, acknowledgeme
         ),
       ).toEqual(persisted.replacementResult)
       expect(yield* exactPartResult(db, persisted.pendingRegistration.partID)).toMatchObject({
-        title: "Retained learning steering not changed",
+        title: "Retained learning steering",
         metadata: { outcome: "error", code: "interrupted" },
       })
 
@@ -4523,6 +4807,69 @@ function settleInteractionTurn(
   )
 }
 
+function goalInvocationProjection(db: Database.Interface["db"], partID: SessionV1.PartID) {
+  return db
+    .select({
+      status: LearningCommandInvocationTable.status,
+      confirmation: LearnerGoalCommandTable.confirmation_snapshot,
+      effectID: sql<LearnerGoal.EffectID | null>`json_extract(${LearningCommandInvocationTable.settlement}, '$.effectID')`,
+      settlement: LearningCommandInvocationTable.settlement,
+      timeSettled: LearningCommandInvocationTable.time_settled,
+    })
+    .from(LearningCommandInvocationTable)
+    .leftJoin(
+      LearnerGoalCommandTable,
+      eq(LearnerGoalCommandTable.invocation_part_id, LearningCommandInvocationTable.part_id),
+    )
+    .where(eq(LearningCommandInvocationTable.part_id, partID))
+    .get()
+}
+
+function goalReceiptCount(db: Database.Interface["db"], occurrenceID?: LearningCommand.OccurrenceID) {
+  return occurrenceID
+    ? db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_receipt AS receipt
+        JOIN learner_goal_commit_seal AS seal ON seal.receipt_id = receipt.id
+        WHERE receipt.occurrence_id = ${occurrenceID}
+      `)
+    : db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_receipt AS receipt
+        JOIN learner_goal_commit_seal AS seal ON seal.receipt_id = receipt.id
+      `)
+}
+
+function retainedSteeringInvocationProjection(db: Database.Interface["db"], partID: SessionV1.PartID) {
+  return db
+    .select({
+      status: LearningCommandInvocationTable.status,
+      effectID: sql<RetainedSteering.TransitionID | null>`json_extract(${LearningCommandInvocationTable.settlement}, '$.effectID')`,
+      settlement: LearningCommandInvocationTable.settlement,
+    })
+    .from(LearningCommandInvocationTable)
+    .where(eq(LearningCommandInvocationTable.part_id, partID))
+    .get()
+}
+
+function retainedSteeringReceiptCount(
+  db: Database.Interface["db"],
+  occurrenceID?: LearningCommand.OccurrenceID,
+) {
+  return occurrenceID
+    ? db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_receipt AS receipt
+        JOIN retained_steering_commit_seal AS seal ON seal.receipt_id = receipt.id
+        WHERE receipt.occurrence_id = ${occurrenceID}
+      `)
+    : db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_receipt AS receipt
+        JOIN retained_steering_commit_seal AS seal ON seal.receipt_id = receipt.id
+      `)
+}
+
 function runtimeLayer(filename: string, permissionLayer = permission) {
   return LayerNode.compile(root, [
     [Database.node, Database.layerFromPath(filename).pipe(Layer.orDie)],
@@ -4530,7 +4877,7 @@ function runtimeLayer(filename: string, permissionLayer = permission) {
   ])
 }
 
-function insertAppliedNavigationInvocation(
+function insertAdmittedNavigationInvocation(
   db: Database.Interface["db"],
   input: {
     suffix: string
@@ -4539,13 +4886,10 @@ function insertAppliedNavigationInvocation(
     occurrenceID: LearningCommand.OccurrenceID
     turnID: Turn.ID
     inputID: Turn.InputID
-    receiptID: LearningCommand.ReceiptID
   } & (
     | {
         kind: "default"
         effect: LearnerNavigation.DefaultEffect
-        confirmation: LearnerNavigation.DefaultConfirmationSnapshot
-        courseTitle: string
         permissionRequestID: PermissionV1.ID
       }
     | { kind: "anchor"; effect: LearnerNavigation.AnchorEffect }
@@ -4553,83 +4897,49 @@ function insertAppliedNavigationInvocation(
 ) {
   const partID = SessionV1.PartID.ascending(`prt_receipt_promotion_${input.suffix}`)
   const assistantMessageID = SessionV1.MessageID.ascending(`msg_receipt_promotion_${input.suffix}`)
-  const settlement =
-    input.kind === "default"
-      ? ({
-          outcome: "applied",
-          navigationKind: "default_course_preference",
-          receiptID: input.receiptID,
-          effectID: input.effect.id,
-          effect: input.effect,
-          current: {
-            kind: "default_course_preference",
-            headID: input.effect.id,
-            version: input.effect.version,
-            courseID: input.effect.courseID,
-            usability: { usable: true, title: input.courseTitle },
-            timeCommitted: input.effect.timeCommitted,
-            commitOrder: input.effect.commitOrder,
-            frontierSequence: input.effect.frontierSequence,
-          },
-          confirmation: input.confirmation,
-          settlementTime: input.effect.timeCommitted,
-          settlementOrder: input.effect.commitOrder,
-        } satisfies LearningCommand.DefaultCourseAppliedSettlement)
-      : ({
-          outcome: "applied",
-          navigationKind: "course_route_anchor",
-          receiptID: input.receiptID,
-          effectID: input.effect.id,
-          effect: input.effect,
-          current: {
-            kind: "course_route_anchor",
-            courseID: input.effect.courseID,
-            headID: input.effect.id,
-            version: input.effect.version,
-            target: input.effect.target,
-            usability: { usable: true },
-            timeCommitted: input.effect.timeCommitted,
-            commitOrder: input.effect.commitOrder,
-            frontierSequence: input.effect.frontierSequence,
-          },
-          settlementTime: input.effect.timeCommitted,
-          settlementOrder: input.effect.commitOrder,
-        } satisfies LearningCommand.RouteAnchorAppliedSettlement)
-  return db
-    .insert(LearningCommandInvocationTable)
-    .values({
-      part_id: partID,
-      session_id: input.sessionID,
-      parent_user_message_id: input.parentUserMessageID,
-      assistant_message_id: assistantMessageID,
-      provider_call_id: `call-receipt-promotion-${input.suffix}`,
-      occurrence_id: input.occurrenceID,
-      command_name:
-        input.kind === "default"
-          ? LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
-          : LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
-      command_version: 1,
-      emission_ordinal: 1,
-      capability_identity:
-        input.kind === "default"
-          ? LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
-          : LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
-      capability_version: 1,
-      authorization_basis: input.kind === "default" ? "learner_acceptance" : "learner_request",
-      input_fingerprint: "f".repeat(64),
-      status: "applied",
-      default_navigation_effect_id: input.kind === "default" ? input.effect.id : null,
-      anchor_navigation_effect_id: input.kind === "anchor" ? input.effect.id : null,
-      permission_request_id: input.kind === "default" ? input.permissionRequestID : null,
-      settlement,
-      time_admitted: input.effect.timeCommitted,
-      time_settled: input.effect.timeCommitted,
-      settlement_order: input.effect.commitOrder,
-      turn_id: input.turnID,
-      input_id: input.inputID,
-    })
-    .run()
-    .pipe(Effect.as({ partID, assistantMessageID }))
+  return db.transaction((tx) =>
+    Effect.gen(function* () {
+      yield* tx
+        .insert(LearningCommandInvocationTable)
+        .values({
+          part_id: partID,
+          session_id: input.sessionID,
+          parent_user_message_id: input.parentUserMessageID,
+          assistant_message_id: assistantMessageID,
+          provider_call_id: `call-receipt-promotion-${input.suffix}`,
+          occurrence_id: input.occurrenceID,
+          command_name:
+            input.kind === "default"
+              ? LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
+              : LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+          command_version: 1,
+          emission_ordinal: 1,
+          capability_identity:
+            input.kind === "default"
+              ? LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
+              : LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
+          capability_version: 1,
+          authorization_basis: input.kind === "default" ? "learner_acceptance" : "learner_request",
+          input_fingerprint: "f".repeat(64),
+          status: "admitted",
+          receipt_id: null,
+          settlement: null,
+          time_admitted: input.effect.timeCommitted,
+          time_settled: null,
+          settlement_order: null,
+          turn_id: input.turnID,
+          input_id: input.inputID,
+        })
+        .run()
+      if (input.kind === "default") {
+        yield* tx
+          .insert(LearnerDefaultCourseCommandTable)
+          .values({ invocation_part_id: partID, permission_request_id: input.permissionRequestID })
+          .run()
+      }
+      return { partID, assistantMessageID }
+    }),
+  )
 }
 
 function insertOrReplaceReceipt(
@@ -4640,19 +4950,11 @@ function insertOrReplaceReceipt(
     INSERT OR REPLACE INTO learning_command_receipt (
       id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
       invocation_part_id, capability_identity, capability_version, authorization_basis,
-      effect_id, representation_effect_id, default_navigation_effect_id, anchor_navigation_effect_id,
-      retained_steering_effect_id,
-      goal_effect_id,
-      permission_request_id, confirmation_snapshot, time_committed, commit_order
+      time_committed, commit_order
     ) VALUES (
       ${receipt.id}, ${receipt.occurrence_id}, ${receipt.origin_session_id}, ${receipt.origin_message_id},
       ${receipt.assistant_message_id}, ${receipt.invocation_part_id}, ${receipt.capability_identity},
-      ${receipt.capability_version}, ${receipt.authorization_basis}, ${receipt.effect_id},
-      ${receipt.representation_effect_id}, ${receipt.default_navigation_effect_id},
-      ${receipt.anchor_navigation_effect_id}, ${receipt.retained_steering_effect_id}, ${receipt.goal_effect_id},
-      ${receipt.permission_request_id},
-      ${receipt.confirmation_snapshot === null ? null : JSON.stringify(receipt.confirmation_snapshot)},
-      ${receipt.time_committed}, ${receipt.commit_order}
+      ${receipt.capability_version}, ${receipt.authorization_basis}, ${receipt.time_committed}, ${receipt.commit_order}
     )
   `)
 }
@@ -4715,8 +5017,11 @@ function navigationReplacementState(
   db: Database.Interface["db"],
   input: {
     acceptanceReceipt: typeof LearningCommandReceiptTable.$inferSelect
+    acceptanceSeal: typeof CourseSelectionAcceptanceCommitSealTable.$inferSelect
     defaultReceipt: typeof LearningCommandReceiptTable.$inferSelect
+    defaultSeal: typeof LearnerDefaultCourseCommitSealTable.$inferSelect
     anchorReceipt: typeof LearningCommandReceiptTable.$inferSelect
+    anchorSeal: typeof LearnerCourseRouteAnchorCommitSealTable.$inferSelect
   },
 ) {
   return Effect.gen(function* () {
@@ -4737,20 +5042,37 @@ function navigationReplacementState(
         )
         .orderBy(LearningCommandInvocationTable.part_id)
         .all(),
+      seals: {
+        acceptance: yield* db
+          .select()
+          .from(CourseSelectionAcceptanceCommitSealTable)
+          .where(eq(CourseSelectionAcceptanceCommitSealTable.effect_id, input.acceptanceSeal.effect_id))
+          .get(),
+        default: yield* db
+          .select()
+          .from(LearnerDefaultCourseCommitSealTable)
+          .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, input.defaultSeal.effect_id))
+          .get(),
+        anchor: yield* db
+          .select()
+          .from(LearnerCourseRouteAnchorCommitSealTable)
+          .where(eq(LearnerCourseRouteAnchorCommitSealTable.effect_id, input.anchorSeal.effect_id))
+          .get(),
+      },
       acceptanceEffect: yield* db
         .select()
         .from(CourseSelectionAcceptanceEffectTable)
-        .where(eq(CourseSelectionAcceptanceEffectTable.id, input.acceptanceReceipt.effect_id!))
+        .where(eq(CourseSelectionAcceptanceEffectTable.id, input.acceptanceSeal.effect_id))
         .get(),
       defaultTransition: yield* db
         .select()
         .from(DefaultCoursePreferenceTransitionTable)
-        .where(eq(DefaultCoursePreferenceTransitionTable.id, input.defaultReceipt.default_navigation_effect_id!))
+        .where(eq(DefaultCoursePreferenceTransitionTable.id, input.defaultSeal.effect_id))
         .get(),
       anchorTransition: yield* db
         .select()
         .from(CourseRouteAnchorTransitionTable)
-        .where(eq(CourseRouteAnchorTransitionTable.id, input.anchorReceipt.anchor_navigation_effect_id!))
+        .where(eq(CourseRouteAnchorTransitionTable.id, input.anchorSeal.effect_id))
         .get(),
       frontier: yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`),
     }

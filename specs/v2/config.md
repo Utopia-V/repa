@@ -1,5 +1,8 @@
 # V2 Config Review
 
+> **Status — inherited preview-v2 review record, not Repa configuration authority.** The classifications below may explain deferred source, but they do not authorize removing, porting, or redesigning released-v1 configuration for Repa. The released-v1 execution path remains the accepted baseline unless a Repa ADR or Gate explicitly changes it.
+> Current Repa authority is indexed by the [documentation map](../../docs/README.md).
+
 This document breaks the legacy configuration schema into small review groups. Work through one group at a time and decide whether each field should be ported as-is, removed, or redesigned for v2.
 
 ## Status Labels

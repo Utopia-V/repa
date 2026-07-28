@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test"
 import { tmpdir } from "../../../fixture/fixture"
 import { deferred, directory, json, mount, wait, worktree } from "./sync-fixture"
 import type { GlobalEvent, TurnInfo, TurnInput } from "@opencode-ai/sdk/v2"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 
 function branchEvent(branch: string, eventDirectory: string): GlobalEvent {
   return {
@@ -458,6 +459,87 @@ describe("tui sync", () => {
       await wait(() => replies.length === 1)
       expect(replies[0]?.searchParams.get("directory")).toBe("/tmp/learning/child-session")
       expect(replies[0]?.searchParams.has("workspace")).toBe(false)
+    } finally {
+      app.renderer.destroy()
+    }
+  })
+
+  test("automatic mode leaves once-only semantic confirmations for an explicit learner reply", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/kv.json`, "{}")
+    const replies: URL[] = []
+    const { app, emit, permission, sync } = await mount((url) => {
+      if (url.pathname !== "/permission/perm_once/reply") return undefined
+      replies.push(new URL(url))
+      return json(true)
+    }, tmp.path)
+
+    try {
+      permission.set("auto")
+      emit({
+        directory,
+        project: "proj_test",
+        payload: {
+          id: "evt_permission_once",
+          type: "permission.asked",
+          properties: {
+            id: "perm_once",
+            sessionID: "ses_child",
+            permission: "content_mutation",
+            patterns: ["modify:C:\\course\\notes\\lesson.md"],
+            tool: { messageID: "msg_once", callID: "call_once" },
+            metadata: {
+              onceOnly: true,
+              operation: "modify",
+              anchorPath: "C:\\course",
+              relativePath: "notes\\lesson.md",
+              lifetime: "this physical tool invocation",
+              rights: ["modify"],
+              warning:
+                "This allows one direct file change only. It does not allow Shell, network, or sibling paths.",
+              permissionPromptRequired: true,
+              ...SemanticPresentation.metadata(
+                SemanticPresentation.proposal({
+                  kind: "content_mutation",
+                  binding: {
+                    sessionID: "ses_child",
+                    messageID: "msg_once",
+                    callID: "call_once",
+                    partID: "part_once",
+                  },
+                  operation: "modify",
+                  anchorPath: "C:\\course",
+                  relativePath: "notes\\lesson.md",
+                  lifetime: "this physical tool invocation",
+                  rights: ["modify"],
+                  warning:
+                    "This allows one direct file change only. It does not allow Shell, network, or sibling paths.",
+                }),
+              ),
+            },
+            always: [],
+          },
+        },
+      })
+      emit({
+        directory,
+        project: "proj_test",
+        payload: {
+          id: "evt_permission_prompt_required",
+          type: "permission.asked",
+          properties: {
+            id: "perm_prompt_required",
+            sessionID: "ses_child",
+            permission: "custom_permission",
+            patterns: ["*"],
+            metadata: { permissionPromptRequired: true },
+            always: ["*"],
+          },
+        },
+      })
+
+      await wait(() => sync.data.permission.ses_child?.length === 2)
+      expect(replies).toHaveLength(0)
     } finally {
       app.renderer.destroy()
     }

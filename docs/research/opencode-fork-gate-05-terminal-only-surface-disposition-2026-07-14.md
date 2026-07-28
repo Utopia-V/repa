@@ -1,14 +1,19 @@
 # OpenCode fork Gate 5: terminal-only surface disposition
 
 Historical result: Passed on 2026-07-14 at
-`25e51861effbddbdb04ae8fe88c4107d34ab91b2`. Current disposition is owned by
-[the documentation index](../README.md).
+`25e51861effbddbdb04ae8fe88c4107d34ab91b2`, then corrected and historically
+closed on 2026-07-15. Independent top-level reviewer task
+`019f6599-2914-7f02-849d-412862338271` accepted both the corrected contract and
+implementation/evidence after one `Revise` round.
 
-Current correction status: Closed on 2026-07-15. Independent top-level reviewer
-task `019f6599-2914-7f02-849d-412862338271` first returned `Revise`, then
-accepted the corrected contract and closed the theory round. The same reviewer
-subsequently accepted the implementation/evidence round with no P0–P3 finding.
-Current cross-Gate disposition remains owned by the documentation index.
+Current status: Scoped-reopened by the 2026-07-27 first-principles audit at the
+active build, outward-identity, permission, and product-surface boundaries.
+Runtime Web routes remain disconnected and the hibernated client source need
+not be deleted. The unstaged corrective candidate described below makes the
+ordinary build terminal-only, corrects reachable schema/network identity, and
+closes the permission counterexamples; its original reviewer accepted it.
+There is not yet a durable integration commit. Current disposition is owned by
+[the documentation index](../README.md).
 
 Date: 2026-07-14
 
@@ -530,9 +535,11 @@ OAuth auth, external provider plugins, plugin tools, MCP tools, AI-SDK
 fallback, usage accounting, and actual catalog costs remain. GitHub Copilot's
 provider-local enterprise authentication remains because it is an explicit
 provider capability, not OpenCode Console or sharing state. Zenmux is an
-unrelated provider and remains. OpenCode-branded attribution headers on other
-retained transports belong to the later product-identity audit unless they
-are coupled to the exact first-party ID branch.
+unrelated provider and remains. At the time of this close,
+OpenCode-branded attribution headers on other retained transports were deferred
+to a later product-identity audit unless coupled to the exact first-party ID
+branch. The 2026-07-27 first-principles correction below rejects that deferral
+for reachable outward identity.
 
 Negative evidence requires a catalog containing `opencode`, `opencode-go`,
 and an ordinary control provider to expose only the control through released
@@ -991,3 +998,87 @@ artifacts owned by a changed source schema. No current repair requires data
 recovery; hibernated implementation is not a compatibility runtime and must
 remain outside registration, startup, background work, false configuration,
 and current release composition.
+
+## 2026-07-27 first-principles correction
+
+The accepted boundary removes hosted Web from automatic build and current
+release participation. `packages/opencode/script/build.ts` nevertheless builds
+`packages/app` by default and embeds its generated asset map as an additional
+binary entrypoint; only `--skip-embed-web-ui` suppresses it. The production
+server no longer exposes a Web fallback, so this is dead shipped composition,
+not evidence of a second active runtime. The primary TUI also retains a visible
+`Open docs` action that opens `https://opencode.ai/docs`, so upstream product
+documentation remains directly presented as Repa help. The retained
+`agent create` surface also offers a fixed inherited permission checklist but
+writes denies only for omitted listed keys while the runtime default remains
+wildcard allow; selecting only `read` can therefore leave newly added
+learning/content mutation capabilities enabled.
+
+Reachable outward identity is also wrong. Config loading and TUI-config
+migration write `https://opencode.ai/config.json` or
+`https://opencode.ai/tui.json` into Repa-owned files. Several retained provider
+transports send OpenCode referer, title, source, billing-origin, integration, or
+user-agent values. These active file writes and network claims are not
+equivalent to harmless internal package namespaces, and the earlier deferral to
+a later identity audit conflicts with Repa's already-settled independent
+product identity.
+
+Gate 5 is scoped-reopened only at these active build, outward-identity,
+permission, and presentation boundaries. The terminal product must be the
+default build, while an explicit non-release research target may still request
+Web assets. The visible docs action must be removed or point to a Repa-owned
+truthful help surface. Repa config must use a Repa-owned version-correct schema
+or omit `$schema`. Provider metadata must identify Repa or be removed unless an
+exact third-party provider contract demonstrably requires a legacy integration
+literal; any such bounded exception is recorded and tested rather than treated
+as OpenCode product membership. Restricted custom Agents must compile
+default-deny plus explicit allows from one authoritative capability catalog.
+The runtime disconnections, internal namespaces, and retained-source
+classification remain valid. Dormant publish/install scripts that still name
+OpenCode registries are not active release paths, but they are explicit
+blockers for any future release-readiness claim and must be quarantined or
+rewritten before such a claim.
+
+## 2026-07-28 corrective implementation candidate
+
+The unstaged working-tree candidate makes terminal-only the ordinary build;
+Web assets require the explicit `--research-embed-web-ui` research flag. It
+removes the upstream docs action and upstream schema writes, identifies active
+provider traffic as Repa or omits the product metadata, keeps ordinary OpenAI
+API-key use, and hibernates the unqualified ChatGPT OAuth registration.
+
+Restricted custom Agents now compile default-deny plus explicit allows from the
+live permission catalog. Generated Agent identifiers share one constrained
+namespace with canonical path containment, live-catalog collision checks, and
+non-overwriting writes. Object-form permissions reject exactly ECMAScript
+array-index keys that cannot preserve authored order, while explicit ordered
+rules retain numeric capability support. Raw JSON/JSONC and legacy compilation
+preserve an own `__proto__` deny without changing `Object.prototype`; a real
+same-named local tool remains physically discoverable but model-invisible.
+
+The preview-v2 production Location no longer registers the inherited
+`customize-opencode` skill by default. This removes an upstream product-help
+surface without deleting the generic v2 skill registry, configured/local/URL
+skill sources, guidance, or skill tool, and without changing the independent
+released-v1 skill mechanism. The hibernated plugin remains directly testable
+when explicitly composed for source maintenance.
+
+The original Gate 5 reviewer independently accepted the build, outward
+identity, OAuth/API-key, generated-Agent, restricted-permission, array-index,
+prototype-key, and registry-visibility corrections. Final shared-tree evidence
+included the OpenCode 400-test corrective set, the Core 100-test corrective
+set, all four affected package typechecks, the ordinary Windows build and its
+packaged smokes, and the explicit research-flag test. Dormant upstream
+publish/install source remains a later release-readiness blocker.
+
+A separate fresh reviewer accepted the preview-v2 skill-surface slice after
+proving that production locations no longer advertise `customize-opencode`,
+generic v2 configured skills still register, the hibernated plugin still
+passes its direct test, and released-v1 discovery and invocation remain
+independent. The focused Core and released-v1 skill tests passed serially; an
+unrelated pre-existing policy-location failure from a wider run does not
+establish or weaken this slice.
+
+This records accepted candidate evidence, not a new close commit. Gate status
+remains scoped-reopened pending durable integration, as owned by
+`docs/README.md`.

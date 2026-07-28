@@ -4,6 +4,7 @@ import { entryBody, entryCanStream, entryDone } from "@/cli/cmd/run/entry.body"
 import type { StreamCommit, ToolSnapshot } from "@/cli/cmd/run/types"
 import { toolInlineInfo } from "@/cli/cmd/run/tool"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 
 function commit(input: Partial<StreamCommit> & Pick<StreamCommit, "kind" | "text" | "phase" | "source">): StreamCommit {
   return input
@@ -41,6 +42,23 @@ function toolCommit(input: {
   })
 }
 
+function goalMeaning(outcome: string) {
+  return {
+    outcome,
+    conditions: [`Demonstrate: ${outcome}`],
+    scope: { type: "learner_home" as const },
+    target: { type: "absent" as const },
+    disposition: "active" as const,
+    fieldBases: {
+      outcome: { type: "accepted" as const },
+      conditions: { type: "accepted" as const },
+      scope: { type: "accepted" as const },
+      target: { type: "accepted" as const },
+      disposition: { type: "accepted" as const },
+    },
+  }
+}
+
 function structured(next: StreamCommit) {
   const body = entryBody(next)
   expect(body.type).toBe("structured")
@@ -52,9 +70,73 @@ function structured(next: StreamCommit) {
 }
 
 describe("run entry body", () => {
+  test("fails closed when a consequential final result has no typed projection", () => {
+    const part = toolPart("content_write", {
+      status: "completed",
+      input: { filePath: "C:\\course\\notes\\lesson.md" },
+      output: "write completed",
+      title: "lesson.md",
+      metadata: {},
+      time: { start: 1, end: 2 },
+    })
+
+    expect(toolInlineInfo(part)).toMatchObject({
+      icon: "!",
+      title: "Consequential result unavailable",
+    })
+    expect(
+      entryBody(
+        commit({
+          kind: "tool",
+          text: "",
+          phase: "final",
+          source: "tool",
+          tool: "content_write",
+          toolState: "completed",
+          part,
+        }),
+      ),
+    ).toEqual({
+      type: "text",
+      content: "Consequential result unavailable: Repa could not verify this result, so no success is inferred.",
+    })
+  })
+
   test("renders the durable learner Goal acknowledgement instead of generic completion or raw settlement", () => {
     const acknowledgement =
       "Stored 2 learner Goals: Operating systems exam readiness; Data structures exam readiness. You can correct either Goal with a later explicit learner direction."
+    const presentation = SemanticPresentation.result({
+      kind: "learner_goals_result",
+      binding: {
+        sessionID: "session-1",
+        messageID: "msg-update_learner_goals",
+        callID: "call-update_learner_goals-1",
+        partID: "update_learner_goals-1",
+      },
+      settlement: { outcome: "applied" },
+      authorizationBasis: "learner_acceptance",
+      operations: [
+        {
+          ordinal: 0,
+          operation: "create",
+          result: "changed",
+          goalID: "goal-internal-one",
+          revisionID: "revision-internal-one",
+          version: 1,
+          meaning: goalMeaning("Operating systems exam readiness"),
+        },
+        {
+          ordinal: 1,
+          operation: "create",
+          result: "changed",
+          goalID: "goal-internal-two",
+          revisionID: "revision-internal-two",
+          version: 1,
+          meaning: goalMeaning("Data structures exam readiness"),
+        },
+      ],
+    })
+    const projection = SemanticPresentation.projectResultBasis(presentation.basis)!
     const part = toolPart("update_learner_goals", {
       status: "completed",
       input: {
@@ -62,8 +144,15 @@ describe("run entry body", () => {
         operations: [{ action: "create" }, { action: "create" }],
       },
       output: acknowledgement,
-      title: "Learner Goals updated",
-      metadata: { outcome: "applied", durablySettled: true },
+      title: projection.title,
+      metadata: {
+        command: "update_learner_goals",
+        commandVersion: 1,
+        outcome: "applied",
+        durablySettled: true,
+        truncated: false,
+        ...SemanticPresentation.metadata(presentation),
+      },
       time: { start: 1, end: 2 },
     })
     const final = entryBody(
@@ -80,16 +169,61 @@ describe("run entry body", () => {
 
     expect(toolInlineInfo(part)).toEqual({
       icon: "◇",
-      title: "Learner Goals updated",
+      title: `${projection.title} — Committed`,
       mode: "block",
-      body: acknowledgement,
+      body: [
+        projection.summary,
+        ...projection.facts.map((fact) => `${fact.label}: ${fact.value}`),
+        "Durable settlement: yes",
+      ].join("\n"),
     })
-    expect(final).toEqual({ type: "text", content: acknowledgement })
+    expect(final).toEqual({
+      type: "text",
+      content: [
+        projection.summary,
+        ...projection.facts.map((fact) => `${fact.label}: ${fact.value}`),
+        "Durable settlement: yes",
+      ].join("\n"),
+    })
+    expect(JSON.stringify(final)).toContain("Operating systems exam readiness")
+    expect(JSON.stringify(final)).not.toContain("goal-internal-one")
     expect(JSON.stringify(final)).not.toContain("completed")
     expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
   })
 
   test("renders retained steering acknowledgement title and body instead of the generic tool fallback", () => {
+    const presentation = SemanticPresentation.result({
+      kind: "retained_learning_steering_result",
+      binding: {
+        sessionID: "session-1",
+        messageID: "msg-update_retained_learning_steering",
+        callID: "call-update_retained_learning_steering-1",
+        partID: "update_retained_learning_steering-1",
+      },
+      settlement: { outcome: "applied" },
+      action: "create",
+      scope: "learning_wide",
+      effect: {
+        state: "operative",
+        status: "operative_active",
+        version: 1,
+        operativeInstruction: "Do not quiz me; continue with explanation.",
+        validUntilNormalized: "2026-07-21T00:00:00.000+08:00",
+        boundaryTimeZone: "Asia/Shanghai",
+        boundaryUtcOffsetMinutes: 480,
+      },
+      current: {
+        state: "operative",
+        status: "operative_active",
+        version: 1,
+        operativeInstruction: "Do not quiz me; continue with explanation.",
+        validUntilNormalized: "2026-07-21T00:00:00.000+08:00",
+        boundaryTimeZone: "Asia/Shanghai",
+        boundaryUtcOffsetMinutes: 480,
+      },
+      relation: "active",
+    })
+    const projection = SemanticPresentation.projectResultBasis(presentation.basis)!
     const part = toolPart(LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY, {
       status: "completed",
       input: {
@@ -100,8 +234,15 @@ describe("run entry body", () => {
       },
       output:
         "Learning-wide until 2026-07-21T00:00:00.000+08:00 [Asia/Shanghai]: Do not quiz me; continue with explanation. You can replace or retract this retained instruction with a later explicit learner direction.",
-      title: "Retained learning steering",
-      metadata: { outcome: "applied" },
+      title: projection.title,
+      metadata: {
+        command: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        commandVersion: 1,
+        outcome: "applied",
+        durablySettled: true,
+        truncated: false,
+        ...SemanticPresentation.metadata(presentation),
+      },
       time: { start: 1, end: 2 },
     })
     const final = entryBody(
@@ -118,15 +259,21 @@ describe("run entry body", () => {
 
     expect(toolInlineInfo(part)).toEqual({
       icon: "◇",
-      title: "Retained learning steering",
+      title: `${projection.title} — Committed`,
       mode: "block",
-      body:
-        "Learning-wide until 2026-07-21T00:00:00.000+08:00 [Asia/Shanghai]: Do not quiz me; continue with explanation. You can replace or retract this retained instruction with a later explicit learner direction.",
+      body: [
+        projection.summary,
+        ...projection.facts.map((fact) => `${fact.label}: ${fact.value}`),
+        "Durable settlement: yes",
+      ].join("\n"),
     })
     expect(final).toEqual({
       type: "text",
-      content:
-        "Learning-wide until 2026-07-21T00:00:00.000+08:00 [Asia/Shanghai]: Do not quiz me; continue with explanation. You can replace or retract this retained instruction with a later explicit learner direction.",
+      content: [
+        projection.summary,
+        ...projection.facts.map((fact) => `${fact.label}: ${fact.value}`),
+        "Durable settlement: yes",
+      ].join("\n"),
     })
     expect(JSON.stringify(final)).not.toContain("completed")
     expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
@@ -280,6 +427,42 @@ describe("run entry body", () => {
       expect(structured(item.commit)).toEqual(item.snapshot)
     })
   }
+
+  test("rejects a legacy free-form semantic result instead of trusting its prose", () => {
+    const result = {
+      version: 1,
+      phase: "result",
+      basis: {
+        capability: "write",
+        title: "Learning artifact write",
+        summary: "The exact learning artifact write committed.",
+        facts: [{ label: "Path", value: "notes/lesson.md" }],
+        outcome: "committed",
+        durablySettled: true,
+      },
+    }
+    const final = entryBody(
+      toolCommit({
+        tool: "write",
+        state: {
+          status: "completed",
+          input: { filePath: "notes/lesson.md", content: "lesson" },
+          output: "generic output",
+          title: "lesson.md",
+          metadata: {
+            semanticPresentationRequired: true,
+            semanticPresentationBasis: result,
+          },
+          time: { start: 1, end: 2 },
+        },
+      }),
+    )
+
+    expect(final).toEqual({
+      type: "text",
+      content: "Consequential result unavailable: Repa could not verify this result, so no success is inferred.",
+    })
+  })
 
   test("keeps running task tool state out of scrollback", () => {
     expect(

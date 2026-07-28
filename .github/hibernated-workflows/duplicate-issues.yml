@@ -33,7 +33,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
         if: steps.author.outputs.skip != 'true'
 
       - name: Install opencode
@@ -167,7 +167,7 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: ./.github/actions/setup-bun
+      - uses: ./.github/hibernated-workflows/support/actions/setup-bun
         if: steps.author.outputs.skip != 'true'
 
       - name: Install opencode

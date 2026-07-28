@@ -63,6 +63,30 @@ describe("Policy", () => {
     }),
   )
 
+  it.effect("matches action identifiers case-sensitively while preserving resource path semantics", () =>
+    Effect.gen(function* () {
+      const policy = yield* Policy.Service
+      yield* policy.load([
+        new Policy.Info({
+          effect: "deny",
+          action: "*",
+          resource: "*",
+        }),
+        new Policy.Info({
+          effect: "allow",
+          action: "course.read",
+          resource: "lessons/*",
+        }),
+      ])
+
+      expect(yield* policy.evaluate("course.read", "lessons/one.md", "deny")).toBe("allow")
+      expect(yield* policy.evaluate("COURSE.READ", "lessons/one.md", "deny")).toBe("deny")
+      expect(yield* policy.evaluate("course.read", "LESSONS/ONE.MD", "deny")).toBe(
+        process.platform === "win32" ? "allow" : "deny",
+      )
+    }),
+  )
+
   it.effect("uses the last matching loaded statement", () =>
     Effect.gen(function* () {
       const policy = yield* Policy.Service

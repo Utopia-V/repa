@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import {
   createPermissionBodyState,
   permissionAlwaysLines,
   permissionCancel,
   permissionEscape,
   permissionInfo,
+  permissionConstraint,
   permissionOptions,
   permissionReject,
   permissionRun,
@@ -58,6 +60,10 @@ describe("run permission shared", () => {
       requestID: "perm-1",
       reply: "once",
     })
+
+    const genericPrompt = req({ metadata: { permissionPromptRequired: true } })
+    expect(permissionConstraint(genericPrompt)).toEqual({ onceOnly: true, rejectOnly: false })
+    expect(permissionOptions("permission", permissionConstraint(genericPrompt).onceOnly)).toEqual(["once", "reject"])
   })
 
   test("builds trimmed reject replies and stage transitions", () => {
@@ -141,208 +147,83 @@ describe("run permission shared", () => {
     })
   })
 
-  test("shows the exact once-only default Course preference state", () => {
+  test("renders the same typed proposal and fails closed when a consequential projection is missing", () => {
+    const proposal = SemanticPresentation.proposal({
+      kind: "default_course_confirmation",
+      binding: {
+        sessionID: "session-1",
+        messageID: "msg-perm-1",
+        callID: "call-perm-1",
+        requestID: "perm-1",
+      },
+      headID: "nav-head-1",
+      version: 1,
+      fromCourseID: "course-previous",
+      fromCourseTitle: "Previous Course",
+      target: {
+        courseID: "course-target",
+        courseTitle: "Target Course",
+        courseVersion: 1,
+        selectionRevisionID: "revision-target",
+        selectionVersion: 1,
+        viewID: "view-target",
+        viewName: "Target View",
+        viewVersion: 2,
+        revisionVersion: 3,
+      },
+    })
     const target = {
-      courseID: "crs_target",
+      courseID: "course-target",
       courseTitle: "Target Course",
-      courseVersion: 4,
-      selectionRevisionID: "rev_target",
-      selectionVersion: 3,
-      viewID: "view_target",
+      courseVersion: 1,
+      selectionRevisionID: "revision-target",
+      selectionVersion: 1,
+      viewID: "view-target",
       viewName: "Target View",
       viewVersion: 2,
-      revisionVersion: 1,
+      revisionVersion: 3,
     }
-    expect(
-      permissionInfo(
-        req({
-          permission: "set_default_course_preference",
-          metadata: {
-            onceOnly: true,
-            confirmation: {
-              permissionRequestID: "perm-set",
-              headID: null,
-              version: 0,
-              fromCourseID: null,
-              fromCourseTitle: null,
-              target,
-            },
-          },
-        }),
-      ),
-    ).toEqual({
-      icon: "◇",
-      title: "Confirm setting the default Course preference",
-      lines: [
-        "Current preference: version 0; head none",
-        "From Course: none",
-        'To Course: "Target Course" [crs_target]',
-        "Target Course version: 4; selection version: 3",
-        'Working View: "Target View" [view_target]; version 2',
-        "Working Revision: rev_target; version 1",
-      ],
-    })
-
-    expect(
-      permissionInfo(
-        req({
-          permission: "set_default_course_preference",
-          metadata: {
-            onceOnly: true,
-            confirmation: {
-              permissionRequestID: "perm-change",
-              headID: "ndp_previous",
-              version: 7,
-              fromCourseID: "crs_previous",
-              fromCourseTitle: "Previous Course",
-              target,
-            },
-          },
-        }),
-      ).lines,
-    ).toEqual([
-      "Current preference: version 7; head ndp_previous",
-      'From Course: "Previous Course" [crs_previous]',
-      'To Course: "Target Course" [crs_target]',
-      "Target Course version: 4; selection version: 3",
-      'Working View: "Target View" [view_target]; version 2',
-      "Working Revision: rev_target; version 1",
-    ])
-
-    expect(
-      permissionInfo(
-        req({
-          permission: "set_default_course_preference",
-          metadata: {
-            onceOnly: true,
-            confirmation: {
-              permissionRequestID: "perm-clear",
-              headID: "ndp_current",
-              version: 2,
-              fromCourseID: "crs_current",
-              fromCourseTitle: "Current Course",
-              target: null,
-            },
-          },
-        }),
-      ),
-    ).toEqual({
-      icon: "◇",
-      title: "Confirm clearing the default Course preference",
-      lines: [
-        "Current preference: version 2; head ndp_current",
-        'From Course: "Current Course" [crs_current]',
-        "To Course: none (clear the preference)",
-      ],
-    })
-
-    const withoutWorkingView = permissionInfo(
-      req({
-        permission: "set_default_course_preference",
-        metadata: {
-          onceOnly: true,
-          confirmation: {
-            permissionRequestID: "perm-no-view",
-            headID: null,
-            version: 0,
-            fromCourseID: null,
-            fromCourseTitle: null,
-            target: {
-              courseID: "crs_no_view",
-              courseTitle: "N".repeat(120),
-              courseVersion: 0,
-              selectionRevisionID: null,
-              selectionVersion: 0,
-              viewID: null,
-              viewName: null,
-              viewVersion: null,
-              revisionVersion: null,
-            },
-          },
-        },
-      }),
-    )
-    expect(withoutWorkingView.lines.slice(-2)).toEqual(["Working View: none", "Working Revision: none"])
-    expect(withoutWorkingView.lines[2]).toContain("[crs_no_view]")
-    expect(withoutWorkingView.lines[2]).not.toContain("N".repeat(120))
-  })
-
-  test("shows the complete once-only learner Goal candidate", () => {
     const confirmation = {
-      schemaVersion: 1,
-      authorizationBasis: "learner_acceptance",
-      semanticFingerprint: "a".repeat(64),
-      command: {
-        operations: [
-          {
-            type: "create",
-            snapshot: {
-              outcome: "Pass the operating-systems exam",
-              conditions: ["Explain virtual memory without notes"],
-              scope: {
-                type: "courses",
-                courses: [{ courseID: "crs_os", basis: { type: "new", expectedCourseVersion: 7 } }],
-              },
-              target: {
-                type: "local_date",
-                date: "2026-09-01",
-                timeZone: "Asia/Shanghai",
-                sourceExpression: "before the September exam",
-                normalizationBasis: "source_temporal_context",
-              },
-              fieldBases: {
-                outcome: { type: "authored", sourceExcerpt: "pass my operating-systems exam" },
-                conditions: { type: "accepted" },
-                scope: { type: "accepted" },
-                target: { type: "accepted" },
-                disposition: { type: "accepted" },
-              },
-            },
-            disposition: "active",
-          },
-        ],
-      },
-      goalBases: [],
-      courseBases: [
-        {
-          courseID: "crs_os",
-          courseTitle: "Operating Systems",
-          operationOrdinal: 0,
-          revisionRole: "source",
-          admission: { type: "new", courseVersion: 7, courseTimeUpdated: 1_774_000_000_000 },
-          availability: { state: "available", title: "Operating Systems" },
-        },
-      ],
+      permissionRequestID: "perm-1",
+      headID: "nav-head-1",
+      version: 1,
+      fromCourseID: "course-previous",
+      fromCourseTitle: "Previous Course",
+      target,
     }
-    const info = permissionInfo(
-      req({
-        permission: "update_learner_goals",
-        metadata: { onceOnly: true, confirmation },
-      }),
-    )
+    const projected = req({
+      permission: "set_default_course_preference",
+      patterns: ["course-target"],
+      tool: { messageID: "msg-perm-1", callID: "call-perm-1" },
+      metadata: {
+        onceOnly: true,
+        navigationKind: "default_course_preference",
+        confirmation,
+        permissionPromptRequired: true,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
 
-    expect(info.title).toBe("Confirm 1 durable learner Goal change")
-    expect(info.lines.join("\n")).toContain("one-time learner acceptance")
-    expect(info.lines.join("\n")).toContain('"Pass the operating-systems exam"')
-    expect(info.lines.join("\n")).toContain('"Explain virtual memory without notes"')
-    expect(info.lines.join("\n")).toContain('"crs_os"')
-    expect(info.lines.join("\n")).toContain('"2026-09-01"')
-    expect(info.lines.join("\n")).toContain('"authored"')
-    expect(info.lines.join("\n")).toContain('"active"')
-    expect(info.lines.join("\n")).toContain("durable, correctable Goal state")
+    expect(permissionInfo(projected)).toEqual({
+      icon: "◇",
+      title: "Confirm the default Course preference",
+      lines: [
+        "This one-time confirmation is bound to the exact current preference and target state.",
+        'Current preference: "Previous Course"; version 1',
+        'Target Course: "Target Course"',
+        "Target versions: Course 1; selection 1",
+        'Working View: "Target View"; version 2',
+        "Working Revision: present; version 3",
+      ],
+    })
+    expect(permissionConstraint(projected)).toEqual({ onceOnly: true, rejectOnly: false })
 
-    const direct = permissionInfo(
-      req({
-        permission: "update_learner_goals",
-        metadata: {
-          authorizationBasis: "learner_request",
-          command: confirmation.command,
-        },
-      }),
-    )
-    expect(direct.title).toBe("Allow 1 direct learner Goal change")
-    expect(direct.lines.join("\n")).toContain('"Pass the operating-systems exam"')
-    expect(direct.lines.join("\n")).toContain("learner-authored request")
+    const missing = req({ permission: "set_default_course_preference", metadata: { onceOnly: true } })
+    expect(permissionInfo(missing)).toMatchObject({ title: "Permission scope unavailable" })
+    expect(permissionConstraint(missing)).toEqual({ onceOnly: true, rejectOnly: true })
+    expect(permissionOptions("permission", true, true)).toEqual(["reject"])
+    const state = createPermissionBodyState(missing.id)
+    expect(permissionRun(state, missing.id, "once", true, true)).toEqual({ state })
   })
 
   test("formats always-allow copy for wildcard and explicit patterns", () => {

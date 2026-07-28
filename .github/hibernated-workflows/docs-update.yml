@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0 # Fetch full history to access commits
 
       - name: Setup Bun
-        uses: ./.github/actions/setup-bun
+        uses: ./.github/hibernated-workflows/support/actions/setup-bun
 
       - name: Get recent commits
         id: commits
