@@ -96,6 +96,23 @@ export type PromptRef = {
   submit(): void
 }
 
+type DeliveryState =
+  | { type: "editing" }
+  | { type: "later_selected"; target: VisibleTurnTarget; turnStartRevision: number }
+  | { type: "undelivered"; reason: string }
+
+type LaterSelected = Extract<DeliveryState, { type: "later_selected" }>
+
+type SubmissionAttempt = Readonly<{
+  deliveryKind: "start" | "steer"
+  sessionID?: string
+  target?: VisibleTurnTarget
+  selected?: LaterSelected
+  busyNormal: boolean
+  observedDelivery: DeliveryState
+  turnStartRevision: number
+}>
+
 const money = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -181,6 +198,8 @@ export function Prompt(props: PromptProps) {
   const keymap = useOpencodeKeymap()
   const agentShortcut = useCommandShortcut("agent.cycle")
   const paletteShortcut = useCommandShortcut("command.palette.show")
+  const laterShortcut = useCommandShortcut("input.submit")
+  const currentWorkShortcut = useCommandShortcut("session.steer")
   const renderer = useRenderer()
   const exit = useExit()
   const dimensions = useTerminalDimensions()
@@ -247,10 +266,21 @@ export function Prompt(props: PromptProps) {
   const pasteStyleId = syntax().getStyleId("extmark.paste")!
   let promptPartTypeId = 0
   const event = useEvent()
+  const [turnStartRevision, setTurnStartRevision] = createSignal(0)
+  const observedTurnStarts = new Set<string>()
+
+  event.on("turn.started", (evt, { directory }) => {
+    if (directory !== project.instance.directory()) return
+    if (evt.properties.sessionID !== props.sessionID) return
+    if (observedTurnStarts.has(evt.properties.turnID)) return
+    observedTurnStarts.add(evt.properties.turnID)
+    setTurnStartRevision((revision) => revision + 1)
+  })
 
   event.on("tui.prompt.append", (evt, { directory }) => {
     if (directory !== project.instance.directory()) return
     if (!input || input.isDestroyed) return
+    if (deliveryPending()) return
     input.insertText(evt.properties.text)
     setTimeout(() => {
       // setTimeout is a workaround and needs to be addressed properly
@@ -310,13 +340,15 @@ export function Prompt(props: PromptProps) {
     extmarkToPartIndex: new Map(),
     interrupt: 0,
   })
-  const [queuedForNext, setQueuedForNext] = createSignal(false)
-  const [notSteered, setNotSteered] = createSignal(false)
-  const queuedDraftLabel = createMemo(() =>
-    notSteered()
-      ? "steer not delivered · draft queued for a new turn (editable)"
-      : "draft queued for next turn (editable)",
-  )
+  const [delivery, setDelivery] = createSignal<DeliveryState>({ type: "editing" })
+  const [deliveryPending, setDeliveryPending] = createSignal(false)
+  let editRevision = 0
+  const deliveryLabel = createMemo(() => {
+    const current = delivery()
+    if (current.type === "later_selected") return "send after this response · editable · this window only"
+    if (current.type === "undelivered") return `not sent · ${current.reason}`
+    return undefined
+  })
 
   createEffect(() => {
     const sessionID = props.sessionID
@@ -324,17 +356,24 @@ export function Prompt(props: PromptProps) {
     void sync.session.hydrateActiveTurn(sessionID).catch(() => {})
   })
 
-  createEffect(
-    on(
-      () => status().type,
-      (next, previous) => {
-        if (next !== "idle" || previous === "idle" || !queuedForNext()) return
-        setQueuedForNext(false)
-        queueMicrotask(() => void submit())
-      },
-      { defer: true },
-    ),
-  )
+  createEffect(() => {
+    const selected = delivery()
+    const activeTurnID = visibleActiveTurnID()
+    const currentStatus = status().type
+    if (selected.type !== "later_selected" || store.mode !== "normal") return
+    if (turnStartRevision() !== selected.turnStartRevision) {
+      markUndelivered("Another response started before this draft could be sent.")
+      return
+    }
+    if (deliveryPending()) return
+    if (currentStatus === "idle") {
+      if (activeTurnID) return
+      void submit("start", undefined, selected)
+      return
+    }
+    if (!activeTurnID || selected.target.turnID === activeTurnID) return
+    markUndelivered("Another response started before this draft could be sent.")
+  })
 
   createEffect(
     on(
@@ -399,8 +438,9 @@ export function Prompt(props: PromptProps) {
         title: "Remove editor context",
         name: "prompt.editor_context.clear",
         category: "Prompt",
-        enabled: Boolean(editorContext()),
+        enabled: Boolean(editorContext()) && !deliveryPending(),
         run: () => {
+          if (deliveryPending()) return
           dismissEditorContext()
           dialog.clear()
         },
@@ -411,19 +451,25 @@ export function Prompt(props: PromptProps) {
         category: "Prompt",
         hidden: true,
         run: async (ctx: CommandContext<Renderable, KeyEvent>) => {
+          if (deliveryPending()) return
+          const revision = editRevision
           ctx.event.preventDefault()
           ctx.event.stopPropagation()
           const content = await clipboard.read?.()
+          if (!canApplyEdit(revision)) return
           if (content?.mime.startsWith("image/")) {
-            await pasteAttachment({
-              filename: "clipboard",
-              mime: content.mime,
-              content: content.data,
-            })
+            await pasteAttachment(
+              {
+                filename: "clipboard",
+                mime: content.mime,
+                content: content.data,
+              },
+              revision,
+            )
             return
           }
           if (content?.mime === "text/plain") {
-            await pasteInputText(content.data)
+            await pasteInputText(content.data, revision)
           }
         },
       },
@@ -460,14 +506,22 @@ export function Prompt(props: PromptProps) {
         },
       },
       {
-        title: "Steer active turn",
+        title: "Add to/correct this response",
+        desc: "Send the current draft to the response already in progress",
         name: "session.steer",
         category: "Session",
-        enabled: status().type !== "idle" && !!visibleActiveTurnID() && !!store.prompt.input && !props.fork,
+        enabled:
+          status().type !== "idle" &&
+          !!visibleActiveTurnID() &&
+          !!store.prompt.input &&
+          store.mode === "normal" &&
+          !deliveryPending() &&
+          !props.fork,
         run: async () => {
           if (!input.focused || auto()?.visible) return
           const target = captureVisibleTurn(props.sessionID, visibleActiveTurnID())
-          const handled = await submit("steer", target)
+          const selected = delivery()
+          const handled = await submit("steer", target, selected.type === "later_selected" ? selected : undefined)
           if (handled) dialog.clear()
         },
       },
@@ -477,6 +531,8 @@ export function Prompt(props: PromptProps) {
         name: "prompt.editor",
         slashName: "editor",
         run: async () => {
+          if (deliveryPending()) return
+          const revision = editRevision
           dialog.clear()
 
           // replace summarized text parts with the actual text
@@ -498,6 +554,7 @@ export function Prompt(props: PromptProps) {
               project.instance.directory() ||
               paths.cwd,
           })
+          if (!canApplyEdit(revision)) return
           if (!content) return
           const normalized = normalizePromptContent(content)
 
@@ -559,6 +616,7 @@ export function Prompt(props: PromptProps) {
             // already expanded inline
             parts: updatedNonTextParts,
           })
+          updateDeliveryAfterEdit(normalized)
           restoreExtmarksFromParts(updatedNonTextParts)
           input.cursorOffset = Bun.stringWidth(normalized)
         },
@@ -569,14 +627,17 @@ export function Prompt(props: PromptProps) {
         category: "Prompt",
         slashName: "skills",
         run: () => {
+          if (deliveryPending()) return
           dialog.replace(() => (
             <DialogSkill
               onSelect={(skill) => {
+                if (deliveryPending()) return
                 input.setText(`/${skill} `)
                 setStore("prompt", {
                   input: `/${skill} `,
                   parts: [],
                 })
+                updateDeliveryAfterEdit(`/${skill} `)
                 input.gotoBufferEnd()
               }}
             />
@@ -634,12 +695,15 @@ export function Prompt(props: PromptProps) {
       input.blur()
     },
     set(prompt) {
+      if (deliveryPending()) return
       input.setText(prompt.input)
       setStore("prompt", prompt)
+      updateDeliveryAfterEdit(prompt.input)
       restoreExtmarksFromParts(prompt.parts)
       input.gotoBufferEnd()
     },
     reset() {
+      if (deliveryPending()) return
       input.clear()
       input.extmarks.clear()
       setStore("prompt", {
@@ -647,6 +711,7 @@ export function Prompt(props: PromptProps) {
         parts: [],
       })
       setStore("extmarkToPartIndex", new Map())
+      setDelivery({ type: "editing" })
     },
     submit() {
       void submit()
@@ -675,7 +740,7 @@ export function Prompt(props: PromptProps) {
 
   createEffect(() => {
     if (!input || input.isDestroyed) return
-    if (props.visible === false || dialog.stack.length > 0) {
+    if (props.visible === false || dialog.stack.length > 0 || deliveryPending()) {
       if (input.focused) input.blur()
       return
     }
@@ -780,9 +845,9 @@ export function Prompt(props: PromptProps) {
         title: "Stash prompt",
         name: "prompt.stash",
         category: "Prompt",
-        enabled: !!store.prompt.input,
+        enabled: !!store.prompt.input && !deliveryPending(),
         run: () => {
-          if (!store.prompt.input) return
+          if (!store.prompt.input || deliveryPending()) return
           stash.push({
             input: store.prompt.input,
             parts: store.prompt.parts,
@@ -791,6 +856,7 @@ export function Prompt(props: PromptProps) {
           input.clear()
           setStore("prompt", { input: "", parts: [] })
           setStore("extmarkToPartIndex", new Map())
+          setDelivery({ type: "editing" })
           dialog.clear()
         },
       },
@@ -798,12 +864,14 @@ export function Prompt(props: PromptProps) {
         title: "Stash pop",
         name: "prompt.stash.pop",
         category: "Prompt",
-        enabled: stash.list().length > 0,
+        enabled: stash.list().length > 0 && !deliveryPending(),
         run: () => {
+          if (deliveryPending()) return
           const entry = stash.pop()
           if (entry) {
             input.setText(entry.input)
             setStore("prompt", { input: entry.input, parts: entry.parts })
+            updateDeliveryAfterEdit(entry.input)
             restoreExtmarksFromParts(entry.parts)
             input.gotoBufferEnd()
           }
@@ -814,13 +882,17 @@ export function Prompt(props: PromptProps) {
         title: "Stash list",
         name: "prompt.stash.list",
         category: "Prompt",
-        enabled: stash.list().length > 0,
+        enabled: stash.list().length > 0 && !deliveryPending(),
         run: () => {
+          if (deliveryPending()) return
           dialog.replace(() => (
             <DialogStash
+              canMutate={() => !deliveryPending()}
               onSelect={(entry) => {
+                if (deliveryPending()) return
                 input.setText(entry.input)
                 setStore("prompt", { input: entry.input, parts: entry.parts })
+                updateDeliveryAfterEdit(entry.input)
                 restoreExtmarksFromParts(entry.parts)
                 input.gotoBufferEnd()
               }}
@@ -841,7 +913,7 @@ export function Prompt(props: PromptProps) {
   useBindings(() => {
     return {
       target: inputTarget,
-      enabled: inputTarget() !== undefined && !props.disabled,
+      enabled: inputTarget() !== undefined && !props.disabled && !deliveryPending(),
       bindings: tuiConfig.keybinds.get("prompt.paste"),
     }
   })
@@ -849,7 +921,7 @@ export function Prompt(props: PromptProps) {
   useBindings(() => {
     return {
       target: inputTarget,
-      enabled: inputTarget() !== undefined && !props.disabled && store.prompt.input !== "",
+      enabled: inputTarget() !== undefined && !props.disabled && !deliveryPending() && store.prompt.input !== "",
       bindings: tuiConfig.keybinds.get("prompt.clear"),
     }
   })
@@ -862,6 +934,7 @@ export function Prompt(props: PromptProps) {
         return (
           inputTarget() !== undefined &&
           !props.disabled &&
+          !deliveryPending() &&
           store.mode === "normal" &&
           !auto()?.visible &&
           input?.visualCursor.offset === 0
@@ -873,8 +946,10 @@ export function Prompt(props: PromptProps) {
           desc: "Shell mode",
           group: "Prompt",
           cmd: () => {
+            if (deliveryPending()) return
             setStore("placeholder", randomIndex(shell().length))
             setStore("mode", "shell")
+            setDelivery({ type: "editing" })
           },
         },
       ],
@@ -884,7 +959,7 @@ export function Prompt(props: PromptProps) {
   useBindings(() => {
     return {
       target: inputTarget,
-      enabled: inputTarget() !== undefined && store.mode === "shell",
+      enabled: inputTarget() !== undefined && store.mode === "shell" && !deliveryPending(),
       bindings: [{ key: "escape", desc: "Exit shell mode", group: "Prompt", cmd: () => setStore("mode", "normal") }],
     }
   })
@@ -894,7 +969,12 @@ export function Prompt(props: PromptProps) {
       target: inputTarget,
       enabled: (() => {
         cursorVersion()
-        return inputTarget() !== undefined && store.mode === "shell" && input?.visualCursor.offset === 0
+        return (
+          inputTarget() !== undefined &&
+          store.mode === "shell" &&
+          !deliveryPending() &&
+          input?.visualCursor.offset === 0
+        )
       })(),
       bindings: [{ key: "backspace", desc: "Exit shell mode", group: "Prompt", cmd: () => setStore("mode", "normal") }],
     }
@@ -905,7 +985,13 @@ export function Prompt(props: PromptProps) {
       target: inputTarget,
       enabled: (() => {
         cursorVersion()
-        return inputTarget() !== undefined && !props.disabled && !auto()?.visible && input !== undefined
+        return (
+          inputTarget() !== undefined &&
+          !props.disabled &&
+          !deliveryPending() &&
+          !auto()?.visible &&
+          input !== undefined
+        )
       })(),
       commands: [
         {
@@ -922,7 +1008,9 @@ export function Prompt(props: PromptProps) {
             if (!item) return false
             input.setText(item.input)
             setStore("prompt", item)
+            updateDeliveryAfterEdit(item.input)
             setStore("mode", item.mode ?? "normal")
+            if (item.mode === "shell") setDelivery({ type: "editing" })
             restoreExtmarksFromParts(item.parts)
             input.cursorOffset = 0
           },
@@ -937,7 +1025,13 @@ export function Prompt(props: PromptProps) {
       target: inputTarget,
       enabled: (() => {
         cursorVersion()
-        return inputTarget() !== undefined && !props.disabled && !auto()?.visible && input !== undefined
+        return (
+          inputTarget() !== undefined &&
+          !props.disabled &&
+          !deliveryPending() &&
+          !auto()?.visible &&
+          input !== undefined
+        )
       })(),
       commands: [
         {
@@ -958,7 +1052,9 @@ export function Prompt(props: PromptProps) {
             if (!item) return false
             input.setText(item.input)
             setStore("prompt", item)
+            updateDeliveryAfterEdit(item.input)
             setStore("mode", item.mode ?? "normal")
+            if (item.mode === "shell") setDelivery({ type: "editing" })
             restoreExtmarksFromParts(item.parts)
             input.cursorOffset = input.plainText.length
           },
@@ -969,17 +1065,66 @@ export function Prompt(props: PromptProps) {
   })
 
   let submitting = false
-  async function submit(delivery: "start" | "steer" = "start", target?: VisibleTurnTarget) {
-    if (submitting) return false
-    submitting = true
-    try {
-      return await submitInner(delivery, target)
-    } finally {
-      submitting = false
+
+  function captureSubmission(
+    deliveryKind: "start" | "steer" = "start",
+    target?: VisibleTurnTarget,
+    selected?: LaterSelected,
+  ): SubmissionAttempt {
+    const observedDelivery = delivery()
+    const busyNormal =
+      deliveryKind === "start" &&
+      !selected &&
+      Boolean(props.sessionID) &&
+      !props.fork &&
+      store.mode === "normal" &&
+      status().type !== "idle"
+    return {
+      deliveryKind,
+      sessionID: props.sessionID,
+      ...(target
+        ? { target }
+        : busyNormal
+          ? { target: captureVisibleTurn(props.sessionID, visibleActiveTurnID()) }
+          : {}),
+      ...(selected ? { selected } : {}),
+      busyNormal,
+      observedDelivery,
+      turnStartRevision: turnStartRevision(),
     }
   }
 
-  async function submitInner(delivery: "start" | "steer", target?: VisibleTurnTarget) {
+  function claimSubmission() {
+    if (submitting) return false
+    submitting = true
+    editRevision += 1
+    setDeliveryPending(true)
+    return true
+  }
+
+  async function runSubmission(attempt: SubmissionAttempt) {
+    try {
+      return await submitInner(attempt)
+    } finally {
+      submitting = false
+      setDeliveryPending(false)
+    }
+  }
+
+  function submit(deliveryKind: "start" | "steer" = "start", target?: VisibleTurnTarget, selected?: LaterSelected) {
+    const attempt = captureSubmission(deliveryKind, target, selected)
+    if (!claimSubmission()) return Promise.resolve(false)
+    return runSubmission(attempt)
+  }
+
+  function scheduleSubmit() {
+    const attempt = captureSubmission()
+    if (!claimSubmission()) return
+    setTimeout(() => setTimeout(() => void runSubmission(attempt), 0), 0)
+  }
+
+  async function submitInner(attempt: SubmissionAttempt) {
+    const { deliveryKind, target, selected } = attempt
     // IME: double-defer may fire before onContentChange flushes the last
     // composed character (e.g. Korean hangul) to the store, so read
     // plainText directly and sync before any downstream reads.
@@ -987,76 +1132,123 @@ export function Prompt(props: PromptProps) {
       setStore("prompt", "input", input.plainText)
       syncExtmarksWithPromptParts()
     }
-    if (props.disabled) return false
-    if (startLocation.creating()) return false
-    if (auto()?.visible) return false
-    if (!store.prompt.input) return false
+    if (attempt.sessionID !== props.sessionID) {
+      if (selected || attempt.busyNormal) {
+        markUndelivered("The learning session changed before this draft could be sent.")
+      }
+      return false
+    }
+    if (selected && delivery() !== selected) return false
+    if (selected && (selected.target.sessionID !== props.sessionID || props.fork)) {
+      markUndelivered("The learning session changed before this draft could be sent.")
+      return true
+    }
+    if (props.disabled) {
+      if (selected) markUndelivered("The composer became unavailable before this draft could be sent.")
+      return false
+    }
+    if (startLocation.creating()) {
+      if (selected) markUndelivered("The learning location changed before this draft could be sent.")
+      return false
+    }
+    if (auto()?.visible) {
+      if (selected) markUndelivered("A composer choice was still open when this draft became ready.")
+      return false
+    }
+    if (!store.prompt.input) {
+      if (selected) setDelivery({ type: "editing" })
+      return false
+    }
     const agent = local.agent.current()
-    if (!agent) return false
+    if (!agent) {
+      if (selected) markUndelivered("No learning agent was available for this draft.")
+      return false
+    }
     const trimmed = store.prompt.input.trim()
     if (trimmed === "exit" || trimmed === "quit" || trimmed === ":q") {
+      if (selected) setDelivery({ type: "editing" })
       void exit()
       return true
     }
     const selectedModel = local.model.current()
     if (!selectedModel) {
       void promptModelWarning()
+      if (selected) markUndelivered("No model was available for this draft.")
       return false
     }
 
-    if (delivery === "start" && props.sessionID && !props.fork && status().type !== "idle") {
-      setNotSteered(false)
-      setQueuedForNext(true)
+    if (attempt.busyNormal) {
+      if (attempt.observedDelivery.type === "later_selected") return true
+      if (!target) {
+        toast.show({
+          title: "Not selected",
+          message: "The current response is still loading. Your draft remains editable; try again when it appears.",
+          variant: "warning",
+        })
+        return true
+      }
+      if (turnStartRevision() !== attempt.turnStartRevision) {
+        markUndelivered("Another response started before this draft could be sent.")
+        return true
+      }
+      setDelivery({
+        type: "later_selected",
+        target,
+        turnStartRevision: attempt.turnStartRevision,
+      })
       toast.show({
-        message: "Draft queued for the next turn; keep editing it here. Use Ctrl+Enter to steer the active turn.",
+        message: `This will send after the current response. Keep editing here, or use ${
+          currentWorkShortcut() || "the current-response action"
+        } to add or correct it now.`,
         variant: "info",
         duration: 3000,
       })
       return true
     }
 
-    if (delivery === "steer" && (!props.sessionID || props.fork)) {
-      toast.show({ message: "There is no materialized active turn to steer.", variant: "warning" })
+    if (deliveryKind === "steer" && (store.mode !== "normal" || !props.sessionID || props.fork)) {
+      markUndelivered("No current response was available for this draft.")
+      toast.show({ message: "This draft was not sent. It remains editable here.", variant: "warning" })
       return true
     }
 
-    if (delivery === "steer" && (!target || target.sessionID !== props.sessionID)) {
-      preserveUndeliveredSteer()
+    if (deliveryKind === "steer" && (!target || target.sessionID !== props.sessionID)) {
+      markUndelivered("The response changed before this draft could be added.")
       toast.show({
-        title: "Steer not delivered",
-        message: "The visible Turn changed before the steer could be admitted; the draft is queued for a new Turn.",
+        title: "Not sent",
+        message: "The response changed before this draft could be added. Choose where to send it again.",
         variant: "warning",
       })
       return true
     }
 
-    const variant = local.model.variant.current()
-    let sessionID = props.fork?.targetSessionID ?? props.sessionID
-    let directory = project.instance.directory()
-    let finishMoveProgress = false
-    if (sessionID == null) {
-      const selectedDirectory = await startLocation.getDirectory(store.prompt.input)
-      if (startLocation.pending() && !selectedDirectory) return false
-      finishMoveProgress = Boolean(startLocation.progress())
-      directory = selectedDirectory ?? directory
-      sessionID = Identifier.ascending("session")
+    if (deliveryKind === "steer" && selected?.target && !sameVisibleTurn(selected.target, target)) {
+      markUndelivered("The response changed before this draft could be added.")
+      toast.show({
+        title: "Not sent",
+        message: "The response changed before this draft could be added. It was not sent to the new response.",
+        variant: "warning",
+      })
+      return true
     }
 
+    const currentDelivery = delivery()
+    const claimed =
+      selected ?? (deliveryKind === "start" && currentDelivery.type === "later_selected" ? currentDelivery : undefined)
+    if (claimed && currentDelivery !== claimed) return false
+    setDelivery({ type: "editing" })
+
+    syncExtmarksWithPromptParts()
+    const promptSnapshot = structuredClone(unwrap(store.prompt))
+    const currentMode = store.mode
     const inputText = expandTrackedPastedText(
-      store.prompt.input,
-      input.extmarks.getAllForTypeId(promptPartTypeId).flatMap((extmark) => {
-        const partIndex = store.extmarkToPartIndex.get(extmark.id)
-        const part = partIndex === undefined ? undefined : store.prompt.parts[partIndex]
-        if (part?.type !== "text") return []
-        return [{ start: extmark.start, end: extmark.end, text: part.text }]
+      promptSnapshot.input,
+      promptSnapshot.parts.flatMap((part) => {
+        if (part.type !== "text" || !part.source?.text) return []
+        return [{ start: part.source.text.start, end: part.source.text.end, text: part.text }]
       }),
     )
-
-    // Filter out text parts (pasted content) since they're now expanded inline
-    const nonTextParts = store.prompt.parts.filter((part) => part.type !== "text")
-
-    // Capture mode before it gets reset
-    const currentMode = store.mode
+    const nonTextParts = promptSnapshot.parts.filter((part) => part.type !== "text")
     const editorSelection = editorContext()
     const editorParts =
       editorSelection && editor.labelState() === "pending"
@@ -1075,7 +1267,19 @@ export function Prompt(props: PromptProps) {
           ]
         : []
 
-    if (store.mode === "shell") {
+    const variant = local.model.variant.current()
+    let sessionID = props.fork?.targetSessionID ?? props.sessionID
+    let directory = project.instance.directory()
+    let finishMoveProgress = false
+    if (sessionID == null) {
+      const selectedDirectory = await startLocation.getDirectory(promptSnapshot.input)
+      if (startLocation.pending() && !selectedDirectory) return false
+      finishMoveProgress = Boolean(startLocation.progress())
+      directory = selectedDirectory ?? directory
+      sessionID = Identifier.ascending("session")
+    }
+
+    if (currentMode === "shell") {
       if (!props.sessionID || props.fork) {
         if (finishMoveProgress) startLocation.finishSubmit()
         toast.show({ message: "Start a learner turn before running a shell command.", variant: "warning" })
@@ -1118,7 +1322,7 @@ export function Prompt(props: PromptProps) {
       const messageID = Identifier.ascending("message")
 
       try {
-        if (delivery === "steer") {
+        if (deliveryKind === "steer") {
           await dispatchVisibleTurn(target, (visible) =>
             sdk.client.session.steer(
               {
@@ -1162,10 +1366,13 @@ export function Prompt(props: PromptProps) {
         }
       } catch (error) {
         if (finishMoveProgress) startLocation.finishSubmit()
-        if (delivery === "steer") preserveUndeliveredSteer()
+        if (deliveryKind === "steer")
+          markUndelivered("This draft was not accepted by the response. Choose where to send it again.")
+        if (claimed && deliveryKind === "start")
+          markUndelivered("This draft was not accepted as the next message. Choose where to send it again.")
         toast.show({
-          title: delivery === "steer" ? "Steer not delivered" : "Failed to start turn",
-          message: errorMessage(error),
+          title: deliveryKind === "steer" || claimed ? "Not sent" : "Failed to send",
+          message: `${errorMessage(error)} The draft remains editable here.`,
           variant: "error",
         })
         return true
@@ -1173,7 +1380,7 @@ export function Prompt(props: PromptProps) {
       if (editorParts.length > 0) editor.markSelectionSent()
     }
     history.append({
-      ...store.prompt,
+      ...promptSnapshot,
       mode: currentMode,
     })
     input.extmarks.clear()
@@ -1182,8 +1389,7 @@ export function Prompt(props: PromptProps) {
       parts: [],
     })
     setStore("extmarkToPartIndex", new Map())
-    setQueuedForNext(false)
-    setNotSteered(false)
+    setDelivery({ type: "editing" })
     props.onSubmit?.()
 
     // temporary hack to make sure the message is sent
@@ -1196,13 +1402,25 @@ export function Prompt(props: PromptProps) {
     return true
   }
 
-  function preserveUndeliveredSteer() {
-    setNotSteered(true)
-    setQueuedForNext(true)
-    if (status().type === "idle") setTimeout(() => void submit(), 0)
+  function sameVisibleTurn(left: VisibleTurnTarget, right: VisibleTurnTarget | undefined) {
+    return left.sessionID === right?.sessionID && left.turnID === right.turnID
   }
 
-  function pasteText(text: string, virtualText: string) {
+  function markUndelivered(reason: string) {
+    setDelivery({ type: "undelivered", reason })
+  }
+
+  function updateDeliveryAfterEdit(value: string) {
+    const current = delivery()
+    if (!value || current.type === "undelivered") setDelivery({ type: "editing" })
+  }
+
+  function canApplyEdit(revision: number) {
+    return !deliveryPending() && revision === editRevision
+  }
+
+  function pasteText(text: string, virtualText: string, revision = editRevision) {
+    if (!canApplyEdit(revision)) return
     const currentOffset = input.cursorOffset
     const extmarkStart = currentOffset
     const extmarkEnd = extmarkStart + promptOffsetWidth(virtualText)
@@ -1236,25 +1454,30 @@ export function Prompt(props: PromptProps) {
     )
   }
 
-  async function pasteInputText(text: string) {
+  async function pasteInputText(text: string, revision = editRevision) {
+    if (!canApplyEdit(revision)) return
     const normalizedText = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
     const pastedContent = normalizedText.trim()
     const filepath = pastedFilepath(pastedContent, terminalEnvironment.platform)
     const isUrl = /^(https?):\/\//.test(filepath)
     if (!isUrl) {
       const attachment = await readLocalAttachment(filepath)
+      if (!canApplyEdit(revision)) return
       const filename = path.basename(filepath)
       if (attachment?.type === "text") {
-        pasteText(attachment.content, `[SVG: ${filename ?? "image"}]`)
+        pasteText(attachment.content, `[SVG: ${filename ?? "image"}]`, revision)
         return
       }
       if (attachment?.type === "binary") {
-        await pasteAttachment({
-          filename,
-          filepath,
-          mime: attachment.mime,
-          content: Buffer.from(attachment.content).toString("base64"),
-        })
+        await pasteAttachment(
+          {
+            filename,
+            filepath,
+            mime: attachment.mime,
+            content: Buffer.from(attachment.content).toString("base64"),
+          },
+          revision,
+        )
         return
       }
     }
@@ -1264,10 +1487,11 @@ export function Prompt(props: PromptProps) {
       (lineCount >= 3 || pastedContent.length > 150) &&
       kv.get("paste_summary_enabled", !sync.data.config.experimental?.disable_paste_summary)
     ) {
-      pasteText(pastedContent, `[Pasted ~${lineCount} lines]`)
+      pasteText(pastedContent, `[Pasted ~${lineCount} lines]`, revision)
       return
     }
 
+    if (!canApplyEdit(revision)) return
     input.insertText(normalizedText)
 
     setTimeout(() => {
@@ -1277,7 +1501,11 @@ export function Prompt(props: PromptProps) {
     }, 0)
   }
 
-  async function pasteAttachment(file: { filename?: string; filepath?: string; content: string; mime: string }) {
+  async function pasteAttachment(
+    file: { filename?: string; filepath?: string; content: string; mime: string },
+    revision = editRevision,
+  ) {
+    if (!canApplyEdit(revision)) return
     const currentOffset = input.cursorOffset
     const extmarkStart = currentOffset
     const pdf = file.mime === "application/pdf"
@@ -1326,8 +1554,8 @@ export function Prompt(props: PromptProps) {
   }
 
   function clearPrompt() {
-    setQueuedForNext(false)
-    setNotSteered(false)
+    if (deliveryPending()) return
+    setDelivery({ type: "editing" })
     if (store.prompt.input.trim().length >= DRAFT_RETENTION_MIN_CHARS || store.prompt.parts.length > 0) {
       history.append({
         ...store.prompt,
@@ -1435,13 +1663,14 @@ export function Prompt(props: PromptProps) {
               onContentChange={() => {
                 const value = input.plainText
                 setStore("prompt", "input", value)
+                updateDeliveryAfterEdit(value)
                 auto()?.onInput(value)
                 syncExtmarksWithPromptParts()
                 setCursorVersion((value) => value + 1)
               }}
               onCursorChange={() => setCursorVersion((value) => value + 1)}
               onKeyDown={(e: { preventDefault(): void }) => {
-                if (props.disabled) {
+                if (props.disabled || deliveryPending()) {
                   e.preventDefault()
                   return
                 }
@@ -1449,10 +1678,12 @@ export function Prompt(props: PromptProps) {
               onSubmit={() => {
                 // IME: double-defer so the last composed character (e.g. Korean
                 // hangul) is flushed to plainText before we read it for submission.
-                setTimeout(() => setTimeout(() => submit(), 0), 0)
+                // Capture the visible response and freeze competing editor writes now;
+                // only the final text flush is deferred.
+                scheduleSubmit()
               }}
               onPaste={async (event: PasteEvent) => {
-                if (props.disabled) {
+                if (props.disabled || deliveryPending()) {
                   event.preventDefault()
                   return
                 }
@@ -1569,13 +1800,8 @@ export function Prompt(props: PromptProps) {
         <box width="100%" flexDirection="row" justifyContent="space-between">
           <Switch>
             <Match when={status().type !== "idle"}>
-              <box
-                flexDirection="row"
-                gap={1}
-                flexGrow={1}
-                justifyContent={status().type === "retry" ? "space-between" : "flex-start"}
-              >
-                <box flexShrink={0} flexDirection="row" gap={1}>
+              <box flexDirection="column" gap={0} flexGrow={1}>
+                <box flexDirection="row" gap={1} flexGrow={1}>
                   <box marginLeft={1}>
                     <Show when={kv.get("animations_enabled", true)} fallback={<text fg={theme.textMuted}>[⋯]</text>}>
                       <spinner color={spinnerDef().color} frames={spinnerDef().frames} interval={40} />
@@ -1639,16 +1865,39 @@ export function Prompt(props: PromptProps) {
                       )
                     })()}
                   </box>
+                  <Show when={deliveryLabel()}>{(label) => <text fg={theme.warning}>{label()}</text>}</Show>
                 </box>
-                <Show when={queuedForNext()}>
-                  <text fg={theme.warning}>{queuedDraftLabel()}</text>
-                </Show>
-                <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
-                  esc{" "}
-                  <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
-                    {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
-                  </span>
-                </text>
+                <Switch>
+                  <Match when={store.mode === "normal"}>
+                    <box
+                      marginLeft={1}
+                      flexDirection={dimensions().width < 90 ? "column" : "row"}
+                      gap={dimensions().width < 90 ? 0 : 2}
+                    >
+                      <text fg={theme.text}>
+                        {laterShortcut() || "enter"}{" "}
+                        <span style={{ fg: theme.textMuted }}>send after this response</span>
+                      </text>
+                      <text fg={theme.text}>
+                        {currentWorkShortcut() || "commands"}{" "}
+                        <span style={{ fg: theme.textMuted }}>add/correct this response</span>
+                      </text>
+                      <text fg={store.interrupt > 0 ? theme.primary : theme.text}>
+                        esc{" "}
+                        <span style={{ fg: store.interrupt > 0 ? theme.primary : theme.textMuted }}>
+                          {store.interrupt > 0 ? "again to interrupt" : "interrupt"}
+                        </span>
+                      </text>
+                    </box>
+                  </Match>
+                  <Match when={true}>
+                    <box marginLeft={1}>
+                      <text fg={theme.text}>
+                        esc <span style={{ fg: theme.textMuted }}>exit shell mode</span>
+                      </text>
+                    </box>
+                  </Match>
+                </Switch>
               </box>
             </Match>
             <Match when={startLocation.progress()}>
@@ -1666,14 +1915,14 @@ export function Prompt(props: PromptProps) {
                 <text fg={theme.accent}>(new working copy)</text>
               </box>
             </Match>
-            <Match when={queuedForNext()}>
+            <Match when={deliveryLabel()}>
               <box paddingLeft={3}>
-                <text fg={theme.warning}>{queuedDraftLabel()}</text>
+                <text fg={theme.warning}>{deliveryLabel()}</text>
               </box>
             </Match>
             <Match when={true}>{props.hint ?? <text />}</Match>
           </Switch>
-          <Show when={status().type !== "retry"}>
+          <Show when={status().type === "idle"}>
             <box gap={2} flexDirection="row">
               <Show when={editorContextLabelState() !== "none" ? editorFileLabelDisplay() : undefined}>
                 {(file) => (
@@ -1718,7 +1967,9 @@ export function Prompt(props: PromptProps) {
         anchor={() => anchor}
         input={() => input}
         setPrompt={(cb) => {
+          if (deliveryPending()) return
           setStore("prompt", produce(cb))
+          updateDeliveryAfterEdit(store.prompt.input)
         }}
         setExtmark={(partIndex, extmarkId) => {
           setStore("extmarkToPartIndex", (map: Map<number, number>) => {

@@ -140,7 +140,7 @@ test("mode-less bindings stay active when the Repa mode changes", async () => {
   }
 })
 
-test("Ctrl+Enter is reserved for explicit Turn steering, not textarea newline", async () => {
+test("Ctrl+Enter is reserved for the configured current-response action, not textarea newline", async () => {
   const sequences: Record<string, string[]> = {}
 
   function Harness() {

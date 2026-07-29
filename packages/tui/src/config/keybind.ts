@@ -92,7 +92,7 @@ export const Definitions = {
   session_rename: keybind("ctrl+r", "Rename session"),
   session_delete: keybind("ctrl+d", "Delete session"),
   session_interrupt: keybind("escape", "Interrupt current session"),
-  session_steer: keybind("ctrl+enter", "Steer the active turn"),
+  session_steer: keybind("ctrl+enter", "Add to or correct the response in progress"),
   session_compact: keybind("<leader>c", "Compact the session"),
   session_toggle_timestamps: keybind("none", "Toggle message timestamps"),
   session_toggle_generic_tool_output: keybind("none", "Toggle generic tool output"),

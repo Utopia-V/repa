@@ -26,7 +26,7 @@ function getStashPreview(input: string, maxLength: number = 50): string {
   return Locale.truncate(firstLine, maxLength)
 }
 
-export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
+export function DialogStash(props: { onSelect: (entry: StashEntry) => void; canMutate?: () => boolean }) {
   const dialog = useDialog()
   const stash = usePromptStash()
   const { theme } = useTheme()
@@ -60,6 +60,7 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
         setToDelete(undefined)
       }}
       onSelect={(option) => {
+        if (props.canMutate && !props.canMutate()) return
         const entries = stash.list()
         const entry = entries[option.value]
         if (entry) {
@@ -73,6 +74,7 @@ export function DialogStash(props: { onSelect: (entry: StashEntry) => void }) {
           command: "stash.delete",
           title: "delete",
           onTrigger: (option) => {
+            if (props.canMutate && !props.canMutate()) return
             if (toDelete() === option.value) {
               stash.remove(option.value)
               setToDelete(undefined)
