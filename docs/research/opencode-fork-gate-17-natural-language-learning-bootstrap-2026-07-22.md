@@ -1,13 +1,18 @@
 # OpenCode fork Gate 17: natural-language learning bootstrap
 
 Status: Maintainer grill paused. The 2026-07-27 first-principles audit reopened
-the previously accepted mandatory-`/learn` decision and derived several
-required contract inputs; it does not select a replacement admission form.
-The audit closed only its bounded health and authority-reconstruction question;
-the remaining Gate 16 natural-language contract/theory barrier blocks further
-grill or design derivation. The local engineering contract is incomplete, has
-not entered independent contract/theory review, and is not implementation
-authority.
+the previously accepted mandatory-`/learn` decision and derived required
+contract inputs without selecting a replacement admission form. Its
+authority-reconstruction result remains accepted. The 2026-07-29 user-flow
+follow-up also scoped-reopened Gate 12's busy-TUI delivery default and Gate 14's
+default-Course boundary; both corrections have now passed their original fresh
+reviewers and are integrated at `c5ea10b8a` and `80fde2012`. Gate 16's
+separately accepted natural-language correction is the only remaining
+pre-Gate-17 implementation/evidence boundary. The local Gate 17 engineering
+contract remains incomplete, has not entered independent contract/theory
+review, and is not implementation authority. A 2026-07-29 product-flow
+follow-up inserted downstream Gate 21A for Tutor move selection and failure
+re-entry; that correction changes no Gate 17 local decision or authorization.
 
 Date: 2026-07-22
 
@@ -34,7 +39,9 @@ an existing Course, Gate 17 must not misclassify it as Course creation; Gate 18
 owns its complete bounded context reconstruction and presentation. Gate 17
 must work without a Goal or LearningSpace and does not claim later learner
 adaptation, future attention, planning, terminal inspection, or the integrated
-product loop.
+product loop. Gate 21A later owns representative cross-domain move selection
+and re-entry; neither bootstrap intent interpretation nor Gate 18 context
+visibility substitutes for that boundary.
 
 ## Why this Gate exists
 

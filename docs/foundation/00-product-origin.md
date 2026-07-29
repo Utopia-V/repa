@@ -88,6 +88,23 @@ worked examples, repeated operation, conceptual explanation, independent work,
 or review. The Tutor chooses and combines these moves while the learner can
 steer at any time.
 
+The Learning System, rather than the learner, normally owns turning the current
+learning situation into a useful next move. An exact learner request governs
+what it specifies. Otherwise Repa may take a transparent, reversible local
+choice; it asks when materially different interpretations require a
+learner-owned value or commitment, or when authorization and failure
+consequences make a default unsafe. The learner may redirect or override at any
+time. This is a low-management product responsibility, not a promise that every
+ambiguity can be inferred and not a requirement for one fixed selector,
+classifier, scheduler, or workflow.
+
+After a correction, interruption, provider failure, restart, or material
+change in time or state, the next admitted interaction rebuilds the relevant
+situation and chooses again. It preserves already committed effects and does
+not blindly replay ambiguous work. The learner is not the application's manual
+synchronization mechanism or the routine arbiter among Course, Goal, review,
+plan, and recent-Interaction records.
+
 The system must be able to distinguish at least these categories conceptually, even if their final data model is not yet settled:
 
 - What happened: observed or reported learning activity.
@@ -202,7 +219,12 @@ outcome boundary; those decisions are not reopened here.
   view plus lazy-detail context architecture.
 - Learner-state representation when a demonstrated future action needs more
   than simple progress, task results, and revisits.
-- The task-selection policy and its explanation contract.
+- The exact task-selection policy and its explanation contract, including the
+  mechanism for representative multiple-candidate conflicts. The
+  Learning-System responsibility to provide a low-management default and
+  truthful re-entry is settled; whether a case uses the ordinary Tutor LLM, a
+  program rule, a bounded control sample, a mixture, or another evidenced
+  mechanism remains open.
 - Persistence and correction shapes for learning authorities not yet
   implemented. Course/View, Artifact, ContentRoot, readable Representation,
   Material Map/alignment, navigation continuity, retained steering, and Goal

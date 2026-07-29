@@ -1,11 +1,48 @@
 # OpenCode fork Gate 12: durable Turn lifecycle
 
-Status: Closed. Independent review run `gate12-20260718-whole-01` accepted both
-contract/theory and implementation/evidence. Findings `G12-CT-001` through
-`G12-CT-006` and `G12-IE-001` through `G12-IE-008` are closed. The accepted
-implementation is fixed by maintainer-authorized commit
-`80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`. Gate 13 remains outside this
-record; its current status is owned by `docs/README.md`.
+Status: The primary-TUI busy-input correction was independently accepted and
+integrated on 2026-07-30 at commit
+`c5ea10b8ab0f573fef03b5066bbcb117a9e0a502`. Independent
+review run `gate12-20260718-whole-01` still fixes the accepted strict Turn,
+start, exact-target steer, draft, race, recovery, and child-lifecycle mechanics
+at maintainer-authorized commit
+`80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`. The later product-flow audit
+falsified the completion claim for the TUI mapping: ordinary busy send meant
+“later” without making the alternative visible before first use, timely
+correction required an internal steer command, and no comparative evidence had
+tested that error against irreversibly admitting an independent next question
+into the running Turn. On 2026-07-29 the maintainer chose ordinary busy Enter as
+the explicit, reversible “send after this response” action and a separately
+visible configured action as “add to/correct this response.”
+Fresh separate top-level reviewer task
+`019fad21-8a6a-7450-af90-505c0bce53f8` returned `Revise` with
+`G12-RC-001` through `G12-RC-003`. Its first exact-diff closure pass closed
+`G12-RC-001`, found the new state/oracles sufficient for `G12-RC-003`, but kept
+`G12-RC-002` open because one earlier completion-lost-steer clause still
+authorized a new queued start identity. That residual clause and the matching
+historical evidence were then fenced. The same reviewer returned `Accept` on
+the second exact-diff closure with no blocker. The corrective contract at the
+end of this record is now implementation authority only for the primary-TUI
+busy-input default/discoverability/process-local delivery-state repair and its
+focused replacement evidence. The original reviewer then returned `Revise` on
+the first implementation/evidence pass with `G12-RC-IE-001` and
+`G12-RC-IE-002`: busy Enter captured its target only after two IME timers, and
+asynchronous editor/paste/dialog work begun before submission could still
+mutate the draft or stash after the delivery claim. The repaired candidate now
+captures the exact target and intent synchronously, claims the composer before
+the IME flush, and rejects every stale asynchronous edit or stash mutation. On
+the next exact-diff pass the same reviewer closed `G12-RC-IE-002` but kept
+`G12-RC-IE-001` open: B could both start and finish during the IME delay, so no
+active B remained when the later selection was materialized. The candidate now
+captures a monotonic same-Session `turn.started` revision with A and carries it
+through `later_selected`; any competing start makes the draft permanently
+`undelivered` even when that Turn has already finished. The full B-cycle oracle
+passes. The original reviewer returned second implementation/evidence
+exact-diff `Accept` with no blocker: `G12-RC-IE-001` and
+`G12-RC-IE-002` are closed, and the scoped Gate 12
+implementation/evidence is integrated at
+`c5ea10b8ab0f573fef03b5066bbcb117a9e0a502`.
+Current disposition is owned by `docs/README.md`.
 
 Date: 2026-07-18
 
@@ -185,7 +222,7 @@ Already committed domain transitions remain governed by their owning
 authority and receipts; Gate 12 does not roll them back or make them false
 because later work in the same Turn failed.
 
-### Ordinary Enter queues the next Turn; explicit steer joins this Turn
+### Historical busy-input default (suspended on 2026-07-29)
 
 While a Turn is active, ordinary terminal submission defaults to a
 process-local editable next-Turn queue. It is not durably admitted until its
@@ -199,7 +236,10 @@ own queueing policy. There is no Gate 12 server-side durable inbox or generic
 
 This choice deliberately differs from the pinned Codex TUI default, where
 Enter steers and Tab queues. The exact-turn steer guard is adapted; the default
-interaction choice is Repa-owned.
+interaction choice was Repa-owned. The dated correction at the end of this
+record suspends this mapping as implementation authority and reopens its
+presentation/evidence question; the strict primitives and exact-target guard
+remain accepted.
 
 ### A child Turn is an ordinary Turn in an independent child Session
 
@@ -715,11 +755,11 @@ Turn completion against the exact running Turn:
 - if terminal completion commits first, the steer receives
   `turn_not_steerable` and remains undelivered.
 
-The TUI may recover from the second result by preserving the text visibly in
-its local next-Turn queue with a new start identity. It must tell the learner
-that steering did not occur and must never retarget whichever Turn happens to
-be active later. HTTP and SDK callers receive the strict failure and make their
-own choice.
+The TUI may preserve the complete text visibly after the second result, but it
+is `undelivered`, not `later_selected`: steering did not occur, no new start
+identity is minted, and no automatic start, steer, retry, or retarget follows.
+Only a later explicit learner action may choose a new delivery path. HTTP and
+SDK callers receive the strict failure and make their own choice.
 
 ### Interrupt also names one Turn
 
@@ -735,10 +775,13 @@ target in scope as described below.
 
 ## Process-local queue and safe-boundary steering
 
-The server owns no durable Gate 12 queue. The terminal queue stores drafts and
-pre-generated retry identities only in the current process. Items remain
-editable and removable. Closing or crashing the process may lose them, and the
-UI must not label them accepted, synced, or recoverable.
+The server owns no durable Gate 12 queue. The terminal stores only
+learner-selected later drafts in that path, and only in the current process.
+Each remains editable and removable. Its one promotion attempt binds one stable
+start identity to the complete snapshot; a failed delivery does not mint a new
+automatic identity or re-enter the later path. Closing or crashing the process
+may lose these drafts, and the UI must not label them accepted, synced, or
+recoverable.
 
 Unpromoted steering is also process-local. A safe promotion boundary is a point
 after the current provider operation and its complete sealed tool-candidate set
@@ -1319,12 +1362,14 @@ than editing generated files.
 The terminal must:
 
 - keep pre-first-request drafts outside durable Session state;
-- make ordinary Enter queue a visible editable next Turn while one is active;
+- **Historical 2026-07-18 mapping, suspended on 2026-07-29:** make ordinary
+  Enter queue a visible editable next Turn while one is active;
 - expose a discoverable configurable explicit-steer binding;
 - track the exact active Turn ID used by steer and interrupt;
 - show pending/unaccepted steer separately from committed history;
-- preserve a raced-out steer visibly as queued draft only with a new start
-  identity and an explicit “not steered” indication;
+- **Historical 2026-07-18 fallback, suspended on 2026-07-29:** preserve a
+  raced-out steer visibly as queued draft with a new start identity and an
+  explicit “not steered” indication;
 - collapse child Sessions/Turns by default while showing running, failed,
   interrupted, or exhausted descendants at the parent task;
 - make Turn limits/counters available in inspection without routinely filling
@@ -1383,7 +1428,7 @@ compatibility would preserve the cause and is outside the product decision.
 | fork-start materialization fails                                  | no target Session, clone, Turn, input, occurrence, or event survives                                         |
 | steer has no active Turn                                          | `no_active_turn`; input remains unaccepted                                                                   |
 | steer expected ID is stale                                        | `active_turn_mismatch`; never target actual Turn                                                             |
-| completion wins steer race                                        | `turn_not_steerable`; TUI preserves visible local draft if desired                                           |
+| completion wins steer race                                        | `turn_not_steerable`; optional visible text is `undelivered`, with no automatic start, steer, retry, or retarget |
 | steer wins completion race                                        | input commits to exact Turn; loop reevaluates before next sample                                             |
 | several steers wait together                                      | promote one learner occurrence per later model admission; preserve FIFO and exact causal binding             |
 | model limit reached                                               | `exhausted` with model receipt; no provider operation starts                                                 |
@@ -1538,12 +1583,15 @@ oracles are not.
 - Several pending learner steers preserve FIFO and promote at most one per
   subsequent model admission; terminalization rejects every still-unpromoted
   item without claiming acceptance.
-- Ordinary Enter while active remains editable/removable local queue state and
+- **Historical 2026-07-18 ordinary-send oracle, suspended on 2026-07-29:**
+  ordinary Enter while active remains editable/removable local queue state and
   starts a new Turn only after admission.
-- Process termination loses local queue/unpromoted steer without any accepted
-  durable item or misleading UI claim.
-- The TUI race fallback visibly says the steer was not delivered, generates a
-  new start identity, and never targets a replacement active Turn.
+- Process termination loses every process-local later-selected, undelivered,
+  or unpromoted-steer draft without any accepted durable item or misleading UI
+  claim.
+- **Historical 2026-07-18 race fallback, suspended on 2026-07-29:** the TUI
+  generates a new start identity for a raced-out steer. The current correction
+  instead requires an undelivered state with no automatic start or retarget.
 - Help and configured keymap discovery expose explicit steer.
 
 ### Child Turns, results, permissions, and cancellation
@@ -1818,9 +1866,11 @@ accepted contract or adding a second runner:
   and cannot be regressed through update or `INSERT OR REPLACE`. Direct-SQL
   attacks followed by cross-Session admission-floor checks prove the boundary.
 - `G12-IE-005`: Sync owns the exact visible active Turn ID. Steer and interrupt
-  capture that ID synchronously and dispatch it unchanged; a raced-out steer
-  leaves an explicit editable new-Turn draft instead of silently retargeting a
-  replacement.
+  capture that ID synchronously and dispatch it unchanged. **Historical
+  2026-07-19 TUI fallback, suspended on 2026-07-29:** a raced-out steer became
+  an explicit editable new-Turn draft. The corrective contract retains exact
+  capture/no retargeting but instead leaves the complete text `undelivered`
+  until a new learner choice.
 - `G12-IE-006`: new transactional oracles inject failure after preparing
   parent-plus-descendant unavailable receipts and prove complete subtree and
   projection rollback. A separate admitted Gate 12 model/tool plus applied
@@ -1966,5 +2016,202 @@ also reran the intended falsification targets:
 5. whether the required evidence can actually falsify production-path and
    restart claims.
 
-Both review layers are accepted. Gate 12 is formally closed and its reviewed
-implementation is integrated at commit `80f5fa30a`.
+Both historical review layers were accepted. At the 2026-07-18 boundary, Gate
+12 was formally closed and its reviewed implementation was integrated at commit
+`80f5fa30a`; the later correction below changes only the current disposition of
+the primary-TUI mapping.
+
+## 2026-07-29 primary-TUI delivery correction candidate
+
+The historical close proved that an admitted steer joins only the exact running
+Turn and that an unpromoted next-Turn draft remains process-local, editable, and
+truthfully losable. It did not prove that the chosen default kept immediate
+learner correction natural. In the shipped mapping, a learner can type “等等，
+我说的是右特征向量” during a mistaken explanation and press ordinary Enter;
+the current model/tool work continues, while the correction waits for a later
+root Turn and may disappear on process exit. The busy footer shows only the
+interrupt action before that first miss. Its steer hint appears afterward in
+internal Turn vocabulary and hard-codes `Ctrl+Enter` even though the keymap is
+configurable.
+
+The correction boundary is:
+
+1. When no Turn is running, ordinary send admits a new root Turn exactly as the
+   accepted implementation already does.
+2. When one Turn is visibly running, the TUI offers both current-work delivery
+   and later delivery. Current-work delivery synchronously captures that exact
+   visible Turn and calls the existing strict steer primitive; it never
+   discovers or retargets a replacement Turn later.
+3. Before the first busy submission, the composer shows both configured
+   bindings in learner language such as “add to this response” and “send after
+   this response.” Learners need not understand Turn, steer, admission, or
+   internal identifiers.
+4. **Maintainer decision, 2026-07-29:** while a Turn is visibly running,
+   ordinary Enter selects “send after this response”; the separate configured
+   current-work action selects “add to/correct this response.” The error policy
+   is deliberately asymmetric. A later-selected draft is still unadmitted,
+   editable, removable, and may be reselected for current work, while an
+   accepted current-work steer has already entered the current Turn's context,
+   budget, cancellation, and terminal fate and cannot be extracted as an
+   independent next question. The reversible error therefore owns the ordinary
+   action. This decision may be revised by the maintainer if observed learner
+   behavior shows that discoverable current-work delivery still makes timely
+   correction unreasonably difficult.
+5. The process-local composer distinguishes these legal states without
+   introducing a durable queue or learning fact:
+   - `editing`: the complete current composer payload has no pending delivery
+      choice;
+   - `later_selected`: while busy, ordinary Enter is an explicit later choice
+     because the composer already labels its configured meaning. The payload
+     stays visible, editable, removable, and eligible for explicit
+     reclassification to current work while the captured active Turn runs.
+     When that Turn leaves active state, the TUI gets one opportunity to
+     atomically snapshot the complete then-current payload and call strict
+     `start`;
+   - `undelivered`: a current-work steer that loses its exact-Turn race, or a
+     later-selected strict `start` that loses to another Turn, enters this state
+     with the complete payload and truthful reason visible. It has no automatic
+     start, steer, later retry, or retarget. Only a new learner choice may send
+     it or mark it later again.
+6. Editing or removing a `later_selected` payload changes what can be delivered;
+   no stale earlier text is submitted. While the captured Turn remains the
+   exact visible active target, choosing current work atomically consumes the
+   later selection into one complete-payload strict-steer attempt. When the
+   captured Turn leaves active state, later promotion instead atomically
+   consumes it into one complete-payload strict-start attempt. Those paths
+   cannot both dispatch. Successful strict steer or strict start is the only
+   admission boundary; a lost race becomes `undelivered` rather than steering a
+   replacement Turn, retrying later, or silently waiting for another completion.
+7. Process exit or crash may lose `editing`, `later_selected`, and
+   `undelivered`; the TUI never describes them as durably saved. The accepted
+   persisted steer FIFO, child behavior, interrupt, cancellation, and recovery
+   semantics remain unchanged.
+
+The pinned Codex comparison at `rust-v0.144.1` /
+`44918ea10c0f99151c6710411b4322c2f5c96bea` demonstrates the mature interaction
+shape in `codex-rs/tui/src/bottom_pane/chat_composer.rs` and `footer.rs`:
+ordinary Enter delivers to current work and an explicit action queues later.
+That reference establishes feasibility, not Repa's default. Repa keeps its own
+keymap, strict exact-Turn API, safe promotion, and failure behavior.
+
+Focused closing evidence must show ordinary busy Enter selecting later delivery
+and staying editable and unadmitted until one complete-payload strict-start
+snapshot; edit, removal, and explicit reclassification to current work before
+that snapshot; the configured current-work action reaching exact Turn A;
+learner-facing binding labels before first use; an immediate correction that can
+still be delivered to A; an independent next question that remains outside A;
+one-winner current-versus-later dispatch; current-work completion-race
+transition to `undelivered`; later-promotion loss to another Turn without steer,
+retry, or retarget; and restart loss without a false durable claim. HTTP and SDK
+continue exposing strict start and exact-target steer primitives; this
+correction does not add a generic start-or-steer API or require a semantic
+classifier to override the learner's delivery choice.
+
+This is a material correction to one earlier accepted product choice.
+Implementation and replacement closing evidence must wait for
+`G12-RC-001` through `G12-RC-003` to close in the original fresh separate
+top-level reviewer task. `G12-RC-002` is addressed by the explicit suspension
+of the old terminal/default clauses above. `G12-RC-003` is addressed by the
+`editing` / `later_selected` / `undelivered` transition and focused race
+oracles. `G12-RC-001` is addressed by the maintainer-owned ordinary
+Enter-to-later decision and its reversible-error policy. The historical
+implementation and evidence remain valid for every unaffected Gate 12
+invariant. The original reviewer returned second-pass exact-diff `Accept` with
+no blocker. This contract now authorizes only the scoped primary-TUI
+busy-input/discoverability/process-local delivery-state implementation and
+focused replacement evidence; strict start/exact-target steer, Turn/race,
+budget/tool/child/cancellation/recovery mechanics, and HTTP/SDK primitives
+remain accepted and unchanged.
+
+## 2026-07-29 corrective implementation/evidence candidate
+
+The candidate changes only the primary TUI composer, its stash dialog, and
+focused keymap/behavior tests:
+
+- `packages/tui/src/component/prompt/index.tsx`;
+- `packages/tui/src/component/dialog-stash.tsx`;
+- `packages/tui/src/config/keybind.ts`;
+- `packages/tui/test/cli/tui/prompt-busy-delivery.test.tsx`; and
+- `packages/tui/test/keymap.test.tsx`.
+
+Busy normal-mode Enter now captures exact visible Turn A and selects one
+process-local `later_selected` draft. Selection performs no API call, history
+write, or stash write; the complete latest text and structured parts remain
+editable or removable. Only a settled `idle` status with no active Turn may
+claim that selection for one strict start. A terminal event for A arriving
+before idle therefore waits. If Turn B becomes active first, the draft becomes
+`undelivered` without a start or steer and does not promote after B finishes.
+
+The configured current-response action is visible in learner language before
+first use and claims the same draft for one exact-A steer. Current and later
+paths share one in-flight/selection claim. A changed target, failed strict
+start/steer, lost server-admission race, disabled composer, changed Session, or
+other precondition loss preserves the full draft as `undelivered`; none starts,
+steers, retries, or retargets automatically. Shell mode hides both learning
+delivery choices. The footer renders the actual configured bindings, stacks on
+narrow terminals, and labels the local draft `this window only`.
+
+Executor integration review found one additional event-order counterexample
+after the first passing candidate: `turn.terminal(A)` could clear active A
+before `session.status(idle)` and trigger an early start. The repair now waits
+through the transient busy/no-active state and adds both terminal-before-idle
+and B-before-promotion traces.
+
+The original reviewer found two further admission races in the first
+implementation/evidence pass. `G12-RC-IE-001` showed that the textarea's two
+IME-flush timers also deferred capture of target A and the ordinary-Enter
+delivery intent; a synchronously arriving B could therefore become the draft's
+new anchor. The repaired handler captures the Session, exact visible target,
+delivery intent, and selected state synchronously in the key event, claims the
+composer immediately, and defers only the final composed-text flush.
+`G12-RC-IE-002` showed that an external editor, clipboard/local-file paste, or
+stash dialog started before that claim could resume afterward and mutate the
+atomic snapshot. A monotonically increasing edit revision now invalidates
+those asynchronous continuations, delivery-pending disables the remaining
+composer mutations, and the stash dialog checks the claim before removing an
+entry. The focused oracles freeze A before both timers and resolve a pre-claim
+paste after dispatch to prove that neither target nor claimed payload can
+change.
+
+The first exact-diff closure closed `G12-RC-IE-002` but found one surviving
+`G12-RC-IE-001` trace: Enter on A, terminal A, start B, terminal B, and idle
+could all occur before `runSubmission`. Because the first repair observed only
+the final active Turn, it then materialized `later_selected` after B and
+automatically started the draft. The prompt now increments a local monotonic
+revision on every same-Session `turn.started`, captures that revision with A,
+and stores it in `later_selected`. Both deferred materialization and later
+promotion compare the captured revision with the live revision, so the fact
+that B appeared cannot disappear when B terminates. A focused oracle emits the
+entire B start/terminal/idle cycle before either IME timer and requires a
+visible `undelivered` draft with zero start or steer.
+
+Fresh package evidence from `packages/tui`:
+
+```text
+bun test test/cli/tui/prompt-busy-delivery.test.tsx test/keymap.test.tsx test/util/visible-turn.test.ts test/cli/tui/prompt-submit-race.test.ts
+19 pass, 0 fail, 58 assertions
+
+bun run typecheck
+pass
+```
+
+Changed-file oxlint reports zero errors and 22 existing-style warnings;
+Prettier is clean, and scoped `git diff --check` passes. The exact tracked
+four-file implementation diff hashes to
+`2e027dc139174ad2ff7530e2d4073814e7fe395e`; the untracked focused test blob
+hashes to `0e601d722d68eb254862241b6b3cbf0db65b5886`. No new packaged process-crash
+run was performed: this correction changes no restart or durable Turn
+mechanism, and its process-local truth is tested through the explicit `this
+window only` projection plus absence of prompt-history/stash writes before
+admission. The retained historical restart evidence continues to own the
+unaffected core. The original reviewer returned second
+implementation/evidence exact-diff `Accept` with no blocker.
+`G12-RC-IE-001` closed against tracked implementation diff
+`2e027dc139174ad2ff7530e2d4073814e7fe395e`, focused-test blob
+`0e601d722d68eb254862241b6b3cbf0db65b5886`, and Gate-record diff
+`ca857807ae15fbb2c34215ee586c050522cea22e`; `G12-RC-IE-002` remains closed.
+The reviewer independently reproduced 19 passes, 0 failures, and 58 assertions.
+Scoped Gate 12 implementation/evidence is accepted and integrated at
+`c5ea10b8ab0f573fef03b5066bbcb117a9e0a502`. This acceptance does not reopen or replace the retained strict
+start/exact-target steer, Turn/race/budget/tool/child/cancellation/recovery,
+HTTP/SDK, or historical core evidence.

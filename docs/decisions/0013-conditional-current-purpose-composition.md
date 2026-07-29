@@ -14,6 +14,17 @@ Amendment (2026-07-27): `Agenda` is only a family/composition label. The
 demonstrated concern belongs to the future-attention authority; this ADR does
 not create one shared Goal/Assignment/planning/future-attention lifecycle.
 
+Amendment (2026-07-29): a follow-up product-flow audit showed that the planned
+Gates could all close while the learner still arbitrated Course, Goal,
+future-attention, planning, and recent-Interaction candidates. That evidence
+assigns the future acceptance responsibility to Gate 21A; it does not claim
+that this ADR's first reconsideration trigger has already occurred in
+production, because Gates 18–21 and their candidate collisions do not yet
+exist. Gate 21A now owns representative cross-domain Tutor move selection and
+failure re-entry evidence. This ADR remains the narrow decision for the
+demonstrated one-future-attention-candidate case and does not pre-authorize a
+universal selector.
+
 ## Plain-language decision
 
 Repa will not ask a separate classifier model to decide what the Tutor should
@@ -141,7 +152,7 @@ does not define a general compiler from arbitrary concern `reason` text or
 authorize a universal pedagogy enum. The first production contract remains
 narrow to the demonstrated constraint, source-bound and correctable.
 
-### 5. Multiple material candidates remain unresolved
+### 5. Multiple material candidates require an owned later boundary
 
 This ADR does not rank several materially different eligible purposes. If no
 accepted deterministic rule selects among them, the Tutor may:
@@ -152,6 +163,15 @@ accepted deterministic rule selects among them, the Tutor may:
 
 It may not silently turn one LLM classifier score into durable priority or a
 universal scheduler.
+
+The selection mechanism remains unresolved, but the product responsibility is
+no longer unowned. The baseline must not routinely require the learner to
+coordinate internal Course, Goal, future-attention, planning, and Interaction
+state. Gate 21A compares ordinary Tutor-LLM judgment, bounded program policy,
+a bounded control-only sample, mixed alternatives, and any other evidenced
+candidate against representative conflict, correction, cost, and failure
+cases. It may close without new schema when the existing context and Tutor loop
+are sufficient.
 
 ### 6. Scope, persistence, and recovery
 
@@ -211,7 +231,8 @@ decision.
 - Context cuts can explain which source/default and priority the realizing
   sample saw.
 - Multiple candidates and generic reason compilation stay explicit open
-  boundaries rather than hidden heuristics.
+  mechanism questions rather than hidden heuristics; Gate 21A owns their
+  representative baseline product boundary.
 - The first implementation must remain future-attention-specific until another real
   authority consumes the same contribution invariant; no generic manager or
   framework is introduced in advance.
@@ -289,6 +310,12 @@ Reconsider this topology only when one of these appears:
 - a real Turn must resume after process restart; or
 - learner-facing research shows that the default/override behavior itself is
   educationally harmful.
+
+The 2026-07-29 audit did not meet the first trigger as production evidence. It
+showed that the roadmap needed an owner for the future evidence that can meet,
+refute, or refine it. Gate 21A owns that acceptance boundary; it does not
+overturn the one-candidate conditional default or choose a general arbitration
+mechanism.
 
 Do not reconsider because an Agent framework exposes plan state, a model can
 emit a confident rationale, or a database table could store “current activity.”

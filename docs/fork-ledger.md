@@ -93,6 +93,368 @@ Historical Gate numbers and evidence are not renumbered. `2A` remains the
 honest corrective insertion after Gate 2 rather than a reason to relabel the
 old route by an inferred Gate count.
 
+## 2026-07-29 Tutor-flow roadmap correction provenance
+
+Current Gate disposition remains owned only by `docs/README.md`. Three fresh
+read-only top-level tasks examined the same parent product promise from
+different boundaries:
+
+- user and cognitive-flow task
+  `019facb1-53a2-7ad1-9dcb-b55c0a496b67`;
+- persistence and reliability architecture task
+  `019facb1-8d35-7641-8410-8442863974a0`; and
+- adversarial roadmap/product-loop task
+  `019facb1-d582-7c32-8dd4-b0b8fcd9bc3d`.
+
+Each task received the maintainer correction that LLM-enabled simplification
+is a candidate design pressure, not a prohibition on workflows, classifiers,
+graphs, or program rules. All three converged on the same missing parent
+responsibility: exact stored candidates and a bounded context observer do not
+by themselves make the Learning System choose and re-enter a useful current
+move. They differed on whether Gate 23 could absorb the repair or a separate
+boundary was required.
+
+Producer/consumer ordering resolved that topology question. Gate 18 must remain
+an observer; Gate 22 must inspect actual rather than merely possible
+consumption; and final Gate 23 integration should not be the first owner of a
+substantial control behavior. Roadmap 09 therefore inserts Gate 21A between the
+last still-admitted baseline pressure producer and Gate 22. `21A` preserves the
+already published Gate 22/23 meanings and historical references; it does not
+make Tutor selection a planning subdomain.
+
+The accepted `P17-F16` correction owns only the product responsibility and evidence
+boundary. It does not select any mechanism—including an ordinary LLM,
+program-policy, separate control sample, mixed implementation, or another
+candidate—and it does not require new schema or by itself reopen an earlier Gate. Product
+origin, ADR-0013, architecture, Roadmap 09, the status map, Gate 17's downstream
+boundary, repository guidance, and the pre-Gate-17 audit carry the resulting
+meaning. No production code or Gate-close evidence was changed.
+
+## 2026-07-29 primary-TUI flow correction provenance
+
+Current Gate disposition remains owned only by `docs/README.md`. After the
+Tutor-flow roadmap correction, two fresh bounded read-only worker contexts
+tested current behavior from the learner's control surface rather than
+rechecking the already accepted authority reconstruction:
+
+- `audit_busy_tui_input_semantics` inspected Gate 12, ADR-0005/0007, the
+  primary TUI composer/keymap, focused key-routing evidence, and the pinned
+  Codex comparison; and
+- `audit_gate14_confirmation_friction` inspected Gate 14, ADR-0003/0008,
+  navigation command/runtime/permission/database constraints, semantic
+  presentation, and existing tests.
+
+Both returned acceptance-changing findings at high confidence.
+
+The Gate 12 finding preserves strict new-Turn admission, exact-target steer,
+process-local later drafts, safe promotion, completion-race handling, budgets,
+child lineage, terminal truth, and recovery. It rejects only the Repa-owned
+primary-TUI mapping that leaves the current-versus-later choice hidden before
+first use, describes it in internal vocabulary, hard-codes a `Ctrl+Enter` hint
+despite a configurable keymap, and routes a failed current-work attempt into
+later delivery without that learner choice. Architecture, Roadmap 09, the Gate
+record, the audit, and the status map now carry the correction boundary:
+current-work and later delivery are discoverable before first use in learner
+language, and every race preserves the learner's selected causal unit.
+
+The Gate 14 finding preserves the separate default-Course and per-Course
+route-anchor owners, exact snapshots, CAS/history, correction, replay, stale
+failure, and restart truth. It rejects the unconditional two-act authorization
+policy for every low-consequence default change. A direct explicit request
+already supplies semantic learner authority and must not receive another
+Gate-specific prompt under effective `allow`; configured capability `ask`
+remains separate. Tutor-supplied meaning must cite the exact accepted proposal,
+not only the generated target. The same audit falsified the corrective
+presenter's broader same-name claim: the default-Course projection can omit
+stable collision-resolving identity, and a name collision created after commit
+can make an immutable historical acknowledgement ambiguous. Architecture,
+Roadmap 09, the Gate record, the audit, and the status map now carry the
+source-bound authorization and stable-replay correction boundary.
+
+Independent collaboration pre-review `review_pre17_flow_corrections` then
+tried to falsify the documentation correction. Its first `Revise` rejected a
+premature concrete default mapping in upper authority, preserved configured
+capability `ask` separately from semantic acceptance, exposed the
+post-commit same-name collision against immutable replay, and required the
+symmetric independent-next-question oracle before choosing Gate 12's default.
+After those repairs, its second `Revise` found the historical Gate 14
+two-confirmation row still labelled current `Accepted` authority. The final
+repair records that the owning product/architecture correction revoked that
+old constraint without promoting the review-pending candidate. The same
+reviewer returned final `Accept` with no P0-P3 finding.
+
+Neither audit worker nor that collaboration pre-review was the fresh separate
+top-level contract/theory reviewer required for a materially revised Gate. At
+that audit point, Gate 12 and Gate 14 were therefore scoped-reopened, their
+corrective candidates authorized no implementation, and their current
+code/tests/migrations were evidence of defects rather than accepted replacement
+behavior. Their later formal reviews, implementations, and integrations are
+recorded below. Gate 16's separately reviewed natural-language correction
+remains unimplemented, and Gate 17 remains paused behind that boundary.
+
+### Formal contract-review first verdicts
+
+The maintainer then authorized the required fresh separate top-level reviews.
+Gate 12 reviewer task `019fad21-8a6a-7450-af90-505c0bce53f8` returned
+`Revise` with `G12-RC-001` through `G12-RC-003`: the ordinary-send default had
+not become a decision, old queue/fallback clauses still survived as authority,
+and explicit later selection was not a legal state distinct from an
+undelivered current-work race. The executor has suspended the old clauses and
+defined `editing`, `later_selected`, and `undelivered`. On 2026-07-29 the
+maintainer compared the two errors and chose ordinary busy Enter for the
+reversible, still-unadmitted later draft, with a separately visible configured
+action for current-work delivery. The candidate permits edit, removal, or
+one-winner reclassification before admission and makes every lost current or
+later race truthfully `undelivered` without automatic retarget. All three
+findings were addressed in the executor diff, but the first exact-diff closure
+pass kept `G12-RC-002` open: one earlier completion-lost-steer clause still
+authorized a new queued start identity. The executor has now replaced that
+clause with explicit `undelivered`/no automatic start-steer-retry-retarget
+semantics, tightened the queue identity text and race table, and fenced the
+matching historical `G12-IE-005` fallback. The same reviewer returned
+second-pass exact-diff `Accept` with no blocker. Implementation authority is
+limited to the primary-TUI busy-input default/discoverability/process-local
+delivery-state repair and focused replacement evidence; all strict Turn,
+HTTP/SDK, and unaffected lifecycle mechanics remain retained.
+
+The scoped Gate 12 implementation candidate changes only the TUI prompt
+composer, stash dialog, keybind description, and focused TUI/keymap tests. Busy
+Enter selects an editable process-local later draft without admission; the
+configured current-response action targets exact A. Promotion waits for settled
+idle plus no active Turn. A transient terminal-before-idle state waits, B
+appearing first becomes `undelivered` with zero dispatch, and an already-issued
+strict start or steer that loses a server race preserves the full payload
+without retry or retarget. Executor integration review found and repaired the
+terminal-before-idle counterexample after the first passing candidate.
+
+The original reviewer's first implementation/evidence pass returned `Revise`
+with `G12-RC-IE-001` and `G12-RC-IE-002`. The first finding showed that two
+IME-flush timers deferred target/intent capture, so B could replace A before the
+busy submission acquired meaning. The second showed that asynchronous editor,
+paste, and dialog operations begun before the delivery claim could resume after
+the claimed snapshot and mutate or lose the draft/stash. The repaired candidate
+synchronously captures Session, exact target, delivery intent, and prior
+selection; claims the composer before deferring only the IME text flush; uses an
+edit revision to reject stale asynchronous continuations; and guards stash
+removal at the dialog boundary.
+
+The next exact-diff pass closed `G12-RC-IE-002` but kept
+`G12-RC-IE-001` open. Its decisive trace completed terminal A, start B,
+terminal B, and idle before `runSubmission`; observing only the final active
+Turn then lost the fact that B had competed and incorrectly promoted after it.
+The second repair increments a prompt-local same-Session revision on every
+`turn.started`, captures it with A, carries it in `later_selected`, and compares
+it before materialization and promotion. B's start therefore remains
+observable after B terminates. Fresh `packages/tui` evidence reports 19 focused
+tests / 58 assertions and package typecheck passing, including the full
+B-start/B-terminal/idle-before-both-timers oracle. The exact tracked four-file
+implementation diff hashes to
+`2e027dc139174ad2ff7530e2d4073814e7fe395e`; the focused untracked test blob
+hashes to `0e601d722d68eb254862241b6b3cbf0db65b5886`. The original reviewer returned
+second implementation/evidence exact-diff `Accept` with no blocker,
+independently reproduced 19 passes / 58 assertions, and closed
+`G12-RC-IE-001/002`. The Gate-record binding at review was
+`ca857807ae15fbb2c34215ee586c050522cea22e`. Scoped implementation/evidence is
+accepted and integrated at
+`c5ea10b8ab0f573fef03b5066bbcb117a9e0a502`; the retained strict Turn,
+HTTP/SDK, and historical core evidence remain unchanged.
+
+Gate 14 reviewer task `019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned
+`Revise` with three P1 blockers and one P3 strengthening. It required a closed
+versioned union for legacy confirmation, direct request, and exact source-bound
+proposal acceptance; capability settlement separate from semantic authority;
+immutable symmetric stable `from`/`to` locators rather than current-state
+reconstruction; and a frozen-current-V12-to-V13 migration preserving legacy
+replay and pending recovery. The executor's current candidate makes those
+choices and fences the executable-looking historical confirmation oracle. It
+was reviewed as exact Gate 14 diff
+`a54c2d4ec7494fa6ffef3f94405204706ff149a5` within working-tree diff
+`12d907c86c8e50771218ba322ccc7201a190058a`; the original reviewer returned
+`Accept` with no blocker for the scoped semantic-authorization union, immutable
+locator/replay choice, V12 classification/migration, and unchanged route-anchor
+boundary.
+
+The subsequent read-only implementation map then falsified the completeness of
+that contract's V2 capability recovery. The existing order durably admits a
+physical invocation before permission, while permission request/reply is
+process-local, leaving three unowned crash windows: before capability
+evaluation, after prompt issue but before reply, and after reply but before the
+final effect transaction. A narrow corrective amendment now distinguishes
+physical admission, durable policy outcome, durable prompt issue, durable
+learner reply, and final effect settlement; adds terminal `not_evaluated`;
+defines request ID if and only if issue is durable; commits issue before live
+publication and reply before waiter release; and recovers without re-prompting
+or applying an uncommitted effect. The accepted semantic union, stable
+locators, legacy V12 classification, and route-anchor boundary remain retained.
+The same reviewer returned `Revise` on the amendment's first closure pass with
+`G14-CAP-001`: durable effective-`ask` evaluation could precede issue, while
+neither `not_evaluated` nor `prompted_abort` truthfully owned that crash point.
+The executor accepted the finding and made effective-`ask` evaluation plus issue
+one atomic durable transition before live publication; no durable unissued-ask
+state exists. The matching oracle now crashes after in-memory ask selection but
+before that atomic commit and requires `not_evaluated` with no request ID. The
+same reviewer returned exact-diff `Accept`, closed `G14-CAP-001`, and found no
+new blocker. That then-accepted candidate is bound to Gate 14 diff
+`b823d8228aff342f697baff92a59ec8ca4bfaa5d`; related Gate 14 clauses were
+reviewed within seven-document diff
+`242598c71180fb72adf4828f1f954f8a1d4e6b3f`, excluding concurrent unrelated
+Gate 12 status bookkeeping.
+
+A deeper implementation map then falsified five narrower assumptions while
+retaining the direct/source-bound semantic split, capability lifecycle,
+current-state-free replay, and route-anchor behavior:
+
+- V12 `applied`, `already_applied`, `no_change`, `error`, and `admitted` rows do
+  not uniformly contain confirmation/effect evidence or a truthfully issued
+  permission request. Their command reservation identity must remain distinct
+  from any referenced effect-confirmation identity.
+- V12 change/clear did not record authorization-time `from` Course version or
+  working selection; predecessor or current state cannot fill the gap.
+- `accepted_proposal_v2` needs one real host-bound producer. The revised
+  contract uses a reserved non-mutating, host-prepared completed Tool Part and
+  rejects plain text, unsealed/copied-without-lineage, and provider-executed
+  proposal calls.
+- Genuinely new V2 candidate authorization is reserved atomically with physical
+  admission; final settlement revalidates and seals an effect link rather than
+  creating the authorization for the first time.
+- The V12 no-effect validator is physically shared with route anchors. V13 may
+  replace that wrapper for default V2 only while preserving the route branch,
+  route-owned DDL, rows, and behavior.
+
+The Gate 14 record now contains that exact amendment. Original reviewer task
+`019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned second narrow exact-diff
+`Accept` with no blocker. The accepted bindings are Gate 14 diff
+`47679d327716ccc7394b2e77393faee76ad20576` and related seven-document diff
+`ebf8daa9047595ce5c2eac5eca77580caef0aa88`, excluding Gate-12-only
+bookkeeping. Scoped implementation authority became available for this contract
+at that review point; no replacement implementation or evidence was accepted.
+
+The subsequently dispatched single top-level Gate 14 recovery executor found a
+sixth, narrower contract/implementation collision before changing code. Accepted
+replay clauses require a committed same-address duplicate/conflict to settle
+before current-owner and capability checks, but the five-seam amendment also
+required every new V2 physical invocation to reserve a complete exact
+current-owner authorization snapshot and later capability outcome. If target B
+has been withdrawn after occurrence O already committed target A, a new O→B
+invocation must return `semantic_conflict` without validating B, yet no truthful
+exact B locator exists for the mandatory authorization row. This is tracked as
+`G14-RC-IE-SEM-001`.
+
+The owning contract candidate preserves Gate 8 universal physical admission and
+splits the later domain disposition: a pre-existing semantic duplicate/conflict
+atomically settles the new physical invocation as `semantic_terminal_v2`
+without candidate authorization, capability policy, request ID, or
+`not_evaluated`; only a genuinely new `candidate_v2` atomically reserves one
+direct/source-bound authorization arm and enters the accepted capability
+lifecycle. A candidate that becomes duplicate/conflict only during the final
+recheck retains its truthful earlier authorization/capability history. The
+original five seams, route behavior, immutable locator/replay, and atomic
+ask-plus-issue repair remain retained. The executor made no new edits, staging,
+or commit. The pre-existing large Gate 14 working-tree diff remains an orphaned,
+unaccepted candidate mixed with accepted Gate 12 changes; it must be classified
+and recovered rather than bulk-discarded. Implementation authority was
+suspended pending original reviewer task
+`019fad21-ff78-7920-bec4-9d06b2ff7b2c`.
+
+That original reviewer returned third narrow exact-diff `Accept` with no
+blocker and closed `G14-RC-IE-SEM-001`. It accepted the closed disposition
+union described above while retaining the prior five seams, direct versus exact
+source-bound candidate authorization, semantic/capability separation, atomic
+ask-plus-issue recovery, immutable current-state-free locator/replay, unchanged
+route admission/meaning/CAS/history/correction, and Gate 8 order. The accepted
+candidate is bound to HEAD `1f4889edced96e9df3dff6aec279db57b3059586`,
+Gate 14 document diff `5ae66e8aa5d8bd8783b4be05e64f4c65db915b2e`,
+and related seven-document diff
+`852a1a5034f838715ac0f46b0b2b52f810f095d8`, excluding unrelated Gate 12
+bookkeeping. Scoped Gate 14 implementation authority is restored for this
+amended contract only. The orphaned/partial implementation and its evidence
+remain unreviewed and unaccepted.
+
+The single top-level recovery executor then classified and reconciled the
+orphaned package diff under that accepted amendment without staging or
+committing. Its first 2026-07-30 implementation/evidence candidate contained 49
+tracked and eight untracked Gate 14 package paths, with tracked-diff SHA-256
+`56ea1c0d16f1c43deddb6e4bc56323bbf9344bc9efff75a8236c4c731298708c`
+and 57-path manifest SHA-256
+`6c94c5d5e22ad1ab8fe473faee247ef54e7e8728bb081ea0e8feeeb5a3d1ca23`.
+Those bindings are rejected provenance, not the current candidate.
+
+The original reviewer returned `Revise` with `G14-IE-STO-001`: final
+semantic-first candidate race settlement was illegal after non-allow
+capability history; `G14-IE-STO-002`/`G14-IE-RT-001`: a migrated
+`legacy_v1` admitted row with durable Turn/Input identity could not reach
+truthful interrupted recovery; and `G14-CAR-001`: public wire, presenter, and
+database shapes still admitted V1-partial endpoints for V2 authorization or
+acknowledgement. It also reported nonblocking `G14-IE-RT-002`: proposal Part
+publication could commit before notification interruption while generic Turn
+audit recorded failure.
+
+The same top-level executor repaired those findings without changing the
+accepted contract, Gate 12, or route-owned behavior. V13 now admits both final
+race outcomes after every truthful capability terminal state while preserving
+candidate history; production startup recovers exactly the migrated V1
+admitted shape; V1/V2 endpoints are closed and discriminated across types,
+wire, presenter, table checks, insert triggers, and the versioned migration;
+and exact durable proposal/Part reconciliation prevents a false generic Turn
+failure after post-commit notification interruption. Frozen-V12 and fresh V13
+definitions are identical, raw V12 bytes remain unchanged, partial V1 history
+remains readable, exact set/change/clear and later same-name replay pass, and
+the shared route seam remains equivalent.
+
+The original reviewer's second implementation/evidence exact-diff pass closed
+`G14-IE-STO-001`, `G14-IE-STO-002`/`G14-IE-RT-001`, `G14-CAR-001`, and
+nonblocking `G14-IE-RT-002`, then returned `Revise` solely for
+`G14-IE-RT-003`. Live permission abort and startup recovery derived or replayed
+truthful capability history but settled interrupted/permission error without
+normal settlement's semantic duplicate/conflict recheck.
+
+The same top-level executor repaired that production divergence without
+changing the contract, storage schema, migration, normal settlement semantics,
+Gate 12, or route ownership. Recovery now derives or replays capability truth
+first and then calls the same semantic-race settlement helper as the normal
+candidate path. Production-entrypoint matrices cover live `not_evaluated` and
+issued/no-reply `prompted_abort`, plus every startup policy/reply outcome,
+against both duplicate and conflict; no-winner durable allow remains
+interrupted and effect-free.
+
+The final repaired candidate contains 50 tracked and ten untracked Gate 14
+package paths. Its raw tracked binary diff from accepted base HEAD
+`1f4889edced96e9df3dff6aec279db57b3059586` has SHA-256
+`85fef1a28edfaf7fc4aef490a3d6de6d97639d4edefd117cfa4e7fbc71f57106`;
+its ordinal complete 60-path Git-blob content manifest has SHA-256
+`7d0b43bf7aeb69b29b3bdf75db67592aeffbc9efd9f043c880875768676d946f`.
+Core, Schema, SDK, and TUI package typechecks pass. OpenCode typecheck reaches
+only unchanged TUI-plugin fixture errors. The Gate record owns the exact
+commands, results, exclusions, sorting convention, and classification.
+
+Original reviewer task `019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned final
+exact-diff `Accept`, closed `G14-IE-RT-003`, retained every previously closed
+finding and boundary, and granted scoped integration authority. It reproduced
+live-abort 1/50, startup recovery 1/192, full runtime 43/763, Core typecheck,
+and diff check. The exact implementation/evidence was integrated at
+`80fde20121c4b98ef9c7514ad7e33cae71c7e6b0`. This closure grants no Gate 16 or
+Gate 17 authority.
+
+Both producer tasks explicitly returned completion callbacks to this source
+task. Gate 14's first callback closed the then-current contract; its later
+implementation mapping caused the narrow recovery reopen above, and its
+amendment callback first returned `Revise` for `G14-CAP-001`, then returned
+`Accept` after the atomic ask-plus-issue repair. Gate 12's first callback
+identified the single residual above and its second callback closed the
+repaired contract; its implementation/evidence callback then identified
+`G12-RC-IE-001/002`. The next callback closed `IE-002` but retained `IE-001`
+for the complete intervening-B cycle; the final callback closed that residual
+and accepted the scoped implementation/evidence. Gate 14's deeper mapping then
+caused the five-seam amendment above; its original reviewer callback accepted
+that amendment with no blocker. The later top-level recovery callback exposed
+`G14-RC-IE-SEM-001`; the third narrow original-reviewer callback accepted its
+repair and restored scoped implementation authority. Two implementation/evidence
+`Revise` callbacks then exposed and closed the storage, recovery, carrier,
+proposal-audit, and final `G14-IE-RT-003` production-entrypoint gaps; the last
+callback returned `Accept` with no blocker and authorized the integration
+recorded above. None of these verdicts changes the unaffected accepted
+boundaries recorded above.
+
 ## 2026-07-15 post-Gate-7 audit provenance
 
 Current disposition is owned only by `docs/README.md`. This section records the

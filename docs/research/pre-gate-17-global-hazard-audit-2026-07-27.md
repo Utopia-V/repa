@@ -1,17 +1,70 @@
 # Pre-Gate-17 global hazard audit
 
-Status: Closed on 2026-07-28 at the bounded pre-Gate-17 project-health,
-authority-reconstruction, inherited-pollution, and working-tree-classification
-boundary. Two fresh read-only passes found no P0-P3 after the renewed evidence
-was integrated. This is not a claim of permanent whole-project health, release
-readiness, Gate 17 authorization, or a proved integrated learning loop. The
-accepted corrective snapshot was later integrated at
-`9e91d43c629b66d65c8741e342bca7cf05de5667`; Gate 17 grill, contract
-derivation, and implementation remain paused behind Gate 16. Its later separate
-review accepted the natural-language corrective contract, but implementation
-and closing evidence remain open. This record owns audit method,
-findings, and repair disposition; it does not replace product foundations,
-revise an ADR by itself, or make a future Gate contract authoritative.
+Status: Open after the 2026-07-29 product-flow follow-up exposed two current
+primary-TUI product defects. The 2026-07-28 close remains valid for authority
+reconstruction, inherited-pollution, working-tree classification, and the
+distinct ownership of Course/Session/context/later-draft/exact-Turn meanings.
+Three fresh read-only product, architecture, and roadmap passes then confirmed
+`P17-F16`; its owning product, architecture, ADR, roadmap, status, and
+provenance correction passed an independent exact-diff review. Two subsequent
+bounded user-flow audits confirmed `P17-F17` and `P17-F18`: Gate 12 sends
+ordinary busy-TUI correction to a later root Turn, and Gate 14 redundantly
+re-authorizes an explicit default-Course request while still permitting an
+ambiguous same-name projection. Their owning architecture, roadmap, status, and
+Gate records now carry corrective candidates, but the material Gate-contract
+revisions required fresh separate top-level review before implementation. Both
+formal reviewers first returned `Revise`; the maintainer then
+settled Gate 12's user-visible default/error policy as ordinary busy Enter to
+the reversible later draft plus a separately visible current-work action. Gate
+12's first closure pass left one stale raced-out-steer fallback clause, now
+repaired; the same reviewer accepted the second exact diff. Gate 14's original
+reviewer likewise accepted the repaired authorization/locator/migration
+contract. Subsequent implementation mapping first exposed three missing V2
+capability crash windows, so Gate 14's narrow
+capability-lifecycle/recovery amendment returned to that reviewer. Its first
+closure pass returned `Revise` for `G14-CAP-001`, the durable
+effective-`ask`-before-issue gap; the repaired candidate now makes ask
+evaluation and issue atomic. The same reviewer returned exact-diff `Accept` and
+closed the finding. Deeper code/data mapping then disproved five remaining
+assumptions: uniform V12 confirmation/issued-request evidence, exact historical
+`from` versions/selections, an implicit proposal producer, first authorization
+at final settlement, and literal preservation of a trigger shared with route
+anchors. The Gate 14 record now repairs those seams without reopening the
+direct/source-bound split, capability lifecycle, current-state-free replay, or
+route behavior. The original reviewer returned second narrow exact-diff
+`Accept` with no blocker and made scoped implementation authority available at
+that review point.
+The later single top-level recovery executor then found
+`G14-RC-IE-SEM-001`: committed semantic replay/conflict was required to win
+before live-owner checks, while every new V2 physical invocation was also
+required to carry a complete live-owner authorization/capability history. A
+withdrawn conflicting target proves those requirements cannot both hold. The
+owning correction keeps universal physical admission, gives a pre-existing
+semantic duplicate/conflict an atomic pre-authorization terminal disposition,
+and reserves full authorization/capability only for genuinely new candidates.
+The original reviewer returned third narrow exact-diff `Accept`, closed
+`G14-RC-IE-SEM-001`, and restored scoped implementation authority; the earlier
+accepted five seams remain retained. The single top-level recovery executor
+then repaired the implementation/evidence boundary through two formal
+`Revise` passes. The final reviewer callback closed `G14-IE-RT-003`, accepted
+the exact candidate, and the result is integrated at `80fde2012`.
+Gate 12's first implementation/evidence
+pass then found two real submission races: delayed target/intent capture and
+pre-claim asynchronous mutations. The candidate now captures and claims
+synchronously and invalidates stale editor/paste continuations. The next review
+closed that mutation boundary but showed that a complete intervening B cycle
+could disappear before deferred selection. A captured monotonic Turn-start
+revision now retains that fact through promotion. The same reviewer returned
+second implementation/evidence exact-diff `Accept`, closed
+`G12-RC-IE-001/002`, and reproduced 19 focused passes / 58 assertions. Scoped
+Gate 12 implementation/evidence is accepted and integrated at `c5ea10b8a`.
+The accepted corrective snapshot
+`9e91d43c629b66d65c8741e342bca7cf05de5667` remains valid for its bounded
+repairs. Gate 17 grill, contract derivation, and implementation remain paused
+behind Gate 16's open implementation/evidence boundary. Gate 12, Gate 14, and
+the accepted audit reconciliation are no longer blockers. This record owns
+audit method, findings, and repair disposition; it does not replace product
+foundations, revise an ADR by itself, or make a Gate contract authoritative.
 
 Date: 2026-07-27
 
@@ -275,8 +328,10 @@ Roadmap 09 now requires:
 - TUI separation among durable state, potential consequence, and actual or
   absent context/plan/action consumption.
 
-This does not require a universal activity/outcome table, a universal
-task-selection engine, or one giant all-feature test.
+This `P17-F04` repair does not by itself require a universal activity/outcome
+table, a universal task-selection engine, or one giant all-feature test. The
+later `P17-F16` finding separately owns representative move-selection and
+re-entry responsibility.
 
 ### `P17-F05`: Gate 17 inherits an unsolved creation and partial-truth boundary
 
@@ -412,8 +467,10 @@ disambiguate; persists one terminal semantic Part in the committing
 transaction; and replays that stored historical acknowledgement rather than
 recomputing it from current state. The original TUI reviewer closed the
 envelope-binding, Goal completeness, canonical-content-anchor, scrolling,
-exact-object, and retained-acknowledgement counterexamples. This is accepted
-candidate evidence, not a new close commit.
+exact-object, and retained-acknowledgement counterexamples. The later
+`P17-F18` finding falsifies only the default-Course locator's same-name and
+post-commit collision coverage; the typed visibility, transaction, replay, and
+other supported locator repairs remain accepted evidence.
 
 ### `P17-F09`: Gate 5 still ships or emits upstream product identity
 
@@ -542,8 +599,9 @@ bootstrap and teaching must continue usefully in a fresh Session without eager
 transcript replay or fabricated progress, and learner confusion or correction
 must materially change the next teaching move without forcing a durable write.
 Bounded real-provider qualification tests the semantic behavior; deterministic
-evidence still owns identity, selection, and no-fabrication claims. No Gate is
-added and Gate 19 remains consumer-earned.
+evidence still owns identity, selection, and no-fabrication claims. This
+`P17-F12` continuity oracle added no Gate and Gate 19 remains consumer-earned;
+the later `P17-F16` finding is a distinct cross-pressure control boundary.
 
 ### `P17-F13`: a bounded falsification review was promoted to global audit closure
 
@@ -661,7 +719,297 @@ not a new product Gate. Individually useful generic package guidance remains
 where current source still supports it; deletion is limited to false queues,
 unowned templates, and scratchpads recoverable from Git history.
 
-## Renewed closure result
+### `P17-F16`: the future route could leave the learner as the Tutor's scheduler
+
+**Violated criteria:** mixed-initiative control, bounded continuity,
+compositional roadmap sufficiency, inspectable consequence, and evolution
+without accidental rigidity.
+
+The 2026-07-28 repair proved one connected feedback trace and two product-floor
+teaching continuities, but it still permitted all future Gates to close while
+no owner had to arbitrate representative pressure from Course/navigation,
+Goal, future attention, planning, retained steering, time, and recent
+Interaction, plus any learner-record/adaptation pressure that Gate 19's
+experiment retained. Gate 18 could project every candidate accurately; Gates
+19–21 could prove their own consumers; Gate 22 could inspect stored state; and
+Gate 23 could pass separate prepared traces. A fresh Session whose learner says
+only `continue` could nevertheless ask the learner to choose the Course, Goal,
+review, plan, route anchor, learner-record response, or recent detour on every
+return. Failure or restart could repeat the same coordination question. The
+books would be correct while the learner remained the routine controller of
+the Learning System.
+
+This is not evidence for a universal selector, classifier, scheduler, graph, or
+durable active-purpose record. The owning product invariant is narrower: Repa
+normally turns the bounded current situation into a useful move, or one
+necessary learning-level clarification, and chooses again after correction,
+failure, restart, or relevant state change. An exact request governs what it
+specifies; a transparent reversible choice should not become an internal-state
+management Turn; learner-owned value, authorization, or unsafe-to-assume
+meaning may still require clarification.
+
+The causally sufficient repair is:
+
+- product origin and the repository checksum now own that low-management
+  responsibility while leaving the implementation mechanism open;
+- architecture separates Gate 18's observer/working-set responsibility from
+  Tutor move selection and failure re-entry;
+- ADR-0013 keeps its demonstrated one-candidate conditional default and records
+  the future evidence owner without claiming that a production
+  multiple-candidate reconsideration trigger has already fired;
+- Roadmap 09 inserts Gate 21A after all still-admitted baseline pressure
+  producers and before the existing Gate 22 inspection boundary, without
+  renumbering Gates 22 or 23; and
+- Gate 23 gains one longitudinal collision oracle that rejects internal-state
+  management Turns, repeated clarification after failure, and scripted
+  single-pressure success.
+
+Gate 21A owns a behavior and evidence boundary, not a preselected structure.
+Its contract must compare relevant ordinary Tutor-LLM, bounded control-only
+model sample, program-policy, mixed, and other evidenced candidates on the same
+representative conflict, correction, cost, and failure cases. No candidate is
+privileged by mechanism category. Gate 21A may close without schema or another
+model call when that candidate wins the comparison. A computed route
+neighborhood or current learning view remains a Gate 18 projection unless a
+distinct durable consumer later earns another owner; seeing the right state is
+not itself the selection result.
+
+### `P17-F17`: busy-TUI delivery choices are hidden and race failures are misclassified
+
+**Violated criteria:** mixed-initiative control, immediate learning value,
+failure/correction truth, and evolution without accidental interaction
+rigidity.
+
+Gate 12 correctly separates strict new-Turn admission, an exact-target steer,
+and an unadmitted process-local later draft. It then accepted a learner-facing
+default without comparing both timing errors or making both actions visible
+before first use: while a Turn is active, ordinary Enter queues the later draft,
+and only an explicit internal steer joins the running work. The production TUI
+implements that decision:
+
+- `packages/tui/src/component/prompt/index.tsx` routes ordinary `submit()` to
+  `start`; while busy it only sets `queuedForNext`, then auto-submits after the
+  current Turn becomes idle;
+- exact current-Turn delivery requires the separately configured
+  `session.steer` binding;
+- before the learner's first busy submission, the footer exposes only
+  interruption; the “next turn / steer active turn” explanation appears only
+  after ordinary Enter has already chosen “later”; and
+- that toast hard-codes `Ctrl+Enter` even though the steer binding is
+  configurable; and
+- a current-work delivery race is relabelled as queued for a new Turn and may
+  enter the automatic later-start path, even though the learner never selected
+  later delivery.
+
+A learner correcting “等等，我说的是右特征向量” during a mistaken explanation
+therefore sees the current prose and tool work continue. The correction becomes
+a later root Turn only after completion and can truthfully disappear if the
+process exits first. That trace proves a discoverability and delivery-choice
+failure, but it does not by itself prove that ordinary Enter must target the
+running Turn.
+
+The pinned Codex comparison demonstrates the mature inverse mapping:
+ordinary Enter delivers now and an explicit queue action keeps work for later.
+Repa need not copy its package or labels, and no new runtime mechanism is
+required, but that precedent does not settle Repa's default. The inverse has its
+own counterexample: an independent next question typed while the response is
+still running can be absorbed into the current Turn's context, budget,
+cancellation, and terminal fate.
+
+The two errors are not equally recoverable. If ordinary Enter selects later,
+an urgent correction may wait, but the payload remains unadmitted, editable,
+removable, and eligible for explicit current delivery or interruption. If
+ordinary Enter selects current work, a mistaken independent next question may
+already be durably admitted to the running Turn and cannot be extracted.
+
+The maintainer therefore chose the reversible error policy on 2026-07-29:
+ordinary busy Enter explicitly means “send after this response,” while a
+separately configured action means “add to/correct this response.” The causally
+sufficient correction keeps the accepted strict APIs, presents both actions
+before first use in learner language, allows a later-selected draft to be
+edited, removed, or atomically reclassified to current work, and permits only
+one dispatch path to win. A lost current-work or later-start race preserves the
+complete payload as visibly undelivered without automatic start, steer, retry,
+or retarget; restart still makes no durable-draft claim. No semantic classifier
+silently overrides the learner's explicit delivery choice.
+
+Gate 12 is scoped-reopened only at this primary-TUI default, presentation, and
+focused evidence boundary. ADR-0005/0007, exact Turn identity, safe steer
+promotion, process-local drafts, budgets, child lineage, terminal outcomes, and
+recovery remain accepted. The revised Gate contract requires fresh separate
+top-level review before code changes.
+
+Formal reviewer task `019fad21-8a6a-7450-af90-505c0bce53f8` returned
+`Revise` with `G12-RC-001` through `G12-RC-003`. The repaired candidate now
+suspends every old ordinary-Enter/automatic-fallback oracle and distinguishes
+`later_selected` from an `undelivered` current-work or strict-start race.
+`G12-RC-001` is addressed by the maintainer-owned later default and asymmetric
+reversibility rationale; `G12-RC-002` and `G12-RC-003` are addressed by
+historical fencing and the one-winner state/race contract. The same reviewer
+returned second-pass exact-diff `Accept` with no blocker. Only the scoped
+primary-TUI busy-input/discoverability/process-local delivery-state
+implementation and replacement evidence remain open. The completed candidate
+now waits for settled idle before promotion, turns B-before-promotion into
+`undelivered` without dispatch, and preserves exact current and server-admission
+race payloads without retry or retarget. The first implementation/evidence
+review returned `Revise` with `G12-RC-IE-001/002`: the IME timers also delayed
+capture of A, and asynchronous editor/paste/dialog work could outlive the
+delivery claim. The repair synchronously captures target and intent, claims the
+composer before the text flush, invalidates stale asynchronous continuations,
+and guards stash removal. The next pass closed `IE-002` but retained `IE-001`
+for A-terminal/B-start/B-terminal/idle all occurring before the timers. The
+second repair captures and carries a monotonic same-Session `turn.started`
+revision, so the competing B remains observable after it ends. Nineteen
+focused TUI tests / 58 assertions and package typecheck pass. The original
+reviewer returned second implementation/evidence exact-diff `Accept`, closed
+`G12-RC-IE-001/002`, independently reproduced the focused result, and made
+scoped integration authority available.
+
+### `P17-F18`: Gate 14 turns one low-consequence preference choice into repeated authorization
+
+**Violated criteria:** immediate learning value, mixed-initiative control,
+inspectable consequence, and evolution without accidental rigidity.
+
+Gate 14 classifies the default Course as a local, reversible, correctable,
+low-consequence navigation preference. It nevertheless requires two distinct
+learner acts for every real set/change/clear: the current occurrence must first
+express an explicit request or acceptance, then the runtime forces a separate
+once-only permission prompt even under the baseline allow policy. The
+production runtime sets `requirePrompt: true`; database constraints, receipts,
+migrations, tool guidance, and tests make the permission request and
+confirmation snapshot mandatory.
+
+The counterexample needs no speculative semantic classifier. After the learner
+says “把唯一的《操作系统》设为默认课程,” the Tutor resolves one exact active Course
+and current snapshot, yet Repa asks them to confirm the same choice again. If
+the Tutor first proposed it and the learner answered “行,” current policy
+requires a third affirmative act because that natural-language acceptance
+cannot also be the forced permission approval. The extra action resolves no
+ambiguity, external effect, irreversibility, or learner-owned trade-off. It
+conflicts with ADR-0008's direct path for routine local reversible writes and
+ADR-0003's rejection of habituated low-value confirmation.
+
+The same slice also retains a false exact-presentation claim. Although the
+internal proposal carries the Course identity, the default-Course semantic
+projection renders title and versions without a collision-aware Course
+locator. Two Courses with identical readable titles and working-selection
+labels can therefore produce indistinguishable approval text. The route-anchor
+presenter already has collision-aware locator behavior; default preference does
+not.
+
+Conditional display at commit is not by itself sufficient. If Course A was
+unique when its immutable receipt omitted the ID, then same-named Course B is
+created later, replaying the historical receipt is ambiguous. Recomputing the
+old acknowledgement from current state would violate immutable replay. The
+contract must retain stable exact identity and either present it durably or
+separate immutable historical acknowledgement from an explicitly current
+inspection annotation.
+
+The causally sufficient correction requires semantic learner authorization
+without a Gate-specific second prompt under effective `allow`. A sufficiently
+explicit, complete, uniquely resolved current request supplies that authority.
+Tutor-supplied meaning must be accepted against one exact Assistant
+Message/proposal and complete semantic projection; a bare later “行” cannot be
+bound only to the generated target. Capability permission remains separate:
+effective `ask` may still prompt, and using one complete surface for both
+semantic acceptance and capability permission would require a reviewed
+source-bound transition rather than silently consuming the user's policy.
+This is not a fixed phrase classifier or an internal-ID requirement: model
+judgment may interpret natural language while the host binds
+complete-or-explicitly-truncated candidate coverage, exact selected identity,
+revision, and final owner revalidation.
+Every arm still preserves the exact source occurrence, preference head/version,
+target Course/working-selection snapshot, accepted proposal when applicable,
+physical invocation, capability result, CAS/history, correction, and
+fail-closed revalidation. The immutable projection remains exact under later
+same-name collisions; learners never have to type an internal ID.
+
+Gate 14 is scoped-reopened only at default-Course authorization, readable
+disambiguation, affected migration, and focused evidence. The separate default
+and route-anchor authorities, route-anchor ordinary-permission path, exact
+revision binding, replay, correction, stale failure, and restart truth remain
+accepted. Because the current physical shape mandates a permission request and
+confirmation snapshot, the replacement contract must derive its authorization
+source, capability interaction, stable locator/replay, and forward migration
+before implementation. It requires fresh separate top-level review.
+
+Formal reviewer task `019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned
+`Revise` with three P1 blockers and one historical-prose P3. The repaired
+candidate chose a closed versioned legacy/direct/source-bound authorization
+union, separate capability settlement and truthful V2 request IDs,
+current-state-free locators, and a frozen current-V12-to-V13 migration with V1
+replay/pending recovery and unchanged route behavior. The original reviewer
+then returned exact-diff `Accept`. The subsequent implementation map found that
+the
+contract did not truthfully recover crashes after physical admission but before
+capability evaluation, after prompt issue but before reply, or after reply but
+before final effect settlement. The current narrow amendment therefore keeps
+physical admission, durable policy outcome, prompt issue, learner reply, and
+final effect distinct; defines request ID if and only if issue is durable; and
+recovers without re-prompting or applying an uncommitted effect. The first
+closure pass returned `Revise` for `G14-CAP-001`: a durable effective-`ask`
+decision could precede issue without belonging to any recovery arm. The repair
+makes effective-`ask` evaluation and issue one atomic durable transition and
+adds the matching pre-commit crash oracle. The original reviewer returned
+exact-diff `Accept`, closed `G14-CAP-001`, and found no new blocker. Scoped Gate
+14 implementation was then authorized.
+
+Deeper code/data mapping invalidated five remaining derived claims without
+changing the accepted product behavior. Real V12 classes have row-dependent
+confirmation/effect availability and an opaque command reservation ID rather
+than proof of prompt issue; change/clear lack authorization-time `from` Course
+version and working selection; proposal acceptance needs one host-prepared
+non-mutating completed Tool Part rather than plain text; genuinely new V2
+candidate authorization must be reserved atomically with physical admission
+rather than first written by the effect transaction; and a no-effect trigger shared with route anchors must be
+replaced for default V2 while preserving its route branch and route-owned
+behavior. The revised Gate 14 contract now states those exact invariants.
+The original reviewer returned second narrow exact-diff `Accept` with no
+blocker; scoped implementation authority was available for that contract at
+that review point, while implementation/evidence acceptance and Gate 17
+remained unauthorized.
+
+Top-level implementation recovery then exposed one further contradiction rather
+than a local code defect. The accepted order makes a committed semantic
+duplicate/conflict independent of current target state and policy, but the
+accepted admission clause required the same invocation to first reserve an
+exact authorization-time target locator and later capability outcome. If target
+B was withdrawn after occurrence O committed A, O→B must conflict even though
+no truthful current B locator can be constructed. `G14-RC-IE-SEM-001` therefore
+reopens only this disposition seam. The corrective candidate distinguishes
+universal Gate 8 physical admission, an atomic `semantic_terminal_v2` result
+with no candidate authorization/capability, and a genuinely new `candidate_v2`
+that retains the accepted direct/source-bound authorization and capability
+lifecycle. A candidate that loses a race only at final settlement keeps its
+already truthful authorization/capability history. The original reviewer
+returned third narrow exact-diff `Accept`, closed `G14-RC-IE-SEM-001`, and
+restored scoped implementation authority without accepting the orphaned
+implementation or evidence.
+
+## Current audit disposition
+
+The first 2026-07-29 follow-up reclosed the newly exposed roadmap-composition
+boundary
+without weakening the 2026-07-28 tree and authority result. Three independent
+read-only passes converged on the observer-versus-control gap while disagreeing
+on whether to strengthen Gate 23 or add a separate Gate. Producer/consumer
+ordering settles that topology question: Gate 18 cannot own control while
+remaining an observer, and Gate 22 cannot inspect a representative selection
+that first appears during final integration. Gate 21A therefore owns the
+separate acceptance boundary; Gates 22 and 23 keep their existing identities.
+No production code, existing Gate closure, or Gate 17 implementation authority
+changes from the `P17-F16` documentation correction.
+
+The later user-flow checks changed that broader disposition. `P17-F17` and
+`P17-F18` falsify two earlier accepted product choices and therefore reopen
+bounded parts of Gates 12 and 14. Current documents now state the intended
+stable outcomes and the exact unaffected invariants. Their formal reviewers
+returned `Revise`; Gate 12's repaired contract and implementation/evidence are
+now accepted, while Gate 14's deeper mapping required the five-seam contract
+amendment above and top-level recovery later exposed
+`G14-RC-IE-SEM-001`. Its original-reviewer closure is now accepted. The audit
+cannot close while Gate 14 and Gate 16 implementation/evidence and durable
+integration of the accepted correction set remain open.
 
 The renewed audit returned to the parent symptom rather than treating residue
 cleanup as the objective. Discussion had repeatedly collapsed six distinct
@@ -716,7 +1064,7 @@ current evidence with no P0-P3 finding. Their decisive checks included:
   entrypoints, resolving local action/type references, zero promotional-asset
   references, and a passing `git diff --check`.
 
-This closes only the audit question stated above. Corrective snapshot
+This closed only the 2026-07-28 bounded authority/tree question. Corrective snapshot
 `9e91d43c629b66d65c8741e342bca7cf05de5667` later integrated the
 accepted Gate 5/6/8/10/11/14/15 repairs and Gate 16's TUI repair. Gate 16's
 natural-language amendment later passed fresh separate top-level review, but
@@ -735,17 +1083,61 @@ separately disposed.
 - Gate 11 already limits its first representation implementation to a pinned
   local PDF text-layer producer and supported image/PDF multimodal input. Its
   retained domain claim is not universal material-format or OCR support.
-- The released-v1 editable TUI draft queue and explicit steer are input-delivery
-  mechanics around a running Turn. A draft for the next root Turn is not yet
-  admitted; an exact-target steer becomes durable only when promoted into the
-  running Turn. Neither is evidence for a durable macro-learning activity,
-  retained policy, or a second learning queue owner.
+- The released-v1 editable TUI draft and exact-target steer remain distinct
+  input-delivery mechanics around a running Turn. A draft for the next root
+  Turn is not yet admitted; an exact-target steer becomes durable only when
+  promoted into the running Turn. Neither is evidence for a durable
+  macro-learning activity, retained policy, or a second learning queue owner.
+  Their strict semantics are healthy; `P17-F17` reopens only which action
+  ordinary busy-TUI send chooses and how that choice is exposed.
 
 ## Current repairs
 
-- `docs/README.md` records the bounded audit closure, the integrated corrective
-  snapshot, and the remaining Gate 16 natural-language implementation/evidence
-  barrier rather than blocking Gate 17 on the now-closed parent health question.
+- Product origin, ADR-0013, architecture, Roadmap 09, repository guidance, and
+  provenance now assign representative Tutor move selection and failure
+  re-entry to the Learning System without preselecting a controller shape.
+  Gate 21A owns that later acceptance boundary; existing Gate 22/23 meanings
+  remain intact, and that bounded `P17-F16` correction did not itself reopen an
+  earlier Gate.
+- Architecture, Roadmap 09, the Gate 12 record, and the status/provenance map
+  now keep strict Turn mechanics while requiring learner-facing current-work
+  and later-delivery actions before first use. Formal review separated explicit
+  `later_selected` from truthful `undelivered` race state and removed stale
+  historical queue/fallback authority. The maintainer chose ordinary busy Enter
+  for the reversible later draft and a separately visible configured action for
+  current work. The first closure pass exposed one residual fallback clause;
+  after that clause and matching historical evidence were fenced, the original
+  reviewer returned second-pass exact-diff `Accept`. The scoped implementation
+  and replacement-evidence candidate includes terminal-before-idle and
+  B-before-promotion traces. Its first implementation/evidence pass exposed
+   delayed target capture and stale asynchronous mutation. The mutation finding
+   closed; a residual complete-B-cycle trace now uses a captured Turn-start
+   revision so a finished competitor cannot disappear. The original reviewer
+   returned second implementation/evidence exact-diff `Accept`, closed both
+   findings, and made scoped integration authority available.
+- Architecture, Roadmap 09, the Gate 14 record, and the status/provenance map
+  now remove the Gate-specific duplicate prompt under effective `allow` while
+  preserving capability `ask`, require Tutor-supplied meaning to cite an exact
+  accepted proposal, and require immutable replay to stay exact after later
+  name collisions. The formal-review repair chooses a closed versioned
+  authorization/capability union, receipt-derived symmetric stable locators,
+  and frozen-V12-to-V13 migration; the original reviewer returned exact-diff
+   `Accept` for that core. Later implementation mapping exposed three omitted V2
+   capability crash windows; the lifecycle/recovery amendment's first closure
+   pass then exposed `G14-CAP-001`. Its repaired atomic ask-plus-issue transition
+   received exact-diff `Accept`. Deeper mapping then exposed row-dependent V12
+   confirmation/request/locator availability, the missing proposal producer,
+   contradictory authorization timing, and the shared route/default trigger.
+   The original reviewer accepted the five-seam amendment with no blocker.
+   Top-level recovery then exposed `G14-RC-IE-SEM-001`, so the final design
+   separates pre-authorization semantic terminals from genuinely new candidate
+   authorization/capability. The original reviewer accepted that amendment;
+   after two implementation/evidence repair passes, it accepted the exact
+   implementation and integration is fixed at `80fde2012`.
+- `docs/README.md` records the bounded 2026-07-28 authority/tree closure, the
+  integrated corrective snapshot, the accepted `P17-F16` roadmap correction,
+  and Gate 16 as the sole current pre-Gate-17 barrier rather than treating any
+  earlier bounded close as permanent parent-project health.
 - `AGENTS.md` now distinguishes revision ownership from technical correctness,
   so a later agent cannot use authority order to conceal a falsified decision.
 - Gate 16's volatile status, Gate record, and fork ledger now preserve its
@@ -753,9 +1145,10 @@ separately disposed.
   natural-language implementation/evidence boundary reopened after fresh
   contract acceptance.
 - Gate 5, Gate 8, Gate 10, Gate 11, Gate 14, and Gate 15 records preserve their
-  historical reviews and record the common corrective integration that closes
-  the falsified build, outward-identity, permission, physical, or primary-TUI
-  layers.
+  historical reviews and the common corrective integration. It closes the
+  affected build, outward-identity, permission, physical, and generic/hidden
+  primary-TUI defects; Gate 14's later default-authorization and exact-locator
+  counterexamples are separately reopened by `P17-F18`.
 - Gate 6 and Gate 8 now own the cross-Gate trigger-versioning and
   shared-settlement dependency corrections instead of leaving them as
   ownerless infrastructure risks.

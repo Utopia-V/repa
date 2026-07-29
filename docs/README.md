@@ -1,20 +1,105 @@
 # Repa documentation
 
-Status: the bounded pre-Gate-17 first-principles audit closed on 2026-07-28
-after two fresh read-only passes accepted the reconstructed authority chain,
-macro-semantic separation, default product composition, inherited-material
-classification, and working-tree accounting with no P0-P3 finding. The audit
-began because ordinary discussion had collapsed new-versus-continuing Course
-identity, Session continuation, bounded context reconstruction, a next-Turn
-draft, and an exact running-Turn steer. Closing it means those distinctions and
-their owners can now be rebuilt from the current tree; it does not mean the
-project is permanently healthy, release-ready, or authorized to implement
-Gate 17. Its accepted local findings temporarily scoped-reopened Gate 5 at its
-active build, outward-identity, permission, and product-surface boundaries;
-Gate 6 at trigger migration/version parity; Gate 8 at the current
-shared-substrate and TUI-result boundaries; Gates 10/11/14/15 at their
-primary-TUI implementation/evidence boundaries; and Gate 16 for both TUI and
-natural-language admission defects.
+Status: the pre-Gate-17 first-principles audit is open after a 2026-07-29
+primary-flow follow-up found two current accepted-product defects. The bounded
+2026-07-28 close remains valid for authority reconstruction, macro-semantic
+separation, inherited-material classification, and working-tree accounting:
+new-versus-continuing Course identity, Session continuation, bounded context
+reconstruction, a later draft, and an exact running-Turn input still have
+distinct owners. Its integrated Gate 5/6/8/10/11/15 and Gate 16 TUI repairs,
+plus the unaffected typed visibility/replay portions of Gate 14, remain valid at
+`9e91d43c6`; exact default-Course disambiguation is now explicitly outside that
+accepted subset. The bounded result never proved permanent project health,
+release readiness, or Gate 17 implementation authority.
+
+On 2026-07-29, a follow-up product-flow audit reopened and reclosed one
+different bounded question: the future route could satisfy its existing traces
+while leaving the learner to arbitrate Course, Goal, future-attention,
+planning, steering, and recent-Interaction candidates. Product origin,
+ADR-0013, architecture, Roadmap 09, repository guidance, and audit provenance
+now assign representative Tutor move selection and failure re-entry to the
+Learning System while leaving mechanism choice evidence-led rather than fixing
+a model/program split. Roadmap 09 inserts Gate 21A before the existing Gate 22
+TUI and Gate 23 product-loop boundaries without renumbering them. This
+documentation correction changes no production code, earlier Gate close, or
+Gate 17 implementation authority.
+
+The continuing follow-up then tested those meanings from the learner's actual
+control surface. It found that Gate 12 maps ordinary busy-TUI send to a later
+root Turn, so a natural correction misses the model/tool work it is trying to
+change unless the learner already knows the internal steer command. Comparison
+with the inverse default showed that the errors are not equally recoverable:
+the later draft remains unadmitted and correctable, while an accepted current
+steer cannot be extracted from the running Turn. The maintainer therefore
+retains busy Enter as an explicitly labelled later action and requires the
+current-work action to be visible before first use. Gate 14 also forces a
+Gate-specific second
+approval after an explicit low-consequence default-Course request even under
+effective `allow`, while its default-Course projection can become
+indistinguishable after a later same-name collision. Gate 12 is therefore
+scoped-reopened only at its primary-TUI delivery default, discoverability, and
+evidence boundary. Gate 14 is
+scoped-reopened only at default-Course authorization, readable
+disambiguation, migration, and affected evidence. Their strict Turn mechanics
+and separate default/route-anchor authorities remain accepted. Gate 12's formal
+reviewer closed its default choice and new state/oracle shape but returned
+`Revise` on the first closure pass because one old raced-out-steer fallback
+clause survived; after that exact residual was repaired, the same reviewer
+returned second-pass exact-diff `Accept`.
+Gate 14's formal reviewer returned exact-diff `Accept` after the repaired
+contract chose a closed versioned authorization union, separate capability
+settlement, receipt-derived locators, and a frozen-V12-to-V13 migration. A
+subsequent implementation map exposed three omitted V2 crash windows between
+physical admission, capability evaluation, durable prompt issue/reply, and
+final effect settlement. The original reviewer's first closure pass returned
+`Revise` for `G14-CAP-001`; the atomic ask-evaluation-plus-issue repair then
+received exact-diff `Accept`. Deeper code/data mapping subsequently falsified
+five remaining implementation-level assumptions: V12 rows do not uniformly
+contain confirmation or issued-request evidence, legacy `from` versions and
+working selections were not recorded, no real host-bound proposal producer had
+been selected, admission and final settlement both appeared to create
+authorization, and one no-effect trigger is physically shared with route
+anchors. Gate 14's contract was therefore narrowly amended again. Its original
+reviewer returned second narrow exact-diff `Accept` with no blocker and made
+scoped implementation authority available for that contract at that review
+point. The
+direct/source-bound distinction, separate capability lifecycle,
+current-state-free replay, and route-anchor behavior remain accepted. The later
+single top-level recovery executor then found that the accepted text
+simultaneously made committed semantic duplicate/conflict precede live
+owner/policy checks and required every V2 physical invocation to reserve a
+complete live-owner authorization/capability record. A withdrawn conflicting
+target makes that conjunction impossible. Gate 14 is therefore narrowly
+contract-reopened again at this one semantic-terminal/candidate-admission seam.
+The original reviewer returned third narrow exact-diff `Accept`, closed
+`G14-RC-IE-SEM-001`, and restored scoped implementation authority for the
+amended contract. The five earlier seams and the retained boundaries above were
+not reopened.
+
+The formerly mixed Gate 12/Gate 14 working tree has been separated and durably
+integrated. Gate 12's independently accepted primary-TUI delivery correction is
+fixed at `c5ea10b8a`. Gate 14's single top-level executor recovered the orphaned
+candidate, repaired the candidate-race constraints, migrated-admitted recovery,
+V1/V2 locator boundary, proposal-audit interruption, and finally
+`G14-IE-RT-003`'s live-abort/startup semantic-winner bypass. Original reviewer
+task `019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned final exact-diff `Accept`
+with no blocker and granted scoped integration authority. The accepted Gate 14
+implementation/evidence is fixed at `80fde2012`; the rejected intermediate
+bindings remain provenance only.
+
+Gate 12's first corrective implementation/evidence pass returned `Revise` for
+two admission races:
+busy Enter captured A only after the IME timers, and asynchronous
+editor/paste/dialog work could resume after the delivery claim. The repaired
+candidate captures target and intent synchronously, freezes competing composer
+mutations, and returned to the original reviewer. That pass closed
+`G12-RC-IE-002` but kept `G12-RC-IE-001` open because B could start and finish
+inside the delayed IME window. A captured monotonic `turn.started` revision now
+remembers that full competing cycle and makes the draft `undelivered`. The same
+reviewer returned second implementation/evidence exact-diff `Accept` with no
+blocker after reproducing 19 focused passes / 58 assertions.
+`G12-RC-IE-001/002` are closed, the scoped implementation/evidence is accepted,
+and integration is fixed at `c5ea10b8a`.
 
 Gate 17 has a maintainer-decision draft, but its engineering contract is
 incomplete, has not passed independent contract/theory review, and authorizes
@@ -31,7 +116,9 @@ complete-or-explicitly-truncated command-specific resolution provenance; the
 same reviewer retested the repair and returned `Accept`. That amendment is now
 implementation authority, but Gate 16's corrective implementation and closing
 evidence remain open. The current control point is therefore Gate 16 corrective
-implementation planning. Gate 17 grill and derivation remain paused behind it.
+implementation/evidence. Gate 17 grill and derivation remain paused behind that
+single open correction; Gate 12, Gate 14, and the accepted audit reconciliation
+are no longer blockers.
 Documentation reconciliation and inherited-material classification are
 current evidence, not proof against future counterexample. “Accepted” records
 a decision and its provenance; it is not a correctness axiom.
@@ -66,12 +153,12 @@ in the [inherited-material index](inherited/README.md).
 | 9. [Source and Artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md) | Adds stable Artifact identity, exact observed revisions, location and availability history, provenance, and correction. | Closed at implementation commit `41db7c292`. |
 | 10. [Content-root authority](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md) | Adds approved roots, bounded observation, separate mutation authority, and exact Gate 9 admission. | Closed again at corrective integration `9e91d43c6`. The primary TUI shows the exact canonical anchor, relative path, operation, one-shot scope, rights, and warning before approval and keeps the committed result visible afterward. Commit `fb6ed5763` remains historical provenance; the domain authority and Windows/NTFS evidence scope are unchanged. |
 | 11. [Readable representation lineage](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md) | Adds optional immutable readable derivations with truthful conversion, drift, availability, and bounded-read semantics. | Closed again at corrective integration `9e91d43c6`. Typed conversion outcomes are default-visible in TUI and direct-run, while one domain-owned v12 failure-code tuple keeps the TypeScript API, validator, and trigger vocabulary in parity. Commit `bdbfa0c05` remains the historical closed snapshot. |
-| 12. [Durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md) | Makes one admitted root request begin a finite durable Turn that may later admit exact-target steers, with exact model/tool membership, budgets, child lineage, terminal truth, and recovery. | Closed at implementation commit `80f5fa30a`. Drafts queued for the next Turn remain unadmitted input-delivery state, not macro-learning state. |
+| 12. [Durable Turn lifecycle](research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md) | Makes one admitted root request begin a finite durable Turn that may later admit exact-target steers, with exact model/tool membership, budgets, child lineage, terminal truth, and recovery. | **Closed again at corrective integration `c5ea10b8a`.** The strict start/steer, exact-target race, lifecycle, and recovery implementation at `80f5fa30a` remains accepted. Formal reviewer `019fad21-8a6a-7450-af90-505c0bce53f8` accepted the corrective contract, then found and closed `G12-RC-IE-001/002`. Busy Enter now captures target/intent and a monotonic same-Session `turn.started` revision synchronously; stale async mutations fail closed, and any intervening B remains an `undelivered` fact after B terminates. Accepted bindings were tracked diff `2e027dc139174ad2ff7530e2d4073814e7fe395e` and focused-test blob `0e601d722d68eb254862241b6b3cbf0db65b5886`; the reviewer reproduced 19 focused passes / 58 assertions before integration. |
 | 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md) | Adds immutable revision-bound material outlines/selectors and optional neutral alignment to exact Course membership. | Closed at the domain-authority boundary at implementation commit `5e762f833`. Hostile arbitrary-SQL evidence is reclassified and the cross-Gate trigger-migration correction is integrated at `9e91d43c6`; Gate 18 still must not use the observation-writing current-use resolver as a pure context read. |
-| 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md) | Adds a learner-controlled default Course preference and independent exact per-Course route anchors. | Closed again at corrective integration `9e91d43c6`. The presenter derives exact readable Course/View/Revision/Item locators from owner snapshots and effects, shows IDs only when needed to disambiguate, and replays the stored historical acknowledgement rather than recomputing it from current state. Commit `a6b542d59` remains historical provenance. |
+| 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md) | Adds a learner-controlled default Course preference and independent exact per-Course route anchors. | **Closed again at corrective integration `80fde2012`.** The separate default/anchor owners, route behavior, CAS/history, correction, and replay remain accepted. Formal reviewer `019fad21-ff78-7920-bec4-9d06b2ff7b2c` accepted the direct/source-bound candidate split, separate capability lifecycle, semantic-terminal/candidate disposition, exact V2/partial V1 locators, V12 migration/classification, proposal lineage, and recovery semantics. After two implementation `Revise` passes, all storage, migrated-admitted, locator, proposal-audit, and `G14-IE-RT-003` live-abort/startup findings closed. Final accepted bindings were tracked package diff `85fef1a28edfaf7fc4aef490a3d6de6d97639d4edefd117cfa4e7fbc71f57106` and ordinal 60-path manifest `7d0b43bf7aeb69b29b3bdf75db67592aeffbc9efd9f043c880875768676d946f`; the reviewer reproduced live-abort 1/50, startup recovery 1/192, full runtime 43/763, Core typecheck, and diff check. Commit `a6b542d59` remains historical provenance. |
 | 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md) | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, correctable policy state. | Closed again at corrective integration `9e91d43c6`. The shared presenter preserves committed create/replace/retract instruction, scope, normalized expiry/timezone, state/version, relation, and correction guidance across TUI, direct-run, replay, and later provider failure. Commit `03ea74ec4` remains historical provenance. |
 | 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md) | Intended to preserve learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning. | **Reopened only at the natural-language implementation/evidence boundary.** Corrective integration `9e91d43c6` closes the TUI layer. Fresh review first returned `Revise` for `G16-RC-001`, then accepted the repaired contract: open semantic interpretation remains model-assisted while direct contextual resolution requires host-bound, complete, untruncated command-specific provenance. Corrective implementation and evidence have not begun. Commit `69433fc78` remains historical provenance, not current full-Gate acceptance. |
-| 17. [Natural-language learning bootstrap draft](research/opencode-fork-gate-17-natural-language-learning-bootstrap-2026-07-22.md) | Candidate boundary for a deliberate natural-language learning bootstrap that may use existing domain commands and teach in the same Turn. | Maintainer grill remains paused. The prior mandatory-`/learn` decision is under first-principles revalidation because the prefix neither resolves new/continue nor owns macro interruption or domain authorization. Request-bound creation/replay, atomic-versus-staged composition, truthful partial settlement, TUI acknowledgement, anchor consequences, and remote-source provenance are required contract inputs; Session topology, queue/steer, macro continuation, and detour/rejoin remain outside this Gate. Implementation is unauthorized. |
+| 17. [Natural-language learning bootstrap draft](research/opencode-fork-gate-17-natural-language-learning-bootstrap-2026-07-22.md) | Candidate boundary for a deliberate natural-language learning bootstrap that may use existing domain commands and teach in the same Turn. | Maintainer grill remains paused behind Gate 14 and Gate 16 corrective closure plus durable integration of the accepted audit set; Gate 12's corrective implementation/evidence is accepted and is no longer a semantic/evidence blocker. The prior mandatory-`/learn` decision is under first-principles revalidation because the prefix neither resolves new/continue nor owns macro interruption or domain authorization. Request-bound creation/replay, atomic-versus-staged composition, truthful partial settlement, TUI acknowledgement, anchor consequences, and remote-source provenance are required contract inputs; Session topology, queue/steer, macro continuation, and detour/rejoin remain outside this Gate. Implementation is unauthorized. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,

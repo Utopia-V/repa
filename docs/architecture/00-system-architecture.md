@@ -8,6 +8,8 @@ Roadmap completeness and cutover semantics clarified: 2026-07-17
 
 First-principles ownership, provenance, and policy corrections: 2026-07-27
 
+Tutor move-selection and flow-continuity responsibility clarified: 2026-07-29
+
 Status: Accepted architecture baseline under ADR-0012, with runtime lineage and
 native persistence amended by ADR-0014. This document is normative for
 ownership, dependency direction, state authority, and failure boundaries.
@@ -28,11 +30,13 @@ state across courses, workspaces, and Sessions. The inherited and transformed
 Agent runtime is the Tutor's flexible execution arm: it composes an immutable,
 bounded view of relevant state for each model sample, exposes ordinary agent
 capabilities and authorized learning commands, and records the interaction.
-The LLM may research, teach, choose a local move, propose a course, and initiate
-real writes. It does not own the authoritative history, legal transitions, or
-cross-Session continuity. One Repa-native SQLite database owns machine state;
-local files and observed source content remain revision-bound artifacts. No
-daemon runs while the terminal is closed.
+Tutor composition also owns the product responsibility to turn that view into
+a useful current move or a truthful clarification and to choose again after
+failure or changed state. The LLM may research, teach, choose a local move,
+propose a course, and initiate real writes. It does not own the authoritative
+history, legal transitions, or cross-Session continuity. One Repa-native SQLite
+database owns machine state; local files and observed source content remain
+revision-bound artifacts. No daemon runs while the terminal is closed.
 
 In plain language: the program keeps the long-term map and the books; the LLM
 looks at the useful part of that map and does the flexible intellectual work.
@@ -63,7 +67,7 @@ pre-create every future class or table.
 | Product-loop purpose    | Connect goals, course/material position, teaching, learner activity, review, assignments, deadlines, and later continuation.                                      |
 | Owned invariant         | Durable learning meaning survives Sessions independently of model context and remains source-linked, correctable, and legally transitioned.                       |
 | Representative behavior | In a new Session, `continue` receives a compact current learning view, chooses a useful move, and reads exact old material or history only if that move needs it. |
-| Counterexample          | Replaying an old transcript, loading every course node, or trusting an LLM summary as the current learner state.                                                  |
+| Counterexample          | Replaying an old transcript, loading every course node, trusting an LLM summary as current state, or making the learner repeatedly coordinate internal candidates. |
 | Failure/correction      | A failed or stale command commits nothing; a later correction preserves the original source and changes the active projection through a new transition.           |
 
 ## Architecture drivers and evidence
@@ -251,11 +255,65 @@ directory, folder layout, discovered material, Goal/Assignment/planning
 pressure, future attention, and model
 judgment may surface information or a proposed target, but none may change that
 preference.
-Changing it requires an explicit learner request followed by a visible
-confirmation bound to the exact target Course/View and current preference
-revision; only then may a validated command commit the transition. The learner
-can withdraw before commit, and a rejected or stale confirmation changes
-nothing.
+Changing it requires semantic learner authorization, not Tutor initiative. A
+sufficiently explicit current request may supply that authorization; meaning
+supplied by a Tutor proposal requires acceptance bound to that exact proposal.
+The navigation owner does not add another mandatory confirmation under
+effective `allow` merely because the preference is durable. Capability
+permission remains a separate control plane: effective `ask` may still prompt,
+but that reply neither creates semantic acceptance nor replaces the exact
+learner request or source-bound proposal acceptance. Every genuinely new V2
+candidate authorization arm binds and revalidates the exact current preference
+revision and target Course/working-selection snapshot. Its immutable
+acknowledgement retains symmetric stable `from`/`to` identity so later same-name Courses cannot make it
+ambiguous or cause replay to consult today's Course state. Migrated V1 rows
+preserve only recorded identity, version, selection, confirmation, and effect
+facts; unavailable history is explicit and never filled from current state or a
+predecessor transition. A separately labelled current inspection may report
+current availability without rewriting history. The learner may see a stable
+internal identity as secondary disambiguation but never has to type it.
+
+“Sufficiently explicit” is a semantic condition, not a fixed phrase list or a
+requirement that learner text contain internal IDs. A model may interpret the
+current utterance and conversation; the program binds the candidate scope,
+identity, revision, completeness/truncation, permission, and correction
+semantics. Incomplete or genuinely ambiguous resolution widens, clarifies, or
+uses a source-bound acceptance or clarification instead of pretending code
+proved the language. A source-bound proposal is not plain Assistant prose: the
+host seals one exact non-mutating completed proposal Tool Part and immutable
+projection before a later learner occurrence can accept it. Provider-executed,
+unsealed, or copied-without-lineage proposal calls are not authority. Gate 14's
+corrective boundary keeps a closed legacy/direct/source-bound candidate
+authorization union and separate capability settlement. After Gate 8 physical
+identity validation, an already-committed semantic duplicate/conflict settles
+atomically before current-owner or capability-policy checks and creates no
+candidate authorization/capability record. Only a genuinely new V2 candidate
+atomically reserves its authorization with physical admission before permission
+evaluation; final settlement only revalidates and seals the effect link. The
+frozen V12 migration classifies missing confirmation/locator facts without
+invention. Route-anchor meaning, owned
+tables, constraints, trigger branch, and behavior remain unchanged, although a
+physically shared validation trigger may be replaced solely to admit default
+V2. The Gate 14 record owns the exact reviewed representation and review
+disposition; `docs/README.md` owns current Gate status.
+
+Reliable candidate capability recovery additionally keeps candidate physical
+admission/authorization, a durable policy outcome, a durably issued prompt, a
+durable learner reply, and the final atomic domain settlement distinct. A
+permission-request identity exists exactly when issue is durable. Effective
+`allow`/`deny` becomes a
+terminal policy outcome when evaluated; effective-`ask` evaluation and issue
+commit atomically, so no durable unissued-ask gap exists. Issue commits before
+live publication and reply commits before releasing the waiting invocation.
+Recovery does not re-prompt or apply an uncommitted preference effect: for a
+candidate, absence of any durable terminal policy outcome or issue is
+`not_evaluated`, issue without reply is `prompted_abort`, and a durable reply preserves its exact
+prompted outcome even when the later physical invocation settles
+interrupted/no-effect. A pre-authorization semantic terminal is already
+complete and never receives `not_evaluated`. “Issued” does not claim that a
+terminal carrier acknowledged rendering. The Gate 14 record owns the concrete versioned
+representation, migration evidence, and current review disposition for this
+lifecycle.
 
 The default Course preference is only a retrieval prior for underspecified
 future requests. When the current request mentions or semantically requires
@@ -263,7 +321,7 @@ another Course—or several Courses—context composition loads their bounded
 relevant views and the Tutor answers from them without changing the durable
 default. This needs no temporary-Course aggregate or `TurnFocus` fact: the
 admitted request and context cut already record what the sample consumed. A
-confirmed preference change alters only the later fallback when input does not
+authorized preference change alters only the later fallback when input does not
 supply a better target.
 
 A `LearningSpace` is an optional accepted grouping for material, work, and
@@ -928,6 +986,53 @@ prompt:
 Prompt rendering is an adapter over that plan. A prompt string is never the
 only record of which state or authority was used.
 
+## Tutor move selection and flow continuity
+
+A bounded context cut is an observer and working set; visibility alone does not
+make any candidate govern the current interaction. Tutor composition separately
+owns the product responsibility to turn the exact request and relevant current
+situation into a useful move, or into one necessary clarification. It does not
+own the durable meanings supplied by Course, Goal, future attention, planning,
+learner history, navigation, steering, or Interaction.
+
+The baseline behavior is:
+
+- an exact current request governs what it actually specifies;
+- when one move is clearly supported, or one of several moves is a transparent
+  and reversible local choice, Repa proceeds without asking the learner to
+  select an internal record or identifier;
+- when materially different alternatives require a learner-owned value,
+  commitment, authorization, or an unsafe-to-assume interpretation, Repa asks
+  a concise learning-level clarification; and
+- the learner may redirect or override the chosen move at any time without
+  first editing durable state.
+
+The implementation may use the ordinary realizing LLM, an accepted bounded
+program rule, a separate control-only model sample, or a mixed composition.
+None is the architectural default merely because it is more model-driven or
+more deterministic. Candidate completeness and truncation, exact sources,
+hard constraints, selection basis, current-request override, latency/cost, and
+failure behavior must remain truthful enough for inspection and correction.
+
+The selected purpose is scoped to the current control interval unless a
+separate durable authority already owns its source meaning. Selection alone
+does not create Course progress, learner evidence, future-attention service,
+plan completion, or a durable active activity. After interruption, provider
+failure, restart, correction, or a relevant committed change, the next admitted
+Turn recompiles current state and selects again. It respects effects already
+committed, does not replay ambiguous work, and does not make the learner
+manually reconstruct the application's state.
+
+This boundary is not a universal scheduler, pedagogy taxonomy, or fixed
+teaching workflow. No mechanism category receives an architectural presumption.
+The ordinary realizing LLM, a bounded control-only sample, a program rule or
+rule tree, a classifier, a mixed composition, an active-purpose record, or a
+graph mechanism is retained, narrowed, introduced, or rejected only through
+representative comparison of learner flow, choice quality, provenance,
+correction, failure/recovery, latency/cost, and lifecycle complexity. Merely
+passing one trace does not privilege the structurally lightest or most
+model-driven candidate.
+
 ## Tutor choice and policy arbitration
 
 The program does not enumerate every legal explanation or teaching move. It
@@ -1231,15 +1336,23 @@ synthetic or compaction input, model operation, physical tool invocation,
 context cut, provider completion, tool settlement, and Turn completion remain
 distinct.
 
-While a Turn is running, ordinary submission in the primary TUI is an editable
-local draft for a later root Turn; it is not yet a learner occurrence or a
-durable queue item. Explicit **steer** targets the exact visible running Turn
-and becomes a durable learner input inside that Turn only when the runner
-promotes it at a safe continuation boundary. A target mismatch or terminal
-Turn cannot silently convert it into an admitted steer. These are input
-delivery semantics around model/tool work, not a durable macro-learning
-activity, retained scoped steering, Course route choice, or evidence that a
-request means “new” versus “continue.”
+While a Turn is running, the primary TUI exposes two distinct actions before
+the learner first submits: add the text to the exact visible running work
+through strict steer, or keep an editable process-local draft for a later root
+Turn. The latter is not yet a learner occurrence or durable queue item. Both
+actions use the configured bindings and learner-facing language rather than
+requiring knowledge of Turn, steer, or admission vocabulary. While busy,
+ordinary Enter explicitly selects the labelled later action; the separate
+configured action selects current work. This assigns the ordinary path to the
+reversible error: a later draft remains unadmitted, editable, removable, and
+eligible for explicit current delivery, whereas an accepted steer cannot be
+removed from the running Turn. The two process-local dispatch paths have one
+winner. A current-work target mismatch, terminal Turn, or later-start loss
+cannot silently retarget the input: the undelivered text remains visibly
+editable and does not automatically start, steer, retry, or wait for a
+replacement Turn. These are input-delivery semantics around model/tool work,
+not a durable macro-learning activity, retained scoped steering, Course route
+choice, or evidence that a request means “new” versus “continue.”
 
 At startup, ambiguous in-flight work is marked interrupted and is not blindly
 redispatched. Exact settled commands replay their receipts; new semantic work
@@ -1327,6 +1440,7 @@ overdue, and expired state from stored times and the trusted clock.
 | learner corrects a report or inference | append correction/supersession; preserve the original source; rebuild active projections                                     |
 | generic tool changes an artifact       | record the artifact/tool result; create no learner/course fact until an explicit domain command imports it                   |
 | context omitted relevant state         | model may inspect state lazily; recorded selection manifest and source refs make the omission diagnosable and correctable    |
+| move selection interrupted or stale     | preserve committed effects, end the process-local selection, recompile current state, and choose or clarify again without blind replay |
 | conflicting local writer               | reject/serialize through the LearnerHome owner and entity preconditions; never silently merge semantic state                 |
 
 ## Target module ownership
@@ -1442,6 +1556,12 @@ Architecture-level behavioral checks must continue to cover:
 - generic tool output cannot mutate learning state by itself;
 - Goal changes recompile dependent views without rewriting Course/evidence or
   mutating a generic Agenda record;
+- representative Course, Goal, future-attention, planning, steering, recent
+  Interaction, and any admitted learner-record pressure produces a useful move
+  or one necessary clarification without requiring the learner to coordinate
+  internal state;
+- correction, interruption, and restart recompile and reselect without
+  repeating ambiguous work or ignoring already committed effects;
 - one learner error does not mutate shared curriculum;
 - provisional model routes remain visibly provisional and correctable;
 - stale material selectors fail closed; and

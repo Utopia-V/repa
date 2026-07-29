@@ -51,6 +51,13 @@ fixed control-flow split or a requirement to script every teaching step in
 code; the learner can steer and genuinely ambiguous local judgment may remain
 model-assisted.
 
+The Learning System normally owns turning the bounded current learning
+situation into a useful next move and choosing again after correction,
+interruption, restart, or changed state. The learner does not routinely
+coordinate internal Course, Goal, review, plan, or Interaction records. This is
+a product responsibility, not a pre-accepted selector, classifier, scheduler,
+graph, durable active-purpose record, or fixed program/model ratio.
+
 Models may also initiate and semantically author real durable writes through
 capability-scoped learning commands. Program-owned authority means the runtime
 binds trusted identity, source, revision, time, permission, transaction, and
@@ -307,6 +314,16 @@ learning tools.
   preferably read-only investigation will produce much more raw material than
   the conclusion needed by the main agent, or when genuinely independent work
   benefits from parallelism. Keep tightly coupled reasoning in one context.
+- A Gate-scale implementation, recovery, or integration that spans durable
+  ownership boundaries, migrations, runtime, carriers, or several turns is
+  top-level task work with one durable executor and one owner for the integrated
+  candidate. Do not split such work among ephemeral subagents that concurrently
+  mutate the shared tree. The top-level executor may still use subagents for
+  bounded read-only investigation or a genuinely independent local question,
+  but it retains implementation, test, and callback ownership. If a worker
+  disappears after writing without a completion callback, classify its edits as
+  an orphaned candidate, suspend acceptance claims, and recover them in a
+  top-level task before further implementation.
 - At a consequential parent decision boundary, identify the coherent decision
   the main agent still owns, any bounded high-entropy investigation suited to a
   fresh worker, and whether one independent review question could still change
