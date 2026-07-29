@@ -2,7 +2,7 @@ import { Effect, Option, Schema } from "effect"
 import { sql } from "drizzle-orm"
 import { isCourseSettlement } from "../../../course/learning-command-settlement"
 import { isGoalSettlement } from "../../../learner-goal/learning-command-settlement"
-import { isNavigationSettlement } from "../../../learner-navigation/learning-command-settlement"
+import { isNavigationSettlement } from "../../../learner-navigation/learning-command-settlement-v12"
 import { isRepresentationSettlement } from "../../../representation/learning-command-settlement"
 import { isRetainedSettlement } from "../../../retained-steering/learning-command-settlement"
 import type { DatabaseMigration } from "../../migration"
@@ -14,11 +14,13 @@ export default {
   up(tx) {
     return Effect.gen(function* () {
       const before = yield* tx
-        .get<{ invocations: number; receipts: number }>(sql`
+        .get<{ invocations: number; receipts: number }>(
+          sql`
           SELECT
             (SELECT count(*) FROM learning_command_invocation) AS invocations,
             (SELECT count(*) FROM learning_command_receipt) AS receipts
-        `)
+        `,
+        )
         .pipe(Effect.orDie)
       if (!before) return yield* Effect.fail(new Error("The v11 learning-command ledger is unreadable"))
 
@@ -321,7 +323,8 @@ export default {
           invocations: number
           receipts: number
           reservations: number
-        }>(sql`
+        }>(
+          sql`
           SELECT
             (
               SELECT count(*)
@@ -609,7 +612,8 @@ export default {
                   )
                 )
             ) AS reservations
-        `)
+        `,
+        )
         .pipe(Effect.orDie)
       if (!validation || validation.invocations || validation.receipts || validation.reservations) {
         return yield* Effect.fail(
@@ -636,17 +640,15 @@ export default {
       }
 
       const after = yield* tx
-        .get<{ invocations: number; receipts: number }>(sql`
+        .get<{ invocations: number; receipts: number }>(
+          sql`
           SELECT
             (SELECT count(*) FROM learning_command_invocation) AS invocations,
             (SELECT count(*) FROM learning_command_receipt) AS receipts
-        `)
+        `,
+        )
         .pipe(Effect.orDie)
-      if (
-        !after ||
-        after.invocations !== before.invocations ||
-        after.receipts !== before.receipts
-      ) {
+      if (!after || after.invocations !== before.invocations || after.receipts !== before.receipts) {
         return yield* Effect.fail(new Error("The v12 learning-command ledger rebuild changed durable row counts"))
       }
 
@@ -661,15 +663,15 @@ export default {
 
 const decodeJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)
 
-function validateMigratedDomainSettlements(
-  tx: Parameters<DatabaseMigration.Migration["up"]>[0],
-) {
+function validateMigratedDomainSettlements(tx: Parameters<DatabaseMigration.Migration["up"]>[0]) {
   return tx
-    .all<{ partID: string; commandName: string; settlement: string }>(sql`
+    .all<{ partID: string; commandName: string; settlement: string }>(
+      sql`
       SELECT part_id AS partID, command_name AS commandName, settlement
       FROM learning_command_invocation
       WHERE status <> 'admitted'
-    `)
+    `,
+    )
     .pipe(
       Effect.orDie,
       Effect.map((rows) => {
@@ -695,11 +697,10 @@ function validDomainSettlement(commandName: string, settlement: unknown) {
   return false
 }
 
-function validateHistoricalTerminalSemantics(
-  tx: Parameters<DatabaseMigration.Migration["up"]>[0],
-) {
+function validateHistoricalTerminalSemantics(tx: Parameters<DatabaseMigration.Migration["up"]>[0]) {
   return tx
-    .get<{ violations: number }>(sql`
+    .get<{ violations: number }>(
+      sql`
       SELECT count(*) AS violations
       FROM __v11_learning_command_invocation AS historical
       WHERE historical.status <> 'admitted'
@@ -1376,7 +1377,8 @@ function validateHistoricalTerminalSemantics(
             )
           )
         )
-    `)
+    `,
+    )
     .pipe(Effect.orDie)
 }
 

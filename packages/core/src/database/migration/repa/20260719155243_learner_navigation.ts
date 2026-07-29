@@ -1,6 +1,6 @@
 import { Effect } from "effect"
 import type { DatabaseMigration } from "../../migration"
-import { LearnerNavigationConstraintSchema } from "../../../learner-navigation/constraint-schema"
+import { LearnerNavigationConstraintSchema } from "../../../learner-navigation/constraint-schema-v1"
 
 export default {
   id: "20260719155243_learner_navigation",

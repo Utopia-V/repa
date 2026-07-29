@@ -2183,13 +2183,13 @@ export class Permission extends HeyApiClient {
   /**
    * Respond to permission request
    *
-   * Approve or deny a permission request from the AI assistant.
+   * Approve, deny, or cancel a permission request from the AI assistant.
    */
   public reply<ThrowOnError extends boolean = false>(
     parameters: {
       requestID: string
       directory?: string
-      reply?: "once" | "always" | "reject"
+      reply?: "once" | "always" | "reject" | "cancel"
       message?: string
     },
     options?: Options<never, ThrowOnError>,
@@ -2222,7 +2222,7 @@ export class Permission extends HeyApiClient {
   /**
    * Respond to permission
    *
-   * Approve or deny a permission request from the AI assistant.
+   * Approve, deny, or cancel a permission request from the AI assistant.
    *
    * @deprecated
    */
@@ -2231,7 +2231,7 @@ export class Permission extends HeyApiClient {
       sessionID: string
       permissionID: string
       directory?: string
-      response?: "once" | "always" | "reject"
+      response?: "once" | "always" | "reject" | "cancel"
     },
     options?: Options<never, ThrowOnError>,
   ) {

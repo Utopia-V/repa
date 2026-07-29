@@ -7,7 +7,8 @@
 //   always     → confirmation step before granting permanent access
 //   reject     → text field for the rejection message
 //
-// Keyboard: left/right to select, enter to confirm, esc to reject.
+// Keyboard: left/right to select, enter to confirm, esc to reject generic
+// requests or cancel exact-reply requests.
 // The diff view (when available) uses the same diff component as scrollback
 // tool snapshots.
 /** @jsxImportSource @opentui/solid */
@@ -143,7 +144,9 @@ export function RunPermissionBody(props: {
   const info = createMemo(() => permissionInfo(props.request))
   const ft = createMemo(() => toolFiletype(info().file))
   const narrow = createMemo(() => footerWidthPolicy(dims().width).dialog.narrow)
-  const opts = createMemo(() => permissionOptions(state().stage, constraint().onceOnly, constraint().rejectOnly))
+  const opts = createMemo(() =>
+    permissionOptions(state().stage, constraint().onceOnly, constraint().rejectOnly, constraint().exactReply),
+  )
   const busy = createMemo(() => state().submitting)
   const title = createMemo(() => {
     if (state().stage === "always") {
@@ -172,7 +175,9 @@ export function RunPermissionBody(props: {
   })
 
   const shift = (dir: -1 | 1) => {
-    setState((prev) => permissionShift(prev, dir, constraint().onceOnly, constraint().rejectOnly))
+    setState((prev) =>
+      permissionShift(prev, dir, constraint().onceOnly, constraint().rejectOnly, constraint().exactReply),
+    )
   }
 
   const submit = async (next: PermissionReply) => {
@@ -193,7 +198,14 @@ export function RunPermissionBody(props: {
 
   const run = (option: PermissionOption) => {
     const cur = state()
-    const next = permissionRun(cur, props.request.id, option, constraint().onceOnly, constraint().rejectOnly)
+    const next = permissionRun(
+      cur,
+      props.request.id,
+      option,
+      constraint().onceOnly,
+      constraint().rejectOnly,
+      constraint().exactReply,
+    )
     if (next.state !== cur) {
       setState(next.state)
     }
@@ -259,7 +271,13 @@ export function RunPermissionBody(props: {
       return
     }
 
-    setState((prev) => permissionEscape(prev))
+    const next = permissionEscape(cur, props.request.id, constraint().exactReply)
+    if (next.state !== cur) {
+      setState(next.state)
+    }
+    if (next.reply) {
+      void submit(next.reply)
+    }
     event.preventDefault()
   })
 
@@ -468,7 +486,10 @@ export function RunPermissionBody(props: {
                 enter <span style={{ fg: props.theme.muted }}>confirm</span>
               </text>
               <text fg={props.theme.text}>
-                esc <span style={{ fg: props.theme.muted }}>{state().stage === "always" ? "cancel" : "reject"}</span>
+                esc{" "}
+                <span style={{ fg: props.theme.muted }}>
+                  {state().stage === "always" || constraint().exactReply ? "cancel" : "reject"}
+                </span>
               </text>
             </box>
           </Show>

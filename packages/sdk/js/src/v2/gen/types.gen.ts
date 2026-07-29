@@ -1469,7 +1469,7 @@ export type GlobalEvent = {
         properties: {
           sessionID: string
           requestID: string
-          reply: "once" | "always" | "reject"
+          reply: "once" | "always" | "reject" | "cancel"
         }
       }
     | {
@@ -1733,6 +1733,8 @@ export type ServerConfig = {
   mdnsDomain?: string
   cors?: Array<string>
 }
+
+export type OrderedPermissionObjectKey = string
 
 export type PermissionActionConfig = "ask" | "allow" | "deny"
 
@@ -6278,7 +6280,7 @@ export type PermissionReplied = {
   data: {
     sessionID: string
     requestID: string
-    reply: "once" | "always" | "reject"
+    reply: "once" | "always" | "reject" | "cancel"
   }
 }
 
@@ -7509,7 +7511,7 @@ export type EventPermissionReplied = {
   properties: {
     sessionID: string
     requestID: string
-    reply: "once" | "always" | "reject"
+    reply: "once" | "always" | "reject" | "cancel"
   }
 }
 
@@ -9610,7 +9612,7 @@ export type PermissionListResponse = PermissionListResponses[keyof PermissionLis
 
 export type PermissionReplyData = {
   body?: {
-    reply: "once" | "always" | "reject"
+    reply: "once" | "always" | "reject" | "cancel"
     message?: string
   }
   path: {
@@ -10755,7 +10757,7 @@ export type SessionUnrevertResponse = SessionUnrevertResponses[keyof SessionUnre
 
 export type PermissionRespondData = {
   body?: {
-    response: "once" | "always" | "reject"
+    response: "once" | "always" | "reject" | "cancel"
   }
   path: {
     sessionID: string

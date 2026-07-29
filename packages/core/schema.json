@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "414e1d6b-6036-4871-8282-cd8fe9561655",
+  "id": "80af71fb-9578-4e91-a3ff-f5c8912e9bbe",
   "prevIds": [
-    "00000000-0000-0000-0000-000000000000"
+    "5ec2c2bf-b607-45c0-ad37-7fc71ef5cb46"
   ],
   "ddl": [
     {
@@ -243,11 +243,31 @@
       "entityType": "tables"
     },
     {
+      "name": "learner_default_course_acknowledgement",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_default_course_capability_issue",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_default_course_capability_settlement",
+      "entityType": "tables"
+    },
+    {
       "name": "learner_default_course_command",
       "entityType": "tables"
     },
     {
       "name": "learner_default_course_commit_seal",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_default_course_disposition",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_default_course_proposal",
       "entityType": "tables"
     },
     {
@@ -4832,13 +4852,23 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "authorization_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "permission_request_id",
       "entityType": "columns",
       "table": "learner_default_course_transition"
     },
     {
       "type": "text",
-      "notNull": true,
+      "notNull": false,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -4984,6 +5014,326 @@
       "generated": null,
       "name": "invocation_part_id",
       "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_authorization_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_version",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_locator",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to_locator",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "relation",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "presentation_snapshot",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "presentation_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_basis",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shown_scope",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shown_scope_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_issued",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "issue_order",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_basis",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reply",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reply_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_order",
+      "entityType": "columns",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
       "table": "learner_default_course_command"
     },
     {
@@ -5025,6 +5375,546 @@
       "name": "invocation_part_id",
       "entityType": "columns",
       "table": "learner_default_course_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_version",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_kind",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "authorization_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_outcome",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_address",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_address_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "incoming_payload_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "existing_effect_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "existing_payload_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "legacy_row_class",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "confirmation_availability",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_permission_request_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_confirmation_request_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "legacy_effect_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "legacy_receipt_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_snapshot",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_excerpt",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolution_scope",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolution_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preference_head_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preference_version",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_locator",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to_locator",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selected_course_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_presentation_part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_presentation_assistant_message_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_assistant_message_id",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_emission_ordinal",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_selection",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_disposed",
+      "entityType": "columns",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "part_id",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "call_id",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "emission_ordinal",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_snapshot",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolution_scope",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolution_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preference_head_id",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "preference_version",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "from_locator",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "to_locator",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "proposal_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "terminal_part_fingerprint",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_presented",
+      "entityType": "columns",
+      "table": "learner_default_course_proposal"
     },
     {
       "type": "text",
@@ -12380,6 +13270,21 @@
     },
     {
       "columns": [
+        "authorization_part_id"
+      ],
+      "tableTo": "learner_default_course_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_transition_authorization_part_id_learner_default_course_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_transition"
+    },
+    {
+      "columns": [
         "effect_id"
       ],
       "tableTo": "learner_course_route_anchor_transition",
@@ -12422,6 +13327,113 @@
       "name": "fk_learner_course_route_anchor_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
       "entityType": "fks",
       "table": "learner_course_route_anchor_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learner_default_course_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_acknowledgement_invocation_part_id_learner_default_course_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "columns": [
+        "effect_authorization_part_id"
+      ],
+      "tableTo": "learner_default_course_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_acknowledgement_effect_authorization_part_id_learner_default_course_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_default_course_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_acknowledgement_effect_id_learner_default_course_transition_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_acknowledgement_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learner_default_course_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_capability_issue_invocation_part_id_learner_default_course_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learner_default_course_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_capability_settlement_invocation_part_id_learner_default_course_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "columns": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "tableTo": "learner_default_course_capability_issue",
+      "columnsTo": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_capability_settlement_invocation_part_id_permission_request_id_learner_default_course_capability_issue_invocation_part_id_permission_request_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_capability_settlement"
     },
     {
       "columns": [
@@ -12482,6 +13494,70 @@
       "name": "fk_learner_default_course_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
       "entityType": "fks",
       "table": "learner_default_course_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_disposition_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "columns": [
+        "proposal_part_id"
+      ],
+      "tableTo": "learner_default_course_proposal",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_disposition_proposal_part_id_learner_default_course_proposal_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "columns": [
+        "turn_id",
+        "part_id",
+        "assistant_message_id"
+      ],
+      "tableTo": "turn_tool_candidate",
+      "columnsTo": [
+        "turn_id",
+        "part_id",
+        "assistant_message_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_proposal_turn_id_part_id_assistant_message_id_turn_tool_candidate_turn_id_part_id_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "tableTo": "turn_candidate_presentation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_default_course_proposal_part_id_turn_candidate_presentation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_default_course_proposal"
     },
     {
       "columns": [
@@ -14657,6 +15733,33 @@
         "invocation_part_id"
       ],
       "nameExplicit": false,
+      "name": "learner_default_course_acknowledgement_pk",
+      "table": "learner_default_course_acknowledgement",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_default_course_capability_issue_pk",
+      "table": "learner_default_course_capability_issue",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_default_course_capability_settlement_pk",
+      "table": "learner_default_course_capability_settlement",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
       "name": "learner_default_course_command_pk",
       "table": "learner_default_course_command",
       "entityType": "pks"
@@ -14668,6 +15771,24 @@
       "nameExplicit": false,
       "name": "learner_default_course_commit_seal_pk",
       "table": "learner_default_course_commit_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_default_course_disposition_pk",
+      "table": "learner_default_course_disposition",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_default_course_proposal_pk",
+      "table": "learner_default_course_proposal",
       "entityType": "pks"
     },
     {
@@ -16139,6 +17260,24 @@
       "name": "learner_default_course_frontier_idx",
       "entityType": "indexes",
       "table": "learner_default_course_transition"
+    },
+    {
+      "columns": [
+        {
+          "value": "effect_id",
+          "isExpression": false
+        },
+        {
+          "value": "invocation_part_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_default_course_acknowledgement_effect_idx",
+      "entityType": "indexes",
+      "table": "learner_default_course_acknowledgement"
     },
     {
       "columns": [
@@ -17826,6 +18965,16 @@
     },
     {
       "columns": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_default_course_capability_issue_invocation_request_unique",
+      "entityType": "uniques",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "columns": [
         "receipt_id"
       ],
       "nameExplicit": true,
@@ -17841,6 +18990,16 @@
       "name": "learner_default_course_commit_seal_invocation_unique",
       "entityType": "uniques",
       "table": "learner_default_course_commit_seal"
+    },
+    {
+      "columns": [
+        "assistant_message_id",
+        "emission_ordinal"
+      ],
+      "nameExplicit": true,
+      "name": "learner_default_course_proposal_assistant_emission_unique",
+      "entityType": "uniques",
+      "table": "learner_default_course_proposal"
     },
     {
       "columns": [
@@ -18286,6 +19445,15 @@
       "name": "learning_occurrence_source_order_occurrence_id_unique",
       "entityType": "uniques",
       "table": "learning_occurrence_source_order"
+    },
+    {
+      "columns": [
+        "permission_request_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_default_course_capability_issue_permission_request_id_unique",
+      "entityType": "uniques",
+      "table": "learner_default_course_capability_issue"
     },
     {
       "columns": [
@@ -19155,14 +20323,8 @@
       "table": "learner_default_course_transition"
     },
     {
-      "value": "length(\"permission_request_id\") > 0",
-      "name": "learner_default_course_permission",
-      "entityType": "checks",
-      "table": "learner_default_course_transition"
-    },
-    {
-      "value": "json_valid(\"confirmation_snapshot\")",
-      "name": "learner_default_course_confirmation",
+      "value": "(\"permission_request_id\" IS NULL AND \"confirmation_snapshot\" IS NULL) OR (\"permission_request_id\" IS NOT NULL AND length(\"permission_request_id\") > 0 AND json_valid(\"confirmation_snapshot\"))",
+      "name": "learner_default_course_legacy_confirmation_shape",
       "entityType": "checks",
       "table": "learner_default_course_transition"
     },
@@ -19173,10 +20335,106 @@
       "table": "learner_default_course_transition"
     },
     {
+      "value": "\"authorization_version\" IN (1, 2) AND \"operation\" IN ('set', 'change', 'clear') AND json_valid(\"from_locator\") AND json_valid(\"to_locator\") AND ((\"authorization_version\" = 1 AND (\n    (\n      json_extract(\"from_locator\", '$.kind') = 'absent'\n      AND json_type(\"from_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"from_locator\", '$.kind') = 'course'\n      AND json_type(\"from_locator\", '$.locator') = 'object'\n      AND json_type(\"from_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"from_locator\", '$.locator.title.availability') IN ('recorded_v1', 'not_recorded_v1')\n      AND json_extract(\"from_locator\", '$.locator.courseVersion.availability') IN ('recorded_v1', 'not_recorded_v1')\n      AND json_extract(\"from_locator\", '$.locator.workingSelection.availability') IN ('recorded_v1', 'not_recorded_v1')\n    )\n  ) AND (\n    (\n      json_extract(\"to_locator\", '$.kind') = 'absent'\n      AND json_type(\"to_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"to_locator\", '$.kind') = 'course'\n      AND json_type(\"to_locator\", '$.locator') = 'object'\n      AND json_type(\"to_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"to_locator\", '$.locator.title.availability') IN ('recorded_v1', 'not_recorded_v1')\n      AND json_extract(\"to_locator\", '$.locator.courseVersion.availability') IN ('recorded_v1', 'not_recorded_v1')\n      AND json_extract(\"to_locator\", '$.locator.workingSelection.availability') IN ('recorded_v1', 'not_recorded_v1')\n    )\n  )) OR (\"authorization_version\" = 2 AND (\n    (\n      json_extract(\"from_locator\", '$.kind') = 'absent'\n      AND json_type(\"from_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"from_locator\", '$.kind') = 'course'\n      AND json_type(\"from_locator\", '$.locator') = 'object'\n      AND json_type(\"from_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"from_locator\", '$.locator.title.availability') = 'recorded_v2'\n      AND json_extract(\"from_locator\", '$.locator.courseVersion.availability') = 'recorded_v2'\n      AND json_extract(\"from_locator\", '$.locator.workingSelection.availability') = 'recorded_v2'\n    )\n  ) AND (\n    (\n      json_extract(\"to_locator\", '$.kind') = 'absent'\n      AND json_type(\"to_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"to_locator\", '$.kind') = 'course'\n      AND json_type(\"to_locator\", '$.locator') = 'object'\n      AND json_type(\"to_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"to_locator\", '$.locator.title.availability') = 'recorded_v2'\n      AND json_extract(\"to_locator\", '$.locator.courseVersion.availability') = 'recorded_v2'\n      AND json_extract(\"to_locator\", '$.locator.workingSelection.availability') = 'recorded_v2'\n    )\n  ))) AND \"relation\" IN ('active', 'superseded') AND json_valid(\"presentation_snapshot\")",
+      "name": "learner_default_course_acknowledgement_shape",
+      "entityType": "checks",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "value": "length(\"presentation_fingerprint\") = 64 AND \"presentation_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_default_course_acknowledgement_fingerprint",
+      "entityType": "checks",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "value": "\"time_committed\" >= 0 AND \"commit_order\" >= 0",
+      "name": "learner_default_course_acknowledgement_time",
+      "entityType": "checks",
+      "table": "learner_default_course_acknowledgement"
+    },
+    {
+      "value": "length(\"authorization_fingerprint\") = 64 AND \"authorization_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND length(\"policy_fingerprint\") = 64 AND \"policy_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND length(\"shown_scope_fingerprint\") = 64 AND \"shown_scope_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_default_course_capability_issue_fingerprints",
+      "entityType": "checks",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "value": "length(\"permission_request_id\") > 0 AND json_valid(\"policy_basis\") AND json_valid(\"shown_scope\") AND \"time_issued\" >= 0 AND \"issue_order\" >= 0",
+      "name": "learner_default_course_capability_issue_shape",
+      "entityType": "checks",
+      "table": "learner_default_course_capability_issue"
+    },
+    {
+      "value": "length(\"authorization_fingerprint\") = 64 AND \"authorization_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND (\"policy_fingerprint\" IS NULL OR (length(\"policy_fingerprint\") = 64 AND \"policy_fingerprint\" NOT GLOB '*[^0-9a-f]*')) AND (\"reply_fingerprint\" IS NULL OR (length(\"reply_fingerprint\") = 64 AND \"reply_fingerprint\" NOT GLOB '*[^0-9a-f]*'))",
+      "name": "learner_default_course_capability_settlement_fingerprints",
+      "entityType": "checks",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "value": "(\n        \"outcome\" = 'not_evaluated'\n        AND \"permission_request_id\" IS NULL\n        AND \"policy_basis\" IS NULL\n        AND \"policy_fingerprint\" IS NULL\n        AND \"reply\" IS NULL\n        AND \"reply_fingerprint\" IS NULL\n      ) OR (\n        \"outcome\" IN ('policy_allow', 'policy_deny')\n        AND \"permission_request_id\" IS NULL\n        AND json_valid(\"policy_basis\")\n        AND \"policy_fingerprint\" IS NOT NULL\n        AND \"reply\" IS NULL\n        AND \"reply_fingerprint\" IS NULL\n      ) OR (\n        \"outcome\" = 'prompted_abort'\n        AND \"permission_request_id\" IS NOT NULL\n        AND \"policy_basis\" IS NULL\n        AND \"policy_fingerprint\" IS NULL\n        AND \"reply\" IS NULL\n        AND \"reply_fingerprint\" IS NULL\n      ) OR (\n        \"outcome\" IN ('prompted_allow', 'prompted_deny', 'prompted_correct', 'prompted_cancel')\n        AND \"permission_request_id\" IS NOT NULL\n        AND \"policy_basis\" IS NULL\n        AND \"policy_fingerprint\" IS NULL\n        AND json_valid(\"reply\")\n        AND \"reply_fingerprint\" IS NOT NULL\n      )",
+      "name": "learner_default_course_capability_settlement_closed_union",
+      "entityType": "checks",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
+      "value": "\"time_settled\" >= 0 AND \"settlement_order\" >= 0",
+      "name": "learner_default_course_capability_settlement_time",
+      "entityType": "checks",
+      "table": "learner_default_course_capability_settlement"
+    },
+    {
       "value": "length(\"permission_request_id\") > 0",
       "name": "learner_default_course_command_permission",
       "entityType": "checks",
       "table": "learner_default_course_command"
+    },
+    {
+      "value": "(\"authorization_fingerprint\" IS NULL OR (length(\"authorization_fingerprint\") = 64 AND \"authorization_fingerprint\" NOT GLOB '*[^0-9a-f]*')) AND length(\"command_fingerprint\") = 64 AND \"command_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND (\"semantic_address_fingerprint\" IS NULL OR (length(\"semantic_address_fingerprint\") = 64 AND \"semantic_address_fingerprint\" NOT GLOB '*[^0-9a-f]*')) AND (\"incoming_payload_fingerprint\" IS NULL OR (length(\"incoming_payload_fingerprint\") = 64 AND \"incoming_payload_fingerprint\" NOT GLOB '*[^0-9a-f]*')) AND (\"existing_payload_fingerprint\" IS NULL OR (length(\"existing_payload_fingerprint\") = 64 AND \"existing_payload_fingerprint\" NOT GLOB '*[^0-9a-f]*')) AND (\"resolution_fingerprint\" IS NULL OR (length(\"resolution_fingerprint\") = 64 AND \"resolution_fingerprint\" NOT GLOB '*[^0-9a-f]*')) AND (\"proposal_fingerprint\" IS NULL OR (length(\"proposal_fingerprint\") = 64 AND \"proposal_fingerprint\" NOT GLOB '*[^0-9a-f]*'))",
+      "name": "learner_default_course_disposition_fingerprints",
+      "entityType": "checks",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "value": "(\n        \"disposition\" = 'legacy_v1'\n        AND \"authorization_version\" = 1\n        AND \"authorization_kind\" = 'legacy_v1'\n        AND \"authorization_fingerprint\" IS NOT NULL\n        AND \"semantic_outcome\" IS NULL\n        AND \"semantic_address\" IS NULL\n        AND \"semantic_address_fingerprint\" IS NULL\n        AND \"incoming_payload_fingerprint\" IS NULL\n        AND \"existing_effect_id\" IS NULL\n        AND \"existing_payload_fingerprint\" IS NULL\n        AND \"legacy_row_class\" IN ('admitted', 'applied', 'already_applied', 'no_change', 'error')\n        AND \"command_permission_request_id\" IS NOT NULL\n        AND length(\"command_permission_request_id\") > 0\n        AND \"command_snapshot\" IS NULL\n        AND \"source_excerpt\" IS NULL\n        AND \"resolution_scope\" IS NULL\n        AND \"resolution_fingerprint\" IS NULL\n        AND \"preference_head_id\" IS NULL\n        AND \"preference_version\" IS NULL\n        AND \"operation\" IS NULL\n        AND \"from_locator\" IS NULL\n        AND \"to_locator\" IS NULL\n        AND \"selected_course_id\" IS NULL\n        AND \"proposal_part_id\" IS NULL\n        AND \"proposal_presentation_part_id\" IS NULL\n        AND \"proposal_presentation_assistant_message_id\" IS NULL\n        AND \"proposal_assistant_message_id\" IS NULL\n        AND \"proposal_emission_ordinal\" IS NULL\n        AND \"proposal_fingerprint\" IS NULL\n        AND \"proposal_selection\" IS NULL\n        AND (\n          (\n            \"legacy_row_class\" IN ('applied', 'already_applied')\n            AND \"confirmation_availability\" = 'recorded_v1'\n            AND \"effect_confirmation_request_id\" IS NOT NULL\n            AND \"legacy_effect_id\" IS NOT NULL\n            AND \"legacy_receipt_id\" IS NOT NULL\n          )\n          OR\n          (\n            \"legacy_row_class\" IN ('admitted', 'no_change', 'error')\n            AND \"confirmation_availability\" = 'not_recorded_v1'\n            AND \"effect_confirmation_request_id\" IS NULL\n            AND \"legacy_effect_id\" IS NULL\n            AND \"legacy_receipt_id\" IS NULL\n          )\n        )\n      ) OR (\n        \"disposition\" = 'semantic_terminal_v2'\n        AND \"authorization_version\" IS NULL\n        AND \"authorization_kind\" IS NULL\n        AND \"authorization_fingerprint\" IS NULL\n        AND \"semantic_outcome\" IN ('already_applied', 'semantic_conflict')\n        AND json_valid(\"command_snapshot\")\n        AND json_valid(\"semantic_address\")\n        AND json_extract(\"semantic_address\", '$.slot') = 'default_course_preference'\n        AND \"semantic_address_fingerprint\" IS NOT NULL\n        AND \"incoming_payload_fingerprint\" IS NOT NULL\n        AND \"existing_effect_id\" IS NOT NULL\n        AND \"existing_payload_fingerprint\" IS NOT NULL\n        AND \"legacy_row_class\" IS NULL\n        AND \"confirmation_availability\" IS NULL\n        AND \"command_permission_request_id\" IS NULL\n        AND \"effect_confirmation_request_id\" IS NULL\n        AND \"legacy_effect_id\" IS NULL\n        AND \"legacy_receipt_id\" IS NULL\n        AND \"source_excerpt\" IS NULL\n        AND \"resolution_scope\" IS NULL\n        AND \"resolution_fingerprint\" IS NULL\n        AND \"preference_head_id\" IS NULL\n        AND \"preference_version\" IS NULL\n        AND \"operation\" IS NULL\n        AND \"from_locator\" IS NULL\n        AND \"to_locator\" IS NULL\n        AND \"selected_course_id\" IS NULL\n        AND \"proposal_part_id\" IS NULL\n        AND \"proposal_presentation_part_id\" IS NULL\n        AND \"proposal_presentation_assistant_message_id\" IS NULL\n        AND \"proposal_assistant_message_id\" IS NULL\n        AND \"proposal_emission_ordinal\" IS NULL\n        AND \"proposal_fingerprint\" IS NULL\n        AND \"proposal_selection\" IS NULL\n      ) OR (\n        \"disposition\" = 'candidate_v2'\n        AND \"authorization_version\" = 2\n        AND \"authorization_kind\" IN ('direct_request_v2', 'accepted_proposal_v2')\n        AND \"authorization_fingerprint\" IS NOT NULL\n        AND \"semantic_outcome\" IS NULL\n        AND \"semantic_address\" IS NULL\n        AND \"semantic_address_fingerprint\" IS NULL\n        AND \"incoming_payload_fingerprint\" IS NULL\n        AND \"existing_effect_id\" IS NULL\n        AND \"existing_payload_fingerprint\" IS NULL\n        AND \"legacy_row_class\" IS NULL\n        AND \"confirmation_availability\" IS NULL\n        AND \"command_permission_request_id\" IS NULL\n        AND \"effect_confirmation_request_id\" IS NULL\n        AND \"legacy_effect_id\" IS NULL\n        AND \"legacy_receipt_id\" IS NULL\n        AND json_valid(\"command_snapshot\")\n        AND length(\"source_excerpt\") > 0\n        AND json_valid(\"resolution_scope\")\n        AND \"resolution_fingerprint\" IS NOT NULL\n        AND \"preference_version\" IS NOT NULL\n        AND ((\"preference_version\" = 0 AND \"preference_head_id\" IS NULL)\n          OR (\"preference_version\" > 0 AND \"preference_head_id\" IS NOT NULL))\n        AND \"operation\" IN ('set', 'change', 'clear')\n        AND json_valid(\"from_locator\")\n        AND json_valid(\"to_locator\")\n        AND (\n    (\n      json_extract(\"from_locator\", '$.kind') = 'absent'\n      AND json_type(\"from_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"from_locator\", '$.kind') = 'course'\n      AND json_type(\"from_locator\", '$.locator') = 'object'\n      AND json_type(\"from_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"from_locator\", '$.locator.title.availability') = 'recorded_v2'\n      AND json_extract(\"from_locator\", '$.locator.courseVersion.availability') = 'recorded_v2'\n      AND json_extract(\"from_locator\", '$.locator.workingSelection.availability') = 'recorded_v2'\n    )\n  )\n        AND (\n    (\n      json_extract(\"to_locator\", '$.kind') = 'absent'\n      AND json_type(\"to_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"to_locator\", '$.kind') = 'course'\n      AND json_type(\"to_locator\", '$.locator') = 'object'\n      AND json_type(\"to_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"to_locator\", '$.locator.title.availability') = 'recorded_v2'\n      AND json_extract(\"to_locator\", '$.locator.courseVersion.availability') = 'recorded_v2'\n      AND json_extract(\"to_locator\", '$.locator.workingSelection.availability') = 'recorded_v2'\n    )\n  )\n        AND (\n          (\n            \"authorization_kind\" = 'direct_request_v2'\n            AND json_extract(\"resolution_scope\", '$.coverage') = 'complete'\n            AND \"proposal_part_id\" IS NULL\n            AND \"proposal_presentation_part_id\" IS NULL\n            AND \"proposal_presentation_assistant_message_id\" IS NULL\n            AND \"proposal_assistant_message_id\" IS NULL\n            AND \"proposal_emission_ordinal\" IS NULL\n            AND \"proposal_fingerprint\" IS NULL\n            AND \"proposal_selection\" IS NULL\n          )\n          OR\n          (\n            \"authorization_kind\" = 'accepted_proposal_v2'\n            AND \"proposal_part_id\" IS NOT NULL\n            AND \"proposal_presentation_part_id\" IS NOT NULL\n            AND \"proposal_presentation_assistant_message_id\" IS NOT NULL\n            AND \"proposal_assistant_message_id\" IS NOT NULL\n            AND \"proposal_emission_ordinal\" IS NOT NULL\n            AND \"proposal_emission_ordinal\" >= 0\n            AND \"proposal_fingerprint\" IS NOT NULL\n            AND \"proposal_selection\" IN ('sole_presented', 'explicit_reference')\n          )\n        )\n      )",
+      "name": "learner_default_course_disposition_closed_union",
+      "entityType": "checks",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "value": "\"time_disposed\" >= 0",
+      "name": "learner_default_course_disposition_time",
+      "entityType": "checks",
+      "table": "learner_default_course_disposition"
+    },
+    {
+      "value": "length(\"command_fingerprint\") = 64 AND \"command_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND length(\"resolution_fingerprint\") = 64 AND \"resolution_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND length(\"proposal_fingerprint\") = 64 AND \"proposal_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND length(\"terminal_part_fingerprint\") = 64 AND \"terminal_part_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_default_course_proposal_fingerprints",
+      "entityType": "checks",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "value": "json_valid(\"command_snapshot\") AND json_valid(\"resolution_scope\") AND json_valid(\"from_locator\") AND json_valid(\"to_locator\") AND (\n    (\n      json_extract(\"from_locator\", '$.kind') = 'absent'\n      AND json_type(\"from_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"from_locator\", '$.kind') = 'course'\n      AND json_type(\"from_locator\", '$.locator') = 'object'\n      AND json_type(\"from_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"from_locator\", '$.locator.title.availability') = 'recorded_v2'\n      AND json_extract(\"from_locator\", '$.locator.courseVersion.availability') = 'recorded_v2'\n      AND json_extract(\"from_locator\", '$.locator.workingSelection.availability') = 'recorded_v2'\n    )\n  ) AND (\n    (\n      json_extract(\"to_locator\", '$.kind') = 'absent'\n      AND json_type(\"to_locator\", '$.locator') IS NULL\n    )\n    OR\n    (\n      json_extract(\"to_locator\", '$.kind') = 'course'\n      AND json_type(\"to_locator\", '$.locator') = 'object'\n      AND json_type(\"to_locator\", '$.locator.courseID') = 'text'\n      AND json_extract(\"to_locator\", '$.locator.title.availability') = 'recorded_v2'\n      AND json_extract(\"to_locator\", '$.locator.courseVersion.availability') = 'recorded_v2'\n      AND json_extract(\"to_locator\", '$.locator.workingSelection.availability') = 'recorded_v2'\n    )\n  )",
+      "name": "learner_default_course_proposal_json",
+      "entityType": "checks",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "value": "(\"preference_version\" = 0 AND \"preference_head_id\" IS NULL) OR (\"preference_version\" > 0 AND \"preference_head_id\" IS NOT NULL)",
+      "name": "learner_default_course_proposal_head",
+      "entityType": "checks",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "value": "\"operation\" IN ('set', 'change', 'clear')",
+      "name": "learner_default_course_proposal_operation",
+      "entityType": "checks",
+      "table": "learner_default_course_proposal"
+    },
+    {
+      "value": "\"emission_ordinal\" >= 0 AND \"time_presented\" >= 0",
+      "name": "learner_default_course_proposal_time_order",
+      "entityType": "checks",
+      "table": "learner_default_course_proposal"
     },
     {
       "value": "length(\"provider_call_id\") > 0",

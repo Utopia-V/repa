@@ -6,6 +6,7 @@ import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { NonNegativeInt } from "@opencode-ai/core/schema"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
+import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Schema } from "effect"
 
 export const AcceptCourseViewRevisionInput = Schema.Struct({
@@ -46,6 +47,67 @@ export const SetDefaultCoursePreferenceInput = Schema.Struct({
 })
 
 export type SetDefaultCoursePreferenceInput = typeof SetDefaultCoursePreferenceInput.Type
+
+const DefaultCourseResolutionCandidateInput = Schema.Struct({
+  courseID: Course.CourseID,
+  title: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1_024)),
+  courseVersion: NonNegativeInt,
+})
+
+const DefaultCourseResolutionScopeInput = Schema.Union([
+  Schema.Struct({
+    coverage: Schema.Literal("complete"),
+    candidates: Schema.Array(DefaultCourseResolutionCandidateInput).check(Schema.isMaxLength(100)),
+    selectedCourseID: Schema.NullOr(Course.CourseID),
+  }),
+  Schema.Struct({
+    coverage: Schema.Literal("explicitly_truncated"),
+    candidates: Schema.Array(DefaultCourseResolutionCandidateInput).check(Schema.isMaxLength(100)),
+    selectedCourseID: Schema.NullOr(Course.CourseID),
+    truncation: Schema.Struct({
+      reason: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1_024)),
+      omittedCount: Schema.optional(NonNegativeInt),
+    }),
+  }),
+])
+
+const DefaultCourseSourceExcerpt = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1_024))
+const DefaultCourseProposalFingerprint = Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/))
+
+export const ProposeDefaultCoursePreferenceInput = Schema.Struct({
+  expectedHeadID: Schema.NullOr(LearnerNavigation.DefaultEffectID),
+  expectedVersion: NonNegativeInt,
+  target: Schema.NullOr(DefaultCourseTargetInput),
+  resolutionScope: DefaultCourseResolutionScopeInput,
+})
+
+export type ProposeDefaultCoursePreferenceInput = typeof ProposeDefaultCoursePreferenceInput.Type
+
+export const SetDefaultCoursePreferenceV2Input = Schema.Union([
+  Schema.Struct({
+    authorization: Schema.Struct({
+      type: Schema.Literal("direct_request_v2"),
+      sourceExcerpt: DefaultCourseSourceExcerpt,
+      resolutionScope: DefaultCourseResolutionScopeInput,
+    }),
+    expectedHeadID: Schema.NullOr(LearnerNavigation.DefaultEffectID),
+    expectedVersion: NonNegativeInt,
+    target: Schema.NullOr(DefaultCourseTargetInput),
+  }),
+  Schema.Struct({
+    authorization: Schema.Struct({
+      type: Schema.Literal("accepted_proposal_v2"),
+      sourceExcerpt: DefaultCourseSourceExcerpt,
+      presentedAssistantMessageID: SessionV1.MessageID,
+      presentedPartID: SessionV1.PartID,
+      emissionOrdinal: NonNegativeInt,
+      proposalFingerprint: DefaultCourseProposalFingerprint,
+      selection: Schema.Literals(["sole_presented", "explicit_reference"]),
+    }),
+  }),
+])
+
+export type SetDefaultCoursePreferenceV2Input = typeof SetDefaultCoursePreferenceV2Input.Type
 
 const RouteAnchorTargetInput = Schema.Struct({
   viewID: Course.ViewID,
@@ -224,6 +286,8 @@ export type UpdateLearnerGoalsInput = typeof UpdateLearnerGoalsInput.Type
 const decode = Schema.decodeUnknownSync(AcceptCourseViewRevisionInput)
 const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput)
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
+const decodeDefaultProposal = Schema.decodeUnknownSync(ProposeDefaultCoursePreferenceInput)
+const decodeDefaultV2 = Schema.decodeUnknownSync(SetDefaultCoursePreferenceV2Input)
 const decodeAnchor = Schema.decodeUnknownSync(SetCourseRouteAnchorInput)
 const decodeSteering = Schema.decodeUnknownSync(UpdateRetainedLearningSteeringInput)
 const decodeGoals = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
@@ -254,6 +318,38 @@ export function normalizeRepresentation(input: unknown): RepresentationConvertIn
 export function normalizeDefault(input: unknown): SetDefaultCoursePreferenceInput {
   const value = decodeDefault(input)
   return {
+    expectedHeadID: value.expectedHeadID,
+    expectedVersion: value.expectedVersion,
+    target: value.target ? { ...value.target } : null,
+  }
+}
+
+export function normalizeDefaultProposal(input: unknown): ProposeDefaultCoursePreferenceInput {
+  const value = decodeDefaultProposal(input)
+  return {
+    expectedHeadID: value.expectedHeadID,
+    expectedVersion: value.expectedVersion,
+    target: value.target ? { ...value.target } : null,
+    resolutionScope: normalizeDefaultResolutionScope(value.resolutionScope),
+  }
+}
+
+export function normalizeDefaultV2(input: unknown): SetDefaultCoursePreferenceV2Input {
+  const value = decodeDefaultV2(input)
+  if (!("expectedHeadID" in value)) {
+    return {
+      authorization: {
+        ...value.authorization,
+        sourceExcerpt: value.authorization.sourceExcerpt.trim(),
+      },
+    }
+  }
+  return {
+    authorization: {
+      type: value.authorization.type,
+      sourceExcerpt: value.authorization.sourceExcerpt.trim(),
+      resolutionScope: normalizeDefaultResolutionScope(value.authorization.resolutionScope),
+    },
     expectedHeadID: value.expectedHeadID,
     expectedVersion: value.expectedVersion,
     target: value.target ? { ...value.target } : null,
@@ -292,7 +388,7 @@ function normalizeBoundary(input: string) {
 export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) return normalize(input)
   if (toolID === LearningCommand.REPRESENTATION_CONVERT_CAPABILITY) return normalizeRepresentation(input)
-  if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) return normalizeDefault(input)
+  if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) return normalizeDefaultV2(input)
   if (toolID === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY) return normalizeAnchor(input)
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) return normalizeSteering(input)
   if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return normalizeGoals(input)
@@ -315,6 +411,28 @@ export function defaultCommand(input: SetDefaultCoursePreferenceInput): LearnerN
   return { kind: "default_course_preference", ...input }
 }
 
+export function defaultProposalCommand(
+  input: ProposeDefaultCoursePreferenceInput,
+): LearnerNavigation.DefaultCourseCommand {
+  return {
+    kind: "default_course_preference",
+    expectedHeadID: input.expectedHeadID,
+    expectedVersion: input.expectedVersion,
+    target: input.target,
+  }
+}
+
+export function directDefaultV2Command(
+  input: Extract<SetDefaultCoursePreferenceV2Input, { readonly authorization: { readonly type: "direct_request_v2" } }>,
+): LearnerNavigation.DefaultCourseCommand {
+  return {
+    kind: "default_course_preference",
+    expectedHeadID: input.expectedHeadID,
+    expectedVersion: input.expectedVersion,
+    target: input.target,
+  }
+}
+
 export function anchorCommand(input: SetCourseRouteAnchorInput): LearnerNavigation.RouteAnchorCommand {
   return { kind: "course_route_anchor", ...input }
 }
@@ -325,6 +443,27 @@ export function retainedSteeringCommand(input: UpdateRetainedLearningSteeringInp
 
 export function learnerGoalCommand(input: UpdateLearnerGoalsInput): LearnerGoal.Command {
   return { operations: input.operations }
+}
+
+function normalizeDefaultResolutionScope(
+  input: ProposeDefaultCoursePreferenceInput["resolutionScope"],
+): ProposeDefaultCoursePreferenceInput["resolutionScope"] {
+  const candidates = input.candidates.map((candidate) => ({
+    ...candidate,
+    title: candidate.title.trim(),
+  }))
+  if (input.coverage === "complete") {
+    return { coverage: input.coverage, candidates, selectedCourseID: input.selectedCourseID }
+  }
+  return {
+    coverage: input.coverage,
+    candidates,
+    selectedCourseID: input.selectedCourseID,
+    truncation: {
+      reason: input.truncation.reason.trim(),
+      ...(input.truncation.omittedCount === undefined ? {} : { omittedCount: input.truncation.omittedCount }),
+    },
+  }
 }
 
 export * as LearningCommandInput from "./input"

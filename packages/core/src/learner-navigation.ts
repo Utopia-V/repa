@@ -42,6 +42,7 @@ import {
 } from "./learner-navigation/sql"
 import type { OccurrenceID } from "./learning-command/occurrence-schema"
 import type { PermissionV1 } from "./v1/permission"
+import type { PartID } from "./v1/session"
 
 export {
   AnchorEffectID,
@@ -318,9 +319,7 @@ export function resolveAnchorEffect(
 
 export function readAnchorResultPresentation(
   tx: Transaction,
-  input:
-    | { readonly effectID: AnchorEffectID }
-    | { readonly courseID: Course.CourseID },
+  input: { readonly effectID: AnchorEffectID } | { readonly courseID: Course.CourseID },
 ): Effect.Effect<AnchorResultPresentation, Error | Course.Error> {
   return Effect.gen(function* () {
     const row =
@@ -363,6 +362,7 @@ export function applyDefault(
   tx: Transaction,
   input: {
     readonly occurrenceID: OccurrenceID
+    readonly authorizationPartID: PartID
     readonly command: DefaultCourseCommand
     readonly permissionRequestID: PermissionV1.ID
     readonly confirmation: DefaultConfirmationSnapshot
@@ -400,6 +400,7 @@ export function applyDefault(
         previous_course_id: previousCourseID,
         course_id: targetCourseID,
         occurrence_id: input.occurrenceID,
+        authorization_part_id: input.authorizationPartID,
         permission_request_id: input.permissionRequestID,
         confirmation_snapshot: input.confirmation,
         target_course_version: receipt?.courseVersion ?? null,
@@ -422,6 +423,7 @@ export function applyDefault(
       previous_course_id: previousCourseID,
       course_id: targetCourseID,
       occurrence_id: input.occurrenceID,
+      authorization_part_id: input.authorizationPartID,
       permission_request_id: input.permissionRequestID,
       confirmation_snapshot: input.confirmation,
       target_course_version: receipt?.courseVersion ?? null,

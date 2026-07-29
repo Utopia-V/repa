@@ -14,6 +14,9 @@ export function ask(
       onFailure: (error): LearningCommand.PermissionOutcome => {
         if (error instanceof PermissionV1.DeniedError) return { type: "deny" }
         if (error instanceof PermissionV1.CorrectedError) return { type: "correct" }
+        if (error instanceof PermissionV1.RejectedError && input.lifecycle?.resolution === "request_exact") {
+          return { type: "deny" }
+        }
         return { type: "cancel" }
       },
       onSuccess: (): LearningCommand.PermissionOutcome => ({ type: "allow" }),

@@ -6,6 +6,7 @@ import type {
   SessionUpdate,
 } from "@agentclientprotocol/sdk"
 import type { Event, OpencodeClient } from "@opencode-ai/sdk/v2"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { createTwoFilesPatch } from "diff"
 import { Effect, ManagedRuntime } from "effect"
@@ -340,6 +341,21 @@ describe("acp permissions", () => {
     expect(harness.replies[0]).toMatchObject({ requestID: "perm_cancelled", reply: "reject" })
   })
 
+  it("preserves an explicit cancel for exact-reply requests", async () => {
+    const harness = createHarness(() => Promise.resolve({ outcome: { outcome: "cancelled" } }))
+    await createSession(harness.session, "ses_a")
+
+    harness.subscription.handle(
+      permissionAsked("ses_a", "perm_cancelled", {
+        metadata: { [PermissionV1.EXACT_REPLY_METADATA_KEY]: true },
+      }),
+    )
+
+    await pollUntil(() => harness.replies.length === 1, "cancelled exact permission was never replied")
+
+    expect(harness.replies[0]).toMatchObject({ requestID: "perm_cancelled", reply: "cancel" })
+  })
+
   it("rejects when requestPermission fails", async () => {
     const harness = createHarness(() => Promise.reject(new Error("client permission UI failed")))
     await createSession(harness.session, "ses_a")
@@ -349,6 +365,28 @@ describe("acp permissions", () => {
     await pollUntil(() => harness.replies.length === 1, "failed permission was never rejected")
 
     expect(harness.replies[0]).toMatchObject({ requestID: "perm_failed", reply: "reject" })
+  })
+
+  it("does not fabricate a learner reply when an exact request transport fails", async () => {
+    let attempt = 0
+    const harness = createHarness(() => {
+      attempt++
+      if (attempt === 1) return Promise.reject(new Error("client permission UI failed"))
+      return Promise.resolve({ outcome: { outcome: "selected", optionId: "once" } })
+    })
+    await createSession(harness.session, "ses_a")
+
+    harness.subscription.handle(
+      permissionAsked("ses_a", "perm_failed_exact", {
+        metadata: { [PermissionV1.EXACT_REPLY_METADATA_KEY]: true },
+      }),
+    )
+    harness.subscription.handle(permissionAsked("ses_a", "perm_after_failure"))
+
+    await pollUntil(() => harness.requests.length === 2, "permission queue did not advance after transport failure")
+    await pollUntil(() => harness.replies.length === 1, "permission after transport failure was never replied")
+
+    expect(harness.replies).toEqual([{ requestID: "perm_after_failure", reply: "once", directory: "/workspace" }])
   })
 
   it("does not let a blocked session A permission block session B message updates", async () => {

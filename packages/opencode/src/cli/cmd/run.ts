@@ -1,4 +1,4 @@
-import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 // CLI entry point for `opencode run` and `opencode --mini`.
 //
@@ -49,6 +49,15 @@ function resolveRunInput(value?: string, piped?: string): string | undefined {
   }
 
   return value + "\n" + piped
+}
+
+export function nonInteractivePermissionDecision(
+  request: Pick<PermissionV1.Request, "metadata">,
+  auto: boolean,
+): "once" | "reject" | "interrupt" {
+  if (auto) return "once"
+  if (PermissionV1.exactReplyRequired(request)) return "interrupt"
+  return "reject"
 }
 
 type FilePart = {
@@ -651,7 +660,11 @@ export const RunCommand = effectCmd({
         // to stdout/UI. `client` is passed explicitly because attach mode may
         // rebind the SDK to the session's directory after the subscription is
         // created, and replies issued from inside the loop must use that client.
-        async function loop(client: OpencodeClient, events: Awaited<ReturnType<typeof sdk.event.subscribe>>) {
+        async function loop(
+          client: OpencodeClient,
+          events: Awaited<ReturnType<typeof sdk.event.subscribe>>,
+          turnID: string,
+        ) {
           const toggles = new Map<string, boolean>()
           let error: string | undefined
 
@@ -754,22 +767,36 @@ export const RunCommand = effectCmd({
               const permission = event.properties
               if (permission.sessionID !== sessionID) continue
 
-              if (auto) {
+              const decision = nonInteractivePermissionDecision(permission, auto)
+              if (decision === "once") {
                 await client.permission.reply({
                   requestID: permission.id,
                   reply: "once",
                 })
-              } else {
-                UI.println(
-                  UI.Style.TEXT_WARNING_BOLD + "!",
-                  UI.Style.TEXT_NORMAL +
-                    `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
-                )
-                await client.permission.reply({
-                  requestID: permission.id,
-                  reply: "reject",
-                })
+                continue
               }
+
+              if (decision === "interrupt") {
+                const message =
+                  `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); ` +
+                  "an interactive reply is required, interrupting the turn"
+                if (!emit("error", { error: { name: "PermissionReplyUnavailable", data: { message } } })) {
+                  UI.error(message)
+                }
+                error = error ? error + EOL + message : message
+                await client.session.interruptTurn({ sessionID, turnID }, { throwOnError: true })
+                continue
+              }
+
+              UI.println(
+                UI.Style.TEXT_WARNING_BOLD + "!",
+                UI.Style.TEXT_NORMAL +
+                  `permission requested: ${permission.permission} (${permission.patterns.join(", ")}); auto-rejecting`,
+              )
+              await client.permission.reply({
+                requestID: permission.id,
+                reply: "reject",
+              })
             }
           }
           return error
@@ -782,7 +809,8 @@ export const RunCommand = effectCmd({
 
         if (!interactive) {
           const events = await client.event.subscribe()
-          const completed = loop(client, events).catch((e) => {
+          const turnID = Identifier.create("trn", "ascending")
+          const completed = loop(client, events, turnID).catch((e) => {
             console.error(e)
             process.exitCode = 1
           })
@@ -803,7 +831,7 @@ export const RunCommand = effectCmd({
             const { expandCommandTemplate } = await import("./run/stream.transport")
             const result = await client.session.start({
               sessionID,
-              turnID: Identifier.create("trn", "ascending"),
+              turnID,
               inputID: Identifier.create("tri", "ascending"),
               messageID: Identifier.ascending("message"),
               agent: command.agent ?? agent,
@@ -825,7 +853,7 @@ export const RunCommand = effectCmd({
           const model = pick(args.model)
           const result = await client.session.start({
             sessionID,
-            turnID: Identifier.create("trn", "ascending"),
+            turnID,
             inputID: Identifier.create("tri", "ascending"),
             messageID: Identifier.ascending("message"),
             agent,

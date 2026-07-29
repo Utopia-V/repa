@@ -38,7 +38,7 @@ export const PermissionApi = HttpApi.make("permission")
           OpenApi.annotations({
             identifier: "permission.reply",
             summary: "Respond to permission request",
-            description: "Approve or deny a permission request from the AI assistant.",
+            description: "Approve, deny, or cancel a permission request from the AI assistant.",
           }),
         ),
       )

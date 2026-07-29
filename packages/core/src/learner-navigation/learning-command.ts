@@ -47,7 +47,10 @@ export function lookupDefaultCoursePermissionRequestID(tx: Transaction, partID: 
     .from(LearnerDefaultCourseCommandTable)
     .where(eq(LearnerDefaultCourseCommandTable.invocation_part_id, partID))
     .get()
-    .pipe(Effect.map((row) => row?.permissionRequestID), Effect.orDie)
+    .pipe(
+      Effect.map((row) => row?.permissionRequestID),
+      Effect.orDie,
+    )
 }
 
 export function reserveNavigation(tx: Transaction, input: NavigationInvocation) {
@@ -191,6 +194,7 @@ function settleDefault(
     }
     const applied = yield* LearnerNavigation.applyDefault(tx, {
       occurrenceID: input.envelope.occurrenceID,
+      authorizationPartID: partID,
       command: input.command,
       permissionRequestID: input.permissionRequestID,
       confirmation: prepared.confirmation,

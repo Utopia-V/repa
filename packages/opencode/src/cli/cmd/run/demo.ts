@@ -1210,8 +1210,12 @@ export function createRunDemo(input: Input) {
     } satisfies Event
     feed(state, event)
 
-    if (input.reply === "reject") {
-      failTool(state, item.ref, input.message || "permission rejected")
+    if (input.reply === "reject" || input.reply === "cancel") {
+      failTool(
+        state,
+        item.ref,
+        input.message || (input.reply === "cancel" ? "permission cancelled" : "permission rejected"),
+      )
       return true
     }
 

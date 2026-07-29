@@ -23,9 +23,14 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { isRecord } from "@/util/record"
 import { RuntimeFlags } from "@/effect/runtime-flags"
-import { assertExternalToolID, learningCommandPreparation } from "@/tool/learning-command"
+import {
+  assertExternalToolID,
+  isLearningCommandToolID,
+  learningCommandPreparation,
+  normalizeHostPreparedToolInput,
+  toolCallPreparation,
+} from "@/tool/learning-command"
 import { assertExternalContentToolID } from "@/tool/content-root"
-import { normalizeCommand as normalizeLearningCommandInput } from "@/learning-command/input"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -127,16 +132,17 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
     authority: input.authority,
   })) {
     const schema = ProviderTransform.schema(input.model, ToolJsonSchema.fromTool(item))
-    const prepareLearningCommand = learningCommandPreparation(item)
+    const prepareToolCall = toolCallPreparation(item)
+    const learningCommand = isLearningCommandToolID(item.id)
     const local = tool({
       description: item.description,
       inputSchema: jsonSchema(schema),
       execute(args, options) {
         return run.promise(
           Effect.gen(function* () {
-            const canonicalArgs = prepareLearningCommand ? normalizeLearningCommandInput(item.id, args) : args
+            const canonicalArgs = prepareToolCall ? normalizeHostPreparedToolInput(item.id, args) : args
             const ctx = context(toRecord(canonicalArgs), options)
-            if (!prepareLearningCommand) {
+            if (!prepareToolCall) {
               yield* plugin.trigger(
                 "tool.execute.before",
                 { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID },
@@ -153,9 +159,9 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
                 messageID: input.processor.message.id,
               })),
             }
-            if (prepareLearningCommand) {
+            if (learningCommand) {
               yield* observeLearningCommandResult(plugin, item.id, ctx.sessionID, ctx.callID, canonicalArgs, output)
-            } else {
+            } else if (!prepareToolCall) {
               yield* plugin.trigger(
                 "tool.execute.after",
                 { tool: item.id, sessionID: ctx.sessionID, callID: ctx.callID, args },
@@ -170,12 +176,12 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
         )
       },
     })
-    if (prepareLearningCommand) {
+    if (prepareToolCall) {
       const prepared = local as AITool & {
         [SessionProcessor.ToolCallPreparation]: SessionProcessor.ToolCallPreparation
       }
       prepared[SessionProcessor.ToolCallPreparation] = (args, registration) => {
-        return run.promise(prepareLearningCommandCall(plugin, item.id, args, registration, prepareLearningCommand))
+        return run.promise(prepareHostToolCall(plugin, item.id, args, registration, prepareToolCall))
       }
     }
     tools[item.id] = local
@@ -556,8 +562,18 @@ export function prepareLearningCommandCall(
   registration: SessionProcessor.RegisteredToolCall,
   prepare: NonNullable<ReturnType<typeof learningCommandPreparation>>,
 ) {
+  return prepareHostToolCall(plugin, toolID, input, registration, prepare)
+}
+
+export function prepareHostToolCall(
+  plugin: Plugin.Interface,
+  toolID: string,
+  input: unknown,
+  registration: SessionProcessor.RegisteredToolCall,
+  prepare: NonNullable<ReturnType<typeof toolCallPreparation>>,
+) {
   return Effect.gen(function* () {
-    const canonical = normalizeLearningCommandInput(toolID, input)
+    const canonical = normalizeHostPreparedToolInput(toolID, input)
     yield* plugin.trigger(
       "tool.execute.before",
       { tool: toolID, sessionID: registration.sessionID, callID: registration.callID },

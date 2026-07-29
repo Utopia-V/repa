@@ -9,8 +9,7 @@ export { SemanticPresentationV1 }
 export const REQUIRED_METADATA_KEY = "semanticPresentationRequired"
 export const PRESENTATION_METADATA_KEY = "semanticPresentationBasis"
 
-const CONTENT_WARNING =
-  "This allows one direct file change only. It does not allow Shell, network, or sibling paths."
+const CONTENT_WARNING = "This allows one direct file change only. It does not allow Shell, network, or sibling paths."
 
 const consequentialPermissionCapabilities = new Set([
   "accept_course_view_revision",
@@ -37,14 +36,19 @@ type CourseLocator = Extract<
   SemanticPresentationV1.ProposalBasis,
   { readonly kind: "accept_course_view_revision" }
 >["locator"]
-type RouteResult = Extract<
-  SemanticPresentationV1.ResultBasis,
-  { readonly kind: "course_route_anchor_result" }
->
+type RouteResult = Extract<SemanticPresentationV1.ResultBasis, { readonly kind: "course_route_anchor_result" }>
 type RetainedResult = Extract<
   SemanticPresentationV1.ResultBasis,
   { readonly kind: "retained_learning_steering_result" }
 >
+type DefaultV2AuthorizationBasis = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "default_course_v2_capability" }
+>["authorization"]
+type DefaultV2Endpoint = DefaultV2AuthorizationBasis["from"]
+type DefaultV2Result = Extract<SemanticPresentationV1.ResultBasis, { readonly kind: "default_course_v2_result" }>
+type DefaultAcknowledgement = NonNullable<DefaultV2Result["acknowledgement"]>
+type DefaultEndpoint = DefaultV2Endpoint | DefaultAcknowledgement["from"]
 
 export type ProposalProjection = Readonly<{
   phase: "proposal"
@@ -121,16 +125,28 @@ export function metadata(value: SemanticPresentationV1.Presentation) {
   } as const
 }
 
-export function readProposal(request: PermissionRequest, required = requiresPermission(request.permission)): Read<ProposalProjection> {
+export function readProposal(
+  request: PermissionRequest,
+  required = requiresPermission(request.permission),
+): Read<ProposalProjection> {
   const decoded = readPhase(request.metadata, decodeProposal, required)
   if (decoded.type !== "valid") return decoded
   const expected = expectedProposal(decoded.value)
   if (!expected) return { type: "invalid" }
+  const exactReply =
+    typeof request.metadata === "object" &&
+    request.metadata !== null &&
+    !Array.isArray(request.metadata) &&
+    (request.metadata as Record<string, unknown>)[PermissionV1.EXACT_REPLY_METADATA_KEY] === true
   if (
     request.permission !== expected.capability ||
     !same(request.patterns, expected.patterns) ||
     !same(request.always, expected.always) ||
-    !same(request.metadata, expected.metadata) ||
+    // Permission owns this carrier constraint; it does not change the proposal's semantic authority.
+    !same(request.metadata, {
+      ...expected.metadata,
+      ...(exactReply ? { [PermissionV1.EXACT_REPLY_METADATA_KEY]: true } : {}),
+    }) ||
     !bindingMatchesRequest(decoded.value.basis.binding, request)
   ) {
     return { type: "invalid" }
@@ -168,11 +184,7 @@ export function projectResultBasis(basis: SemanticPresentationV1.ResultBasis) {
   return projectResult(basis)
 }
 
-function readPhase<A>(
-  value: unknown,
-  decode: (value: unknown) => Option.Option<A>,
-  required: boolean,
-): Read<A> {
+function readPhase<A>(value: unknown, decode: (value: unknown) => Option.Option<A>, required: boolean): Read<A> {
   if (!isRecord(value)) return required ? { type: "invalid" } : { type: "absent" }
   const marked = value[REQUIRED_METADATA_KEY] === true
   const supplied = Object.hasOwn(value, PRESENTATION_METADATA_KEY)
@@ -281,6 +293,28 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
         command,
       },
       binding: command,
+    })
+  }
+  if (basis.kind === "default_course_v2_capability") {
+    const authorization = basis.authorization
+    if (
+      authorization.kind !== authorization.source.kind ||
+      authorization.command.kind !== "default_course_preference" ||
+      !defaultAuthorizationTargetMatches(authorization)
+    ) {
+      return undefined
+    }
+    const pattern = authorization.to.kind === "course" ? authorization.to.locator.courseID : "clear"
+    return expected(value, {
+      capability: "set_default_course_preference",
+      patterns: [pattern],
+      always: [pattern],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        navigationKind: "default_course_preference",
+        authorization,
+      },
     })
   }
   if (basis.kind === "course_route_anchor") {
@@ -422,9 +456,7 @@ function navigationCommand(
   }
 }
 
-function retainedCommand(
-  basis: Extract<SemanticPresentationV1.ProposalBasis, { kind: "retained_learning_steering" }>,
-) {
+function retainedCommand(basis: Extract<SemanticPresentationV1.ProposalBasis, { kind: "retained_learning_steering" }>) {
   const common = {
     action: basis.action,
     sourceExcerpt: basis.sourceExcerpt,
@@ -497,10 +529,8 @@ function goalCommand(operations: readonly SemanticPresentationV1.GoalProposalOpe
     if (!goalSourceMatchesOperation(operation)) return undefined
     if (operation.meaning.disposition !== "superseded") return undefined
     if (
-      (operation.replacementTarget.type === "new" &&
-        operation.resultIntent !== "supersede_with_new_goal") ||
-      (operation.replacementTarget.type === "existing" &&
-        operation.resultIntent !== "supersede_with_existing_goal")
+      (operation.replacementTarget.type === "new" && operation.resultIntent !== "supersede_with_new_goal") ||
+      (operation.replacementTarget.type === "existing" && operation.resultIntent !== "supersede_with_existing_goal")
     ) {
       return undefined
     }
@@ -563,32 +593,55 @@ function projectProposal(
   approval: "once_only" | "policy",
 ): ProposalProjection {
   if (basis.kind === "accept_course_view_revision") {
-    return proposalProjection(basis, approval, "accept_course_view_revision", "Accept this Course View revision",
-      "This approval is bound to one exact Course revision and the displayed state versions.", [
+    return proposalProjection(
+      basis,
+      approval,
+      "accept_course_view_revision",
+      "Accept this Course View revision",
+      "This approval is bound to one exact Course revision and the displayed state versions.",
+      [
         ...courseLocatorFacts(basis.locator),
         fact("Expected Course version", basis.expectedCourseVersion),
-        fact("Expected selection", basis.expectedSelectionRevisionID ? `revision present; version ${basis.expectedSelectionVersion}` : `none; version ${basis.expectedSelectionVersion}`),
+        fact(
+          "Expected selection",
+          basis.expectedSelectionRevisionID
+            ? `revision present; version ${basis.expectedSelectionVersion}`
+            : `none; version ${basis.expectedSelectionVersion}`,
+        ),
         fact("Expected View version", basis.expectedViewVersion),
         fact("Expected Revision version", basis.expectedRevisionVersion),
-      ])
+      ],
+    )
   }
   if (basis.kind === "representation_convert") {
-    return proposalProjection(basis, approval, "representation.convert", "Create a readable representation",
-      "This approval converts one exact Artifact revision with the trusted producer shown below.", [
+    return proposalProjection(
+      basis,
+      approval,
+      "representation.convert",
+      "Create a readable representation",
+      "This approval converts one exact Artifact revision with the trusted producer shown below.",
+      [
         fact("Artifact", basis.effectiveArtifactID),
         fact("Source Revision", basis.sourceRevisionID),
         fact("Producer", basis.producerKind),
-      ])
+      ],
+    )
   }
   if (basis.kind === "content_mutation") {
-    return proposalProjection(basis, approval, "content_mutation", `Allow one file ${basis.operation}`,
-      CONTENT_WARNING, [
+    return proposalProjection(
+      basis,
+      approval,
+      "content_mutation",
+      `Allow one file ${basis.operation}`,
+      CONTENT_WARNING,
+      [
         fact("Operation", basis.operation),
         fact("Anchor", basis.anchorPath),
         fact("Relative path", basis.relativePath),
         fact("Lifetime", basis.lifetime),
         fact("Rights", basis.rights.join(", ")),
-      ])
+      ],
+    )
   }
   if (basis.kind === "default_course_confirmation") {
     return proposalProjection(
@@ -598,15 +651,48 @@ function projectProposal(
       basis.target ? "Confirm the default Course preference" : "Confirm clearing the default Course preference",
       "This one-time confirmation is bound to the exact current preference and target state.",
       [
-        fact("Current preference", basis.fromCourseTitle ? `"${basis.fromCourseTitle}"; version ${basis.version}` : `none; version ${basis.version}`),
+        fact(
+          "Current preference",
+          basis.fromCourseTitle
+            ? `"${basis.fromCourseTitle}"; version ${basis.version}`
+            : `none; version ${basis.version}`,
+        ),
         fact("Target Course", basis.target ? `"${basis.target.courseTitle}"` : "none"),
         ...(basis.target
           ? [
-              fact("Target versions", `Course ${basis.target.courseVersion}; selection ${basis.target.selectionVersion}`),
-              fact("Working View", basis.target.viewName ? `"${basis.target.viewName}"; version ${basis.target.viewVersion}` : "none"),
-              fact("Working Revision", basis.target.selectionRevisionID ? `present; version ${basis.target.revisionVersion}` : "none"),
+              fact(
+                "Target versions",
+                `Course ${basis.target.courseVersion}; selection ${basis.target.selectionVersion}`,
+              ),
+              fact(
+                "Working View",
+                basis.target.viewName ? `"${basis.target.viewName}"; version ${basis.target.viewVersion}` : "none",
+              ),
+              fact(
+                "Working Revision",
+                basis.target.selectionRevisionID ? `present; version ${basis.target.revisionVersion}` : "none",
+              ),
             ]
           : []),
+      ],
+    )
+  }
+  if (basis.kind === "default_course_v2_capability") {
+    return proposalProjection(
+      basis,
+      approval,
+      "set_default_course_preference",
+      basis.authorization.to.kind === "course"
+        ? "Set the default Course preference"
+        : "Clear the default Course preference",
+      "This approval is bound to one exact learner-authorized operation and its symmetric before/after Course locators.",
+      [
+        fact("Authorization", basis.authorization.kind),
+        fact("Operation", basis.authorization.operation),
+        ...defaultEndpointFacts("From", basis.authorization.from),
+        ...defaultEndpointFacts("To", basis.authorization.to),
+        fact("Preference version", basis.authorization.preferenceVersion),
+        fact("Resolution coverage", basis.authorization.resolutionScope.coverage),
       ],
     )
   }
@@ -668,7 +754,10 @@ function projectProposal(
       ? "This one-time candidate becomes correctable Goal state; it is not evidence, mastery, priority, or a study schedule."
       : "This exact learner-authored request becomes correctable Goal state.",
     [
-      fact("Authorization", basis.authorizationBasis === "learner_acceptance" ? "one-time learner acceptance" : "direct learner request"),
+      fact(
+        "Authorization",
+        basis.authorizationBasis === "learner_acceptance" ? "one-time learner acceptance" : "direct learner request",
+      ),
       ...(basis.confirmation?.goalBases.map((goal, index) =>
         fact(`Current Goal basis ${index + 1}`, `"${goal.outcome}"; ${goal.disposition}; version ${goal.version}`),
       ) ?? []),
@@ -698,14 +787,11 @@ function proposalProjection(
   return { phase: "proposal", capability, title, summary, facts, approval }
 }
 
-function expectedResultMetadata(
-  presentation: SemanticPresentationV1.Result,
-  projection: ResultProjection,
-) {
+function expectedResultMetadata(presentation: SemanticPresentationV1.Result, projection: ResultProjection) {
   const basis = presentation.basis
   const common = {
     command: projection.capability,
-    commandVersion: 1,
+    commandVersion: basis.kind === "default_course_v2_result" ? 2 : 1,
     outcome: basis.settlement.outcome,
     ...(basis.settlement.outcome === "error" ? { code: basis.settlement.code } : {}),
     durablySettled: projection.durablySettled,
@@ -737,10 +823,7 @@ function expectedResultMetadata(
 function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProjection | undefined {
   const settlement = basis.settlement
   const outcome = resultOutcome(settlement)
-  const failure =
-    settlement.outcome === "error"
-      ? [fact("Failure", settlement.code)]
-      : []
+  const failure = settlement.outcome === "error" ? [fact("Failure", settlement.code)] : []
   if (basis.kind === "accept_course_view_revision_result") {
     if (
       settlement.outcome === "error" &&
@@ -779,7 +862,9 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
         ...(basis.committedSelection
           ? [
               fact("Committed selection", `version ${basis.committedSelection.version}`),
-              ...(basis.currentSelection ? [fact("Current selection", `version ${basis.currentSelection.version}`)] : []),
+              ...(basis.currentSelection
+                ? [fact("Current selection", `version ${basis.currentSelection.version}`)]
+                : []),
               ...(basis.relation ? [fact("Relation", basis.relation)] : []),
             ]
           : []),
@@ -834,6 +919,85 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       ],
     )
   }
+  if (basis.kind === "default_course_v2_result") {
+    const disposition = basis.disposition
+    const acknowledgement = basis.acknowledgement
+    if (
+      acknowledgement &&
+      (acknowledgement.invocationPartID !== basis.binding.partID || !validDefaultAcknowledgement(acknowledgement))
+    ) {
+      return undefined
+    }
+    if (disposition.kind === "semantic_terminal_v2") {
+      const duplicate = disposition.outcome === "already_applied"
+      if (
+        duplicate
+          ? settlement.outcome !== "already_applied" ||
+            !acknowledgement ||
+            acknowledgement.effectID !== disposition.existingEffectID ||
+            disposition.incomingPayloadFingerprint !== disposition.existingPayloadFingerprint
+          : settlement.outcome !== "error" ||
+            settlement.code !== "semantic_conflict" ||
+            acknowledgement !== undefined ||
+            disposition.incomingPayloadFingerprint === disposition.existingPayloadFingerprint
+      ) {
+        return undefined
+      }
+    } else {
+      const authorization = disposition.authorization
+      const acknowledgementRequired = settlement.outcome === "applied" || settlement.outcome === "already_applied"
+      if (
+        authorization.kind !== authorization.source.kind ||
+        !defaultAuthorizationTargetMatches(authorization) ||
+        acknowledgementRequired !== Boolean(acknowledgement) ||
+        ((settlement.outcome === "applied" || settlement.outcome === "already_applied") &&
+          acknowledgement &&
+          (acknowledgement.authorizationVersion !== 2 || acknowledgement.operation !== authorization.operation)) ||
+        (settlement.outcome === "applied" &&
+          acknowledgement &&
+          (acknowledgement.authorizationVersion !== 2 ||
+            acknowledgement.effectAuthorizationPartID !== basis.binding.partID ||
+            acknowledgement.operation !== authorization.operation ||
+            !same(acknowledgement.from, authorization.from) ||
+            !same(acknowledgement.to, authorization.to)))
+      ) {
+        return undefined
+      }
+    }
+    const owner =
+      disposition.kind === "candidate_v2"
+        ? [
+            fact("Disposition", disposition.kind),
+            fact("Authorization", disposition.authorization.kind),
+            fact("Operation", disposition.authorization.operation),
+            ...defaultEndpointFacts("From", disposition.authorization.from),
+            ...defaultEndpointFacts("To", disposition.authorization.to),
+          ]
+        : [
+            fact("Disposition", disposition.kind),
+            fact("Semantic outcome", disposition.outcome),
+            fact("Existing effect", disposition.existingEffectID),
+          ]
+    return resultProjection(
+      basis,
+      "set_default_course_preference",
+      "Default Course preference",
+      resultSummary("Default Course preference", outcome),
+      [
+        ...failure,
+        ...owner,
+        ...(acknowledgement
+          ? [
+              fact("Effect authorization", acknowledgement.effectAuthorizationPartID),
+              fact("Operation", acknowledgement.operation),
+              ...defaultEndpointFacts("Effect from", acknowledgement.from),
+              ...defaultEndpointFacts("Effect to", acknowledgement.to),
+              fact("Relation", acknowledgement.relation),
+            ]
+          : []),
+      ],
+    )
+  }
   if (basis.kind === "course_route_anchor_result") {
     if (
       settlement.outcome === "error" &&
@@ -859,9 +1023,7 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       [
         ...failure,
         ...(basis.effect?.locator ? courseLocatorFacts(basis.effect.locator, "Committed ") : []),
-        ...(basis.effect
-          ? [fact("Committed anchor", `${basis.effect.target}; version ${basis.effect.version}`)]
-          : []),
+        ...(basis.effect ? [fact("Committed anchor", `${basis.effect.target}; version ${basis.effect.version}`)] : []),
         ...(basis.current?.locator ? courseLocatorFacts(basis.current.locator, "Current ") : []),
         ...(basis.current
           ? [
@@ -902,83 +1064,71 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       return undefined
     }
     const title = basis.action === "retract" ? "Removed retained learning steering" : "Retained learning steering"
-    return resultProjection(
-      basis,
-      "update_retained_learning_steering",
-      title,
-      resultSummary(title, outcome),
-      [
-        ...failure,
-        ...(basis.effect
-          ? [
-              fact("Action", basis.action!),
-              fact("Scope", basis.scope!),
-              ...(basis.action === "retract"
-                ? basis.previous?.operativeInstruction
-                  ? [fact("Retracted instruction", basis.previous.operativeInstruction)]
-                  : []
-                : basis.effect.operativeInstruction
-                  ? [fact("Instruction", basis.effect.operativeInstruction)]
-                  : []),
-              ...(basis.effect.validUntilNormalized
-                ? [fact("Valid until", basis.effect.validUntilNormalized)]
+    return resultProjection(basis, "update_retained_learning_steering", title, resultSummary(title, outcome), [
+      ...failure,
+      ...(basis.effect
+        ? [
+            fact("Action", basis.action!),
+            fact("Scope", basis.scope!),
+            ...(basis.action === "retract"
+              ? basis.previous?.operativeInstruction
+                ? [fact("Retracted instruction", basis.previous.operativeInstruction)]
+                : []
+              : basis.effect.operativeInstruction
+                ? [fact("Instruction", basis.effect.operativeInstruction)]
                 : []),
-              ...(basis.effect.boundaryTimeZone && basis.effect.boundaryUtcOffsetMinutes !== undefined
+            ...(basis.effect.validUntilNormalized ? [fact("Valid until", basis.effect.validUntilNormalized)] : []),
+            ...(basis.effect.boundaryTimeZone && basis.effect.boundaryUtcOffsetMinutes !== undefined
+              ? [
+                  fact(
+                    "Time zone",
+                    `${basis.effect.boundaryTimeZone} (${utcOffset(basis.effect.boundaryUtcOffsetMinutes)})`,
+                  ),
+                ]
+              : []),
+            ...(basis.action === "replace" && basis.previous
+              ? [
+                  fact(
+                    "Replaces",
+                    `version ${basis.previous.version}: ${basis.previous.operativeInstruction ?? basis.previous.state}`,
+                  ),
+                ]
+              : basis.action === "replace" && settlement.outcome === "no_change"
                 ? [
                     fact(
-                      "Time zone",
-                      `${basis.effect.boundaryTimeZone} (${utcOffset(basis.effect.boundaryUtcOffsetMinutes)})`,
-                    ),
-                  ]
-                : []),
-              ...(basis.action === "replace" && basis.previous
-                ? [
-                    fact(
-                      "Replaces",
-                      `version ${basis.previous.version}: ${
-                        basis.previous.operativeInstruction ?? basis.previous.state
-                      }`,
-                    ),
-                  ]
-                : basis.action === "replace" && settlement.outcome === "no_change"
-                  ? [
-                      fact(
-                        "Replacement relation",
-                        `The requested replacement already matches current version ${basis.effect.version}.`,
-                      ),
-                    ]
-                  : []),
-              fact("State", basis.effect.state),
-              fact("Status", basis.effect.status),
-              fact("Version", basis.effect.version),
-              ...(basis.action === "retract"
-                ? [
-                    fact("Effect", "This retained instruction no longer applies."),
-                    fact("Correction", "A later explicit learner direction can reinstate or replace it."),
-                  ]
-                : [
-                    fact(
-                      "Correction",
-                      "Replace or retract this retained instruction with a later explicit learner direction.",
-                    ),
-                  ]),
-              ...(basis.relation === "superseded"
-                ? [
-                    fact("Relation", "superseded"),
-                    fact(
-                      "Current policy",
-                      `version ${basis.current!.version}; ${basis.current!.state}${
-                        basis.current!.operativeInstruction
-                          ? `: ${basis.current!.operativeInstruction}`
-                          : ""
-                      }`,
+                      "Replacement relation",
+                      `The requested replacement already matches current version ${basis.effect.version}.`,
                     ),
                   ]
                 : []),
-            ]
-          : []),
-      ],
-    )
+            fact("State", basis.effect.state),
+            fact("Status", basis.effect.status),
+            fact("Version", basis.effect.version),
+            ...(basis.action === "retract"
+              ? [
+                  fact("Effect", "This retained instruction no longer applies."),
+                  fact("Correction", "A later explicit learner direction can reinstate or replace it."),
+                ]
+              : [
+                  fact(
+                    "Correction",
+                    "Replace or retract this retained instruction with a later explicit learner direction.",
+                  ),
+                ]),
+            ...(basis.relation === "superseded"
+              ? [
+                  fact("Relation", "superseded"),
+                  fact(
+                    "Current policy",
+                    `version ${basis.current!.version}; ${basis.current!.state}${
+                      basis.current!.operativeInstruction ? `: ${basis.current!.operativeInstruction}` : ""
+                    }`,
+                  ),
+                ]
+              : []),
+          ]
+        : []),
+    ])
   }
   if (basis.kind === "learner_goals_result") {
     if (settlement.outcome !== "error" && (!basis.authorizationBasis || basis.operations.length === 0)) {
@@ -992,11 +1142,14 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       [
         ...failure,
         ...(basis.authorizationBasis
-          ? [fact("Authorization", basis.authorizationBasis === "learner_acceptance" ? "learner acceptance" : "direct learner request")]
+          ? [
+              fact(
+                "Authorization",
+                basis.authorizationBasis === "learner_acceptance" ? "learner acceptance" : "direct learner request",
+              ),
+            ]
           : []),
-        ...basis.operations.map((operation) =>
-          fact(`Goal change ${operation.ordinal + 1}`, goalResultText(operation)),
-        ),
+        ...basis.operations.map((operation) => fact(`Goal change ${operation.ordinal + 1}`, goalResultText(operation))),
       ],
     )
   }
@@ -1129,10 +1282,7 @@ function goalResultText(operation: SemanticPresentationV1.GoalResultOperation) {
   return lines.join("\n")
 }
 
-function goalMeaningLines(
-  meaning: SemanticPresentationV1.GoalProposalOperation["meaning"],
-  prefix = "",
-) {
+function goalMeaningLines(meaning: SemanticPresentationV1.GoalProposalOperation["meaning"], prefix = "") {
   return [
     `${prefix}Outcome: ${meaning.outcome}`,
     `${prefix}Conditions: ${meaning.conditions.length ? meaning.conditions.join("; ") : "none"}`,
@@ -1169,9 +1319,7 @@ function goalFieldBases(bases: SemanticPresentationV1.GoalProposalOperation["mea
     .join("; ")
 }
 
-function fieldBasis(
-  basis: SemanticPresentationV1.GoalProposalOperation["meaning"]["fieldBases"]["outcome"],
-) {
+function fieldBasis(basis: SemanticPresentationV1.GoalProposalOperation["meaning"]["fieldBases"]["outcome"]) {
   if (basis.type === "authored") return `authored from “${basis.sourceExcerpt}”`
   if (basis.type === "accepted") return "accepted in this confirmation"
   return "carried from the preceding Goal revision"
@@ -1205,14 +1353,8 @@ function bindingMatchesPart(binding: SemanticPresentationV1.ToolBinding, part: C
 
 function courseLocatorFacts(locator: CourseLocator, prefix = ""): readonly Fact[] {
   return [
-    fact(
-      `${prefix}Course`,
-      locatorValue(locator.course.title, locator.course.id, locator.course.showID),
-    ),
-    fact(
-      `${prefix}View`,
-      locatorValue(locator.view.name, locator.view.id, locator.view.showID),
-    ),
+    fact(`${prefix}Course`, locatorValue(locator.course.title, locator.course.id, locator.course.showID)),
+    fact(`${prefix}View`, locatorValue(locator.view.name, locator.view.id, locator.view.showID)),
     fact(
       `${prefix}Revision`,
       locatorValue(`#${locator.revision.number}`, locator.revision.id, locator.revision.showID),
@@ -1278,6 +1420,138 @@ function fact(label: string, value: string | number): Fact {
   return { label, value: String(value) }
 }
 
+function defaultAuthorizationTargetMatches(authorization: DefaultV2AuthorizationBasis) {
+  const target = authorization.command.target
+  const selected = authorization.resolutionScope.selectedCourseID
+  const selectedCandidates = authorization.resolutionScope.candidates.filter(
+    (candidate) => candidate.courseID === selected,
+  )
+  const operation =
+    authorization.from.kind === "absent" && authorization.to.kind === "course"
+      ? "set"
+      : authorization.from.kind === "course" && authorization.to.kind === "absent"
+        ? "clear"
+        : "change"
+  if (
+    authorization.command.expectedHeadID !== authorization.preferenceHeadID ||
+    authorization.command.expectedVersion !== authorization.preferenceVersion ||
+    !validDefaultV2Endpoint(authorization.from) ||
+    !validDefaultV2Endpoint(authorization.to) ||
+    authorization.operation !== operation ||
+    selected !== (target?.courseID ?? null) ||
+    (authorization.resolutionScope.coverage === "complete"
+      ? authorization.resolutionScope.truncation !== undefined
+      : !authorization.resolutionScope.truncation?.reason.trim()) ||
+    (authorization.source.kind === "direct_request_v2" && authorization.resolutionScope.coverage !== "complete")
+  ) {
+    return false
+  }
+  if (!target) return authorization.to.kind === "absent" && selectedCandidates.length === 0
+  if (
+    selectedCandidates.length !== 1 ||
+    selectedCandidates[0]!.courseVersion !== target.courseVersion ||
+    authorization.to.kind !== "course" ||
+    authorization.to.locator.courseID !== target.courseID ||
+    authorization.to.locator.title.availability !== "recorded_v2" ||
+    authorization.to.locator.title.value !== selectedCandidates[0]!.title ||
+    authorization.to.locator.courseVersion.availability !== "recorded_v2" ||
+    authorization.to.locator.courseVersion.value !== target.courseVersion ||
+    authorization.to.locator.workingSelection.availability !== "recorded_v2"
+  ) {
+    return false
+  }
+  const selection = authorization.to.locator.workingSelection.value
+  return (
+    selection.revisionID === target.selectionRevisionID &&
+    selection.selectionVersion === target.selectionVersion &&
+    selection.viewID === target.viewID &&
+    selection.viewVersion === target.viewVersion &&
+    selection.revisionVersion === target.revisionVersion
+  )
+}
+
+function validDefaultAcknowledgement(acknowledgement: DefaultAcknowledgement) {
+  return (
+    defaultOperation(acknowledgement.from, acknowledgement.to) === acknowledgement.operation &&
+    (acknowledgement.authorizationVersion === 1
+      ? validDefaultV1Endpoint(acknowledgement.from) && validDefaultV1Endpoint(acknowledgement.to)
+      : validDefaultV2Endpoint(acknowledgement.from) && validDefaultV2Endpoint(acknowledgement.to))
+  )
+}
+
+function validDefaultV1Endpoint(endpoint: Extract<DefaultAcknowledgement, { authorizationVersion: 1 }>["from"]) {
+  if (endpoint.kind === "absent") return true
+  const locator = endpoint.locator
+  return (
+    locator.workingSelection.availability === "not_recorded_v1" ||
+    validDefaultWorkingSelection(locator.workingSelection.value)
+  )
+}
+
+function validDefaultV2Endpoint(endpoint: DefaultV2Endpoint) {
+  if (endpoint.kind === "absent") return true
+  return (
+    endpoint.locator.title.availability === "recorded_v2" &&
+    endpoint.locator.courseVersion.availability === "recorded_v2" &&
+    endpoint.locator.workingSelection.availability === "recorded_v2" &&
+    validDefaultWorkingSelection(endpoint.locator.workingSelection.value)
+  )
+}
+
+function validDefaultWorkingSelection(selection: {
+  readonly revisionID: string | null
+  readonly selectionVersion: number
+  readonly viewID: string | null
+  readonly viewName: string | null
+  readonly viewVersion: number | null
+  readonly revisionVersion: number | null
+}) {
+  if (selection.revisionID === null) {
+    return (
+      selection.viewID === null &&
+      selection.viewName === null &&
+      selection.viewVersion === null &&
+      selection.revisionVersion === null
+    )
+  }
+  return (
+    selection.viewID !== null &&
+    selection.viewName !== null &&
+    selection.viewVersion !== null &&
+    selection.revisionVersion !== null
+  )
+}
+
+function defaultOperation(from: DefaultEndpoint, to: DefaultEndpoint) {
+  if (from.kind === "absent" && to.kind === "course") return "set"
+  if (from.kind === "course" && to.kind === "absent") return "clear"
+  return "change"
+}
+
+function defaultEndpointFacts(prefix: string, endpoint: DefaultEndpoint): readonly Fact[] {
+  if (endpoint.kind === "absent") return [fact(prefix, "none")]
+  const locator = endpoint.locator
+  const title = locator.title.availability === "not_recorded_v1" ? "title not recorded" : `"${locator.title.value}"`
+  const courseVersion =
+    locator.courseVersion.availability === "not_recorded_v1"
+      ? "Course version not recorded"
+      : `Course version ${locator.courseVersion.value}`
+  if (locator.workingSelection.availability === "not_recorded_v1") {
+    return [
+      fact(prefix, `${title}; ${locator.courseID}`),
+      fact(`${prefix} versions`, `${courseVersion}; working selection not recorded`),
+    ]
+  }
+  const selection = locator.workingSelection.value
+  return [
+    fact(prefix, `${title}; ${locator.courseID}`),
+    fact(
+      `${prefix} versions`,
+      `${courseVersion}; selection ${selection.selectionVersion}; View ${selection.viewVersion ?? "none"}; Revision ${selection.revisionVersion ?? "none"}`,
+    ),
+  ]
+}
+
 function titleCase(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ")
 }
@@ -1285,14 +1559,20 @@ function titleCase(value: string) {
 function same(left: unknown, right: unknown): boolean {
   if (Object.is(left, right)) return true
   if (Array.isArray(left) || Array.isArray(right)) {
-    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
       left.every((value, index) => same(value, right[index]))
+    )
   }
   if (!isRecord(left) || !isRecord(right)) return false
   const leftKeys = Object.keys(left).sort()
   const rightKeys = Object.keys(right).sort()
-  return leftKeys.length === rightKeys.length &&
+  return (
+    leftKeys.length === rightKeys.length &&
     leftKeys.every((key, index) => key === rightKeys[index] && same(left[key], right[key]))
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

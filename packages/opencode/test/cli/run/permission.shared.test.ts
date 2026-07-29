@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { nonInteractivePermissionDecision } from "@/cli/cmd/run"
 import {
   createPermissionBodyState,
   permissionAlwaysLines,
@@ -62,7 +64,7 @@ describe("run permission shared", () => {
     })
 
     const genericPrompt = req({ metadata: { permissionPromptRequired: true } })
-    expect(permissionConstraint(genericPrompt)).toEqual({ onceOnly: true, rejectOnly: false })
+    expect(permissionConstraint(genericPrompt)).toEqual({ onceOnly: true, rejectOnly: false, exactReply: false })
     expect(permissionOptions("permission", permissionConstraint(genericPrompt).onceOnly)).toEqual(["once", "reject"])
   })
 
@@ -82,15 +84,39 @@ describe("run permission shared", () => {
       selected: "reject",
     })
 
-    expect(permissionEscape(createPermissionBodyState("perm-1"))).toMatchObject({
+    expect(permissionEscape(createPermissionBodyState("perm-1"), "perm-1").state).toMatchObject({
       stage: "reject",
       selected: "reject",
     })
 
-    expect(permissionEscape({ ...next.state, stage: "always", selected: "confirm" })).toMatchObject({
+    expect(permissionEscape({ ...next.state, stage: "always", selected: "confirm" }, "perm-1").state).toMatchObject({
       stage: "permission",
       selected: "always",
     })
+  })
+
+  test("exposes targeted cancel only for exact-reply requests", () => {
+    const exact = req({ metadata: { [PermissionV1.EXACT_REPLY_METADATA_KEY]: true } })
+    const constraint = permissionConstraint(exact)
+
+    expect(constraint).toEqual({ onceOnly: false, rejectOnly: false, exactReply: true })
+    expect(permissionOptions("permission", false, false, true)).toEqual(["once", "always", "reject", "cancel"])
+    expect(permissionRun(createPermissionBodyState(exact.id), exact.id, "cancel", false, false, true).reply).toEqual({
+      requestID: exact.id,
+      reply: "cancel",
+    })
+    expect(permissionEscape(createPermissionBodyState(exact.id), exact.id, true).reply).toEqual({
+      requestID: exact.id,
+      reply: "cancel",
+    })
+  })
+
+  test("interrupts headless exact requests without fabricating a reply", () => {
+    const exact = req({ metadata: { [PermissionV1.EXACT_REPLY_METADATA_KEY]: true } })
+
+    expect(nonInteractivePermissionDecision(req(), false)).toBe("reject")
+    expect(nonInteractivePermissionDecision(exact, false)).toBe("interrupt")
+    expect(nonInteractivePermissionDecision(exact, true)).toBe("once")
   })
 
   test("maps supported permission types into display info", () => {
@@ -216,11 +242,11 @@ describe("run permission shared", () => {
         "Working Revision: present; version 3",
       ],
     })
-    expect(permissionConstraint(projected)).toEqual({ onceOnly: true, rejectOnly: false })
+    expect(permissionConstraint(projected)).toEqual({ onceOnly: true, rejectOnly: false, exactReply: false })
 
     const missing = req({ permission: "set_default_course_preference", metadata: { onceOnly: true } })
     expect(permissionInfo(missing)).toMatchObject({ title: "Permission scope unavailable" })
-    expect(permissionConstraint(missing)).toEqual({ onceOnly: true, rejectOnly: true })
+    expect(permissionConstraint(missing)).toEqual({ onceOnly: true, rejectOnly: true, exactReply: false })
     expect(permissionOptions("permission", true, true)).toEqual(["reject"])
     const state = createPermissionBodyState(missing.id)
     expect(permissionRun(state, missing.id, "once", true, true)).toEqual({ state })

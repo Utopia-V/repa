@@ -4,6 +4,7 @@ import { createMemo, For, Match, Show, Switch } from "solid-js"
 import { Portal, useRenderer, useTerminalDimensions, type JSX } from "@opentui/solid"
 import type { ScrollBoxRenderable, TextareaRenderable } from "@opentui/core"
 import { useTheme, selectedForeground } from "../../context/theme"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { useSDK } from "../../context/sdk"
 import { SplitBorder } from "../../ui/border"
@@ -129,6 +130,7 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
   const semantic = createMemo(() => permissionPresentation(props.request))
   const onceOnly = createMemo(() => isOnceOnlyPermission(props.request))
   const rejectOnly = createMemo(() => semantic().type === "invalid")
+  const exactReply = createMemo(() => PermissionV1.exactReplyRequired(props.request))
 
   const input = createMemo(() => {
     const tool = props.request.tool
@@ -173,6 +175,7 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
           }
           options={{ confirm: "Confirm", cancel: "Cancel" }}
           escapeKey="cancel"
+          escapeTitle="Cancel permission choice"
           onSelect={(option) => {
             setStore("stage", "permission")
             if (option === "cancel") return
@@ -430,7 +433,58 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
             </box>
           )
 
-          const body = (
+          const onSelect = (option: string) => {
+            if (option === "always") {
+              setStore("stage", "always")
+              return
+            }
+            if (option === "cancel") {
+              void sdk.client.permission.reply({
+                reply: "cancel",
+                requestID: props.request.id,
+                directory: props.directory,
+              })
+              return
+            }
+            if (option === "reject") {
+              if (session()?.parentID) {
+                setStore("stage", "reject")
+                return
+              }
+              void sdk.client.permission.reply({
+                reply: "reject",
+                requestID: props.request.id,
+                directory: props.directory,
+              })
+              return
+            }
+            if (option !== "once") return
+            void sdk.client.permission.reply({
+              reply: "once",
+              requestID: props.request.id,
+              directory: props.directory,
+            })
+          }
+
+          const body = exactReply() ? (
+            <Prompt
+              title="Permission required"
+              header={header()}
+              body={current.body}
+              scrollable={semantic().type !== "absent"}
+              options={
+                rejectOnly()
+                  ? { reject: "Reject", cancel: "Cancel" }
+                  : onceOnly()
+                    ? { once: "Allow once", reject: "Reject", cancel: "Cancel" }
+                    : { once: "Allow once", always: "Allow always", reject: "Reject", cancel: "Cancel" }
+              }
+              escapeKey="cancel"
+              escapeTitle="Cancel permission request"
+              fullscreen
+              onSelect={onSelect}
+            />
+          ) : (
             <Prompt
               title="Permission required"
               header={header()}
@@ -445,29 +499,7 @@ export function PermissionPrompt(props: { request: PermissionRequest; directory:
               }
               escapeKey="reject"
               fullscreen
-              onSelect={(option) => {
-                if (option === "always") {
-                  setStore("stage", "always")
-                  return
-                }
-                if (option === "reject") {
-                  if (session()?.parentID) {
-                    setStore("stage", "reject")
-                    return
-                  }
-                  void sdk.client.permission.reply({
-                    reply: "reject",
-                    requestID: props.request.id,
-                    directory: props.directory,
-                  })
-                  return
-                }
-                void sdk.client.permission.reply({
-                  reply: "once",
-                  requestID: props.request.id,
-                  directory: props.directory,
-                })
-              }}
+              onSelect={onSelect}
             />
           )
 
@@ -565,6 +597,7 @@ function Prompt<const T extends Record<string, string>>(props: {
   body: JSX.Element
   options: T
   escapeKey?: keyof T
+  escapeTitle?: string
   fullscreen?: boolean
   scrollable?: boolean
   onSelect: (option: keyof T) => void
@@ -586,7 +619,7 @@ function Prompt<const T extends Record<string, string>>(props: {
     commands: [
       {
         name: "app.exit",
-        title: "Reject permission",
+        title: props.escapeTitle ?? "Reject permission",
         category: "Permission",
         run() {
           if (!props.escapeKey) return
@@ -654,7 +687,7 @@ function Prompt<const T extends Record<string, string>>(props: {
         ? [
             {
               key: "escape",
-              desc: "Reject permission",
+              desc: props.escapeTitle ?? "Reject permission",
               group: "Permission",
               cmd: () => props.onSelect(props.escapeKey!),
             },

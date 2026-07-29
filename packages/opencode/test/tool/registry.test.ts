@@ -21,7 +21,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
 import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
-import { assertExternalToolID } from "@/tool/learning-command"
+import { assertExternalToolID, toolCallPreparation } from "@/tool/learning-command"
 import { Permission } from "@/permission"
 
 const configLayer = TestConfig.layer({
@@ -180,13 +180,11 @@ describe("tool.registry", () => {
       expect(yield* registry.ids()).toContain("__proto__")
       expect(Permission.evaluate("__proto__", "*", agent.permission).action).toBe("deny")
       expect(
-        (
-          yield* registry.tools({
-            providerID: ProviderV2.ID.opencode,
-            modelID: ModelV2.ID.make("test"),
-            agent,
-          })
-        ).map((tool) => tool.id),
+        (yield* registry.tools({
+          providerID: ProviderV2.ID.opencode,
+          modelID: ModelV2.ID.make("test"),
+          agent,
+        })).map((tool) => tool.id),
       ).not.toContain("__proto__")
     }),
   )
@@ -270,6 +268,9 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("set_default_course_preference", "mcp")).toThrow(
         "mcp tool ID set_default_course_preference is reserved by the learning-command runtime",
       )
+      expect(() => assertExternalToolID("propose_default_course_preference", "mcp")).toThrow(
+        "mcp tool ID propose_default_course_preference is reserved by the host-prepared proposal runtime",
+      )
       expect(() => assertExternalToolID("set_course_route_anchor", "mcp")).toThrow(
         "mcp tool ID set_course_route_anchor is reserved by the learning-command runtime",
       )
@@ -282,17 +283,21 @@ describe("tool.registry", () => {
     }),
   )
 
-  it.instance("exposes every closed learning-command capability", () =>
+  it.instance("exposes every closed learning command and host-prepared proposal", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
       const ids = yield* registry.ids()
+      const proposal = (yield* registry.all()).find((tool) => tool.id === "propose_default_course_preference")
 
       expect(ids).toContain("accept_course_view_revision")
       expect(ids).toContain("representation.convert")
+      expect(ids).toContain("propose_default_course_preference")
       expect(ids).toContain("set_default_course_preference")
       expect(ids).toContain("set_course_route_anchor")
       expect(ids).toContain("update_retained_learning_steering")
       expect(ids).toContain("update_learner_goals")
+      expect(proposal).toBeDefined()
+      expect(toolCallPreparation(proposal!)).toBeFunction()
     }),
   )
 

@@ -5,7 +5,7 @@ import { Effect, Semaphore } from "effect"
 import type { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { migrations } from "./migration.gen"
 import { DatabaseSchemaExtras } from "./schema-extras"
-import { triggerStatements, viewStatements } from "./schema-extras-v12"
+import { triggerStatements, viewStatements } from "./schema-extras-v13"
 import schema from "./schema.gen"
 import {
   APPLICATION_ID,
@@ -138,7 +138,11 @@ function checks(db: Database | Transaction, path: string, version: number) {
 }
 
 function normalizeSchemaSQL(value: string) {
-  return value.replace(/\s+/g, " ").replace(/ IF NOT EXISTS /i, " ").trim().replace(/;$/, "")
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/ IF NOT EXISTS /i, " ")
+    .trim()
+    .replace(/;$/, "")
 }
 
 function initialize(db: Database, path: string, input: readonly Migration[]) {

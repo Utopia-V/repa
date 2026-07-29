@@ -16,6 +16,11 @@ const schema = path.join(root, "packages/core/src/database/schema.gen.ts")
 const withoutRowidTables = new Set([
   "course_state_history",
   "learner_course_route_anchor_transition",
+  "learner_default_course_acknowledgement",
+  "learner_default_course_disposition",
+  "learner_default_course_capability_issue",
+  "learner_default_course_capability_settlement",
+  "learner_default_course_proposal",
   "learner_default_course_transition",
   "learner_goal_time_zone",
   "learner_goal_time_zone_release",

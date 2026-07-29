@@ -79,10 +79,19 @@ export function createPermissionBodyState(requestID: string): PermissionBodyStat
   }
 }
 
-export function permissionOptions(stage: PermissionStage, onceOnly = false, rejectOnly = false): PermissionOption[] {
+export function permissionOptions(
+  stage: PermissionStage,
+  onceOnly = false,
+  rejectOnly = false,
+  exactReply = false,
+): PermissionOption[] {
   if (stage === "permission") {
-    if (rejectOnly) return ["reject"]
-    return onceOnly ? ["once", "reject"] : ["once", "always", "reject"]
+    const options: PermissionOption[] = rejectOnly
+      ? ["reject"]
+      : onceOnly
+        ? ["once", "reject"]
+        : ["once", "always", "reject"]
+    return exactReply ? [...options, "cancel"] : options
   }
 
   if (stage === "always") {
@@ -158,8 +167,9 @@ export function permissionShift(
   dir: -1 | 1,
   onceOnly = false,
   rejectOnly = false,
+  exactReply = false,
 ): PermissionBodyState {
-  const list = permissionOptions(state.stage, onceOnly, rejectOnly)
+  const list = permissionOptions(state.stage, onceOnly, rejectOnly, exactReply)
   if (list.length === 0) {
     return state
   }
@@ -185,13 +195,20 @@ export function permissionRun(
   option: PermissionOption,
   onceOnly = false,
   rejectOnly = false,
+  exactReply = false,
 ): PermissionStep {
   if (state.submitting) {
     return { state }
   }
 
   if (state.stage === "permission") {
-    if (rejectOnly && option !== "reject") return { state }
+    if (rejectOnly && option !== "reject" && !(exactReply && option === "cancel")) return { state }
+    if (exactReply && option === "cancel") {
+      return {
+        state,
+        reply: permissionReply(requestID, "cancel"),
+      }
+    }
     if (option === "always") {
       if (onceOnly) return { state }
       return {
@@ -241,18 +258,19 @@ export function permissionRun(
 
 export function permissionConstraint(request: PermissionRequest) {
   const promptRequired = PermissionV1.promptRequired(request)
+  const exactReply = PermissionV1.exactReplyRequired(request)
   const semantic = SemanticPresentation.readProposal(request)
   if (semantic.type === "invalid") {
-    return { onceOnly: true, rejectOnly: true }
+    return { onceOnly: true, rejectOnly: true, exactReply }
   }
   if (
     promptRequired ||
     request.metadata.onceOnly === true ||
     (semantic.type === "valid" && semantic.value.approval === "once_only")
   ) {
-    return { onceOnly: true, rejectOnly: false }
+    return { onceOnly: true, rejectOnly: false, exactReply }
   }
-  return { onceOnly: false, rejectOnly: false }
+  return { onceOnly: false, rejectOnly: false, exactReply }
 }
 
 export function permissionReject(state: PermissionBodyState, requestID: string): PermissionReply | undefined {
@@ -271,18 +289,29 @@ export function permissionCancel(state: PermissionBodyState): PermissionBodyStat
   }
 }
 
-export function permissionEscape(state: PermissionBodyState): PermissionBodyState {
+export function permissionEscape(state: PermissionBodyState, requestID: string, exactReply = false): PermissionStep {
   if (state.stage === "always") {
     return {
-      ...state,
-      stage: "permission",
-      selected: "always",
+      state: {
+        ...state,
+        stage: "permission",
+        selected: "always",
+      },
+    }
+  }
+
+  if (exactReply) {
+    return {
+      state,
+      reply: permissionReply(requestID, "cancel"),
     }
   }
 
   return {
-    ...state,
-    stage: "reject",
-    selected: "reject",
+    state: {
+      ...state,
+      stage: "reject",
+      selected: "reject",
+    },
   }
 }

@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test"
 import type { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import type { DefaultCourseV2Authorization } from "@opencode-ai/core/learner-navigation/default-course-v2"
+import type { DefaultCourseAcknowledgement, DefaultCourseProposal } from "@opencode-ai/core/learner-navigation/schema"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
-import type { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { SessionV1 } from "@opencode-ai/core/v1/session"
 import { LearningCommandPresentation } from "@/learning-command/presentation"
 
@@ -117,6 +119,18 @@ describe("learning command semantic basis and projection", () => {
     })
     expect(JSON.stringify(proposalRead)).not.toContain("cou_course")
     expect(JSON.stringify(proposalRead)).not.toContain("rev_revision")
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: { ...exact.metadata, [PermissionV1.EXACT_REPLY_METADATA_KEY]: true },
+      }).type,
+    ).toBe("valid")
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: { ...exact.metadata, [PermissionV1.EXACT_REPLY_METADATA_KEY]: false },
+      }),
+    ).toEqual({ type: "invalid" })
     expect(SemanticPresentation.readProposal({ ...exact, patterns: ["secret-extra-scope"] })).toEqual({
       type: "invalid",
     })
@@ -261,8 +275,20 @@ describe("learning command semantic basis and projection", () => {
       semanticFingerprint: "a".repeat(64),
       command,
       goalBases: [
-        { goalID: "gol_source", revisionID: "glr_source", version: 2, outcome: "Learn derivatives", disposition: "active" },
-        { goalID: "gol_target", revisionID: "glr_target", version: 4, outcome: "Solve composite derivatives", disposition: "active" },
+        {
+          goalID: "gol_source",
+          revisionID: "glr_source",
+          version: 2,
+          outcome: "Learn derivatives",
+          disposition: "active",
+        },
+        {
+          goalID: "gol_target",
+          revisionID: "glr_target",
+          version: 4,
+          outcome: "Solve composite derivatives",
+          disposition: "active",
+        },
       ],
       courseBases: [
         {
@@ -471,5 +497,367 @@ describe("learning command semantic basis and projection", () => {
       }),
     ).toEqual({ type: "invalid" })
     expect(SemanticPresentation.readResult({ ...part, tool: "content_write" })).toEqual({ type: "invalid" })
+  })
+
+  test("binds a host proposal to one exact terminal Tool Part without implying mutation", () => {
+    const proposal = {
+      partID: "prt_proposal",
+      turnID: "trn_proposal",
+      sessionID: envelope.sessionID,
+      assistantMessageID: envelope.assistantMessageID,
+      callID: "call_proposal",
+      emissionOrdinal: 2,
+      command: {
+        kind: "default_course_preference",
+        expectedHeadID: null,
+        expectedVersion: 0,
+        target: null,
+      },
+      commandFingerprint: "a".repeat(64),
+      resolutionScope: {
+        coverage: "explicitly_truncated",
+        candidates: [],
+        selectedCourseID: null,
+        truncation: { reason: "Only the currently relevant Courses were shown" },
+      },
+      resolutionFingerprint: "b".repeat(64),
+      preferenceHeadID: null,
+      preferenceVersion: 0,
+      operation: "change",
+      from: { kind: "absent" },
+      to: { kind: "absent" },
+      fingerprint: "c".repeat(64),
+      timePresented: 4,
+    } as unknown as DefaultCourseProposal
+    const exact = LearningCommandPresentation.hostDefaultCourseProposalResult(proposal, {
+      sessionID: envelope.sessionID,
+      assistantMessageID: envelope.assistantMessageID,
+      providerCallID: "call_proposal",
+      partID: "prt_proposal",
+      emissionOrdinal: 2,
+    })
+    expect(exact.metadata).toMatchObject({
+      proposalFingerprint: proposal.fingerprint,
+      durablyRecorded: true,
+      mutating: false,
+    })
+    expect(JSON.parse(exact.output)).toMatchObject({
+      outcome: "proposal_recorded",
+      proposal: { partID: proposal.partID, fingerprint: proposal.fingerprint },
+    })
+    expect(() =>
+      LearningCommandPresentation.hostDefaultCourseProposalResult(proposal, {
+        sessionID: envelope.sessionID,
+        assistantMessageID: envelope.assistantMessageID,
+        providerCallID: "copied_call",
+        partID: "prt_proposal",
+        emissionOrdinal: 2,
+      }),
+    ).toThrow("diverged")
+  })
+
+  test("projects V2 capability and settlement from one exact symmetric locator basis", () => {
+    const target = {
+      courseID: "cou_target",
+      title: { availability: "recorded_v2" as const, value: "Algorithms" },
+      courseVersion: { availability: "recorded_v2" as const, value: 3 },
+      workingSelection: {
+        availability: "recorded_v2" as const,
+        value: {
+          revisionID: "rev_target",
+          selectionVersion: 4,
+          viewID: "view_main",
+          viewName: "Main",
+          viewVersion: 5,
+          revisionVersion: 6,
+        },
+      },
+    }
+    const authorization = {
+      kind: "direct_request_v2",
+      fingerprint: "d".repeat(64),
+      command: {
+        kind: "default_course_preference",
+        expectedHeadID: null,
+        expectedVersion: 0,
+        target: {
+          courseID: "cou_target",
+          courseVersion: 3,
+          selectionRevisionID: "rev_target",
+          selectionVersion: 4,
+          viewID: "view_main",
+          viewVersion: 5,
+          revisionVersion: 6,
+        },
+      },
+      commandFingerprint: "e".repeat(64),
+      source: {
+        kind: "direct_request_v2",
+        occurrenceID: "loc_occurrence",
+        excerpt: "make Algorithms my default course",
+      },
+      resolutionScope: {
+        coverage: "complete",
+        candidates: [{ courseID: "cou_target", title: "Algorithms", courseVersion: 3 }],
+        selectedCourseID: "cou_target",
+      },
+      resolutionFingerprint: "f".repeat(64),
+      preferenceHeadID: null,
+      preferenceVersion: 0,
+      operation: "set",
+      from: { kind: "absent" },
+      to: { kind: "course", locator: target },
+    } as unknown as DefaultCourseV2Authorization
+    const proposal = LearningCommandPresentation.defaultCourseV2Capability(authorization, envelope)
+    const exact = request({
+      permission: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      patterns: ["cou_target"],
+      always: ["cou_target"],
+      metadata: {
+        navigationKind: "default_course_preference",
+        authorization,
+        [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+    expect(SemanticPresentation.readProposal(exact)).toMatchObject({
+      type: "valid",
+      value: { title: "Set the default Course preference", approval: "policy" },
+    })
+    expect(SemanticPresentation.readProposal({ ...exact, patterns: ["clear"] })).toEqual({ type: "invalid" })
+    for (const malformed of [
+      {
+        ...authorization,
+        from: {
+          kind: "course",
+          locator: {
+            ...target,
+            title: { availability: "not_recorded_v1" },
+          },
+        },
+      },
+      {
+        ...authorization,
+        to: {
+          kind: "course",
+          locator: {
+            ...target,
+            courseVersion: { availability: "not_recorded_v1" },
+          },
+        },
+      },
+      {
+        ...authorization,
+        to: {
+          kind: "course",
+          locator: {
+            ...target,
+            workingSelection: {
+              availability: "recorded_v2",
+              value: { ...target.workingSelection.value, viewName: null },
+            },
+          },
+        },
+      },
+    ]) {
+      const malformedProposal = LearningCommandPresentation.defaultCourseV2Capability(
+        malformed as unknown as DefaultCourseV2Authorization,
+        envelope,
+      )
+      expect(
+        SemanticPresentation.readProposal(
+          request({
+            permission: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            patterns: ["cou_target"],
+            always: ["cou_target"],
+            metadata: {
+              navigationKind: "default_course_preference",
+              authorization: malformed,
+              [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
+              ...SemanticPresentation.metadata(malformedProposal),
+            },
+          }),
+        ),
+      ).toEqual({ type: "invalid" })
+    }
+
+    const acknowledgement = {
+      schemaVersion: 1,
+      invocationPartID: envelope.partID,
+      effectAuthorizationPartID: envelope.partID,
+      authorizationVersion: 2,
+      effectID: "ndp_effect",
+      receiptID: "lcr_receipt",
+      operation: "set",
+      from: authorization.from,
+      to: authorization.to,
+      relation: "active",
+      timeCommitted: 3,
+      commitOrder: 4,
+    } as unknown as DefaultCourseAcknowledgement
+    const result = LearningCommandPresentation.defaultCourseV2SettlementResult(
+      { outcome: "applied", settlementTime: 3, settlementOrder: 4 },
+      { kind: "candidate_v2", authorization },
+      acknowledgement,
+      envelope,
+    )
+    const projected = SemanticPresentation.projectResultBasis(result.basis)
+    if (!projected) throw new Error("Expected a valid V2 Default-Course result")
+    const part = {
+      id: envelope.partID,
+      sessionID: envelope.sessionID,
+      messageID: envelope.assistantMessageID,
+      type: "tool",
+      tool: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      callID: envelope.providerCallID,
+      state: {
+        status: "completed",
+        input: {},
+        output: "{}",
+        title: projected.title,
+        metadata: {
+          command: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+          commandVersion: 2,
+          outcome: "applied",
+          durablySettled: true,
+          truncated: false,
+          ...SemanticPresentation.metadata(result),
+        },
+        time: { start: 1, end: 3 },
+      },
+    } as SessionV1.ToolPart
+    expect(SemanticPresentation.readResult(part)).toMatchObject({ type: "valid" })
+    if (result.basis.kind !== "default_course_v2_result") throw new Error("Expected the V2 result basis")
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...result.basis,
+        acknowledgement: { ...result.basis.acknowledgement!, operation: "clear" },
+      }),
+    ).toBeUndefined()
+    for (const malformed of [
+      {
+        ...result.basis.acknowledgement!,
+        from: {
+          kind: "course",
+          locator: {
+            ...target,
+            title: { availability: "not_recorded_v1" },
+          },
+        },
+      },
+      {
+        ...result.basis.acknowledgement!,
+        to: {
+          kind: "course",
+          locator: {
+            ...target,
+            workingSelection: {
+              availability: "recorded_v2",
+              value: { ...target.workingSelection.value, viewID: null },
+            },
+          },
+        },
+      },
+    ]) {
+      expect(
+        SemanticPresentation.projectResultBasis({
+          ...result.basis,
+          acknowledgement: malformed,
+        } as unknown as typeof result.basis),
+      ).toBeUndefined()
+    }
+
+    const semanticTerminal = {
+      kind: "semantic_terminal_v2",
+      outcome: "already_applied",
+      command: authorization.command,
+      commandFingerprint: "command-fingerprint",
+      semanticAddress: {
+        occurrenceID: authorization.source.occurrenceID,
+        slot: "default_course_preference",
+      },
+      semanticAddressFingerprint: "address-fingerprint",
+      incomingPayloadFingerprint: "same-payload",
+      existingEffectID: acknowledgement.effectID,
+      existingPayloadFingerprint: "same-payload",
+    } as const
+    const legacyAcknowledgement = {
+      schemaVersion: 1,
+      invocationPartID: envelope.partID,
+      effectAuthorizationPartID: "prt_legacy_effect",
+      authorizationVersion: 1,
+      effectID: acknowledgement.effectID,
+      receiptID: acknowledgement.receiptID,
+      operation: "set",
+      from: { kind: "absent" },
+      to: {
+        kind: "course",
+        locator: {
+          courseID: "cou_target",
+          title: { availability: "recorded_v1", value: "Algorithms" },
+          courseVersion: { availability: "not_recorded_v1" },
+          workingSelection: { availability: "not_recorded_v1" },
+        },
+      },
+      relation: "active",
+      timeCommitted: 3,
+      commitOrder: 4,
+    } as unknown as DefaultCourseAcknowledgement
+    const duplicate = LearningCommandPresentation.defaultCourseV2SettlementResult(
+      { outcome: "already_applied", settlementTime: 5, settlementOrder: 6 },
+      semanticTerminal,
+      legacyAcknowledgement,
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(duplicate.basis)).toMatchObject({
+      title: "Default Course preference",
+      outcome: "already_applied",
+    })
+    if (duplicate.basis.kind !== "default_course_v2_result") {
+      throw new Error("Expected the semantic-terminal V2 result basis")
+    }
+    if (duplicate.basis.disposition.kind !== "semantic_terminal_v2") {
+      throw new Error("Expected the semantic-terminal V2 disposition")
+    }
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...duplicate.basis,
+        disposition: {
+          ...duplicate.basis.disposition,
+          existingPayloadFingerprint: "different-payload",
+        },
+      }),
+    ).toBeUndefined()
+
+    const conflict = LearningCommandPresentation.defaultCourseV2SettlementResult(
+      {
+        outcome: "error",
+        code: "semantic_conflict",
+        settlementTime: 7,
+        settlementOrder: 8,
+      },
+      {
+        ...semanticTerminal,
+        outcome: "semantic_conflict",
+        incomingPayloadFingerprint: "incoming-payload",
+        existingPayloadFingerprint: "existing-payload",
+      },
+      undefined,
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(conflict.basis)).toMatchObject({
+      title: "Default Course preference",
+      outcome: "failed",
+      code: "semantic_conflict",
+    })
+    if (conflict.basis.kind !== "default_course_v2_result") {
+      throw new Error("Expected the semantic-conflict V2 result basis")
+    }
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...conflict.basis,
+        acknowledgement: legacyAcknowledgement,
+      }),
+    ).toBeUndefined()
   })
 })

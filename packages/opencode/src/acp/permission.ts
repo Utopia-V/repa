@@ -6,6 +6,7 @@ import type {
   ToolCallLocation,
   ToolCallUpdate,
 } from "@agentclientprotocol/sdk"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { Event, OpencodeClient } from "@opencode-ai/sdk/v2"
 import { applyPatch } from "diff"
 import { exists, readText } from "@/util/filesystem"
@@ -14,7 +15,7 @@ import { pendingToolCall, toLocations, type ToolInput } from "./tool"
 import { Effect } from "effect"
 
 type PermissionEvent = Extract<Event, { type: "permission.asked" }>
-type Reply = "once" | "always" | "reject"
+type Reply = "once" | "always" | "reject" | "cancel"
 type Connection = Partial<Pick<AgentSideConnection, "requestPermission" | "writeTextFile">>
 
 const permissionOptions: PermissionOption[] = [
@@ -52,9 +53,10 @@ export class Handler {
     const permission = event.properties
     const session = await Effect.runPromise(this.input.session.tryGet(permission.sessionID))
     if (!session) return
+    const exactReply = PermissionV1.exactReplyRequired(permission)
 
     if (!this.input.connection.requestPermission) {
-      await this.reply(permission.id, "reject", session.cwd)
+      if (!exactReply) await this.reply(permission.id, "reject", session.cwd)
       return
     }
 
@@ -69,15 +71,15 @@ export class Handler {
         options: permissionOptions,
       })
       .catch(async () => {
-        await this.reply(permission.id, "reject", session.cwd)
+        if (!exactReply) await this.reply(permission.id, "reject", session.cwd)
         return undefined
       })
 
     if (!result) return
 
-    const reply = selectedReply(result)
+    const reply = selectedReply(result, exactReply)
     if (reply !== "once" && reply !== "always") {
-      await this.reply(permission.id, "reject", session.cwd)
+      await this.reply(permission.id, reply, session.cwd)
       return
     }
 
@@ -216,9 +218,11 @@ async function diffContentForPatch(filepath: string, diff: string, displayPath =
   }
 }
 
-function selectedReply(result: RequestPermissionResponse): Reply {
-  if (result.outcome.outcome !== "selected") return "reject"
+function selectedReply(result: RequestPermissionResponse, exactReply: boolean): Reply {
+  if (result.outcome.outcome !== "selected") return exactReply ? "cancel" : "reject"
   if (result.outcome.optionId === "once" || result.outcome.optionId === "always") return result.outcome.optionId
+  if (result.outcome.optionId === "reject") return "reject"
+  if (exactReply) return "cancel"
   return "reject"
 }
 

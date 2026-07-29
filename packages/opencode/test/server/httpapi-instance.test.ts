@@ -177,6 +177,25 @@ describe("instance HttpApi", () => {
     }),
   )
 
+  it.live("accepts cancel on the permission reply wire", () =>
+    Effect.gen(function* () {
+      const dir = yield* tmpdirScoped({ git: true })
+      const permissionID = PermissionV1.ID.ascending()
+      const response = yield* HttpClientRequest.post(`/permission/${permissionID}/reply`).pipe(
+        directoryHeader(dir),
+        HttpClientRequest.bodyJson({ reply: "cancel" }),
+        Effect.flatMap(HttpClient.execute),
+      )
+
+      expect(response.status).toBe(404)
+      expect(yield* response.json).toEqual({
+        _tag: "PermissionNotFoundError",
+        requestID: permissionID,
+        message: `Permission request not found: ${permissionID}`,
+      })
+    }),
+  )
+
   it.live("returns typed not found bodies for missing permission and question requests", () =>
     Effect.gen(function* () {
       const dir = yield* tmpdirScoped({ git: true })

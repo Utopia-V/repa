@@ -2,7 +2,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { InstanceState } from "@/effect/instance-state"
 import { Wildcard } from "@opencode-ai/core/util/wildcard"
-import { Deferred, Effect, Layer, Context } from "effect"
+import { Deferred, Effect, Layer, Context, Semaphore } from "effect"
 import os from "os"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -41,17 +41,43 @@ export type AuthorityLayer = {
 export type AskInput = PermissionV1.AskInput & {
   readonly requirePrompt?: boolean
   readonly authority?: readonly AuthorityLayer[]
+  readonly lifecycle?: DurableLifecycle
 }
+
+export type EvaluationBasis = Readonly<{
+  permission: string
+  patterns: readonly string[]
+  requirePrompt: boolean
+  ruleset: PermissionV1.Ruleset
+  authority: readonly AuthorityLayer[]
+  approved: PermissionV1.Ruleset
+  evaluated: readonly PermissionV1.Rule[]
+}>
+
+export type Selection =
+  | { readonly action: "allow" | "deny"; readonly basis: EvaluationBasis }
+  | { readonly action: "ask"; readonly basis: EvaluationBasis; readonly request: PermissionV1.Request }
+
+export type DurableLifecycle = Readonly<{
+  resolution: "request_exact"
+  selected: (selection: Selection) => Effect.Effect<void>
+  replied: (input: { request: PermissionV1.Request; reply: PermissionV1.ReplyInput }) => Effect.Effect<void>
+}>
 
 interface PendingEntry {
   info: PermissionV1.Request
-  deferred: Deferred.Deferred<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>
+  deferred: Deferred.Deferred<
+    void,
+    PermissionV1.RejectedError | PermissionV1.CorrectedError | PermissionV1.CancelledError
+  >
   requirePrompt: boolean
+  lifecycle?: DurableLifecycle
 }
 
 interface State {
   pending: Map<PermissionV1.ID, PendingEntry>
   approved: PermissionV1.Rule[]
+  transitions: Semaphore.Semaphore
 }
 
 export function evaluate(permission: string, pattern: string, ...rulesets: PermissionV1.Ruleset[]): PermissionV1.Rule {
@@ -93,15 +119,18 @@ const layer = Layer.effect(
         const state = {
           pending: new Map<PermissionV1.ID, PendingEntry>(),
           approved: [],
+          transitions: Semaphore.makeUnsafe(1),
         }
 
         yield* Effect.addFinalizer(() =>
-          Effect.gen(function* () {
-            for (const item of state.pending.values()) {
-              yield* Deferred.fail(item.deferred, new PermissionV1.RejectedError())
-            }
-            state.pending.clear()
-          }),
+          state.transitions.withPermit(
+            Effect.gen(function* () {
+              for (const item of state.pending.values()) {
+                yield* Deferred.fail(item.deferred, new PermissionV1.RejectedError())
+              }
+              state.pending.clear()
+            }),
+          ),
         )
 
         return state
@@ -109,122 +138,193 @@ const layer = Layer.effect(
     )
 
     const ask = Effect.fn("Permission.ask")(function* (input: AskInput) {
-      const { approved, pending } = yield* InstanceState.get(state)
-      const { ruleset, requirePrompt = false, authority = [], ...request } = input
-      let needsAsk = requirePrompt
+      const current = yield* InstanceState.get(state)
+      const admission = yield* Effect.uninterruptible(
+        current.transitions.withPermit(
+          Effect.gen(function* () {
+            const { approved, pending } = current
+            const { ruleset, requirePrompt = false, authority = [], lifecycle, ...request } = input
+            const evaluated = request.patterns.map((pattern) => {
+              const base = evaluateAuthority(request.permission, pattern, ruleset, authority)
+              if (base.action !== "ask") return base
+              if (evaluate(request.permission, pattern, approved).action !== "allow") return base
+              return { ...base, action: "allow" as const }
+            })
+            const basis: EvaluationBasis = {
+              permission: request.permission,
+              patterns: [...request.patterns],
+              requirePrompt,
+              ruleset: [...ruleset],
+              authority: authority.map((layer) => ({ absence: layer.absence, ruleset: [...layer.ruleset] })),
+              approved: approved.filter(
+                (rule) =>
+                  Wildcard.matchIdentifier(request.permission, rule.permission) &&
+                  request.patterns.some((pattern) => Wildcard.match(pattern, rule.pattern)),
+              ),
+              evaluated,
+            }
+            for (const rule of evaluated) {
+              yield* Effect.logInfo("evaluated", {
+                permission: request.permission,
+                pattern: rule.pattern,
+                action: rule,
+              })
+            }
+            const action = evaluated.some((rule) => rule.action === "deny")
+              ? ("deny" as const)
+              : requirePrompt || evaluated.some((rule) => rule.action === "ask")
+                ? ("ask" as const)
+                : ("allow" as const)
 
-      for (const pattern of request.patterns) {
-        const base = evaluateAuthority(request.permission, pattern, ruleset, authority)
-        const rule =
-          base.action === "ask" && evaluate(request.permission, pattern, approved).action === "allow"
-            ? { ...base, action: "allow" as const }
-            : base
-        yield* Effect.logInfo("evaluated", { permission: request.permission, pattern, action: rule })
-        if (rule.action === "deny") {
-          return yield* new PermissionV1.DeniedError({
-            ruleset: [ruleset, ...authority.map((layer) => layer.ruleset)]
-              .flat()
-              .filter((rule) => Wildcard.matchIdentifier(request.permission, rule.permission)),
-          })
-        }
-        if (rule.action === "allow") continue
-        needsAsk = true
-      }
+            if (action === "deny") {
+              if (lifecycle) yield* lifecycle.selected({ action, basis })
+              return yield* new PermissionV1.DeniedError({
+                ruleset: [ruleset, ...authority.map((layer) => layer.ruleset)]
+                  .flat()
+                  .filter((rule) => Wildcard.matchIdentifier(request.permission, rule.permission)),
+              })
+            }
+            if (action === "allow") {
+              if (lifecycle) yield* lifecycle.selected({ action, basis })
+              return { type: "complete" as const }
+            }
 
-      if (!needsAsk) return
-
-      const id = request.id ?? PermissionV1.ID.ascending()
-      const info: PermissionV1.Request = {
-        id,
-        sessionID: request.sessionID,
-        permission: request.permission,
-        patterns: request.patterns,
-        metadata: requestMetadata(request.metadata, requirePrompt),
-        always: request.always,
-        tool: request.tool,
-      }
-      yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
-
-      const deferred = yield* Deferred.make<void, PermissionV1.RejectedError | PermissionV1.CorrectedError>()
-      pending.set(id, { info, deferred, requirePrompt })
-      yield* events.publish(Event.Asked, info)
+            const id = request.id ?? PermissionV1.ID.ascending()
+            const info: PermissionV1.Request = {
+              id,
+              sessionID: request.sessionID,
+              permission: request.permission,
+              patterns: request.patterns,
+              metadata: requestMetadata(request.metadata, requirePrompt, Boolean(lifecycle)),
+              always: request.always,
+              tool: request.tool,
+            }
+            yield* Effect.logInfo("asking", { id, permission: info.permission, patterns: info.patterns })
+            const deferred = yield* Deferred.make<
+              void,
+              PermissionV1.RejectedError | PermissionV1.CorrectedError | PermissionV1.CancelledError
+            >()
+            if (lifecycle) yield* lifecycle.selected({ action, basis, request: info })
+            pending.set(id, { info, deferred, requirePrompt, lifecycle })
+            return { type: "pending" as const, info, deferred, pending }
+          }),
+        ),
+      )
+      if (admission.type === "complete") return
       return yield* Effect.ensuring(
-        Deferred.await(deferred),
-        Effect.sync(() => {
-          pending.delete(id)
+        Effect.gen(function* () {
+          yield* events.publish(Event.Asked, admission.info)
+          return yield* Deferred.await(admission.deferred)
         }),
+        current.transitions.withPermit(
+          Effect.sync(() => {
+            if (admission.pending.get(admission.info.id)?.deferred !== admission.deferred) return
+            admission.pending.delete(admission.info.id)
+          }),
+        ),
       )
     })
 
     const reply = Effect.fn("Permission.reply")(function* (input: PermissionV1.ReplyInput) {
-      const { approved, pending } = yield* InstanceState.get(state)
-      const existing = pending.get(input.requestID)
-      if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
+      const current = yield* InstanceState.get(state)
+      const resolved = yield* Effect.uninterruptible(
+        current.transitions.withPermit(
+          Effect.gen(function* () {
+            const { approved, pending } = current
+            const existing = pending.get(input.requestID)
+            if (!existing) return yield* new PermissionV1.NotFoundError({ requestID: input.requestID })
+            if (existing.lifecycle) yield* existing.lifecycle.replied({ request: existing.info, reply: input })
+            pending.delete(input.requestID)
+            const result = [{ entry: existing, reply: input }]
 
-      pending.delete(input.requestID)
-      yield* events.publish(Event.Replied, {
-        sessionID: existing.info.sessionID,
-        requestID: existing.info.id,
-        reply: input.reply,
-      })
+            if (input.reply === "reject") {
+              if (existing.lifecycle?.resolution === "request_exact") return result
+              for (const [id, item] of pending.entries()) {
+                if (item.info.sessionID !== existing.info.sessionID) continue
+                if (item.lifecycle?.resolution === "request_exact") continue
+                pending.delete(id)
+                result.push({
+                  entry: item,
+                  reply: { requestID: item.info.id, reply: "reject" as const },
+                })
+              }
+              return result
+            }
+            if (input.reply === "cancel" || input.reply === "once") return result
+            if (existing.requirePrompt || existing.info.metadata.onceOnly === true) return result
 
-      if (input.reply === "reject") {
-        yield* Deferred.fail(
-          existing.deferred,
-          input.message
-            ? new PermissionV1.CorrectedError({ feedback: input.message })
-            : new PermissionV1.RejectedError(),
-        )
+            for (const pattern of existing.info.always) {
+              approved.push({
+                permission: existing.info.permission,
+                pattern,
+                action: "allow",
+              })
+            }
+            if (existing.lifecycle?.resolution === "request_exact") return result
+            for (const [id, item] of pending.entries()) {
+              if (item.info.sessionID !== existing.info.sessionID) continue
+              if (item.lifecycle?.resolution === "request_exact") continue
+              if (item.requirePrompt || item.info.metadata.onceOnly === true) continue
+              const ok = item.info.patterns.every(
+                (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
+              )
+              if (!ok) continue
+              pending.delete(id)
+              result.push({
+                entry: item,
+                reply: { requestID: item.info.id, reply: "always" as const },
+              })
+            }
+            return result
+          }),
+        ),
+      )
 
-        for (const [id, item] of pending.entries()) {
-          if (item.info.sessionID !== existing.info.sessionID) continue
-          pending.delete(id)
-          yield* events.publish(Event.Replied, {
-            sessionID: item.info.sessionID,
-            requestID: item.info.id,
-            reply: "reject",
-          })
-          yield* Deferred.fail(item.deferred, new PermissionV1.RejectedError())
-        }
-        return
-      }
-
-      yield* Deferred.succeed(existing.deferred, undefined)
-      if (input.reply === "once" || existing.requirePrompt || existing.info.metadata.onceOnly === true) return
-
-      for (const pattern of existing.info.always) {
-        approved.push({
-          permission: existing.info.permission,
-          pattern,
-          action: "allow",
-        })
-      }
-
-      for (const [id, item] of pending.entries()) {
-        if (item.info.sessionID !== existing.info.sessionID) continue
-        if (item.requirePrompt || item.info.metadata.onceOnly === true) continue
-        const ok = item.info.patterns.every(
-          (pattern) => evaluate(item.info.permission, pattern, approved).action === "allow",
-        )
-        if (!ok) continue
-        pending.delete(id)
-        yield* events.publish(Event.Replied, {
-          sessionID: item.info.sessionID,
-          requestID: item.info.id,
-          reply: "always",
-        })
-        yield* Deferred.succeed(item.deferred, undefined)
-      }
+      // The lifecycle reply is already durable and every pending entry is removed.
+      // Release all waiters before best-effort live publication so carrier delivery
+      // cannot become a second acknowledgement boundary.
+      yield* Effect.uninterruptible(
+        Effect.forEach(resolved, (item) => completeReply(item.entry, item.reply), { discard: true }),
+      )
+      yield* Effect.uninterruptible(
+        Effect.forEach(
+          resolved,
+          (item) =>
+            events
+              .publish(Event.Replied, {
+                sessionID: item.entry.info.sessionID,
+                requestID: item.entry.info.id,
+                reply: item.reply.reply,
+              })
+              .pipe(Effect.exit),
+          { discard: true },
+        ),
+      )
     })
 
     const list = Effect.fn("Permission.list")(function* () {
-      const pending = (yield* InstanceState.get(state)).pending
-      return Array.from(pending.values(), (item) => item.info)
+      const current = yield* InstanceState.get(state)
+      return yield* current.transitions.withPermit(
+        Effect.sync(() => Array.from(current.pending.values(), (item) => item.info)),
+      )
     })
 
     return Service.of({ ask, reply, list })
   }),
 )
+
+function completeReply(entry: PendingEntry, input: PermissionV1.ReplyInput) {
+  if (input.reply === "cancel") {
+    return Deferred.fail(entry.deferred, new PermissionV1.CancelledError()).pipe(Effect.asVoid)
+  }
+  if (input.reply === "reject") {
+    return Deferred.fail(
+      entry.deferred,
+      input.message ? new PermissionV1.CorrectedError({ feedback: input.message }) : new PermissionV1.RejectedError(),
+    ).pipe(Effect.asVoid)
+  }
+  return Deferred.succeed(entry.deferred, undefined).pipe(Effect.asVoid)
+}
 
 function expand(pattern: string): string {
   if (pattern.startsWith("~/")) return os.homedir() + pattern.slice(1)
@@ -234,12 +334,17 @@ function expand(pattern: string): string {
   return pattern
 }
 
-function requestMetadata(metadata: PermissionV1.Request["metadata"], requirePrompt: boolean) {
+function requestMetadata(metadata: PermissionV1.Request["metadata"], requirePrompt: boolean, exactReply: boolean) {
   const sanitized = Object.fromEntries(
-    Object.entries(metadata).filter(([key]) => key !== PermissionV1.PROMPT_REQUIRED_METADATA_KEY),
+    Object.entries(metadata).filter(
+      ([key]) => key !== PermissionV1.PROMPT_REQUIRED_METADATA_KEY && key !== PermissionV1.EXACT_REPLY_METADATA_KEY,
+    ),
   )
-  if (!requirePrompt) return sanitized
-  return { ...sanitized, [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true }
+  return {
+    ...sanitized,
+    ...(requirePrompt ? { [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true } : {}),
+    ...(exactReply ? { [PermissionV1.EXACT_REPLY_METADATA_KEY]: true } : {}),
+  }
 }
 
 export function fromConfig(permission: ConfigPermissionV1.Info) {

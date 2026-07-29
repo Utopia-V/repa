@@ -6,14 +6,25 @@ import { ID, type Request } from "@opencode-ai/schema/permission-v1"
 
 // Permission.Service owns this transport constraint. It does not grant domain authority.
 export const PROMPT_REQUIRED_METADATA_KEY = "permissionPromptRequired"
+export const EXACT_REPLY_METADATA_KEY = "permissionExactReply"
 
 export function promptRequired(request: Pick<Request, "metadata">) {
   return request.metadata[PROMPT_REQUIRED_METADATA_KEY] === true
 }
 
+export function exactReplyRequired(request: Pick<Request, "metadata">) {
+  return request.metadata[EXACT_REPLY_METADATA_KEY] === true
+}
+
 export class RejectedError extends Schema.TaggedErrorClass<RejectedError>()("PermissionRejectedError", {}) {
   override get message() {
     return "The user rejected permission to use this specific tool call."
+  }
+}
+
+export class CancelledError extends Schema.TaggedErrorClass<CancelledError>()("PermissionCancelledError", {}) {
+  override get message() {
+    return "The user cancelled this permission request."
   }
 }
 
@@ -37,4 +48,4 @@ export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Per
   requestID: ID,
 }) {}
 
-export type Error = DeniedError | RejectedError | CorrectedError
+export type Error = DeniedError | RejectedError | CorrectedError | CancelledError

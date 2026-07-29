@@ -25,6 +25,14 @@ function service(ask: Permission.Interface["ask"]): Permission.Interface {
 describe("learning command permission", () => {
   test("preserves every permission decision as a typed outcome", async () => {
     const abort = new AbortController().signal
+    const exact = {
+      ...input,
+      lifecycle: {
+        resolution: "request_exact" as const,
+        selected: () => Effect.void,
+        replied: () => Effect.void,
+      },
+    }
     expect(
       await Effect.runPromise(
         LearningCommandPermission.ask(
@@ -61,6 +69,24 @@ describe("learning command permission", () => {
         ),
       ),
     ).toEqual({ type: "correct" })
+    expect(
+      await Effect.runPromise(
+        LearningCommandPermission.ask(
+          service(() => Effect.fail(new PermissionV1.RejectedError())),
+          exact,
+          abort,
+        ),
+      ),
+    ).toEqual({ type: "deny" })
+    expect(
+      await Effect.runPromise(
+        LearningCommandPermission.ask(
+          service(() => Effect.fail(new PermissionV1.CancelledError())),
+          exact,
+          abort,
+        ),
+      ),
+    ).toEqual({ type: "cancel" })
   })
 
   test("abort cancels and finalizes a pending process-local permission waiter", async () => {

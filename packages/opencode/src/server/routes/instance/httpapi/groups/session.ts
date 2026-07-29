@@ -397,7 +397,7 @@ export const SessionApi = HttpApi.make("session")
           OpenApi.annotations({
             identifier: "permission.respond",
             summary: "Respond to permission",
-            description: "Approve or deny a permission request from the AI assistant.",
+            description: "Approve, deny, or cancel a permission request from the AI assistant.",
             deprecated: true,
           }),
         ),

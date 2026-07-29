@@ -8,14 +8,20 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
+import { LearnerNavigationConstraintSchema } from "@opencode-ai/core/learner-navigation/constraint-schema-v2"
+import {
+  PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+  issueDefaultCourseCapabilityPrompt,
+  recoverDefaultCourseCapability,
+  settleDefaultCoursePolicy,
+  settleDefaultCoursePrompt,
+  settleDefaultCourseV2,
+} from "@opencode-ai/core/learner-navigation/default-course-v2"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerGoalCommandTable, LearnerGoalCommitSealTable } from "@opencode-ai/core/learner-goal/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
-import {
-  RetainedSteeringCommandTable,
-  RetainedSteeringCommitSealTable,
-} from "@opencode-ai/core/retained-steering/sql"
+import { RetainedSteeringCommandTable, RetainedSteeringCommitSealTable } from "@opencode-ai/core/retained-steering/sql"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import {
   AdmittedLearnerOccurrenceTable,
@@ -26,6 +32,10 @@ import {
   CourseRouteAnchorTransitionTable,
   DefaultCoursePreferenceTransitionTable,
   LearnerCourseRouteAnchorCommitSealTable,
+  LearnerDefaultCourseAcknowledgementTable,
+  LearnerDefaultCourseCapabilityIssueTable,
+  LearnerDefaultCourseCapabilitySettlementTable,
+  LearnerDefaultCourseDispositionTable,
   LearnerDefaultCourseCommandTable,
   LearnerDefaultCourseCommitSealTable,
 } from "@opencode-ai/core/learner-navigation/sql"
@@ -52,6 +62,7 @@ import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema } from "effect"
 import { join } from "path"
 import { tmpdir } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
+import { seedFrozenV12AdmittedDefaultCourse } from "../../../core/test/fixture/frozen-v12-default-course"
 
 const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 const permissionRequests: Permission.AskInput[] = []
@@ -67,21 +78,84 @@ const permission = Layer.succeed(
     ask: (input) =>
       Effect.gen(function* () {
         permissionRequests.push(input)
-        const denied = input.ruleset.findLast(
+        const evaluated = input.ruleset.findLast(
           (rule) =>
             (rule.permission === "*" || rule.permission === input.permission) &&
             (rule.pattern === "*" || input.patterns.includes(rule.pattern)),
         )
-        if (denied?.action === "deny") {
+        const action = input.requirePrompt ? "ask" : (evaluated?.action ?? "ask")
+        const basis = {
+          permission: input.permission,
+          patterns: [...input.patterns],
+          requirePrompt: input.requirePrompt ?? false,
+          ruleset: [...input.ruleset],
+          authority: [...(input.authority ?? [])],
+          approved: [],
+          evaluated: input.patterns.map((pattern) => ({
+            permission: input.permission,
+            pattern,
+            action,
+          })),
+        } satisfies Permission.EvaluationBasis
+        if (action === "deny") {
+          if (input.lifecycle) yield* input.lifecycle.selected({ action, basis })
           return yield* Effect.fail(new PermissionV1.DeniedError({ ruleset: input.ruleset }))
         }
         const failure = permissionFailures.shift()
         if (failure) return yield* Effect.fail(failure)
         const wait = permissionWaits.shift()
-        if (!wait) return
+        if (!wait) {
+          if (!input.lifecycle) return
+          if (action === "allow") return yield* input.lifecycle.selected({ action, basis })
+          const id = input.id ?? PermissionV1.ID.ascending()
+          const request = {
+            id,
+            sessionID: input.sessionID,
+            permission: input.permission,
+            patterns: input.patterns,
+            metadata: input.metadata,
+            always: input.always,
+            tool: input.tool,
+          } satisfies PermissionV1.Request
+          yield* input.lifecycle.selected({ action: "ask", basis, request })
+          return yield* input.lifecycle.replied({
+            request,
+            reply: { requestID: id, reply: "once" },
+          })
+        }
+        const id = input.id ?? PermissionV1.ID.ascending()
+        const request = {
+          id,
+          sessionID: input.sessionID,
+          permission: input.permission,
+          patterns: input.patterns,
+          metadata: input.metadata,
+          always: input.always,
+          tool: input.tool,
+        } satisfies PermissionV1.Request
+        if (input.lifecycle) yield* input.lifecycle.selected({ action: "ask", basis, request })
         yield* Deferred.succeed(wait.entered, undefined)
         yield* Deferred.await(wait.release)
-        if (wait.failure) return yield* Effect.fail(wait.failure)
+        if (wait.failure) {
+          if (input.lifecycle) {
+            yield* input.lifecycle.replied({
+              request,
+              reply:
+                wait.failure instanceof PermissionV1.CorrectedError
+                  ? { requestID: id, reply: "reject", message: wait.failure.feedback }
+                  : wait.failure instanceof PermissionV1.CancelledError
+                    ? { requestID: id, reply: "cancel" }
+                    : { requestID: id, reply: "reject" },
+            })
+          }
+          return yield* Effect.fail(wait.failure)
+        }
+        if (input.lifecycle) {
+          yield* input.lifecycle.replied({
+            request,
+            reply: { requestID: id, reply: "once" },
+          })
+        }
       }),
     reply: () => Effect.void,
     list: () => Effect.succeed([]),
@@ -1494,9 +1568,7 @@ it.effect("rejects revoked, overclaimed, and incomplete direct learner Goal sour
               sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
             ),
             receipts: yield* goalReceiptCount(db, interaction.occurrenceID),
-            invocation: invocation
-              ? { status: invocation.status, effectID: invocation.effectID }
-              : undefined,
+            invocation: invocation ? { status: invocation.status, effectID: invocation.effectID } : undefined,
           }
         }),
       ),
@@ -1624,190 +1696,192 @@ it.effect("commits retained learning steering with its exact learner-visible ack
   }),
 )
 
-it.effect("preserves owner-produced retained meaning across replacement, retraction, and post-commit notification failure", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    const db = (yield* Database.Service).db
-    const events = yield* EventV2Bridge.Service
-    const runtime = yield* LearningCommandRuntime.Service
-    const sourceTime = Date.now() + 60_000
-    const createText = "across all my learning this week, explain before practice"
-    const createInput = {
-      action: "create" as const,
-      sourceExcerpt: createText,
-      operativeInstruction: "Explain the idea before asking me to practice.",
-      validUntil: new Date(sourceTime + 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
-    }
-    const created = yield* seedInteraction(
-      db,
-      "retained-readable-create",
-      createInput,
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      { text: createText, time: sourceTime, timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      createInput,
-      created.registration,
-    )
-
-    let observerRuns = 0
-    const unsubscribe = yield* events.listen((event) => {
-      if (event.type !== SessionV1.Event.PartUpdated.type) return Effect.void
-      const data = event.data as typeof SessionV1.Event.PartUpdated.data.Type
-      if (data.part.id !== created.registration.partID) return Effect.void
-      if (data.part.type !== "tool" || data.part.state.status !== "completed") return Effect.void
-      return Effect.sync(() => {
-        observerRuns++
-      }).pipe(Effect.andThen(Effect.interrupt))
-    })
-    yield* Effect.addFinalizer(() => unsubscribe)
-
-    const createResult = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      createInput,
-      context(created.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
-    )
-    const createRead = SemanticPresentation.readResult({
-      id: created.registration.partID,
-      sessionID: created.registration.sessionID,
-      messageID: created.registration.assistantMessageID,
-      callID: created.registration.callID,
-      tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      state: { status: "completed", title: createResult.title, metadata: createResult.metadata },
-    })
-    if (createRead.type !== "valid") return yield* Effect.die("Expected a valid retained create presentation")
-    expect(createRead.value.facts).toEqual(
-      expect.arrayContaining([
-        { label: "Scope", value: "learning_wide" },
-        { label: "Instruction", value: createInput.operativeInstruction },
-        { label: "Valid until", value: createInput.validUntil },
-        { label: "Time zone", value: "UTC (+00:00)" },
-        { label: "State", value: "operative" },
-        { label: "Version", value: "1" },
-        {
-          label: "Correction",
-          value: "Replace or retract this retained instruction with a later explicit learner direction.",
-        },
-      ]),
-    )
-    expect(observerRuns).toBe(1)
-    expect(yield* exactPartResult(db, created.registration.partID)).toEqual(createResult)
-    expect(
-      yield* runtime.executeCommand(
+it.effect(
+  "preserves owner-produced retained meaning across replacement, retraction, and post-commit notification failure",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const events = yield* EventV2Bridge.Service
+      const runtime = yield* LearningCommandRuntime.Service
+      const sourceTime = Date.now() + 60_000
+      const createText = "across all my learning this week, explain before practice"
+      const createInput = {
+        action: "create" as const,
+        sourceExcerpt: createText,
+        operativeInstruction: "Explain the idea before asking me to practice.",
+        validUntil: new Date(sourceTime + 24 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+      }
+      const created = yield* seedInteraction(
+        db,
+        "retained-readable-create",
+        createInput,
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        { text: createText, time: sourceTime, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
         LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
         createInput,
-        context(created.registration, "deny", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
-      ),
-    ).toEqual(createResult)
-    expect(observerRuns).toBe(1)
+        created.registration,
+      )
 
-    const createdSnapshot = yield* db.transaction((tx) => RetainedSteering.readActiveSnapshot(tx, sourceTime + 1))
-    const createdHead = createdSnapshot.items[0]?.transition
-    if (!createdHead) return yield* Effect.die("Expected the retained create head")
-    const replaceTime = sourceTime + 1_000
-    const replaceText = "across all my learning this week, use a worked example"
-    const replaceInput = {
-      action: "replace" as const,
-      policyID: createdHead.policyID,
-      expectedHeadID: createdHead.id,
-      expectedVersion: createdHead.version,
-      sourceExcerpt: replaceText,
-      operativeInstruction: "Use a worked example before independent practice.",
-      validUntil: new Date(sourceTime + 12 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
-    }
-    const replaced = yield* seedInteraction(
-      db,
-      "retained-readable-replace",
-      replaceInput,
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      { text: replaceText, time: replaceTime, timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      replaceInput,
-      replaced.registration,
-    )
-    const replaceResult = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      replaceInput,
-      context(replaced.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
-    )
-    const replaceRead = SemanticPresentation.readResult({
-      id: replaced.registration.partID,
-      sessionID: replaced.registration.sessionID,
-      messageID: replaced.registration.assistantMessageID,
-      callID: replaced.registration.callID,
-      tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      state: { status: "completed", title: replaceResult.title, metadata: replaceResult.metadata },
-    })
-    if (replaceRead.type !== "valid") return yield* Effect.die("Expected a valid retained replace presentation")
-    expect(replaceRead.value.facts).toEqual(
-      expect.arrayContaining([
-        { label: "Instruction", value: replaceInput.operativeInstruction },
-        { label: "Valid until", value: replaceInput.validUntil },
-        { label: "Time zone", value: "UTC (+00:00)" },
-        {
-          label: "Replaces",
-          value: `version 1: ${createInput.operativeInstruction}`,
-        },
-        { label: "Version", value: "2" },
-        {
-          label: "Correction",
-          value: "Replace or retract this retained instruction with a later explicit learner direction.",
-        },
-      ]),
-    )
+      let observerRuns = 0
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== SessionV1.Event.PartUpdated.type) return Effect.void
+        const data = event.data as typeof SessionV1.Event.PartUpdated.data.Type
+        if (data.part.id !== created.registration.partID) return Effect.void
+        if (data.part.type !== "tool" || data.part.state.status !== "completed") return Effect.void
+        return Effect.sync(() => {
+          observerRuns++
+        }).pipe(Effect.andThen(Effect.interrupt))
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
 
-    const replacementSnapshot = yield* db.transaction((tx) =>
-      RetainedSteering.readActiveSnapshot(tx, replaceTime + 1),
-    )
-    const replacementHead = replacementSnapshot.items[0]?.transition
-    if (!replacementHead) return yield* Effect.die("Expected the retained replacement head")
-    const retractTime = sourceTime + 2_000
-    const retractText = "across all my learning, remove the worked-example instruction"
-    const retractInput = {
-      action: "retract" as const,
-      policyID: replacementHead.policyID,
-      expectedHeadID: replacementHead.id,
-      expectedVersion: replacementHead.version,
-      sourceExcerpt: retractText,
-    }
-    const retracted = yield* seedInteraction(
-      db,
-      "retained-readable-retract",
-      retractInput,
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      { text: retractText, time: retractTime, timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      retractInput,
-      retracted.registration,
-    )
-    const retractResult = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      retractInput,
-      context(retracted.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
-    )
-    const retractRead = SemanticPresentation.readResult({
-      id: retracted.registration.partID,
-      sessionID: retracted.registration.sessionID,
-      messageID: retracted.registration.assistantMessageID,
-      callID: retracted.registration.callID,
-      tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
-      state: { status: "completed", title: retractResult.title, metadata: retractResult.metadata },
-    })
-    if (retractRead.type !== "valid") return yield* Effect.die("Expected a valid retained retract presentation")
-    expect(retractRead.value.facts).toEqual(
-      expect.arrayContaining([
-        { label: "Retracted instruction", value: replaceInput.operativeInstruction },
-        { label: "State", value: "retracted" },
-        { label: "Version", value: "3" },
-        { label: "Effect", value: "This retained instruction no longer applies." },
-      ]),
-    )
-  }),
+      const createResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        createInput,
+        context(created.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+      )
+      const createRead = SemanticPresentation.readResult({
+        id: created.registration.partID,
+        sessionID: created.registration.sessionID,
+        messageID: created.registration.assistantMessageID,
+        callID: created.registration.callID,
+        tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        state: { status: "completed", title: createResult.title, metadata: createResult.metadata },
+      })
+      if (createRead.type !== "valid") return yield* Effect.die("Expected a valid retained create presentation")
+      expect(createRead.value.facts).toEqual(
+        expect.arrayContaining([
+          { label: "Scope", value: "learning_wide" },
+          { label: "Instruction", value: createInput.operativeInstruction },
+          { label: "Valid until", value: createInput.validUntil },
+          { label: "Time zone", value: "UTC (+00:00)" },
+          { label: "State", value: "operative" },
+          { label: "Version", value: "1" },
+          {
+            label: "Correction",
+            value: "Replace or retract this retained instruction with a later explicit learner direction.",
+          },
+        ]),
+      )
+      expect(observerRuns).toBe(1)
+      expect(yield* exactPartResult(db, created.registration.partID)).toEqual(createResult)
+      expect(
+        yield* runtime.executeCommand(
+          LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+          createInput,
+          context(created.registration, "deny", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+        ),
+      ).toEqual(createResult)
+      expect(observerRuns).toBe(1)
+
+      const createdSnapshot = yield* db.transaction((tx) => RetainedSteering.readActiveSnapshot(tx, sourceTime + 1))
+      const createdHead = createdSnapshot.items[0]?.transition
+      if (!createdHead) return yield* Effect.die("Expected the retained create head")
+      const replaceTime = sourceTime + 1_000
+      const replaceText = "across all my learning this week, use a worked example"
+      const replaceInput = {
+        action: "replace" as const,
+        policyID: createdHead.policyID,
+        expectedHeadID: createdHead.id,
+        expectedVersion: createdHead.version,
+        sourceExcerpt: replaceText,
+        operativeInstruction: "Use a worked example before independent practice.",
+        validUntil: new Date(sourceTime + 12 * 60 * 60 * 1_000).toISOString().replace("Z", "+00:00"),
+      }
+      const replaced = yield* seedInteraction(
+        db,
+        "retained-readable-replace",
+        replaceInput,
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        { text: replaceText, time: replaceTime, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        replaceInput,
+        replaced.registration,
+      )
+      const replaceResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        replaceInput,
+        context(replaced.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+      )
+      const replaceRead = SemanticPresentation.readResult({
+        id: replaced.registration.partID,
+        sessionID: replaced.registration.sessionID,
+        messageID: replaced.registration.assistantMessageID,
+        callID: replaced.registration.callID,
+        tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        state: { status: "completed", title: replaceResult.title, metadata: replaceResult.metadata },
+      })
+      if (replaceRead.type !== "valid") return yield* Effect.die("Expected a valid retained replace presentation")
+      expect(replaceRead.value.facts).toEqual(
+        expect.arrayContaining([
+          { label: "Instruction", value: replaceInput.operativeInstruction },
+          { label: "Valid until", value: replaceInput.validUntil },
+          { label: "Time zone", value: "UTC (+00:00)" },
+          {
+            label: "Replaces",
+            value: `version 1: ${createInput.operativeInstruction}`,
+          },
+          { label: "Version", value: "2" },
+          {
+            label: "Correction",
+            value: "Replace or retract this retained instruction with a later explicit learner direction.",
+          },
+        ]),
+      )
+
+      const replacementSnapshot = yield* db.transaction((tx) =>
+        RetainedSteering.readActiveSnapshot(tx, replaceTime + 1),
+      )
+      const replacementHead = replacementSnapshot.items[0]?.transition
+      if (!replacementHead) return yield* Effect.die("Expected the retained replacement head")
+      const retractTime = sourceTime + 2_000
+      const retractText = "across all my learning, remove the worked-example instruction"
+      const retractInput = {
+        action: "retract" as const,
+        policyID: replacementHead.policyID,
+        expectedHeadID: replacementHead.id,
+        expectedVersion: replacementHead.version,
+        sourceExcerpt: retractText,
+      }
+      const retracted = yield* seedInteraction(
+        db,
+        "retained-readable-retract",
+        retractInput,
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        { text: retractText, time: retractTime, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        retractInput,
+        retracted.registration,
+      )
+      const retractResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        retractInput,
+        context(retracted.registration, "allow", LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY),
+      )
+      const retractRead = SemanticPresentation.readResult({
+        id: retracted.registration.partID,
+        sessionID: retracted.registration.sessionID,
+        messageID: retracted.registration.assistantMessageID,
+        callID: retracted.registration.callID,
+        tool: LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY,
+        state: { status: "completed", title: retractResult.title, metadata: retractResult.metadata },
+      })
+      if (retractRead.type !== "valid") return yield* Effect.die("Expected a valid retained retract presentation")
+      expect(retractRead.value.facts).toEqual(
+        expect.arrayContaining([
+          { label: "Retracted instruction", value: replaceInput.operativeInstruction },
+          { label: "State", value: "retracted" },
+          { label: "Version", value: "3" },
+          { label: "Effect", value: "This retained instruction no longer applies." },
+        ]),
+      )
+    }),
 )
 
 it.effect("keeps provider observation metadata outside retained invocation identity", () =>
@@ -2119,14 +2193,14 @@ it.effect(
     }),
 )
 
-it.effect("requires an exact once-only default confirmation and keeps authorized no-change effect-free", () =>
+it.effect("authorizes direct Default-Course V2 requests once and denies before no-change settlement", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
     const courses = yield* Course.Service
     const navigation = yield* LearnerNavigation.ReadService
     const runtime = yield* LearningCommandRuntime.Service
-    const seeded = yield* seedCourse(courses, "Default algorithms", "Main")
+    const seeded = yield* seedCourse(courses, "Default algorithms V2", "Main")
     const target = {
       courseID: seeded.course.id,
       courseVersion: 0,
@@ -2136,12 +2210,26 @@ it.effect("requires an exact once-only default confirmation and keeps authorized
       viewVersion: null,
       revisionVersion: null,
     }
-    const input = { expectedHeadID: null, expectedVersion: 0, target }
+    const input = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "make Default algorithms V2 my default",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: 0 }],
+          selectedCourseID: seeded.course.id,
+        },
+      },
+      expectedHeadID: null,
+      expectedVersion: 0,
+      target,
+    } as const
     const interaction = yield* seedInteraction(
       db,
-      "default-set",
+      "default-v2-direct",
       input,
       LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please make Default algorithms V2 my default Course." },
     )
 
     yield* runtime.prepareCommand(
@@ -2154,82 +2242,1806 @@ it.effect("requires an exact once-only default confirmation and keeps authorized
       input,
       context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
     )
-    expect(JSON.parse(applied.output)).toMatchObject({
-      outcome: "applied",
-      navigationKind: "default_course_preference",
-      current: { version: 1, courseID: seeded.course.id, usability: { usable: true } },
-    })
-    const request = permissionRequests.find((item) => item.sessionID === interaction.sessionID)
-    expect(request).toMatchObject({
-      requirePrompt: true,
-      always: [],
-      metadata: {
-        onceOnly: true,
+    const output = JSON.parse(applied.output)
+    expect(output).toMatchObject({
+      settlement: {
+        outcome: "applied",
         navigationKind: "default_course_preference",
-        confirmation: { version: 0, fromCourseID: null, target: { courseID: seeded.course.id } },
+        current: { version: 1, courseID: seeded.course.id },
+      },
+      authorization: {
+        kind: "direct_request_v2",
+        source: { excerpt: input.authorization.sourceExcerpt },
+        operation: "set",
+        from: { kind: "absent" },
+        to: {
+          kind: "course",
+          locator: {
+            courseID: seeded.course.id,
+            title: { availability: "recorded_v2", value: seeded.course.title },
+            courseVersion: { availability: "recorded_v2", value: 0 },
+            workingSelection: {
+              availability: "recorded_v2",
+              value: {
+                revisionID: null,
+                selectionVersion: 0,
+                viewID: null,
+                viewName: null,
+                viewVersion: null,
+                revisionVersion: null,
+              },
+            },
+          },
+        },
+      },
+      acknowledgement: {
+        authorizationVersion: 2,
+        invocationPartID: interaction.registration.partID,
+        operation: "set",
+        from: { kind: "absent" },
+        to: { kind: "course", locator: { courseID: seeded.course.id } },
       },
     })
-    const receipt = yield* db
-      .select({
-        id: LearningCommandReceiptTable.id,
-        permission_request_id: LearnerDefaultCourseCommandTable.permission_request_id,
-        confirmation_snapshot: DefaultCoursePreferenceTransitionTable.confirmation_snapshot,
-      })
-      .from(LearningCommandReceiptTable)
-      .innerJoin(
-        LearnerDefaultCourseCommandTable,
-        eq(LearnerDefaultCourseCommandTable.invocation_part_id, LearningCommandReceiptTable.invocation_part_id),
-      )
-      .innerJoin(
-        LearnerDefaultCourseCommitSealTable,
-        eq(LearnerDefaultCourseCommitSealTable.receipt_id, LearningCommandReceiptTable.id),
-      )
-      .innerJoin(
-        DefaultCoursePreferenceTransitionTable,
-        eq(DefaultCoursePreferenceTransitionTable.id, LearnerDefaultCourseCommitSealTable.effect_id),
-      )
-      .where(eq(LearningCommandReceiptTable.invocation_part_id, interaction.registration.partID))
-      .get()
-    expect(receipt).toMatchObject({
-      permission_request_id: request?.id,
-      confirmation_snapshot: request?.metadata.confirmation,
+    expect(applied.metadata).toMatchObject({
+      commandVersion: 2,
+      outcome: "applied",
+      durablySettled: true,
     })
-    const explicitCourse = yield* courses.createCourse({ title: "Explicit fallback target" })
-    expect(yield* navigation.resolveCourses([explicitCourse.id, seeded.course.id, explicitCourse.id])).toMatchObject({
-      source: "explicit",
-      courses: [{ courseID: explicitCourse.id }, { courseID: seeded.course.id }],
+    const asked = permissionRequests.find((item) => item.sessionID === interaction.sessionID)
+    expect(asked).toMatchObject({
+      permission: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      patterns: [seeded.course.id],
+      always: [seeded.course.id],
+      lifecycle: { resolution: "request_exact" },
+      metadata: {
+        navigationKind: "default_course_preference",
+        authorization: { fingerprint: output.authorization.fingerprint },
+      },
     })
     expect(
-      yield* navigation.resolveCourses(Array.from({ length: 101 }, () => explicitCourse.id)).pipe(Effect.flip),
-    ).toMatchObject({
-      _tag: "LearnerNavigation.InvalidReadError",
-    })
-    yield* courses.withdrawCourse({
+      yield* db.get(sql`
+        SELECT outcome
+        FROM learner_default_course_capability_settlement
+        WHERE invocation_part_id = ${interaction.registration.partID}
+      `),
+    ).toEqual({ outcome: "policy_allow" })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      version: 1,
       courseID: seeded.course.id,
+      usability: { usable: true },
+    })
+    const partialV1Endpoint = JSON.stringify({
+      kind: "course",
+      locator: {
+        courseID: seeded.course.id,
+        title: { availability: "not_recorded_v1" },
+        courseVersion: { availability: "not_recorded_v1" },
+        workingSelection: { availability: "not_recorded_v1" },
+      },
+    })
+    yield* Effect.forEach(
+      [
+        {
+          table: "learner_default_course_disposition",
+          immutable: "learner_default_course_disposition_immutable_v13",
+          key: "invocation_part_id",
+          column: "from_locator",
+        },
+        {
+          table: "learner_default_course_disposition",
+          immutable: "learner_default_course_disposition_immutable_v13",
+          key: "invocation_part_id",
+          column: "to_locator",
+        },
+        {
+          table: "learner_default_course_acknowledgement",
+          immutable: "learner_default_course_acknowledgement_immutable_v13",
+          key: "invocation_part_id",
+          column: "from_locator",
+        },
+        {
+          table: "learner_default_course_acknowledgement",
+          immutable: "learner_default_course_acknowledgement_immutable_v13",
+          key: "invocation_part_id",
+          column: "to_locator",
+        },
+      ] as const,
+      (attempt) =>
+        Effect.gen(function* () {
+          expect(
+            Exit.isFailure(
+              yield* db
+                .transaction((tx) =>
+                  Effect.gen(function* () {
+                    yield* tx.run(sql.raw(`DROP TRIGGER ${attempt.immutable}`))
+                    yield* tx.run(sql`
+                      UPDATE ${sql.identifier(attempt.table)}
+                      SET ${sql.identifier(attempt.column)} = ${partialV1Endpoint}
+                      WHERE ${sql.identifier(attempt.key)} = ${interaction.registration.partID}
+                    `)
+                  }),
+                )
+                .pipe(Effect.exit),
+            ),
+          ).toBe(true)
+        }),
+      { discard: true },
+    )
+
+    const current = yield* navigation.currentDefault()
+    const deniedInput = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "keep Default algorithms V2 as my default",
+        resolutionScope: input.authorization.resolutionScope,
+      },
+      expectedHeadID: current.headID,
+      expectedVersion: current.version,
+      target,
+    } as const
+    const denied = yield* seedInteraction(
+      db,
+      "default-v2-denied-no-change",
+      deniedInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please keep Default algorithms V2 as my default Course." },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      deniedInput,
+      denied.registration,
+    )
+    const deniedResult = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      deniedInput,
+      context(denied.registration, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    expect(JSON.parse(deniedResult.output)).toMatchObject({
+      settlement: { outcome: "error", code: "permission_rejected" },
+      authorization: { operation: "change" },
+    })
+    expect(
+      yield* db.get(sql`
+        SELECT outcome
+        FROM learner_default_course_capability_settlement
+        WHERE invocation_part_id = ${denied.registration.partID}
+      `),
+    ).toEqual({ outcome: "policy_deny" })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      headID: current.headID,
+      version: current.version,
+    })
+
+    const interruptedInput = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "clear my default Course",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: 0 }],
+          selectedCourseID: null,
+        },
+      },
+      expectedHeadID: current.headID,
+      expectedVersion: current.version,
+      target: null,
+    } as const
+    const interrupted = yield* seedInteraction(
+      db,
+      "default-v2-not-evaluated",
+      interruptedInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please clear my default Course." },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      interruptedInput,
+      interrupted.registration,
+    )
+    const aborted = new AbortController()
+    aborted.abort()
+    const interruptedContext = {
+      ...context(interrupted.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      abort: aborted.signal,
+    }
+    const interruptedResult = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      interruptedInput,
+      interruptedContext,
+    )
+    expect(JSON.parse(interruptedResult.output)).toMatchObject({
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    expect(
+      yield* db.get(sql`
+        SELECT outcome
+        FROM learner_default_course_capability_settlement
+        WHERE invocation_part_id = ${interrupted.registration.partID}
+      `),
+    ).toEqual({ outcome: "not_evaluated" })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      headID: current.headID,
+      version: current.version,
+    })
+
+    const promptedInput = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "clear the default Course after prompting me",
+        resolutionScope: interruptedInput.authorization.resolutionScope,
+      },
+      expectedHeadID: current.headID,
+      expectedVersion: current.version,
+      target: null,
+    } as const
+    const prompted = yield* seedInteraction(
+      db,
+      "default-v2-prompted-allow",
+      promptedInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please clear the default Course after prompting me." },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      promptedInput,
+      prompted.registration,
+    )
+    const promptedResult = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      promptedInput,
+      context(prompted.registration, "ask", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    expect(JSON.parse(promptedResult.output)).toMatchObject({
+      settlement: { outcome: "applied", current: { version: 2, courseID: null } },
+      authorization: {
+        operation: "clear",
+        from: {
+          kind: "course",
+          locator: {
+            courseID: seeded.course.id,
+            title: { availability: "recorded_v2", value: seeded.course.title },
+            courseVersion: { availability: "recorded_v2", value: 0 },
+            workingSelection: { availability: "recorded_v2" },
+          },
+        },
+        to: { kind: "absent" },
+      },
+      acknowledgement: {
+        authorizationVersion: 2,
+        operation: "clear",
+        from: { kind: "course", locator: { courseID: seeded.course.id } },
+        to: { kind: "absent" },
+      },
+    })
+    expect(
+      yield* db.get(sql`
+        SELECT outcome
+        FROM learner_default_course_capability_settlement
+        WHERE invocation_part_id = ${prompted.registration.partID}
+      `),
+    ).toEqual({ outcome: "prompted_allow" })
+
+    const cleared = yield* navigation.currentDefault()
+    const abandonedInput = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "restore Default algorithms V2 as my default",
+        resolutionScope: input.authorization.resolutionScope,
+      },
+      expectedHeadID: cleared.headID,
+      expectedVersion: cleared.version,
+      target,
+    } as const
+    const abandoned = yield* seedInteraction(
+      db,
+      "default-v2-prompted-abort",
+      abandonedInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please restore Default algorithms V2 as my default Course." },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      abandonedInput,
+      abandoned.registration,
+    )
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    permissionWaits.push({ entered, release })
+    const controller = new AbortController()
+    const execution = yield* runtime
+      .executeCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, abandonedInput, {
+        ...context(abandoned.registration, "ask", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+        abort: controller.signal,
+      })
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+    controller.abort()
+    const abandonedResult = yield* Fiber.join(execution)
+    expect(JSON.parse(abandonedResult.output)).toMatchObject({
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    expect(
+      yield* db.get(sql`
+        SELECT outcome
+        FROM learner_default_course_capability_settlement
+        WHERE invocation_part_id = ${abandoned.registration.partID}
+      `),
+    ).toEqual({ outcome: "prompted_abort" })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      headID: cleared.headID,
+      version: cleared.version,
+      courseID: null,
+    })
+
+    yield* Effect.forEach(
+      ["policy_allow", "prompted_allow"] as const,
+      (outcome, index) =>
+        Effect.gen(function* () {
+          const time = Date.now() + index
+          const crashInput = {
+            authorization: {
+              type: "direct_request_v2",
+              sourceExcerpt: `restore Default algorithms V2 after ${outcome}`,
+              resolutionScope: input.authorization.resolutionScope,
+            },
+            expectedHeadID: cleared.headID,
+            expectedVersion: cleared.version,
+            target,
+          } as const
+          const crashed = yield* seedInteraction(
+            db,
+            `default-v2-crash-${outcome}`,
+            crashInput,
+            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            { text: `Please restore Default algorithms V2 after ${outcome}.`, time },
+          )
+          yield* runtime.prepareCommand(
+            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            crashInput,
+            crashed.registration,
+          )
+          yield* db.transaction((tx) =>
+            outcome === "policy_allow"
+              ? settleDefaultCoursePolicy(tx, {
+                  partID: crashed.registration.partID,
+                  outcome,
+                  policyBasis: { source: "runtime-crash-window-test", action: "allow" },
+                  time: time + 1,
+                  order: 100 + index * 2,
+                })
+              : Effect.gen(function* () {
+                  const requestID = PermissionV1.ID.ascending()
+                  yield* issueDefaultCourseCapabilityPrompt(tx, {
+                    partID: crashed.registration.partID,
+                    requestID,
+                    policyBasis: { source: "runtime-crash-window-test", action: "ask" },
+                    shownScope: { patterns: [seeded.course.id], always: [seeded.course.id] },
+                    time: time + 1,
+                    order: 100 + index * 2,
+                  })
+                  yield* settleDefaultCoursePrompt(tx, {
+                    partID: crashed.registration.partID,
+                    requestID,
+                    outcome,
+                    reply: { requestID, reply: "once" },
+                    time: time + 2,
+                    order: 101 + index * 2,
+                  })
+                }),
+          )
+          const frontierBeforeRecovery = yield* db.transaction((tx) => LearningFrontier.read(tx))
+          expect(yield* runtime.interrupt(crashed.registration)).toBe(true)
+          expect(JSON.parse((yield* exactPartResult(db, crashed.registration.partID)).output)).toMatchObject({
+            settlement: { outcome: "error", code: "interrupted" },
+          })
+          expect(
+            yield* db.get(sql`
+              SELECT outcome
+              FROM learner_default_course_capability_settlement
+              WHERE invocation_part_id = ${crashed.registration.partID}
+            `),
+          ).toEqual({ outcome })
+          expect(
+            yield* db.get(sql`
+              SELECT
+                (SELECT count(*) FROM learner_default_course_transition
+                  WHERE authorization_part_id = ${crashed.registration.partID}) AS effects,
+                (SELECT count(*) FROM learner_default_course_acknowledgement
+                  WHERE invocation_part_id = ${crashed.registration.partID}) AS acknowledgements
+            `),
+          ).toEqual({ effects: 0, acknowledgements: 0 })
+          expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontierBeforeRecovery)
+          expect(yield* navigation.currentDefault()).toMatchObject({
+            headID: cleared.headID,
+            version: cleared.version,
+            courseID: null,
+          })
+        }),
+      { discard: true },
+    )
+  }),
+)
+
+it.effect("settles pre-existing Default-Course semantics before changed ownership, source loss, or capability", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const runtime = yield* LearningCommandRuntime.Service
+    const selected = yield* courses.createCourse({ title: "Semantic terminal target" })
+    const selectedView = yield* courses.createView({
+      courseID: selected.id,
+      name: "Semantic terminal view",
+      expectedCourseVersion: 0,
+      authorship: Course.Authorship.learnerAuthored(),
+      revision: { items: [{ key: "root", title: "Semantic terminal target" }] },
+    })
+    yield* courses.select({
+      courseID: selected.id,
+      revisionID: selectedView.revision.id,
+      expectedCourseVersion: 0,
+      expectedSelectionVersion: 0,
+      expectedViewVersion: 0,
+      expectedRevisionVersion: 0,
+    })
+    const conflicting = yield* courses.createCourse({ title: "Semantic terminal conflict" })
+    const target = {
+      courseID: selected.id,
+      courseVersion: 0,
+      selectionRevisionID: selectedView.revision.id,
+      selectionVersion: 1,
+      viewID: selectedView.view.id,
+      viewVersion: 0,
+      revisionVersion: 0,
+    }
+    const input = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "use Semantic terminal target",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: selected.id, title: selected.title, courseVersion: 0 }],
+          selectedCourseID: selected.id,
+        },
+      },
+      expectedHeadID: null,
+      expectedVersion: 0,
+      target,
+    } as const
+    const interaction = yield* seedInteraction(
+      db,
+      "default-v2-semantic-terminal",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please use Semantic terminal target as my default Course." },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input,
+      interaction.registration,
+    )
+    const applied = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input,
+      context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    const appliedOutput = JSON.parse(applied.output)
+    const capabilityCalls = permissionRequests.length
+
+    yield* courses.select({
+      courseID: selected.id,
+      expectedCourseVersion: 0,
+      expectedSelectionRevisionID: selectedView.revision.id,
+      expectedSelectionVersion: 1,
+    })
+    const removed = yield* insertAssistant(
+      db,
+      interaction,
+      "default-v2-semantic-terminal-removed-selection",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, input, removed)
+    expect(
+      JSON.parse(
+        (yield* runtime.executeCommand(
+          LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+          input,
+          context(removed, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+        )).output,
+      ),
+    ).toMatchObject({
+      disposition: "semantic_terminal_v2",
+      settlement: { outcome: "already_applied", effectID: appliedOutput.settlement.effectID },
+    })
+
+    yield* courses.correctCourse({
+      courseID: selected.id,
+      title: "Changed after commit",
+      expectedCourseVersion: 0,
+    })
+    const sameName = yield* courses.createCourse({ title: "Semantic terminal target" })
+    const changed = yield* insertAssistant(
+      db,
+      interaction,
+      "default-v2-semantic-terminal-changed",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, input, changed)
+    const changedResult = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input,
+      context(changed, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, [
+        { ruleset: [], absence: "deny" },
+      ]),
+    )
+    const changedOutput = JSON.parse(changedResult.output)
+    expect(changedOutput).toMatchObject({
+      disposition: "semantic_terminal_v2",
+      settlement: {
+        outcome: "already_applied",
+        effectID: appliedOutput.settlement.effectID,
+      },
+      semanticTerminal: {
+        kind: "semantic_terminal_v2",
+        outcome: "already_applied",
+        existingEffectID: appliedOutput.settlement.effectID,
+      },
+      acknowledgement: {
+        invocationPartID: changed.partID,
+        effectAuthorizationPartID: interaction.registration.partID,
+        authorizationVersion: 2,
+        operation: "set",
+        from: { kind: "absent" },
+        to: {
+          kind: "course",
+          locator: {
+            courseID: selected.id,
+            title: { availability: "recorded_v2", value: "Semantic terminal target" },
+            courseVersion: { availability: "recorded_v2", value: 0 },
+            workingSelection: {
+              availability: "recorded_v2",
+              value: {
+                revisionID: selectedView.revision.id,
+                selectionVersion: 1,
+                viewID: selectedView.view.id,
+                viewName: "Semantic terminal view",
+                viewVersion: 0,
+                revisionVersion: 0,
+              },
+            },
+          },
+        },
+      },
+    })
+    expect(changedOutput.authorization).toBeUndefined()
+    expect(changedOutput.acknowledgement.to.locator.courseID).not.toBe(sameName.id)
+
+    yield* courses.withdrawCourse({
+      courseID: selected.id,
+      expectedCourseVersion: 1,
+      expectedSelectionVersion: 2,
+    })
+    yield* db
+      .insert(LearnerOccurrenceTombstoneTable)
+      .values({
+        occurrence_id: interaction.occurrenceID,
+        reason: "source_unavailable",
+        time_deleted: Date.now(),
+      })
+      .run()
+    const unavailable = yield* insertAssistant(
+      db,
+      interaction,
+      "default-v2-semantic-terminal-unavailable",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, input, unavailable)
+    expect(
+      JSON.parse(
+        (yield* runtime.executeCommand(
+          LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+          input,
+          context(unavailable, "ask", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+        )).output,
+      ),
+    ).toMatchObject({
+      disposition: "semantic_terminal_v2",
+      settlement: { outcome: "already_applied", effectID: appliedOutput.settlement.effectID },
+    })
+
+    yield* courses.withdrawCourse({
+      courseID: conflicting.id,
       expectedCourseVersion: 0,
       expectedSelectionVersion: 0,
     })
-    expect(yield* navigation.currentDefault()).toMatchObject({
-      courseID: seeded.course.id,
-      usability: { usable: false, cause: "course_withdrawn" },
+    const conflictInput = {
+      ...input,
+      target: { ...target, courseID: conflicting.id },
+      authorization: {
+        ...input.authorization,
+        sourceExcerpt: "use the unavailable conflicting target",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: conflicting.id, title: conflicting.title, courseVersion: 0 }],
+          selectedCourseID: conflicting.id,
+        },
+      },
+    } as const
+    const conflict = yield* insertAssistant(
+      db,
+      interaction,
+      "default-v2-semantic-terminal-conflict",
+      conflictInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, conflictInput, conflict)
+    const conflictOutput = JSON.parse(
+      (yield* runtime.executeCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        conflictInput,
+        context(conflict, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      )).output,
+    )
+    expect(conflictOutput).toMatchObject({
+      disposition: "semantic_terminal_v2",
+      settlement: { outcome: "error", code: "semantic_conflict" },
+      semanticTerminal: {
+        kind: "semantic_terminal_v2",
+        outcome: "semantic_conflict",
+        existingEffectID: appliedOutput.settlement.effectID,
+      },
     })
-    expect(yield* navigation.resolveCourses([])).toMatchObject({
-      source: "none",
-      courses: [],
-      default: { courseID: seeded.course.id, usability: { usable: false, cause: "course_withdrawn" } },
-    })
-    yield* courses.restoreCourse({ courseID: seeded.course.id, expectedCourseVersion: 1 })
-    expect(yield* navigation.resolveCourses([])).toMatchObject({
-      source: "default",
-      courses: [{ courseID: seeded.course.id, availability: "available" }],
-    })
-    const appliedSettlement = JSON.parse(applied.output) as { effectID: LearnerNavigation.DefaultEffectID }
+    expect(conflictOutput.authorization).toBeUndefined()
+    expect(conflictOutput.acknowledgement).toBeUndefined()
+    expect(permissionRequests.length).toBe(capabilityCalls)
+
     expect(
-      yield* db.transaction((tx) =>
-        LearningCommand.assertPartDeletable(tx, interaction.registration.partID).pipe(Effect.flip),
+      yield* db.all(sql`
+        SELECT
+          disposition,
+          authorization_version,
+          authorization_kind,
+          authorization_fingerprint,
+          semantic_outcome,
+          source_excerpt,
+          resolution_scope,
+          from_locator,
+          to_locator
+        FROM learner_default_course_disposition
+        WHERE invocation_part_id IN (${removed.partID}, ${changed.partID}, ${unavailable.partID}, ${conflict.partID})
+        ORDER BY invocation_part_id
+      `),
+    ).toEqual(
+      [removed.partID, changed.partID, unavailable.partID, conflict.partID].sort().map((partID) => ({
+        disposition: "semantic_terminal_v2",
+        authorization_version: null,
+        authorization_kind: null,
+        authorization_fingerprint: null,
+        semantic_outcome: partID === conflict.partID ? "semantic_conflict" : "already_applied",
+        source_excerpt: null,
+        resolution_scope: null,
+        from_locator: null,
+        to_locator: null,
+      })),
+    )
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learner_default_course_capability_issue
+            WHERE invocation_part_id IN (
+              ${removed.partID}, ${changed.partID}, ${unavailable.partID}, ${conflict.partID}
+            )) AS issues,
+          (SELECT count(*) FROM learner_default_course_capability_settlement
+            WHERE invocation_part_id IN (
+              ${removed.partID}, ${changed.partID}, ${unavailable.partID}, ${conflict.partID}
+            )) AS capabilities,
+          (SELECT count(*) FROM learner_default_course_acknowledgement
+            WHERE invocation_part_id = ${conflict.partID}) AS conflict_acknowledgements,
+          (SELECT count(*) FROM learner_default_course_acknowledgement
+            WHERE invocation_part_id IN (
+              ${removed.partID}, ${changed.partID}, ${unavailable.partID}
+            )) AS duplicate_acknowledgements,
+          (SELECT count(*) FROM learner_default_course_transition
+            WHERE authorization_part_id IN (
+              ${removed.partID}, ${changed.partID}, ${unavailable.partID}, ${conflict.partID}
+            )) AS effects
+      `),
+    ).toEqual({
+      issues: 0,
+      capabilities: 0,
+      conflict_acknowledgements: 0,
+      duplicate_acknowledgements: 3,
+      effects: 0,
+    })
+    expect(
+      Exit.isFailure(
+        yield* db
+          .transaction((tx) =>
+            Effect.gen(function* () {
+              yield* tx.run("DROP TRIGGER learner_default_course_disposition_immutable_v13")
+              yield* tx.run(sql`
+                UPDATE learner_default_course_disposition
+                SET
+                  authorization_version = 2,
+                  authorization_kind = 'direct_request_v2',
+                  authorization_fingerprint = ${"a".repeat(64)}
+                WHERE invocation_part_id = ${changed.partID}
+              `)
+            }),
+          )
+          .pipe(Effect.exit),
       ),
-    ).toMatchObject({ _tag: "LearningCommand.SettledPartImmutableError" })
-    const requestsAfterApply = permissionRequests.length
+    ).toBe(true)
+  }),
+)
+
+it.effect("retains candidate authorization and capability history when a Default-Course race loses", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const navigation = yield* LearnerNavigation.ReadService
+    const runtime = yield* LearningCommandRuntime.Service
+    const selected = yield* courses.createCourse({ title: "Candidate race duplicate" })
+    const target = {
+      courseID: selected.id,
+      courseVersion: 0,
+      selectionRevisionID: null,
+      selectionVersion: 0,
+      viewID: null,
+      viewVersion: null,
+      revisionVersion: null,
+    }
+    const input = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "choose Candidate race duplicate",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: selected.id, title: selected.title, courseVersion: 0 }],
+          selectedCourseID: selected.id,
+        },
+      },
+      expectedHeadID: null,
+      expectedVersion: 0,
+      target,
+    } as const
+    const interaction = yield* seedInteraction(
+      db,
+      "default-v2-candidate-race-duplicate",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please choose Candidate race duplicate as my default Course." },
+    )
+    const losing = yield* insertAssistant(
+      db,
+      interaction,
+      "default-v2-candidate-race-duplicate-loser",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input,
+      interaction.registration,
+    )
+    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, input, losing)
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    permissionWaits.push({ entered, release })
+    const losingExecution = yield* runtime
+      .executeCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        input,
+        context(losing, "ask", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      )
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+    const winner = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input,
+      context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    yield* Deferred.succeed(release, undefined)
+    const lost = yield* Fiber.join(losingExecution)
+    const winnerOutput = JSON.parse(winner.output)
+    const lostOutput = JSON.parse(lost.output)
+    expect(lostOutput).toMatchObject({
+      disposition: "candidate_v2",
+      settlement: {
+        outcome: "already_applied",
+        effectID: winnerOutput.settlement.effectID,
+      },
+      authorization: {
+        kind: "direct_request_v2",
+        fingerprint: expect.any(String),
+      },
+      acknowledgement: {
+        invocationPartID: losing.partID,
+        effectAuthorizationPartID: interaction.registration.partID,
+      },
+    })
+    expect(lostOutput.semanticTerminal).toBeUndefined()
+    expect(
+      yield* db.get(sql`
+        SELECT
+          disposition.disposition,
+          disposition.authorization_kind,
+          capability.outcome,
+          issue.permission_request_id,
+          acknowledgement.effect_authorization_part_id,
+          (SELECT count(*) FROM learner_default_course_transition
+            WHERE authorization_part_id = ${losing.partID}) AS effects
+        FROM learner_default_course_disposition AS disposition
+        JOIN learner_default_course_capability_issue AS issue
+          ON issue.invocation_part_id = disposition.invocation_part_id
+        JOIN learner_default_course_capability_settlement AS capability
+          ON capability.invocation_part_id = disposition.invocation_part_id
+        JOIN learner_default_course_acknowledgement AS acknowledgement
+          ON acknowledgement.invocation_part_id = disposition.invocation_part_id
+        WHERE disposition.invocation_part_id = ${losing.partID}
+      `),
+    ).toMatchObject({
+      disposition: "candidate_v2",
+      authorization_kind: "direct_request_v2",
+      outcome: "prompted_allow",
+      permission_request_id: expect.any(String),
+      effect_authorization_part_id: interaction.registration.partID,
+      effects: 0,
+    })
+
+    const winnerCourse = yield* courses.createCourse({ title: "Candidate race conflict winner" })
+    const loserCourse = yield* courses.createCourse({ title: "Candidate race conflict loser" })
+    const current = yield* navigation.currentDefault()
+    const conflictWinnerInput = defaultCourseDirectInput(winnerCourse, "choose Candidate race conflict winner", current)
+    const conflictLoserInput = defaultCourseDirectInput(loserCourse, "choose Candidate race conflict loser", current)
+    const conflictInteraction = yield* seedInteraction(
+      db,
+      "default-v2-candidate-race-conflict",
+      conflictWinnerInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      {
+        text: "Please choose Candidate race conflict winner or choose Candidate race conflict loser as my default Course.",
+      },
+    )
+    const conflictLosing = yield* insertAssistant(
+      db,
+      conflictInteraction,
+      "default-v2-candidate-race-conflict-loser",
+      conflictLoserInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      conflictWinnerInput,
+      conflictInteraction.registration,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      conflictLoserInput,
+      conflictLosing,
+    )
+    const conflictEntered = yield* Deferred.make<void>()
+    const conflictRelease = yield* Deferred.make<void>()
+    permissionWaits.push({ entered: conflictEntered, release: conflictRelease })
+    const conflictExecution = yield* runtime
+      .executeCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        conflictLoserInput,
+        context(conflictLosing, "ask", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      )
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(conflictEntered)
+    const conflictWinner = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      conflictWinnerInput,
+      context(conflictInteraction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    expect(JSON.parse(conflictWinner.output)).toMatchObject({
+      settlement: { outcome: "applied", current: { courseID: winnerCourse.id } },
+      authorization: {
+        operation: "change",
+        from: { kind: "course", locator: { courseID: selected.id } },
+        to: { kind: "course", locator: { courseID: winnerCourse.id } },
+      },
+      acknowledgement: {
+        authorizationVersion: 2,
+        operation: "change",
+        from: { kind: "course", locator: { courseID: selected.id } },
+        to: { kind: "course", locator: { courseID: winnerCourse.id } },
+      },
+    })
+    yield* Deferred.succeed(conflictRelease, undefined)
+    const conflictLost = JSON.parse((yield* Fiber.join(conflictExecution)).output)
+    expect(conflictLost).toMatchObject({
+      disposition: "candidate_v2",
+      settlement: { outcome: "error", code: "semantic_conflict" },
+      authorization: {
+        kind: "direct_request_v2",
+        command: { target: { courseID: loserCourse.id } },
+      },
+    })
+    expect(conflictLost.semanticTerminal).toBeUndefined()
+    expect(conflictLost.acknowledgement).toBeUndefined()
+    expect(
+      yield* db.get(sql`
+        SELECT
+          disposition.disposition,
+          disposition.authorization_kind,
+          capability.outcome,
+          issue.permission_request_id,
+          (SELECT count(*) FROM learner_default_course_acknowledgement
+            WHERE invocation_part_id = ${conflictLosing.partID}) AS acknowledgements,
+          (SELECT count(*) FROM learner_default_course_transition
+            WHERE authorization_part_id = ${conflictLosing.partID}) AS effects
+        FROM learner_default_course_disposition AS disposition
+        JOIN learner_default_course_capability_issue AS issue
+          ON issue.invocation_part_id = disposition.invocation_part_id
+        JOIN learner_default_course_capability_settlement AS capability
+          ON capability.invocation_part_id = disposition.invocation_part_id
+        WHERE disposition.invocation_part_id = ${conflictLosing.partID}
+      `),
+    ).toMatchObject({
+      disposition: "candidate_v2",
+      authorization_kind: "direct_request_v2",
+      outcome: "prompted_allow",
+      permission_request_id: expect.any(String),
+      acknowledgements: 0,
+      effects: 0,
+    })
+    expect(
+      Exit.isFailure(
+        yield* db
+          .transaction((tx) =>
+            Effect.gen(function* () {
+              yield* tx.run("DROP TRIGGER learner_default_course_disposition_immutable_v13")
+              yield* tx.run(sql`
+                UPDATE learner_default_course_disposition
+                SET authorization_fingerprint = NULL
+                WHERE invocation_part_id = ${conflictLosing.partID}
+              `)
+            }),
+          )
+          .pipe(Effect.exit),
+      ),
+    ).toBe(true)
+  }),
+)
+
+it.effect("settles every non-allow capability history by the final semantic race result", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const navigation = yield* LearnerNavigation.ReadService
+    const runtime = yield* LearningCommandRuntime.Service
+    const outcomes = [
+      "policy_deny",
+      "prompted_deny",
+      "prompted_correct",
+      "prompted_cancel",
+      "not_evaluated",
+      "prompted_abort",
+    ] as const
+
+    yield* Effect.forEach(
+      outcomes,
+      (outcome, outcomeIndex) =>
+        Effect.forEach(
+          ["already_applied", "semantic_conflict"] as const,
+          (semanticOutcome, semanticIndex) =>
+            Effect.gen(function* () {
+              const suffix = `${outcome}-${semanticOutcome}`
+              const winnerCourse = yield* courses.createCourse({ title: `Race winner ${suffix}` })
+              const loserCourse =
+                semanticOutcome === "already_applied"
+                  ? winnerCourse
+                  : yield* courses.createCourse({ title: `Race loser ${suffix}` })
+              const current = yield* navigation.currentDefault()
+              const winnerExcerpt = `choose Race winner ${suffix}`
+              const loserExcerpt = `choose Race loser ${suffix}`
+              const winnerInput = defaultCourseDirectInput(winnerCourse, winnerExcerpt, current)
+              const loserInput = defaultCourseDirectInput(loserCourse, loserExcerpt, current)
+              const interaction = yield* seedInteraction(
+                db,
+                `default-v2-nonallow-race-${suffix}`,
+                winnerInput,
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                { text: `Please ${winnerExcerpt}; the competing interpretation is to ${loserExcerpt}.` },
+              )
+              const losing = yield* insertAssistant(
+                db,
+                interaction,
+                `default-v2-nonallow-race-loser-${suffix}`,
+                loserInput,
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+              )
+              yield* runtime.prepareCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                winnerInput,
+                interaction.registration,
+              )
+              yield* runtime.prepareCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                loserInput,
+                losing,
+              )
+              yield* settleRaceCapability(db, losing.partID, outcome, outcomeIndex * 10 + semanticIndex)
+              const winner = JSON.parse(
+                (yield* runtime.executeCommand(
+                  LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                  winnerInput,
+                  context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+                )).output,
+              )
+              const lost = yield* db.transaction((tx) =>
+                settleDefaultCourseV2(tx, {
+                  partID: losing.partID,
+                  settlement: {
+                    time: Date.now() + outcomeIndex * 10 + semanticIndex,
+                    order: 1_000 + outcomeIndex * 10 + semanticIndex,
+                  },
+                }),
+              )
+              expect(lost).toMatchObject(
+                semanticOutcome === "already_applied"
+                  ? {
+                      type: "settled",
+                      settlement: {
+                        outcome: "already_applied",
+                        effectID: winner.settlement.effectID,
+                      },
+                      acknowledgement: {
+                        invocationPartID: losing.partID,
+                        effectAuthorizationPartID: interaction.registration.partID,
+                        authorizationVersion: 2,
+                      },
+                    }
+                  : {
+                      type: "settled",
+                      settlement: { outcome: "error", code: "semantic_conflict" },
+                    },
+              )
+              if (semanticOutcome === "semantic_conflict") expect(lost).not.toHaveProperty("acknowledgement")
+              expect(
+                yield* db.get(sql`
+                  SELECT
+                    disposition.disposition,
+                    disposition.authorization_kind,
+                    capability.outcome,
+                    (SELECT count(*) FROM learner_default_course_transition
+                      WHERE authorization_part_id = ${losing.partID}) AS effects,
+                    (SELECT count(*) FROM learner_default_course_acknowledgement
+                      WHERE invocation_part_id = ${losing.partID}) AS acknowledgements
+                  FROM learner_default_course_disposition AS disposition
+                  JOIN learner_default_course_capability_settlement AS capability
+                    ON capability.invocation_part_id = disposition.invocation_part_id
+                  WHERE disposition.invocation_part_id = ${losing.partID}
+                `),
+              ).toEqual({
+                disposition: "candidate_v2",
+                authorization_kind: "direct_request_v2",
+                outcome,
+                effects: 0,
+                acknowledgements: semanticOutcome === "already_applied" ? 1 : 0,
+              })
+            }),
+          { discard: true },
+        ),
+      { discard: true },
+    )
+  }),
+)
+
+it.effect("gives semantic winners precedence through live Default-Course permission abort", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const navigation = yield* LearnerNavigation.ReadService
+    const runtime = yield* LearningCommandRuntime.Service
+
+    yield* Effect.forEach(
+      ["not_evaluated", "prompted_abort"] as const,
+      (outcome) =>
+        Effect.forEach(
+          ["already_applied", "semantic_conflict"] as const,
+          (semanticOutcome) =>
+            Effect.gen(function* () {
+              const suffix = `${outcome}-${semanticOutcome}`
+              const winnerCourse = yield* courses.createCourse({ title: `Live abort winner ${suffix}` })
+              const candidateCourse =
+                semanticOutcome === "already_applied"
+                  ? winnerCourse
+                  : yield* courses.createCourse({ title: `Live abort candidate ${suffix}` })
+              const current = yield* navigation.currentDefault()
+              const winnerExcerpt = `choose Live abort winner ${suffix}`
+              const candidateExcerpt = `choose Live abort candidate ${suffix}`
+              const winnerInput = defaultCourseDirectInput(winnerCourse, winnerExcerpt, current)
+              const candidateInput = defaultCourseDirectInput(candidateCourse, candidateExcerpt, current)
+              const interaction = yield* seedInteraction(
+                db,
+                `default-v2-live-abort-${suffix}`,
+                winnerInput,
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                { text: `Please ${winnerExcerpt}; another interpretation is to ${candidateExcerpt}.` },
+              )
+              const candidate = yield* insertAssistant(
+                db,
+                interaction,
+                `default-v2-live-abort-candidate-${suffix}`,
+                candidateInput,
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+              )
+              yield* runtime.prepareCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                candidateInput,
+                candidate,
+              )
+              yield* runtime.prepareCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                winnerInput,
+                interaction.registration,
+              )
+              const controller = new AbortController()
+              const pending =
+                outcome === "prompted_abort"
+                  ? yield* Effect.gen(function* () {
+                      const entered = yield* Deferred.make<void>()
+                      const release = yield* Deferred.make<void>()
+                      permissionWaits.push({ entered, release })
+                      const execution = yield* runtime
+                        .executeCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, candidateInput, {
+                          ...context(candidate, "ask", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+                          abort: controller.signal,
+                        })
+                        .pipe(Effect.forkChild)
+                      yield* Deferred.await(entered)
+                      return execution
+                    })
+                  : undefined
+              const capabilityBefore = yield* defaultCourseCandidateEvidence(db, candidate.partID)
+              expect(capabilityBefore.capability).toBeUndefined()
+              expect(capabilityBefore.issue).toEqual(
+                outcome === "prompted_abort"
+                  ? expect.objectContaining({ permission_request_id: expect.any(String) })
+                  : undefined,
+              )
+              const winner = yield* runtime.executeCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                winnerInput,
+                context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+              )
+              const winnerOutput = JSON.parse(winner.output)
+              const currentAfterWinner = yield* navigation.currentDefault()
+              const frontierAfterWinner = yield* db.transaction((tx) => LearningFrontier.read(tx))
+              controller.abort()
+              const lost = pending
+                ? yield* Fiber.join(pending)
+                : yield* runtime.executeCommand(
+                    LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                    candidateInput,
+                    {
+                      ...context(candidate, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+                      abort: controller.signal,
+                    },
+                  )
+              const output = JSON.parse(lost.output)
+              expect(output).toMatchObject(
+                semanticOutcome === "already_applied"
+                  ? {
+                      disposition: "candidate_v2",
+                      settlement: { outcome: "already_applied", effectID: winnerOutput.settlement.effectID },
+                      acknowledgement: {
+                        invocationPartID: candidate.partID,
+                        effectAuthorizationPartID: interaction.registration.partID,
+                        effectID: winnerOutput.settlement.effectID,
+                      },
+                    }
+                  : {
+                      disposition: "candidate_v2",
+                      settlement: { outcome: "error", code: "semantic_conflict" },
+                    },
+              )
+              expect(output.semanticTerminal).toBeUndefined()
+              if (semanticOutcome === "semantic_conflict") expect(output.acknowledgement).toBeUndefined()
+              const capabilityAfter = yield* defaultCourseCandidateEvidence(db, candidate.partID)
+              expect(capabilityAfter.issue).toEqual(capabilityBefore.issue)
+              expect(capabilityAfter.capability).toMatchObject({
+                outcome,
+                permission_request_id:
+                  outcome === "prompted_abort" ? capabilityBefore.issue!.permission_request_id : null,
+                reply: null,
+                reply_fingerprint: null,
+              })
+              expect(capabilityAfter.counts).toEqual({
+                effects: 0,
+                acknowledgements: semanticOutcome === "already_applied" ? 1 : 0,
+              })
+              expect(yield* navigation.currentDefault()).toEqual(currentAfterWinner)
+              expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontierAfterWinner)
+              const terminal = yield* exactPartResult(db, candidate.partID)
+              expect(terminal).toEqual(lost)
+              const replay = yield* runtime.executeCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                candidateInput,
+                context(candidate, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+              )
+              expect(replay).toEqual(terminal)
+              expect(yield* defaultCourseCandidateEvidence(db, candidate.partID)).toEqual(capabilityAfter)
+            }),
+          { discard: true },
+        ),
+      { discard: true },
+    )
+  }),
+)
+
+it.effect("gives semantic winners precedence through every Default-Course startup recovery branch", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const navigation = yield* LearnerNavigation.ReadService
+    const runtime = yield* LearningCommandRuntime.Service
+    const outcomes = [
+      "not_evaluated",
+      "prompted_abort",
+      "policy_allow",
+      "policy_deny",
+      "prompted_allow",
+      "prompted_deny",
+      "prompted_correct",
+      "prompted_cancel",
+    ] as const
+
+    yield* Effect.forEach(
+      outcomes,
+      (outcome, outcomeIndex) =>
+        Effect.forEach(
+          ["already_applied", "semantic_conflict"] as const,
+          (semanticOutcome, semanticIndex) =>
+            Effect.gen(function* () {
+              const suffix = `${outcome}-${semanticOutcome}`
+              const winnerCourse = yield* courses.createCourse({ title: `Startup winner ${suffix}` })
+              const candidateCourse =
+                semanticOutcome === "already_applied"
+                  ? winnerCourse
+                  : yield* courses.createCourse({ title: `Startup candidate ${suffix}` })
+              const current = yield* navigation.currentDefault()
+              const winnerExcerpt = `choose Startup winner ${suffix}`
+              const candidateExcerpt = `choose Startup candidate ${suffix}`
+              const winnerInput = defaultCourseDirectInput(winnerCourse, winnerExcerpt, current)
+              const candidateInput = defaultCourseDirectInput(candidateCourse, candidateExcerpt, current)
+              const interaction = yield* seedInteraction(
+                db,
+                `default-v2-startup-recovery-${suffix}`,
+                winnerInput,
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                { text: `Please ${winnerExcerpt}; another interpretation is to ${candidateExcerpt}.` },
+              )
+              const candidate = yield* insertAssistant(
+                db,
+                interaction,
+                `default-v2-startup-recovery-candidate-${suffix}`,
+                candidateInput,
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+              )
+              yield* runtime.prepareCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                candidateInput,
+                candidate,
+              )
+              if (outcome === "prompted_abort") {
+                yield* db.transaction((tx) =>
+                  issueDefaultCourseCapabilityPrompt(tx, {
+                    partID: candidate.partID,
+                    requestID: PermissionV1.ID.ascending(`per_default_startup_${semanticIndex}`),
+                    policyBasis: { source: "startup-recovery-race-oracle", action: "ask" },
+                    shownScope: { patterns: [candidateCourse.id], always: [candidateCourse.id] },
+                    time: Date.now(),
+                    order: 0,
+                  }),
+                )
+              }
+              if (outcome !== "not_evaluated" && outcome !== "prompted_abort") {
+                yield* settleRaceCapability(db, candidate.partID, outcome, 300 + outcomeIndex * 10 + semanticIndex)
+              }
+              const capabilityBefore = yield* defaultCourseCandidateEvidence(db, candidate.partID)
+              if (outcome === "not_evaluated") {
+                expect(capabilityBefore).toMatchObject({ issue: undefined, capability: undefined })
+              }
+              if (outcome === "prompted_abort") {
+                expect(capabilityBefore.issue).toMatchObject({ permission_request_id: expect.any(String) })
+                expect(capabilityBefore.capability).toBeUndefined()
+              }
+              if (outcome !== "not_evaluated" && outcome !== "prompted_abort") {
+                expect(capabilityBefore.capability).toMatchObject({ outcome })
+              }
+              yield* runtime.prepareCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                winnerInput,
+                interaction.registration,
+              )
+              const winner = yield* runtime.executeCommand(
+                LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                winnerInput,
+                context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+              )
+              const winnerOutput = JSON.parse(winner.output)
+              const currentAfterWinner = yield* navigation.currentDefault()
+              const frontierAfterWinner = yield* db.transaction((tx) => LearningFrontier.read(tx))
+              expect(yield* runtime.interrupt(candidate)).toBe(true)
+              const terminal = yield* exactPartResult(db, candidate.partID)
+              const output = JSON.parse(terminal.output)
+              expect(output).toMatchObject(
+                semanticOutcome === "already_applied"
+                  ? {
+                      disposition: "candidate_v2",
+                      settlement: { outcome: "already_applied", effectID: winnerOutput.settlement.effectID },
+                      acknowledgement: {
+                        invocationPartID: candidate.partID,
+                        effectAuthorizationPartID: interaction.registration.partID,
+                        effectID: winnerOutput.settlement.effectID,
+                      },
+                    }
+                  : {
+                      disposition: "candidate_v2",
+                      settlement: { outcome: "error", code: "semantic_conflict" },
+                    },
+              )
+              expect(output.semanticTerminal).toBeUndefined()
+              if (semanticOutcome === "semantic_conflict") expect(output.acknowledgement).toBeUndefined()
+              const capabilityAfter = yield* defaultCourseCandidateEvidence(db, candidate.partID)
+              if (capabilityBefore.capability) {
+                expect(capabilityAfter).toEqual({
+                  ...capabilityBefore,
+                  counts: {
+                    effects: 0,
+                    acknowledgements: semanticOutcome === "already_applied" ? 1 : 0,
+                  },
+                })
+              } else {
+                expect(capabilityAfter.issue).toEqual(capabilityBefore.issue)
+                expect(capabilityAfter.capability).toMatchObject({
+                  outcome,
+                  permission_request_id:
+                    outcome === "prompted_abort" ? capabilityBefore.issue!.permission_request_id : null,
+                  reply: null,
+                  reply_fingerprint: null,
+                })
+                expect(capabilityAfter.counts).toEqual({
+                  effects: 0,
+                  acknowledgements: semanticOutcome === "already_applied" ? 1 : 0,
+                })
+              }
+              expect(yield* navigation.currentDefault()).toEqual(currentAfterWinner)
+              expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontierAfterWinner)
+              expect(yield* runtime.interrupt(candidate)).toBe(true)
+              expect(yield* exactPartResult(db, candidate.partID)).toEqual(terminal)
+              expect(yield* defaultCourseCandidateEvidence(db, candidate.partID)).toEqual(capabilityAfter)
+            }),
+          { discard: true },
+        ),
+      { discard: true },
+    )
+
+    yield* Effect.forEach(
+      ["policy_allow", "prompted_allow"] as const,
+      (outcome, index) =>
+        Effect.gen(function* () {
+          const current = yield* navigation.currentDefault()
+          const course = yield* courses.createCourse({ title: `No-winner startup ${outcome}` })
+          const sourceExcerpt = `choose No-winner startup ${outcome}`
+          const input = defaultCourseDirectInput(course, sourceExcerpt, current)
+          const interaction = yield* seedInteraction(
+            db,
+            `default-v2-startup-no-winner-${outcome}`,
+            input,
+            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            { text: `Please ${sourceExcerpt}.` },
+          )
+          yield* runtime.prepareCommand(
+            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            input,
+            interaction.registration,
+          )
+          yield* settleRaceCapability(db, interaction.registration.partID, outcome, 500 + index)
+          const before = yield* defaultCourseCandidateEvidence(db, interaction.registration.partID)
+          const frontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+          expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
+          const terminal = yield* exactPartResult(db, interaction.registration.partID)
+          expect(JSON.parse(terminal.output)).toMatchObject({
+            disposition: "candidate_v2",
+            settlement: { outcome: "error", code: "interrupted" },
+          })
+          expect(yield* defaultCourseCandidateEvidence(db, interaction.registration.partID)).toEqual(before)
+          expect(yield* navigation.currentDefault()).toEqual(current)
+          expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontier)
+          expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
+          expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(terminal)
+        }),
+      { discard: true },
+    )
+  }),
+)
+
+it.effect("records a nonmutating Default-Course proposal and accepts it only from a later learner Turn", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const navigation = yield* LearnerNavigation.ReadService
+    const runtime = yield* LearningCommandRuntime.Service
+    const seeded = yield* seedCourse(courses, "Proposed algorithms", "Main")
+    const proposalInput = {
+      expectedHeadID: null,
+      expectedVersion: 0,
+      target: {
+        courseID: seeded.course.id,
+        courseVersion: 0,
+        selectionRevisionID: null,
+        selectionVersion: 0,
+        viewID: null,
+        viewVersion: null,
+        revisionVersion: null,
+      },
+      resolutionScope: {
+        coverage: "explicitly_truncated",
+        candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: 0 }],
+        selectedCourseID: seeded.course.id,
+        truncation: { reason: "The Tutor presented the one currently relevant Course" },
+      },
+    } as const
+    const proposed = yield* seedInteraction(
+      db,
+      "default-v2-proposal",
+      proposalInput,
+      PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Help me decide which Course to continue." },
+    )
+    const frontierBefore = yield* db.transaction((tx) => LearningFrontier.read(tx))
+
+    yield* runtime.prepareDefaultCourseProposal(proposalInput, proposed.registration)
+    const exactProposal = yield* exactPartResult(db, proposed.registration.partID)
+    const proposal = JSON.parse(exactProposal.output).proposal as {
+      fingerprint: string
+      timePresented: number
+      emissionOrdinal: number
+    }
+    expect(exactProposal.metadata).toMatchObject({
+      proposalFingerprint: proposal.fingerprint,
+      durablyRecorded: true,
+      mutating: false,
+    })
+    expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontierBefore)
+    expect(
+      yield* db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_invocation
+        WHERE part_id = ${proposed.registration.partID}
+      `),
+    ).toEqual({ count: 0 })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      version: 0,
+      courseID: null,
+      usability: { usable: false, cause: "absent" },
+    })
+    const partialV1Endpoint = JSON.stringify({
+      kind: "course",
+      locator: {
+        courseID: seeded.course.id,
+        title: { availability: "not_recorded_v1" },
+        courseVersion: { availability: "not_recorded_v1" },
+        workingSelection: { availability: "not_recorded_v1" },
+      },
+    })
+    yield* Effect.forEach(
+      ["from_locator", "to_locator"] as const,
+      (column) =>
+        Effect.gen(function* () {
+          expect(
+            Exit.isFailure(
+              yield* db
+                .transaction((tx) =>
+                  Effect.gen(function* () {
+                    yield* tx.run(sql.raw("DROP TRIGGER learner_default_course_proposal_immutable_v13"))
+                    yield* tx.run(sql`
+                      UPDATE learner_default_course_proposal
+                      SET ${sql.identifier(column)} = ${partialV1Endpoint}
+                      WHERE part_id = ${proposed.registration.partID}
+                    `)
+                  }),
+                )
+                .pipe(Effect.exit),
+            ),
+          ).toBe(true)
+        }),
+      { discard: true },
+    )
+    const sameRoundInput = {
+      authorization: {
+        type: "accepted_proposal_v2",
+        sourceExcerpt: "Help me decide which Course to continue",
+        presentedAssistantMessageID: proposed.registration.assistantMessageID,
+        presentedPartID: proposed.registration.partID,
+        emissionOrdinal: proposal.emissionOrdinal,
+        proposalFingerprint: proposal.fingerprint,
+        selection: "sole_presented",
+      },
+    } as const
+    expect(
+      Exit.isFailure(
+        yield* runtime
+          .prepareCommand(
+            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            sameRoundInput,
+            proposed.registration,
+          )
+          .pipe(Effect.exit),
+      ),
+    ).toBe(true)
+    expect(
+      yield* db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_invocation
+        WHERE part_id = ${proposed.registration.partID}
+      `),
+    ).toEqual({ count: 0 })
+    yield* settleInteractionTurn(db, proposed, proposal.timePresented)
+
+    const copiedAssistantMessageID = SessionV1.MessageID.ascending("msg_default_v2_unsealed_copy")
+    const copiedPartID = SessionV1.PartID.ascending("prt_default_v2_unsealed_copy")
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        const source = yield* tx
+          .select({ data: PartTable.data })
+          .from(PartTable)
+          .where(eq(PartTable.id, proposed.registration.partID))
+          .get()
+        if (!source) return yield* Effect.die("Expected the completed proposal Part to copy")
+        yield* tx
+          .insert(MessageTable)
+          .values({
+            id: copiedAssistantMessageID,
+            session_id: proposed.sessionID,
+            data: assistantData(proposed.userMessageID, proposal.timePresented + 1),
+            time_created: proposal.timePresented + 1,
+            time_updated: proposal.timePresented + 1,
+          })
+          .run()
+        yield* tx
+          .insert(PartTable)
+          .values({
+            id: copiedPartID,
+            session_id: proposed.sessionID,
+            message_id: copiedAssistantMessageID,
+            data: structuredClone(source.data),
+            time_created: proposal.timePresented + 1,
+            time_updated: proposal.timePresented + 1,
+          })
+          .run()
+      }),
+    )
+    const copiedAcceptanceInput = {
+      authorization: {
+        type: "accepted_proposal_v2",
+        sourceExcerpt: "Yes, use the copied Course proposal",
+        presentedAssistantMessageID: copiedAssistantMessageID,
+        presentedPartID: copiedPartID,
+        emissionOrdinal: proposal.emissionOrdinal,
+        proposalFingerprint: proposal.fingerprint,
+        selection: "sole_presented",
+      },
+    } as const
+    const copiedAcceptance = yield* seedFollowupInteraction(
+      db,
+      proposed,
+      "default-v2-proposal-unsealed-copy",
+      copiedAcceptanceInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      {
+        text: "Yes, use the copied Course proposal.",
+        time: proposal.timePresented + 2,
+      },
+    )
+    expect(
+      Exit.isFailure(
+        yield* runtime
+          .prepareCommand(
+            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            copiedAcceptanceInput,
+            copiedAcceptance.registration,
+          )
+          .pipe(Effect.exit),
+      ),
+    ).toBe(true)
+    expect(
+      yield* db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_invocation
+        WHERE part_id = ${copiedAcceptance.registration.partID}
+      `),
+    ).toEqual({ count: 0 })
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* TurnLifecycle.settleTool(tx, {
+          turnID: copiedAcceptance.turnID,
+          partID: copiedAcceptance.registration.partID,
+          state: "failed",
+          time: proposal.timePresented + 2,
+        })
+        yield* TurnLifecycle.settle(tx, {
+          turnID: copiedAcceptance.turnID,
+          outcome: "failed",
+          reason: "provider_failure",
+          time: proposal.timePresented + 2,
+        })
+      }),
+    )
+
+    const acceptedInput = {
+      authorization: {
+        type: "accepted_proposal_v2",
+        sourceExcerpt: "Yes, use that Course",
+        presentedAssistantMessageID: proposed.registration.assistantMessageID,
+        presentedPartID: proposed.registration.partID,
+        emissionOrdinal: proposal.emissionOrdinal,
+        proposalFingerprint: proposal.fingerprint,
+        selection: "sole_presented",
+      },
+    } as const
+    const accepted = yield* seedFollowupInteraction(
+      db,
+      proposed,
+      "default-v2-proposal-accepted",
+      acceptedInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      {
+        text: "Yes, use that Course as my default.",
+        time: proposal.timePresented + 3,
+      },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      acceptedInput,
+      accepted.registration,
+    )
+    const result = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      acceptedInput,
+      context(accepted.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    expect(JSON.parse(result.output)).toMatchObject({
+      settlement: { outcome: "applied" },
+      authorization: {
+        kind: "accepted_proposal_v2",
+        source: {
+          proposalPartID: proposed.registration.partID,
+          proposalPresentationPartID: proposed.registration.partID,
+          proposalPresentationAssistantMessageID: proposed.registration.assistantMessageID,
+          proposalEmissionOrdinal: proposal.emissionOrdinal,
+          proposalFingerprint: proposal.fingerprint,
+          selection: "sole_presented",
+        },
+      },
+    })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      version: 1,
+      courseID: seeded.course.id,
+      usability: { usable: true },
+    })
+  }),
+)
+
+it.effect("replays a migrated terminal Default-Course V1 Part before V2 decoding or permission", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const time = Date.now()
+    const input = { expectedHeadID: null, expectedVersion: 0, target: null }
+    const interaction = yield* seedInteraction(
+      db,
+      "default-v1-terminal-replay",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Keep no Course as my default.", time },
+    )
+    const permissionRequestID = PermissionV1.ID.ascending()
+    const invocation = {
+      envelope: {
+        occurrenceID: interaction.occurrenceID,
+        turnID: interaction.turnID,
+        inputID: interaction.inputID,
+        sessionID: interaction.sessionID,
+        parentUserMessageID: interaction.userMessageID,
+        assistantMessageID: interaction.registration.assistantMessageID,
+        partID: interaction.registration.partID,
+        providerCallID: interaction.registration.callID,
+        emissionOrdinal: interaction.registration.emissionOrdinal,
+        capabilityIdentity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        capabilityVersion: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_VERSION,
+        authorizationBasis: "learner_acceptance" as const,
+        timeAdmitted: time,
+      },
+      command: { kind: "default_course_preference" as const, ...input },
+      permissionRequestID,
+    }
+    expect(yield* db.transaction((tx) => LearningCommand.reserveNavigation(tx, invocation))).toEqual({
+      type: "candidate",
+    })
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        const physical = yield* tx
+          .select()
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
+          .get()
+        if (!physical) return yield* Effect.die("Expected the legacy Default-Course invocation")
+        yield* tx.run("DROP TRIGGER IF EXISTS learner_default_course_disposition_validate_insert_v13")
+        yield* tx
+          .insert(LearnerDefaultCourseDispositionTable)
+          .values({
+            invocation_part_id: interaction.registration.partID,
+            disposition: "legacy_v1",
+            authorization_version: 1,
+            authorization_kind: "legacy_v1",
+            authorization_fingerprint: "a".repeat(64),
+            command_fingerprint: physical.input_fingerprint,
+            legacy_row_class: "no_change",
+            confirmation_availability: "not_recorded_v1",
+            command_permission_request_id: permissionRequestID,
+            time_disposed: physical.time_admitted,
+          })
+          .run()
+        yield* LearnerNavigationConstraintSchema.install(tx)
+      }),
+    )
+    const settled = yield* db.transaction((tx) =>
+      LearningCommand.settleNavigation(tx, {
+        ...invocation,
+        permission: { type: "allow" },
+        settlement: { time: time + 1, order: 1 },
+      }),
+    )
+    if (settled.type !== "settled") return yield* Effect.die("Expected a terminal V1 no-change settlement")
+    const exact = LearningCommandRuntime.exactResult(
+      settled.settlement,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      {
+        partID: interaction.registration.partID,
+        assistantMessageID: interaction.registration.assistantMessageID,
+        sessionID: interaction.registration.sessionID,
+        providerCallID: interaction.registration.callID,
+        timeAdmitted: time,
+      },
+    )
+    yield* db
+      .update(PartTable)
+      .set({
+        data: {
+          type: "tool",
+          tool: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+          callID: interaction.registration.callID,
+          state: {
+            status: "completed",
+            input,
+            output: exact.output,
+            title: exact.title,
+            metadata: exact.metadata,
+            time: { start: time, end: settled.settlement.settlementTime },
+          },
+        } as (typeof PartTable.$inferInsert)["data"],
+        time_updated: settled.settlement.settlementTime,
+      })
+      .where(eq(PartTable.id, interaction.registration.partID))
+      .run()
+    yield* settleInteractionTurn(db, interaction, settled.settlement.settlementTime)
+
+    const requestsBeforeReplay = permissionRequests.length
     yield* runtime.prepareCommand(
       LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
       input,
@@ -2241,277 +4053,8 @@ it.effect("requires an exact once-only default confirmation and keeps authorized
         input,
         context(interaction.registration, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
       ),
-    ).toEqual(applied)
-    expect(permissionRequests).toHaveLength(requestsAfterApply)
-
-    const duplicate = yield* insertAssistant(
-      db,
-      interaction,
-      "default-semantic-replay",
-      input,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-    )
-    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, input, duplicate)
-    expect(
-      JSON.parse(
-        (yield* runtime.executeCommand(
-          LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-          input,
-          context(duplicate, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
-        )).output,
-      ),
-    ).toMatchObject({ outcome: "already_applied", effectID: appliedSettlement.effectID })
-    const conflictInput = {
-      ...input,
-      target: { ...target, courseID: explicitCourse.id },
-    }
-    const conflicting = yield* insertAssistant(
-      db,
-      interaction,
-      "default-semantic-conflict",
-      conflictInput,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-    )
-    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, conflictInput, conflicting)
-    expect(
-      JSON.parse(
-        (yield* runtime.executeCommand(
-          LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-          conflictInput,
-          context(conflicting, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
-        )).output,
-      ),
-    ).toMatchObject({ outcome: "error", code: "semantic_conflict" })
-    expect(permissionRequests).toHaveLength(requestsAfterApply)
-    expect(
-      Exit.isFailure(
-        yield* db
-          .update(DefaultCoursePreferenceTransitionTable)
-          .set({ commit_order: 99 })
-          .where(eq(DefaultCoursePreferenceTransitionTable.id, appliedSettlement.effectID))
-          .run()
-          .pipe(Effect.exit),
-      ),
-    ).toBe(true)
-    expect(
-      Exit.isFailure(
-        yield* db
-          .update(LearnerDefaultCourseCommandTable)
-          .set({ permission_request_id: PermissionV1.ID.ascending() })
-          .where(eq(LearnerDefaultCourseCommandTable.invocation_part_id, interaction.registration.partID))
-          .run()
-          .pipe(Effect.exit),
-      ),
-    ).toBe(true)
-    const malformedOccurrenceID = LearningCommand.createOccurrenceID()
-    const malformedMessageID = SessionV1.MessageID.ascending()
-    const malformedPartID = SessionV1.PartID.ascending()
-    const malformedTime = Date.now()
-    yield* db
-      .insert(MessageTable)
-      .values({
-        id: malformedMessageID,
-        session_id: interaction.sessionID,
-        data: userData(malformedTime),
-        time_created: malformedTime,
-        time_updated: malformedTime,
-      })
-      .run()
-    yield* db
-      .insert(PartTable)
-      .values({
-        id: malformedPartID,
-        session_id: interaction.sessionID,
-        message_id: malformedMessageID,
-        data: { type: "text", text: "Malformed navigation source" } as (typeof PartTable.$inferInsert)["data"],
-        time_created: malformedTime,
-        time_updated: malformedTime,
-      })
-      .run()
-    const malformedSourceOrder = yield* db
-      .insert(LearnerOccurrenceSourceOrderTable)
-      .values({
-        occurrence_id: malformedOccurrenceID,
-        origin_session_id: interaction.sessionID,
-        origin_message_id: malformedMessageID,
-        time_allocated: malformedTime,
-        source_temporal_state: "unavailable",
-        source_timezone: null,
-        source_utc_offset_minutes: null,
-        source_temporal_unavailable_reason: "timezone_unavailable",
-      })
-      .returning({ sequence: LearnerOccurrenceSourceOrderTable.sequence })
-      .get()
-    if (!malformedSourceOrder) return yield* Effect.die("Expected a source-order allocation")
-    yield* db
-      .insert(AdmittedLearnerOccurrenceTable)
-      .values({
-        id: malformedOccurrenceID,
-        origin_session_id: interaction.sessionID,
-        origin_message_id: malformedMessageID,
-        time_admitted: malformedTime,
-        source_order: malformedSourceOrder.sequence,
-        source_temporal_state: "unavailable",
-        source_temporal_unavailable_reason: "timezone_unavailable",
-      })
-      .run()
-    const malformed = yield* db
-      .transaction((tx) =>
-        Effect.gen(function* () {
-          const consumed = yield* LearningFrontier.read(tx)
-          const time = Math.max(Date.now(), consumed.time)
-          const frontier = yield* LearningFrontier.advance(tx, { time, consumed: [consumed] })
-          yield* tx
-            .insert(DefaultCoursePreferenceTransitionTable)
-            .values({
-              id: LearnerNavigation.DefaultEffectID.make(`ndp_${"z".repeat(26)}`),
-              version: 2,
-              predecessor_id: appliedSettlement.effectID,
-              previous_course_id: seeded.course.id,
-              course_id: null,
-              occurrence_id: malformedOccurrenceID,
-              permission_request_id: PermissionV1.ID.ascending(),
-              confirmation_snapshot: {} as LearnerNavigation.DefaultConfirmationSnapshot,
-              time_committed: time,
-              commit_order: 100,
-              frontier_sequence: frontier.sequence,
-              frontier_time: frontier.time,
-            })
-            .run()
-        }),
-      )
-      .pipe(Effect.exit)
-    expect(Exit.isFailure(malformed)).toBe(true)
-
-    const extraField = yield* db
-      .transaction((tx) =>
-        Effect.gen(function* () {
-          const consumed = yield* LearningFrontier.read(tx)
-          const time = Math.max(Date.now(), consumed.time)
-          const frontier = yield* LearningFrontier.advance(tx, { time, consumed: [consumed] })
-          const permissionRequestID = PermissionV1.ID.ascending()
-          yield* tx
-            .insert(DefaultCoursePreferenceTransitionTable)
-            .values({
-              id: LearnerNavigation.DefaultEffectID.make(`ndp_${"y".repeat(26)}`),
-              version: 2,
-              predecessor_id: appliedSettlement.effectID,
-              previous_course_id: seeded.course.id,
-              course_id: null,
-              occurrence_id: malformedOccurrenceID,
-              permission_request_id: permissionRequestID,
-              confirmation_snapshot: {
-                permissionRequestID,
-                headID: appliedSettlement.effectID,
-                version: 1,
-                fromCourseID: seeded.course.id,
-                fromCourseTitle: seeded.course.title,
-                target: null,
-                extra: true,
-              } as LearnerNavigation.DefaultConfirmationSnapshot,
-              time_committed: time,
-              commit_order: 101,
-              frontier_sequence: frontier.sequence,
-              frontier_time: frontier.time,
-            })
-            .run()
-        }),
-      )
-      .pipe(Effect.exit)
-    expect(Exit.isFailure(extraField)).toBe(true)
-
-    const current = yield* navigation.currentDefault()
-    const noChangeInput = { expectedHeadID: current.headID, expectedVersion: current.version, target }
-    const noChange = yield* seedInteraction(
-      db,
-      "default-no-change",
-      noChangeInput,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-    )
-    const beforeNoChange = yield* db.transaction((tx) => LearningFrontier.read(tx))
-    const receiptsBefore = (yield* db.select().from(LearningCommandReceiptTable).all()).length
-    yield* runtime.prepareCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      noChangeInput,
-      noChange.registration,
-    )
-    const unchanged = yield* runtime.executeCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      noChangeInput,
-      context(noChange.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
-    )
-    expect(JSON.parse(unchanged.output)).toMatchObject({
-      outcome: "no_change",
-      navigationKind: "default_course_preference",
-      current: { headID: current.headID, version: 1 },
-    })
-    expect(permissionRequests.some((item) => item.sessionID === noChange.sessionID)).toBe(false)
-    expect((yield* db.select().from(LearningCommandReceiptTable).all()).length).toBe(receiptsBefore)
-    expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(beforeNoChange)
-    yield* db.transaction((tx) =>
-      LearningCommand.removeNoEffectInvocationsForAssistant(tx, noChange.registration.assistantMessageID),
-    )
-    yield* db.transaction((tx) => LearningCommand.assertPartDeletable(tx, noChange.registration.partID))
-    expect(
-      yield* db
-        .select()
-        .from(LearningCommandInvocationTable)
-        .where(eq(LearningCommandInvocationTable.part_id, noChange.registration.partID))
-        .get(),
-    ).toBeUndefined()
-    expect(yield* navigation.currentDefault()).toMatchObject({ headID: current.headID, version: current.version })
-
-    const denied = yield* seedInteraction(
-      db,
-      "default-denied-no-change",
-      noChangeInput,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      noChangeInput,
-      denied.registration,
-    )
-    const deniedResult = yield* runtime.executeCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      noChangeInput,
-      context(denied.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, [
-        { ruleset: [{ permission: "read", pattern: "*", action: "allow" }], absence: "deny" },
-      ]),
-    )
-    expect(JSON.parse(deniedResult.output)).toMatchObject({ outcome: "error", code: "permission_rejected" })
-    expect(permissionRequests.some((item) => item.sessionID === denied.sessionID)).toBe(false)
-
-    const clearInput = { expectedHeadID: current.headID, expectedVersion: current.version, target: null }
-    const clear = yield* seedInteraction(
-      db,
-      "default-clear",
-      clearInput,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      clearInput,
-      clear.registration,
-    )
-    expect(
-      JSON.parse(
-        (yield* runtime.executeCommand(
-          LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-          clearInput,
-          context(clear.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
-        )).output,
-      ),
-    ).toMatchObject({ outcome: "applied", current: { version: 2, courseID: null } })
-    expect((yield* navigation.currentDefault()).usability).toEqual({ usable: false, cause: "absent" })
-    yield* db
-      .insert(LearnerOccurrenceTombstoneTable)
-      .values({ occurrence_id: interaction.occurrenceID, reason: "source_unavailable", time_deleted: Date.now() })
-      .run()
-    expect(
-      (yield* navigation.listDefaultHistory()).items.find((item) => item.effect.id === appliedSettlement.effectID)
-        ?.source,
-    ).toMatchObject({ availability: "source_unavailable", occurrenceID: interaction.occurrenceID })
+    ).toEqual(exact)
+    expect(permissionRequests).toHaveLength(requestsBeforeReplay)
   }),
 )
 
@@ -2713,6 +4256,15 @@ it.effect("preserves navigation and its source receipt across whole Session dele
     const sessions = yield* Session.Service
     const course = yield* courses.createCourse({ title: "Deletion-retained default" })
     const input = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "make Deletion-retained default my default",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: course.id, title: course.title, courseVersion: 0 }],
+          selectedCourseID: course.id,
+        },
+      },
       expectedHeadID: null,
       expectedVersion: 0,
       target: {
@@ -2730,6 +4282,7 @@ it.effect("preserves navigation and its source receipt across whole Session dele
       "navigation-session-deletion",
       input,
       LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please make Deletion-retained default my default Course." },
     )
     yield* runtime.prepareCommand(
       LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
@@ -2742,7 +4295,7 @@ it.effect("preserves navigation and its source receipt across whole Session dele
         input,
         context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
       )).output,
-    ) as { effectID: LearnerNavigation.DefaultEffectID; settlementTime: number }
+    ).settlement as { effectID: LearnerNavigation.DefaultEffectID; settlementTime: number }
     yield* db.transaction((tx) =>
       Effect.gen(function* () {
         yield* TurnLifecycle.settleTool(tx, {
@@ -3044,7 +4597,6 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     if (!originalInvocation || !originalEffect) return yield* Effect.die("Expected the legacy settlement fixture")
 
     const course = yield* courses.getCourse(seeded.course.id)
-    const defaultPermissionRequestID = PermissionV1.ID.ascending()
     const defaultCommand = {
       kind: "default_course_preference" as const,
       expectedHeadID: null,
@@ -3059,27 +4611,52 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
         revisionVersion: 0,
       },
     }
-    const preparedDefault = yield* db.transaction((tx) =>
-      Effect.gen(function* () {
-        const prepared = yield* LearnerNavigation.prepareDefaultInTransaction(
-          tx,
-          defaultCommand,
-          defaultPermissionRequestID,
-        )
-        if (prepared.decision !== "candidate") return yield* Effect.die("Expected a new default preference candidate")
-        const frontier = yield* LearningFrontier.read(tx)
-        const effect = yield* LearnerNavigation.applyDefault(tx, {
-          occurrenceID: interaction.occurrenceID,
-          command: defaultCommand,
-          permissionRequestID: defaultPermissionRequestID,
-          confirmation: prepared.confirmation,
-          proof: prepared.proof,
-          trustedTime: Math.max(Date.now(), frontier.time),
-          commitOrder: 10,
-        })
-        return { effect, confirmation: prepared.confirmation }
-      }),
+    const defaultInput = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "make Receipt integrity my default Course",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: course.stateVersion }],
+          selectedCourseID: seeded.course.id,
+        },
+      },
+      expectedHeadID: defaultCommand.expectedHeadID,
+      expectedVersion: defaultCommand.expectedVersion,
+      target: defaultCommand.target,
+    } as const
+    const defaultInteraction = yield* seedInteraction(
+      db,
+      "receipt-promotion-default-v2",
+      defaultInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please make Receipt integrity my default Course." },
     )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      defaultInput,
+      defaultInteraction.registration,
+    )
+    const defaultResult = JSON.parse(
+      (yield* runtime.executeCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        defaultInput,
+        context(defaultInteraction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      )).output,
+    )
+    if (defaultResult.settlement?.outcome !== "applied") {
+      return yield* Effect.die("Expected the real V2 Default-Course runtime to establish the fixture")
+    }
+    const preparedDefault = {
+      effect: defaultResult.settlement.effect as LearnerNavigation.DefaultEffect,
+    }
+    const defaultSealBeforePromotion = yield* db
+      .select()
+      .from(LearnerDefaultCourseCommitSealTable)
+      .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, preparedDefault.effect.id))
+      .get()
+    if (!defaultSealBeforePromotion) return yield* Effect.die("Expected the V2 Default-Course seal fixture")
+    const defaultPermissionRequestID = PermissionV1.ID.ascending()
     const defaultTransitionBeforeReplacement = yield* db
       .select()
       .from(DefaultCoursePreferenceTransitionTable)
@@ -3175,7 +4752,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
         .from(LearnerDefaultCourseCommitSealTable)
         .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, preparedDefault.effect.id))
         .get(),
-    ).toBeUndefined()
+    ).toEqual(defaultSealBeforePromotion)
     expect(
       yield* db
         .select()
@@ -3429,7 +5006,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
     expect(defaultReplacementState).toEqual({
       receipt: originalReceipt,
       legacyEffectReceipt: originalSeal,
-      navigationReceipt: undefined,
+      navigationReceipt: defaultSealBeforePromotion,
       invocation: originalInvocation,
       effect: originalEffect,
     })
@@ -3477,6 +5054,15 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
 
     const course = yield* courses.getCourse(seeded.course.id)
     const defaultInput = {
+      authorization: {
+        type: "direct_request_v2",
+        sourceExcerpt: "make Receipt replacement my default",
+        resolutionScope: {
+          coverage: "complete",
+          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: course.stateVersion }],
+          selectedCourseID: seeded.course.id,
+        },
+      },
       expectedHeadID: null,
       expectedVersion: 0,
       target: {
@@ -3494,6 +5080,7 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       "replace-default",
       defaultInput,
       LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Please make Receipt replacement my default Course." },
     )
     yield* runtime.prepareCommand(
       LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
@@ -4065,6 +5652,94 @@ it.effect("settles permission denial and crash recovery as exact completed Parts
   }),
 )
 
+test("upgrades and recovers a frozen V12 admitted Default-Course invocation with durable Turn identity", async () => {
+  await using tmp = await tmpdir()
+  const filename = join(tmp.path, "frozen-v12-admitted-default-course.sqlite")
+  const frozen = await seedFrozenV12AdmittedDefaultCourse(filename)
+  const migrated = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const part = yield* db.get<{ rawPart: string }>(sql`
+        SELECT CAST(data AS text) AS rawPart FROM part WHERE id = ${frozen.partID}
+      `)
+      const invocation = yield* db
+        .select({
+          status: LearningCommandInvocationTable.status,
+          settlement: LearningCommandInvocationTable.settlement,
+          turnID: LearningCommandInvocationTable.turn_id,
+          inputID: LearningCommandInvocationTable.input_id,
+        })
+        .from(LearningCommandInvocationTable)
+        .where(eq(LearningCommandInvocationTable.part_id, frozen.partID))
+        .get()
+      const disposition = yield* db
+        .select()
+        .from(LearnerDefaultCourseDispositionTable)
+        .where(eq(LearnerDefaultCourseDispositionTable.invocation_part_id, frozen.partID))
+        .get()
+      return { part, invocation, disposition }
+    }).pipe(Effect.provide(Database.layerFromPath(filename).pipe(Layer.orDie)), Effect.scoped),
+  )
+
+  expect(migrated.part?.rawPart).toBe(frozen.rawPart)
+  expect(migrated.invocation).toEqual({
+    status: "admitted",
+    settlement: null,
+    turnID: frozen.turnID,
+    inputID: frozen.inputID,
+  })
+  expect(migrated.disposition).toMatchObject({
+    disposition: "legacy_v1",
+    authorization_version: 1,
+    authorization_kind: "legacy_v1",
+    command_fingerprint: frozen.inputFingerprint,
+    legacy_row_class: "admitted",
+    confirmation_availability: "not_recorded_v1",
+    command_permission_request_id: frozen.permissionRequestID,
+    effect_confirmation_request_id: null,
+    legacy_effect_id: null,
+    legacy_receipt_id: null,
+  })
+
+  const recovered = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      yield* LearningCommandRuntime.Service
+      return {
+        part: yield* exactPartResult(db, frozen.partID),
+        invocation: yield* db
+          .select({
+            status: LearningCommandInvocationTable.status,
+            settlement: LearningCommandInvocationTable.settlement,
+          })
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, frozen.partID))
+          .get(),
+        disposition: yield* db
+          .select()
+          .from(LearnerDefaultCourseDispositionTable)
+          .where(eq(LearnerDefaultCourseDispositionTable.invocation_part_id, frozen.partID))
+          .get(),
+        capabilityIssues: yield* db.select().from(LearnerDefaultCourseCapabilityIssueTable).all(),
+        capabilitySettlements: yield* db.select().from(LearnerDefaultCourseCapabilitySettlementTable).all(),
+        acknowledgements: yield* db.select().from(LearnerDefaultCourseAcknowledgementTable).all(),
+        effects: yield* db.select().from(DefaultCoursePreferenceTransitionTable).all(),
+      }
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+
+  expect(JSON.parse(recovered.part.output)).toMatchObject({ outcome: "error", code: "interrupted" })
+  expect(recovered.invocation).toMatchObject({
+    status: "error",
+    settlement: { outcome: "error", code: "interrupted" },
+  })
+  expect(recovered.disposition).toEqual(migrated.disposition)
+  expect(recovered.capabilityIssues).toEqual([])
+  expect(recovered.capabilitySettlements).toEqual([])
+  expect(recovered.acknowledgements).toEqual([])
+  expect(recovered.effects).toEqual([])
+})
+
 test("reopens stored success and recovers admitted work without re-execution", async () => {
   await using tmp = await tmpdir()
   const filename = join(tmp.path, "learning-command-reopen.sqlite")
@@ -4141,6 +5816,15 @@ test("reopens stored success and recovers admitted work without re-execution", a
 
       const navigationCourse = yield* courses.createCourse({ title: "Persistent default navigation" })
       const navigationInput = {
+        authorization: {
+          type: "direct_request_v2",
+          sourceExcerpt: "make Persistent default navigation my default",
+          resolutionScope: {
+            coverage: "complete",
+            candidates: [{ courseID: navigationCourse.id, title: navigationCourse.title, courseVersion: 0 }],
+            selectedCourseID: navigationCourse.id,
+          },
+        },
         expectedHeadID: null,
         expectedVersion: 0,
         target: {
@@ -4158,6 +5842,7 @@ test("reopens stored success and recovers admitted work without re-execution", a
         "reopen-navigation-applied",
         navigationInput,
         LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        { text: "Please make Persistent default navigation my default Course." },
       )
       yield* runtime.prepareCommand(
         LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
@@ -4169,11 +5854,26 @@ test("reopens stored success and recovers admitted work without re-execution", a
         navigationInput,
         context(navigationInteraction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
       )
-      const navigationSettlement = JSON.parse(navigationApplied.output) as {
+      const navigationSettlement = JSON.parse(navigationApplied.output).settlement as {
         effectID: LearnerNavigation.DefaultEffectID
       }
       const pendingNavigationCourse = yield* courses.createCourse({ title: "Interrupted default navigation" })
       const pendingNavigationInput = {
+        authorization: {
+          type: "direct_request_v2",
+          sourceExcerpt: "change my default to Interrupted default navigation",
+          resolutionScope: {
+            coverage: "complete",
+            candidates: [
+              {
+                courseID: pendingNavigationCourse.id,
+                title: pendingNavigationCourse.title,
+                courseVersion: 0,
+              },
+            ],
+            selectedCourseID: pendingNavigationCourse.id,
+          },
+        },
         expectedHeadID: navigationSettlement.effectID,
         expectedVersion: 1,
         target: {
@@ -4191,6 +5891,7 @@ test("reopens stored success and recovers admitted work without re-execution", a
         "reopen-navigation-interrupted",
         pendingNavigationInput,
         LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        { text: "Please change my default to Interrupted default navigation." },
       )
       yield* runtime.prepareCommand(
         LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
@@ -4291,7 +5992,9 @@ test("reopens stored success and recovers admitted work without re-execution", a
       expect(yield* sequence(db, persisted.navigationRegistration.sessionID)).toBe(navigationSequence)
 
       const pendingNavigation = yield* exactPartResult(db, persisted.pendingNavigationRegistration.partID)
-      expect(JSON.parse(pendingNavigation.output)).toMatchObject({ outcome: "error", code: "interrupted" })
+      expect(JSON.parse(pendingNavigation.output)).toMatchObject({
+        settlement: { outcome: "error", code: "interrupted" },
+      })
       expect(yield* navigation.currentDefault()).toMatchObject({
         courseID: persisted.navigationCourseID,
         version: 1,
@@ -4622,7 +6325,7 @@ test("joins only active execution and never replays from a completed cache", asy
   )
 })
 
-test("rejects a default confirmation whose exact Course snapshot changes while the prompt is open", async () => {
+test("rejects a Default-Course V2 authorization whose Course snapshot changes while the prompt is open", async () => {
   await using tmp = await tmpdir()
   const filename = join(tmp.path, "learning-command-default-confirmation-race.sqlite")
   const entered = Promise.withResolvers<void>()
@@ -4631,11 +6334,39 @@ test("rejects a default confirmation whose exact Course snapshot changes while t
   const blockingConfirmation = Layer.succeed(
     Permission.Service,
     Permission.Service.of({
-      ask: () => {
-        asks++
-        entered.resolve()
-        return Effect.promise(() => release.promise)
-      },
+      ask: (permission) =>
+        Effect.gen(function* () {
+          asks++
+          const id = permission.id ?? PermissionV1.ID.ascending()
+          const basis = {
+            permission: permission.permission,
+            patterns: [...permission.patterns],
+            requirePrompt: permission.requirePrompt ?? false,
+            ruleset: [...permission.ruleset],
+            authority: [...(permission.authority ?? [])],
+            approved: [],
+            evaluated: permission.patterns.map((pattern) => ({
+              permission: permission.permission,
+              pattern,
+              action: "ask" as const,
+            })),
+          } satisfies Permission.EvaluationBasis
+          const request = {
+            id,
+            sessionID: permission.sessionID,
+            permission: permission.permission,
+            patterns: permission.patterns,
+            metadata: permission.metadata,
+            always: permission.always,
+            tool: permission.tool,
+          } satisfies PermissionV1.Request
+          if (permission.lifecycle) yield* permission.lifecycle.selected({ action: "ask", basis, request })
+          entered.resolve()
+          yield* Effect.promise(() => release.promise)
+          if (permission.lifecycle) {
+            yield* permission.lifecycle.replied({ request, reply: { requestID: id, reply: "once" } })
+          }
+        }),
       reply: () => Effect.void,
       list: () => Effect.succeed([]),
     }),
@@ -4648,6 +6379,15 @@ test("rejects a default confirmation whose exact Course snapshot changes while t
       const runtime = yield* LearningCommandRuntime.Service
       const course = yield* courses.createCourse({ title: "Original default title" })
       const input = {
+        authorization: {
+          type: "direct_request_v2",
+          sourceExcerpt: "make Original default title my default",
+          resolutionScope: {
+            coverage: "complete",
+            candidates: [{ courseID: course.id, title: course.title, courseVersion: 0 }],
+            selectedCourseID: course.id,
+          },
+        },
         expectedHeadID: null,
         expectedVersion: 0,
         target: {
@@ -4665,6 +6405,7 @@ test("rejects a default confirmation whose exact Course snapshot changes while t
         "default-confirmation-race",
         input,
         LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        { text: "Please make Original default title my default Course." },
       )
       yield* runtime.prepareCommand(
         LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
@@ -4675,7 +6416,7 @@ test("rejects a default confirmation whose exact Course snapshot changes while t
         .executeCommand(
           LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
           input,
-          context(interaction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+          context(interaction.registration, "ask", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
         )
         .pipe(Effect.forkChild)
       yield* Effect.promise(() => entered.promise)
@@ -4688,7 +6429,7 @@ test("rejects a default confirmation whose exact Course snapshot changes while t
       release.resolve()
       const result = yield* Fiber.join(execution)
 
-      expect(JSON.parse(result.output)).toMatchObject({ outcome: "error", code: "stale" })
+      expect(JSON.parse(result.output)).toMatchObject({ settlement: { outcome: "error", code: "stale" } })
       expect(asks).toBe(1)
       expect(yield* db.select().from(DefaultCoursePreferenceTransitionTable).all()).toEqual([])
       expect(yield* db.select().from(LearningCommandReceiptTable).all()).toEqual([])
@@ -4696,6 +6437,38 @@ test("rejects a default confirmation whose exact Course snapshot changes while t
     }).pipe(Effect.provide(runtimeLayer(filename, blockingConfirmation)), Effect.scoped),
   )
 })
+
+function defaultCourseDirectInput(
+  course: Course.CourseInfo,
+  sourceExcerpt: string,
+  current: Readonly<{ headID: LearnerNavigation.DefaultEffectID | null; version: number }> = {
+    headID: null,
+    version: 0,
+  },
+) {
+  return {
+    authorization: {
+      type: "direct_request_v2",
+      sourceExcerpt,
+      resolutionScope: {
+        coverage: "complete",
+        candidates: [{ courseID: course.id, title: course.title, courseVersion: course.stateVersion }],
+        selectedCourseID: course.id,
+      },
+    },
+    expectedHeadID: current.headID,
+    expectedVersion: current.version,
+    target: {
+      courseID: course.id,
+      courseVersion: course.stateVersion,
+      selectionRevisionID: null,
+      selectionVersion: course.selection.version,
+      viewID: null,
+      viewVersion: null,
+      revisionVersion: null,
+    },
+  } as const
+}
 
 function acceptance(courseID: Course.CourseID, revisionID: Course.RevisionID) {
   return {
@@ -4852,10 +6625,7 @@ function retainedSteeringInvocationProjection(db: Database.Interface["db"], part
     .get()
 }
 
-function retainedSteeringReceiptCount(
-  db: Database.Interface["db"],
-  occurrenceID?: LearningCommand.OccurrenceID,
-) {
+function retainedSteeringReceiptCount(db: Database.Interface["db"], occurrenceID?: LearningCommand.OccurrenceID) {
   return occurrenceID
     ? db.get(sql`
         SELECT count(*) AS count
@@ -4868,6 +6638,98 @@ function retainedSteeringReceiptCount(
         FROM learning_command_receipt AS receipt
         JOIN retained_steering_commit_seal AS seal ON seal.receipt_id = receipt.id
       `)
+}
+
+function settleRaceCapability(
+  db: Database.Interface["db"],
+  partID: SessionV1.PartID,
+  outcome:
+    | "policy_allow"
+    | "policy_deny"
+    | "prompted_allow"
+    | "prompted_deny"
+    | "prompted_correct"
+    | "prompted_cancel"
+    | "not_evaluated"
+    | "prompted_abort",
+  ordinal: number,
+) {
+  return db.transaction((tx) =>
+    Effect.gen(function* () {
+      const authorization = yield* tx
+        .select({
+          fingerprint: LearnerDefaultCourseDispositionTable.authorization_fingerprint,
+          time: LearnerDefaultCourseDispositionTable.time_disposed,
+        })
+        .from(LearnerDefaultCourseDispositionTable)
+        .where(eq(LearnerDefaultCourseDispositionTable.invocation_part_id, partID))
+        .get()
+      if (!authorization?.fingerprint) return yield* Effect.die("Race candidate lost its authorization")
+      const time = Math.max(Date.now(), authorization.time) + ordinal
+      if (outcome === "policy_allow" || outcome === "policy_deny") {
+        yield* settleDefaultCoursePolicy(tx, {
+          partID,
+          outcome,
+          policyBasis: { source: "candidate-race-oracle", action: outcome === "policy_allow" ? "allow" : "deny" },
+          time,
+          order: ordinal * 2,
+        })
+        return
+      }
+      if (outcome === "not_evaluated") {
+        yield* recoverDefaultCourseCapability(tx, { partID, time, order: ordinal * 2 })
+        return
+      }
+      const requestID = PermissionV1.ID.ascending(`per_default_race_${outcome}_${ordinal}`)
+      yield* issueDefaultCourseCapabilityPrompt(tx, {
+        partID,
+        requestID,
+        policyBasis: { source: "candidate-race-oracle" },
+        shownScope: { authorizationFingerprint: authorization.fingerprint },
+        time,
+        order: ordinal * 2,
+      })
+      if (outcome === "prompted_abort") {
+        yield* recoverDefaultCourseCapability(tx, { partID, time: time + 1, order: ordinal * 2 + 1 })
+        return
+      }
+      yield* settleDefaultCoursePrompt(tx, {
+        partID,
+        requestID,
+        outcome,
+        reply:
+          outcome === "prompted_allow"
+            ? { requestID, reply: "once" }
+            : outcome === "prompted_correct"
+              ? { requestID, reply: "reject", message: "form a corrected candidate" }
+              : { requestID, reply: outcome === "prompted_cancel" ? "cancel" : "reject" },
+        time: time + 1,
+        order: ordinal * 2 + 1,
+      })
+    }),
+  )
+}
+
+function defaultCourseCandidateEvidence(db: Database.Interface["db"], partID: SessionV1.PartID) {
+  return Effect.all({
+    issue: db
+      .select()
+      .from(LearnerDefaultCourseCapabilityIssueTable)
+      .where(eq(LearnerDefaultCourseCapabilityIssueTable.invocation_part_id, partID))
+      .get(),
+    capability: db
+      .select()
+      .from(LearnerDefaultCourseCapabilitySettlementTable)
+      .where(eq(LearnerDefaultCourseCapabilitySettlementTable.invocation_part_id, partID))
+      .get(),
+    counts: db.get(sql`
+      SELECT
+        (SELECT count(*) FROM learner_default_course_transition
+          WHERE authorization_part_id = ${partID}) AS effects,
+        (SELECT count(*) FROM learner_default_course_acknowledgement
+          WHERE invocation_part_id = ${partID}) AS acknowledgements
+    `),
+  })
 }
 
 function runtimeLayer(filename: string, permissionLayer = permission) {
@@ -4970,7 +6832,7 @@ function insertOrReplaceDefaultTransition(
     INSERT OR REPLACE INTO learner_default_course_transition (
       ${rowid}
       id, version, predecessor_id, previous_course_id, course_id, occurrence_id,
-      permission_request_id, confirmation_snapshot, target_course_version,
+      authorization_part_id, permission_request_id, confirmation_snapshot, target_course_version,
       target_selection_revision_id, target_selection_version, target_view_id,
       target_view_version, target_revision_version, time_committed, commit_order,
       frontier_sequence, frontier_time
@@ -4978,7 +6840,7 @@ function insertOrReplaceDefaultTransition(
     SELECT
       ${rowid}
       ${replacementID}, version, predecessor_id, previous_course_id, course_id, occurrence_id,
-      permission_request_id, confirmation_snapshot, target_course_version,
+      authorization_part_id, permission_request_id, confirmation_snapshot, target_course_version,
       target_selection_revision_id, target_selection_version, target_view_id,
       target_view_version, target_revision_version, time_committed, commit_order + 1,
       frontier_sequence, frontier_time
@@ -5097,7 +6959,9 @@ function seedInteraction(
   db: Database.Interface["db"],
   suffix: string,
   input: Record<string, unknown>,
-  toolID: LearningCommandRuntime.PrimaryCapability = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+  toolID:
+    | LearningCommandRuntime.PrimaryCapability
+    | typeof PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
   options: { readonly text?: string; readonly time?: number; readonly timeZone?: string | null } = {},
 ) {
   return Effect.gen(function* () {
@@ -5181,7 +7045,80 @@ function seedInteraction(
     const interaction = { sessionID, userMessageID, turnID, inputID, occurrenceID }
     return {
       ...interaction,
-      registration: yield* insertAssistant(db, interaction, suffix, input, toolID),
+      registration: yield* insertAssistant(db, interaction, suffix, input, toolID, time),
+    }
+  }).pipe(Effect.orDie)
+}
+
+function seedFollowupInteraction(
+  db: Database.Interface["db"],
+  origin: {
+    readonly sessionID: SessionSchema.ID
+  },
+  suffix: string,
+  input: Record<string, unknown>,
+  toolID: LearningCommandRuntime.PrimaryCapability,
+  options: { readonly text: string; readonly time: number; readonly timeZone?: string | null },
+) {
+  return Effect.gen(function* () {
+    const userMessageID = SessionV1.MessageID.ascending(`msg_learning_runtime_user_${suffix}`)
+    const userPartID = SessionV1.PartID.ascending(`prt_learning_runtime_user_${suffix}`)
+    yield* db
+      .insert(MessageTable)
+      .values({
+        id: userMessageID,
+        session_id: origin.sessionID,
+        data: userData(options.time),
+        time_created: options.time,
+        time_updated: options.time,
+      })
+      .run()
+    yield* db
+      .insert(PartTable)
+      .values({
+        id: userPartID,
+        session_id: origin.sessionID,
+        message_id: userMessageID,
+        data: { type: "text", text: options.text } as (typeof PartTable.$inferInsert)["data"],
+        time_created: options.time,
+        time_updated: options.time,
+      })
+      .run()
+    const turnID = Turn.ID.create()
+    const inputID = Turn.InputID.create()
+    const occurrenceID = yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        const occurrence = yield* LearningCommand.Occurrence.admit(tx, {
+          admission: LearningCommand.LearnerAdmission.interactive({ timeZone: options.timeZone }),
+          sessionID: origin.sessionID,
+          messageID: userMessageID,
+          timeAdmitted: options.time,
+        })
+        yield* TurnLifecycle.admit(tx, {
+          kind: "learner",
+          turnID,
+          sessionID: origin.sessionID,
+          inputID,
+          messageID: userMessageID,
+          occurrenceID: occurrence.id,
+          limits: { model: 100, tool: 100 },
+          envelope: { input },
+          policyBasis: { source: "learning-command-runtime-followup-test" },
+          timeAdmitted: options.time,
+        })
+        return occurrence.id
+      }),
+    )
+    const interaction = {
+      sessionID: origin.sessionID,
+      userMessageID,
+      turnID,
+      inputID,
+      occurrenceID,
+    }
+    return {
+      ...interaction,
+      registration: yield* insertAssistant(db, interaction, suffix, input, toolID, options.time),
     }
   }).pipe(Effect.orDie)
 }
@@ -5197,10 +7134,13 @@ function insertAssistant(
   },
   suffix: string,
   input: Record<string, unknown>,
-  toolID: LearningCommandRuntime.PrimaryCapability = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+  toolID:
+    | LearningCommandRuntime.PrimaryCapability
+    | typeof PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY = LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY,
+  timeOverride?: number,
 ) {
   return Effect.gen(function* () {
-    const time = Date.now()
+    const time = timeOverride ?? Date.now()
     const assistantMessageID = SessionV1.MessageID.ascending(`msg_learning_runtime_assistant_${suffix}`)
     const partID = SessionV1.PartID.ascending(`prt_learning_runtime_tool_${suffix}`)
     const callID = `call-learning-runtime-${suffix}`

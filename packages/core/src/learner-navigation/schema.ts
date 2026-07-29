@@ -4,6 +4,10 @@ import { Schema } from "effect"
 import type { PermissionV1 } from "../v1/permission"
 import { Identifier } from "../id/id"
 import type { Course } from "../course"
+import type { Turn } from "@opencode-ai/schema/turn"
+import type { SessionSchema } from "../session/schema"
+import type { ReceiptID } from "../learning-command/physical-schema"
+import type { MessageID, PartID } from "../v1/session"
 
 export const DefaultEffectID = Schema.String.check(Schema.isPattern(/^ndp_[0-9A-Za-z]{26}$/)).pipe(
   Schema.brand("LearnerNavigation.DefaultEffectID"),
@@ -37,6 +41,138 @@ export type DefaultCourseCommand = Readonly<{
   expectedVersion: number
   target: DefaultCourseTarget | null
 }>
+
+export type LocatedValueV1<T> =
+  | Readonly<{ availability: "recorded_v1"; value: T }>
+  | Readonly<{ availability: "not_recorded_v1" }>
+
+export type LocatedValueV2<T> = Readonly<{ availability: "recorded_v2"; value: T }>
+
+export type DefaultCourseWorkingSelection = Readonly<{
+  revisionID: Course.RevisionID | null
+  selectionVersion: number
+  viewID: Course.ViewID | null
+  viewName: string | null
+  viewVersion: number | null
+  revisionVersion: number | null
+}>
+
+export type DefaultCourseStableLocatorV1 = Readonly<{
+  courseID: Course.CourseID
+  title: LocatedValueV1<string>
+  courseVersion: LocatedValueV1<number>
+  workingSelection: LocatedValueV1<DefaultCourseWorkingSelection>
+}>
+
+export type DefaultCourseStableLocatorV2 = Readonly<{
+  courseID: Course.CourseID
+  title: LocatedValueV2<string>
+  courseVersion: LocatedValueV2<number>
+  workingSelection: LocatedValueV2<DefaultCourseWorkingSelection>
+}>
+
+export type DefaultCourseEndpointV1 =
+  | Readonly<{ kind: "absent" }>
+  | Readonly<{ kind: "course"; locator: DefaultCourseStableLocatorV1 }>
+
+export type DefaultCourseEndpointV2 =
+  | Readonly<{ kind: "absent" }>
+  | Readonly<{ kind: "course"; locator: DefaultCourseStableLocatorV2 }>
+
+export type DefaultCourseEndpoint = DefaultCourseEndpointV1 | DefaultCourseEndpointV2
+
+export type DefaultCourseOperation = "set" | "change" | "clear"
+
+export type DefaultCourseResolutionScope = Readonly<{
+  coverage: "complete" | "explicitly_truncated"
+  candidates: readonly Readonly<{
+    courseID: Course.CourseID
+    title: string
+    courseVersion: number
+  }>[]
+  selectedCourseID: Course.CourseID | null
+  truncation?: Readonly<{
+    reason: string
+    omittedCount?: number
+  }>
+}>
+
+export type DefaultCourseProposal = Readonly<{
+  partID: PartID
+  turnID: Turn.ID
+  sessionID: SessionSchema.ID
+  assistantMessageID: MessageID
+  callID: string
+  emissionOrdinal: number
+  command: DefaultCourseCommand
+  commandFingerprint: string
+  resolutionScope: DefaultCourseResolutionScope
+  resolutionFingerprint: string
+  preferenceHeadID: DefaultEffectID | null
+  preferenceVersion: number
+  operation: DefaultCourseOperation
+  from: DefaultCourseEndpointV2
+  to: DefaultCourseEndpointV2
+  fingerprint: string
+  timePresented: number
+}>
+
+export type DefaultCourseAuthorizationKind = "legacy_v1" | "direct_request_v2" | "accepted_proposal_v2"
+
+export type DefaultCourseDispositionKind = "legacy_v1" | "semantic_terminal_v2" | "candidate_v2"
+
+export type DefaultCourseSemanticAddress = Readonly<{
+  occurrenceID: string
+  slot: "default_course_preference"
+}>
+
+export type DefaultCourseSemanticTerminalDisposition = Readonly<{
+  kind: "semantic_terminal_v2"
+  outcome: "already_applied" | "semantic_conflict"
+  command: DefaultCourseCommand
+  commandFingerprint: string
+  semanticAddress: DefaultCourseSemanticAddress
+  semanticAddressFingerprint: string
+  incomingPayloadFingerprint: string
+  existingEffectID: DefaultEffectID
+  existingPayloadFingerprint: string
+}>
+
+export type DefaultCourseCapabilityOutcome =
+  | "not_evaluated"
+  | "policy_allow"
+  | "policy_deny"
+  | "prompted_allow"
+  | "prompted_deny"
+  | "prompted_correct"
+  | "prompted_cancel"
+  | "prompted_abort"
+
+type DefaultCourseAcknowledgementCommon = Readonly<{
+  schemaVersion: 1
+  invocationPartID: PartID
+  effectAuthorizationPartID: PartID
+  effectID: DefaultEffectID
+  receiptID: ReceiptID
+  operation: DefaultCourseOperation
+  relation: "active" | "superseded"
+  timeCommitted: number
+  commitOrder: number
+}>
+
+export type DefaultCourseAcknowledgement =
+  | (DefaultCourseAcknowledgementCommon &
+      Readonly<{
+        authorizationVersion: 1
+        from: DefaultCourseEndpointV1
+        to: DefaultCourseEndpointV1
+      }>)
+  | (DefaultCourseAcknowledgementCommon &
+      Readonly<{
+        authorizationVersion: 2
+        from: DefaultCourseEndpointV2
+        to: DefaultCourseEndpointV2
+      }>)
 
 export type RouteAnchorTarget = Readonly<{
   viewID: Course.ViewID

@@ -30,8 +30,7 @@ import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { isDeepStrictEqual } from "node:util"
-import { isLearningCommandToolID } from "@/tool/learning-command"
-import { normalizeCommand as normalizeLearningCommandInput } from "@/learning-command/input"
+import { isHostPreparedToolID, isLearningCommandToolID, normalizeHostPreparedToolInput } from "@/tool/learning-command"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
@@ -114,15 +113,16 @@ type ToolCall = {
   registration?: RegisteredToolCall
 }
 
-function assertProviderDoesNotExecuteLearningCommand(
+function assertProviderDoesNotExecuteHostPreparedTool(
   input: { name: string; providerExecuted?: boolean },
   existing?: Pick<ToolCall, "name" | "providerExecuted">,
 ) {
   const name =
-    (input.providerExecuted === true && isLearningCommandToolID(input.name) ? input.name : undefined) ??
-    (existing?.providerExecuted === true && isLearningCommandToolID(existing.name) ? existing.name : undefined)
+    (input.providerExecuted === true && isHostPreparedToolID(input.name) ? input.name : undefined) ??
+    (existing?.providerExecuted === true && isHostPreparedToolID(existing.name) ? existing.name : undefined)
   if (!name) return
-  throw new ProcessorIntegrityFailure(`Provider-executed learning command is forbidden: ${name}`)
+  const kind = isLearningCommandToolID(name) ? "learning command" : "host-prepared proposal"
+  throw new ProcessorIntegrityFailure(`Provider-executed ${kind} is forbidden: ${name}`)
 }
 
 type LocalTool = LLM.StreamInput["tools"][string] & {
@@ -309,15 +309,17 @@ const layer = Layer.effect(
         if (modelOperation && !isDeepStrictEqual(modelOperation, operation)) {
           return yield* new Turn.AdmissionConflictError({ turnID: operation.turnID })
         }
-        const read = yield* database.db.transaction((tx) => RetainedSteering.readCut(tx, operation.assistantMessageID)).pipe(
-          Effect.mapError(
-            (error) =>
-              new Turn.IntegrityError({
-                turnID: operation.turnID,
-                reason: `Retained steering cut read failed: ${"reason" in error ? error.reason : "database_error"}`,
-              }),
-          ),
-        )
+        const read = yield* database.db
+          .transaction((tx) => RetainedSteering.readCut(tx, operation.assistantMessageID))
+          .pipe(
+            Effect.mapError(
+              (error) =>
+                new Turn.IntegrityError({
+                  turnID: operation.turnID,
+                  reason: `Retained steering cut read failed: ${"reason" in error ? error.reason : "database_error"}`,
+                }),
+            ),
+          )
         if (read.type === "not_found") {
           return yield* new Turn.IntegrityError({
             turnID: operation.turnID,
@@ -422,7 +424,11 @@ const layer = Layer.effect(
             time: { start: match.part.state.time.start, end: Date.now() },
           },
         })
-        if (error instanceof PermissionV1.RejectedError || error instanceof Question.RejectedError) {
+        if (
+          error instanceof PermissionV1.RejectedError ||
+          error instanceof PermissionV1.CancelledError ||
+          error instanceof Question.RejectedError
+        ) {
           ctx.blocked = ctx.shouldBreak
         }
         yield* settleToolCall(toolCallID)
@@ -520,7 +526,9 @@ const layer = Layer.effect(
 
       const canonicalToolInput = (name: string, value: unknown): Record<string, unknown> => {
         const input = isRecord(value) ? value : { value }
-        return isLearningCommandToolID(name) ? normalizeLearningCommandInput(name, input) : input
+        return isHostPreparedToolID(name)
+          ? (normalizeHostPreparedToolInput(name, input) as Record<string, unknown>)
+          : input
       }
 
       const checkDoomLoop = Effect.fn("SessionProcessor.checkDoomLoop")(function* (
@@ -733,7 +741,7 @@ const layer = Layer.effect(
           }
 
           case "tool-call": {
-            assertProviderDoesNotExecuteLearningCommand(value)
+            assertProviderDoesNotExecuteHostPreparedTool(value)
             if (ctx.assistantMessage.summary) {
               throw new ProcessorIntegrityFailure(`Tool call not allowed while generating summary: ${value.name}`)
             }
@@ -750,7 +758,7 @@ const layer = Layer.effect(
               return
             }
             call.input = input
-            call.raw = isLearningCommandToolID(value.name) || !call.raw ? JSON.stringify(input) : call.raw
+            call.raw = isHostPreparedToolID(value.name) || !call.raw ? JSON.stringify(input) : call.raw
             call.metadata = value.providerMetadata
             call.providerExecuted = value.providerExecuted === true
             call.finalized = true
@@ -785,7 +793,7 @@ const layer = Layer.effect(
 
           case "tool-result": {
             const buffered = ctx.toolcalls[value.id]
-            assertProviderDoesNotExecuteLearningCommand(value, buffered)
+            assertProviderDoesNotExecuteHostPreparedTool(value, buffered)
             if (!value.providerExecuted && !buffered?.admitted && dispatchedToolCallID !== value.id) {
               throw new ProcessorIntegrityFailure(
                 `Local tool result arrived before FIFO invocation admission: ${value.id}`,
@@ -825,7 +833,7 @@ const layer = Layer.effect(
 
           case "tool-error": {
             const buffered = ctx.toolcalls[value.id]
-            assertProviderDoesNotExecuteLearningCommand(
+            assertProviderDoesNotExecuteHostPreparedTool(
               { name: value.name, providerExecuted: buffered?.providerExecuted },
               buffered,
             )

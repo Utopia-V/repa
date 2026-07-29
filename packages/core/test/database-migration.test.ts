@@ -10,6 +10,7 @@ import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "@opencode-ai/core/database/admission"
 import { install as installSchemaExtrasV10 } from "@opencode-ai/core/database/schema-extras-v10"
 import { install as installSchemaExtrasV11 } from "@opencode-ai/core/database/schema-extras-v11"
+import { install as installSchemaExtrasV12 } from "@opencode-ai/core/database/schema-extras-v12"
 import sessionUsageMigration from "@opencode-ai/core/database/migration/20260510033149_session_usage"
 import normalizeStoragePathsMigration from "@opencode-ai/core/database/migration/20260601010001_normalize_storage_paths"
 import sessionMessageProjectionOrderMigration from "@opencode-ai/core/database/migration/20260603040000_session_message_projection_order"
@@ -28,6 +29,7 @@ import learnerNavigationMigration from "@opencode-ai/core/database/migration/rep
 import retainedSteeringMigration from "@opencode-ai/core/database/migration/repa/20260720113159_gate15_retained_steering"
 import learnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260720200330_gate16_learner_goals"
 import domainNeutralLearningCommandLedgerMigration from "@opencode-ai/core/database/migration/repa/20260727121200_domain_neutral_learning_command_ledger"
+import defaultCourseV2Migration from "@opencode-ai/core/database/migration/repa/20260729144139_gate14_default_course_v2"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -42,8 +44,11 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
+import { learningCommandStatements } from "@opencode-ai/core/learner-navigation/learning-command-constraint-v12"
+import { noEffectStatement } from "@opencode-ai/core/learner-navigation/learning-command-constraint-v13"
 import { tmpdir } from "./fixture/tmpdir"
 import databaseV11Schema from "./fixture/database-v11-schema"
+import databaseV12Schema from "./fixture/database-v12-schema"
 
 const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
   Effect.runPromise(
@@ -167,17 +172,21 @@ const databaseV11Migrations = [
 
 function schemaManifestDigest(db: TestDatabase) {
   return db
-    .all<{ type: string; name: string; tableName: string; definition: string }>(sql`
+    .all<{ type: string; name: string; tableName: string; definition: string }>(
+      sql`
       SELECT type, name, tbl_name AS tableName, sql AS definition
       FROM sqlite_schema
       WHERE name NOT LIKE 'sqlite_%'
         AND sql IS NOT NULL
       ORDER BY type, name
-    `)
+    `,
+    )
     .pipe(
       Effect.map((rows) => {
         const hash = new Bun.CryptoHasher("sha256")
-        hash.update(rows.map((row) => [row.type, row.name, row.tableName, row.definition].join("\u0000")).join("\u0001"))
+        hash.update(
+          rows.map((row) => [row.type, row.name, row.tableName, row.definition].join("\u0000")).join("\u0001"),
+        )
         return hash.digest("hex")
       }),
     )
@@ -185,12 +194,42 @@ function schemaManifestDigest(db: TestDatabase) {
 
 function structuralManifest(db: TestDatabase) {
   return db
-    .all<{ type: string; name: string; definition: string }>(sql`
+    .all<{ type: string; name: string; definition: string }>(
+      sql`
       SELECT type, name, sql AS definition
       FROM sqlite_schema
       WHERE type IN ('trigger', 'view')
       ORDER BY type, name
-    `)
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: normalizeSchemaDefinition(row.definition),
+        })),
+      ),
+    )
+}
+
+function routeOwnedManifest(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_schema
+      WHERE name NOT LIKE 'sqlite_%'
+        AND sql IS NOT NULL
+        AND (
+          tbl_name IN (
+            'learner_course_route_anchor_transition',
+            'learner_course_route_anchor_commit_seal'
+          )
+          OR name = 'course_route_anchor_learning_command_terminal_validate_v12'
+        )
+      ORDER BY type, name
+    `,
+    )
     .pipe(
       Effect.map((rows) =>
         rows.map((row) => ({
@@ -243,10 +282,7 @@ function initializeDatabaseV11(
   return db.transaction((tx) =>
     Effect.gen(function* () {
       yield* databaseV11Schema.up(tx)
-      if (
-        input?.corruption === "course_command_version" ||
-        input?.corruption === "course_capability_version"
-      ) {
+      if (input?.corruption === "course_command_version" || input?.corruption === "course_capability_version") {
         yield* tx.run("PRAGMA ignore_check_constraints = ON")
       }
       yield* tx.run(sql`
@@ -389,9 +425,7 @@ function seedFrozenV11LearningHistory(
     },
   }
   const defaultReceiptConfirmation =
-    corruption === "default_confirmation"
-      ? { ...defaultConfirmation, target: null }
-      : defaultConfirmation
+    corruption === "default_confirmation" ? { ...defaultConfirmation, target: null } : defaultConfirmation
   const goalCommand = {
     operations: [
       {
@@ -432,9 +466,7 @@ function seedFrozenV11LearningHistory(
     courseBases: [],
   }
   const goalInvocationConfirmation =
-    corruption === "goal_confirmation"
-      ? { ...goalConfirmation, semanticFingerprint: "7".repeat(64) }
-      : goalConfirmation
+    corruption === "goal_confirmation" ? { ...goalConfirmation, semanticFingerprint: "7".repeat(64) } : goalConfirmation
   const representationSettlement = JSON.stringify({
     outcome: "applied",
     receiptID: "lcr_00000000000000000000000002",
@@ -557,7 +589,7 @@ function seedFrozenV11LearningHistory(
                     usability: { usable: false, cause: "absent" },
                     timeCommitted: 18,
                   }
-              : anchorCurrent,
+                : anchorCurrent,
           settlementTime: 18,
           settlementOrder: 8,
         },
@@ -565,9 +597,7 @@ function seedFrozenV11LearningHistory(
   const errorSettlement = JSON.stringify({
     outcome: "error",
     code: corruption === "retained_error_code" ? "invented_domain_failure" : "validation_error",
-    ...(corruption === "retained_error_detail"
-      ? { detail: { effectID: "rst_00000000000000000000000001" } }
-      : {}),
+    ...(corruption === "retained_error_detail" ? { detail: { effectID: "rst_00000000000000000000000001" } } : {}),
     settlementTime: 19,
     settlementOrder: 9,
   })
@@ -762,7 +792,9 @@ function seedFrozenV11LearningHistory(
         'prt_v11_retained'
       )
     `)
-    yield* tx.run(sql`INSERT INTO retained_steering_policy (id, time_created) VALUES ('rsp_00000000000000000000000001', 5)`)
+    yield* tx.run(
+      sql`INSERT INTO retained_steering_policy (id, time_created) VALUES ('rsp_00000000000000000000000001', 5)`,
+    )
     yield* tx.run(sql`
       INSERT INTO retained_steering_state (singleton, steering_revision, latest_cut_as_of)
       VALUES (1, 1, 0)
@@ -1175,6 +1207,89 @@ function dropCourseStateHistory(db: TestDatabase) {
   })
 }
 
+function restoreV12DefaultCourseTransition(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(
+      sql.raw(`
+      CREATE TABLE __v12_learner_default_course_transition (
+        id text PRIMARY KEY,
+        version integer NOT NULL CONSTRAINT learner_default_course_version_unique UNIQUE,
+        predecessor_id text CONSTRAINT learner_default_course_predecessor_unique UNIQUE,
+        previous_course_id text,
+        course_id text,
+        occurrence_id text NOT NULL CONSTRAINT learner_default_course_occurrence_unique UNIQUE,
+        permission_request_id text NOT NULL,
+        confirmation_snapshot text NOT NULL,
+        target_course_version integer,
+        target_selection_revision_id text,
+        target_selection_version integer,
+        target_view_id text,
+        target_view_version integer,
+        target_revision_version integer,
+        time_committed integer NOT NULL,
+        commit_order integer NOT NULL,
+        frontier_sequence integer NOT NULL CONSTRAINT learner_default_course_frontier_unique UNIQUE,
+        frontier_time integer NOT NULL,
+        FOREIGN KEY (predecessor_id) REFERENCES learner_default_course_transition(id) ON DELETE RESTRICT,
+        FOREIGN KEY (previous_course_id) REFERENCES course(id) ON DELETE RESTRICT,
+        FOREIGN KEY (course_id) REFERENCES course(id) ON DELETE RESTRICT,
+        FOREIGN KEY (course_id, target_view_id) REFERENCES course_view(course_id, id) ON DELETE RESTRICT,
+        FOREIGN KEY (course_id, target_view_id, target_selection_revision_id)
+          REFERENCES course_view_revision(course_id, view_id, id) ON DELETE RESTRICT,
+        FOREIGN KEY (occurrence_id) REFERENCES learning_admitted_occurrence(id) ON DELETE RESTRICT,
+        CHECK((version = 1 AND predecessor_id IS NULL AND previous_course_id IS NULL)
+          OR (version > 1 AND predecessor_id IS NOT NULL)),
+        CHECK(NOT (course_id IS previous_course_id)),
+        CHECK((course_id IS NULL AND target_course_version IS NULL
+          AND target_selection_revision_id IS NULL AND target_selection_version IS NULL
+          AND target_view_id IS NULL AND target_view_version IS NULL AND target_revision_version IS NULL)
+          OR (course_id IS NOT NULL AND target_course_version IS NOT NULL
+            AND target_selection_version IS NOT NULL
+            AND ((target_selection_revision_id IS NULL AND target_view_id IS NULL
+              AND target_view_version IS NULL AND target_revision_version IS NULL)
+              OR (target_selection_revision_id IS NOT NULL AND target_view_id IS NOT NULL
+                AND target_view_version IS NOT NULL AND target_revision_version IS NOT NULL)))),
+        CHECK(version >= 1
+          AND (target_course_version IS NULL OR target_course_version >= 0)
+          AND (target_selection_version IS NULL OR target_selection_version >= 0)
+          AND (target_view_version IS NULL OR target_view_version >= 0)
+          AND (target_revision_version IS NULL OR target_revision_version >= 0)),
+        CHECK(length(permission_request_id) > 0),
+        CHECK(json_valid(confirmation_snapshot)),
+        CHECK(time_committed >= 0 AND commit_order >= 0
+          AND frontier_sequence >= 1 AND frontier_time = time_committed)
+      ) WITHOUT ROWID
+    `),
+    )
+    yield* db.run(
+      sql.raw(`
+      INSERT INTO __v12_learner_default_course_transition (
+        id, version, predecessor_id, previous_course_id, course_id, occurrence_id,
+        permission_request_id, confirmation_snapshot, target_course_version,
+        target_selection_revision_id, target_selection_version, target_view_id,
+        target_view_version, target_revision_version, time_committed, commit_order,
+        frontier_sequence, frontier_time
+      )
+      SELECT
+        id, version, predecessor_id, previous_course_id, course_id, occurrence_id,
+        permission_request_id, confirmation_snapshot, target_course_version,
+        target_selection_revision_id, target_selection_version, target_view_id,
+        target_view_version, target_revision_version, time_committed, commit_order,
+        frontier_sequence, frontier_time
+      FROM learner_default_course_transition
+    `),
+    )
+    yield* db.run(sql`DROP TABLE learner_default_course_transition`)
+    yield* db.run(sql`ALTER TABLE __v12_learner_default_course_transition RENAME TO learner_default_course_transition`)
+    yield* db.run(
+      sql`CREATE INDEX learner_default_course_history_idx ON learner_default_course_transition (version, id)`,
+    )
+    yield* db.run(
+      sql`CREATE INDEX learner_default_course_frontier_idx ON learner_default_course_transition (frontier_sequence, version)`,
+    )
+  })
+}
+
 function dropGate16(db: TestDatabase) {
   return Effect.gen(function* () {
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
@@ -1186,6 +1301,16 @@ function dropGate16(db: TestDatabase) {
     yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
       discard: true,
     })
+    yield* restoreV12DefaultCourseTransition(db)
+    for (const table of [
+      "learner_default_course_acknowledgement",
+      "learner_default_course_capability_settlement",
+      "learner_default_course_capability_issue",
+      "learner_default_course_disposition",
+      "learner_default_course_proposal",
+    ]) {
+      yield* db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(table)}`)
+    }
     for (const table of [
       "course_selection_acceptance_commit_seal",
       "representation_command_commit_seal",
@@ -1211,6 +1336,7 @@ function dropGate16(db: TestDatabase) {
     ]) {
       yield* db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(table)}`)
     }
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 12}`)
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 11}`)
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 10}`)
     yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
@@ -1565,6 +1691,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
           { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
           { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
+          { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -1602,15 +1729,553 @@ describe("DatabaseMigration", () => {
     )
   })
 
+  test("upgrades the frozen v12 schema to exact v13 Default-Course structural parity", async () => {
+    const tables = [
+      "learner_default_course_acknowledgement",
+      "learner_default_course_disposition",
+      "learner_default_course_capability_issue",
+      "learner_default_course_capability_settlement",
+      "learner_default_course_proposal",
+      "learner_default_course_transition",
+    ]
+    const definitions = (db: TestDatabase) =>
+      db
+        .all<{ name: string; definition: string }>(
+          sql`
+          SELECT name, sql AS definition
+          FROM sqlite_schema
+          WHERE type = 'table'
+            AND name IN (${sql.join(
+              tables.map((name) => sql`${name}`),
+              sql`, `,
+            )})
+          ORDER BY name
+        `,
+        )
+        .pipe(
+          Effect.map((rows) =>
+            rows.map((row) => ({
+              name: row.name,
+              definition: normalizeSchemaDefinition(row.definition),
+            })),
+          ),
+        )
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.transaction((tx) => databaseV12Schema.up(tx))
+        yield* db.transaction((tx) => installSchemaExtrasV12(tx))
+        const route = yield* routeOwnedManifest(db)
+        yield* db.run("PRAGMA foreign_keys = OFF")
+        yield* db.transaction((tx) => defaultCourseV2Migration.up(tx))
+        yield* db.run("PRAGMA foreign_keys = ON")
+        return {
+          structures: yield* structuralManifest(db),
+          definitions: yield* definitions(db),
+          route,
+          migratedRoute: yield* routeOwnedManifest(db),
+          foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
+        }
+      }),
+    )
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        return {
+          structures: yield* structuralManifest(db),
+          definitions: yield* definitions(db),
+        }
+      }),
+    )
+    expect(upgraded.structures).toEqual(fresh.structures)
+    expect(upgraded.definitions).toEqual(fresh.definitions)
+    expect(upgraded.migratedRoute).toEqual(upgraded.route)
+    expect(upgraded.foreignKeys).toEqual([])
+  })
+
+  test("preserves the v12 route-anchor branch inside the v13 shared no-effect wrapper", () => {
+    const previous = learningCommandStatements.find((statement) =>
+      statement.includes("learner_navigation_learning_command_no_effect_validate_v12"),
+    )
+    if (!previous) throw new Error("The frozen v12 Navigation no-effect trigger is unavailable")
+    const normalize = (value: string) => value.replace(/\s+/g, " ").trim()
+    const expected = [
+      `NEW.command_name = 'set_course_route_anchor'
+       AND NEW.command_version = 1
+       AND NEW.capability_identity = 'set_course_route_anchor'
+       AND NEW.capability_version = 1
+       AND NEW.authorization_basis = 'learner_request'`,
+      `NEW.command_name = 'set_course_route_anchor'
+       AND json_extract(NEW.settlement, '$.navigationKind') = 'course_route_anchor'
+       AND json_extract(NEW.settlement, '$.current.kind') = 'course_route_anchor'
+       AND json_type(NEW.settlement, '$.current.courseID') = 'text'
+       AND json_type(NEW.settlement, '$.current.headID') IN ('text', 'null')
+       AND json_type(NEW.settlement, '$.current.version') = 'integer'
+       AND json_extract(NEW.settlement, '$.current.version') >= 0
+       AND json_type(NEW.settlement, '$.current.target') IN ('object', 'null')
+       AND json_type(NEW.settlement, '$.current.usability') = 'object'`,
+    ].map(normalize)
+    const v12 = normalize(previous)
+    const v13 = normalize(noEffectStatement)
+
+    expect(v12.match(/NEW\.command_name = 'set_course_route_anchor'/g)).toHaveLength(2)
+    expect(v13.match(/NEW\.command_name = 'set_course_route_anchor'/g)).toHaveLength(2)
+    for (const clause of expected) {
+      expect(v12).toContain(clause)
+      expect(v13).toContain(clause)
+    }
+  })
+
+  test("migrates v12 command and effect confirmations separately with partial historical locators", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV11(db)
+        yield* DatabaseMigration.apply(db, {
+          path: "frozen-v12-default-course.db",
+          migrations: [...databaseV11Migrations, domainNeutralLearningCommandLedgerMigration],
+        })
+
+        const triggers = yield* db.all<{ name: string }>(
+          sql`SELECT name FROM sqlite_schema WHERE type = 'trigger' ORDER BY name`,
+        )
+        yield* Effect.forEach(
+          triggers,
+          (trigger) => db.run(sql.raw(`DROP TRIGGER "${trigger.name.replaceAll('"', '""')}"`)),
+          { discard: true },
+        )
+        const confirmation = {
+          permissionRequestID: "permission_v12_clear_effect",
+          headID: "ndp_00000000000000000000000001",
+          version: 1,
+          fromCourseID: "crs_00000000000000000000000001",
+          fromCourseTitle: "Frozen v11 migration fixture",
+          target: null,
+        }
+        const effect = {
+          id: "ndp_00000000000000000000000002",
+          occurrenceID: "lco_00000000000000000000000013",
+          previousCourseID: "crs_00000000000000000000000001",
+          courseID: null,
+          previousVersion: 1,
+          version: 2,
+          timeCommitted: 20,
+          commitOrder: 10,
+          frontierSequence: 2,
+        }
+        const current = {
+          kind: "default_course_preference",
+          headID: effect.id,
+          version: 2,
+          courseID: null,
+          usability: { usable: false, cause: "absent" },
+          source: {
+            receiptID: "lcr_00000000000000000000000013",
+            occurrenceID: effect.occurrenceID,
+            originSessionID: "ses_v11",
+            originMessageID: "msg_v12_clear",
+            assistantMessageID: "msg_v12_assistant_clear",
+            invocationPartID: "prt_v12_clear",
+            availability: "available",
+          },
+          timeCommitted: 20,
+          commitOrder: 10,
+          frontierSequence: 2,
+        }
+        const applied = JSON.stringify({
+          outcome: "applied",
+          navigationKind: "default_course_preference",
+          receiptID: current.source.receiptID,
+          effectID: effect.id,
+          effect,
+          current,
+          confirmation,
+          settlementTime: 20,
+          settlementOrder: 10,
+        })
+        const replay = JSON.stringify({
+          outcome: "already_applied",
+          navigationKind: "default_course_preference",
+          receiptID: current.source.receiptID,
+          effectID: effect.id,
+          effect,
+          current,
+          confirmation,
+          settlementTime: 21,
+          settlementOrder: 11,
+          relation: "active",
+        })
+        const noChange = JSON.stringify({
+          outcome: "no_change",
+          navigationKind: "default_course_preference",
+          current,
+          settlementTime: 22,
+          settlementOrder: 12,
+        })
+        const error = JSON.stringify({
+          outcome: "error",
+          code: "stale",
+          settlementTime: 23,
+          settlementOrder: 13,
+        })
+        const rawPart =
+          '{"type":"tool", "tool":"set_default_course_preference","callID":"call-v12-clear","state":{"status":"completed","input":{"target":null},"output":"frozen-v12"}}'
+        yield* db.run(sql`
+          INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES ('project_v12', '/frozen-v12', 1, 1, '[]')
+        `)
+        yield* db.run(sql`
+          INSERT INTO session (
+            id, project_id, slug, directory, title, version, time_created, time_updated
+          ) VALUES (
+            'ses_v11', 'project_v12', 'frozen-v12', '/frozen-v12',
+            'Frozen V12 migration fixture', 'test', 1, 1
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES
+            ('msg_v12_clear', 'ses_v11', 19, 19, '{"role":"user"}'),
+            (
+              'msg_v12_assistant_clear', 'ses_v11', 20, 20,
+              '{"role":"assistant","parentID":"msg_v12_clear"}'
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+          VALUES (
+            'prt_v12_clear', 'msg_v12_assistant_clear', 'ses_v11', 20, 20, ${rawPart}
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_admitted_occurrence (
+            id, origin_session_id, origin_message_id, time_admitted
+          ) VALUES (
+            ${effect.occurrenceID}, 'ses_v11', 'msg_v12_clear', 20
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_invocation (
+            part_id, session_id, parent_user_message_id, assistant_message_id,
+            provider_call_id, occurrence_id, command_name, command_version,
+            emission_ordinal, capability_identity, capability_version,
+            authorization_basis, input_fingerprint, status, receipt_id,
+            settlement, time_admitted, time_settled, settlement_order
+          ) VALUES
+            (
+              'prt_v12_clear', 'ses_v11', 'msg_v12_clear', 'msg_v12_assistant_clear',
+              'call-v12-clear', ${effect.occurrenceID}, 'set_default_course_preference', 1,
+              0, 'set_default_course_preference', 1, 'learner_acceptance',
+              ${"c".repeat(64)}, 'applied', ${current.source.receiptID},
+              ${applied}, 20, 20, 10
+            ),
+            (
+              'prt_v12_clear_replay', 'ses_v11', 'msg_v12_clear', 'msg_v12_assistant_clear_replay',
+              'call-v12-clear-replay', ${effect.occurrenceID}, 'set_default_course_preference', 1,
+              0, 'set_default_course_preference', 1, 'learner_acceptance',
+              ${"d".repeat(64)}, 'already_applied', ${current.source.receiptID},
+              ${replay}, 21, 21, 11
+            ),
+            (
+              'prt_v12_no_change', 'ses_v11', 'msg_v12_clear', 'msg_v12_assistant_no_change',
+              'call-v12-no-change', ${effect.occurrenceID}, 'set_default_course_preference', 1,
+              0, 'set_default_course_preference', 1, 'learner_acceptance',
+              ${"e".repeat(64)}, 'no_change', NULL, ${noChange}, 22, 22, 12
+            ),
+            (
+              'prt_v12_error', 'ses_v11', 'msg_v12_clear', 'msg_v12_assistant_error',
+              'call-v12-error', ${effect.occurrenceID}, 'set_default_course_preference', 1,
+              0, 'set_default_course_preference', 1, 'learner_acceptance',
+              ${"f".repeat(64)}, 'error', NULL, ${error}, 23, 23, 13
+            ),
+            (
+              'prt_v12_admitted', 'ses_v11', 'msg_v12_clear', 'msg_v12_assistant_admitted',
+              'call-v12-admitted', ${effect.occurrenceID}, 'set_default_course_preference', 1,
+              0, 'set_default_course_preference', 1, 'learner_acceptance',
+              ${"0".repeat(64)}, 'admitted', NULL, NULL, 24, NULL, NULL
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learner_default_course_command (invocation_part_id, permission_request_id)
+          VALUES
+            ('prt_v12_clear', 'permission_v12_clear_effect'),
+            ('prt_v12_clear_replay', 'permission_v12_later_acceptance'),
+            ('prt_v12_no_change', 'permission_v12_no_change'),
+            ('prt_v12_error', 'permission_v12_error'),
+            ('prt_v12_admitted', 'permission_v12_admitted')
+        `)
+        yield* db.run(sql`
+          UPDATE learning_command_invocation
+          SET turn_id = 'turn-v12-admitted', input_id = 'input-v12-admitted'
+          WHERE part_id = 'prt_v12_admitted'
+        `)
+        yield* db.run(sql`
+          UPDATE learning_shared_frontier
+          SET sequence = 2, time_committed = 20
+          WHERE singleton = 1
+        `)
+        yield* db.run(sql`
+          INSERT INTO learner_default_course_transition (
+            id, version, predecessor_id, previous_course_id, course_id, occurrence_id,
+            permission_request_id, confirmation_snapshot, time_committed, commit_order,
+            frontier_sequence, frontier_time
+          ) VALUES (
+            ${effect.id}, 2, 'ndp_00000000000000000000000001',
+            'crs_00000000000000000000000001', NULL, ${effect.occurrenceID},
+            'permission_v12_clear_effect', ${JSON.stringify(confirmation)},
+            20, 10, 2, 20
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_receipt (
+            id, occurrence_id, origin_session_id, origin_message_id, assistant_message_id,
+            invocation_part_id, capability_identity, capability_version,
+            authorization_basis, time_committed, commit_order
+          ) VALUES (
+            ${current.source.receiptID}, ${effect.occurrenceID}, 'ses_v11', 'msg_v12_clear',
+            'msg_v12_assistant_clear', 'prt_v12_clear',
+            'set_default_course_preference', 1, 'learner_acceptance', 20, 10
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learner_default_course_commit_seal (effect_id, receipt_id, invocation_part_id)
+          VALUES (${effect.id}, ${current.source.receiptID}, 'prt_v12_clear')
+        `)
+        const preserved = yield* db.all<{
+          part_id: string
+          part: string | null
+          settlement: string | null
+          confirmation: string | null
+        }>(sql`
+          SELECT
+            invocation.part_id,
+            CAST(part.data AS text) AS part,
+            CAST(invocation.settlement AS text) AS settlement,
+            CAST(effect.confirmation_snapshot AS text) AS confirmation
+          FROM learning_command_invocation AS invocation
+          JOIN learner_default_course_command AS command
+            ON command.invocation_part_id = invocation.part_id
+          LEFT JOIN part ON part.id = invocation.part_id
+          LEFT JOIN learner_default_course_commit_seal AS seal
+            ON seal.receipt_id = invocation.receipt_id
+          LEFT JOIN learner_default_course_transition AS effect ON effect.id = seal.effect_id
+          ORDER BY invocation.part_id
+        `)
+        expect(preserved.find((row) => row.part_id === "prt_v12_clear")).toMatchObject({ part: rawPart })
+
+        yield* DatabaseMigration.apply(db, { path: "frozen-v12-default-course.db" })
+
+        expect(
+          yield* db.all(sql`
+            SELECT
+              invocation.part_id,
+              CAST(part.data AS text) AS part,
+              CAST(invocation.settlement AS text) AS settlement,
+              CAST(effect.confirmation_snapshot AS text) AS confirmation
+            FROM learning_command_invocation AS invocation
+            JOIN learner_default_course_command AS command
+              ON command.invocation_part_id = invocation.part_id
+            LEFT JOIN part ON part.id = invocation.part_id
+            LEFT JOIN learner_default_course_commit_seal AS seal
+              ON seal.receipt_id = invocation.receipt_id
+            LEFT JOIN learner_default_course_transition AS effect ON effect.id = seal.effect_id
+            ORDER BY invocation.part_id
+          `),
+        ).toEqual(preserved)
+        expect(
+          yield* db.get(sql`
+            SELECT turn_id, input_id
+            FROM learning_command_invocation
+            WHERE part_id = 'prt_v12_admitted'
+          `),
+        ).toEqual({ turn_id: "turn-v12-admitted", input_id: "input-v12-admitted" })
+        expect(
+          yield* db.get(sql`
+            SELECT
+              disposition,
+              command_permission_request_id,
+              effect_confirmation_request_id,
+              legacy_effect_id,
+              legacy_receipt_id
+            FROM learner_default_course_disposition
+            WHERE invocation_part_id = 'prt_v12_clear_replay'
+          `),
+        ).toEqual({
+          disposition: "legacy_v1",
+          command_permission_request_id: "permission_v12_later_acceptance",
+          effect_confirmation_request_id: "permission_v12_clear_effect",
+          legacy_effect_id: effect.id,
+          legacy_receipt_id: current.source.receiptID,
+        })
+        expect(
+          yield* db.all(sql`
+            SELECT
+              invocation_part_id,
+              disposition,
+              legacy_row_class,
+              confirmation_availability,
+              effect_confirmation_request_id,
+              legacy_effect_id,
+              legacy_receipt_id
+            FROM learner_default_course_disposition
+            WHERE invocation_part_id IN (
+              'prt_v12_admitted', 'prt_v12_error', 'prt_v12_no_change'
+            )
+            ORDER BY invocation_part_id
+          `),
+        ).toEqual([
+          {
+            invocation_part_id: "prt_v12_admitted",
+            disposition: "legacy_v1",
+            legacy_row_class: "admitted",
+            confirmation_availability: "not_recorded_v1",
+            effect_confirmation_request_id: null,
+            legacy_effect_id: null,
+            legacy_receipt_id: null,
+          },
+          {
+            invocation_part_id: "prt_v12_error",
+            disposition: "legacy_v1",
+            legacy_row_class: "error",
+            confirmation_availability: "not_recorded_v1",
+            effect_confirmation_request_id: null,
+            legacy_effect_id: null,
+            legacy_receipt_id: null,
+          },
+          {
+            invocation_part_id: "prt_v12_no_change",
+            disposition: "legacy_v1",
+            legacy_row_class: "no_change",
+            confirmation_availability: "not_recorded_v1",
+            effect_confirmation_request_id: null,
+            legacy_effect_id: null,
+            legacy_receipt_id: null,
+          },
+        ])
+        expect(
+          yield* db.get(sql`
+            SELECT
+              effect_authorization_part_id,
+              operation,
+              relation,
+              json_extract(from_locator, '$.locator.courseID') AS from_course_id,
+              json_extract(from_locator, '$.locator.title.value') AS from_title,
+              json_extract(from_locator, '$.locator.courseVersion.availability') AS from_version,
+              json_extract(from_locator, '$.locator.workingSelection.availability') AS from_selection,
+              json_extract(to_locator, '$.kind') AS to_kind
+            FROM learner_default_course_acknowledgement
+            WHERE invocation_part_id = 'prt_v12_clear_replay'
+          `),
+        ).toEqual({
+          effect_authorization_part_id: "prt_v12_clear",
+          operation: "clear",
+          relation: "active",
+          from_course_id: "crs_00000000000000000000000001",
+          from_title: "Frozen v11 migration fixture",
+          from_version: "not_recorded_v1",
+          from_selection: "not_recorded_v1",
+          to_kind: "absent",
+        })
+        expect(yield* db.all(sql.raw("PRAGMA foreign_key_check"))).toEqual([])
+      }),
+    )
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV11(db)
+        yield* DatabaseMigration.apply(db, {
+          path: "corrupt-v12-default-course.db",
+          migrations: [...databaseV11Migrations, domainNeutralLearningCommandLedgerMigration],
+        })
+        const triggers = yield* db.all<{ name: string }>(
+          sql`SELECT name FROM sqlite_schema WHERE type = 'trigger' ORDER BY name`,
+        )
+        yield* Effect.forEach(
+          triggers,
+          (trigger) => db.run(sql.raw(`DROP TRIGGER "${trigger.name.replaceAll('"', '""')}"`)),
+          { discard: true },
+        )
+        yield* db.run(sql`
+          UPDATE learner_default_course_transition
+          SET confirmation_snapshot = json_set(
+            confirmation_snapshot,
+            '$.fromCourseID',
+            'crs_00000000000000000000000001'
+          )
+          WHERE id = 'ndp_00000000000000000000000001'
+        `)
+        yield* db.run(sql`
+          UPDATE learning_command_invocation
+          SET settlement = json_set(
+            settlement,
+            '$.confirmation.fromCourseID',
+            'crs_00000000000000000000000001'
+          )
+          WHERE part_id = 'prt_v11_default'
+        `)
+
+        const error = yield* Effect.flip(DatabaseMigration.apply(db, { path: "corrupt-v12-default-course.db" }))
+
+        expect(error).toMatchObject({
+          _tag: "DatabaseMigrationError",
+          migrationID: defaultCourseV2Migration.id,
+          fromVersion: BASELINE_VERSION + 11,
+          toVersion: BASELINE_VERSION + 12,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT json_extract(confirmation_snapshot, '$.fromCourseID') AS from_course_id
+            FROM learner_default_course_transition
+            WHERE id = 'ndp_00000000000000000000000001'
+          `),
+        ).toEqual({ from_course_id: "crs_00000000000000000000000001" })
+        expect(
+          yield* db.get(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND name = 'learner_default_course_disposition'
+          `),
+        ).toBeUndefined()
+      }),
+    )
+  })
+
   test("upgrades the frozen v11 database and rows to the exact current structural manifest", async () => {
     await run(
       Effect.gen(function* () {
         const db = yield* makeDb
         yield* initializeDatabaseV11(db)
+        const preservedRouteInvocations = yield* db.all(sql`
+          SELECT part_id, status, CAST(settlement AS text) AS settlement
+          FROM learning_command_invocation
+          WHERE command_name = 'set_course_route_anchor'
+          ORDER BY part_id
+        `)
+        const preservedRouteEffect = yield* db.get(sql`
+          SELECT
+            effect.id,
+            effect.course_id,
+            effect.version,
+            effect.predecessor_id,
+            effect.previous_view_id,
+            effect.previous_revision_id,
+            effect.previous_item_id,
+            effect.target_view_id,
+            effect.target_revision_id,
+            effect.target_item_id,
+            effect.occurrence_id,
+            effect.target_course_version,
+            effect.target_selection_version,
+            effect.target_view_version,
+            effect.target_revision_version,
+            effect.time_committed,
+            effect.commit_order,
+            effect.frontier_sequence,
+            effect.frontier_time
+          FROM learner_course_route_anchor_transition AS effect
+        `)
 
-        expect(yield* schemaManifestDigest(db)).toBe(
-          "6c8969cb8b0c167c672ca22ec42b1412fb2821b7d5f714a31b17c58705710838",
-        )
+        expect(yield* schemaManifestDigest(db)).toBe("6c8969cb8b0c167c672ca22ec42b1412fb2821b7d5f714a31b17c58705710838")
         expect(
           yield* db.get<{ definition: string }>(sql`
             SELECT sql AS definition
@@ -1635,9 +2300,7 @@ describe("DatabaseMigration", () => {
         const retainedSeal = freshStructuralManifest.find(
           (entry) => entry.name === "retained_steering_commit_seal_validate_insert_v12",
         )?.definition
-        expect(retainedSeal).toContain(
-          "invocation.capability_identity = 'update_retained_learning_steering'",
-        )
+        expect(retainedSeal).toContain("invocation.capability_identity = 'update_retained_learning_steering'")
         expect(retainedSeal).toContain("invocation.capability_version = 1")
         const goalSeal = freshStructuralManifest.find(
           (entry) => entry.name === "learner_goal_commit_seal_validate_insert_v12",
@@ -1658,6 +2321,39 @@ describe("DatabaseMigration", () => {
         yield* DatabaseMigration.apply(db, { path: "frozen-v11.db" })
 
         expect(yield* structuralManifest(db)).toEqual(freshStructuralManifest)
+        expect(
+          yield* db.all(sql`
+            SELECT part_id, status, CAST(settlement AS text) AS settlement
+            FROM learning_command_invocation
+            WHERE command_name = 'set_course_route_anchor'
+            ORDER BY part_id
+          `),
+        ).toEqual(preservedRouteInvocations)
+        expect(
+          yield* db.get(sql`
+            SELECT
+              effect.id,
+              effect.course_id,
+              effect.version,
+              effect.predecessor_id,
+              effect.previous_view_id,
+              effect.previous_revision_id,
+              effect.previous_item_id,
+              effect.target_view_id,
+              effect.target_revision_id,
+              effect.target_item_id,
+              effect.occurrence_id,
+              effect.target_course_version,
+              effect.target_selection_version,
+              effect.target_view_version,
+              effect.target_revision_version,
+              effect.time_committed,
+              effect.commit_order,
+              effect.frontier_sequence,
+              effect.frontier_time
+            FROM learner_course_route_anchor_transition AS effect
+          `),
+        ).toEqual(preservedRouteEffect)
         expect(
           yield* db.get(sql`
             SELECT part_id, status, receipt_id
@@ -1780,6 +2476,58 @@ describe("DatabaseMigration", () => {
             invocation_part_id: "prt_v11_retained",
           },
         ])
+        expect(
+          yield* db.get(sql`
+            SELECT
+              authorization.disposition,
+              authorization.authorization_version,
+              authorization.authorization_kind,
+              authorization.legacy_row_class,
+              authorization.confirmation_availability,
+              authorization.command_permission_request_id,
+              authorization.effect_confirmation_request_id,
+              authorization.legacy_effect_id,
+              authorization.legacy_receipt_id,
+              effect.authorization_part_id
+            FROM learner_default_course_disposition AS authorization
+            JOIN learner_default_course_transition AS effect
+              ON effect.id = authorization.legacy_effect_id
+            WHERE authorization.invocation_part_id = 'prt_v11_default'
+          `),
+        ).toEqual({
+          disposition: "legacy_v1",
+          authorization_version: 1,
+          authorization_kind: "legacy_v1",
+          legacy_row_class: "applied",
+          confirmation_availability: "recorded_v1",
+          command_permission_request_id: "permission_v11_default",
+          effect_confirmation_request_id: "permission_v11_default",
+          legacy_effect_id: "ndp_00000000000000000000000001",
+          legacy_receipt_id: "lcr_00000000000000000000000003",
+          authorization_part_id: "prt_v11_default",
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT
+              operation,
+              relation,
+              json_extract(from_locator, '$.kind') AS from_kind,
+              json_extract(to_locator, '$.locator.courseID') AS to_course_id,
+              json_extract(to_locator, '$.locator.title.availability') AS title_availability,
+              json_extract(to_locator, '$.locator.courseVersion.availability') AS version_availability,
+              json_extract(to_locator, '$.locator.workingSelection.availability') AS selection_availability
+            FROM learner_default_course_acknowledgement
+            WHERE invocation_part_id = 'prt_v11_default'
+          `),
+        ).toEqual({
+          operation: "set",
+          relation: "active",
+          from_kind: "absent",
+          to_course_id: "crs_00000000000000000000000001",
+          title_availability: "recorded_v1",
+          version_availability: "recorded_v1",
+          selection_availability: "recorded_v1",
+        })
         expect(
           yield* db.get(sql`
             SELECT effect.authorization_basis, effect.semantic_fingerprint,
@@ -1969,18 +2717,16 @@ describe("DatabaseMigration", () => {
           yield* initializeDatabaseV11(db, { corruption: fixture.corruption })
 
           const violatesFrozenCheck =
-            fixture.corruption === "course_command_version" ||
-            fixture.corruption === "course_capability_version"
+            fixture.corruption === "course_command_version" || fixture.corruption === "course_capability_version"
           const violatesDomainValidator =
             fixture.corruption === "anchor_no_change_usability" ||
             fixture.corruption === "anchor_no_change_partial_source" ||
             fixture.corruption === "goal_operation_meaning" ||
             fixture.corruption === "goal_replacement_target"
-          const error = violatesFrozenCheck || violatesDomainValidator
-            ? yield* Effect.flip(
-                db.transaction((tx) => domainNeutralLearningCommandLedgerMigration.up(tx)),
-              )
-            : yield* Effect.flip(DatabaseMigration.apply(db, { path: fixture.path }))
+          const error =
+            violatesFrozenCheck || violatesDomainValidator
+              ? yield* Effect.flip(db.transaction((tx) => domainNeutralLearningCommandLedgerMigration.up(tx)))
+              : yield* Effect.flip(DatabaseMigration.apply(db, { path: fixture.path }))
 
           if (violatesFrozenCheck) {
             expect(String(error)).toContain("cannot be represented by v12")
@@ -2985,6 +3731,11 @@ describe("DatabaseMigration", () => {
           SELECT name, wr
           FROM pragma_table_list
           WHERE name IN (
+            'learner_default_course_acknowledgement',
+            'learner_default_course_disposition',
+            'learner_default_course_capability_issue',
+            'learner_default_course_capability_settlement',
+            'learner_default_course_proposal',
             'learner_default_course_transition',
             'learner_course_route_anchor_transition',
             'learning_command_receipt'
@@ -2993,6 +3744,11 @@ describe("DatabaseMigration", () => {
         `)
         expect(freshTableStorage).toEqual([
           { name: "learner_course_route_anchor_transition", wr: 1 },
+          { name: "learner_default_course_acknowledgement", wr: 1 },
+          { name: "learner_default_course_capability_issue", wr: 1 },
+          { name: "learner_default_course_capability_settlement", wr: 1 },
+          { name: "learner_default_course_disposition", wr: 1 },
+          { name: "learner_default_course_proposal", wr: 1 },
           { name: "learner_default_course_transition", wr: 1 },
           { name: "learning_command_receipt", wr: 1 },
         ])
@@ -3014,20 +3770,17 @@ describe("DatabaseMigration", () => {
         expect(freshAnchorConflictTrigger).toContain("existing.occurrence_id = NEW.occurrence_id")
         expect(freshAnchorConflictTrigger).toContain("existing.frontier_sequence = NEW.frontier_sequence")
         const freshDefaultSealTrigger = fresh.find(
-          (item) => item.name === "learner_default_course_commit_seal_validate_insert_v12",
+          (item) => item.name === "learner_default_course_commit_seal_validate_insert_v13",
         )?.definition
-        expect(freshDefaultSealTrigger).toContain(
-          "invocation.capability_identity = 'set_default_course_preference'",
-        )
-        expect(freshDefaultSealTrigger).toContain("invocation.capability_version = 1")
+        expect(freshDefaultSealTrigger).toContain("invocation.capability_identity = 'set_default_course_preference'")
+        expect(freshDefaultSealTrigger).toContain("invocation.capability_version = authorization.authorization_version")
+        expect(freshDefaultSealTrigger).toContain("effect.authorization_part_id = NEW.invocation_part_id")
         expect(freshDefaultSealTrigger).toContain("receipt.id = NEW.receipt_id")
         expect(freshDefaultSealTrigger).toContain("receipt.invocation_part_id = NEW.invocation_part_id")
         const freshAnchorSealTrigger = fresh.find(
           (item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12",
         )?.definition
-        expect(freshAnchorSealTrigger).toContain(
-          "invocation.capability_identity = 'set_course_route_anchor'",
-        )
+        expect(freshAnchorSealTrigger).toContain("invocation.capability_identity = 'set_course_route_anchor'")
         expect(freshAnchorSealTrigger).toContain("invocation.capability_version = 1")
         expect(freshAnchorSealTrigger).toContain("receipt.id = NEW.receipt_id")
         expect(freshAnchorSealTrigger).toContain("receipt.invocation_part_id = NEW.invocation_part_id")
@@ -3068,6 +3821,11 @@ describe("DatabaseMigration", () => {
             SELECT name, wr
             FROM pragma_table_list
             WHERE name IN (
+              'learner_default_course_acknowledgement',
+              'learner_default_course_disposition',
+              'learner_default_course_capability_issue',
+              'learner_default_course_capability_settlement',
+              'learner_default_course_proposal',
               'learner_default_course_transition',
               'learner_course_route_anchor_transition',
               'learning_command_receipt'
@@ -3082,8 +3840,7 @@ describe("DatabaseMigration", () => {
           upgraded.find((item) => item.name === "learner_course_route_anchor_conflict_forbidden")?.definition,
         ).toBe(freshAnchorConflictTrigger)
         expect(
-          upgraded.find((item) => item.name === "learner_default_course_commit_seal_validate_insert_v12")
-            ?.definition,
+          upgraded.find((item) => item.name === "learner_default_course_commit_seal_validate_insert_v13")?.definition,
         ).toBe(freshDefaultSealTrigger)
         expect(
           upgraded.find((item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12")
@@ -3547,7 +4304,11 @@ describe("DatabaseMigration", () => {
             JOIN course_selection_acceptance_commit_seal AS seal ON seal.receipt_id = receipt.id
             WHERE receipt.id = 'lcr_00000000000000000000000021'
           `),
-        ).toEqual({ id: "lcr_00000000000000000000000021", invocation_part_id: "prt_gate10_applied", effect_id: "cse_00000000000000000000000021" })
+        ).toEqual({
+          id: "lcr_00000000000000000000000021",
+          invocation_part_id: "prt_gate10_applied",
+          effect_id: "cse_00000000000000000000000021",
+        })
         expect(
           yield* db.get(sql`
             SELECT content_root_id, binding_id, binding_episode_id, grant_episode_id, disposition
@@ -4180,6 +4941,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 9, id: retainedSteeringMigration.id },
           { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
           { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
+          { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
         ])
       }),
     )

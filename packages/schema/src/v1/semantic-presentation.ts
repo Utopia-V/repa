@@ -127,9 +127,7 @@ const GoalUpdateOperation = Schema.Struct({
   expectedVersion: PositiveVersion,
   source: GoalRevision,
   meaning: GoalMeaning,
-  supersessionTarget: optional(
-    GoalRevision,
-  ),
+  supersessionTarget: optional(GoalRevision),
 })
 
 const GoalReplaceOperation = Schema.Struct({
@@ -297,6 +295,168 @@ const DefaultTarget = Schema.Struct({
   revisionVersion: Schema.NullOr(PositiveVersion),
 })
 
+const DefaultWorkingSelection = Schema.Struct({
+  revisionID: Schema.NullOr(StringValue),
+  selectionVersion: PositiveVersion,
+  viewID: Schema.NullOr(StringValue),
+  viewName: Schema.NullOr(StringValue),
+  viewVersion: Schema.NullOr(PositiveVersion),
+  revisionVersion: Schema.NullOr(PositiveVersion),
+}).check(
+  Schema.makeFilter((selection) => {
+    if (
+      selection.revisionID === null &&
+      selection.viewID === null &&
+      selection.viewName === null &&
+      selection.viewVersion === null &&
+      selection.revisionVersion === null
+    ) {
+      return undefined
+    }
+    if (
+      selection.revisionID !== null &&
+      selection.viewID !== null &&
+      selection.viewName !== null &&
+      selection.viewVersion !== null &&
+      selection.revisionVersion !== null
+    ) {
+      return undefined
+    }
+    return "Default-Course working-selection identity must be wholly absent or wholly recorded"
+  }),
+)
+
+const DefaultLocatedStringV1 = Schema.Union([
+  Schema.Struct({ availability: Schema.Literal("recorded_v1"), value: StringValue }),
+  Schema.Struct({ availability: Schema.Literal("not_recorded_v1") }),
+])
+
+const DefaultLocatedVersionV1 = Schema.Union([
+  Schema.Struct({ availability: Schema.Literal("recorded_v1"), value: PositiveVersion }),
+  Schema.Struct({ availability: Schema.Literal("not_recorded_v1") }),
+])
+
+const DefaultLocatedWorkingSelectionV1 = Schema.Union([
+  Schema.Struct({
+    availability: Schema.Literal("recorded_v1"),
+    value: DefaultWorkingSelection,
+  }),
+  Schema.Struct({ availability: Schema.Literal("not_recorded_v1") }),
+])
+
+const DefaultStableLocatorV1 = Schema.Struct({
+  courseID: StringValue,
+  title: DefaultLocatedStringV1,
+  courseVersion: DefaultLocatedVersionV1,
+  workingSelection: DefaultLocatedWorkingSelectionV1,
+})
+
+const DefaultEndpointV1 = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("absent") }),
+  Schema.Struct({ kind: Schema.Literal("course"), locator: DefaultStableLocatorV1 }),
+])
+
+const DefaultStableLocatorV2 = Schema.Struct({
+  courseID: StringValue,
+  title: Schema.Struct({ availability: Schema.Literal("recorded_v2"), value: StringValue }),
+  courseVersion: Schema.Struct({ availability: Schema.Literal("recorded_v2"), value: PositiveVersion }),
+  workingSelection: Schema.Struct({
+    availability: Schema.Literal("recorded_v2"),
+    value: DefaultWorkingSelection,
+  }),
+})
+
+const DefaultEndpointV2 = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("absent") }),
+  Schema.Struct({ kind: Schema.Literal("course"), locator: DefaultStableLocatorV2 }),
+])
+
+const DefaultResolutionScope = Schema.Struct({
+  coverage: Schema.Literals(["complete", "explicitly_truncated"]),
+  candidates: Schema.Array(
+    Schema.Struct({ courseID: StringValue, title: StringValue, courseVersion: PositiveVersion }),
+  ),
+  selectedCourseID: Schema.NullOr(StringValue),
+  truncation: optional(
+    Schema.Struct({
+      reason: StringValue,
+      omittedCount: optional(PositiveVersion),
+    }),
+  ),
+})
+
+const DefaultDirectAuthorizationSource = Schema.Struct({
+  kind: Schema.Literal("direct_request_v2"),
+  occurrenceID: StringValue,
+  excerpt: StringValue,
+})
+
+const DefaultAcceptedAuthorizationSource = Schema.Struct({
+  kind: Schema.Literal("accepted_proposal_v2"),
+  occurrenceID: StringValue,
+  excerpt: StringValue,
+  proposalPartID: StringValue,
+  proposalPresentationPartID: StringValue,
+  proposalPresentationAssistantMessageID: StringValue,
+  proposalAssistantMessageID: StringValue,
+  proposalEmissionOrdinal: PositiveVersion,
+  proposalFingerprint: StringValue,
+  selection: Schema.Literals(["sole_presented", "explicit_reference"]),
+})
+
+const DefaultV2Command = Schema.Struct({
+  kind: Schema.Literal("default_course_preference"),
+  expectedHeadID: Schema.NullOr(StringValue),
+  expectedVersion: PositiveVersion,
+  target: Schema.NullOr(
+    Schema.Struct({
+      courseID: StringValue,
+      courseVersion: PositiveVersion,
+      selectionRevisionID: Schema.NullOr(StringValue),
+      selectionVersion: PositiveVersion,
+      viewID: Schema.NullOr(StringValue),
+      viewVersion: Schema.NullOr(PositiveVersion),
+      revisionVersion: Schema.NullOr(PositiveVersion),
+    }),
+  ),
+})
+
+const DefaultV2Authorization = Schema.Struct({
+  kind: Schema.Literals(["direct_request_v2", "accepted_proposal_v2"]),
+  fingerprint: StringValue,
+  command: DefaultV2Command,
+  commandFingerprint: StringValue,
+  source: Schema.Union([DefaultDirectAuthorizationSource, DefaultAcceptedAuthorizationSource]),
+  resolutionScope: DefaultResolutionScope,
+  resolutionFingerprint: StringValue,
+  preferenceHeadID: Schema.NullOr(StringValue),
+  preferenceVersion: PositiveVersion,
+  operation: Schema.Literals(["set", "change", "clear"]),
+  from: DefaultEndpointV2,
+  to: DefaultEndpointV2,
+})
+
+const DefaultV2ResultDisposition = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("candidate_v2"),
+    authorization: DefaultV2Authorization,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("semantic_terminal_v2"),
+    outcome: Schema.Literals(["already_applied", "semantic_conflict"]),
+    command: DefaultV2Command,
+    commandFingerprint: StringValue,
+    semanticAddress: Schema.Struct({
+      occurrenceID: StringValue,
+      slot: Schema.Literal("default_course_preference"),
+    }),
+    semanticAddressFingerprint: StringValue,
+    incomingPayloadFingerprint: StringValue,
+    existingEffectID: StringValue,
+    existingPayloadFingerprint: StringValue,
+  }),
+])
+
 const DefaultConfirmationProposal = Schema.Struct({
   kind: Schema.Literal("default_course_confirmation"),
   ...ProposalBinding,
@@ -324,6 +484,12 @@ const DefaultCommandProposal = Schema.Struct({
       revisionVersion: Schema.NullOr(PositiveVersion),
     }),
   ),
+})
+
+const DefaultV2CapabilityProposal = Schema.Struct({
+  kind: Schema.Literal("default_course_v2_capability"),
+  ...ProposalBinding,
+  authorization: DefaultV2Authorization,
 })
 
 const RouteAnchorProposal = Schema.Struct({
@@ -372,6 +538,7 @@ export const ProposalBasis = Schema.Union([
   ContentMutationProposal,
   DefaultConfirmationProposal,
   DefaultCommandProposal,
+  DefaultV2CapabilityProposal,
   RouteAnchorProposal,
   RetainedSteeringProposal,
   LearnerGoalProposal,
@@ -399,15 +566,9 @@ const CourseResult = Schema.Struct({
   courseID: optional(StringValue),
   revisionID: optional(StringValue),
   locator: optional(CourseLocator),
-  previousSelection: optional(
-    Schema.Struct({ revisionID: optional(StringValue), version: PositiveVersion }),
-  ),
-  committedSelection: optional(
-    Schema.Struct({ revisionID: optional(StringValue), version: PositiveVersion }),
-  ),
-  currentSelection: optional(
-    Schema.Struct({ revisionID: optional(StringValue), version: PositiveVersion }),
-  ),
+  previousSelection: optional(Schema.Struct({ revisionID: optional(StringValue), version: PositiveVersion })),
+  committedSelection: optional(Schema.Struct({ revisionID: optional(StringValue), version: PositiveVersion })),
+  currentSelection: optional(Schema.Struct({ revisionID: optional(StringValue), version: PositiveVersion })),
   relation: optional(Schema.Literals(["active", "superseded"])),
 })
 
@@ -432,6 +593,44 @@ const DefaultCourseResult = Schema.Struct({
     }),
   ),
   relation: optional(Schema.Literals(["active", "superseded"])),
+})
+
+const DefaultCourseV2Result = Schema.Struct({
+  kind: Schema.Literal("default_course_v2_result"),
+  ...ResultCommon,
+  disposition: DefaultV2ResultDisposition,
+  acknowledgement: optional(
+    Schema.Union([
+      Schema.Struct({
+        schemaVersion: Schema.Literal(1),
+        invocationPartID: StringValue,
+        effectAuthorizationPartID: StringValue,
+        authorizationVersion: Schema.Literal(1),
+        effectID: StringValue,
+        receiptID: StringValue,
+        operation: Schema.Literals(["set", "change", "clear"]),
+        from: DefaultEndpointV1,
+        to: DefaultEndpointV1,
+        relation: Schema.Literals(["active", "superseded"]),
+        timeCommitted: PositiveVersion,
+        commitOrder: PositiveVersion,
+      }),
+      Schema.Struct({
+        schemaVersion: Schema.Literal(1),
+        invocationPartID: StringValue,
+        effectAuthorizationPartID: StringValue,
+        authorizationVersion: Schema.Literal(2),
+        effectID: StringValue,
+        receiptID: StringValue,
+        operation: Schema.Literals(["set", "change", "clear"]),
+        from: DefaultEndpointV2,
+        to: DefaultEndpointV2,
+        relation: Schema.Literals(["active", "superseded"]),
+        timeCommitted: PositiveVersion,
+        commitOrder: PositiveVersion,
+      }),
+    ]),
+  ),
 })
 
 const RouteAnchorResult = Schema.Struct({
@@ -506,6 +705,7 @@ export const ResultBasis = Schema.Union([
   CourseResult,
   RepresentationResult,
   DefaultCourseResult,
+  DefaultCourseV2Result,
   RouteAnchorResult,
   RetainedSteeringResult,
   LearnerGoalResult,

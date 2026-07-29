@@ -53,6 +53,19 @@ const waitForPending = (count: number) =>
     )
   })
 
+function exactLifecycle(
+  input: {
+    selected?: Permission.DurableLifecycle["selected"]
+    replied?: Permission.DurableLifecycle["replied"]
+  } = {},
+): Permission.DurableLifecycle {
+  return {
+    resolution: "request_exact",
+    selected: input.selected ?? (() => Effect.void),
+    replied: input.replied ?? (() => Effect.void),
+  }
+}
+
 const fail = <A, E, R>(self: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {
     const exit = yield* self.pipe(Effect.exit)
@@ -101,12 +114,8 @@ test("capability identifiers remain case-sensitive through delegated authority a
   expect(Permission.evaluate("read", "lesson.md", ruleset).action).toBe("allow")
   expect(Permission.evaluate("READ", "lesson.md", ruleset).action).toBe("deny")
   expect(
-    Permission.evaluateAuthority(
-      "READ",
-      "lesson.md",
-      [{ permission: "*", pattern: "*", action: "allow" }],
-      authority,
-    ).action,
+    Permission.evaluateAuthority("READ", "lesson.md", [{ permission: "*", pattern: "*", action: "allow" }], authority)
+      .action,
   ).toBe("deny")
   expect(Permission.disabled(["read", "READ"], ruleset)).toEqual(new Set(["READ"]))
   expect(Object.keys(Permission.visibleTools({ read: true, READ: true }, ruleset))).toEqual(["read"])
@@ -816,6 +825,131 @@ it.instance(
   { git: true },
 )
 
+it.instance(
+  "exact lifecycle durably selects before publication and preserves the targeted raw reply",
+  () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2Bridge.Service
+      const order: string[] = []
+      const selections: Permission.Selection[] = []
+      const replies: Array<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }> = []
+      const asked = yield* Deferred.make<PermissionV1.Request>()
+      const replied = yield* Deferred.make<void>()
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type === Permission.Event.Asked.type) {
+          order.push("asked")
+          return Deferred.succeed(asked, event.data as PermissionV1.Request).pipe(Effect.asVoid)
+        }
+        if (event.type === Permission.Event.Replied.type) {
+          order.push("published-reply")
+          return Deferred.succeed(replied, undefined).pipe(Effect.asVoid)
+        }
+        return Effect.void
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      const fiber = yield* ask({
+        id: PermissionV1.ID.make("per_exact_lifecycle"),
+        sessionID: SessionID.make("session_exact_lifecycle"),
+        permission: "set_default_course_preference",
+        patterns: ["course_target"],
+        metadata: { source: "runtime", permissionExactReply: false },
+        always: [],
+        requirePrompt: true,
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+        lifecycle: exactLifecycle({
+          selected: (selection) =>
+            Effect.sync(() => {
+              order.push("selected")
+              selections.push(selection)
+            }),
+          replied: (input) =>
+            Effect.sync(() => {
+              order.push("durable-reply")
+              replies.push(input)
+            }),
+        }),
+      }).pipe(Effect.forkScoped)
+
+      const request = yield* Deferred.await(asked)
+      expect(order).toEqual(["selected", "asked"])
+      expect(selections).toHaveLength(1)
+      expect(selections[0]).toMatchObject({
+        action: "ask",
+        request: {
+          id: PermissionV1.ID.make("per_exact_lifecycle"),
+          metadata: {
+            source: "runtime",
+            [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
+            [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true,
+          },
+        },
+      })
+      expect(request.metadata[PermissionV1.EXACT_REPLY_METADATA_KEY]).toBe(true)
+
+      yield* reply({
+        requestID: request.id,
+        reply: "reject",
+        message: "Use the current course instead",
+      })
+      yield* Deferred.await(replied)
+      const exit = yield* Fiber.await(fiber)
+
+      expect(order).toEqual(["selected", "asked", "durable-reply", "published-reply"])
+      expect(replies).toEqual([
+        {
+          request,
+          reply: {
+            requestID: request.id,
+            reply: "reject",
+            message: "Use the current course instead",
+          },
+        },
+      ])
+      expect(Exit.isFailure(exit)).toBe(true)
+      if (Exit.isFailure(exit)) expect(Cause.squash(exit.cause)).toBeInstanceOf(PermissionV1.CorrectedError)
+    }),
+  { git: true },
+)
+
+it.instance(
+  "exact lifecycle creates no permission request identity for deterministic allow or deny",
+  () =>
+    Effect.gen(function* () {
+      const selections: Permission.Selection[] = []
+      const lifecycle = exactLifecycle({
+        selected: (selection) =>
+          Effect.sync(() => {
+            selections.push(selection)
+          }),
+      })
+
+      yield* ask({
+        sessionID: SessionID.make("session_exact_allow"),
+        permission: "read",
+        patterns: ["lesson.md"],
+        metadata: {},
+        always: [],
+        ruleset: [{ permission: "read", pattern: "*", action: "allow" }],
+        lifecycle,
+      })
+      yield* ask({
+        sessionID: SessionID.make("session_exact_deny"),
+        permission: "bash",
+        patterns: ["rm lesson.md"],
+        metadata: {},
+        always: [],
+        ruleset: [{ permission: "bash", pattern: "*", action: "deny" }],
+        lifecycle,
+      }).pipe(Effect.exit)
+
+      expect(selections.map((selection) => selection.action)).toEqual(["allow", "deny"])
+      expect(selections.every((selection) => !("request" in selection))).toBe(true)
+      expect(yield* list()).toEqual([])
+    }),
+  { git: true },
+)
+
 // reply tests
 
 it.instance(
@@ -891,6 +1025,31 @@ it.instance(
         expect(err).toBeInstanceOf(PermissionV1.CorrectedError)
         expect(String(err)).toContain("Use a safer command")
       }
+    }),
+  { git: true },
+)
+
+it.instance(
+  "reply - cancel throws CancelledError without becoming a rejection",
+  () =>
+    Effect.gen(function* () {
+      const fiber = yield* ask({
+        id: PermissionV1.ID.make("per_cancelled"),
+        sessionID: SessionID.make("session_cancelled"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+        lifecycle: exactLifecycle(),
+      }).pipe(Effect.forkScoped)
+
+      yield* waitForPending(1)
+      yield* reply({ requestID: PermissionV1.ID.make("per_cancelled"), reply: "cancel" })
+
+      const exit = yield* Fiber.await(fiber)
+      expect(Exit.isFailure(exit)).toBe(true)
+      if (Exit.isFailure(exit)) expect(Cause.squash(exit.cause)).toBeInstanceOf(PermissionV1.CancelledError)
     }),
   { git: true },
 )
@@ -1175,6 +1334,143 @@ it.instance(
 )
 
 it.instance(
+  "exact rejection is isolated from generic reject fanout in both directions",
+  () =>
+    Effect.gen(function* () {
+      const exactA = yield* ask({
+        id: PermissionV1.ID.make("per_exact_reject_a"),
+        sessionID: SessionID.make("session_mixed_reject"),
+        permission: "bash",
+        patterns: ["one"],
+        metadata: {},
+        always: [],
+        requirePrompt: true,
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+        lifecycle: exactLifecycle(),
+      }).pipe(Effect.forkScoped)
+      const genericA = yield* ask({
+        id: PermissionV1.ID.make("per_generic_reject_a"),
+        sessionID: SessionID.make("session_mixed_reject"),
+        permission: "bash",
+        patterns: ["two"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+      const exactB = yield* ask({
+        id: PermissionV1.ID.make("per_exact_reject_b"),
+        sessionID: SessionID.make("session_mixed_reject"),
+        permission: "bash",
+        patterns: ["three"],
+        metadata: {},
+        always: [],
+        requirePrompt: true,
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+        lifecycle: exactLifecycle(),
+      }).pipe(Effect.forkScoped)
+      const genericB = yield* ask({
+        id: PermissionV1.ID.make("per_generic_reject_b"),
+        sessionID: SessionID.make("session_mixed_reject"),
+        permission: "bash",
+        patterns: ["four"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+
+      yield* waitForPending(4)
+      yield* reply({ requestID: PermissionV1.ID.make("per_exact_reject_a"), reply: "reject" })
+      expect((yield* list()).map((item) => item.id).toSorted()).toEqual(
+        [
+          PermissionV1.ID.make("per_generic_reject_a"),
+          PermissionV1.ID.make("per_exact_reject_b"),
+          PermissionV1.ID.make("per_generic_reject_b"),
+        ].toSorted(),
+      )
+
+      yield* reply({ requestID: PermissionV1.ID.make("per_generic_reject_a"), reply: "reject" })
+      expect((yield* list()).map((item) => item.id)).toEqual([PermissionV1.ID.make("per_exact_reject_b")])
+
+      yield* reply({ requestID: PermissionV1.ID.make("per_exact_reject_b"), reply: "cancel" })
+      const exits = yield* Effect.all([
+        Fiber.await(exactA),
+        Fiber.await(genericA),
+        Fiber.await(exactB),
+        Fiber.await(genericB),
+      ])
+      expect(exits.every(Exit.isFailure)).toBe(true)
+    }),
+  { git: true },
+)
+
+it.instance(
+  "exact requests are isolated from generic always fanout in both directions",
+  () =>
+    Effect.gen(function* () {
+      const exactA = yield* ask({
+        id: PermissionV1.ID.make("per_exact_always_a"),
+        sessionID: SessionID.make("session_mixed_always"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: ["ls"],
+        requirePrompt: true,
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+        lifecycle: exactLifecycle(),
+      }).pipe(Effect.forkScoped)
+      const genericA = yield* ask({
+        id: PermissionV1.ID.make("per_generic_always_a"),
+        sessionID: SessionID.make("session_mixed_always"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: ["ls"],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+      const exactB = yield* ask({
+        id: PermissionV1.ID.make("per_exact_always_b"),
+        sessionID: SessionID.make("session_mixed_always"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: [],
+        requirePrompt: true,
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+        lifecycle: exactLifecycle(),
+      }).pipe(Effect.forkScoped)
+      const genericB = yield* ask({
+        id: PermissionV1.ID.make("per_generic_always_b"),
+        sessionID: SessionID.make("session_mixed_always"),
+        permission: "bash",
+        patterns: ["ls"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+
+      yield* waitForPending(4)
+      yield* reply({ requestID: PermissionV1.ID.make("per_exact_always_a"), reply: "always" })
+      expect((yield* list()).map((item) => item.id).toSorted()).toEqual(
+        [
+          PermissionV1.ID.make("per_generic_always_a"),
+          PermissionV1.ID.make("per_exact_always_b"),
+          PermissionV1.ID.make("per_generic_always_b"),
+        ].toSorted(),
+      )
+
+      yield* reply({ requestID: PermissionV1.ID.make("per_generic_always_a"), reply: "always" })
+      expect((yield* list()).map((item) => item.id)).toEqual([PermissionV1.ID.make("per_exact_always_b")])
+
+      yield* reply({ requestID: PermissionV1.ID.make("per_exact_always_b"), reply: "cancel" })
+      expect(Exit.isSuccess(yield* Fiber.await(exactA))).toBe(true)
+      expect(Exit.isSuccess(yield* Fiber.await(genericA))).toBe(true)
+      expect(Exit.isFailure(yield* Fiber.await(exactB))).toBe(true)
+      expect(Exit.isSuccess(yield* Fiber.await(genericB))).toBe(true)
+    }),
+  { git: true },
+)
+
+it.instance(
   "reply - reject cancels all pending for same session",
   () =>
     Effect.gen(function* () {
@@ -1329,6 +1625,61 @@ it.instance(
         requestID: PermissionV1.ID.make("per_test7"),
         reply: "once",
       })
+    }),
+  { git: true },
+)
+
+it.instance(
+  "a committed reply releases every waiter even when live event publication fails",
+  () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2Bridge.Service
+      const publicationStarted = yield* Deferred.make<void>()
+      const releasePublication = yield* Deferred.make<void>()
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== Permission.Event.Replied.type) return Effect.void
+        return Effect.gen(function* () {
+          yield* Deferred.succeed(publicationStarted, undefined)
+          yield* Deferred.await(releasePublication)
+          return yield* Effect.die(new Error("simulated permission reply delivery failure"))
+        })
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      const first = yield* ask({
+        id: PermissionV1.ID.make("per_publish_failure_a"),
+        sessionID: SessionID.make("session_publish_failure"),
+        permission: "bash",
+        patterns: ["one"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+      const second = yield* ask({
+        id: PermissionV1.ID.make("per_publish_failure_b"),
+        sessionID: SessionID.make("session_publish_failure"),
+        permission: "bash",
+        patterns: ["two"],
+        metadata: {},
+        always: [],
+        ruleset: [],
+      }).pipe(Effect.forkScoped)
+
+      yield* waitForPending(2)
+      const replying = yield* reply({
+        requestID: PermissionV1.ID.make("per_publish_failure_a"),
+        reply: "reject",
+      }).pipe(Effect.forkScoped)
+      yield* Deferred.await(publicationStarted).pipe(Effect.timeout("1 second"))
+      const exits = yield* Effect.all([Fiber.await(first), Fiber.await(second)]).pipe(Effect.timeout("1 second"))
+
+      expect(exits.every(Exit.isFailure)).toBe(true)
+      expect(
+        exits.every((exit) => Exit.isFailure(exit) && Cause.squash(exit.cause) instanceof PermissionV1.RejectedError),
+      ).toBe(true)
+      expect(yield* list()).toEqual([])
+      yield* Deferred.succeed(releasePublication, undefined)
+      expect(Exit.isSuccess(yield* Fiber.await(replying).pipe(Effect.timeout("1 second")))).toBe(true)
     }),
   { git: true },
 )

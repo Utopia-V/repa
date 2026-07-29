@@ -56,8 +56,12 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { McpCatalog } from "@/mcp/catalog"
 import { AcceptCourseViewRevisionTool } from "./accept-course-view-revision"
-import { assertExternalToolID, learningCommandPreparation } from "./learning-command"
-import { SetCourseRouteAnchorTool, SetDefaultCoursePreferenceTool } from "./learner-navigation"
+import { assertExternalToolID, toolCallPreparation } from "./learning-command"
+import {
+  ProposeDefaultCoursePreferenceTool,
+  SetCourseRouteAnchorTool,
+  SetDefaultCoursePreferenceTool,
+} from "./learner-navigation"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { RepresentationConvertTool } from "./representation-convert"
@@ -130,6 +134,7 @@ const layer = Layer.effect(
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
     const acceptCourseViewRevision = yield* AcceptCourseViewRevisionTool
+    const proposeDefaultCoursePreference = yield* ProposeDefaultCoursePreferenceTool
     const setDefaultCoursePreference = yield* SetDefaultCoursePreferenceTool
     const setCourseRouteAnchor = yield* SetCourseRouteAnchorTool
     const representationConvert = yield* RepresentationConvertTool
@@ -255,6 +260,7 @@ const layer = Layer.effect(
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
           acceptCourseViewRevision: Tool.init(acceptCourseViewRevision),
+          proposeDefaultCoursePreference: Tool.init(proposeDefaultCoursePreference),
           setDefaultCoursePreference: Tool.init(setDefaultCoursePreference),
           setCourseRouteAnchor: Tool.init(setCourseRouteAnchor),
           representationConvert: Tool.init(representationConvert),
@@ -274,6 +280,7 @@ const layer = Layer.effect(
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
             tool.acceptCourseViewRevision,
+            tool.proposeDefaultCoursePreference,
             tool.setDefaultCoursePreference,
             tool.setCourseRouteAnchor,
             tool.representationConvert,
@@ -381,6 +388,7 @@ const layer = Layer.effect(
       return yield* Effect.forEach(
         visible,
         Effect.fnUntraced(function* (tool: Tool.Def) {
+          const prepareToolCall = toolCallPreparation(tool)
           const output = {
             description: tool.description,
             parameters: tool.parameters,
@@ -404,7 +412,7 @@ const layer = Layer.effect(
             jsonSchema,
             execute: tool.execute,
             formatValidationError: tool.formatValidationError,
-            ...(learningCommandPreparation(tool) ? { prepareLearningCommand: learningCommandPreparation(tool) } : {}),
+            ...(prepareToolCall ? { prepareToolCall } : {}),
           }
         }),
         { concurrency: "unbounded" },

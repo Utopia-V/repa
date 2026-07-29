@@ -1,6 +1,7 @@
 /** @jsxImportSource @opentui/solid */
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
+import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { PermissionRequest } from "@opencode-ai/sdk/v2"
 import { createDefaultOpenTuiKeymap } from "@opentui/keymap/opentui"
 import { testRender, useRenderer } from "@opentui/solid"
@@ -41,18 +42,15 @@ function request(): PermissionRequest {
         ),
         scope: {
           type: "courses" as const,
-          courses: Array.from(
-            { length: LearnerGoal.MAX_COURSES },
-            (_, courseIndex) => ({
-              courseID: `course-${operationIndex + 1}-${courseIndex + 1}`,
-              courseTitle: `Course ${operationIndex + 1}.${courseIndex + 1}`,
-              basis: { type: "new" as const, expectedCourseVersion: 1 },
-              availability: {
-                state: "available" as const,
-                title: `Course ${operationIndex + 1}.${courseIndex + 1}`,
-              },
-            }),
-          ),
+          courses: Array.from({ length: LearnerGoal.MAX_COURSES }, (_, courseIndex) => ({
+            courseID: `course-${operationIndex + 1}-${courseIndex + 1}`,
+            courseTitle: `Course ${operationIndex + 1}.${courseIndex + 1}`,
+            basis: { type: "new" as const, expectedCourseVersion: 1 },
+            availability: {
+              state: "available" as const,
+              title: `Course ${operationIndex + 1}.${courseIndex + 1}`,
+            },
+          })),
         },
         target: { type: "absent" as const },
         disposition: "active" as const,
@@ -67,9 +65,7 @@ function request(): PermissionRequest {
           disposition: {
             type: "authored" as const,
             sourceExcerpt:
-              operationIndex === LearnerGoal.MAX_OPERATIONS - 1
-                ? tail
-                : `source lifecycle ${operationIndex + 1}`,
+              operationIndex === LearnerGoal.MAX_OPERATIONS - 1 ? tail : `source lifecycle ${operationIndex + 1}`,
           },
         },
       },
@@ -110,17 +106,14 @@ function request(): PermissionRequest {
     metadata: {
       authorizationBasis: "learner_request",
       command,
+      [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
       ...SemanticPresentation.metadata(presentation),
     },
     tool: { messageID, callID },
   }
 }
 
-async function frame(
-  app: Awaited<ReturnType<typeof testRender>>,
-  includes: string,
-  timeout = 2000,
-) {
+async function frame(app: Awaited<ReturnType<typeof testRender>>, includes: string, timeout = 2000) {
   const start = Date.now()
   let last = ""
   while (true) {
@@ -142,6 +135,15 @@ test("maximum legal Goal proposal scrolls to its tail without hiding permission 
   await Bun.write(path.join(state, "kv.json"), "{}")
   const config = createTuiResolvedConfig()
   const calls = createFetch()
+  const replies: unknown[] = []
+  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request ? input : new Request(input, init)
+    if (new URL(request.url).pathname === `/permission/${requestID}/reply`) {
+      replies.push(await request.clone().json())
+      return new Response(JSON.stringify(true), { headers: { "content-type": "application/json" } })
+    }
+    return calls.fetch(input, init)
+  }) as typeof globalThis.fetch
   const sync = {
     data: {
       session: [],
@@ -155,20 +157,12 @@ test("maximum legal Goal proposal scrolls to its tail without hiding permission 
     const unregister = registerOpencodeKeymap(keymap, renderer, config)
     onCleanup(unregister)
     return (
-      <TestTuiContexts
-        directory={directory.path}
-        paths={{ home: directory.path, state, worktree: directory.path }}
-      >
+      <TestTuiContexts directory={directory.path} paths={{ home: directory.path, state, worktree: directory.path }}>
         <OpencodeKeymapProvider keymap={keymap}>
           <TuiConfigProvider config={config}>
             <KVProvider>
               <ThemeProvider mode="dark" source={{ discover: async () => ({}) }}>
-                <SDKProvider
-                  url="http://test"
-                  directory={directory.path}
-                  fetch={calls.fetch}
-                  events={eventSource()}
-                >
+                <SDKProvider url="http://test" directory={directory.path} fetch={fetch} events={eventSource()}>
                   <LocationProvider>
                     <SyncContext.Provider value={sync}>
                       <PermissionPrompt request={request()} directory={directory.path} />
@@ -190,6 +184,7 @@ test("maximum legal Goal proposal scrolls to its tail without hiding permission 
     expect(initial).toContain("Allow once")
     expect(initial).toContain("Allow always")
     expect(initial).toContain("Reject")
+    expect(initial).toContain("Cancel")
     expect(initial).toContain("scroll scope")
 
     app.mockInput.pressKey("END")
@@ -197,7 +192,17 @@ test("maximum legal Goal proposal scrolls to its tail without hiding permission 
     expect(scrolled).toContain("Allow once")
     expect(scrolled).toContain("Allow always")
     expect(scrolled).toContain("Reject")
+    expect(scrolled).toContain("Cancel")
     expect(scrolled).toContain("scroll scope")
+
+    app.mockInput.pressKey("ESCAPE")
+    const start = Date.now()
+    while (replies.length === 0) {
+      await app.renderOnce()
+      if (Date.now() - start > 2000) throw new Error("Timed out waiting for exact permission cancel reply")
+      await Bun.sleep(10)
+    }
+    expect(replies).toEqual([{ reply: "cancel" }])
   } finally {
     app.renderer.destroy()
   }

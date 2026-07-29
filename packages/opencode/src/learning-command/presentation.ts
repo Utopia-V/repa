@@ -4,6 +4,11 @@ import { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
+import type {
+  DefaultCourseV2Authorization,
+  DefaultCourseV2ResultDisposition,
+} from "@opencode-ai/core/learner-navigation/default-course-v2"
+import type { DefaultCourseAcknowledgement, DefaultCourseProposal } from "@opencode-ai/core/learner-navigation/schema"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 
@@ -27,6 +32,73 @@ export type ResultOwnerPresentation = Readonly<{
   anchor?: LearnerNavigation.AnchorResultPresentation
   retained?: RetainedSteering.ResultPresentation
 }>
+
+export function hostDefaultCourseProposalResult(
+  proposal: DefaultCourseProposal,
+  input: Readonly<{
+    sessionID: string
+    assistantMessageID: string
+    providerCallID: string
+    partID: string
+    emissionOrdinal: number
+  }>,
+) {
+  if (
+    proposal.sessionID !== input.sessionID ||
+    proposal.assistantMessageID !== input.assistantMessageID ||
+    proposal.callID !== input.providerCallID ||
+    proposal.partID !== input.partID ||
+    proposal.emissionOrdinal !== input.emissionOrdinal
+  ) {
+    throw new Error("Default Course proposal diverged from its host-prepared Tool identity")
+  }
+  return {
+    title: "Default Course proposal",
+    metadata: {
+      proposalKind: "default_course_preference",
+      proposalFingerprint: proposal.fingerprint,
+      emissionOrdinal: proposal.emissionOrdinal,
+      durablyRecorded: true,
+      mutating: false,
+      truncated: false,
+    },
+    output: JSON.stringify({
+      outcome: "proposal_recorded",
+      proposal,
+      instruction:
+        "This proposal is non-mutating. A later learner acceptance must select this exact proposal Part; the proposing Assistant cannot accept it in the same round.",
+    }),
+  }
+}
+
+export function defaultCourseV2Capability(authorization: DefaultCourseV2Authorization, envelope: BindingInput) {
+  return SemanticPresentation.proposal({
+    kind: "default_course_v2_capability",
+    binding: binding(envelope),
+    authorization,
+  })
+}
+
+export function defaultCourseV2SettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  disposition: DefaultCourseV2ResultDisposition,
+  acknowledgement: DefaultCourseAcknowledgement | undefined,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed Default-Course V2 settlement has no exact error code")
+  }
+  return SemanticPresentation.result({
+    kind: "default_course_v2_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition,
+    ...(acknowledgement ? { acknowledgement } : {}),
+  })
+}
 
 export function acceptCourseProposal(
   invocation: LearningCommand.AcceptCourseViewRevisionInvocation,
@@ -254,9 +326,7 @@ export function settlementResult(
   return SemanticPresentation.result({
     kind: "learner_goals_result",
     ...common,
-    ...("authorizationBasis" in settlement
-      ? { authorizationBasis: settlement.authorizationBasis }
-      : {}),
+    ...("authorizationBasis" in settlement ? { authorizationBasis: settlement.authorizationBasis } : {}),
     operations: goalOperations,
   })
 }
@@ -357,19 +427,12 @@ function defaultCurrent(current: LearnerNavigation.DefaultProjection) {
   return {
     version: current.version,
     courseID: current.courseID,
-    status: current.usability.usable
-      ? ("available" as const)
-      : current.usability.cause,
-    ...("title" in current.usability && current.usability.title
-      ? { title: current.usability.title }
-      : {}),
+    status: current.usability.usable ? ("available" as const) : current.usability.cause,
+    ...("title" in current.usability && current.usability.title ? { title: current.usability.title } : {}),
   }
 }
 
-function anchorCurrent(
-  current: LearnerNavigation.AnchorProjection,
-  locator?: Course.PresentationLocator,
-) {
+function anchorCurrent(current: LearnerNavigation.AnchorProjection, locator?: Course.PresentationLocator) {
   return {
     courseID: current.courseID,
     version: current.version,
@@ -413,8 +476,7 @@ function requireAnchorPresentation(
     !presentation ||
     !("navigationKind" in settlement) ||
     settlement.navigationKind !== "course_route_anchor" ||
-    ("effectID" in settlement &&
-      (!presentation.effect || presentation.effect.id !== settlement.effectID)) ||
+    ("effectID" in settlement && (!presentation.effect || presentation.effect.id !== settlement.effectID)) ||
     (!("effectID" in settlement) && presentation.effect)
   ) {
     throw new Error("Course route-anchor settlement is missing its exact committed owner presentation")
@@ -463,9 +525,7 @@ function goalOperationMatches(
     return false
   }
   const requiresSupersessionTarget =
-    settled.operation !== "replace" &&
-    settled.disposition === "superseded" &&
-    settled.replacementTarget === undefined
+    settled.operation !== "replace" && settled.disposition === "superseded" && settled.replacementTarget === undefined
   if (requiresSupersessionTarget !== (presented.supersessionTarget !== undefined)) return false
   if (settled.replacementTarget === undefined) return presented.replacementTarget === undefined
   return (
@@ -517,9 +577,6 @@ function sameValue(left: unknown, right: unknown): boolean {
   const rightKeys = Object.keys(rightRecord).sort()
   return (
     leftKeys.length === rightKeys.length &&
-    leftKeys.every(
-      (key, index) =>
-        key === rightKeys[index] && sameValue(leftRecord[key], rightRecord[key]),
-    )
+    leftKeys.every((key, index) => key === rightKeys[index] && sameValue(leftRecord[key], rightRecord[key]))
   )
 }
