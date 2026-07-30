@@ -86,6 +86,11 @@ Gate design.
    architecture are concrete enough to implement and verify. A Gate need not
    complete an end-to-end product loop. Empty speculative tables and knowingly
    false placeholder semantics remain out of scope.
+8. The ordinary Agent may lazily query a domain owner for exact identities,
+   current revisions, bounded semantic snapshots, cursors, and explicit
+   truncation when resolving natural language. That query is neither automatic
+   context injection nor a learner-facing browser. Its completeness describes
+   returned state, not proof that one semantic interpretation is correct.
 
 ## Logical relationship map
 
@@ -523,6 +528,10 @@ enter only through behavior that can state their honest meaning and consumer.
 - A learning command validates only its actual source, entity, working-view,
   material, and permission preconditions. A global revision is not a universal
   stale-write guard.
+- An open-language command may use an exact identity/version selected by the
+  Agent from model-visible owner reads. The program validates that state and
+  transition without requiring internal IDs in learner wording or persisting
+  an exhaustive candidate universe as semantic authorization.
 - Domain transition, immutable domain receipt, physical Tool Part settlement,
   exact model-visible result, and required Interaction projection commit in one
   SQLite transaction when all effects are local.

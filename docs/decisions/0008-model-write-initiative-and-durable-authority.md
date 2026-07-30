@@ -35,6 +35,22 @@ durable learning command. A successfully admitted model-issued command commits
 actual system state; it is not necessarily a proposal awaiting a second model
 or a hidden host selector.
 
+The ordinary interactive Agent is the default semantic author for open learner
+language. It may use bounded model-visible owner reads to resolve a natural
+reference, decide that more retrieval is needed, or ask the learner when an
+ambiguity matters. A read's cursor or truncation state is a truthful tool fact,
+not a host proof that one interpretation is linguistically unique. The runtime
+does not require internal IDs to appear in learner wording, duplicate natural
+language interpretation with keyword rules, or retain an exhaustive candidate
+universe merely to legalize the model's choice.
+
+Relevant reads and typed calls are internal Agent work, not a learner-facing
+coordination protocol. If a materially different learner-owned choice remains,
+the Agent clarifies in the ordinary conversation before issuing the write. A
+special proposal/confirmation lifecycle is not introduced by default; it must
+be earned by a separate permission, external-effect, or durable lifecycle
+invariant.
+
 For every such command:
 
 1. The model-visible payload contains only the semantic fields the capability
@@ -63,6 +79,13 @@ Routine, local, reversible writes may execute without an approval dialog. They
 remain visible and correctable. High-impact or external effects retain their
 separate permission and connector-specific reconciliation boundaries.
 
+Model fallibility is contained at the execution boundary rather than answered
+with a shadow semantic implementation: selected entity identities and expected
+versions must be real and current, legal transitions and permission remain
+program-owned, and the committed meaning is shown and correctable. A
+model-supplied interpretation does not become mechanically proven merely
+because those checks pass.
+
 Deterministic consequences that must always occur cannot depend on the model
 remembering to call a tool. They are derived or enforced by code after the
 authoritative prerequisite transition. A learning interaction with no useful
@@ -79,6 +102,9 @@ second runtime, or a global teaching workflow.
   validate state transitions.
 - Tool visibility is part of the delegated capability boundary and may vary at
   a model-sampling boundary.
+- Model-visible owner queries are distinct from automatic context injection and
+  learner-facing browsers; they may be exposed when an authorized command needs
+  contextual reference resolution.
 - Model-authored hypotheses may be durable and useful without masquerading as
   verified facts.
 - Learner corrections append provenance and change the active projection; they

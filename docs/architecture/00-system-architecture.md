@@ -1007,12 +1007,13 @@ The baseline behavior is:
 - the learner may redirect or override the chosen move at any time without
   first editing durable state.
 
-The implementation may use the ordinary realizing LLM, an accepted bounded
-program rule, a separate control-only model sample, or a mixed composition.
-None is the architectural default merely because it is more model-driven or
-more deterministic. Candidate completeness and truncation, exact sources,
-hard constraints, selection basis, current-request override, latency/cost, and
-failure behavior must remain truthful enough for inspection and correction.
+The ordinary realizing Agent is the default selector and semantic interpreter
+inside the bounded current view. It may use lazy tools, make a transparent
+reversible local choice, or ask one learning-level clarification. Exact sources,
+hard constraints, current-request override, omitted or truncated tool results,
+latency/cost, and failure behavior remain truthful enough for inspection and
+correction, but candidate coverage is not promoted into a mechanical proof of
+semantic uniqueness.
 
 The selected purpose is scoped to the current control interval unless a
 separate durable authority already owns its source meaning. Selection alone
@@ -1024,14 +1025,14 @@ committed, does not replay ambiguous work, and does not make the learner
 manually reconstruct the application's state.
 
 This boundary is not a universal scheduler, pedagogy taxonomy, or fixed
-teaching workflow. No mechanism category receives an architectural presumption.
-The ordinary realizing LLM, a bounded control-only sample, a program rule or
-rule tree, a classifier, a mixed composition, an active-purpose record, or a
-graph mechanism is retained, narrowed, introduced, or rejected only through
-representative comparison of learner flow, choice quality, provenance,
-correction, failure/recovery, latency/cost, and lifecycle complexity. Merely
-passing one trace does not privilege the structurally lightest or most
-model-driven candidate.
+teaching workflow. Representative evidence first tests the ordinary Agent with
+the trustworthy context and tools it actually needs. A bounded control-only
+sample, program rule or rule tree, classifier, mixed controller, active-purpose
+record, or graph mechanism is considered only when a concrete failure survives
+improvement of that simpler boundary and the added mechanism owns the missing
+invariant. Passing one trace is not enough, but speculative mechanism
+tournaments are not a prerequisite for using the Agent capability the product
+was built around.
 
 ## Tutor choice and policy arbitration
 
@@ -1202,6 +1203,16 @@ judgment; the learner may redirect. The model may directly commit an authorized
 local transition, so “mixed” does not mean every action waits for a hidden
 second controller.
 
+For open-language interpretation and local semantic choice, the ordinary
+interactive Agent is the architectural default. It receives bounded current
+state plus lazy owner reads and typed commands. A deterministic phrase parser,
+semantic resolver, exhaustive-candidate admission proof, separate selector
+sample, or workflow controller is introduced only after a specific invariant
+or observed failure shows why that ordinary Agent boundary is insufficient.
+Model fallibility is contained by exact identities and revisions, legal
+transitions, permission, atomic settlement, visible results, and correction;
+those mechanisms do not attempt to prove linguistic entailment.
+
 In plain language: the program remembers the numbers and does the calendar
 math; the LLM understands what the work means and helps teach, split, or adapt
 it. Neither replaces the other where both are needed.
@@ -1227,6 +1238,15 @@ produce artifacts. Their outputs are untrusted observations from the learning
 domain's point of view. Only an explicit learning command may import one of
 those observations into Course, material, learner, Goal, future-attention,
 Assignment, planning, or policy state.
+
+A model-visible learning-owner query may return exact IDs, versions, semantic
+snapshots, cursors, and explicit truncation so the Agent can resolve a natural
+reference or retrieve lazy detail. The Agent decides whether that view is
+sufficient, whether to read more, and whether to clarify. The command executor
+validates the selected exact state and legal transition; it does not require
+the learner to utter an internal ID or persist a complete candidate universe as
+proof that the Agent understood the language. Automatic context projection,
+model-visible retrieval, and a learner-facing browser remain separate surfaces.
 
 A learning command is not generic CRUD. It names a meaningful transition and
 owns:

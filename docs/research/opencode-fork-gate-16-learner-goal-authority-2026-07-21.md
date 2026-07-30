@@ -1,22 +1,22 @@
 # OpenCode fork Gate 16: learner Goal authority
 
-Status: Reopened only at the natural-language implementation/evidence boundary.
-The decisions under **Accepted maintainer decisions** remain the
-intended product boundary, but the contract's raw-SQL closure requirements and
-the accepted implementation contradict its open natural-language admission
-semantics. Corrective integration commit
-`9e91d43c629b66d65c8741e342bca7cf05de5667` closes the independently
-accepted TUI repair described below. Fresh separate top-level review task
-`019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` returned `Revise` on the first
-natural-language corrective-contract pass with `G16-RC-001`, then returned
-`Accept` after the revised amendment closed that finding. The amendment below
-is implementation authority; corrective implementation and closing evidence
-remain open. Independent review
-run `gate16-whole-20260721-01` historically closed `G16-CT-001` through
-`G16-CT-005`, `G16-IE-001` through `G16-IE-013`, and the bounded real-provider
-qualification `G16-IE-U01`; commit
-`69433fc78d383bade1d92319eb3153a2cd7c68bd` remains that historical closed
-snapshot, not current implementation acceptance.
+Status: Contract/theory reopened at the Agent-semantic boundary. The 2026-07-30
+maintainer correction rejects both the historical fixed-language admission
+implementation and the later attempt to replace it with exhaustive
+command-specific candidate provenance. Open-language interpretation and
+contextual reference belong to the ordinary interactive Agent using bounded
+model-visible owner reads; program authority begins at trusted identity,
+version, permission, legal transition, transaction, replay, visible result,
+and correction. No current Gate 16 implementation authority exists.
+
+The decisions under **Accepted maintainer decisions**, the structural Goal
+identity/revision/lifecycle result, and corrective TUI integration
+`9e91d43c629b66d65c8741e342bca7cf05de5667` remain retained inputs. Fresh
+review task `019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` and historical run
+`gate16-whole-20260721-01` remain provenance for the contracts they actually
+reviewed, not acceptance of the newly corrected boundary. Commit
+`69433fc78d383bade1d92319eb3153a2cd7c68bd` remains a historical implementation
+snapshot.
 
 Date: 2026-07-21
 
@@ -38,7 +38,64 @@ composes Goal inspection and correction into the terminal. Gate 23 proves the
 integrated loop, including Goal-driven cross-day replanning. None of those
 consumer behaviors belongs to Gate 16.
 
-## 2026-07-27 reopen finding
+## 2026-07-30 Agent-native semantic correction
+
+The invalid prior interpretation was that model fallibility required the host
+to prove that one natural-language interpretation was uniquely justified. The
+historical implementation attempted that with English/Chinese phrase lists and
+internal Goal IDs. The 2026-07-28 corrective amendment removed those parsers
+but still required an immutable complete, untruncated candidate universe before
+a contextual reference could use direct authority. Both designs duplicate the
+ordinary Agent's semantic work and make the learner-facing path depend on an
+internal proof protocol.
+
+The current production surface confirms the mismatch:
+
+- the Goal tool description and default Repa prompt require internal Goal IDs
+  to occur in learner wording for direct update/replacement;
+- Core contains fixed create, cadence, negation, condition, target, lifecycle,
+  correction, and replacement phrase tests; and
+- the same Gate contract denies the Agent a model-visible Goal query while
+  expecting it to resolve contextual Goal references.
+
+The rederived Gate boundary must instead preserve this simple flow:
+
+```text
+learner natural language
+-> ordinary Agent interprets the intent
+-> Agent reads exact Goal/Course owner state lazily when needed
+-> Agent asks only for a materially unresolved learner-owned choice
+-> typed Goal command validates and atomically commits exact current state
+-> TUI shows the durable, correctable result
+```
+
+The model-visible owner query returns exact Goal/Course identities, current
+versions and semantic snapshots, stable cursors, and explicit omission or
+truncation. Those are trustworthy facts for the Agent, not mechanical proof of
+linguistic uniqueness. The Agent decides whether to read more, make a
+transparent reversible choice, or clarify. A typed write binds the exact
+admitted learner occurrence and selected current heads; the runtime validates
+shape, source availability, owner/version/CAS, permission, legal lifecycle,
+atomicity, replay, and correction without requiring the learner to utter an
+internal ID.
+
+Clear learner-authored intent may still commit as a routine visible,
+correctable local write. If a materially different outcome, condition, scope,
+target, identity/lifecycle relation, or replacement meaning remains unresolved,
+the Agent asks in ordinary conversation before issuing the same typed command.
+Gate 16 does not presume a separate proposal/confirmation state machine for
+that clarification. The command binds the resulting exact source occurrence,
+and the visible result and correction path contain model error without a phrase
+parser or exhaustive candidate proof.
+
+This owner query is not automatic Gate 18 context injection and not Gate 22's
+learner-facing browser. It is the ordinary tool access needed for Gate 16's own
+natural-reference write path. The new contract must simplify the model-facing
+query/write surface, remove semantic phrase forensics from application code and
+SQLite, preserve the retained structural Goal invariants that still earn their
+cost, and receive fresh separate contract/theory review before implementation.
+
+## Historical 2026-07-27 reopen finding
 
 The accepted contract says entry is not restricted to `/goal`, any other
 command, or a fixed interaction shape; a clear fully learner-authored Goal may
@@ -70,7 +127,12 @@ invariants while removing semantic interpretation and acknowledgement
 rendering from SQLite. The direct and accepted-candidate behaviors then require
 focused natural-language counterexamples before Gate 16 may close again.
 
-### Accepted corrective contract amendment — implementation/evidence open
+### Superseded 2026-07-28 corrective amendment
+
+This amendment is retained as review provenance. Its rejection of fixed phrase
+parsing remains valid, but its complete-candidate resolution proof and resulting
+implementation authority were superseded by the 2026-07-30 maintainer
+correction above.
 
 The reopen finding exposes one missing provenance arm in addition to the
 invalid parsers. The first corrective review found that the proposal let a
@@ -83,9 +145,10 @@ counterexample against the owner-read and context-cut contracts and accepted
 it as `G16-RC-001`.
 
 The same fresh, separate top-level reviewer retested the following revised
-amendment and returned `Accept`. It is implementation authority for the
-reopened natural-language boundary only; it does not close Gate 16
-implementation/evidence or authorize Gate 17:
+amendment and returned `Accept`. At that historical point it became
+implementation authority for the reopened natural-language boundary. The
+2026-07-30 correction above supersedes that authority; this list now records
+the reviewed candidate rather than authorizing Gate 16 or Gate 17:
 
 - open-language Goal recognition and contextual reference resolution belong to
   the model-assisted command-authoring boundary; neither application code nor
@@ -161,11 +224,11 @@ implementation/evidence or authorize Gate 17:
   Gate 18 context injection, a general semantic resolver, a universal command
   bus or activity owner, another mode/runtime, or Gate 17 bootstrap behavior.
 
-This record owns the accepted Gate 16 engineering contract and closing
-evidence. Accepted product meaning comes from the product foundation, accepted
-ADRs, architecture, Roadmap 09, and the maintainer decisions below. Storage,
-command, projection, failure, and evidence details remain derived engineering
-decisions rather than product authority. Review run
+This record retains the historical Gate 16 contract and closing evidence.
+Accepted product meaning comes from the product foundation, accepted ADRs,
+architecture, Roadmap 09, and the maintainer decisions below. The historical
+storage, command, projection, failure, and evidence details are inputs to the
+new derivation rather than current implementation authority. Review run
 `gate16-whole-20260721-01` challenged, repaired, and accepted the historical
 contract recorded below. Corrective review task
 `019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` independently challenged, revised, and
@@ -762,9 +825,9 @@ Authorized no-change operations may coexist with real changes and are reported,
 but create no revision of their own. If every operation is no-change, no effect,
 receipt arm, mutation-slot use, or shared-frontier advance occurs.
 
-## Learner source, clarification, and authorization
+## Historical learner source, clarification, and authorization
 
-### Direct learner-request arm
+### Historical direct learner-request arm
 
 A clear fully learner-authored change set uses the trusted current occurrence
 under `learner_request`. The default Repa profile treats this as a routine local,
@@ -792,7 +855,7 @@ invocation, canonical payload, result, and correction path remain inspectable.
 A bounded native-provider qualification must still test that the default model
 uses this arm only for a clearly explicit learner Goal.
 
-### Model-assisted accepted-candidate arm
+### Historical model-assisted accepted-candidate arm
 
 If the model supplies or changes any consequential outcome, condition, scope,
 target interpretation, Goal identity relation, lifecycle disposition,
@@ -984,12 +1047,13 @@ commit seal, malformed disposition/temporal arm, dangling effect/receipt,
 invalid current one-to-one/cycle projection, or incomplete scope union. They
 never repair state by choosing the highest version.
 
-Gate 16 registers no general model-visible Goal browser and performs no
-automatic prompt/context injection. Gate 18 later chooses a bounded exact Goal
-projection for a model sample; Gate 21 consumes exact revisions as planning
-demands; Gate 22 composes learner-facing inspect/correct. A fresh Session can
-query the same LearnerHome owner state without importing an old transcript, but
-that fact does not pre-own Gate 18 selection.
+Gate 16 must expose the bounded model-visible Goal owner query needed for its
+own contextual-reference command path. This query is lazy tool access, not
+automatic prompt/context injection and not a learner-facing Goal browser. Gate
+18 later chooses a bounded automatic Goal projection for a model sample; Gate
+21 consumes exact revisions as planning demands; Gate 22 composes
+learner-facing inspect/correct. A fresh Session can query the same LearnerHome
+owner state without importing an old transcript.
 
 ## Failure, cancellation, restart, and destructive lifecycle
 
@@ -1167,7 +1231,7 @@ Gate 16 does not imply:
 - completion of Gate 18 context, Gate 21 planning, Gate 22 terminal projection,
   or Gate 23 product-loop work.
 
-## Closing evidence contract
+## Historical closing evidence contract
 
 Gate 16 may close only if fresh evidence demonstrates the following against the
 exact implementation candidate. Passing a plan or implementing the schema is
@@ -1562,7 +1626,9 @@ The natural-language implementation/evidence defect remains open. Fresh
 separate top-level corrective review task
 `019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` first returned `Revise` with
 `G16-RC-001`, then accepted the revised amendment above as implementation
-authority. SQL phrase forensics, natural-reference handling, and
-direct/defaulted admission have not yet been corrected or requalified. Gate 16
-therefore remains reopened at implementation/evidence, and Gate 17 remains
-paused.
+authority at that historical point. The 2026-07-30 maintainer correction now
+supersedes its exhaustive resolution-proof boundary. SQL and application phrase
+forensics, missing model-visible owner reads, natural-reference handling, and
+the model-facing mutation surface must be rederived together. Gate 16 is
+therefore reopened at contract/theory rather than merely implementation
+evidence, and Gate 17 remains paused.

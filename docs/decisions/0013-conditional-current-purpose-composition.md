@@ -25,6 +25,14 @@ failure re-entry evidence. This ADR remains the narrow decision for the
 demonstrated one-future-attention-candidate case and does not pre-authorize a
 universal selector.
 
+Amendment (2026-07-30): the ordinary interactive Agent is now the accepted
+default for open semantic arbitration. Gate 21A retains the product-flow
+evidence boundary, but it no longer requires an up-front tournament among
+selector architectures. It first tests the ordinary Agent with trustworthy
+context, exact constraints, and lazy owner tools. Another controller shape is
+considered only if a representative failure survives repair of that simpler
+boundary and demonstrates a separately owned invariant.
+
 ## Plain-language decision
 
 Repa will not ask a separate classifier model to decide what the Tutor should
@@ -167,11 +175,12 @@ universal scheduler.
 The selection mechanism remains unresolved, but the product responsibility is
 no longer unowned. The baseline must not routinely require the learner to
 coordinate internal Course, Goal, future-attention, planning, and Interaction
-state. Gate 21A compares ordinary Tutor-LLM judgment, bounded program policy,
-a bounded control-only sample, mixed alternatives, and any other evidenced
-candidate against representative conflict, correction, cost, and failure
-cases. It may close without new schema when the existing context and Tutor loop
-are sufficient.
+state. Gate 21A first tests ordinary Tutor-Agent judgment with the exact context
+and tools needed by the representative conflict, correction, cost, and failure
+cases. It may close without new schema or another model call. A bounded program
+policy, control-only sample, mixed controller, or other mechanism enters the
+comparison only after that ordinary path has a causal failure the candidate can
+actually address.
 
 ### 6. Scope, persistence, and recovery
 
@@ -230,9 +239,9 @@ decision.
   attention.
 - Context cuts can explain which source/default and priority the realizing
   sample saw.
-- Multiple candidates and generic reason compilation stay explicit open
-  mechanism questions rather than hidden heuristics; Gate 21A owns their
-  representative baseline product boundary.
+- Multiple candidates remain a representative behavior question rather than a
+  reason to prebuild hidden heuristics; Gate 21A owns the ordinary Agent
+  product-flow evidence and any later causal widening.
 - The first implementation must remain future-attention-specific until another real
   authority consumes the same contribution invariant; no generic manager or
   framework is introduced in advance.
@@ -312,10 +321,10 @@ Reconsider this topology only when one of these appears:
   educationally harmful.
 
 The 2026-07-29 audit did not meet the first trigger as production evidence. It
-showed that the roadmap needed an owner for the future evidence that can meet,
-refute, or refine it. Gate 21A owns that acceptance boundary; it does not
-overturn the one-candidate conditional default or choose a general arbitration
-mechanism.
+showed that the roadmap needed an owner for the future behavior evidence that
+can meet, refute, or refine it. Gate 21A owns that boundary and begins with the
+ordinary Agent; it does not overturn the one-candidate conditional default or
+choose a general arbitration mechanism.
 
 Do not reconsider because an Agent framework exposes plan state, a model can
 emit a confident rationale, or a database table could store “current activity.”

@@ -1,7 +1,9 @@
 # Pre-Gate-17 global hazard audit
 
-Status: Open after the 2026-07-29 product-flow follow-up exposed two current
-primary-TUI product defects. The 2026-07-28 close remains valid for authority
+Status: Open at `P17-F19`, the 2026-07-30 Agent-native semantic ownership
+correction. Gate 14's default-Course Agent query/admission and Gate 16's Goal
+Agent query/write are contract-reopened; Gate 17 remains paused. The
+2026-07-28 close remains valid for authority
 reconstruction, inherited-pollution, working-tree classification, and the
 distinct ownership of Course/Session/context/later-draft/exact-Turn meanings.
 Three fresh read-only product, architecture, and roadmap passes then confirmed
@@ -60,11 +62,12 @@ second implementation/evidence exact-diff `Accept`, closed
 Gate 12 implementation/evidence is accepted and integrated at `c5ea10b8a`.
 The accepted corrective snapshot
 `9e91d43c629b66d65c8741e342bca7cf05de5667` remains valid for its bounded
-repairs. Gate 17 grill, contract derivation, and implementation remain paused
-behind Gate 16's open implementation/evidence boundary. Gate 12, Gate 14, and
-the accepted audit reconciliation are no longer blockers. This record owns
-audit method, findings, and repair disposition; it does not replace product
-foundations, revise an ADR by itself, or make a Gate contract authoritative.
+repairs. Gate 12's correction and the structural/TUI/settlement portions of
+Gate 14 and Gate 16 remain retained. Gate 17 grill, contract derivation, and
+implementation remain paused while the simpler Gate 14/16 Agent-native
+contracts are derived and reviewed. This record owns audit method, findings,
+and repair disposition; it does not replace product foundations, revise an ADR
+by itself, or make a Gate contract authoritative.
 
 Date: 2026-07-27
 
@@ -870,6 +873,12 @@ scoped integration authority available.
 **Violated criteria:** immediate learning value, mixed-initiative control,
 inspectable consequence, and evolution without accidental rigidity.
 
+Historical-scope note: this finding correctly removed the redundant capability
+prompt and preserved exact locator/replay behavior. Its later
+complete-candidate/proposal derivation is superseded by `P17-F19`; the following
+paragraphs record that intermediate correction rather than current semantic
+admission authority.
+
 Gate 14 classifies the default Course as a local, reversible, correctable,
 low-consequence navigation preference. It nevertheless requires two distinct
 learner acts for every real set/change/clear: the current occurrence must first
@@ -986,6 +995,74 @@ returned third narrow exact-diff `Accept`, closed `G14-RC-IE-SEM-001`, and
 restored scoped implementation authority without accepting the orphaned
 implementation or evidence.
 
+### `P17-F19`: semantic reliability was reimplemented outside the Agent
+
+**Violated criteria:** immediate learning value, truthful semantic ownership,
+mixed-initiative control, and evolution without accidental rigidity.
+
+Product origin and ADR-0008 already assign open-language interpretation and
+semantic command authorship to the model while code owns trusted source,
+identity, version, permission, legal transitions, atomic settlement, and
+correction. Later Gate derivations preserved the words but reversed the actual
+boundary:
+
+- Gate 16 Core parses fixed English/Chinese Goal initiation, negation, cadence,
+  condition, target, lifecycle, correction, and replacement phrases, while the
+  tool and default Agent prompt require internal Goal IDs in learner wording;
+- Gate 16 exposes no model-visible Goal owner query, so the Agent cannot
+  naturally inspect the state that a contextual correction refers to;
+- the accepted 2026-07-28 Gate 16 repair removes phrase parsing but replaces it
+  with a complete, untruncated, durably retained candidate universe as a
+  prerequisite for direct semantic authority;
+- Gate 14 uses the same exhaustive resolution-scope idea for a reversible
+  default-Course preference and exposes no ordinary Course discovery tool; and
+- Gate 21A required an up-front comparison among controller architectures
+  before first testing the ordinary Agent with the context and tools the product
+  already inherited.
+
+This is one cause, not several missing validators. A complete query page can
+truthfully tell the Agent that no owner records were omitted from that query.
+It cannot prove that one natural-language referent, Goal identity relation, or
+teaching move is objectively entailed. Persisting the page turns a useful tool
+fact into false semantic authority. Requiring internal IDs or more phrases
+merely makes the learner compensate for withholding normal Agent retrieval.
+
+The causally sufficient correction establishes the ordinary interactive Agent
+as the default for open-language intent, contextual reference, comparison, and
+local Tutor choice. Domain-owner queries return exact IDs, versions, semantic
+snapshots, stable cursors, and explicit truncation. The Agent decides whether to
+read more, make a transparent reversible local choice, or ask one
+learning-level clarification. Typed commands then bind exact current state;
+program code still validates capability, permission, CAS, legal transition,
+transaction, replay/recovery, and visible correction. Model fallibility is
+contained by those boundaries rather than answered with a shadow semantic
+implementation.
+
+Consequences:
+
+- Gate 14 is contract-reopened only for its model-visible Course query and
+  default-preference semantic admission surface; identity/history, route
+  anchors, migration, capability lifecycle, locators, replay, and TUI result
+  truth remain retained.
+- Gate 16 is contract-reopened rather than merely implementation-reopened. Its
+  Goal query/write surface must be simplified together; structural Goal
+  identity/revision/lifecycle work and the accepted TUI presenter remain
+  retained inputs.
+- Gate 17 owns durable Course/View/material bootstrap effects through the
+  ordinary Agent, not another language interpreter. `/learn` is optional
+  discoverability only.
+- Gate 18 distinguishes automatic context projection from lazy model-visible
+  owner reads.
+- Gate 21A retains representative low-management product-flow evidence but
+  tests the ordinary Agent first. Another controller is considered only after a
+  causal failure survives repair of that simpler boundary.
+
+No Gate 14/16 semantic-path implementation or Gate 17 implementation is
+authorized until the revised Gate contracts receive their required fresh
+review. This correction does not reopen deterministic arithmetic, storage
+identity, transaction, permission, migration, or failure invariants merely
+because they are program-owned.
+
 ## Current audit disposition
 
 The first 2026-07-29 follow-up reclosed the newly exposed roadmap-composition
@@ -1001,15 +1078,14 @@ No production code, existing Gate closure, or Gate 17 implementation authority
 changes from the `P17-F16` documentation correction.
 
 The later user-flow checks changed that broader disposition. `P17-F17` and
-`P17-F18` falsify two earlier accepted product choices and therefore reopen
-bounded parts of Gates 12 and 14. Current documents now state the intended
-stable outcomes and the exact unaffected invariants. Their formal reviewers
-returned `Revise`; Gate 12's repaired contract and implementation/evidence are
-now accepted, while Gate 14's deeper mapping required the five-seam contract
-amendment above and top-level recovery later exposed
-`G14-RC-IE-SEM-001`. Its original-reviewer closure is now accepted. The audit
-cannot close while Gate 14 and Gate 16 implementation/evidence and durable
-integration of the accepted correction set remain open.
+`P17-F18` falsified two earlier accepted product choices; their reviewed
+implementation repairs are now integrated. `P17-F19` subsequently identifies
+the shared semantic-ownership mistake beneath Gate 14's resolution scope, Gate
+16's parser and candidate-proof repair, Gate 17's admission framing, and Gate
+21A's mechanism tournament. Gate 14 and Gate 16 are therefore contract-reopened
+only at their Agent-semantic surfaces despite the retained integrations
+described above. The audit remains open until those contracts are rederived,
+reviewed, and their implementation disposition is truthful.
 
 The renewed audit returned to the parent symptom rather than treating residue
 cleanup as the objective. Discussion had repeatedly collapsed six distinct
@@ -1067,12 +1143,12 @@ current evidence with no P0-P3 finding. Their decisive checks included:
 This closed only the 2026-07-28 bounded authority/tree question. Corrective snapshot
 `9e91d43c629b66d65c8741e342bca7cf05de5667` later integrated the
 accepted Gate 5/6/8/10/11/14/15 repairs and Gate 16's TUI repair. Gate 16's
-natural-language amendment later passed fresh separate top-level review, but
-its implementation/evidence remains open; Gate 17 still has no accepted
-engineering contract; Gate 18 has not implemented bounded learning context;
-Gate 23 has not proved the integrated product loop; and dormant historical
-release material still blocks any future release-readiness claim until
-separately disposed.
+natural-language amendment later passed fresh separate top-level review, then
+`P17-F19` superseded its candidate-proof authority and reopened Gate 14/16 at
+their Agent-semantic contracts. Gate 17 still has no accepted engineering
+contract; Gate 18 has not implemented bounded learning context; Gate 23 has not
+proved the integrated product loop; and dormant historical release material
+still blocks any future release-readiness claim until separately disposed.
 
 ## Confirmed healthy boundaries
 
@@ -1095,10 +1171,9 @@ separately disposed.
 
 - Product origin, ADR-0013, architecture, Roadmap 09, repository guidance, and
   provenance now assign representative Tutor move selection and failure
-  re-entry to the Learning System without preselecting a controller shape.
-  Gate 21A owns that later acceptance boundary; existing Gate 22/23 meanings
-  remain intact, and that bounded `P17-F16` correction did not itself reopen an
-  earlier Gate.
+  re-entry to the Learning System. Gate 21A owns that later acceptance boundary
+  and now tests the ordinary Agent first; another controller shape requires a
+  causal surviving failure. Existing Gate 22/23 meanings remain intact.
 - Architecture, Roadmap 09, the Gate 12 record, and the status/provenance map
   now keep strict Turn mechanics while requiring learner-facing current-work
   and later-delivery actions before first use. Formal review separated explicit
@@ -1134,16 +1209,17 @@ separately disposed.
    authorization/capability. The original reviewer accepted that amendment;
    after two implementation/evidence repair passes, it accepted the exact
    implementation and integration is fixed at `80fde2012`.
-- `docs/README.md` records the bounded 2026-07-28 authority/tree closure, the
-  integrated corrective snapshot, the accepted `P17-F16` roadmap correction,
-  and Gate 16 as the sole current pre-Gate-17 barrier rather than treating any
-  earlier bounded close as permanent parent-project health.
+- Product origin, ADR-0008/0012/0013, architecture, Roadmap 09, repository
+  guidance, Gate 14/16/17 records, and `docs/README.md` now carry the `P17-F19`
+  Agent-native correction. Gate 14 and Gate 16 are the scoped contract
+  boundaries before Gate 17; their unaffected integrated mechanics remain
+  accepted rather than being discarded wholesale.
 - `AGENTS.md` now distinguishes revision ownership from technical correctness,
   so a later agent cannot use authority order to conceal a falsified decision.
-- Gate 16's volatile status, Gate record, and fork ledger now preserve its
-  historical close, record the integrated TUI correction, and keep only the
-  natural-language implementation/evidence boundary reopened after fresh
-  contract acceptance.
+- Gate 16's volatile status and Gate record preserve its historical close and
+  integrated TUI correction while superseding both fixed-language parsing and
+  the later exhaustive candidate-proof amendment. The current reopen is
+  contract/theory, not merely implementation/evidence.
 - Gate 5, Gate 8, Gate 10, Gate 11, Gate 14, and Gate 15 records preserve their
   historical reviews and the common corrective integration. It closes the
   affected build, outward-identity, permission, physical, and generic/hidden

@@ -1587,6 +1587,54 @@ create a general semantic resolver/command bus, or establish permanent project
 health. No code, provider run, or Gate 17 work occurred during either review
 pass.
 
+## 2026-07-30 Agent-native semantic ownership correction
+
+The maintainer identified a product-level contradiction before Gate 16
+implementation began: the ordinary Agent already owns natural-language
+understanding, yet Gate 14 and Gate 16 attempted to make program machinery
+prove the Agent's interpretation. Repository inspection confirmed one shared
+cause:
+
+- Gate 16 application/Core code parses fixed English/Chinese Goal phrases and
+  requires internal Goal IDs for direct contextual updates;
+- the released Agent has no model-visible Goal owner query;
+- the reviewed Gate 16 amendment replaces phrase parsing with a complete,
+  untruncated, persisted candidate universe as direct-write authority;
+- Gate 14's accepted default-Course V2 surface uses the same exhaustive
+  resolution-scope proof while exposing no ordinary Course discovery tool; and
+- Gate 21A required an up-front mechanism comparison before trying the ordinary
+  Agent with trustworthy context and tools.
+
+Product origin and ADR-0008 already supplied the correct ownership split. The
+2026-07-30 correction now makes it explicit and propagates it through
+ADR-0012/0013, architecture, Roadmap 09, repository guidance, the Gate
+14/16/17 records, the pre-Gate-17 audit, and the current status map:
+
+- the ordinary interactive Agent is the default for open-language
+  interpretation, contextual reference, semantic comparison, and local Tutor
+  choice;
+- model-visible owner queries provide exact IDs, versions, snapshots, cursors,
+  and explicit truncation, while the Agent decides whether to read more or
+  clarify;
+- typed commands and program code retain identity/version, capability,
+  permission, legal transition, atomicity, replay/recovery, visible result, and
+  correction without claiming to prove linguistic entailment;
+- Gate 14 is contract-reopened only for default-Course Agent query/admission;
+  its default identity/history, route anchors, CAS, migration, locators,
+  capability lifecycle, replay/recovery, and TUI result remain retained;
+- Gate 16 is contract-reopened for the Goal Agent query/write surface; its
+  structural Goal decisions and accepted TUI repair remain retained inputs;
+- Gate 17 owns durable bootstrap command composition through the ordinary
+  Agent, with `/learn` optional rather than required; and
+- Gate 21A retains product-flow evidence but first tests the ordinary Agent.
+
+The prior Gate 14 and Gate 16 reviewer verdicts remain exact provenance for the
+candidates they reviewed. Their candidate-proof clauses are no longer current
+implementation authority. No production file, migration, test, or staging area
+was changed by this documentation correction. Fresh separate contract/theory
+review is required after the simplified Gate 14 and Gate 16 contracts are
+derived; Gate 17 implementation remains unauthorized.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

@@ -50,6 +50,25 @@ time, permission, and persistence; the model may supply the open semantic
 content and decide to write. Legal commitment makes the record part of the
 system, but it does not upgrade a report or inference into stronger evidence.
 
+The ordinary interactive Agent is the default engine for open-language
+interpretation, contextual reference, semantic comparison, and local teaching
+choice. Repa gives it bounded trustworthy state and tools, including explicit
+omission or truncation, and lets it read more or ask a learning-level question
+when needed. The program does not duplicate those judgments with phrase lists,
+deterministic semantic parsers, exhaustive-candidate proofs, or a second
+selector merely because a model can be wrong. Reliability comes from trusted
+identity and versions, capability bounds, legal transitions, atomic settlement,
+visible results, and correction. A separate deterministic or model-control
+mechanism is earned only by an invariant or observed failure that the ordinary
+Agent plus those boundaries cannot satisfy.
+
+This machinery stays below the learner's normal control surface. The learner
+speaks naturally; the Agent performs relevant reads and tool calls itself. When
+a consequential learner-owned choice is genuinely unresolved, the same Agent
+asks in the conversation before writing. Repa does not presume a domain-specific
+confirmation ritual, command grammar, internal-ID exchange, or state-management
+Turn merely to compensate for ordinary semantic uncertainty.
+
 For ordinary substantial planning demands, including assignments and
 Goal-driven work such as exam preparation, the program also owns the closed
 arithmetic of planning: deadlines, estimated remaining work, known available
@@ -202,6 +221,11 @@ the learning behavior's ownership, identity, lifecycle, correction, and
 failure contract survive. This is mechanism reuse, not semantic equivalence.
 Codex remains a secondary comparison reference for convergent behavior and
 failure properties.
+
+For open semantic work, the first reduction target is the inherited interactive
+Agent loop itself: model context plus model-visible reads and typed tools.
+Custom resolvers, classifiers, workflow engines, and semantic state machines
+are later hypotheses, not the default meaning of making learning native.
 
 ## Deliberately unresolved
 

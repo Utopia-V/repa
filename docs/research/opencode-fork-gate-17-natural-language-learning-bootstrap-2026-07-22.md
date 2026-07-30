@@ -1,18 +1,21 @@
 # OpenCode fork Gate 17: natural-language learning bootstrap
 
-Status: Maintainer grill paused. The 2026-07-27 first-principles audit reopened
-the previously accepted mandatory-`/learn` decision and derived required
-contract inputs without selecting a replacement admission form. Its
-authority-reconstruction result remains accepted. The 2026-07-29 user-flow
-follow-up also scoped-reopened Gate 12's busy-TUI delivery default and Gate 14's
-default-Course boundary; both corrections have now passed their original fresh
-reviewers and are integrated at `c5ea10b8a` and `80fde2012`. Gate 16's
-separately accepted natural-language correction is the only remaining
-pre-Gate-17 implementation/evidence boundary. The local Gate 17 engineering
-contract remains incomplete, has not entered independent contract/theory
-review, and is not implementation authority. A 2026-07-29 product-flow
-follow-up inserted downstream Gate 21A for Tutor move selection and failure
-re-entry; that correction changes no Gate 17 local decision or authorization.
+Status: Maintainer grill paused behind the 2026-07-30 Agent-native semantic
+correction. The ordinary interactive Agent now owns open-language bootstrap
+intent; `/learn` may remain an optional discoverability shortcut but is not a
+required admission envelope or a second interpreter. Gate 14's default-Course
+query/admission seam and Gate 16's Goal query/write seam are contract-reopened
+because both attempted to replace Agent judgment with candidate-proof
+protocols. Their previously accepted structural, TUI, settlement, and replay
+work remains scoped as recorded by their owners.
+
+The local Gate 17 engineering contract remains incomplete, has not entered
+independent contract/theory review, and is not implementation authority. Gate
+17 must now derive only the missing durable Course/View/material command
+composition reached through the ordinary Agent, not another natural-language
+subsystem. Downstream Gate 21A retains representative move-selection and
+failure-re-entry evidence while beginning with the ordinary Agent rather than a
+preselected mechanism comparison.
 
 Date: 2026-07-22
 
@@ -40,24 +43,25 @@ owns its complete bounded context reconstruction and presentation. Gate 17
 must work without a Goal or LearningSpace and does not claim later learner
 adaptation, future attention, planning, terminal inspection, or the integrated
 product loop. Gate 21A later owns representative cross-domain move selection
-and re-entry; neither bootstrap intent interpretation nor Gate 18 context
-visibility substitutes for that boundary.
+and re-entry evidence for the ordinary Agent; Gate 18 context visibility alone
+does not prove that behavior.
 
 ## Why this Gate exists
 
 The predecessor Gates established independent Course, Artifact,
 Representation, Material Map, command-settlement, and durable-Turn
-authorities. Their trusted application capabilities do not yet let a deliberate
-released-v1 natural-language request form or revise only the Course state
-currently needed, explicitly adopt and align local material when asked, and
-continue into useful teaching through the normal Agent path.
+authorities. Their trusted application capabilities do not yet let the ordinary
+released-v1 Agent create or revise only the Course state currently needed,
+explicitly adopt and align local material when asked, and continue into useful
+teaching through typed domain commands.
 
-Gate 17 owns that natural-language bootstrap composition. A fresh LearnerHome
-must be able to begin sustained learning with or without local material, commit
-only the domain state actually authorized, preserve every domain's identity,
-correction, and failure semantics, and explain or demonstrate in the same
-Turn. A direct question may remain a valuable zero-write interaction. Generic
-read, search, attachment, or discovery does not silently admit learning state.
+Gate 17 owns that durable bootstrap composition, not natural-language
+interpretation itself. A fresh LearnerHome must be able to begin sustained
+learning with or without local material, commit only the domain state actually
+authorized, preserve every domain's identity, correction, and failure
+semantics, and explain or demonstrate in the same Turn. A direct question may
+remain a valuable zero-write interaction. Generic read, search, attachment, or
+discovery does not silently admit learning state.
 
 The inherited released-v1 harness already reconstructs one Session's model
 history from durable typed Message/Part state, supports explicit continuation
@@ -72,22 +76,20 @@ projection boundary.
 
 ## Maintainer decisions and audit disposition
 
-### Bootstrap is explicit, intent-scoped, and demand-opened
+### Bootstrap uses the ordinary Agent and remains intent-scoped
 
 The historical 2026-07-22 decision required every Gate 17 durable bootstrap to
-begin with `/learn`. The 2026-07-27 first-principles audit reopens that
-requirement. A prefix proves only that a syntax was used: it does not decide
-new versus continue, distinguish a macro activity, resolve interruption, or
-authorize any owning domain transition. It also creates a second admission
-rule beside ordinary natural-language Goal, steering, and Artifact paths.
-Mandatory prefix, optional shortcut, and exact natural-language intent are
-therefore alternatives to be rederived rather than accepted inputs.
+begin with `/learn`. The 2026-07-27 first-principles audit reopened that
+requirement, and the 2026-07-30 maintainer correction now settles the parent
+direction: ordinary natural language through the interactive Agent is the
+primary path. A prefix proves only that syntax was used; it does not decide new
+versus continue, distinguish a macro activity, resolve interruption, or
+authorize an owning domain transition. `/learn` may be retained only as an
+optional discoverable shortcut whose suffix remains natural language.
 
-The part that survives falsification is semantic: no required
-`new | route | resume` subcommand grammar is justified. If `/learn` is retained
-in any role, its suffix remains natural language. With or without that shortcut,
-model-assisted interpretation may resolve a deliberate request to one or more
-separately owned effects:
+No required `new | route | resume` subcommand grammar is justified. With or
+without an optional shortcut, the ordinary Agent may resolve a deliberate
+request to one or more separately owned effects:
 
 - create a distinct stable Course only when the learner means to begin a
   sustained endeavor separate from existing Courses;
@@ -105,11 +107,12 @@ long-running work, consequences that cannot be known or authorized together,
 and later choices that depend on an earlier result must instead settle in
 stages with refreshed context and truthful partial receipts.
 
-Those are internal settlement distinctions, not user-visible modes. If the
-distinction or an existing Course target is consequentially ambiguous, the
-Tutor clarifies without a bootstrap write. It may resolve a visible exact
-candidate or the usable learner-controlled default, but never silently merge
-or create from fuzzy title similarity.
+Those are internal settlement distinctions, not user-visible modes. The Agent
+uses bounded Course-owner reads when an existing target matters. If materially
+different interpretations remain, the Tutor clarifies without a bootstrap
+write; otherwise it may make a transparent reversible choice without exposing
+internal IDs. The runtime validates the chosen exact owner state but does not
+prove language meaning from exhaustive candidate coverage.
 
 Creating a Course does not imply creating a whole route. A Course may remain
 valid with no View. A coarse View is formed only when it helps the current
@@ -119,12 +122,12 @@ course outline is authored only when the learner requests that artifact or a
 current decision genuinely depends on its breadth. Working selection changes
 only when the admitted request authorizes it.
 
-An unprefixed learning statement remains eligible for useful teaching or
-transient discussion. Until admission is rederived, Gate 17 may not assume
-either that unprefixed input is forbidden from bootstrap or that natural
-language alone is sufficient. Explicit material adoption must appear in the
-admitted learner request under the Artifact owner's rules; no prefix is
-authority to admit every file it mentions or reads.
+An unprefixed learning statement is eligible for teaching, transient
+discussion, or an authorized bootstrap effect according to the ordinary
+Agent's interpretation and the available typed commands. Explicit material
+adoption remains governed by the Artifact owner's rules; neither natural
+language understanding nor a prefix silently admits every file mentioned or
+read.
 
 Decision provenance: maintainer, 2026-07-22; reopened by the 2026-07-27
 first-principles audit. The counterexample is a semantically exact unprefixed

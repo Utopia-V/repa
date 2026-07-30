@@ -157,9 +157,17 @@ own Tutor behavior:
 
 - code owns hard constraints, trusted time/source/identity, domain legality,
   and deterministic consequences;
-- the LLM may research, explain, demonstrate, choose local moves, propose or
-  refine routes, and initiate real authorized commands; and
+- the ordinary interactive LLM is the default for open-language interpretation,
+  contextual reference, research, explanation, demonstration, local move
+  choice, route proposals, and real authorized command initiative; and
 - the learner owns goals and current steering and may interrupt or override.
+
+Code supplies bounded trustworthy views and typed tools to that Agent. It does
+not add a parallel phrase parser, semantic resolver, candidate-proof protocol,
+or preliminary controller unless a specific non-linguistic invariant or
+observed product failure requires one. Explicit truncation helps the Agent
+decide whether to read more or clarify; it does not let code certify a natural
+language interpretation.
 
 Open conversational teaching does not require a domain transition. Only useful
 long-term meaning, a commitment, learning-domain state, or an external effect
@@ -217,6 +225,9 @@ and bounded observed content needed for provenance.
 - Learning-domain modules do not import AI SDK, providers, or terminal code.
 - Interaction lifecycle does not infer learning meaning from text.
 - Context composition uses queries and performs no domain writes.
+- Model-visible domain queries may support contextual reference and lazy detail
+  without becoming automatic context injection or learner-facing management
+  surfaces.
 - Model-initiated learning changes enter only through sample-bound capability
   bindings and domain commands.
 - Provider, filesystem, web, and terminal integrations are outer adapters.

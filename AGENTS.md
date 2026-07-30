@@ -65,6 +65,16 @@ correction semantics; it does not mean that only deterministic code may decide
 or write. A successful write preserves its epistemic basis and does not make an
 unsupported model assertion true.
 
+For open-language interpretation, contextual reference, semantic comparison,
+and local Tutor choice, first use the ordinary interactive Agent with bounded
+trusted context, lazy owner reads, and typed tools. Do not replace that
+capability with keyword rules, a deterministic semantic parser, exhaustive
+candidate proof, separate selector, or workflow machinery unless a concrete
+invariant or observed failure survives the simpler Agent boundary. Program
+checks establish identity, current version, permission, legal transition,
+atomicity, replay, visible consequence, and correction; they do not prove that
+one natural-language interpretation is objectively entailed.
+
 Do not reduce the product to a one-shot chat teacher, note generator, Anki skin,
 todo application, rigid command-line planner, or generic agent with a few
 learning tools.

@@ -1,18 +1,22 @@
 # OpenCode fork Gate 14: learner navigation continuity
 
-Status: Corrective implementation/evidence accepted and integrated on
-2026-07-30 at `80fde20121c4b98ef9c7514ad7e33cae71c7e6b0`. Original reviewer
-task `019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned final exact-diff `Accept`
-with no blocker after two implementation repair passes. The scoped correction
-covers default-Course admission/authorization, exact readable disambiguation,
-migration, semantic-terminal/candidate recovery, and affected evidence. Default
-Course and exact route-anchor identities, transitions, CAS/history, correction,
-and fail-closed semantics remain accepted; route-anchor admission was not
-reopened. Corrective integration
-`9e91d43c629b66d65c8741e342bca7cf05de5667` remains valid for the earlier
-typed/default-visible settlement, replay, route-anchor locator, and
-trigger-versioning repairs; `80fde2012` adds the accepted full default-Course
-correction. The
+Status: Contract/theory reopened only at the Agent-native default-Course
+reference and admission boundary. The 2026-07-30 maintainer correction rejects
+complete Course-candidate coverage as a program proof that the Agent understood
+natural language. A model-visible Course owner read plus the ordinary Agent and
+one typed set/clear command must be rederived; no implementation authority
+exists for this seam.
+
+Corrective implementation/evidence integrated at
+`80fde20121c4b98ef9c7514ad7e33cae71c7e6b0` remains historical evidence and
+retained implementation for default identity/history, exact locators,
+migration, capability settlement, replay/recovery, and all route-anchor
+behavior. Original reviewer task
+`019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned final exact-diff `Accept` for
+that candidate. Corrective integration
+`9e91d43c629b66d65c8741e342bca7cf05de5667` also remains valid for the earlier
+typed/default-visible settlement, route-anchor locator, and trigger-versioning
+repairs. The
 later product-flow audit also falsified the claim that every low-consequence
 default change needs a Gate-specific second approval under effective `allow`;
 configured capability `ask` remains separate. That owning product/architecture
@@ -25,8 +29,10 @@ historical-prose P3 strengthening. After the executor repaired all four, the
 same reviewer returned `Accept` on the exact-diff closure. Its direct-request
 versus exact source-bound proposal distinction, semantic/capability separation,
 current-state-free replay choice, and unchanged route-anchor behavior retain
-that acceptance. Subsequent implementation mapping exposed three previously
-unspecified V2 crash windows around capability evaluation, durable prompt
+their historical acceptance; the 2026-07-30 correction reopens only whether
+the direct/proposal resolution machinery belongs in the model-facing path.
+Subsequent implementation mapping exposed three previously unspecified V2
+crash windows around capability evaluation, durable prompt
 issuance, durable learner reply, and final effect settlement. The narrow
 capability-lifecycle/recovery amendment at the end of this record was therefore
 reviewed by the same reviewer. Its first closure pass returned `Revise`
@@ -66,7 +72,7 @@ disposition, and limits the complete V2 authorization/capability lifecycle to
 genuinely new candidates. The original reviewer returned third narrow
 exact-diff `Accept`, closed `G14-RC-IE-SEM-001`, and restored scoped
 implementation authority for this amended contract. The recovered
-implementation/evidence line remains unaccepted. Its first
+implementation/evidence line then entered review. Its first
 implementation/evidence review returned `Revise` with
 `G14-IE-STO-001`, `G14-IE-STO-002`, `G14-IE-RT-001`, and
 `G14-CAR-001`, plus nonblocking `G14-IE-RT-002`. The second exact-diff review
@@ -74,8 +80,8 @@ closed all of those findings but returned `Revise` solely for
 `G14-IE-RT-003`: live permission abort and startup recovery preserved
 capability history but skipped the final semantic duplicate/conflict recheck.
 The second repaired candidate and fresh evidence bound at the end of this
-record supersede both rejected byte sets. This current candidate remains
-unreviewed and unaccepted.
+record superseded both rejected byte sets and received final exact-diff
+`Accept` before integration at `80fde2012`.
 The historical independent review run
 `gate14-whole-20260719-01` accepted contract/theory after closing `G14-CT-001`
 through `G14-CT-005` and both nonblocking strengthenings. At that historical
@@ -123,15 +129,51 @@ inspection and correction paths into a learner-facing terminal surface. None
 of those later loops belongs to Gate 14.
 
 This record preserves the reviewed historical Gate 14 contract and owns the
-current correction candidate. Current product meaning comes from the product
-and architecture owners. The 2026-07-19 two-act default-confirmation decision
-was revoked there on 2026-07-29; the route-anchor decision and the unaffected
-identity, transition, and correction boundaries remain authority. Tagged
-transition encoding, exact compare-and-swap tuples, replacement authorization
-arms, command and query shapes, and closing evidence are derived engineering
-proposals. A fresh separate top-level reviewer may reject or revise those
-derivations. Only the maintainer or an owning product, architecture, or roadmap
-decision may change accepted product meaning.
+current scoped correction problem. Current product meaning comes from the
+product and architecture owners. The 2026-07-19 two-act default-confirmation
+decision was revoked there on 2026-07-29; the 2026-07-30 correction also
+revokes exhaustive candidate coverage as semantic authorization. The
+route-anchor decision and the unaffected default identity, transition,
+history, correction, replay, and migration boundaries remain authority.
+Command/query shape and replacement evidence must be rederived and reviewed
+before another implementation change.
+
+## 2026-07-30 Agent-native navigation correction
+
+The accepted V2 implementation asks the model to supply an exact bounded Course
+resolution scope, persists that candidate universe, and uses a host-recorded
+proposal protocol when the model supplies meaning. The released Agent registry
+does not expose an ordinary Course-owner discovery tool. This recreates the
+same false boundary found in Gate 16: the model is expected to understand a
+natural reference but the host withholds normal state access and substitutes a
+proof protocol for semantic judgment.
+
+The rederived learner path is:
+
+```text
+learner says which Course should be the default
+-> ordinary Agent reads current Courses when needed
+-> Agent selects one exact Course or asks about real ambiguity
+-> typed set/clear command validates current preference and Course versions
+-> configured capability policy applies
+-> exact visible result remains correctable and replayable
+```
+
+Course reads must return exact owner identities, versions, dispositions, stable
+cursors, and explicit truncation. The Agent decides whether to read more or
+clarify; the program does not require the learner to utter an internal ID or
+store all candidates as proof of uniqueness. A clear direct request receives no
+Gate-specific second prompt under effective `allow`; configured `ask` still
+applies. If the Agent suggests a materially different default, it obtains the
+learner's answer in ordinary conversation before issuing the same typed command;
+Gate 14 does not presume a second natural-language interpreter, special
+proposal lifecycle, or durable candidate universe.
+
+This correction does not reopen route anchors, default-Course identity/history,
+CAS, migration, current-state-free replay, capability recovery, stable
+locators, or terminal visibility. A fresh contract must determine the simplest
+Course query/write surface and retire only the semantic-proof machinery before
+implementation resumes.
 
 ## Terminology
 
