@@ -2308,9 +2308,16 @@ diff bytes with SHA-256
 `86e336d855392ec9e6f0135e45e3ad308cfdafeae5b92aa7170fb42d6b3fe409`;
 its 3,550-byte 40-path ordinal manifest hashes to
 `dd8e90817944f42ba7a841455f09edb7630f8c55038ac3d26070ea09fe5c50d9`.
-The first reviewer bindings are rejected provenance only. The repaired
-candidate is unstaged, uncommitted, and unaccepted pending exact-diff closure
-by the same reviewer; no Gate 17 authority follows.
+The first reviewer bindings are rejected provenance only. The same reviewer
+independently reproduced every superseding binding, reran Core Goal 6/43 and
+registry/package reachability 29/142, and returned `Accept` with no blocker.
+`G16-AN-IMP-001..003` are closed. Its only nonblocking note is that the temporal
+matrix approaches Bun's default five-second timeout when run concurrently with
+the unrelated registry suite; the exact Core command passes alone.
+
+The accepted 43-path candidate was integrated without content drift at
+`2baba9eeabeb9f163cfe380009dbb07673e3a669`. Gate 16 is closed at its
+Agent-native Goal boundary. Gate 17 remains unstarted and unauthorized.
 
 ## Historical evidence locators
 

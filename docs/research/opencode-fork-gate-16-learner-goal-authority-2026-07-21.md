@@ -8,9 +8,10 @@ Gate 8 advanced the current native database at
 authority was available for the contract below. The same reviewer returned
 `Revise` on the first implementation/evidence candidate with
 `G16-AN-IMP-001..003`. The top-level executor has repaired those exact seams;
-the superseding candidate is complete and unstaged, and exact-diff closure by
-the same reviewer is pending. It is not accepted or integrated. Gate 17
-remains unauthorized.
+the same reviewer accepted the superseding exact candidate and closed all
+three findings. The accepted implementation is integrated at
+`2baba9eeabeb9f163cfe380009dbb07673e3a669`. Gate 16 is closed at its
+Agent-native Goal boundary. Gate 17 remains unauthorized.
 
 The decisions under **Accepted maintainer decisions**, the structural Goal
 identity/revision/lifecycle result, and corrective TUI integration
@@ -2305,7 +2306,17 @@ candidate-path error. The previously bound presentation, prompt, Schema, TUI,
 and released-model evidence remains causally valid because none of these three
 repairs changes those carriers, the model-visible command, or provider path.
 
-This superseding candidate remains unstaged, uncommitted, and unaccepted.
-Original reviewer task `019fb2a3-c902-7882-8134-1bf33f1eb04d` must close this
-exact diff before integration or any current Gate 16 acceptance. No Gate 17
-authority follows.
+Original reviewer task `019fb2a3-c902-7882-8134-1bf33f1eb04d` independently
+reproduced every superseding package, record, aggregate, and full-tree binding,
+reran Core Goal 6/43 and registry/package reachability 29/142, and returned
+`Accept` with no blocker. `G16-AN-IMP-001..003` are closed; all retained
+contract, migration, replay/recovery, carrier, provider, and earlier-Gate
+boundaries remain accepted. The reviewer noted only that running the temporal
+matrix concurrently with the unrelated registry suite can approach Bun's
+default five-second timeout; the exact Core command passed alone in about four
+seconds, so this is a nonblocking evidence-maintenance note rather than a
+semantic or isolation defect.
+
+The exact accepted candidate was integrated without content drift at
+`2baba9eeabeb9f163cfe380009dbb07673e3a669`. Gate 16 is closed at this
+boundary. No Gate 17 authority follows.
