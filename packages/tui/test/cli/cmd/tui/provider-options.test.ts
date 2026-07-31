@@ -10,8 +10,8 @@ describe("providerOptions", () => {
     })
   })
 
-  test("describes active OpenAI authentication as API-key-only", () => {
-    expect(providerOptions([{ id: "openai", name: "OpenAI" }])[0]?.description).toBe("(API key)")
+  test("describes active OpenAI subscription and API-key authentication", () => {
+    expect(providerOptions([{ id: "openai", name: "OpenAI" }])[0]?.description).toBe("(ChatGPT Plus/Pro or API key)")
   })
 
   test("does not use Other as the generic provider category", () => {

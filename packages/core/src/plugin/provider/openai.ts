@@ -154,7 +154,10 @@ const headless = {
 export const OpenAIPlugin = define({
   id: "openai",
   effect: Effect.fn(function* (ctx) {
-    // ChatGPT OAuth remains intentionally hibernated until Repa owns or verifies a compatible client registration.
+    yield* ctx.integration.transform((draft) => {
+      draft.method.update(browser)
+      draft.method.update(headless)
+    })
     yield* ctx.catalog.transform(
       Effect.fn(function* (evt) {
         for (const item of evt.provider.list()) {

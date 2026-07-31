@@ -9,6 +9,7 @@ import type {
 import { Config } from "@/config/config"
 import { createOpencodeClient } from "@opencode-ai/sdk"
 import { ServerAuth } from "@/server/auth"
+import { CodexAuthPlugin } from "./openai/codex"
 import { Session } from "@/session/session"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { CopilotAuthPlugin } from "./github-copilot/copilot"
@@ -61,9 +62,13 @@ export function experimentalWebSocketsEnabled(input: { enabled: boolean; channel
 }
 
 // Built-in plugins that are directly imported (not installed from npm)
-function internalPlugins(): PluginInstance[] {
+function internalPlugins(flags: RuntimeFlags.Info): PluginInstance[] {
   return [
-    // ChatGPT OAuth remains intentionally hibernated until Repa owns or verifies a compatible client registration.
+    // Temporary rollout: pre-release builds use WebSockets by default; releases require explicit opt-in.
+    (input) =>
+      CodexAuthPlugin(input, {
+        experimentalWebSockets: experimentalWebSocketsEnabled({ enabled: flags.experimentalWebSockets }),
+      }),
     CopilotAuthPlugin,
     GitlabAuthPlugin,
     PoeAuthPlugin,
@@ -164,7 +169,7 @@ const layer = Layer.effect(
           $: typeof Bun === "undefined" ? undefined : Bun.$,
         }
 
-        for (const plugin of flags.disableDefaultPlugins ? [] : internalPlugins()) {
+        for (const plugin of flags.disableDefaultPlugins ? [] : internalPlugins(flags)) {
           const init = yield* Effect.tryPromise({
             try: () => plugin(input),
             catch: errorMessage,

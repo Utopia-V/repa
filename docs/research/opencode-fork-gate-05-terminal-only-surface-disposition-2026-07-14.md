@@ -6,14 +6,18 @@ closed on 2026-07-15. Independent top-level reviewer task
 `019f6599-2914-7f02-849d-412862338271` accepted both the corrected contract and
 implementation/evidence after one `Revise` round.
 
-Current status: Closed again at corrective integration commit
-`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
-first-principles audit had scoped-reopened the active build, outward-identity,
-permission, and product-surface boundaries. Runtime Web routes remain
-disconnected and the hibernated client source need not be deleted. The
-corrective snapshot below makes the ordinary build terminal-only, corrects
-reachable schema/network identity, and closes the accepted permission
-counterexamples. Current disposition is owned by
+Current status: Scoped reopened on 2026-07-30 for one retained-capability
+regression in corrective integration
+`9e91d43c629b66d65c8741e342bca7cf05de5667`. That snapshot remains accepted
+for terminal-only composition, reachable help/schema identity, preview-v2
+skill-surface retirement, and the restricted-Agent and permission
+counterexamples. Its removal of the released-v1 OpenAI OAuth plugin and Core
+browser/headless methods contradicted this Gate's accepted ordinary-OAuth
+boundary and prior real-provider evidence. The working tree contains a precise
+restoration candidate; 44 focused tests / 68 assertions and Core/TUI
+typechecks pass. A maintainer-completed real ChatGPT Plus/Pro login wrote one
+OAuth credential to Repa's own store, and the bounded Gate 14 released-model
+qualification passed; independent closure remains outstanding. Current disposition is owned by
 [the documentation index](../README.md).
 
 Date: 2026-07-14
@@ -1046,7 +1050,9 @@ The corrective snapshot makes terminal-only the ordinary build;
 Web assets require the explicit `--research-embed-web-ui` research flag. It
 removes the upstream docs action and upstream schema writes, identifies active
 provider traffic as Repa or omits the product metadata, keeps ordinary OpenAI
-API-key use, and hibernates the unqualified ChatGPT OAuth registration.
+API-key use, and also hibernates the inherited ChatGPT OAuth registration. The
+last disposition was later falsified: it was not authorized by this Gate and is
+superseded by the 2026-07-30 retained-OAuth correction below.
 
 Restricted custom Agents now compile default-deny plus explicit allows from the
 live permission catalog. Generated Agent identifiers share one constrained
@@ -1066,7 +1072,10 @@ when explicitly composed for source maintenance.
 
 The original Gate 5 reviewer independently accepted the build, outward
 identity, OAuth/API-key, generated-Agent, restricted-permission, array-index,
-prototype-key, and registry-visibility corrections. Final shared-tree evidence
+prototype-key, and registry-visibility snapshot. That review remains
+provenance, but its OAuth disposition is not current authority: it failed to
+falsify the new hibernation premise against this record's earlier retained
+OAuth clauses and the existing real-provider runs. Final shared-tree evidence
 included the OpenCode 400-test corrective set, the Core 100-test corrective
 set, all four affected package typechecks, the ordinary Windows build and its
 packaged smokes, and the explicit research-flag test. Dormant upstream
@@ -1081,6 +1090,93 @@ unrelated pre-existing policy-location failure from a wider run does not
 establish or weaken this slice.
 
 Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
-independently accepted shared-tree snapshot and closes this scoped reopen. It
-does not claim release readiness or authorize execution of hibernated upstream
-automation.
+unaffected parts of the independently accepted shared-tree snapshot. It does
+not close the later-discovered OAuth regression, claim release readiness, or
+authorize execution of hibernated upstream automation.
+
+## 2026-07-30 retained OAuth regression correction
+
+Maintainer correction exposed that Repa does not require an OpenAI API key for
+ordinary OpenAI use: the inherited released-v1 provider supports ChatGPT
+Plus/Pro OAuth and had already been used by Gate 11, Gate 15, and Gate 16 real
+model evidence. Repa authenticates the same ChatGPT account into its own
+credential store; it does not need to copy Codex Desktop's local credential.
+
+`9e91d43c629b66d65c8741e342bca7cf05de5667` had disconnected both active
+registrations:
+
+- released-v1 `CodexAuthPlugin`, which owns the primary TUI `/connect` and CLI
+  `providers login` path; and
+- Core's browser/headless OpenAI integration methods.
+
+The deletion was derived from an agent premise that Repa lacked an owned or
+verified OAuth client registration. It was not a maintainer decision or a
+failed compatibility test, and it contradicted this record's retained
+ordinary-OAuth clauses. OpenCode Console/account membership and local provider
+authentication are separate capabilities. Required protocol literals such as
+the OAuth client identifier or originator do not make Repa an OpenCode account
+product.
+
+The precise correction restores those two registrations, the
+ChatGPT-Plus/Pro-or-API-key discovery text, and the current SDK shape in the
+concurrent token-refresh oracle. It does not restore OpenCode Console,
+organization, sharing, cloud, Web/Desktop, update, install, publish, or release
+surfaces. The upstream docs URL and upstream schema write remain retired;
+future Repa-owned help or schema affordances are a separate product task.
+
+No second same-level deletion of Session/Turn, models, ordinary tools, MCP,
+plugins, subagents, compaction, or generic skills was found in the responsible
+commit. A provider-by-provider compatibility check also found no second
+functional removal in the branding-header edits:
+
+- GitHub requires a valid `User-Agent` and recommends the calling application's
+  own name; Cloudflare records it as client metadata. `repa/<version>` is the
+  truthful form. See
+  [GitHub's User-Agent contract](https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api)
+  and
+  [Cloudflare's logging description](https://developers.cloudflare.com/changelog/post/2026-06-12-user-agent-logging/).
+- OpenRouter, Vercel AI Gateway, and ZenMux document
+  `HTTP-Referer`/title as optional app-attribution metadata, while Kilo's
+  official gateway examples require no such headers. Omitting the false
+  `https://opencode.ai/` referer does not disable inference. See
+  [OpenRouter](https://openrouter.ai/docs/app-attribution),
+  [Vercel](https://vercel.com/docs/ai-gateway/ecosystem/app-attribution),
+  [ZenMux](https://zenmux.ai/docs/api/overview.html), and
+  [Kilo](https://kilo.ai/docs/gateway).
+- LLM Gateway documents `X-Source` as optional public source attribution;
+  Cerebras describes its integration header as usage/support tracking; and
+  NVIDIA ecosystem implementations use their own product names for
+  `X-BILLING-INVOKE-ORIGIN`. Repa's product values are attribution, not an
+  inherited authentication identity. See
+  [LLM Gateway](https://docs.llmgateway.io/features/source) and
+  [Cerebras](https://inference-docs.cerebras.ai/integrations/vercel-ai-sdk).
+
+xAI browser OAuth remains the one compatibility literal not covered by a
+public contract: its `referrer` changed from `opencode` to `repa` while the
+public Grok-CLI client ID remains inherited. This is not a deleted capability,
+and the independent xAI device/API paths do not use that browser referrer, but
+a future xAI browser-login claim must be proven by a real login rather than by
+the existing construction test.
+
+This correction is a working-tree implementation/evidence candidate. Fresh
+focused evidence passes 44 tests / 68 assertions across Core registration,
+released-v1 auth projection, CLI/TUI discovery, and concurrent token refresh;
+Core and TUI typechecks pass. OpenCode's package typecheck reaches only the
+pre-existing TUI fixture diagnostics, with no OAuth-path diagnostic. The first
+real headless attempt reached OpenAI's device flow and expired without writing
+a credential. A later maintainer-completed attempt then wrote exactly one
+`openai:oauth` credential into Repa's own credential store; no OpenAI API key
+was introduced.
+
+That credential was projected only into an isolated Gate 14 qualification
+process. `openai/gpt-5.5` completed four normal Turns across three fresh
+Sessions: a unique-title Course read and V3 default write, a duplicate-title
+clarification with no write, a non-writing suggestion, and a same-Session
+later acceptance with one V3 write. The run emitted no permission request,
+created no retired proposal row, and retained exact root Agent-issuance
+provenance for both writes. This proves the restored released-v1 path can
+authenticate and execute the retained provider flow; it does not claim that
+every inherited provider-specific OAuth literal is compatible.
+
+The correction remains unstaged and unintegrated until the required independent
+implementation/evidence closure succeeds.

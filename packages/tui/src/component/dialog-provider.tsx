@@ -58,7 +58,7 @@ export function providerOptions(list: { id: string; name: string }[]): ProviderO
         providerID: provider.id,
         description: {
           anthropic: "(API key)",
-          openai: "(API key)",
+          openai: "(ChatGPT Plus/Pro or API key)",
         }[provider.id],
         category: provider.id in PROVIDER_PRIORITY ? "Popular" : "Providers",
       })),
@@ -92,9 +92,7 @@ export function createDialogProviderOptions() {
     const value = await DialogPrompt.show(dialog, "Other", {
       placeholder: "Provider id",
       description: () => (
-        <text fg={theme.textMuted}>
-          This only stores a credential. Configure the provider in repa.json to use it.
-        </text>
+        <text fg={theme.textMuted}>This only stores a credential. Configure the provider in repa.json to use it.</text>
       ),
     })
     if (value === null) return

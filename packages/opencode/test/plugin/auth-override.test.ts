@@ -79,7 +79,11 @@ describe("plugin.auth-override", () => {
         expect(copilot.length).toBe(1)
         expect(copilot[0].label).toBe("Test Override Auth")
         expect(plainMethods[ProviderV2.ID.make("github-copilot")][0].label).not.toBe("Test Override Auth")
-        expect(plainMethods[ProviderV2.ID.openai]).toBeUndefined()
+        expect(plainMethods[ProviderV2.ID.openai]).toEqual([
+          { type: "oauth", label: "ChatGPT Pro/Plus (browser)" },
+          { type: "oauth", label: "ChatGPT Pro/Plus (headless)" },
+          { type: "api", label: "Manually enter API Key" },
+        ])
       }),
     { git: true },
     30000,

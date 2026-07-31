@@ -257,7 +257,7 @@ export function resolveProviderOptions(input: {
     ).map((item) => ({
       label: item.name,
       value: item.id,
-      hint: item.id === "openai" ? "API key" : undefined,
+      hint: item.id === "openai" ? "ChatGPT Plus/Pro or API key" : undefined,
     })),
     ...input.pluginProviders.map((item) => ({
       label: item.name,
