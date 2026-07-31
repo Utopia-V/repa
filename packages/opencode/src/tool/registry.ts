@@ -57,11 +57,7 @@ import { ConfigPermissionV1 } from "@opencode-ai/core/v1/config/permission"
 import { McpCatalog } from "@/mcp/catalog"
 import { AcceptCourseViewRevisionTool } from "./accept-course-view-revision"
 import { assertExternalToolID, toolCallPreparation } from "./learning-command"
-import {
-  ProposeDefaultCoursePreferenceTool,
-  SetCourseRouteAnchorTool,
-  SetDefaultCoursePreferenceTool,
-} from "./learner-navigation"
+import { SetCourseRouteAnchorTool, SetDefaultCoursePreferenceTool } from "./learner-navigation"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { RepresentationConvertTool } from "./representation-convert"
@@ -76,6 +72,9 @@ import {
   assertExternalContentToolID,
 } from "./content-root"
 import { ContentRoot } from "@opencode-ai/core/content-root"
+import { Course } from "@opencode-ai/core/course"
+import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
+import { CourseQueryTool, LearningNavigationQueryTool } from "./course-navigation-query"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -134,9 +133,10 @@ const layer = Layer.effect(
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
     const acceptCourseViewRevision = yield* AcceptCourseViewRevisionTool
-    const proposeDefaultCoursePreference = yield* ProposeDefaultCoursePreferenceTool
     const setDefaultCoursePreference = yield* SetDefaultCoursePreferenceTool
     const setCourseRouteAnchor = yield* SetCourseRouteAnchorTool
+    const courseQuery = yield* CourseQueryTool
+    const learningNavigationQuery = yield* LearningNavigationQueryTool
     const representationConvert = yield* RepresentationConvertTool
     const updateRetainedLearningSteering = yield* UpdateRetainedLearningSteeringTool
     const updateLearnerGoals = yield* UpdateLearnerGoalsTool
@@ -260,9 +260,10 @@ const layer = Layer.effect(
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
           acceptCourseViewRevision: Tool.init(acceptCourseViewRevision),
-          proposeDefaultCoursePreference: Tool.init(proposeDefaultCoursePreference),
           setDefaultCoursePreference: Tool.init(setDefaultCoursePreference),
           setCourseRouteAnchor: Tool.init(setCourseRouteAnchor),
+          courseQuery: Tool.init(courseQuery),
+          learningNavigationQuery: Tool.init(learningNavigationQuery),
           representationConvert: Tool.init(representationConvert),
           updateRetainedLearningSteering: Tool.init(updateRetainedLearningSteering),
           updateLearnerGoals: Tool.init(updateLearnerGoals),
@@ -280,9 +281,10 @@ const layer = Layer.effect(
             tool.invalid,
             ...(questionEnabled ? [tool.question] : []),
             tool.acceptCourseViewRevision,
-            tool.proposeDefaultCoursePreference,
             tool.setDefaultCoursePreference,
             tool.setCourseRouteAnchor,
+            tool.courseQuery,
+            tool.learningNavigationQuery,
             tool.representationConvert,
             tool.updateRetainedLearningSteering,
             tool.updateLearnerGoals,
@@ -532,6 +534,8 @@ export const node = LayerNode.make({
     LearningCommandRuntime.node,
     RepresentationCommandRuntime.node,
     ContentRoot.node,
+    Course.node,
+    LearnerNavigation.readNode,
   ],
 })
 

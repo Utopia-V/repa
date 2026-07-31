@@ -45,9 +45,16 @@ type DefaultV2AuthorizationBasis = Extract<
   SemanticPresentationV1.ProposalBasis,
   { readonly kind: "default_course_v2_capability" }
 >["authorization"]
+type DefaultV3AgentActionBasis = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "default_course_v3_capability" }
+>["agentAction"]
 type DefaultV2Endpoint = DefaultV2AuthorizationBasis["from"]
 type DefaultV2Result = Extract<SemanticPresentationV1.ResultBasis, { readonly kind: "default_course_v2_result" }>
-type DefaultAcknowledgement = NonNullable<DefaultV2Result["acknowledgement"]>
+type DefaultV3Result = Extract<SemanticPresentationV1.ResultBasis, { readonly kind: "default_course_v3_result" }>
+type DefaultAcknowledgement =
+  | NonNullable<DefaultV2Result["acknowledgement"]>
+  | NonNullable<DefaultV3Result["acknowledgement"]>
 type DefaultEndpoint = DefaultV2Endpoint | DefaultAcknowledgement["from"]
 
 export type ProposalProjection = Readonly<{
@@ -314,6 +321,22 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       domain: {
         navigationKind: "default_course_preference",
         authorization,
+      },
+    })
+  }
+  if (basis.kind === "default_course_v3_capability") {
+    const agentAction = basis.agentAction
+    if (!validDefaultV3AgentAction(agentAction, basis.binding)) return undefined
+    const pattern = agentAction.to.kind === "course" ? agentAction.to.locator.courseID : "clear"
+    return expected(value, {
+      capability: "set_default_course_preference",
+      patterns: [pattern],
+      always: [pattern],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        navigationKind: "default_course_preference",
+        agentAction,
       },
     })
   }
@@ -696,6 +719,24 @@ function projectProposal(
       ],
     )
   }
+  if (basis.kind === "default_course_v3_capability") {
+    return proposalProjection(
+      basis,
+      approval,
+      "set_default_course_preference",
+      basis.agentAction.to.kind === "course"
+        ? "Set the default Course preference"
+        : "Clear the default Course preference",
+      "This approval is bound to one exact Agent-issued operation and its runtime-captured before/after Course locators.",
+      [
+        fact("Issuance", basis.agentAction.provenance.kind),
+        fact("Operation", basis.agentAction.operation),
+        ...defaultEndpointFacts("From", basis.agentAction.from),
+        ...defaultEndpointFacts("To", basis.agentAction.to),
+        fact("Preference version", basis.agentAction.preferenceVersion),
+      ],
+    )
+  }
   if (basis.kind === "default_course_command") {
     return proposalProjection(
       basis,
@@ -791,7 +832,7 @@ function expectedResultMetadata(presentation: SemanticPresentationV1.Result, pro
   const basis = presentation.basis
   const common = {
     command: projection.capability,
-    commandVersion: basis.kind === "default_course_v2_result" ? 2 : 1,
+    commandVersion: basis.kind === "default_course_v3_result" ? 3 : basis.kind === "default_course_v2_result" ? 2 : 1,
     outcome: basis.settlement.outcome,
     ...(basis.settlement.outcome === "error" ? { code: basis.settlement.code } : {}),
     durablySettled: projection.durablySettled,
@@ -989,6 +1030,86 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
         ...(acknowledgement
           ? [
               fact("Effect authorization", acknowledgement.effectAuthorizationPartID),
+              fact("Operation", acknowledgement.operation),
+              ...defaultEndpointFacts("Effect from", acknowledgement.from),
+              ...defaultEndpointFacts("Effect to", acknowledgement.to),
+              fact("Relation", acknowledgement.relation),
+            ]
+          : []),
+      ],
+    )
+  }
+  if (basis.kind === "default_course_v3_result") {
+    const disposition = basis.disposition
+    const acknowledgement = basis.acknowledgement
+    if (
+      acknowledgement &&
+      (acknowledgement.invocationPartID !== basis.binding.partID || !validDefaultAcknowledgement(acknowledgement))
+    ) {
+      return undefined
+    }
+    if (disposition.kind === "semantic_terminal_v3") {
+      const duplicate = disposition.outcome === "already_applied"
+      if (
+        duplicate
+          ? settlement.outcome !== "already_applied" ||
+            !acknowledgement ||
+            acknowledgement.effectID !== disposition.existingEffectID ||
+            disposition.incomingPayloadFingerprint !== disposition.existingPayloadFingerprint
+          : settlement.outcome !== "error" ||
+            settlement.code !== "semantic_conflict" ||
+            acknowledgement !== undefined ||
+            disposition.incomingPayloadFingerprint === disposition.existingPayloadFingerprint
+      ) {
+        return undefined
+      }
+    } else {
+      const agentAction = disposition.agentAction
+      const acknowledgementRequired = settlement.outcome === "applied" || settlement.outcome === "already_applied"
+      if (
+        !validDefaultV3AgentAction(agentAction, basis.binding) ||
+        acknowledgementRequired !== Boolean(acknowledgement) ||
+        (settlement.outcome === "applied" &&
+          acknowledgement &&
+          (acknowledgement.schemaVersion !== 2 ||
+            acknowledgement.effectAgentActionPartID !== basis.binding.partID ||
+            acknowledgement.operation !== agentAction.operation ||
+            !same(acknowledgement.from, agentAction.from) ||
+            !same(acknowledgement.to, agentAction.to)))
+      ) {
+        return undefined
+      }
+    }
+    const owner =
+      disposition.kind === "agent_action_v3"
+        ? [
+            fact("Disposition", disposition.kind),
+            fact("Issuance", disposition.agentAction.provenance.kind),
+            fact("Operation", disposition.agentAction.operation),
+            ...defaultEndpointFacts("From", disposition.agentAction.from),
+            ...defaultEndpointFacts("To", disposition.agentAction.to),
+          ]
+        : [
+            fact("Disposition", disposition.kind),
+            fact("Semantic outcome", disposition.outcome),
+            fact("Existing effect", disposition.existingEffectID),
+          ]
+    return resultProjection(
+      basis,
+      "set_default_course_preference",
+      "Default Course preference",
+      resultSummary("Default Course preference", outcome),
+      [
+        ...failure,
+        ...owner,
+        ...(acknowledgement
+          ? [
+              fact(
+                acknowledgement.schemaVersion === 2 ? "Effect Agent action" : "Effect authorization",
+                acknowledgement.schemaVersion === 2
+                  ? acknowledgement.effectAgentActionPartID
+                  : acknowledgement.effectAuthorizationPartID,
+              ),
               fact("Operation", acknowledgement.operation),
               ...defaultEndpointFacts("Effect from", acknowledgement.from),
               ...defaultEndpointFacts("Effect to", acknowledgement.to),
@@ -1470,12 +1591,50 @@ function defaultAuthorizationTargetMatches(authorization: DefaultV2Authorization
   )
 }
 
+function validDefaultV3AgentAction(
+  agentAction: DefaultV3AgentActionBasis,
+  binding: SemanticPresentationV1.ToolBinding,
+) {
+  const targetCourseID = agentAction.command.action === "set" ? agentAction.command.courseID : null
+  const provenance = agentAction.provenance
+  const lineageValid =
+    provenance.kind === "root"
+      ? provenance.lineage.length === 0 && provenance.occurrenceID === provenance.causalRootOccurrenceID
+      : provenance.lineage.length > 0 &&
+        provenance.lineage.at(-1)?.childTurnID === provenance.turnID &&
+        provenance.effectiveDelegatedCapability.identity === "set_default_course_preference" &&
+        provenance.effectiveDelegatedCapability.version === 3 &&
+        provenance.effectiveDelegatedCapability.projectionVersion === 2 &&
+        provenance.effectiveDelegatedCapability.fingerprint ===
+          provenance.lineage.at(-1)?.delegatedCapabilityFingerprint
+  return (
+    binding.partID !== undefined &&
+    provenance.sessionID === binding.sessionID &&
+    provenance.assistantMessageID === binding.messageID &&
+    provenance.invocationPartID === binding.partID &&
+    provenance.providerCallID === binding.callID &&
+    provenance.capabilityIdentity === "set_default_course_preference" &&
+    provenance.capabilityVersion === 3 &&
+    lineageValid &&
+    validDefaultV2Endpoint(agentAction.from) &&
+    validDefaultV2Endpoint(agentAction.to) &&
+    defaultOperation(agentAction.from, agentAction.to) === agentAction.operation &&
+    (targetCourseID === null
+      ? agentAction.to.kind === "absent"
+      : agentAction.to.kind === "course" && agentAction.to.locator.courseID === targetCourseID)
+  )
+}
+
 function validDefaultAcknowledgement(acknowledgement: DefaultAcknowledgement) {
   return (
     defaultOperation(acknowledgement.from, acknowledgement.to) === acknowledgement.operation &&
-    (acknowledgement.authorizationVersion === 1
-      ? validDefaultV1Endpoint(acknowledgement.from) && validDefaultV1Endpoint(acknowledgement.to)
-      : validDefaultV2Endpoint(acknowledgement.from) && validDefaultV2Endpoint(acknowledgement.to))
+    (acknowledgement.schemaVersion === 2
+      ? acknowledgement.agentActionVersion === 3 &&
+        validDefaultV2Endpoint(acknowledgement.from) &&
+        validDefaultV2Endpoint(acknowledgement.to)
+      : acknowledgement.authorizationVersion === 1
+        ? validDefaultV1Endpoint(acknowledgement.from) && validDefaultV1Endpoint(acknowledgement.to)
+        : validDefaultV2Endpoint(acknowledgement.from) && validDefaultV2Endpoint(acknowledgement.to))
   )
 }
 

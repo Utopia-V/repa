@@ -42,6 +42,12 @@ export type DefaultCourseCommand = Readonly<{
   target: DefaultCourseTarget | null
 }>
 
+export type DefaultCourseAgentCommandV3 =
+  | Readonly<{ action: "set"; courseID: Course.CourseID }>
+  | Readonly<{ action: "clear" }>
+
+export type DefaultCourseStoredCommand = DefaultCourseCommand | DefaultCourseAgentCommandV3
+
 export type LocatedValueV1<T> =
   | Readonly<{ availability: "recorded_v1"; value: T }>
   | Readonly<{ availability: "not_recorded_v1" }>
@@ -119,23 +125,86 @@ export type DefaultCourseProposal = Readonly<{
 
 export type DefaultCourseAuthorizationKind = "legacy_v1" | "direct_request_v2" | "accepted_proposal_v2"
 
-export type DefaultCourseDispositionKind = "legacy_v1" | "semantic_terminal_v2" | "candidate_v2"
+export type DefaultCourseDispositionKind =
+  | "legacy_v1"
+  | "semantic_terminal_v2"
+  | "candidate_v2"
+  | "semantic_terminal_v3"
+  | "agent_action_v3"
 
 export type DefaultCourseSemanticAddress = Readonly<{
   occurrenceID: string
   slot: "default_course_preference"
 }>
 
-export type DefaultCourseSemanticTerminalDisposition = Readonly<{
-  kind: "semantic_terminal_v2"
+type DefaultCourseSemanticTerminalCommon = Readonly<{
   outcome: "already_applied" | "semantic_conflict"
-  command: DefaultCourseCommand
   commandFingerprint: string
   semanticAddress: DefaultCourseSemanticAddress
   semanticAddressFingerprint: string
   incomingPayloadFingerprint: string
   existingEffectID: DefaultEffectID
   existingPayloadFingerprint: string
+}>
+
+export type DefaultCourseSemanticTerminalDisposition =
+  | (DefaultCourseSemanticTerminalCommon & Readonly<{ kind: "semantic_terminal_v2"; command: DefaultCourseCommand }>)
+  | (DefaultCourseSemanticTerminalCommon &
+      Readonly<{ kind: "semantic_terminal_v3"; command: DefaultCourseAgentCommandV3 }>)
+
+export type DefaultCourseAgentActionLineageEdge = Readonly<{
+  childTurnID: Turn.ID
+  childSessionID: SessionSchema.ID
+  childDepth: number
+  parentTurnID: Turn.ID
+  parentSessionID: SessionSchema.ID
+  parentDepth: number
+  parentTaskPartID: PartID
+  parentModelMessageID: MessageID
+  delegatedCapability: Readonly<Record<string, unknown>>
+  delegatedCapabilityFingerprint: string
+}>
+
+type DefaultCourseAgentActionProvenanceCommon = Readonly<{
+  schemaVersion: 1
+  occurrenceID: string
+  causalRootOccurrenceID: string
+  sessionID: SessionSchema.ID
+  turnID: Turn.ID
+  inputID: Turn.InputID
+  assistantMessageID: MessageID
+  invocationPartID: PartID
+  providerCallID: string
+  emissionOrdinal: number
+  capabilityIdentity: "set_default_course_preference"
+  capabilityVersion: 3
+}>
+
+export type DefaultCourseAgentActionProvenance =
+  | (DefaultCourseAgentActionProvenanceCommon & Readonly<{ kind: "root"; lineage: readonly [] }>)
+  | (DefaultCourseAgentActionProvenanceCommon &
+      Readonly<{
+        kind: "delegated"
+        lineage: readonly [DefaultCourseAgentActionLineageEdge, ...DefaultCourseAgentActionLineageEdge[]]
+        effectiveDelegatedCapability: Readonly<{
+          identity: "set_default_course_preference"
+          version: 3
+          projectionVersion: 2
+          fingerprint: string
+        }>
+      }>)
+
+export type DefaultCourseAgentAction = Readonly<{
+  kind: "agent_action_v3"
+  fingerprint: string
+  provenance: DefaultCourseAgentActionProvenance
+  command: DefaultCourseAgentCommandV3
+  commandFingerprint: string
+  preferenceHeadID: DefaultEffectID | null
+  preferenceVersion: number
+  operation: DefaultCourseOperation
+  from: DefaultCourseEndpointV2
+  to: DefaultCourseEndpointV2
 }>
 
 export type DefaultCourseCapabilityOutcome =
@@ -149,9 +218,7 @@ export type DefaultCourseCapabilityOutcome =
   | "prompted_abort"
 
 type DefaultCourseAcknowledgementCommon = Readonly<{
-  schemaVersion: 1
   invocationPartID: PartID
-  effectAuthorizationPartID: PartID
   effectID: DefaultEffectID
   receiptID: ReceiptID
   operation: DefaultCourseOperation
@@ -163,13 +230,25 @@ type DefaultCourseAcknowledgementCommon = Readonly<{
 export type DefaultCourseAcknowledgement =
   | (DefaultCourseAcknowledgementCommon &
       Readonly<{
+        schemaVersion: 1
+        effectAuthorizationPartID: PartID
         authorizationVersion: 1
         from: DefaultCourseEndpointV1
         to: DefaultCourseEndpointV1
       }>)
   | (DefaultCourseAcknowledgementCommon &
       Readonly<{
+        schemaVersion: 1
+        effectAuthorizationPartID: PartID
         authorizationVersion: 2
+        from: DefaultCourseEndpointV2
+        to: DefaultCourseEndpointV2
+      }>)
+  | (DefaultCourseAcknowledgementCommon &
+      Readonly<{
+        schemaVersion: 2
+        effectAgentActionPartID: PartID
+        agentActionVersion: 3
         from: DefaultCourseEndpointV2
         to: DefaultCourseEndpointV2
       }>)
@@ -192,7 +271,7 @@ export type RouteAnchorCommand = Readonly<{
   target: RouteAnchorTarget | null
 }>
 
-export type Command = DefaultCourseCommand | RouteAnchorCommand
+export type Command = DefaultCourseStoredCommand | RouteAnchorCommand
 
 export type DefaultConfirmationSnapshot = Readonly<{
   permissionRequestID: PermissionV1.ID

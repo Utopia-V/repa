@@ -109,6 +109,18 @@ export const SetDefaultCoursePreferenceV2Input = Schema.Union([
 
 export type SetDefaultCoursePreferenceV2Input = typeof SetDefaultCoursePreferenceV2Input.Type
 
+export const SetDefaultCoursePreferenceV3Input = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("set"),
+    courseID: Course.CourseID,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("clear"),
+  }),
+]).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export type SetDefaultCoursePreferenceV3Input = typeof SetDefaultCoursePreferenceV3Input.Type
+
 const RouteAnchorTargetInput = Schema.Struct({
   viewID: Course.ViewID,
   revisionID: Course.RevisionID,
@@ -288,6 +300,7 @@ const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
 const decodeDefaultProposal = Schema.decodeUnknownSync(ProposeDefaultCoursePreferenceInput)
 const decodeDefaultV2 = Schema.decodeUnknownSync(SetDefaultCoursePreferenceV2Input)
+const decodeDefaultV3 = Schema.decodeUnknownSync(SetDefaultCoursePreferenceV3Input)
 const decodeAnchor = Schema.decodeUnknownSync(SetCourseRouteAnchorInput)
 const decodeSteering = Schema.decodeUnknownSync(UpdateRetainedLearningSteeringInput)
 const decodeGoals = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
@@ -356,6 +369,11 @@ export function normalizeDefaultV2(input: unknown): SetDefaultCoursePreferenceV2
   }
 }
 
+export function normalizeDefaultV3(input: unknown): SetDefaultCoursePreferenceV3Input {
+  const value = decodeDefaultV3(input)
+  return value.action === "set" ? { action: value.action, courseID: value.courseID } : { action: value.action }
+}
+
 export function normalizeAnchor(input: unknown): SetCourseRouteAnchorInput {
   const value = decodeAnchor(input)
   return {
@@ -388,7 +406,7 @@ function normalizeBoundary(input: string) {
 export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) return normalize(input)
   if (toolID === LearningCommand.REPRESENTATION_CONVERT_CAPABILITY) return normalizeRepresentation(input)
-  if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) return normalizeDefaultV2(input)
+  if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) return normalizeDefaultV3(input)
   if (toolID === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY) return normalizeAnchor(input)
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) return normalizeSteering(input)
   if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return normalizeGoals(input)

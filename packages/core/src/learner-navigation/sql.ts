@@ -24,6 +24,7 @@ import type {
   AnchorEffectID,
   DefaultConfirmationSnapshot,
   DefaultCourseAcknowledgement,
+  DefaultCourseAgentActionProvenance,
   DefaultCourseCapabilityOutcome,
   DefaultCourseCommand,
   DefaultCourseDispositionKind,
@@ -32,8 +33,66 @@ import type {
   DefaultCourseOperation,
   DefaultCourseResolutionScope,
   DefaultCourseSemanticAddress,
+  DefaultCourseStoredCommand,
   DefaultEffectID,
 } from "./schema"
+
+function defaultCourseCommandV2Shape(column: AnySQLiteColumn) {
+  return sql`(
+    json_type(${column}) = 'object'
+    AND json_extract(${column}, '$.kind') = 'default_course_preference'
+    AND json_type(${column}, '$.expectedHeadID') IN ('null', 'text')
+    AND json_type(${column}, '$.expectedVersion') = 'integer'
+    AND json_extract(${column}, '$.expectedVersion') >= 0
+    AND json_type(${column}, '$.target') IN ('null', 'object')
+    AND json_remove(${column}, '$.kind', '$.expectedHeadID', '$.expectedVersion', '$.target') = '{}'
+    AND (
+      json_type(${column}, '$.target') = 'null'
+      OR (
+        json_type(${column}, '$.target.courseID') = 'text'
+        AND json_extract(${column}, '$.target.courseID') GLOB 'crs_[0-9A-Za-z]*'
+        AND length(json_extract(${column}, '$.target.courseID')) = 30
+        AND json_type(${column}, '$.target.courseVersion') = 'integer'
+        AND json_extract(${column}, '$.target.courseVersion') >= 0
+        AND json_type(${column}, '$.target.selectionRevisionID') IN ('null', 'text')
+        AND json_type(${column}, '$.target.selectionVersion') = 'integer'
+        AND json_extract(${column}, '$.target.selectionVersion') >= 0
+        AND json_type(${column}, '$.target.viewID') IN ('null', 'text')
+        AND json_type(${column}, '$.target.viewVersion') IN ('null', 'integer')
+        AND json_type(${column}, '$.target.revisionVersion') IN ('null', 'integer')
+        AND json_remove(
+          json_extract(${column}, '$.target'),
+          '$.courseID',
+          '$.courseVersion',
+          '$.selectionRevisionID',
+          '$.selectionVersion',
+          '$.viewID',
+          '$.viewVersion',
+          '$.revisionVersion'
+        ) = '{}'
+      )
+    )
+  )`
+}
+
+function defaultCourseCommandV3Shape(column: AnySQLiteColumn) {
+  return sql`(
+    json_type(${column}) = 'object'
+    AND (
+      (
+        json_extract(${column}, '$.action') = 'clear'
+        AND json_remove(${column}, '$.action') = '{}'
+      )
+      OR (
+        json_extract(${column}, '$.action') = 'set'
+        AND json_type(${column}, '$.courseID') = 'text'
+        AND json_extract(${column}, '$.courseID') GLOB 'crs_[0-9A-Za-z]*'
+        AND length(json_extract(${column}, '$.courseID')) = 30
+        AND json_remove(${column}, '$.action', '$.courseID') = '{}'
+      )
+    )
+  )`
+}
 
 function defaultCourseEndpointV1Shape(column: AnySQLiteColumn) {
   return sql`(
@@ -54,21 +113,95 @@ function defaultCourseEndpointV1Shape(column: AnySQLiteColumn) {
 }
 
 function defaultCourseEndpointV2Shape(column: AnySQLiteColumn) {
-  return sql`(
-    (
-      json_extract(${column}, '$.kind') = 'absent'
-      AND json_type(${column}, '$.locator') IS NULL
+  return sql`COALESCE((
+    json_type(${column}) = 'object'
+    AND (
+      (
+        json_extract(${column}, '$.kind') = 'absent'
+        AND json_remove(${column}, '$.kind') = '{}'
+      )
+      OR
+      (
+        json_extract(${column}, '$.kind') = 'course'
+        AND json_type(${column}, '$.locator') = 'object'
+        AND json_remove(${column}, '$.kind', '$.locator') = '{}'
+        AND json_remove(
+          json_extract(${column}, '$.locator'),
+          '$.courseID',
+          '$.title',
+          '$.courseVersion',
+          '$.workingSelection'
+        ) = '{}'
+        AND json_type(${column}, '$.locator.courseID') = 'text'
+        AND length(json_extract(${column}, '$.locator.courseID')) > 0
+        AND json_type(${column}, '$.locator.title') = 'object'
+        AND json_remove(
+          json_extract(${column}, '$.locator.title'),
+          '$.availability',
+          '$.value'
+        ) = '{}'
+        AND json_extract(${column}, '$.locator.title.availability') = 'recorded_v2'
+        AND json_type(${column}, '$.locator.title.value') = 'text'
+        AND json_type(${column}, '$.locator.courseVersion') = 'object'
+        AND json_remove(
+          json_extract(${column}, '$.locator.courseVersion'),
+          '$.availability',
+          '$.value'
+        ) = '{}'
+        AND json_extract(${column}, '$.locator.courseVersion.availability') = 'recorded_v2'
+        AND json_type(${column}, '$.locator.courseVersion.value') = 'integer'
+        AND json_extract(${column}, '$.locator.courseVersion.value') >= 0
+        AND json_type(${column}, '$.locator.workingSelection') = 'object'
+        AND json_remove(
+          json_extract(${column}, '$.locator.workingSelection'),
+          '$.availability',
+          '$.value'
+        ) = '{}'
+        AND json_extract(${column}, '$.locator.workingSelection.availability') = 'recorded_v2'
+        AND json_type(${column}, '$.locator.workingSelection.value') = 'object'
+        AND json_remove(
+          json_extract(${column}, '$.locator.workingSelection.value'),
+          '$.revisionID',
+          '$.selectionVersion',
+          '$.viewID',
+          '$.viewName',
+          '$.viewVersion',
+          '$.revisionVersion'
+        ) = '{}'
+        AND json_type(${column}, '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
+        AND json_type(${column}, '$.locator.workingSelection.value.selectionVersion') = 'integer'
+        AND json_extract(${column}, '$.locator.workingSelection.value.selectionVersion') >= 0
+        AND json_type(${column}, '$.locator.workingSelection.value.viewID') IN ('text', 'null')
+        AND json_type(${column}, '$.locator.workingSelection.value.viewName') IN ('text', 'null')
+        AND json_type(${column}, '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
+        AND (
+          json_type(${column}, '$.locator.workingSelection.value.viewVersion') = 'null'
+          OR json_extract(${column}, '$.locator.workingSelection.value.viewVersion') >= 0
+        )
+        AND json_type(${column}, '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
+        AND (
+          json_type(${column}, '$.locator.workingSelection.value.revisionVersion') = 'null'
+          OR json_extract(${column}, '$.locator.workingSelection.value.revisionVersion') >= 0
+        )
+        AND (
+          (
+            json_type(${column}, '$.locator.workingSelection.value.revisionID') = 'null'
+            AND json_type(${column}, '$.locator.workingSelection.value.viewID') = 'null'
+            AND json_type(${column}, '$.locator.workingSelection.value.viewName') = 'null'
+            AND json_type(${column}, '$.locator.workingSelection.value.viewVersion') = 'null'
+            AND json_type(${column}, '$.locator.workingSelection.value.revisionVersion') = 'null'
+          )
+          OR (
+            json_type(${column}, '$.locator.workingSelection.value.revisionID') = 'text'
+            AND json_type(${column}, '$.locator.workingSelection.value.viewID') = 'text'
+            AND json_type(${column}, '$.locator.workingSelection.value.viewName') = 'text'
+            AND json_type(${column}, '$.locator.workingSelection.value.viewVersion') = 'integer'
+            AND json_type(${column}, '$.locator.workingSelection.value.revisionVersion') = 'integer'
+          )
+        )
+      )
     )
-    OR
-    (
-      json_extract(${column}, '$.kind') = 'course'
-      AND json_type(${column}, '$.locator') = 'object'
-      AND json_type(${column}, '$.locator.courseID') = 'text'
-      AND json_extract(${column}, '$.locator.title.availability') = 'recorded_v2'
-      AND json_extract(${column}, '$.locator.courseVersion.availability') = 'recorded_v2'
-      AND json_extract(${column}, '$.locator.workingSelection.availability') = 'recorded_v2'
-    )
-  )`
+  ), 0)`
 }
 
 export const LearnerDefaultCourseProposalTable = sqliteTable(
@@ -138,6 +271,9 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
     authorization_version: integer().$type<1 | 2>(),
     authorization_kind: text().$type<"legacy_v1" | "direct_request_v2" | "accepted_proposal_v2">(),
     authorization_fingerprint: text(),
+    agent_action_version: integer().$type<3>(),
+    agent_action_fingerprint: text(),
+    agent_action_provenance: text({ mode: "json" }).$type<DefaultCourseAgentActionProvenance>(),
     command_fingerprint: text().notNull(),
     semantic_outcome: text().$type<"already_applied" | "semantic_conflict">(),
     semantic_address: text({ mode: "json" }).$type<DefaultCourseSemanticAddress>(),
@@ -151,7 +287,7 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
     effect_confirmation_request_id: text().$type<PermissionV1.ID>(),
     legacy_effect_id: text().$type<DefaultEffectID>(),
     legacy_receipt_id: text().$type<ReceiptID>(),
-    command_snapshot: text({ mode: "json" }).$type<DefaultCourseCommand>(),
+    command_snapshot: text({ mode: "json" }).$type<DefaultCourseStoredCommand>(),
     source_excerpt: text(),
     resolution_scope: text({ mode: "json" }).$type<DefaultCourseResolutionScope>(),
     resolution_fingerprint: text(),
@@ -181,7 +317,7 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
     }).onDelete("restrict"),
     check(
       "learner_default_course_disposition_fingerprints",
-      sql`(${table.authorization_fingerprint} IS NULL OR (length(${table.authorization_fingerprint}) = 64 AND ${table.authorization_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND length(${table.command_fingerprint}) = 64 AND ${table.command_fingerprint} NOT GLOB '*[^0-9a-f]*' AND (${table.semantic_address_fingerprint} IS NULL OR (length(${table.semantic_address_fingerprint}) = 64 AND ${table.semantic_address_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.incoming_payload_fingerprint} IS NULL OR (length(${table.incoming_payload_fingerprint}) = 64 AND ${table.incoming_payload_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.existing_payload_fingerprint} IS NULL OR (length(${table.existing_payload_fingerprint}) = 64 AND ${table.existing_payload_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.resolution_fingerprint} IS NULL OR (length(${table.resolution_fingerprint}) = 64 AND ${table.resolution_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.proposal_fingerprint} IS NULL OR (length(${table.proposal_fingerprint}) = 64 AND ${table.proposal_fingerprint} NOT GLOB '*[^0-9a-f]*'))`,
+      sql`(${table.authorization_fingerprint} IS NULL OR (length(${table.authorization_fingerprint}) = 64 AND ${table.authorization_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.agent_action_fingerprint} IS NULL OR (length(${table.agent_action_fingerprint}) = 64 AND ${table.agent_action_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND length(${table.command_fingerprint}) = 64 AND ${table.command_fingerprint} NOT GLOB '*[^0-9a-f]*' AND (${table.semantic_address_fingerprint} IS NULL OR (length(${table.semantic_address_fingerprint}) = 64 AND ${table.semantic_address_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.incoming_payload_fingerprint} IS NULL OR (length(${table.incoming_payload_fingerprint}) = 64 AND ${table.incoming_payload_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.existing_payload_fingerprint} IS NULL OR (length(${table.existing_payload_fingerprint}) = 64 AND ${table.existing_payload_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.resolution_fingerprint} IS NULL OR (length(${table.resolution_fingerprint}) = 64 AND ${table.resolution_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.proposal_fingerprint} IS NULL OR (length(${table.proposal_fingerprint}) = 64 AND ${table.proposal_fingerprint} NOT GLOB '*[^0-9a-f]*'))`,
     ),
     check(
       "learner_default_course_disposition_closed_union",
@@ -190,6 +326,9 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
         AND ${table.authorization_version} = 1
         AND ${table.authorization_kind} = 'legacy_v1'
         AND ${table.authorization_fingerprint} IS NOT NULL
+        AND ${table.agent_action_version} IS NULL
+        AND ${table.agent_action_fingerprint} IS NULL
+        AND ${table.agent_action_provenance} IS NULL
         AND ${table.semantic_outcome} IS NULL
         AND ${table.semantic_address} IS NULL
         AND ${table.semantic_address_fingerprint} IS NULL
@@ -238,8 +377,51 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
         AND ${table.authorization_version} IS NULL
         AND ${table.authorization_kind} IS NULL
         AND ${table.authorization_fingerprint} IS NULL
+        AND ${table.agent_action_version} IS NULL
+        AND ${table.agent_action_fingerprint} IS NULL
+        AND ${table.agent_action_provenance} IS NULL
         AND ${table.semantic_outcome} IN ('already_applied', 'semantic_conflict')
         AND json_valid(${table.command_snapshot})
+        AND json_valid(${table.semantic_address})
+        AND json_extract(${table.semantic_address}, '$.slot') = 'default_course_preference'
+        AND ${table.semantic_address_fingerprint} IS NOT NULL
+        AND ${table.incoming_payload_fingerprint} IS NOT NULL
+        AND ${table.existing_effect_id} IS NOT NULL
+        AND ${table.existing_payload_fingerprint} IS NOT NULL
+        AND ${table.legacy_row_class} IS NULL
+        AND ${table.confirmation_availability} IS NULL
+        AND ${table.command_permission_request_id} IS NULL
+        AND ${table.effect_confirmation_request_id} IS NULL
+        AND ${table.legacy_effect_id} IS NULL
+        AND ${table.legacy_receipt_id} IS NULL
+        AND ${table.source_excerpt} IS NULL
+        AND ${table.resolution_scope} IS NULL
+        AND ${table.resolution_fingerprint} IS NULL
+        AND ${table.preference_head_id} IS NULL
+        AND ${table.preference_version} IS NULL
+        AND ${table.operation} IS NULL
+        AND ${table.from_locator} IS NULL
+        AND ${table.to_locator} IS NULL
+        AND ${table.selected_course_id} IS NULL
+        AND ${table.proposal_part_id} IS NULL
+        AND ${table.proposal_presentation_part_id} IS NULL
+        AND ${table.proposal_presentation_assistant_message_id} IS NULL
+        AND ${table.proposal_assistant_message_id} IS NULL
+        AND ${table.proposal_emission_ordinal} IS NULL
+        AND ${table.proposal_fingerprint} IS NULL
+        AND ${table.proposal_selection} IS NULL
+        AND ${defaultCourseCommandV2Shape(table.command_snapshot)}
+      ) OR (
+        ${table.disposition} = 'semantic_terminal_v3'
+        AND ${table.authorization_version} IS NULL
+        AND ${table.authorization_kind} IS NULL
+        AND ${table.authorization_fingerprint} IS NULL
+        AND ${table.agent_action_version} IS NULL
+        AND ${table.agent_action_fingerprint} IS NULL
+        AND ${table.agent_action_provenance} IS NULL
+        AND ${table.semantic_outcome} IN ('already_applied', 'semantic_conflict')
+        AND json_valid(${table.command_snapshot})
+        AND ${defaultCourseCommandV3Shape(table.command_snapshot)}
         AND json_valid(${table.semantic_address})
         AND json_extract(${table.semantic_address}, '$.slot') = 'default_course_preference'
         AND ${table.semantic_address_fingerprint} IS NOT NULL
@@ -273,6 +455,9 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
         AND ${table.authorization_version} = 2
         AND ${table.authorization_kind} IN ('direct_request_v2', 'accepted_proposal_v2')
         AND ${table.authorization_fingerprint} IS NOT NULL
+        AND ${table.agent_action_version} IS NULL
+        AND ${table.agent_action_fingerprint} IS NULL
+        AND ${table.agent_action_provenance} IS NULL
         AND ${table.semantic_outcome} IS NULL
         AND ${table.semantic_address} IS NULL
         AND ${table.semantic_address_fingerprint} IS NULL
@@ -286,6 +471,7 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
         AND ${table.legacy_effect_id} IS NULL
         AND ${table.legacy_receipt_id} IS NULL
         AND json_valid(${table.command_snapshot})
+        AND ${defaultCourseCommandV2Shape(table.command_snapshot)}
         AND length(${table.source_excerpt}) > 0
         AND json_valid(${table.resolution_scope})
         AND ${table.resolution_fingerprint} IS NOT NULL
@@ -322,6 +508,74 @@ export const LearnerDefaultCourseDispositionTable = sqliteTable(
             AND ${table.proposal_selection} IN ('sole_presented', 'explicit_reference')
           )
         )
+      ) OR (
+        ${table.disposition} = 'agent_action_v3'
+        AND ${table.authorization_version} IS NULL
+        AND ${table.authorization_kind} IS NULL
+        AND ${table.authorization_fingerprint} IS NULL
+        AND ${table.agent_action_version} = 3
+        AND ${table.agent_action_fingerprint} IS NOT NULL
+        AND json_valid(${table.agent_action_provenance})
+        AND json_extract(${table.agent_action_provenance}, '$.schemaVersion') = 1
+        AND json_extract(${table.agent_action_provenance}, '$.kind') IN ('root', 'delegated')
+        AND json_extract(${table.agent_action_provenance}, '$.capabilityIdentity') = 'set_default_course_preference'
+        AND json_extract(${table.agent_action_provenance}, '$.capabilityVersion') = 3
+        AND json_type(${table.agent_action_provenance}, '$.lineage') = 'array'
+        AND (
+          (
+            json_extract(${table.agent_action_provenance}, '$.kind') = 'root'
+            AND json_array_length(${table.agent_action_provenance}, '$.lineage') = 0
+          )
+          OR (
+            json_extract(${table.agent_action_provenance}, '$.kind') = 'delegated'
+            AND json_array_length(${table.agent_action_provenance}, '$.lineage') > 0
+          )
+        )
+        AND ${table.semantic_outcome} IS NULL
+        AND ${table.semantic_address} IS NULL
+        AND ${table.semantic_address_fingerprint} IS NULL
+        AND ${table.incoming_payload_fingerprint} IS NULL
+        AND ${table.existing_effect_id} IS NULL
+        AND ${table.existing_payload_fingerprint} IS NULL
+        AND ${table.legacy_row_class} IS NULL
+        AND ${table.confirmation_availability} IS NULL
+        AND ${table.command_permission_request_id} IS NULL
+        AND ${table.effect_confirmation_request_id} IS NULL
+        AND ${table.legacy_effect_id} IS NULL
+        AND ${table.legacy_receipt_id} IS NULL
+        AND json_valid(${table.command_snapshot})
+        AND ${table.source_excerpt} IS NULL
+        AND ${table.resolution_scope} IS NULL
+        AND ${table.resolution_fingerprint} IS NULL
+        AND ${table.preference_version} IS NOT NULL
+        AND ((${table.preference_version} = 0 AND ${table.preference_head_id} IS NULL)
+          OR (${table.preference_version} > 0 AND ${table.preference_head_id} IS NOT NULL))
+        AND ${table.operation} IN ('set', 'change', 'clear')
+        AND json_valid(${table.from_locator})
+        AND json_valid(${table.to_locator})
+        AND ${defaultCourseEndpointV2Shape(table.from_locator)}
+        AND ${defaultCourseEndpointV2Shape(table.to_locator)}
+        AND ${defaultCourseCommandV3Shape(table.command_snapshot)}
+        AND ${table.selected_course_id} IS NULL
+        AND (
+          (
+            json_extract(${table.command_snapshot}, '$.action') = 'clear'
+            AND json_extract(${table.to_locator}, '$.kind') = 'absent'
+          )
+          OR (
+            json_extract(${table.command_snapshot}, '$.action') = 'set'
+            AND json_extract(${table.to_locator}, '$.kind') = 'course'
+            AND json_extract(${table.command_snapshot}, '$.courseID') =
+              json_extract(${table.to_locator}, '$.locator.courseID')
+          )
+        )
+        AND ${table.proposal_part_id} IS NULL
+        AND ${table.proposal_presentation_part_id} IS NULL
+        AND ${table.proposal_presentation_assistant_message_id} IS NULL
+        AND ${table.proposal_assistant_message_id} IS NULL
+        AND ${table.proposal_emission_ordinal} IS NULL
+        AND ${table.proposal_fingerprint} IS NULL
+        AND ${table.proposal_selection} IS NULL
       )`,
     ),
     check("learner_default_course_disposition_time", sql`${table.time_disposed} >= 0`),
@@ -333,7 +587,8 @@ export const LearnerDefaultCourseCapabilityIssueTable = sqliteTable(
   {
     invocation_part_id: text().$type<PartID>().primaryKey(),
     permission_request_id: text().$type<PermissionV1.ID>().notNull().unique(),
-    authorization_fingerprint: text().notNull(),
+    authorization_fingerprint: text(),
+    agent_action_fingerprint: text(),
     policy_basis: text({ mode: "json" }).$type<Record<string, unknown>>().notNull(),
     policy_fingerprint: text().notNull(),
     shown_scope: text({ mode: "json" }).$type<Record<string, unknown>>().notNull(),
@@ -352,7 +607,7 @@ export const LearnerDefaultCourseCapabilityIssueTable = sqliteTable(
     ),
     check(
       "learner_default_course_capability_issue_fingerprints",
-      sql`length(${table.authorization_fingerprint}) = 64 AND ${table.authorization_fingerprint} NOT GLOB '*[^0-9a-f]*' AND length(${table.policy_fingerprint}) = 64 AND ${table.policy_fingerprint} NOT GLOB '*[^0-9a-f]*' AND length(${table.shown_scope_fingerprint}) = 64 AND ${table.shown_scope_fingerprint} NOT GLOB '*[^0-9a-f]*'`,
+      sql`((length(${table.authorization_fingerprint}) = 64 AND ${table.authorization_fingerprint} NOT GLOB '*[^0-9a-f]*' AND ${table.agent_action_fingerprint} IS NULL) OR (${table.authorization_fingerprint} IS NULL AND length(${table.agent_action_fingerprint}) = 64 AND ${table.agent_action_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND length(${table.policy_fingerprint}) = 64 AND ${table.policy_fingerprint} NOT GLOB '*[^0-9a-f]*' AND length(${table.shown_scope_fingerprint}) = 64 AND ${table.shown_scope_fingerprint} NOT GLOB '*[^0-9a-f]*'`,
     ),
     check(
       "learner_default_course_capability_issue_shape",
@@ -367,7 +622,8 @@ export const LearnerDefaultCourseCapabilitySettlementTable = sqliteTable(
     invocation_part_id: text().$type<PartID>().primaryKey(),
     outcome: text().$type<DefaultCourseCapabilityOutcome>().notNull(),
     permission_request_id: text().$type<PermissionV1.ID>(),
-    authorization_fingerprint: text().notNull(),
+    authorization_fingerprint: text(),
+    agent_action_fingerprint: text(),
     policy_basis: text({ mode: "json" }).$type<Record<string, unknown>>(),
     policy_fingerprint: text(),
     reply: text({ mode: "json" }).$type<Record<string, unknown>>(),
@@ -389,7 +645,7 @@ export const LearnerDefaultCourseCapabilitySettlementTable = sqliteTable(
     }).onDelete("restrict"),
     check(
       "learner_default_course_capability_settlement_fingerprints",
-      sql`length(${table.authorization_fingerprint}) = 64 AND ${table.authorization_fingerprint} NOT GLOB '*[^0-9a-f]*' AND (${table.policy_fingerprint} IS NULL OR (length(${table.policy_fingerprint}) = 64 AND ${table.policy_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.reply_fingerprint} IS NULL OR (length(${table.reply_fingerprint}) = 64 AND ${table.reply_fingerprint} NOT GLOB '*[^0-9a-f]*'))`,
+      sql`((length(${table.authorization_fingerprint}) = 64 AND ${table.authorization_fingerprint} NOT GLOB '*[^0-9a-f]*' AND ${table.agent_action_fingerprint} IS NULL) OR (${table.authorization_fingerprint} IS NULL AND length(${table.agent_action_fingerprint}) = 64 AND ${table.agent_action_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.policy_fingerprint} IS NULL OR (length(${table.policy_fingerprint}) = 64 AND ${table.policy_fingerprint} NOT GLOB '*[^0-9a-f]*')) AND (${table.reply_fingerprint} IS NULL OR (length(${table.reply_fingerprint}) = 64 AND ${table.reply_fingerprint} NOT GLOB '*[^0-9a-f]*'))`,
     ),
     check(
       "learner_default_course_capability_settlement_closed_union",
@@ -454,7 +710,8 @@ export const DefaultCoursePreferenceTransitionTable = sqliteTable(
     previous_course_id: text().$type<Course.CourseID>(),
     course_id: text().$type<Course.CourseID>(),
     occurrence_id: text().$type<OccurrenceID>().notNull(),
-    authorization_part_id: text().$type<PartID>().notNull(),
+    authorization_part_id: text().$type<PartID>(),
+    agent_action_part_id: text().$type<PartID>(),
     permission_request_id: text().$type<PermissionV1.ID>(),
     confirmation_snapshot: text({ mode: "json" }).$type<DefaultConfirmationSnapshot>(),
     target_course_version: integer(),
@@ -487,6 +744,10 @@ export const DefaultCoursePreferenceTransitionTable = sqliteTable(
       columns: [table.authorization_part_id],
       foreignColumns: [LearnerDefaultCourseDispositionTable.invocation_part_id],
     }).onDelete("restrict"),
+    foreignKey({
+      columns: [table.agent_action_part_id],
+      foreignColumns: [LearnerDefaultCourseDispositionTable.invocation_part_id],
+    }).onDelete("restrict"),
     unique("learner_default_course_version_unique").on(table.version),
     unique("learner_default_course_predecessor_unique").on(table.predecessor_id),
     unique("learner_default_course_occurrence_unique").on(table.occurrence_id),
@@ -507,6 +768,10 @@ export const DefaultCoursePreferenceTransitionTable = sqliteTable(
     check(
       "learner_default_course_legacy_confirmation_shape",
       sql`(${table.permission_request_id} IS NULL AND ${table.confirmation_snapshot} IS NULL) OR (${table.permission_request_id} IS NOT NULL AND length(${table.permission_request_id}) > 0 AND json_valid(${table.confirmation_snapshot}))`,
+    ),
+    check(
+      "learner_default_course_provenance_shape",
+      sql`(${table.authorization_part_id} IS NOT NULL AND ${table.agent_action_part_id} IS NULL) OR (${table.authorization_part_id} IS NULL AND ${table.agent_action_part_id} IS NOT NULL AND ${table.permission_request_id} IS NULL AND ${table.confirmation_snapshot} IS NULL)`,
     ),
     check(
       "learner_default_course_time_order",
@@ -543,8 +808,10 @@ export const LearnerDefaultCourseAcknowledgementTable = sqliteTable(
   "learner_default_course_acknowledgement",
   {
     invocation_part_id: text().$type<PartID>().primaryKey(),
-    effect_authorization_part_id: text().$type<PartID>().notNull(),
-    authorization_version: integer().$type<1 | 2>().notNull(),
+    effect_authorization_part_id: text().$type<PartID>(),
+    authorization_version: integer().$type<1 | 2>(),
+    effect_agent_action_part_id: text().$type<PartID>(),
+    agent_action_version: integer().$type<3>(),
     effect_id: text().$type<DefaultEffectID>().notNull(),
     receipt_id: text().$type<ReceiptID>().notNull(),
     operation: text().$type<DefaultCourseOperation>().notNull(),
@@ -566,6 +833,10 @@ export const LearnerDefaultCourseAcknowledgementTable = sqliteTable(
       foreignColumns: [LearnerDefaultCourseDispositionTable.invocation_part_id],
     }).onDelete("restrict"),
     foreignKey({
+      columns: [table.effect_agent_action_part_id],
+      foreignColumns: [LearnerDefaultCourseDispositionTable.invocation_part_id],
+    }).onDelete("restrict"),
+    foreignKey({
       columns: [table.effect_id],
       foreignColumns: [DefaultCoursePreferenceTransitionTable.id],
     }).onDelete("restrict"),
@@ -575,7 +846,57 @@ export const LearnerDefaultCourseAcknowledgementTable = sqliteTable(
     }).onDelete("restrict"),
     check(
       "learner_default_course_acknowledgement_shape",
-      sql`${table.authorization_version} IN (1, 2) AND ${table.operation} IN ('set', 'change', 'clear') AND json_valid(${table.from_locator}) AND json_valid(${table.to_locator}) AND ((${table.authorization_version} = 1 AND ${defaultCourseEndpointV1Shape(table.from_locator)} AND ${defaultCourseEndpointV1Shape(table.to_locator)}) OR (${table.authorization_version} = 2 AND ${defaultCourseEndpointV2Shape(table.from_locator)} AND ${defaultCourseEndpointV2Shape(table.to_locator)})) AND ${table.relation} IN ('active', 'superseded') AND json_valid(${table.presentation_snapshot})`,
+      sql`
+        ${table.operation} IN ('set', 'change', 'clear')
+        AND json_valid(${table.from_locator})
+        AND json_valid(${table.to_locator})
+        AND json_valid(${table.presentation_snapshot})
+        AND ${table.relation} IN ('active', 'superseded')
+        AND (
+          (
+            ${table.authorization_version} = 1
+            AND ${table.effect_authorization_part_id} IS NOT NULL
+            AND ${table.agent_action_version} IS NULL
+            AND ${table.effect_agent_action_part_id} IS NULL
+            AND ${defaultCourseEndpointV1Shape(table.from_locator)}
+            AND ${defaultCourseEndpointV1Shape(table.to_locator)}
+            AND json_extract(${table.presentation_snapshot}, '$.schemaVersion') = 1
+            AND json_extract(${table.presentation_snapshot}, '$.authorizationVersion') = 1
+            AND json_extract(${table.presentation_snapshot}, '$.effectAuthorizationPartID') =
+              ${table.effect_authorization_part_id}
+            AND json_type(${table.presentation_snapshot}, '$.agentActionVersion') IS NULL
+            AND json_type(${table.presentation_snapshot}, '$.effectAgentActionPartID') IS NULL
+          )
+          OR (
+            ${table.authorization_version} = 2
+            AND ${table.effect_authorization_part_id} IS NOT NULL
+            AND ${table.agent_action_version} IS NULL
+            AND ${table.effect_agent_action_part_id} IS NULL
+            AND ${defaultCourseEndpointV2Shape(table.from_locator)}
+            AND ${defaultCourseEndpointV2Shape(table.to_locator)}
+            AND json_extract(${table.presentation_snapshot}, '$.schemaVersion') = 1
+            AND json_extract(${table.presentation_snapshot}, '$.authorizationVersion') = 2
+            AND json_extract(${table.presentation_snapshot}, '$.effectAuthorizationPartID') =
+              ${table.effect_authorization_part_id}
+            AND json_type(${table.presentation_snapshot}, '$.agentActionVersion') IS NULL
+            AND json_type(${table.presentation_snapshot}, '$.effectAgentActionPartID') IS NULL
+          )
+          OR (
+            ${table.authorization_version} IS NULL
+            AND ${table.effect_authorization_part_id} IS NULL
+            AND ${table.agent_action_version} = 3
+            AND ${table.effect_agent_action_part_id} IS NOT NULL
+            AND ${defaultCourseEndpointV2Shape(table.from_locator)}
+            AND ${defaultCourseEndpointV2Shape(table.to_locator)}
+            AND json_extract(${table.presentation_snapshot}, '$.schemaVersion') = 2
+            AND json_extract(${table.presentation_snapshot}, '$.agentActionVersion') = 3
+            AND json_extract(${table.presentation_snapshot}, '$.effectAgentActionPartID') =
+              ${table.effect_agent_action_part_id}
+            AND json_type(${table.presentation_snapshot}, '$.authorizationVersion') IS NULL
+            AND json_type(${table.presentation_snapshot}, '$.effectAuthorizationPartID') IS NULL
+          )
+        )
+      `,
     ),
     check(
       "learner_default_course_acknowledgement_fingerprint",

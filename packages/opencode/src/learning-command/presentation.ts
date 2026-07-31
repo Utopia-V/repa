@@ -5,10 +5,15 @@ import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import type {
+  DefaultCourseV3ResultDisposition,
   DefaultCourseV2Authorization,
   DefaultCourseV2ResultDisposition,
 } from "@opencode-ai/core/learner-navigation/default-course-v2"
-import type { DefaultCourseAcknowledgement, DefaultCourseProposal } from "@opencode-ai/core/learner-navigation/schema"
+import type {
+  DefaultCourseAcknowledgement,
+  DefaultCourseAgentAction,
+  DefaultCourseProposal,
+} from "@opencode-ai/core/learner-navigation/schema"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 
@@ -90,6 +95,35 @@ export function defaultCourseV2SettlementResult(
   }
   return SemanticPresentation.result({
     kind: "default_course_v2_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition,
+    ...(acknowledgement?.schemaVersion === 1 ? { acknowledgement } : {}),
+  })
+}
+
+export function defaultCourseV3Capability(agentAction: DefaultCourseAgentAction, envelope: BindingInput) {
+  return SemanticPresentation.proposal({
+    kind: "default_course_v3_capability",
+    binding: binding(envelope),
+    agentAction,
+  })
+}
+
+export function defaultCourseV3SettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  disposition: DefaultCourseV3ResultDisposition,
+  acknowledgement: DefaultCourseAcknowledgement | undefined,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed Default-Course V3 settlement has no exact error code")
+  }
+  return SemanticPresentation.result({
+    kind: "default_course_v3_result",
     binding: binding(envelope),
     settlement:
       settlement.outcome === "error"
@@ -189,6 +223,9 @@ export function learnerGoalsProposal(
   prepared: LearnerGoal.ProposalPresentation,
   confirmation?: LearnerGoal.ConfirmationSnapshot,
 ) {
+  if (prepared.authorizationBasis === "agent_action") {
+    throw new Error("Historical learner Goal proposal cannot claim current Agent-action provenance")
+  }
   return SemanticPresentation.proposal({
     kind: "learner_goals",
     binding: binding(
@@ -323,10 +360,14 @@ export function settlementResult(
     })
   }
   requireGoalSettlementPresentation(settlement, goalOperations)
+  const authorizationBasis = "authorizationBasis" in settlement ? settlement.authorizationBasis : undefined
+  if (authorizationBasis === "agent_action") {
+    throw new Error("Historical learner Goal result cannot claim current Agent-action provenance")
+  }
   return SemanticPresentation.result({
     kind: "learner_goals_result",
     ...common,
-    ...("authorizationBasis" in settlement ? { authorizationBasis: settlement.authorizationBasis } : {}),
+    ...(authorizationBasis ? { authorizationBasis } : {}),
     operations: goalOperations,
   })
 }

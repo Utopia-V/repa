@@ -11,6 +11,7 @@ import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "@opencode-ai/core
 import { install as installSchemaExtrasV10 } from "@opencode-ai/core/database/schema-extras-v10"
 import { install as installSchemaExtrasV11 } from "@opencode-ai/core/database/schema-extras-v11"
 import { install as installSchemaExtrasV12 } from "@opencode-ai/core/database/schema-extras-v12"
+import { install as installSchemaExtrasV13 } from "@opencode-ai/core/database/schema-extras-v13"
 import sessionUsageMigration from "@opencode-ai/core/database/migration/20260510033149_session_usage"
 import normalizeStoragePathsMigration from "@opencode-ai/core/database/migration/20260601010001_normalize_storage_paths"
 import sessionMessageProjectionOrderMigration from "@opencode-ai/core/database/migration/20260603040000_session_message_projection_order"
@@ -30,6 +31,7 @@ import retainedSteeringMigration from "@opencode-ai/core/database/migration/repa
 import learnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260720200330_gate16_learner_goals"
 import domainNeutralLearningCommandLedgerMigration from "@opencode-ai/core/database/migration/repa/20260727121200_domain_neutral_learning_command_ledger"
 import defaultCourseV2Migration from "@opencode-ai/core/database/migration/repa/20260729144139_gate14_default_course_v2"
+import agentNativeDefaultCourseMigration from "@opencode-ai/core/database/migration/repa/20260730115237_gate14_agent_native_default_course"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -49,6 +51,7 @@ import { noEffectStatement } from "@opencode-ai/core/learner-navigation/learning
 import { tmpdir } from "./fixture/tmpdir"
 import databaseV11Schema from "./fixture/database-v11-schema"
 import databaseV12Schema from "./fixture/database-v12-schema"
+import databaseV13Schema from "./fixture/database-v13-schema"
 
 const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
   Effect.runPromise(
@@ -1339,6 +1342,7 @@ function dropGate16(db: TestDatabase) {
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 12}`)
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 11}`)
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 10}`)
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 13}`)
     yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
   })
 }
@@ -1692,6 +1696,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
           { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
           { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
+          { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -1729,7 +1734,485 @@ describe("DatabaseMigration", () => {
     )
   })
 
-  test("upgrades the frozen v12 schema to exact v13 Default-Course structural parity", async () => {
+  test("rejects mixed or incomplete Agent-native Default-Course disposition shapes", async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        yield* db.run(sql`
+          INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES ('project_v14_shape', '/learning', 0, 0, '[]')
+        `)
+        const provenance = (index: number, override: Readonly<Record<string, unknown>> = {}) => ({
+          schemaVersion: 1,
+          kind: "root",
+          occurrenceID: `occ_v14_shape_${index}`,
+          causalRootOccurrenceID: `occ_v14_shape_${index}`,
+          sessionID: `ses_v14_shape_${index}`,
+          turnID: `trn_v14_shape_${index}`,
+          inputID: `inp_v14_shape_${index}`,
+          assistantMessageID: `msg_v14_shape_assistant_${index}`,
+          invocationPartID: `prt_v14_shape_${index}`,
+          providerCallID: `call_v14_shape_${index}`,
+          emissionOrdinal: 0,
+          capabilityIdentity: "set_default_course_preference",
+          capabilityVersion: 3,
+          lineage: [],
+          ...override,
+        })
+        const delegated = (
+          index: number,
+          override: Readonly<Record<string, unknown>> = {},
+          edgeOverride: Readonly<Record<string, unknown>> = {},
+        ) => {
+          const root = provenance(index)
+          const fingerprint = "d".repeat(64)
+          const edge = {
+            childTurnID: root.turnID,
+            childSessionID: root.sessionID,
+            childDepth: 1,
+            parentTurnID: `trn_v14_shape_parent_${index}`,
+            parentSessionID: `ses_v14_shape_parent_${index}`,
+            parentDepth: 0,
+            parentTaskPartID: `prt_v14_shape_parent_${index}`,
+            parentModelMessageID: `msg_v14_shape_parent_${index}`,
+            delegatedCapability: {
+              version: 2,
+              parent: [],
+              inherited: [],
+              profile: [],
+              explicit: [
+                {
+                  permission: "set_default_course_preference",
+                  pattern: "*",
+                  action: "allow",
+                },
+              ],
+            },
+            delegatedCapabilityFingerprint: fingerprint,
+            ...edgeOverride,
+          }
+          return {
+            ...root,
+            kind: "delegated",
+            lineage: [edge],
+            effectiveDelegatedCapability: {
+              identity: "set_default_course_preference",
+              version: 3,
+              projectionVersion: 2,
+              fingerprint,
+            },
+            ...override,
+          }
+        }
+        const insert = (
+          index: number,
+          input: Readonly<{
+            provenance: unknown
+            operation: string
+            command?: unknown
+            from?: unknown
+            to?: unknown
+            course?: Readonly<{
+              id: string
+              title: string
+              workingSelection?:
+                | Readonly<{ kind: "absent" }>
+                | Readonly<{
+                    kind: "recorded"
+                    revisionID: string
+                    selectionVersion: number
+                    viewID: string
+                    viewName: string
+                    viewVersion: number
+                    revisionVersion: number
+                  }>
+            }>
+          }>,
+        ) =>
+          Effect.gen(function* () {
+            yield* db.run(sql`
+              INSERT INTO session (
+                id, project_id, slug, directory, title, version, time_created, time_updated
+              ) VALUES (
+                ${`ses_v14_shape_${index}`}, 'project_v14_shape', ${`shape-${index}`},
+                '/learning', 'V14 shape fixture', 'test', ${index}, ${index}
+              )
+            `)
+            yield* db.run(sql`
+              INSERT INTO message (id, session_id, time_created, time_updated, data)
+              VALUES (
+                ${`msg_v14_shape_user_${index}`}, ${`ses_v14_shape_${index}`},
+                ${index}, ${index}, '{"role":"user"}'
+              )
+            `)
+            yield* db.run(sql`
+              INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+              VALUES (
+                ${`prt_v14_shape_user_${index}`}, ${`msg_v14_shape_user_${index}`},
+                ${`ses_v14_shape_${index}`}, ${index}, ${index},
+                '{"type":"text","text":"V14 disposition shape fixture"}'
+              )
+            `)
+            yield* db.run(sql`
+              INSERT INTO learning_occurrence_source_order (
+                occurrence_id, origin_session_id, origin_message_id, time_allocated,
+                source_temporal_state, source_timezone, source_utc_offset_minutes
+              ) VALUES (
+                ${`occ_v14_shape_${index}`}, ${`ses_v14_shape_${index}`},
+                ${`msg_v14_shape_user_${index}`}, ${index}, 'resolved', 'UTC', 0
+              )
+            `)
+            yield* db.run(sql`
+              INSERT INTO learning_admitted_occurrence (
+                id, origin_session_id, origin_message_id, time_admitted, source_order,
+                source_temporal_state, source_timezone, source_utc_offset_minutes
+              ) VALUES (
+                ${`occ_v14_shape_${index}`},
+                ${`ses_v14_shape_${index}`},
+                ${`msg_v14_shape_user_${index}`},
+                ${index},
+                (
+                  SELECT sequence FROM learning_occurrence_source_order
+                  WHERE occurrence_id = ${`occ_v14_shape_${index}`}
+                ),
+                'resolved', 'UTC', 0
+              )
+            `)
+            yield* db.run(sql`
+              INSERT INTO learning_command_invocation (
+                part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+                occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+                capability_version, authorization_basis, input_fingerprint, status, time_admitted,
+                turn_id, input_id
+              ) VALUES (
+                ${`prt_v14_shape_${index}`},
+                ${`ses_v14_shape_${index}`},
+                ${`msg_v14_shape_user_${index}`},
+                ${`msg_v14_shape_assistant_${index}`},
+                ${`call_v14_shape_${index}`},
+                ${`occ_v14_shape_${index}`},
+                'set_default_course_preference', 3, 0, 'set_default_course_preference',
+                3, 'agent_action', ${String(index % 10).repeat(64)}, 'admitted', ${index},
+                ${`trn_v14_shape_${index}`}, ${`inp_v14_shape_${index}`}
+              )
+            `)
+            if (input.course) {
+              yield* db.run(sql`
+                INSERT INTO course (id, title, state_version, time_created, time_updated)
+                VALUES (${input.course.id}, ${input.course.title}, 0, ${index}, ${index})
+              `)
+              if (input.course.workingSelection?.kind === "absent") {
+                yield* db.run(sql`
+                  INSERT INTO course_working_selection (course_id, revision_id, version, time_updated)
+                  VALUES (${input.course.id}, NULL, 0, ${index})
+                `)
+              }
+              if (input.course.workingSelection?.kind === "recorded") {
+                yield* db.run(sql`
+                  INSERT INTO course_view (
+                    id, course_id, name, state_version, time_created, time_updated
+                  ) VALUES (
+                    ${input.course.workingSelection.viewID}, ${input.course.id},
+                    ${input.course.workingSelection.viewName},
+                    ${input.course.workingSelection.viewVersion}, ${index}, ${index}
+                  )
+                `)
+                yield* db.run(sql`
+                  INSERT INTO course_view_revision (
+                    id, course_id, view_id, revision_number, authorship_basis, time_created
+                  ) VALUES (
+                    ${input.course.workingSelection.revisionID}, ${input.course.id},
+                    ${input.course.workingSelection.viewID}, 1, 'tutor_proposed', ${index}
+                  )
+                `)
+                yield* db.run(sql`
+                  INSERT INTO course_view_revision_state (
+                    course_id, view_id, revision_id, state_version, time_updated
+                  ) VALUES (
+                    ${input.course.id}, ${input.course.workingSelection.viewID},
+                    ${input.course.workingSelection.revisionID},
+                    ${input.course.workingSelection.revisionVersion}, ${index}
+                  )
+                `)
+                yield* db.run(sql`
+                  INSERT INTO course_working_selection (course_id, revision_id, version, time_updated)
+                  VALUES (
+                    ${input.course.id}, ${input.course.workingSelection.revisionID},
+                    ${input.course.workingSelection.selectionVersion}, ${index}
+                  )
+                `)
+              }
+            }
+            return yield* db
+              .run(
+                sql`
+                INSERT INTO learner_default_course_disposition (
+                  invocation_part_id, disposition, agent_action_version, agent_action_fingerprint,
+                  agent_action_provenance, command_fingerprint, command_snapshot, preference_version,
+                  operation, from_locator, to_locator, time_disposed
+                ) VALUES (
+                  ${`prt_v14_shape_${index}`}, 'agent_action_v3', 3, ${"a".repeat(64)},
+                  ${JSON.stringify(input.provenance)}, ${"b".repeat(64)},
+                  ${JSON.stringify(input.command ?? { action: "clear" })}, 0,
+                  ${input.operation}, ${JSON.stringify(input.from ?? { kind: "absent" })},
+                  ${JSON.stringify(input.to ?? { kind: "absent" })}, ${index}
+                )
+              `,
+              )
+              .pipe(Effect.exit)
+          })
+
+        const valid = yield* insert(1, { provenance: provenance(1), operation: "change" })
+        const unknownRootField = yield* insert(2, {
+          provenance: provenance(2, { unexpected: "shadow" }),
+          operation: "change",
+        })
+        const contradictoryOperation = yield* insert(3, {
+          provenance: provenance(3),
+          operation: "set",
+        })
+        const incompleteDelegated = yield* insert(4, {
+          provenance: provenance(4, { kind: "delegated", lineage: [{}] }),
+          operation: "change",
+        })
+        const validDelegated = yield* insert(5, {
+          provenance: delegated(5),
+          operation: "change",
+        })
+        const unknownDelegatedField = yield* insert(6, {
+          provenance: delegated(6, {}, { unexpected: "shadow" }),
+          operation: "change",
+        })
+        const malformedDelegatedRule = yield* insert(7, {
+          provenance: delegated(
+            7,
+            {},
+            {
+              delegatedCapability: {
+                version: 2,
+                parent: [],
+                inherited: [],
+                profile: [],
+                explicit: [
+                  {
+                    permission: "set_default_course_preference",
+                    pattern: "*",
+                    action: "allow",
+                    unexpected: "shadow",
+                  },
+                ],
+              },
+            },
+          ),
+          operation: "change",
+        })
+        const mismatchedEffectiveFingerprint = yield* insert(8, {
+          provenance: delegated(8, {
+            effectiveDelegatedCapability: {
+              identity: "set_default_course_preference",
+              version: 3,
+              projectionVersion: 2,
+              fingerprint: "e".repeat(64),
+            },
+          }),
+          operation: "change",
+        })
+        const validCourseID = "crs_00000000000000000000000009"
+        const validCourseLocator = yield* insert(9, {
+          provenance: provenance(9),
+          operation: "set",
+          command: { action: "set", courseID: validCourseID },
+          course: { id: validCourseID, title: "Valid V14 locator", workingSelection: { kind: "absent" } },
+          to: {
+            kind: "course",
+            locator: {
+              courseID: validCourseID,
+              title: { availability: "recorded_v2", value: "Valid V14 locator" },
+              courseVersion: { availability: "recorded_v2", value: 0 },
+              workingSelection: {
+                availability: "recorded_v2",
+                value: {
+                  revisionID: null,
+                  selectionVersion: 0,
+                  viewID: null,
+                  viewName: null,
+                  viewVersion: null,
+                  revisionVersion: null,
+                },
+              },
+            },
+          },
+        })
+        const unknownAbsentEndpoint = yield* insert(10, {
+          provenance: provenance(10),
+          operation: "change",
+          from: { kind: "absent", unexpected: "accepted" },
+        })
+        const incompleteCourseID = "crs_00000000000000000000000011"
+        const incompleteCourseEndpoint = yield* insert(11, {
+          provenance: provenance(11),
+          operation: "set",
+          command: { action: "set", courseID: incompleteCourseID },
+          course: { id: incompleteCourseID, title: "Incomplete V14 locator" },
+          to: {
+            kind: "course",
+            unexpected: "accepted",
+            locator: {
+              courseID: incompleteCourseID,
+              unexpected: "accepted",
+              title: { availability: "recorded_v2", unexpected: "accepted" },
+              courseVersion: { availability: "recorded_v2", unexpected: "accepted" },
+              workingSelection: { availability: "recorded_v2", unexpected: "accepted" },
+            },
+          },
+        })
+        const recordedCourseID = "crs_00000000000000000000000012"
+        const recordedSelection = {
+          kind: "recorded" as const,
+          revisionID: "cvr_00000000000000000000000012",
+          selectionVersion: 1,
+          viewID: "cvw_00000000000000000000000012",
+          viewName: "Recorded V14 view",
+          viewVersion: 0,
+          revisionVersion: 0,
+        }
+        const recordedEndpoint = {
+          kind: "course" as const,
+          locator: {
+            courseID: recordedCourseID,
+            title: { availability: "recorded_v2" as const, value: "Recorded V14 locator" },
+            courseVersion: { availability: "recorded_v2" as const, value: 0 },
+            workingSelection: {
+              availability: "recorded_v2" as const,
+              value: {
+                revisionID: recordedSelection.revisionID,
+                selectionVersion: recordedSelection.selectionVersion,
+                viewID: recordedSelection.viewID,
+                viewName: recordedSelection.viewName,
+                viewVersion: recordedSelection.viewVersion,
+                revisionVersion: recordedSelection.revisionVersion,
+              },
+            },
+          },
+        }
+        const validRecordedSelection = yield* insert(12, {
+          provenance: provenance(12),
+          operation: "set",
+          command: { action: "set", courseID: recordedCourseID },
+          course: {
+            id: recordedCourseID,
+            title: "Recorded V14 locator",
+            workingSelection: recordedSelection,
+          },
+          to: recordedEndpoint,
+        })
+        const mixedMissingRevisionCourseID = "crs_00000000000000000000000013"
+        const mixedMissingRevisionSelection = {
+          ...recordedSelection,
+          revisionID: "cvr_00000000000000000000000013",
+          viewID: "cvw_00000000000000000000000013",
+        }
+        const mixedMissingRevision = yield* insert(13, {
+          provenance: provenance(13),
+          operation: "set",
+          command: { action: "set", courseID: mixedMissingRevisionCourseID },
+          course: {
+            id: mixedMissingRevisionCourseID,
+            title: "Mixed missing revision V14 locator",
+            workingSelection: mixedMissingRevisionSelection,
+          },
+          to: {
+            ...recordedEndpoint,
+            locator: {
+              ...recordedEndpoint.locator,
+              courseID: mixedMissingRevisionCourseID,
+              title: { availability: "recorded_v2", value: "Mixed missing revision V14 locator" },
+              workingSelection: {
+                availability: "recorded_v2",
+                value: {
+                  revisionID: null,
+                  selectionVersion: mixedMissingRevisionSelection.selectionVersion,
+                  viewID: mixedMissingRevisionSelection.viewID,
+                  viewName: mixedMissingRevisionSelection.viewName,
+                  viewVersion: mixedMissingRevisionSelection.viewVersion,
+                  revisionVersion: mixedMissingRevisionSelection.revisionVersion,
+                },
+              },
+            },
+          },
+        })
+        const mixedMissingViewCourseID = "crs_00000000000000000000000014"
+        const mixedMissingViewSelection = {
+          ...recordedSelection,
+          revisionID: "cvr_00000000000000000000000014",
+          viewID: "cvw_00000000000000000000000014",
+        }
+        const mixedMissingView = yield* insert(14, {
+          provenance: provenance(14),
+          operation: "set",
+          command: { action: "set", courseID: mixedMissingViewCourseID },
+          course: {
+            id: mixedMissingViewCourseID,
+            title: "Mixed missing view V14 locator",
+            workingSelection: mixedMissingViewSelection,
+          },
+          to: {
+            ...recordedEndpoint,
+            locator: {
+              ...recordedEndpoint.locator,
+              courseID: mixedMissingViewCourseID,
+              title: { availability: "recorded_v2", value: "Mixed missing view V14 locator" },
+              workingSelection: {
+                availability: "recorded_v2",
+                value: {
+                  revisionID: mixedMissingViewSelection.revisionID,
+                  selectionVersion: mixedMissingViewSelection.selectionVersion,
+                  viewID: null,
+                  viewName: null,
+                  viewVersion: null,
+                  revisionVersion: null,
+                },
+              },
+            },
+          },
+        })
+        return {
+          valid,
+          unknownRootField,
+          contradictoryOperation,
+          incompleteDelegated,
+          validDelegated,
+          unknownDelegatedField,
+          malformedDelegatedRule,
+          mismatchedEffectiveFingerprint,
+          validCourseLocator,
+          unknownAbsentEndpoint,
+          incompleteCourseEndpoint,
+          validRecordedSelection,
+          mixedMissingRevision,
+          mixedMissingView,
+        }
+      }),
+    )
+
+    expect(result.valid._tag).toBe("Success")
+    expect(result.unknownRootField._tag).toBe("Failure")
+    expect(result.contradictoryOperation._tag).toBe("Failure")
+    expect(result.incompleteDelegated._tag).toBe("Failure")
+    expect(result.validDelegated._tag).toBe("Success")
+    expect(result.unknownDelegatedField._tag).toBe("Failure")
+    expect(result.malformedDelegatedRule._tag).toBe("Failure")
+    expect(result.mismatchedEffectiveFingerprint._tag).toBe("Failure")
+    expect(result.validCourseLocator._tag).toBe("Success")
+    expect(result.unknownAbsentEndpoint._tag).toBe("Failure")
+    expect(result.incompleteCourseEndpoint._tag).toBe("Failure")
+    expect(result.validRecordedSelection._tag).toBe("Success")
+    expect(result.mixedMissingRevision._tag).toBe("Failure")
+    expect(result.mixedMissingView._tag).toBe("Failure")
+  })
+
+  test("upgrades the frozen v12 schema through v13 to exact current Default-Course structural parity", async () => {
     const tables = [
       "learner_default_course_acknowledgement",
       "learner_default_course_disposition",
@@ -1768,6 +2251,7 @@ describe("DatabaseMigration", () => {
         const route = yield* routeOwnedManifest(db)
         yield* db.run("PRAGMA foreign_keys = OFF")
         yield* db.transaction((tx) => defaultCourseV2Migration.up(tx))
+        yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
         return {
           structures: yield* structuralManifest(db),
@@ -1792,6 +2276,555 @@ describe("DatabaseMigration", () => {
     expect(upgraded.definitions).toEqual(fresh.definitions)
     expect(upgraded.migratedRoute).toEqual(upgraded.route)
     expect(upgraded.foreignKeys).toEqual([])
+  })
+
+  test("upgrades frozen v13 Default-Course rows without rewriting history or reopening proposal production", async () => {
+    const preservedTables = [
+      "learning_command_invocation",
+      "learner_default_course_disposition",
+      "learner_default_course_capability_settlement",
+      "learner_default_course_proposal",
+    ] as const
+    const snapshot = (db: TestDatabase, columns?: ReadonlyMap<(typeof preservedTables)[number], readonly string[]>) =>
+      Effect.forEach(preservedTables, (name) =>
+        Effect.gen(function* () {
+          const projection =
+            columns?.get(name) ??
+            (yield* db.all<{ name: string }>(sql`PRAGMA table_info(${sql.identifier(name)})`)).map(
+              (column) => column.name,
+            )
+          const rows = yield* db.all<Record<string, unknown>>(
+            sql`SELECT ${sql.join(
+              projection.map((column) => sql.identifier(column)),
+              sql`, `,
+            )} FROM ${sql.identifier(name)}`,
+          )
+          return {
+            name,
+            columns: projection,
+            rows: rows.toSorted((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))),
+          }
+        }),
+      )
+
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.transaction((tx) => databaseV13Schema.up(tx))
+        yield* db.run(sql`
+          INSERT INTO learning_admitted_occurrence (
+            id, origin_session_id, origin_message_id, time_admitted
+          ) VALUES
+            ('occ_v13_v1', 'ses_v13', 'msg_v13_v1', 1),
+            ('occ_v13_v2', 'ses_v13', 'msg_v13_v2', 2)
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_invocation (
+            part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+            occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+            capability_version, authorization_basis, input_fingerprint, status, time_admitted
+          ) VALUES
+            (
+              'prt_v13_v1', 'ses_v13', 'msg_v13_v1', 'asst_v13_v1', 'call_v13_v1',
+              'occ_v13_v1', 'set_default_course_preference', 1, 0, 'set_default_course_preference',
+              1, 'learner_request', ${"1".repeat(64)}, 'admitted', 1
+            ),
+            (
+              'prt_v13_v2', 'ses_v13', 'msg_v13_v2', 'asst_v13_v2', 'call_v13_v2',
+              'occ_v13_v2', 'set_default_course_preference', 2, 0, 'set_default_course_preference',
+              2, 'learner_request', ${"2".repeat(64)}, 'admitted', 2
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learner_default_course_disposition (
+            invocation_part_id, disposition, authorization_version, authorization_kind,
+            authorization_fingerprint, command_fingerprint, legacy_row_class,
+            confirmation_availability, command_permission_request_id, time_disposed
+          ) VALUES (
+            'prt_v13_v1', 'legacy_v1', 1, 'legacy_v1',
+            ${"3".repeat(64)}, ${"4".repeat(64)}, 'admitted',
+            'not_recorded_v1', 'permission_v13_v1', 1
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learner_default_course_disposition (
+            invocation_part_id, disposition, authorization_version, authorization_kind,
+            authorization_fingerprint, command_fingerprint, command_snapshot, source_excerpt,
+            resolution_scope, resolution_fingerprint, preference_version, operation,
+            from_locator, to_locator, time_disposed
+          ) VALUES (
+            'prt_v13_v2', 'candidate_v2', 2, 'direct_request_v2',
+            ${"5".repeat(64)}, ${"6".repeat(64)},
+            '{"kind":"default_course_preference","expectedHeadID":null,"expectedVersion":0,"target":null}',
+            'clear it',
+            '{"coverage":"complete"}', ${"7".repeat(64)}, 0, 'clear',
+            '{"kind":"absent"}', '{"kind":"absent"}', 2
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learner_default_course_capability_settlement (
+            invocation_part_id, outcome, authorization_fingerprint, policy_basis,
+            policy_fingerprint, time_settled, settlement_order
+          ) VALUES (
+            'prt_v13_v2', 'policy_deny', ${"5".repeat(64)}, '{"decision":"deny"}',
+            ${"8".repeat(64)}, 3, 3
+          )
+        `)
+        yield* db.transaction((tx) => installSchemaExtrasV13(tx))
+        const before = yield* snapshot(db)
+        const columns = new Map(before.map((entry) => [entry.name, entry.columns] as const))
+
+        yield* db.run("PRAGMA foreign_keys = OFF")
+        yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
+        yield* db.run("PRAGMA foreign_keys = ON")
+
+        const after = yield* snapshot(db, columns)
+        const structures = yield* structuralManifest(db)
+        const legacyAgentColumns = yield* db.all(sql`
+          SELECT invocation_part_id, agent_action_version, agent_action_fingerprint
+          FROM learner_default_course_disposition
+          ORDER BY invocation_part_id
+        `)
+        const retiredProposal = yield* Effect.exit(
+          db.run(sql`INSERT INTO learner_default_course_proposal (part_id) VALUES ('proposal_v14_forbidden')`),
+        )
+        yield* db.run(sql`
+          INSERT INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES ('project_v14_locator_upgrade', '/learning', 10, 10, '[]')
+        `)
+        yield* db.run(sql`
+          INSERT INTO session (
+            id, project_id, slug, directory, title, version, time_created, time_updated
+          ) VALUES
+            (
+              'ses_v14_locator_upgrade_1', 'project_v14_locator_upgrade', 'locator-1',
+              '/learning', 'V14 locator upgrade fixture', 'test', 10, 10
+            ),
+            (
+              'ses_v14_locator_upgrade_2', 'project_v14_locator_upgrade', 'locator-2',
+              '/learning', 'V14 locator upgrade fixture', 'test', 11, 11
+            ),
+            (
+              'ses_v14_locator_upgrade_3', 'project_v14_locator_upgrade', 'locator-3',
+              '/learning', 'V14 locator upgrade fixture', 'test', 12, 12
+            ),
+            (
+              'ses_v14_locator_upgrade_4', 'project_v14_locator_upgrade', 'locator-4',
+              '/learning', 'V14 locator upgrade fixture', 'test', 13, 13
+            ),
+            (
+              'ses_v14_locator_upgrade_5', 'project_v14_locator_upgrade', 'locator-5',
+              '/learning', 'V14 locator upgrade fixture', 'test', 14, 14
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES
+            (
+              'msg_v14_locator_upgrade_user_1', 'ses_v14_locator_upgrade_1',
+              10, 10, '{"role":"user"}'
+            ),
+            (
+              'msg_v14_locator_upgrade_user_2', 'ses_v14_locator_upgrade_2',
+              11, 11, '{"role":"user"}'
+            ),
+            (
+              'msg_v14_locator_upgrade_user_3', 'ses_v14_locator_upgrade_3',
+              12, 12, '{"role":"user"}'
+            ),
+            (
+              'msg_v14_locator_upgrade_user_4', 'ses_v14_locator_upgrade_4',
+              13, 13, '{"role":"user"}'
+            ),
+            (
+              'msg_v14_locator_upgrade_user_5', 'ses_v14_locator_upgrade_5',
+              14, 14, '{"role":"user"}'
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES
+            (
+              'prt_v14_locator_upgrade_1', 'msg_v14_locator_upgrade_user_1',
+              'ses_v14_locator_upgrade_1', 10, 10,
+              '{"type":"text","text":"V14 locator upgrade fixture"}'
+            ),
+            (
+              'prt_v14_locator_upgrade_2', 'msg_v14_locator_upgrade_user_2',
+              'ses_v14_locator_upgrade_2', 11, 11,
+              '{"type":"text","text":"V14 locator upgrade fixture"}'
+            ),
+            (
+              'prt_v14_locator_upgrade_3', 'msg_v14_locator_upgrade_user_3',
+              'ses_v14_locator_upgrade_3', 12, 12,
+              '{"type":"text","text":"V14 locator upgrade fixture"}'
+            ),
+            (
+              'prt_v14_locator_upgrade_4', 'msg_v14_locator_upgrade_user_4',
+              'ses_v14_locator_upgrade_4', 13, 13,
+              '{"type":"text","text":"V14 locator upgrade fixture"}'
+            ),
+            (
+              'prt_v14_locator_upgrade_5', 'msg_v14_locator_upgrade_user_5',
+              'ses_v14_locator_upgrade_5', 14, 14,
+              '{"type":"text","text":"V14 locator upgrade fixture"}'
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_occurrence_source_order (
+            occurrence_id, origin_session_id, origin_message_id, time_allocated,
+            source_temporal_state, source_timezone, source_utc_offset_minutes
+          ) VALUES
+            (
+              'occ_v14_locator_upgrade_1', 'ses_v14_locator_upgrade_1',
+              'msg_v14_locator_upgrade_user_1', 10, 'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_2', 'ses_v14_locator_upgrade_2',
+              'msg_v14_locator_upgrade_user_2', 11, 'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_3', 'ses_v14_locator_upgrade_3',
+              'msg_v14_locator_upgrade_user_3', 12, 'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_4', 'ses_v14_locator_upgrade_4',
+              'msg_v14_locator_upgrade_user_4', 13, 'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_5', 'ses_v14_locator_upgrade_5',
+              'msg_v14_locator_upgrade_user_5', 14, 'resolved', 'UTC', 0
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_admitted_occurrence (
+            id, origin_session_id, origin_message_id, time_admitted, source_order,
+            source_temporal_state, source_timezone, source_utc_offset_minutes
+          ) VALUES
+            (
+              'occ_v14_locator_upgrade_1', 'ses_v14_locator_upgrade_1',
+              'msg_v14_locator_upgrade_user_1', 10,
+              (SELECT sequence FROM learning_occurrence_source_order WHERE occurrence_id = 'occ_v14_locator_upgrade_1'),
+              'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_2', 'ses_v14_locator_upgrade_2',
+              'msg_v14_locator_upgrade_user_2', 11,
+              (SELECT sequence FROM learning_occurrence_source_order WHERE occurrence_id = 'occ_v14_locator_upgrade_2'),
+              'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_3', 'ses_v14_locator_upgrade_3',
+              'msg_v14_locator_upgrade_user_3', 12,
+              (SELECT sequence FROM learning_occurrence_source_order WHERE occurrence_id = 'occ_v14_locator_upgrade_3'),
+              'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_4', 'ses_v14_locator_upgrade_4',
+              'msg_v14_locator_upgrade_user_4', 13,
+              (SELECT sequence FROM learning_occurrence_source_order WHERE occurrence_id = 'occ_v14_locator_upgrade_4'),
+              'resolved', 'UTC', 0
+            ),
+            (
+              'occ_v14_locator_upgrade_5', 'ses_v14_locator_upgrade_5',
+              'msg_v14_locator_upgrade_user_5', 14,
+              (SELECT sequence FROM learning_occurrence_source_order WHERE occurrence_id = 'occ_v14_locator_upgrade_5'),
+              'resolved', 'UTC', 0
+            )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_invocation (
+            part_id, session_id, parent_user_message_id, assistant_message_id, provider_call_id,
+            occurrence_id, command_name, command_version, emission_ordinal, capability_identity,
+            capability_version, authorization_basis, input_fingerprint, status, time_admitted,
+            turn_id, input_id
+          ) VALUES
+            (
+              'prt_v14_locator_upgrade_1', 'ses_v14_locator_upgrade_1',
+              'msg_v14_locator_upgrade_user_1', 'msg_v14_locator_upgrade_assistant_1',
+              'call_v14_locator_upgrade_1', 'occ_v14_locator_upgrade_1',
+              'set_default_course_preference', 3, 0, 'set_default_course_preference', 3,
+              'agent_action', ${"c".repeat(64)}, 'admitted', 10,
+              'trn_v14_locator_upgrade_1', 'inp_v14_locator_upgrade_1'
+            ),
+            (
+              'prt_v14_locator_upgrade_2', 'ses_v14_locator_upgrade_2',
+              'msg_v14_locator_upgrade_user_2', 'msg_v14_locator_upgrade_assistant_2',
+              'call_v14_locator_upgrade_2', 'occ_v14_locator_upgrade_2',
+              'set_default_course_preference', 3, 0, 'set_default_course_preference', 3,
+              'agent_action', ${"d".repeat(64)}, 'admitted', 11,
+              'trn_v14_locator_upgrade_2', 'inp_v14_locator_upgrade_2'
+            ),
+            (
+              'prt_v14_locator_upgrade_3', 'ses_v14_locator_upgrade_3',
+              'msg_v14_locator_upgrade_user_3', 'msg_v14_locator_upgrade_assistant_3',
+              'call_v14_locator_upgrade_3', 'occ_v14_locator_upgrade_3',
+              'set_default_course_preference', 3, 0, 'set_default_course_preference', 3,
+              'agent_action', ${"e".repeat(64)}, 'admitted', 12,
+              'trn_v14_locator_upgrade_3', 'inp_v14_locator_upgrade_3'
+            ),
+            (
+              'prt_v14_locator_upgrade_4', 'ses_v14_locator_upgrade_4',
+              'msg_v14_locator_upgrade_user_4', 'msg_v14_locator_upgrade_assistant_4',
+              'call_v14_locator_upgrade_4', 'occ_v14_locator_upgrade_4',
+              'set_default_course_preference', 3, 0, 'set_default_course_preference', 3,
+              'agent_action', ${"f".repeat(64)}, 'admitted', 13,
+              'trn_v14_locator_upgrade_4', 'inp_v14_locator_upgrade_4'
+            ),
+            (
+              'prt_v14_locator_upgrade_5', 'ses_v14_locator_upgrade_5',
+              'msg_v14_locator_upgrade_user_5', 'msg_v14_locator_upgrade_assistant_5',
+              'call_v14_locator_upgrade_5', 'occ_v14_locator_upgrade_5',
+              'set_default_course_preference', 3, 0, 'set_default_course_preference', 3,
+              'agent_action', ${"9".repeat(64)}, 'admitted', 14,
+              'trn_v14_locator_upgrade_5', 'inp_v14_locator_upgrade_5'
+            )
+        `)
+        const validCourseID = "crs_00000000000000000000000012"
+        const malformedCourseID = "crs_00000000000000000000000013"
+        const recordedCourseID = "crs_00000000000000000000000014"
+        const mixedMissingRevisionCourseID = "crs_00000000000000000000000015"
+        const mixedMissingViewCourseID = "crs_00000000000000000000000016"
+        yield* db.run(sql`
+          INSERT INTO course (id, title, state_version, time_created, time_updated) VALUES
+            (${validCourseID}, 'Valid upgraded V14 locator', 0, 10, 10),
+            (${malformedCourseID}, 'Malformed upgraded V14 locator', 0, 11, 11),
+            (${recordedCourseID}, 'Recorded upgraded V14 locator', 0, 12, 12),
+            (${mixedMissingRevisionCourseID}, 'Mixed missing revision upgraded V14 locator', 0, 13, 13),
+            (${mixedMissingViewCourseID}, 'Mixed missing view upgraded V14 locator', 0, 14, 14)
+        `)
+        yield* db.run(sql`
+          INSERT INTO course_view (id, course_id, name, state_version, time_created, time_updated) VALUES
+            ('cvw_00000000000000000000000014', ${recordedCourseID}, 'Recorded upgraded view', 0, 12, 12),
+            ('cvw_00000000000000000000000015', ${mixedMissingRevisionCourseID}, 'Mixed missing revision upgraded view', 0, 13, 13),
+            ('cvw_00000000000000000000000016', ${mixedMissingViewCourseID}, 'Mixed missing view upgraded view', 0, 14, 14)
+        `)
+        yield* db.run(sql`
+          INSERT INTO course_view_revision (
+            id, course_id, view_id, revision_number, authorship_basis, time_created
+          ) VALUES
+            ('cvr_00000000000000000000000014', ${recordedCourseID}, 'cvw_00000000000000000000000014', 1, 'tutor_proposed', 12),
+            ('cvr_00000000000000000000000015', ${mixedMissingRevisionCourseID}, 'cvw_00000000000000000000000015', 1, 'tutor_proposed', 13),
+            ('cvr_00000000000000000000000016', ${mixedMissingViewCourseID}, 'cvw_00000000000000000000000016', 1, 'tutor_proposed', 14)
+        `)
+        yield* db.run(sql`
+          INSERT INTO course_view_revision_state (
+            course_id, view_id, revision_id, state_version, time_updated
+          ) VALUES
+            (${recordedCourseID}, 'cvw_00000000000000000000000014', 'cvr_00000000000000000000000014', 0, 12),
+            (${mixedMissingRevisionCourseID}, 'cvw_00000000000000000000000015', 'cvr_00000000000000000000000015', 0, 13),
+            (${mixedMissingViewCourseID}, 'cvw_00000000000000000000000016', 'cvr_00000000000000000000000016', 0, 14)
+        `)
+        yield* db.run(sql`
+          INSERT INTO course_working_selection (course_id, revision_id, version, time_updated) VALUES
+            (${validCourseID}, NULL, 0, 10),
+            (${recordedCourseID}, 'cvr_00000000000000000000000014', 1, 12),
+            (${mixedMissingRevisionCourseID}, 'cvr_00000000000000000000000015', 1, 13),
+            (${mixedMissingViewCourseID}, 'cvr_00000000000000000000000016', 1, 14)
+        `)
+        const provenance = (index: 1 | 2 | 3 | 4 | 5) => ({
+          schemaVersion: 1,
+          kind: "root",
+          occurrenceID: `occ_v14_locator_upgrade_${index}`,
+          causalRootOccurrenceID: `occ_v14_locator_upgrade_${index}`,
+          sessionID: `ses_v14_locator_upgrade_${index}`,
+          turnID: `trn_v14_locator_upgrade_${index}`,
+          inputID: `inp_v14_locator_upgrade_${index}`,
+          assistantMessageID: `msg_v14_locator_upgrade_assistant_${index}`,
+          invocationPartID: `prt_v14_locator_upgrade_${index}`,
+          providerCallID: `call_v14_locator_upgrade_${index}`,
+          emissionOrdinal: 0,
+          capabilityIdentity: "set_default_course_preference",
+          capabilityVersion: 3,
+          lineage: [],
+        })
+        const validLocator = yield* db
+          .run(
+            sql`
+            INSERT INTO learner_default_course_disposition (
+              invocation_part_id, disposition, agent_action_version, agent_action_fingerprint,
+              agent_action_provenance, command_fingerprint, command_snapshot, preference_version,
+              operation, from_locator, to_locator, time_disposed
+            ) VALUES (
+              'prt_v14_locator_upgrade_1', 'agent_action_v3', 3, ${"a".repeat(64)},
+              ${JSON.stringify(provenance(1))}, ${"b".repeat(64)},
+              ${JSON.stringify({ action: "set", courseID: validCourseID })}, 0, 'set',
+              '{"kind":"absent"}',
+              ${JSON.stringify({
+                kind: "course",
+                locator: {
+                  courseID: validCourseID,
+                  title: { availability: "recorded_v2", value: "Valid upgraded V14 locator" },
+                  courseVersion: { availability: "recorded_v2", value: 0 },
+                  workingSelection: {
+                    availability: "recorded_v2",
+                    value: {
+                      revisionID: null,
+                      selectionVersion: 0,
+                      viewID: null,
+                      viewName: null,
+                      viewVersion: null,
+                      revisionVersion: null,
+                    },
+                  },
+                },
+              })},
+              10
+            )
+          `,
+          )
+          .pipe(Effect.exit)
+        const malformedLocator = yield* db
+          .run(
+            sql`
+            INSERT INTO learner_default_course_disposition (
+              invocation_part_id, disposition, agent_action_version, agent_action_fingerprint,
+              agent_action_provenance, command_fingerprint, command_snapshot, preference_version,
+              operation, from_locator, to_locator, time_disposed
+            ) VALUES (
+              'prt_v14_locator_upgrade_2', 'agent_action_v3', 3, ${"a".repeat(64)},
+              ${JSON.stringify(provenance(2))}, ${"b".repeat(64)},
+              ${JSON.stringify({ action: "set", courseID: malformedCourseID })}, 0, 'set',
+              '{"kind":"absent","unexpected":"accepted"}',
+              ${JSON.stringify({
+                kind: "course",
+                unexpected: "accepted",
+                locator: {
+                  courseID: malformedCourseID,
+                  unexpected: "accepted",
+                  title: { availability: "recorded_v2" },
+                  courseVersion: { availability: "recorded_v2" },
+                  workingSelection: { availability: "recorded_v2" },
+                },
+              })},
+              11
+            )
+          `,
+          )
+          .pipe(Effect.exit)
+        const insertRecordedLocator = (
+          index: 3 | 4 | 5,
+          courseID: string,
+          title: string,
+          selection: Readonly<{
+            revisionID: string | null
+            selectionVersion: number
+            viewID: string | null
+            viewName: string | null
+            viewVersion: number | null
+            revisionVersion: number | null
+          }>,
+        ) =>
+          db
+            .run(
+              sql`
+                INSERT INTO learner_default_course_disposition (
+                  invocation_part_id, disposition, agent_action_version, agent_action_fingerprint,
+                  agent_action_provenance, command_fingerprint, command_snapshot, preference_version,
+                  operation, from_locator, to_locator, time_disposed
+                ) VALUES (
+                  ${`prt_v14_locator_upgrade_${index}`}, 'agent_action_v3', 3, ${"a".repeat(64)},
+                  ${JSON.stringify(provenance(index))}, ${"b".repeat(64)},
+                  ${JSON.stringify({ action: "set", courseID })}, 0, 'set',
+                  '{"kind":"absent"}',
+                  ${JSON.stringify({
+                    kind: "course",
+                    locator: {
+                      courseID,
+                      title: { availability: "recorded_v2", value: title },
+                      courseVersion: { availability: "recorded_v2", value: 0 },
+                      workingSelection: { availability: "recorded_v2", value: selection },
+                    },
+                  })},
+                  ${index + 9}
+                )
+              `,
+            )
+            .pipe(Effect.exit)
+        const validRecordedSelection = yield* insertRecordedLocator(
+          3,
+          recordedCourseID,
+          "Recorded upgraded V14 locator",
+          {
+            revisionID: "cvr_00000000000000000000000014",
+            selectionVersion: 1,
+            viewID: "cvw_00000000000000000000000014",
+            viewName: "Recorded upgraded view",
+            viewVersion: 0,
+            revisionVersion: 0,
+          },
+        )
+        const mixedMissingRevision = yield* insertRecordedLocator(
+          4,
+          mixedMissingRevisionCourseID,
+          "Mixed missing revision upgraded V14 locator",
+          {
+            revisionID: null,
+            selectionVersion: 1,
+            viewID: "cvw_00000000000000000000000015",
+            viewName: "Mixed missing revision upgraded view",
+            viewVersion: 0,
+            revisionVersion: 0,
+          },
+        )
+        const mixedMissingView = yield* insertRecordedLocator(
+          5,
+          mixedMissingViewCourseID,
+          "Mixed missing view upgraded V14 locator",
+          {
+            revisionID: "cvr_00000000000000000000000016",
+            selectionVersion: 1,
+            viewID: null,
+            viewName: null,
+            viewVersion: null,
+            revisionVersion: null,
+          },
+        )
+        return {
+          before,
+          after,
+          structures,
+          foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
+          legacyAgentColumns,
+          retiredProposal,
+          validLocator,
+          malformedLocator,
+          validRecordedSelection,
+          mixedMissingRevision,
+          mixedMissingView,
+        }
+      }),
+    )
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        return yield* structuralManifest(db)
+      }),
+    )
+
+    expect(upgraded.after).toEqual(upgraded.before)
+    expect(upgraded.structures).toEqual(fresh)
+    expect(upgraded.foreignKeys).toEqual([])
+    expect(upgraded.legacyAgentColumns).toEqual([
+      {
+        invocation_part_id: "prt_v13_v1",
+        agent_action_version: null,
+        agent_action_fingerprint: null,
+      },
+      {
+        invocation_part_id: "prt_v13_v2",
+        agent_action_version: null,
+        agent_action_fingerprint: null,
+      },
+    ])
+    expect(upgraded.retiredProposal._tag).toBe("Failure")
+    if (upgraded.retiredProposal._tag === "Failure") {
+      expect(String(upgraded.retiredProposal.cause)).toContain("learner_default_course_proposal_retired")
+    }
+    expect(upgraded.validLocator._tag).toBe("Success")
+    expect(upgraded.malformedLocator._tag).toBe("Failure")
+    expect(upgraded.validRecordedSelection._tag).toBe("Success")
+    expect(upgraded.mixedMissingRevision._tag).toBe("Failure")
+    expect(upgraded.mixedMissingView._tag).toBe("Failure")
   })
 
   test("preserves the v12 route-anchor branch inside the v13 shared no-effect wrapper", () => {
@@ -3770,7 +4803,7 @@ describe("DatabaseMigration", () => {
         expect(freshAnchorConflictTrigger).toContain("existing.occurrence_id = NEW.occurrence_id")
         expect(freshAnchorConflictTrigger).toContain("existing.frontier_sequence = NEW.frontier_sequence")
         const freshDefaultSealTrigger = fresh.find(
-          (item) => item.name === "learner_default_course_commit_seal_validate_insert_v13",
+          (item) => item.name === "learner_default_course_commit_seal_validate_insert_v14_history",
         )?.definition
         expect(freshDefaultSealTrigger).toContain("invocation.capability_identity = 'set_default_course_preference'")
         expect(freshDefaultSealTrigger).toContain("invocation.capability_version = authorization.authorization_version")
@@ -3840,7 +4873,8 @@ describe("DatabaseMigration", () => {
           upgraded.find((item) => item.name === "learner_course_route_anchor_conflict_forbidden")?.definition,
         ).toBe(freshAnchorConflictTrigger)
         expect(
-          upgraded.find((item) => item.name === "learner_default_course_commit_seal_validate_insert_v13")?.definition,
+          upgraded.find((item) => item.name === "learner_default_course_commit_seal_validate_insert_v14_history")
+            ?.definition,
         ).toBe(freshDefaultSealTrigger)
         expect(
           upgraded.find((item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12")
@@ -4942,6 +5976,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 10, id: learnerGoalsMigration.id },
           { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
           { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
+          { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
         ])
       }),
     )

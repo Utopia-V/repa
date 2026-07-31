@@ -421,6 +421,16 @@ const DefaultV2Command = Schema.Struct({
   ),
 })
 
+const DefaultV3Command = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("set"),
+    courseID: StringValue,
+  }),
+  Schema.Struct({
+    action: Schema.Literal("clear"),
+  }),
+])
+
 const DefaultV2Authorization = Schema.Struct({
   kind: Schema.Literals(["direct_request_v2", "accepted_proposal_v2"]),
   fingerprint: StringValue,
@@ -445,6 +455,87 @@ const DefaultV2ResultDisposition = Schema.Union([
     kind: Schema.Literal("semantic_terminal_v2"),
     outcome: Schema.Literals(["already_applied", "semantic_conflict"]),
     command: DefaultV2Command,
+    commandFingerprint: StringValue,
+    semanticAddress: Schema.Struct({
+      occurrenceID: StringValue,
+      slot: Schema.Literal("default_course_preference"),
+    }),
+    semanticAddressFingerprint: StringValue,
+    incomingPayloadFingerprint: StringValue,
+    existingEffectID: StringValue,
+    existingPayloadFingerprint: StringValue,
+  }),
+])
+
+const DefaultAgentActionLineageEdge = Schema.Struct({
+  childTurnID: StringValue,
+  childSessionID: StringValue,
+  childDepth: PositiveVersion,
+  parentTurnID: StringValue,
+  parentSessionID: StringValue,
+  parentDepth: PositiveVersion,
+  parentTaskPartID: StringValue,
+  parentModelMessageID: StringValue,
+  delegatedCapability: Schema.Record(Schema.String, Schema.Unknown),
+  delegatedCapabilityFingerprint: StringValue,
+})
+
+const DefaultAgentActionProvenanceCommon = {
+  schemaVersion: Schema.Literal(1),
+  occurrenceID: StringValue,
+  causalRootOccurrenceID: StringValue,
+  sessionID: StringValue,
+  turnID: StringValue,
+  inputID: StringValue,
+  assistantMessageID: StringValue,
+  invocationPartID: StringValue,
+  providerCallID: StringValue,
+  emissionOrdinal: PositiveVersion,
+  capabilityIdentity: Schema.Literal("set_default_course_preference"),
+  capabilityVersion: Schema.Literal(3),
+}
+
+const DefaultAgentActionProvenance = Schema.Union([
+  Schema.Struct({
+    ...DefaultAgentActionProvenanceCommon,
+    kind: Schema.Literal("root"),
+    lineage: Schema.Tuple([]),
+  }),
+  Schema.Struct({
+    ...DefaultAgentActionProvenanceCommon,
+    kind: Schema.Literal("delegated"),
+    lineage: Schema.Array(DefaultAgentActionLineageEdge),
+    effectiveDelegatedCapability: Schema.Struct({
+      identity: Schema.Literal("set_default_course_preference"),
+      version: Schema.Literal(3),
+      projectionVersion: Schema.Literal(2),
+      fingerprint: StringValue,
+    }),
+  }),
+])
+
+const DefaultV3AgentAction = Schema.Struct({
+  kind: Schema.Literal("agent_action_v3"),
+  fingerprint: StringValue,
+  provenance: DefaultAgentActionProvenance,
+  command: DefaultV3Command,
+  commandFingerprint: StringValue,
+  preferenceHeadID: Schema.NullOr(StringValue),
+  preferenceVersion: PositiveVersion,
+  operation: Schema.Literals(["set", "change", "clear"]),
+  from: DefaultEndpointV2,
+  to: DefaultEndpointV2,
+})
+
+const DefaultV3ResultDisposition = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("agent_action_v3"),
+    agentAction: DefaultV3AgentAction,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("semantic_terminal_v3"),
+    outcome: Schema.Literals(["already_applied", "semantic_conflict"]),
+    command: DefaultV3Command,
     commandFingerprint: StringValue,
     semanticAddress: Schema.Struct({
       occurrenceID: StringValue,
@@ -490,6 +581,12 @@ const DefaultV2CapabilityProposal = Schema.Struct({
   kind: Schema.Literal("default_course_v2_capability"),
   ...ProposalBinding,
   authorization: DefaultV2Authorization,
+})
+
+const DefaultV3CapabilityProposal = Schema.Struct({
+  kind: Schema.Literal("default_course_v3_capability"),
+  ...ProposalBinding,
+  agentAction: DefaultV3AgentAction,
 })
 
 const RouteAnchorProposal = Schema.Struct({
@@ -539,6 +636,7 @@ export const ProposalBasis = Schema.Union([
   DefaultConfirmationProposal,
   DefaultCommandProposal,
   DefaultV2CapabilityProposal,
+  DefaultV3CapabilityProposal,
   RouteAnchorProposal,
   RetainedSteeringProposal,
   LearnerGoalProposal,
@@ -633,6 +731,58 @@ const DefaultCourseV2Result = Schema.Struct({
   ),
 })
 
+const DefaultCourseV3Result = Schema.Struct({
+  kind: Schema.Literal("default_course_v3_result"),
+  ...ResultCommon,
+  disposition: DefaultV3ResultDisposition,
+  acknowledgement: optional(
+    Schema.Union([
+      Schema.Struct({
+        schemaVersion: Schema.Literal(1),
+        invocationPartID: StringValue,
+        effectAuthorizationPartID: StringValue,
+        authorizationVersion: Schema.Literal(1),
+        effectID: StringValue,
+        receiptID: StringValue,
+        operation: Schema.Literals(["set", "change", "clear"]),
+        from: DefaultEndpointV1,
+        to: DefaultEndpointV1,
+        relation: Schema.Literals(["active", "superseded"]),
+        timeCommitted: PositiveVersion,
+        commitOrder: PositiveVersion,
+      }),
+      Schema.Struct({
+        schemaVersion: Schema.Literal(1),
+        invocationPartID: StringValue,
+        effectAuthorizationPartID: StringValue,
+        authorizationVersion: Schema.Literal(2),
+        effectID: StringValue,
+        receiptID: StringValue,
+        operation: Schema.Literals(["set", "change", "clear"]),
+        from: DefaultEndpointV2,
+        to: DefaultEndpointV2,
+        relation: Schema.Literals(["active", "superseded"]),
+        timeCommitted: PositiveVersion,
+        commitOrder: PositiveVersion,
+      }),
+      Schema.Struct({
+        schemaVersion: Schema.Literal(2),
+        invocationPartID: StringValue,
+        effectAgentActionPartID: StringValue,
+        agentActionVersion: Schema.Literal(3),
+        effectID: StringValue,
+        receiptID: StringValue,
+        operation: Schema.Literals(["set", "change", "clear"]),
+        from: DefaultEndpointV2,
+        to: DefaultEndpointV2,
+        relation: Schema.Literals(["active", "superseded"]),
+        timeCommitted: PositiveVersion,
+        commitOrder: PositiveVersion,
+      }),
+    ]),
+  ),
+})
+
 const RouteAnchorResult = Schema.Struct({
   kind: Schema.Literal("course_route_anchor_result"),
   ...ResultCommon,
@@ -706,6 +856,7 @@ export const ResultBasis = Schema.Union([
   RepresentationResult,
   DefaultCourseResult,
   DefaultCourseV2Result,
+  DefaultCourseV3Result,
   RouteAnchorResult,
   RetainedSteeringResult,
   LearnerGoalResult,

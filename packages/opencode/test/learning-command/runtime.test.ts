@@ -8,7 +8,6 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
-import { LearnerNavigationConstraintSchema } from "@opencode-ai/core/learner-navigation/constraint-schema-v2"
 import {
   PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
   issueDefaultCourseCapabilityPrompt,
@@ -16,6 +15,7 @@ import {
   settleDefaultCoursePolicy,
   settleDefaultCoursePrompt,
   settleDefaultCourseV2,
+  settleDefaultCourseV3,
 } from "@opencode-ai/core/learner-navigation/default-course-v2"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerGoalCommandTable, LearnerGoalCommitSealTable } from "@opencode-ai/core/learner-goal/sql"
@@ -51,6 +51,7 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnModelOperationTable } from "@opencode-ai/core/turn/sql"
 import { Turn } from "@opencode-ai/schema/turn"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
@@ -2193,7 +2194,7 @@ it.effect(
     }),
 )
 
-it.effect("authorizes direct Default-Course V2 requests once and denies before no-change settlement", () =>
+it.effect("settles Agent-native Default-Course actions once and denies before no-change settlement", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
@@ -2201,28 +2202,9 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
     const navigation = yield* LearnerNavigation.ReadService
     const runtime = yield* LearningCommandRuntime.Service
     const seeded = yield* seedCourse(courses, "Default algorithms V2", "Main")
-    const target = {
-      courseID: seeded.course.id,
-      courseVersion: 0,
-      selectionRevisionID: null,
-      selectionVersion: 0,
-      viewID: null,
-      viewVersion: null,
-      revisionVersion: null,
-    }
     const input = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "make Default algorithms V2 my default",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: 0 }],
-          selectedCourseID: seeded.course.id,
-        },
-      },
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target,
+      action: "set",
+      courseID: seeded.course.id,
     } as const
     const interaction = yield* seedInteraction(
       db,
@@ -2249,9 +2231,17 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
         navigationKind: "default_course_preference",
         current: { version: 1, courseID: seeded.course.id },
       },
-      authorization: {
-        kind: "direct_request_v2",
-        source: { excerpt: input.authorization.sourceExcerpt },
+      disposition: "agent_action_v3",
+      agentAction: {
+        kind: "agent_action_v3",
+        command: input,
+        provenance: {
+          kind: "root",
+          occurrenceID: interaction.occurrenceID,
+          turnID: interaction.turnID,
+          invocationPartID: interaction.registration.partID,
+          lineage: [],
+        },
         operation: "set",
         from: { kind: "absent" },
         to: {
@@ -2275,15 +2265,17 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
         },
       },
       acknowledgement: {
-        authorizationVersion: 2,
+        schemaVersion: 2,
+        agentActionVersion: 3,
         invocationPartID: interaction.registration.partID,
+        effectAgentActionPartID: interaction.registration.partID,
         operation: "set",
         from: { kind: "absent" },
         to: { kind: "course", locator: { courseID: seeded.course.id } },
       },
     })
     expect(applied.metadata).toMatchObject({
-      commandVersion: 2,
+      commandVersion: 3,
       outcome: "applied",
       durablySettled: true,
     })
@@ -2295,7 +2287,7 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
       lifecycle: { resolution: "request_exact" },
       metadata: {
         navigationKind: "default_course_preference",
-        authorization: { fingerprint: output.authorization.fingerprint },
+        agentAction: { fingerprint: output.agentAction.fingerprint },
       },
     })
     expect(
@@ -2369,16 +2361,7 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
     )
 
     const current = yield* navigation.currentDefault()
-    const deniedInput = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "keep Default algorithms V2 as my default",
-        resolutionScope: input.authorization.resolutionScope,
-      },
-      expectedHeadID: current.headID,
-      expectedVersion: current.version,
-      target,
-    } as const
+    const deniedInput = input
     const denied = yield* seedInteraction(
       db,
       "default-v2-denied-no-change",
@@ -2398,7 +2381,8 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
     )
     expect(JSON.parse(deniedResult.output)).toMatchObject({
       settlement: { outcome: "error", code: "permission_rejected" },
-      authorization: { operation: "change" },
+      disposition: "agent_action_v3",
+      agentAction: { operation: "change", command: input },
     })
     expect(
       yield* db.get(sql`
@@ -2412,19 +2396,56 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
       version: current.version,
     })
 
-    const interruptedInput = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "clear my default Course",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: 0 }],
-          selectedCourseID: null,
-        },
+    const unchanged = yield* seedInteraction(
+      db,
+      "default-v3-allowed-no-change",
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Keep Default algorithms V2 as my default Course." },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input,
+      unchanged.registration,
+    )
+    const unchangedResult = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input,
+      context(unchanged.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    expect(JSON.parse(unchangedResult.output)).toMatchObject({
+      settlement: {
+        outcome: "no_change",
+        navigationKind: "default_course_preference",
+        current: { headID: current.headID, version: current.version, courseID: seeded.course.id },
       },
-      expectedHeadID: current.headID,
-      expectedVersion: current.version,
-      target: null,
+      disposition: "agent_action_v3",
+      agentAction: { operation: "change", command: input },
+    })
+    expect(unchangedResult.metadata).toMatchObject({
+      commandVersion: 3,
+      outcome: "no_change",
+      durablySettled: true,
+    })
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT outcome FROM learner_default_course_capability_settlement
+            WHERE invocation_part_id = ${unchanged.registration.partID}) AS capability,
+          (SELECT count(*) FROM learner_default_course_transition
+            WHERE agent_action_part_id = ${unchanged.registration.partID}) AS effects,
+          (SELECT count(*) FROM learner_default_course_acknowledgement
+            WHERE invocation_part_id = ${unchanged.registration.partID}) AS acknowledgements
+      `),
+    ).toEqual({ capability: "policy_allow", effects: 0, acknowledgements: 0 })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      headID: current.headID,
+      version: current.version,
+      courseID: seeded.course.id,
+    })
+
+    const interruptedInput = {
+      action: "clear",
     } as const
     const interrupted = yield* seedInteraction(
       db,
@@ -2464,16 +2485,7 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
       version: current.version,
     })
 
-    const promptedInput = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "clear the default Course after prompting me",
-        resolutionScope: interruptedInput.authorization.resolutionScope,
-      },
-      expectedHeadID: current.headID,
-      expectedVersion: current.version,
-      target: null,
-    } as const
+    const promptedInput = interruptedInput
     const prompted = yield* seedInteraction(
       db,
       "default-v2-prompted-allow",
@@ -2493,7 +2505,10 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
     )
     expect(JSON.parse(promptedResult.output)).toMatchObject({
       settlement: { outcome: "applied", current: { version: 2, courseID: null } },
-      authorization: {
+      disposition: "agent_action_v3",
+      agentAction: {
+        kind: "agent_action_v3",
+        command: promptedInput,
         operation: "clear",
         from: {
           kind: "course",
@@ -2507,7 +2522,8 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
         to: { kind: "absent" },
       },
       acknowledgement: {
-        authorizationVersion: 2,
+        schemaVersion: 2,
+        agentActionVersion: 3,
         operation: "clear",
         from: { kind: "course", locator: { courseID: seeded.course.id } },
         to: { kind: "absent" },
@@ -2523,14 +2539,8 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
 
     const cleared = yield* navigation.currentDefault()
     const abandonedInput = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "restore Default algorithms V2 as my default",
-        resolutionScope: input.authorization.resolutionScope,
-      },
-      expectedHeadID: cleared.headID,
-      expectedVersion: cleared.version,
-      target,
+      action: "set",
+      courseID: seeded.course.id,
     } as const
     const abandoned = yield* seedInteraction(
       db,
@@ -2578,16 +2588,7 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
       (outcome, index) =>
         Effect.gen(function* () {
           const time = Date.now() + index
-          const crashInput = {
-            authorization: {
-              type: "direct_request_v2",
-              sourceExcerpt: `restore Default algorithms V2 after ${outcome}`,
-              resolutionScope: input.authorization.resolutionScope,
-            },
-            expectedHeadID: cleared.headID,
-            expectedVersion: cleared.version,
-            target,
-          } as const
+          const crashInput = abandonedInput
           const crashed = yield* seedInteraction(
             db,
             `default-v2-crash-${outcome}`,
@@ -2645,7 +2646,7 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
             yield* db.get(sql`
               SELECT
                 (SELECT count(*) FROM learner_default_course_transition
-                  WHERE authorization_part_id = ${crashed.registration.partID}) AS effects,
+                  WHERE agent_action_part_id = ${crashed.registration.partID}) AS effects,
                 (SELECT count(*) FROM learner_default_course_acknowledgement
                   WHERE invocation_part_id = ${crashed.registration.partID}) AS acknowledgements
             `),
@@ -2659,6 +2660,254 @@ it.effect("authorizes direct Default-Course V2 requests once and denies before n
         }),
       { discard: true },
     )
+  }),
+)
+
+it.effect("clears an Agent-native default after the retained target Course is withdrawn", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const navigation = yield* LearnerNavigation.ReadService
+    const runtime = yield* LearningCommandRuntime.Service
+    const seeded = yield* seedCourse(courses, "Withdrawn retained default", "Main")
+    const setInput = { action: "set", courseID: seeded.course.id } as const
+    const set = yield* seedInteraction(
+      db,
+      "default-v3-withdrawn-set",
+      setInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Use Withdrawn retained default as my default Course." },
+    )
+    yield* runtime.prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, setInput, set.registration)
+    expect(
+      JSON.parse(
+        (yield* runtime.executeCommand(
+          LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+          setInput,
+          context(set.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+        )).output,
+      ),
+    ).toMatchObject({ settlement: { outcome: "applied", current: { courseID: seeded.course.id } } })
+
+    yield* courses.withdrawCourse({
+      courseID: seeded.course.id,
+      expectedCourseVersion: 0,
+      expectedSelectionVersion: 0,
+    })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      courseID: seeded.course.id,
+      usability: { usable: false, cause: "course_withdrawn" },
+    })
+
+    const clearInput = { action: "clear" } as const
+    const clear = yield* seedInteraction(
+      db,
+      "default-v3-withdrawn-clear",
+      clearInput,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      { text: "Clear the withdrawn Course from my default preference." },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      clearInput,
+      clear.registration,
+    )
+    const result = yield* runtime.executeCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      clearInput,
+      context(clear.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+    )
+    expect(JSON.parse(result.output)).toMatchObject({
+      settlement: { outcome: "applied", current: { version: 2, courseID: null } },
+      disposition: "agent_action_v3",
+      agentAction: {
+        command: clearInput,
+        operation: "clear",
+        from: {
+          kind: "course",
+          locator: {
+            courseID: seeded.course.id,
+            title: { availability: "recorded_v2", value: seeded.course.title },
+            courseVersion: { availability: "recorded_v2", value: 1 },
+          },
+        },
+        to: { kind: "absent" },
+      },
+      acknowledgement: {
+        schemaVersion: 2,
+        agentActionVersion: 3,
+        operation: "clear",
+        from: { kind: "course", locator: { courseID: seeded.course.id } },
+        to: { kind: "absent" },
+      },
+    })
+    expect(yield* navigation.currentDefault()).toMatchObject({
+      version: 2,
+      courseID: null,
+      usability: { usable: false, cause: "absent" },
+    })
+  }),
+)
+
+it.effect("records delegated Agent issuance and rejects missing child authority before candidate admission", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const courses = yield* Course.Service
+    const runtime = yield* LearningCommandRuntime.Service
+    const capability = (courseID: Course.CourseID, allow: boolean) => ({
+      version: 2,
+      parent: [],
+      inherited: [],
+      profile: [],
+      explicit: allow
+        ? [
+            {
+              permission: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+              pattern: courseID,
+              action: "allow",
+            },
+          ]
+        : [],
+    })
+
+    const appliedCourse = yield* courses.createCourse({ title: "Delegated applied default" })
+    const appliedInput = { action: "set", courseID: appliedCourse.id } as const
+    const appliedCapability = capability(appliedCourse.id, true)
+    const applied = yield* seedDelegatedDefaultCourseInteraction(db, "applied", appliedInput, appliedCapability)
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      appliedInput,
+      applied.registration,
+    )
+    const appliedOutput = JSON.parse(
+      (yield* runtime.executeCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        appliedInput,
+        context(applied.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      )).output,
+    )
+    expect(appliedOutput).toMatchObject({
+      disposition: "agent_action_v3",
+      settlement: { outcome: "applied" },
+      agentAction: {
+        command: appliedInput,
+        provenance: {
+          kind: "delegated",
+          occurrenceID: applied.registration.causalOccurrenceID,
+          causalRootOccurrenceID: applied.registration.causalOccurrenceID,
+          sessionID: applied.child.sessionID,
+          turnID: applied.child.turnID,
+          invocationPartID: applied.registration.partID,
+          lineage: [
+            {
+              childTurnID: applied.child.turnID,
+              childSessionID: applied.child.sessionID,
+              parentSessionID: applied.parent.sessionID,
+              delegatedCapability: appliedCapability,
+              delegatedCapabilityFingerprint: expect.any(String),
+            },
+          ],
+          effectiveDelegatedCapability: {
+            identity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            version: 3,
+            projectionVersion: 2,
+            fingerprint: expect.any(String),
+          },
+        },
+      },
+    })
+
+    const deniedCourse = yield* courses.createCourse({ title: "Delegated denied default" })
+    const deniedInput = { action: "set", courseID: deniedCourse.id } as const
+    const denied = yield* seedDelegatedDefaultCourseInteraction(
+      db,
+      "denied",
+      deniedInput,
+      capability(deniedCourse.id, true),
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      deniedInput,
+      denied.registration,
+    )
+    const deniedOutput = JSON.parse(
+      (yield* runtime.executeCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        deniedInput,
+        context(denied.registration, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      )).output,
+    )
+    expect(deniedOutput).toMatchObject({
+      disposition: "agent_action_v3",
+      settlement: { outcome: "error", code: "permission_rejected" },
+      agentAction: { provenance: { kind: "delegated", turnID: denied.child.turnID } },
+    })
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT outcome FROM learner_default_course_capability_settlement
+            WHERE invocation_part_id = ${denied.registration.partID}) AS capability,
+          (SELECT count(*) FROM learner_default_course_transition
+            WHERE agent_action_part_id = ${denied.registration.partID}) AS effects
+      `),
+    ).toEqual({ capability: "policy_deny", effects: 0 })
+
+    const ungrantedCourse = yield* courses.createCourse({ title: "Delegated ungranted default" })
+    const ungrantedInput = { action: "set", courseID: ungrantedCourse.id } as const
+    const ungranted = yield* seedDelegatedDefaultCourseInteraction(
+      db,
+      "ungranted",
+      ungrantedInput,
+      capability(ungrantedCourse.id, false),
+    )
+    expect(
+      Exit.isFailure(
+        yield* runtime
+          .prepareCommand(
+            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+            ungrantedInput,
+            ungranted.registration,
+          )
+          .pipe(Effect.exit),
+      ),
+    ).toBe(true)
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learning_command_invocation
+            WHERE part_id = ${ungranted.registration.partID}) AS invocations,
+          (SELECT count(*) FROM learner_default_course_disposition
+            WHERE invocation_part_id = ${ungranted.registration.partID}) AS dispositions,
+          (SELECT count(*) FROM learner_default_course_capability_settlement
+            WHERE invocation_part_id = ${ungranted.registration.partID}) AS capabilities
+      `),
+    ).toEqual({ invocations: 0, dispositions: 0, capabilities: 0 })
+
+    const invalidCourse = yield* courses.createCourse({ title: "Delegated invalid lineage default" })
+    const invalidInput = { action: "set", courseID: invalidCourse.id } as const
+    const invalid = yield* seedDelegatedDefaultCourseInteraction(
+      db,
+      "invalid-lineage",
+      invalidInput,
+      capability(invalidCourse.id, true),
+    )
+    expect(
+      Exit.isFailure(
+        yield* runtime
+          .prepareCommand(LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY, invalidInput, {
+            ...invalid.registration,
+            causalOccurrenceID: undefined,
+          })
+          .pipe(Effect.exit),
+      ),
+    ).toBe(true)
+    expect(
+      yield* db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_invocation
+        WHERE part_id = ${invalid.registration.partID}
+      `),
+    ).toEqual({ count: 0 })
   }),
 )
 
@@ -2685,28 +2934,9 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
       expectedRevisionVersion: 0,
     })
     const conflicting = yield* courses.createCourse({ title: "Semantic terminal conflict" })
-    const target = {
-      courseID: selected.id,
-      courseVersion: 0,
-      selectionRevisionID: selectedView.revision.id,
-      selectionVersion: 1,
-      viewID: selectedView.view.id,
-      viewVersion: 0,
-      revisionVersion: 0,
-    }
     const input = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "use Semantic terminal target",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: selected.id, title: selected.title, courseVersion: 0 }],
-          selectedCourseID: selected.id,
-        },
-      },
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target,
+      action: "set",
+      courseID: selected.id,
     } as const
     const interaction = yield* seedInteraction(
       db,
@@ -2751,7 +2981,7 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
         )).output,
       ),
     ).toMatchObject({
-      disposition: "semantic_terminal_v2",
+      disposition: "semantic_terminal_v3",
       settlement: { outcome: "already_applied", effectID: appliedOutput.settlement.effectID },
     })
 
@@ -2778,20 +3008,20 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
     )
     const changedOutput = JSON.parse(changedResult.output)
     expect(changedOutput).toMatchObject({
-      disposition: "semantic_terminal_v2",
+      disposition: "semantic_terminal_v3",
       settlement: {
         outcome: "already_applied",
         effectID: appliedOutput.settlement.effectID,
       },
       semanticTerminal: {
-        kind: "semantic_terminal_v2",
+        kind: "semantic_terminal_v3",
         outcome: "already_applied",
         existingEffectID: appliedOutput.settlement.effectID,
       },
       acknowledgement: {
         invocationPartID: changed.partID,
-        effectAuthorizationPartID: interaction.registration.partID,
-        authorizationVersion: 2,
+        effectAgentActionPartID: interaction.registration.partID,
+        agentActionVersion: 3,
         operation: "set",
         from: { kind: "absent" },
         to: {
@@ -2815,7 +3045,7 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
         },
       },
     })
-    expect(changedOutput.authorization).toBeUndefined()
+    expect(changedOutput.agentAction).toBeUndefined()
     expect(changedOutput.acknowledgement.to.locator.courseID).not.toBe(sameName.id)
 
     yield* courses.withdrawCourse({
@@ -2848,7 +3078,7 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
         )).output,
       ),
     ).toMatchObject({
-      disposition: "semantic_terminal_v2",
+      disposition: "semantic_terminal_v3",
       settlement: { outcome: "already_applied", effectID: appliedOutput.settlement.effectID },
     })
 
@@ -2858,17 +3088,8 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
       expectedSelectionVersion: 0,
     })
     const conflictInput = {
-      ...input,
-      target: { ...target, courseID: conflicting.id },
-      authorization: {
-        ...input.authorization,
-        sourceExcerpt: "use the unavailable conflicting target",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: conflicting.id, title: conflicting.title, courseVersion: 0 }],
-          selectedCourseID: conflicting.id,
-        },
-      },
+      action: "set",
+      courseID: conflicting.id,
     } as const
     const conflict = yield* insertAssistant(
       db,
@@ -2886,15 +3107,15 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
       )).output,
     )
     expect(conflictOutput).toMatchObject({
-      disposition: "semantic_terminal_v2",
+      disposition: "semantic_terminal_v3",
       settlement: { outcome: "error", code: "semantic_conflict" },
       semanticTerminal: {
-        kind: "semantic_terminal_v2",
+        kind: "semantic_terminal_v3",
         outcome: "semantic_conflict",
         existingEffectID: appliedOutput.settlement.effectID,
       },
     })
-    expect(conflictOutput.authorization).toBeUndefined()
+    expect(conflictOutput.agentAction).toBeUndefined()
     expect(conflictOutput.acknowledgement).toBeUndefined()
     expect(permissionRequests.length).toBe(capabilityCalls)
 
@@ -2905,6 +3126,8 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
           authorization_version,
           authorization_kind,
           authorization_fingerprint,
+          agent_action_version,
+          agent_action_fingerprint,
           semantic_outcome,
           source_excerpt,
           resolution_scope,
@@ -2916,10 +3139,12 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
       `),
     ).toEqual(
       [removed.partID, changed.partID, unavailable.partID, conflict.partID].sort().map((partID) => ({
-        disposition: "semantic_terminal_v2",
+        disposition: "semantic_terminal_v3",
         authorization_version: null,
         authorization_kind: null,
         authorization_fingerprint: null,
+        agent_action_version: null,
+        agent_action_fingerprint: null,
         semantic_outcome: partID === conflict.partID ? "semantic_conflict" : "already_applied",
         source_excerpt: null,
         resolution_scope: null,
@@ -2945,7 +3170,7 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
               ${removed.partID}, ${changed.partID}, ${unavailable.partID}
             )) AS duplicate_acknowledgements,
           (SELECT count(*) FROM learner_default_course_transition
-            WHERE authorization_part_id IN (
+            WHERE agent_action_part_id IN (
               ${removed.partID}, ${changed.partID}, ${unavailable.partID}, ${conflict.partID}
             )) AS effects
       `),
@@ -2978,7 +3203,7 @@ it.effect("settles pre-existing Default-Course semantics before changed ownershi
   }),
 )
 
-it.effect("retains candidate authorization and capability history when a Default-Course race loses", () =>
+it.effect("retains Agent issuance and capability history when a Default-Course race loses", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
@@ -2986,28 +3211,9 @@ it.effect("retains candidate authorization and capability history when a Default
     const navigation = yield* LearnerNavigation.ReadService
     const runtime = yield* LearningCommandRuntime.Service
     const selected = yield* courses.createCourse({ title: "Candidate race duplicate" })
-    const target = {
-      courseID: selected.id,
-      courseVersion: 0,
-      selectionRevisionID: null,
-      selectionVersion: 0,
-      viewID: null,
-      viewVersion: null,
-      revisionVersion: null,
-    }
     const input = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "choose Candidate race duplicate",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: selected.id, title: selected.title, courseVersion: 0 }],
-          selectedCourseID: selected.id,
-        },
-      },
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target,
+      action: "set",
+      courseID: selected.id,
     } as const
     const interaction = yield* seedInteraction(
       db,
@@ -3050,18 +3256,19 @@ it.effect("retains candidate authorization and capability history when a Default
     const winnerOutput = JSON.parse(winner.output)
     const lostOutput = JSON.parse(lost.output)
     expect(lostOutput).toMatchObject({
-      disposition: "candidate_v2",
+      disposition: "agent_action_v3",
       settlement: {
         outcome: "already_applied",
         effectID: winnerOutput.settlement.effectID,
       },
-      authorization: {
-        kind: "direct_request_v2",
+      agentAction: {
+        kind: "agent_action_v3",
+        command: input,
         fingerprint: expect.any(String),
       },
       acknowledgement: {
         invocationPartID: losing.partID,
-        effectAuthorizationPartID: interaction.registration.partID,
+        effectAgentActionPartID: interaction.registration.partID,
       },
     })
     expect(lostOutput.semanticTerminal).toBeUndefined()
@@ -3069,12 +3276,12 @@ it.effect("retains candidate authorization and capability history when a Default
       yield* db.get(sql`
         SELECT
           disposition.disposition,
-          disposition.authorization_kind,
+          disposition.agent_action_fingerprint,
           capability.outcome,
           issue.permission_request_id,
-          acknowledgement.effect_authorization_part_id,
+          acknowledgement.effect_agent_action_part_id,
           (SELECT count(*) FROM learner_default_course_transition
-            WHERE authorization_part_id = ${losing.partID}) AS effects
+            WHERE agent_action_part_id = ${losing.partID}) AS effects
         FROM learner_default_course_disposition AS disposition
         JOIN learner_default_course_capability_issue AS issue
           ON issue.invocation_part_id = disposition.invocation_part_id
@@ -3085,11 +3292,11 @@ it.effect("retains candidate authorization and capability history when a Default
         WHERE disposition.invocation_part_id = ${losing.partID}
       `),
     ).toMatchObject({
-      disposition: "candidate_v2",
-      authorization_kind: "direct_request_v2",
+      disposition: "agent_action_v3",
+      agent_action_fingerprint: expect.any(String),
       outcome: "prompted_allow",
       permission_request_id: expect.any(String),
-      effect_authorization_part_id: interaction.registration.partID,
+      effect_agent_action_part_id: interaction.registration.partID,
       effects: 0,
     })
 
@@ -3142,13 +3349,14 @@ it.effect("retains candidate authorization and capability history when a Default
     )
     expect(JSON.parse(conflictWinner.output)).toMatchObject({
       settlement: { outcome: "applied", current: { courseID: winnerCourse.id } },
-      authorization: {
+      disposition: "agent_action_v3",
+      agentAction: {
         operation: "change",
         from: { kind: "course", locator: { courseID: selected.id } },
         to: { kind: "course", locator: { courseID: winnerCourse.id } },
       },
       acknowledgement: {
-        authorizationVersion: 2,
+        agentActionVersion: 3,
         operation: "change",
         from: { kind: "course", locator: { courseID: selected.id } },
         to: { kind: "course", locator: { courseID: winnerCourse.id } },
@@ -3157,11 +3365,11 @@ it.effect("retains candidate authorization and capability history when a Default
     yield* Deferred.succeed(conflictRelease, undefined)
     const conflictLost = JSON.parse((yield* Fiber.join(conflictExecution)).output)
     expect(conflictLost).toMatchObject({
-      disposition: "candidate_v2",
+      disposition: "agent_action_v3",
       settlement: { outcome: "error", code: "semantic_conflict" },
-      authorization: {
-        kind: "direct_request_v2",
-        command: { target: { courseID: loserCourse.id } },
+      agentAction: {
+        kind: "agent_action_v3",
+        command: { action: "set", courseID: loserCourse.id },
       },
     })
     expect(conflictLost.semanticTerminal).toBeUndefined()
@@ -3170,13 +3378,13 @@ it.effect("retains candidate authorization and capability history when a Default
       yield* db.get(sql`
         SELECT
           disposition.disposition,
-          disposition.authorization_kind,
+          disposition.agent_action_fingerprint,
           capability.outcome,
           issue.permission_request_id,
           (SELECT count(*) FROM learner_default_course_acknowledgement
             WHERE invocation_part_id = ${conflictLosing.partID}) AS acknowledgements,
           (SELECT count(*) FROM learner_default_course_transition
-            WHERE authorization_part_id = ${conflictLosing.partID}) AS effects
+            WHERE agent_action_part_id = ${conflictLosing.partID}) AS effects
         FROM learner_default_course_disposition AS disposition
         JOIN learner_default_course_capability_issue AS issue
           ON issue.invocation_part_id = disposition.invocation_part_id
@@ -3185,8 +3393,8 @@ it.effect("retains candidate authorization and capability history when a Default
         WHERE disposition.invocation_part_id = ${conflictLosing.partID}
       `),
     ).toMatchObject({
-      disposition: "candidate_v2",
-      authorization_kind: "direct_request_v2",
+      disposition: "agent_action_v3",
+      agent_action_fingerprint: expect.any(String),
       outcome: "prompted_allow",
       permission_request_id: expect.any(String),
       acknowledgements: 0,
@@ -3200,7 +3408,7 @@ it.effect("retains candidate authorization and capability history when a Default
               yield* tx.run("DROP TRIGGER learner_default_course_disposition_immutable_v13")
               yield* tx.run(sql`
                 UPDATE learner_default_course_disposition
-                SET authorization_fingerprint = NULL
+                SET agent_action_fingerprint = NULL
                 WHERE invocation_part_id = ${conflictLosing.partID}
               `)
             }),
@@ -3277,7 +3485,7 @@ it.effect("settles every non-allow capability history by the final semantic race
                 )).output,
               )
               const lost = yield* db.transaction((tx) =>
-                settleDefaultCourseV2(tx, {
+                settleDefaultCourseV3(tx, {
                   partID: losing.partID,
                   settlement: {
                     time: Date.now() + outcomeIndex * 10 + semanticIndex,
@@ -3295,8 +3503,8 @@ it.effect("settles every non-allow capability history by the final semantic race
                       },
                       acknowledgement: {
                         invocationPartID: losing.partID,
-                        effectAuthorizationPartID: interaction.registration.partID,
-                        authorizationVersion: 2,
+                        effectAgentActionPartID: interaction.registration.partID,
+                        agentActionVersion: 3,
                       },
                     }
                   : {
@@ -3309,10 +3517,10 @@ it.effect("settles every non-allow capability history by the final semantic race
                 yield* db.get(sql`
                   SELECT
                     disposition.disposition,
-                    disposition.authorization_kind,
+                    disposition.agent_action_fingerprint,
                     capability.outcome,
                     (SELECT count(*) FROM learner_default_course_transition
-                      WHERE authorization_part_id = ${losing.partID}) AS effects,
+                      WHERE agent_action_part_id = ${losing.partID}) AS effects,
                     (SELECT count(*) FROM learner_default_course_acknowledgement
                       WHERE invocation_part_id = ${losing.partID}) AS acknowledgements
                   FROM learner_default_course_disposition AS disposition
@@ -3321,8 +3529,8 @@ it.effect("settles every non-allow capability history by the final semantic race
                   WHERE disposition.invocation_part_id = ${losing.partID}
                 `),
               ).toEqual({
-                disposition: "candidate_v2",
-                authorization_kind: "direct_request_v2",
+                disposition: "agent_action_v3",
+                agent_action_fingerprint: expect.any(String),
                 outcome,
                 effects: 0,
                 acknowledgements: semanticOutcome === "already_applied" ? 1 : 0,
@@ -3432,19 +3640,24 @@ it.effect("gives semantic winners precedence through live Default-Course permiss
               expect(output).toMatchObject(
                 semanticOutcome === "already_applied"
                   ? {
-                      disposition: "candidate_v2",
+                      disposition: "agent_action_v3",
                       settlement: { outcome: "already_applied", effectID: winnerOutput.settlement.effectID },
                       acknowledgement: {
                         invocationPartID: candidate.partID,
-                        effectAuthorizationPartID: interaction.registration.partID,
+                        effectAgentActionPartID: interaction.registration.partID,
+                        agentActionVersion: 3,
                         effectID: winnerOutput.settlement.effectID,
                       },
                     }
                   : {
-                      disposition: "candidate_v2",
+                      disposition: "agent_action_v3",
                       settlement: { outcome: "error", code: "semantic_conflict" },
                     },
               )
+              expect(output.agentAction).toMatchObject({
+                kind: "agent_action_v3",
+                command: candidateInput,
+              })
               expect(output.semanticTerminal).toBeUndefined()
               if (semanticOutcome === "semantic_conflict") expect(output.acknowledgement).toBeUndefined()
               const capabilityAfter = yield* defaultCourseCandidateEvidence(db, candidate.partID)
@@ -3579,19 +3792,24 @@ it.effect("gives semantic winners precedence through every Default-Course startu
               expect(output).toMatchObject(
                 semanticOutcome === "already_applied"
                   ? {
-                      disposition: "candidate_v2",
+                      disposition: "agent_action_v3",
                       settlement: { outcome: "already_applied", effectID: winnerOutput.settlement.effectID },
                       acknowledgement: {
                         invocationPartID: candidate.partID,
-                        effectAuthorizationPartID: interaction.registration.partID,
+                        effectAgentActionPartID: interaction.registration.partID,
+                        agentActionVersion: 3,
                         effectID: winnerOutput.settlement.effectID,
                       },
                     }
                   : {
-                      disposition: "candidate_v2",
+                      disposition: "agent_action_v3",
                       settlement: { outcome: "error", code: "semantic_conflict" },
                     },
               )
+              expect(output.agentAction).toMatchObject({
+                kind: "agent_action_v3",
+                command: candidateInput,
+              })
               expect(output.semanticTerminal).toBeUndefined()
               if (semanticOutcome === "semantic_conflict") expect(output.acknowledgement).toBeUndefined()
               const capabilityAfter = yield* defaultCourseCandidateEvidence(db, candidate.partID)
@@ -3654,7 +3872,7 @@ it.effect("gives semantic winners precedence through every Default-Course startu
           expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
           const terminal = yield* exactPartResult(db, interaction.registration.partID)
           expect(JSON.parse(terminal.output)).toMatchObject({
-            disposition: "candidate_v2",
+            disposition: "agent_action_v3",
             settlement: { outcome: "error", code: "interrupted" },
           })
           expect(yield* defaultCourseCandidateEvidence(db, interaction.registration.partID)).toEqual(before)
@@ -3668,395 +3886,70 @@ it.effect("gives semantic winners precedence through every Default-Course startu
   }),
 )
 
-it.effect("records a nonmutating Default-Course proposal and accepts it only from a later learner Turn", () =>
+it.effect("keeps retired Default-Course proposal production unreachable", () =>
   Effect.gen(function* () {
-    permissionRequests.length = 0
     const db = (yield* Database.Service).db
-    const courses = yield* Course.Service
-    const navigation = yield* LearnerNavigation.ReadService
     const runtime = yield* LearningCommandRuntime.Service
-    const seeded = yield* seedCourse(courses, "Proposed algorithms", "Main")
-    const proposalInput = {
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target: {
-        courseID: seeded.course.id,
-        courseVersion: 0,
-        selectionRevisionID: null,
-        selectionVersion: 0,
-        viewID: null,
-        viewVersion: null,
-        revisionVersion: null,
-      },
-      resolutionScope: {
-        coverage: "explicitly_truncated",
-        candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: 0 }],
-        selectedCourseID: seeded.course.id,
-        truncation: { reason: "The Tutor presented the one currently relevant Course" },
-      },
-    } as const
-    const proposed = yield* seedInteraction(
-      db,
-      "default-v2-proposal",
-      proposalInput,
-      PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      { text: "Help me decide which Course to continue." },
-    )
-    const frontierBefore = yield* db.transaction((tx) => LearningFrontier.read(tx))
+    const core = yield* Effect.promise(() => import("@opencode-ai/core/learner-navigation/default-course-v2"))
 
-    yield* runtime.prepareDefaultCourseProposal(proposalInput, proposed.registration)
-    const exactProposal = yield* exactPartResult(db, proposed.registration.partID)
-    const proposal = JSON.parse(exactProposal.output).proposal as {
-      fingerprint: string
-      timePresented: number
-      emissionOrdinal: number
-    }
-    expect(exactProposal.metadata).toMatchObject({
-      proposalFingerprint: proposal.fingerprint,
-      durablyRecorded: true,
-      mutating: false,
-    })
-    expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontierBefore)
+    expect("prepareDefaultCourseProposal" in runtime).toBe(false)
+    expect("prepareDefaultCourseProposal" in core).toBe(false)
+    expect("recordDefaultCourseProposal" in core).toBe(false)
     expect(
       yield* db.get(sql`
         SELECT count(*) AS count
-        FROM learning_command_invocation
-        WHERE part_id = ${proposed.registration.partID}
+        FROM learner_default_course_proposal
       `),
     ).toEqual({ count: 0 })
-    expect(yield* navigation.currentDefault()).toMatchObject({
-      version: 0,
-      courseID: null,
-      usability: { usable: false, cause: "absent" },
-    })
-    const partialV1Endpoint = JSON.stringify({
-      kind: "course",
-      locator: {
-        courseID: seeded.course.id,
-        title: { availability: "not_recorded_v1" },
-        courseVersion: { availability: "not_recorded_v1" },
-        workingSelection: { availability: "not_recorded_v1" },
-      },
-    })
-    yield* Effect.forEach(
-      ["from_locator", "to_locator"] as const,
-      (column) =>
-        Effect.gen(function* () {
-          expect(
-            Exit.isFailure(
-              yield* db
-                .transaction((tx) =>
-                  Effect.gen(function* () {
-                    yield* tx.run(sql.raw("DROP TRIGGER learner_default_course_proposal_immutable_v13"))
-                    yield* tx.run(sql`
-                      UPDATE learner_default_course_proposal
-                      SET ${sql.identifier(column)} = ${partialV1Endpoint}
-                      WHERE part_id = ${proposed.registration.partID}
-                    `)
-                  }),
-                )
-                .pipe(Effect.exit),
-            ),
-          ).toBe(true)
-        }),
-      { discard: true },
-    )
-    const sameRoundInput = {
-      authorization: {
-        type: "accepted_proposal_v2",
-        sourceExcerpt: "Help me decide which Course to continue",
-        presentedAssistantMessageID: proposed.registration.assistantMessageID,
-        presentedPartID: proposed.registration.partID,
-        emissionOrdinal: proposal.emissionOrdinal,
-        proposalFingerprint: proposal.fingerprint,
-        selection: "sole_presented",
-      },
-    } as const
-    expect(
-      Exit.isFailure(
-        yield* runtime
-          .prepareCommand(
-            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-            sameRoundInput,
-            proposed.registration,
-          )
-          .pipe(Effect.exit),
-      ),
-    ).toBe(true)
-    expect(
-      yield* db.get(sql`
-        SELECT count(*) AS count
-        FROM learning_command_invocation
-        WHERE part_id = ${proposed.registration.partID}
-      `),
-    ).toEqual({ count: 0 })
-    yield* settleInteractionTurn(db, proposed, proposal.timePresented)
-
-    const copiedAssistantMessageID = SessionV1.MessageID.ascending("msg_default_v2_unsealed_copy")
-    const copiedPartID = SessionV1.PartID.ascending("prt_default_v2_unsealed_copy")
-    yield* db.transaction((tx) =>
-      Effect.gen(function* () {
-        const source = yield* tx
-          .select({ data: PartTable.data })
-          .from(PartTable)
-          .where(eq(PartTable.id, proposed.registration.partID))
-          .get()
-        if (!source) return yield* Effect.die("Expected the completed proposal Part to copy")
-        yield* tx
-          .insert(MessageTable)
-          .values({
-            id: copiedAssistantMessageID,
-            session_id: proposed.sessionID,
-            data: assistantData(proposed.userMessageID, proposal.timePresented + 1),
-            time_created: proposal.timePresented + 1,
-            time_updated: proposal.timePresented + 1,
-          })
-          .run()
-        yield* tx
-          .insert(PartTable)
-          .values({
-            id: copiedPartID,
-            session_id: proposed.sessionID,
-            message_id: copiedAssistantMessageID,
-            data: structuredClone(source.data),
-            time_created: proposal.timePresented + 1,
-            time_updated: proposal.timePresented + 1,
-          })
-          .run()
-      }),
-    )
-    const copiedAcceptanceInput = {
-      authorization: {
-        type: "accepted_proposal_v2",
-        sourceExcerpt: "Yes, use the copied Course proposal",
-        presentedAssistantMessageID: copiedAssistantMessageID,
-        presentedPartID: copiedPartID,
-        emissionOrdinal: proposal.emissionOrdinal,
-        proposalFingerprint: proposal.fingerprint,
-        selection: "sole_presented",
-      },
-    } as const
-    const copiedAcceptance = yield* seedFollowupInteraction(
-      db,
-      proposed,
-      "default-v2-proposal-unsealed-copy",
-      copiedAcceptanceInput,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      {
-        text: "Yes, use the copied Course proposal.",
-        time: proposal.timePresented + 2,
-      },
-    )
-    expect(
-      Exit.isFailure(
-        yield* runtime
-          .prepareCommand(
-            LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-            copiedAcceptanceInput,
-            copiedAcceptance.registration,
-          )
-          .pipe(Effect.exit),
-      ),
-    ).toBe(true)
-    expect(
-      yield* db.get(sql`
-        SELECT count(*) AS count
-        FROM learning_command_invocation
-        WHERE part_id = ${copiedAcceptance.registration.partID}
-      `),
-    ).toEqual({ count: 0 })
-    yield* db.transaction((tx) =>
-      Effect.gen(function* () {
-        yield* TurnLifecycle.settleTool(tx, {
-          turnID: copiedAcceptance.turnID,
-          partID: copiedAcceptance.registration.partID,
-          state: "failed",
-          time: proposal.timePresented + 2,
-        })
-        yield* TurnLifecycle.settle(tx, {
-          turnID: copiedAcceptance.turnID,
-          outcome: "failed",
-          reason: "provider_failure",
-          time: proposal.timePresented + 2,
-        })
-      }),
-    )
-
-    const acceptedInput = {
-      authorization: {
-        type: "accepted_proposal_v2",
-        sourceExcerpt: "Yes, use that Course",
-        presentedAssistantMessageID: proposed.registration.assistantMessageID,
-        presentedPartID: proposed.registration.partID,
-        emissionOrdinal: proposal.emissionOrdinal,
-        proposalFingerprint: proposal.fingerprint,
-        selection: "sole_presented",
-      },
-    } as const
-    const accepted = yield* seedFollowupInteraction(
-      db,
-      proposed,
-      "default-v2-proposal-accepted",
-      acceptedInput,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      {
-        text: "Yes, use that Course as my default.",
-        time: proposal.timePresented + 3,
-      },
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      acceptedInput,
-      accepted.registration,
-    )
-    const result = yield* runtime.executeCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      acceptedInput,
-      context(accepted.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
-    )
-    expect(JSON.parse(result.output)).toMatchObject({
-      settlement: { outcome: "applied" },
-      authorization: {
-        kind: "accepted_proposal_v2",
-        source: {
-          proposalPartID: proposed.registration.partID,
-          proposalPresentationPartID: proposed.registration.partID,
-          proposalPresentationAssistantMessageID: proposed.registration.assistantMessageID,
-          proposalEmissionOrdinal: proposal.emissionOrdinal,
-          proposalFingerprint: proposal.fingerprint,
-          selection: "sole_presented",
-        },
-      },
-    })
-    expect(yield* navigation.currentDefault()).toMatchObject({
-      version: 1,
-      courseID: seeded.course.id,
-      usability: { usable: true },
-    })
   }),
 )
 
-it.effect("replays a migrated terminal Default-Course V1 Part before V2 decoding or permission", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const time = Date.now()
-    const input = { expectedHeadID: null, expectedVersion: 0, target: null }
-    const interaction = yield* seedInteraction(
-      db,
-      "default-v1-terminal-replay",
-      input,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      { text: "Keep no Course as my default.", time },
-    )
-    const permissionRequestID = PermissionV1.ID.ascending()
-    const invocation = {
-      envelope: {
-        occurrenceID: interaction.occurrenceID,
-        turnID: interaction.turnID,
-        inputID: interaction.inputID,
-        sessionID: interaction.sessionID,
-        parentUserMessageID: interaction.userMessageID,
-        assistantMessageID: interaction.registration.assistantMessageID,
-        partID: interaction.registration.partID,
-        providerCallID: interaction.registration.callID,
-        emissionOrdinal: interaction.registration.emissionOrdinal,
-        capabilityIdentity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-        capabilityVersion: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_VERSION,
-        authorizationBasis: "learner_acceptance" as const,
-        timeAdmitted: time,
-      },
-      command: { kind: "default_course_preference" as const, ...input },
-      permissionRequestID,
-    }
-    expect(yield* db.transaction((tx) => LearningCommand.reserveNavigation(tx, invocation))).toEqual({
-      type: "candidate",
-    })
-    yield* db.transaction((tx) =>
-      Effect.gen(function* () {
-        const physical = yield* tx
-          .select()
-          .from(LearningCommandInvocationTable)
-          .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
-          .get()
-        if (!physical) return yield* Effect.die("Expected the legacy Default-Course invocation")
-        yield* tx.run("DROP TRIGGER IF EXISTS learner_default_course_disposition_validate_insert_v13")
-        yield* tx
-          .insert(LearnerDefaultCourseDispositionTable)
-          .values({
-            invocation_part_id: interaction.registration.partID,
-            disposition: "legacy_v1",
-            authorization_version: 1,
-            authorization_kind: "legacy_v1",
-            authorization_fingerprint: "a".repeat(64),
-            command_fingerprint: physical.input_fingerprint,
-            legacy_row_class: "no_change",
-            confirmation_availability: "not_recorded_v1",
-            command_permission_request_id: permissionRequestID,
-            time_disposed: physical.time_admitted,
-          })
-          .run()
-        yield* LearnerNavigationConstraintSchema.install(tx)
-      }),
-    )
-    const settled = yield* db.transaction((tx) =>
-      LearningCommand.settleNavigation(tx, {
-        ...invocation,
-        permission: { type: "allow" },
-        settlement: { time: time + 1, order: 1 },
-      }),
-    )
-    if (settled.type !== "settled") return yield* Effect.die("Expected a terminal V1 no-change settlement")
-    const exact = LearningCommandRuntime.exactResult(
-      settled.settlement,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      {
-        partID: interaction.registration.partID,
-        assistantMessageID: interaction.registration.assistantMessageID,
-        sessionID: interaction.registration.sessionID,
-        providerCallID: interaction.registration.callID,
-        timeAdmitted: time,
-      },
-    )
-    yield* db
-      .update(PartTable)
-      .set({
-        data: {
-          type: "tool",
-          tool: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-          callID: interaction.registration.callID,
-          state: {
-            status: "completed",
-            input,
-            output: exact.output,
-            title: exact.title,
-            metadata: exact.metadata,
-            time: { start: time, end: settled.settlement.settlementTime },
-          },
-        } as (typeof PartTable.$inferInsert)["data"],
-        time_updated: settled.settlement.settlementTime,
-      })
-      .where(eq(PartTable.id, interaction.registration.partID))
-      .run()
-    yield* settleInteractionTurn(db, interaction, settled.settlement.settlementTime)
-
-    const requestsBeforeReplay = permissionRequests.length
-    yield* runtime.prepareCommand(
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-      input,
-      interaction.registration,
-    )
-    expect(
-      yield* runtime.executeCommand(
+test("replays a migrated terminal Default-Course V1 Part before V3 decoding or permission", async () => {
+  await using tmp = await tmpdir()
+  const filename = join(tmp.path, "frozen-v12-terminal-default-course.sqlite")
+  const frozen = await seedFrozenV12AdmittedDefaultCourse(filename, {
+    state: "terminal_no_change",
+    terminalResult: (settlement, envelope) =>
+      LearningCommandRuntime.exactResult(
+        settlement,
         LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
-        input,
-        context(interaction.registration, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+        envelope,
       ),
-    ).toEqual(exact)
-    expect(permissionRequests).toHaveLength(requestsBeforeReplay)
-  }),
-)
+  })
+  const requestsBeforeReplay = permissionRequests.length
+  const replay = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      yield* runtime.prepareCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        frozen.input,
+        frozen.registration,
+      )
+      const exact = yield* exactPartResult(db, frozen.partID)
+      const executed = yield* runtime.executeCommand(
+        LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        frozen.input,
+        context(frozen.registration, "deny", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
+      )
+      const disposition = yield* db
+        .select()
+        .from(LearnerDefaultCourseDispositionTable)
+        .where(eq(LearnerDefaultCourseDispositionTable.invocation_part_id, frozen.partID))
+        .get()
+      return { exact, executed, disposition }
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+
+  expect(replay.executed).toEqual(replay.exact)
+  expect(JSON.parse(replay.exact.output)).toMatchObject({ outcome: "no_change" })
+  expect(replay.disposition).toMatchObject({
+    disposition: "legacy_v1",
+    legacy_row_class: "no_change",
+    confirmation_availability: "not_recorded_v1",
+  })
+  expect(permissionRequests).toHaveLength(requestsBeforeReplay)
+})
 
 it.effect("keeps route anchors exact to one Course Revision Item and uses ordinary permission", () =>
   Effect.gen(function* () {
@@ -4255,28 +4148,7 @@ it.effect("preserves navigation and its source receipt across whole Session dele
     const runtime = yield* LearningCommandRuntime.Service
     const sessions = yield* Session.Service
     const course = yield* courses.createCourse({ title: "Deletion-retained default" })
-    const input = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "make Deletion-retained default my default",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: course.id, title: course.title, courseVersion: 0 }],
-          selectedCourseID: course.id,
-        },
-      },
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target: {
-        courseID: course.id,
-        courseVersion: 0,
-        selectionRevisionID: null,
-        selectionVersion: 0,
-        viewID: null,
-        viewVersion: null,
-        revisionVersion: null,
-      },
-    }
+    const input = { action: "set", courseID: course.id } as const
     const interaction = yield* seedInteraction(
       db,
       "navigation-session-deletion",
@@ -4596,35 +4468,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       .get()
     if (!originalInvocation || !originalEffect) return yield* Effect.die("Expected the legacy settlement fixture")
 
-    const course = yield* courses.getCourse(seeded.course.id)
-    const defaultCommand = {
-      kind: "default_course_preference" as const,
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target: {
-        courseID: seeded.course.id,
-        courseVersion: course.stateVersion,
-        selectionRevisionID: seeded.view.revision.id,
-        selectionVersion: course.selection.version,
-        viewID: seeded.view.view.id,
-        viewVersion: 0,
-        revisionVersion: 0,
-      },
-    }
-    const defaultInput = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "make Receipt integrity my default Course",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: course.stateVersion }],
-          selectedCourseID: seeded.course.id,
-        },
-      },
-      expectedHeadID: defaultCommand.expectedHeadID,
-      expectedVersion: defaultCommand.expectedVersion,
-      target: defaultCommand.target,
-    } as const
+    const defaultInput = { action: "set", courseID: seeded.course.id } as const
     const defaultInteraction = yield* seedInteraction(
       db,
       "receipt-promotion-default-v2",
@@ -4645,7 +4489,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       )).output,
     )
     if (defaultResult.settlement?.outcome !== "applied") {
-      return yield* Effect.die("Expected the real V2 Default-Course runtime to establish the fixture")
+      return yield* Effect.die("Expected the Agent-native Default-Course runtime to establish the fixture")
     }
     const preparedDefault = {
       effect: defaultResult.settlement.effect as LearnerNavigation.DefaultEffect,
@@ -4655,7 +4499,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
       .from(LearnerDefaultCourseCommitSealTable)
       .where(eq(LearnerDefaultCourseCommitSealTable.effect_id, preparedDefault.effect.id))
       .get()
-    if (!defaultSealBeforePromotion) return yield* Effect.die("Expected the V2 Default-Course seal fixture")
+    if (!defaultSealBeforePromotion) return yield* Effect.die("Expected the Agent-native Default-Course seal fixture")
     const defaultPermissionRequestID = PermissionV1.ID.ascending()
     const defaultTransitionBeforeReplacement = yield* db
       .select()
@@ -4761,6 +4605,7 @@ it.effect("rejects raw promotion of a non-navigation receipt into either navigat
         .get(),
     ).toMatchObject({ id: preparedDefault.effect.id, version: 1 })
 
+    const course = yield* courses.getCourse(seeded.course.id)
     const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id))
       .items[0]
     const anchorCommand = {
@@ -5052,29 +4897,7 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       .get()
     if (!acceptanceReceipt || !acceptanceSeal) return yield* Effect.die("Expected the acceptance receipt fixture")
 
-    const course = yield* courses.getCourse(seeded.course.id)
-    const defaultInput = {
-      authorization: {
-        type: "direct_request_v2",
-        sourceExcerpt: "make Receipt replacement my default",
-        resolutionScope: {
-          coverage: "complete",
-          candidates: [{ courseID: seeded.course.id, title: seeded.course.title, courseVersion: course.stateVersion }],
-          selectedCourseID: seeded.course.id,
-        },
-      },
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target: {
-        courseID: seeded.course.id,
-        courseVersion: course.stateVersion,
-        selectionRevisionID: seeded.view.revision.id,
-        selectionVersion: course.selection.version,
-        viewID: seeded.view.view.id,
-        viewVersion: 0,
-        revisionVersion: 0,
-      },
-    }
+    const defaultInput = { action: "set", courseID: seeded.course.id } as const
     const defaultInteraction = yield* seedInteraction(
       db,
       "replace-default",
@@ -5205,6 +5028,7 @@ it.effect("rejects SQLite replacement of either navigation receipt identity", ()
       source: { receiptID: defaultReceipt.id },
     })
 
+    const course = yield* courses.getCourse(seeded.course.id)
     const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id))
       .items[0]
     const anchorInput = {
@@ -5815,28 +5639,7 @@ test("reopens stored success and recovers admitted work without re-execution", a
       )
 
       const navigationCourse = yield* courses.createCourse({ title: "Persistent default navigation" })
-      const navigationInput = {
-        authorization: {
-          type: "direct_request_v2",
-          sourceExcerpt: "make Persistent default navigation my default",
-          resolutionScope: {
-            coverage: "complete",
-            candidates: [{ courseID: navigationCourse.id, title: navigationCourse.title, courseVersion: 0 }],
-            selectedCourseID: navigationCourse.id,
-          },
-        },
-        expectedHeadID: null,
-        expectedVersion: 0,
-        target: {
-          courseID: navigationCourse.id,
-          courseVersion: 0,
-          selectionRevisionID: null,
-          selectionVersion: 0,
-          viewID: null,
-          viewVersion: null,
-          revisionVersion: null,
-        },
-      }
+      const navigationInput = { action: "set", courseID: navigationCourse.id } as const
       const navigationInteraction = yield* seedInteraction(
         db,
         "reopen-navigation-applied",
@@ -5854,38 +5657,8 @@ test("reopens stored success and recovers admitted work without re-execution", a
         navigationInput,
         context(navigationInteraction.registration, "allow", LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY),
       )
-      const navigationSettlement = JSON.parse(navigationApplied.output).settlement as {
-        effectID: LearnerNavigation.DefaultEffectID
-      }
       const pendingNavigationCourse = yield* courses.createCourse({ title: "Interrupted default navigation" })
-      const pendingNavigationInput = {
-        authorization: {
-          type: "direct_request_v2",
-          sourceExcerpt: "change my default to Interrupted default navigation",
-          resolutionScope: {
-            coverage: "complete",
-            candidates: [
-              {
-                courseID: pendingNavigationCourse.id,
-                title: pendingNavigationCourse.title,
-                courseVersion: 0,
-              },
-            ],
-            selectedCourseID: pendingNavigationCourse.id,
-          },
-        },
-        expectedHeadID: navigationSettlement.effectID,
-        expectedVersion: 1,
-        target: {
-          courseID: pendingNavigationCourse.id,
-          courseVersion: 0,
-          selectionRevisionID: null,
-          selectionVersion: 0,
-          viewID: null,
-          viewVersion: null,
-          revisionVersion: null,
-        },
-      }
+      const pendingNavigationInput = { action: "set", courseID: pendingNavigationCourse.id } as const
       const pendingNavigationInteraction = yield* seedInteraction(
         db,
         "reopen-navigation-interrupted",
@@ -6325,7 +6098,7 @@ test("joins only active execution and never replays from a completed cache", asy
   )
 })
 
-test("rejects a Default-Course V2 authorization whose Course snapshot changes while the prompt is open", async () => {
+test("rejects an Agent-native Default-Course action whose runtime-owned Course snapshot changes while prompting", async () => {
   await using tmp = await tmpdir()
   const filename = join(tmp.path, "learning-command-default-confirmation-race.sqlite")
   const entered = Promise.withResolvers<void>()
@@ -6378,28 +6151,7 @@ test("rejects a Default-Course V2 authorization whose Course snapshot changes wh
       const courses = yield* Course.Service
       const runtime = yield* LearningCommandRuntime.Service
       const course = yield* courses.createCourse({ title: "Original default title" })
-      const input = {
-        authorization: {
-          type: "direct_request_v2",
-          sourceExcerpt: "make Original default title my default",
-          resolutionScope: {
-            coverage: "complete",
-            candidates: [{ courseID: course.id, title: course.title, courseVersion: 0 }],
-            selectedCourseID: course.id,
-          },
-        },
-        expectedHeadID: null,
-        expectedVersion: 0,
-        target: {
-          courseID: course.id,
-          courseVersion: 0,
-          selectionRevisionID: null,
-          selectionVersion: 0,
-          viewID: null,
-          viewVersion: null,
-          revisionVersion: null,
-        },
-      }
+      const input = { action: "set", courseID: course.id } as const
       const interaction = yield* seedInteraction(
         db,
         "default-confirmation-race",
@@ -6440,33 +6192,15 @@ test("rejects a Default-Course V2 authorization whose Course snapshot changes wh
 
 function defaultCourseDirectInput(
   course: Course.CourseInfo,
-  sourceExcerpt: string,
-  current: Readonly<{ headID: LearnerNavigation.DefaultEffectID | null; version: number }> = {
+  _sourceExcerpt: string,
+  _current: Readonly<{ headID: LearnerNavigation.DefaultEffectID | null; version: number }> = {
     headID: null,
     version: 0,
   },
 ) {
   return {
-    authorization: {
-      type: "direct_request_v2",
-      sourceExcerpt,
-      resolutionScope: {
-        coverage: "complete",
-        candidates: [{ courseID: course.id, title: course.title, courseVersion: course.stateVersion }],
-        selectedCourseID: course.id,
-      },
-    },
-    expectedHeadID: current.headID,
-    expectedVersion: current.version,
-    target: {
-      courseID: course.id,
-      courseVersion: course.stateVersion,
-      selectionRevisionID: null,
-      selectionVersion: course.selection.version,
-      viewID: null,
-      viewVersion: null,
-      revisionVersion: null,
-    },
+    action: "set",
+    courseID: course.id,
   } as const
 }
 
@@ -6656,16 +6390,18 @@ function settleRaceCapability(
 ) {
   return db.transaction((tx) =>
     Effect.gen(function* () {
-      const authorization = yield* tx
+      const provenance = yield* tx
         .select({
-          fingerprint: LearnerDefaultCourseDispositionTable.authorization_fingerprint,
+          authorizationFingerprint: LearnerDefaultCourseDispositionTable.authorization_fingerprint,
+          agentActionFingerprint: LearnerDefaultCourseDispositionTable.agent_action_fingerprint,
           time: LearnerDefaultCourseDispositionTable.time_disposed,
         })
         .from(LearnerDefaultCourseDispositionTable)
         .where(eq(LearnerDefaultCourseDispositionTable.invocation_part_id, partID))
         .get()
-      if (!authorization?.fingerprint) return yield* Effect.die("Race candidate lost its authorization")
-      const time = Math.max(Date.now(), authorization.time) + ordinal
+      const fingerprint = provenance?.agentActionFingerprint ?? provenance?.authorizationFingerprint
+      if (!provenance || !fingerprint) return yield* Effect.die("Race candidate lost its issuance provenance")
+      const time = Math.max(Date.now(), provenance.time) + ordinal
       if (outcome === "policy_allow" || outcome === "policy_deny") {
         yield* settleDefaultCoursePolicy(tx, {
           partID,
@@ -6685,7 +6421,7 @@ function settleRaceCapability(
         partID,
         requestID,
         policyBasis: { source: "candidate-race-oracle" },
-        shownScope: { authorizationFingerprint: authorization.fingerprint },
+        shownScope: { provenanceFingerprint: fingerprint },
         time,
         order: ordinal * 2,
       })
@@ -6725,7 +6461,7 @@ function defaultCourseCandidateEvidence(db: Database.Interface["db"], partID: Se
     counts: db.get(sql`
       SELECT
         (SELECT count(*) FROM learner_default_course_transition
-          WHERE authorization_part_id = ${partID}) AS effects,
+          WHERE authorization_part_id = ${partID} OR agent_action_part_id = ${partID}) AS effects,
         (SELECT count(*) FROM learner_default_course_acknowledgement
           WHERE invocation_part_id = ${partID}) AS acknowledgements
     `),
@@ -7130,7 +6866,7 @@ function insertAssistant(
     userMessageID: SessionV1.MessageID
     turnID: Turn.ID
     inputID: Turn.InputID
-    occurrenceID: LearningCommand.OccurrenceID
+    occurrenceID?: LearningCommand.OccurrenceID
   },
   suffix: string,
   input: Record<string, unknown>,
@@ -7222,6 +6958,251 @@ function insertAssistant(
       assistantMessageID,
     }) satisfies LearningCommandRuntime.Registration
   }).pipe(Effect.orDie)
+}
+
+function seedDelegatedDefaultCourseInteraction(
+  db: Database.Interface["db"],
+  suffix: string,
+  input: Readonly<{ action: "set"; courseID: Course.CourseID }> | Readonly<{ action: "clear" }>,
+  delegatedCapability: Record<string, unknown>,
+) {
+  return Effect.gen(function* () {
+    const time = Date.now()
+    const parentSessionID = SessionSchema.ID.make(`ses_learning_runtime_delegation_parent_${suffix}`)
+    const parentTurnID = Turn.ID.create()
+    const parentInputID = Turn.InputID.create()
+    const parentUserMessageID = SessionV1.MessageID.ascending(`msg_delegation_parent_user_${suffix}`)
+    const parentUserPartID = SessionV1.PartID.ascending(`prt_delegation_parent_user_${suffix}`)
+    const parentAssistantMessageID = SessionV1.MessageID.ascending(`msg_delegation_parent_assistant_${suffix}`)
+    const parentTaskPartID = SessionV1.PartID.ascending(`prt_delegation_parent_task_${suffix}`)
+    const parentTaskCallID = `call-delegation-parent-${suffix}`
+    yield* db
+      .insert(ProjectTable)
+      .values({
+        id: Project.ID.global,
+        worktree: AbsolutePath.make("C:\\project"),
+        sandboxes: [],
+        time_created: time,
+        time_updated: time,
+      })
+      .onConflictDoNothing()
+      .run()
+    yield* db
+      .insert(SessionTable)
+      .values({
+        id: parentSessionID,
+        project_id: Project.ID.global,
+        slug: parentSessionID,
+        directory: "C:\\project",
+        title: `Delegation parent ${suffix}`,
+        version: "test",
+        time_created: time,
+        time_updated: time,
+      })
+      .run()
+    yield* db
+      .insert(MessageTable)
+      .values({
+        id: parentUserMessageID,
+        session_id: parentSessionID,
+        data: userData(time),
+        time_created: time,
+        time_updated: time,
+      })
+      .run()
+    yield* db
+      .insert(PartTable)
+      .values({
+        id: parentUserPartID,
+        session_id: parentSessionID,
+        message_id: parentUserMessageID,
+        data: { type: "text", text: `Delegate ${suffix}` } as (typeof PartTable.$inferInsert)["data"],
+        time_created: time,
+        time_updated: time,
+      })
+      .run()
+    const occurrenceID = yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        const occurrence = yield* LearningCommand.Occurrence.admit(tx, {
+          admission: LearningCommand.LearnerAdmission.interactive({ timeZone: "UTC" }),
+          sessionID: parentSessionID,
+          messageID: parentUserMessageID,
+          timeAdmitted: time,
+        })
+        yield* TurnLifecycle.admit(tx, {
+          kind: "learner",
+          turnID: parentTurnID,
+          sessionID: parentSessionID,
+          inputID: parentInputID,
+          messageID: parentUserMessageID,
+          occurrenceID: occurrence.id,
+          limits: { model: 1, tool: 1 },
+          envelope: { input: { task: `delegate ${suffix}` } },
+          policyBasis: { source: "delegated-default-course-test" },
+          timeAdmitted: time,
+        })
+        return occurrence.id
+      }),
+    )
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* tx
+          .insert(MessageTable)
+          .values({
+            id: parentAssistantMessageID,
+            session_id: parentSessionID,
+            data: assistantData(parentUserMessageID, time + 1),
+            time_created: time + 1,
+            time_updated: time + 1,
+          })
+          .run()
+        yield* tx
+          .insert(PartTable)
+          .values({
+            id: parentTaskPartID,
+            session_id: parentSessionID,
+            message_id: parentAssistantMessageID,
+            data: {
+              type: "tool",
+              tool: "task",
+              callID: parentTaskCallID,
+              state: {
+                status: "pending",
+                input: { description: `Delegate ${suffix}` },
+                raw: JSON.stringify({ description: `Delegate ${suffix}` }),
+              },
+            } as (typeof PartTable.$inferInsert)["data"],
+            time_created: time + 1,
+            time_updated: time + 1,
+          })
+          .run()
+        yield* TurnLifecycle.admitModel(tx, {
+          turnID: parentTurnID,
+          sessionID: parentSessionID,
+          assistantMessageID: parentAssistantMessageID,
+          requestEnvelope: { task: `delegate ${suffix}` },
+          contextFingerprint: new Bun.CryptoHasher("sha256").update(`delegation-parent:${suffix}`).digest("hex"),
+          snapshotFrontier: { sequence: 0, time: 0 },
+          timeAdmitted: time + 1,
+        })
+        yield* TurnLifecycle.sealCandidateSet(tx, {
+          turnID: parentTurnID,
+          sessionID: parentSessionID,
+          assistantMessageID: parentAssistantMessageID,
+          candidates: [
+            {
+              partID: parentTaskPartID,
+              callID: parentTaskCallID,
+              tool: "task",
+              envelope: { description: `Delegate ${suffix}` },
+            },
+          ],
+          timeSealed: time + 1,
+        })
+        yield* TurnLifecycle.settleModel(tx, {
+          turnID: parentTurnID,
+          assistantMessageID: parentAssistantMessageID,
+          state: "completed",
+          time: time + 1,
+        })
+        yield* TurnLifecycle.admitTool(tx, {
+          turnID: parentTurnID,
+          sessionID: parentSessionID,
+          assistantMessageID: parentAssistantMessageID,
+          partID: parentTaskPartID,
+          timeAdmitted: time + 1,
+        })
+      }),
+    )
+
+    const childSessionID = SessionSchema.ID.make(`ses_learning_runtime_delegation_child_${suffix}`)
+    const childTurnID = Turn.ID.create()
+    const childInputID = Turn.InputID.create()
+    const childUserMessageID = SessionV1.MessageID.ascending(`msg_delegation_child_user_${suffix}`)
+    const childUserPartID = SessionV1.PartID.ascending(`prt_delegation_child_user_${suffix}`)
+    yield* db
+      .insert(SessionTable)
+      .values({
+        id: childSessionID,
+        project_id: Project.ID.global,
+        parent_id: parentSessionID,
+        slug: childSessionID,
+        directory: "C:\\project",
+        title: `Delegated default Course ${suffix}`,
+        version: "test",
+        time_created: time + 2,
+        time_updated: time + 2,
+      })
+      .run()
+    yield* db
+      .insert(MessageTable)
+      .values({
+        id: childUserMessageID,
+        session_id: childSessionID,
+        data: userData(time + 2),
+        time_created: time + 2,
+        time_updated: time + 2,
+      })
+      .run()
+    yield* db
+      .insert(PartTable)
+      .values({
+        id: childUserPartID,
+        session_id: childSessionID,
+        message_id: childUserMessageID,
+        data: {
+          type: "text",
+          text: `Apply delegated default Course action ${suffix}`,
+        } as (typeof PartTable.$inferInsert)["data"],
+        time_created: time + 2,
+        time_updated: time + 2,
+      })
+      .run()
+    yield* db.transaction((tx) =>
+      TurnLifecycle.admit(tx, {
+        kind: "delegated_task",
+        turnID: childTurnID,
+        sessionID: childSessionID,
+        inputID: childInputID,
+        messageID: childUserMessageID,
+        limits: { model: 8, tool: 16 },
+        envelope: { kind: "delegated_task", requestedOutput: `Apply ${suffix}` },
+        policyBasis: { source: "delegated-default-course-test" },
+        delegatedCapability,
+        parentTurnID,
+        parentTaskPartID,
+        parentModelMessageID: parentAssistantMessageID,
+        depthLimit: 1,
+        timeAdmitted: time + 2,
+      }),
+    )
+    const registration = yield* insertAssistant(
+      db,
+      {
+        sessionID: childSessionID,
+        userMessageID: childUserMessageID,
+        turnID: childTurnID,
+        inputID: childInputID,
+      },
+      `delegated-default-${suffix}`,
+      input,
+      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    )
+    const operation = yield* db
+      .select({ occurrenceID: TurnModelOperationTable.causal_occurrence_id })
+      .from(TurnModelOperationTable)
+      .where(eq(TurnModelOperationTable.assistant_message_id, registration.assistantMessageID))
+      .get()
+    if (!operation?.occurrenceID) {
+      return yield* Effect.die("Delegated Default-Course model operation has no causal learner occurrence")
+    }
+    return {
+      parent: { sessionID: parentSessionID, turnID: parentTurnID },
+      child: { sessionID: childSessionID, turnID: childTurnID, inputID: childInputID },
+      registration: { ...registration, causalOccurrenceID: operation.occurrenceID },
+      occurrenceID,
+    }
+  })
 }
 
 function userData(time: number): Omit<SessionV1.User, "id" | "sessionID"> {

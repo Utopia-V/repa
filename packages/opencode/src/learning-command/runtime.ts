@@ -7,24 +7,28 @@ import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import {
-  PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
   SET_DEFAULT_COURSE_PREFERENCE_V2_VERSION,
+  SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
   issueDefaultCourseCapabilityPrompt,
-  prepareDefaultCourseProposal,
   readDefaultCourseInvocationVersion,
-  readRecordedDefaultCourseProposal,
-  recordDefaultCourseProposal,
   recoverDefaultCourseV2,
+  recoverDefaultCourseV3,
   reserveDefaultCourseV2,
+  reserveDefaultCourseV3,
   resolveDefaultCourseProposalPresentation,
   settleDefaultCoursePolicy,
   settleDefaultCoursePrompt,
   settleDefaultCourseV2,
+  settleDefaultCourseV3,
   type DefaultCourseInvocationVersion,
+  type DefaultCourseV3ResultDisposition,
   type DefaultCourseV2ResultDisposition,
   type DefaultCourseV2Authorization,
 } from "@opencode-ai/core/learner-navigation/default-course-v2"
-import type { DefaultCourseAcknowledgement } from "@opencode-ai/core/learner-navigation/schema"
+import type {
+  DefaultCourseAcknowledgement,
+  DefaultCourseAgentAction,
+} from "@opencode-ai/core/learner-navigation/schema"
 import type { DefaultCourseSemanticTerminalDisposition } from "@opencode-ai/core/learner-navigation/schema"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
@@ -43,22 +47,21 @@ import {
   anchorCommand,
   command,
   defaultCommand,
-  defaultProposalCommand,
   directDefaultV2Command,
   learnerGoalCommand,
   normalize,
   normalizeAnchor,
   normalizeDefault,
-  normalizeDefaultProposal,
   normalizeDefaultV2,
+  normalizeDefaultV3,
   normalizeGoals,
   normalizeSteering,
   retainedSteeringCommand,
   type AcceptCourseViewRevisionInput,
   type SetCourseRouteAnchorInput,
-  type ProposeDefaultCoursePreferenceInput,
   type SetDefaultCoursePreferenceInput,
   type SetDefaultCoursePreferenceV2Input,
+  type SetDefaultCoursePreferenceV3Input,
   type UpdateLearnerGoalsInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
@@ -185,10 +188,24 @@ type DefaultV2ExecutionPreparation =
   | Readonly<{ type: "candidate"; authorization: DefaultCourseV2Authorization }>
   | Readonly<{ type: "settled"; exact: ExactResult }>
 
+type DefaultV3Canonical = Readonly<{
+  toolID: typeof LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY
+  input: SetDefaultCoursePreferenceV3Input
+}>
+
+type DefaultV3Active = Readonly<{
+  canonical: DefaultV3Canonical
+  registration: Registration
+  deferred: Deferred.Deferred<ExactResult, unknown>
+}>
+
+type DefaultV3ExecutionPreparation =
+  | Readonly<{ type: "candidate"; agentAction: DefaultCourseAgentAction }>
+  | Readonly<{ type: "settled"; exact: ExactResult }>
+
 export interface Interface {
   readonly prepare: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly execute: (input: unknown, context: ExecuteContext) => Effect.Effect<ExactResult, unknown>
-  readonly prepareDefaultCourseProposal: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly prepareCommand: (
     toolID: PrimaryCapability,
     input: unknown,
@@ -213,11 +230,9 @@ const layer = Layer.effect(
     const permission = yield* Permission.Service
     const inflight = new Map<SessionV1.PartID, Active>()
     const defaultV2Inflight = new Map<SessionV1.PartID, DefaultV2Active>()
+    const defaultV3Inflight = new Map<SessionV1.PartID, DefaultV3Active>()
 
     yield* recoverAdmitted(events)
-
-    const prepareDefaultCourseProposalCall = (input: unknown, registration: Registration) =>
-      prepareHostDefaultCourseProposal(events, input, registration)
 
     const prepareCommand = Effect.fn("LearningCommandRuntime.prepare")(function* (
       toolID: PrimaryCapability,
@@ -225,7 +240,7 @@ const layer = Layer.effect(
       registration: Registration,
     ) {
       if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
-        return yield* prepareDefaultCourseV2(events, modelInput, registration)
+        return yield* prepareDefaultCourse(events, modelInput, registration)
       }
       const canonical = canonicalInput(toolID, modelInput)
       const transaction = events.transaction((tx) =>
@@ -291,7 +306,14 @@ const layer = Layer.effect(
       context: ExecuteContext,
     ) {
       if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
-        return yield* executeDefaultCourseV2(events, permission, defaultV2Inflight, modelInput, context)
+        return yield* executeDefaultCourse(
+          events,
+          permission,
+          defaultV2Inflight,
+          defaultV3Inflight,
+          modelInput,
+          context,
+        )
       }
       const registration = requireRegistration(context)
       const canonical = canonicalInput(toolID, modelInput)
@@ -361,7 +383,6 @@ const layer = Layer.effect(
     return Service.of({
       prepare,
       execute,
-      prepareDefaultCourseProposal: prepareDefaultCourseProposalCall,
       prepareCommand,
       executeCommand,
       interrupt,
@@ -369,79 +390,290 @@ const layer = Layer.effect(
   }),
 )
 
-function prepareHostDefaultCourseProposal(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
-  const input = normalizeDefaultProposal(modelInput)
-  const transaction = events
+function prepareDefaultCourse(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
+  return Effect.gen(function* () {
+    const state = yield* readStoredDefaultCourseState(events, registration)
+    if (state?.version === 1 || state?.version === 2) {
+      return yield* prepareDefaultCourseV2(events, modelInput, registration)
+    }
+    return yield* prepareDefaultCourseV3(events, modelInput, registration)
+  })
+}
+
+function executeDefaultCourse(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  v2Inflight: Map<SessionV1.PartID, DefaultV2Active>,
+  v3Inflight: Map<SessionV1.PartID, DefaultV3Active>,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const state = yield* readStoredDefaultCourseState(events, registration)
+    if (state?.version === 1 || state?.version === 2) {
+      return yield* executeDefaultCourseV2(events, permission, v2Inflight, modelInput, context)
+    }
+    return yield* executeDefaultCourseV3(events, permission, v3Inflight, modelInput, context)
+  })
+}
+
+function readStoredDefaultCourseState(events: EventV2.Interface, registration: Registration) {
+  return events
+    .transaction((tx) =>
+      readDefaultCourseInvocationVersion(tx, {
+        partID: registration.partID,
+        assistantMessageID: registration.assistantMessageID,
+        providerCallID: registration.callID,
+      }).pipe(Effect.map(noEvent), Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function prepareDefaultCourseV3(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
+  return events
     .transaction((tx) =>
       Effect.gen(function* () {
-        const timePresented = Date.now()
-        const proposal = yield* prepareDefaultCourseProposal(tx, {
+        const canonical = {
+          toolID: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+          input: normalizeDefaultV3(modelInput),
+        } satisfies DefaultV3Canonical
+        const existing = yield* readDefaultCourseInvocationVersion(tx, {
           partID: registration.partID,
-          turnID: registration.turnID,
-          sessionID: registration.sessionID,
-          assistantMessageID: registration.assistantMessageID,
-          callID: registration.callID,
-          emissionOrdinal: registration.emissionOrdinal,
-          command: defaultProposalCommand(input),
-          resolutionScope: input.resolutionScope,
-          timePresented,
-        })
-        const exact = LearningCommandPresentation.hostDefaultCourseProposalResult(proposal, {
-          sessionID: registration.sessionID,
           assistantMessageID: registration.assistantMessageID,
           providerCallID: registration.callID,
-          partID: registration.partID,
-          emissionOrdinal: registration.emissionOrdinal,
         })
-        const part = {
-          id: registration.partID,
-          messageID: registration.assistantMessageID,
-          sessionID: registration.sessionID,
-          type: "tool",
-          tool: PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        if (existing) {
+          if (existing.version !== 3) return yield* invocationConflict(registration)
+          const state = yield* requireDefaultCourseV3State(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, state)
+          }
+          return noEvent(undefined)
+        }
+
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const row = yield* readPartRow(tx, registration.partID)
+        if (!row) {
+          return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+        }
+        const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+          turnID: registration.turnID,
+          inputID: registration.inputID,
+          causalOccurrenceID: registration.causalOccurrenceID,
+          partID: registration.partID,
           callID: registration.callID,
-          state: {
-            status: "completed",
-            input,
-            title: exact.title,
-            metadata: exact.metadata,
-            output: exact.output,
-            time: { start: proposal.timePresented, end: proposal.timePresented },
-          },
-        } satisfies SessionV1.ToolPart
-        yield* recordDefaultCourseProposal(tx, { proposal, completedPart: part })
-        return withPartEvent(undefined, part, proposal.timePresented)
+          emissionOrdinal: registration.emissionOrdinal,
+          sessionID: registration.sessionID,
+          assistantMessageID: registration.assistantMessageID,
+          capabilityIdentity: canonical.toolID,
+        })
+        const timeAdmitted = Math.max(
+          row.time_created,
+          trusted.modelTimeAdmitted,
+          trusted.candidateTimeRegistered,
+          trusted.toolTimeAdmitted,
+        )
+        yield* assertDefaultCourseV3AdmittedPart(tx, canonical, registration)
+        const reserved = yield* reserveDefaultCourseV3(tx, {
+          envelope: defaultCourseV3Envelope(registration, timeAdmitted),
+          command: canonical.input,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, timeAdmitted),
+        })
+        if (reserved.type === "admitted") return noEvent(undefined)
+        if (reserved.type === "replay") {
+          return yield* Effect.die("New Default-Course V3 admission unexpectedly replayed")
+        }
+        const part = defaultCourseV3TerminalPart(
+          canonical,
+          registration,
+          requireSemanticTerminalV3(reserved.semanticTerminal),
+          reserved.settlement,
+          "acknowledgement" in reserved ? reserved.acknowledgement : undefined,
+          timeAdmitted,
+        )
+        return withPartEvent(undefined, part, reserved.settlement.settlementTime)
       }).pipe(Effect.orDie),
     )
     .pipe(Effect.asVoid)
-  return Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
-      const exit = yield* restore(transaction).pipe(Effect.exit)
-      if (Exit.isSuccess(exit)) return
-      const reconciled = yield* events
-        .transaction((tx) =>
-          readRecordedDefaultCourseProposal(tx, {
+}
+
+function executeDefaultCourseV3(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  inflight: Map<SessionV1.PartID, DefaultV3Active>,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const canonical = {
+      toolID: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input: normalizeDefaultV3(modelInput),
+    } satisfies DefaultV3Canonical
+    const active = inflight.get(registration.partID)
+    if (active) {
+      if (!isDeepStrictEqual(active.registration, registration) || !isDeepStrictEqual(active.canonical, canonical)) {
+        return yield* invocationConflict(registration)
+      }
+      return yield* Deferred.await(active.deferred)
+    }
+
+    const deferred = Deferred.makeUnsafe<ExactResult, unknown>()
+    const token = { canonical, registration, deferred } satisfies DefaultV3Active
+    inflight.set(registration.partID, token)
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const exit = yield* restore(
+          executeDefaultCourseV3Once(events, permission, canonical, registration, context),
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(exit)) {
+          const reconciled = yield* loadCommittedDefaultCourseV3Result(events, canonical, registration).pipe(
+            Effect.exit,
+          )
+          if (Exit.isSuccess(reconciled) && reconciled.value) {
+            yield* Deferred.succeed(deferred, reconciled.value).pipe(Effect.ignore)
+            if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+            return reconciled.value
+          }
+          const cause = Exit.isFailure(reconciled) ? reconciled.cause : exit.cause
+          yield* Deferred.failCause(deferred, cause).pipe(Effect.ignore)
+          if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+          return yield* Effect.failCause(cause)
+        }
+        yield* Deferred.succeed(deferred, exit.value).pipe(Effect.ignore)
+        if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+        return exit.value
+      }),
+    )
+  })
+}
+
+function executeDefaultCourseV3Once(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: DefaultV3Canonical,
+  registration: Registration,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* events.transaction<DefaultV3ExecutionPreparation, typeof SessionV1.Event.PartUpdated>(
+      (tx) =>
+        Effect.gen(function* () {
+          const state = yield* requireDefaultCourseV3State(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            return noEvent({
+              type: "settled" as const,
+              exact: exactFromPart(yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, state)),
+            })
+          }
+          return noEvent({ type: "candidate" as const, agentAction: state.agentAction! })
+        }).pipe(Effect.orDie),
+    )
+    if (prepared.result.type === "settled") return prepared.result.exact
+
+    const authority = requirePermissionContext(context)
+    const agentAction = prepared.result.agentAction
+    const presentation = LearningCommandPresentation.defaultCourseV3Capability(agentAction, {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    })
+    const pattern = agentAction.to.kind === "course" ? agentAction.to.locator.courseID : "clear"
+    const shownScope = {
+      patterns: [pattern],
+      agentAction,
+      semanticPresentation: presentation,
+    }
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        sessionID: registration.sessionID,
+        permission: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        patterns: [pattern],
+        always: [pattern],
+        metadata: {
+          navigationKind: "default_course_preference",
+          agentAction,
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: {
+          messageID: registration.assistantMessageID,
+          callID: registration.callID,
+        },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+        lifecycle: {
+          resolution: "request_exact",
+          selected: (selection) => persistDefaultCourseSelection(events, registration, selection, shownScope),
+          replied: (input) => persistDefaultCourseReply(events, registration, input),
+        },
+      },
+      context.abort,
+    )
+    return yield* commitDefaultCourseV3(events, canonical, registration, permissionOutcome)
+  })
+}
+
+function commitDefaultCourseV3(
+  events: EventV2.Interface,
+  canonical: DefaultV3Canonical,
+  registration: Registration,
+  permission: LearningCommand.PermissionOutcome,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireDefaultCourseV3State(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(exactFromPart(yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, state)))
+        }
+        const settlement = yield* permission.type === "abort"
+          ? recoverDefaultCourseV3(tx, {
+              partID: registration.partID,
+              settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+            })
+          : Effect.gen(function* () {
+              const consumed = yield* LearningFrontier.read(tx)
+              yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+              return yield* settleDefaultCourseV3(tx, {
+                partID: registration.partID,
+                settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+              })
+            })
+        if (settlement.type === "replay") {
+          const replayed = requirePhysicalSettlement(settlement.settlement)
+          return noEvent(
+            exactFromPart(
+              yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, {
+                ...state,
+                status: replayed.outcome,
+                settlement: replayed,
+                acknowledgement: settlement.acknowledgement,
+              }),
+            ),
+          )
+        }
+        if (settlement.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
             partID: registration.partID,
-            turnID: registration.turnID,
-            sessionID: registration.sessionID,
-            assistantMessageID: registration.assistantMessageID,
-            callID: registration.callID,
-            emissionOrdinal: registration.emissionOrdinal,
-            modelInput: input,
-          }).pipe(
-            Effect.map((proposal) => noEvent(Boolean(proposal))),
-            Effect.orDie,
-          ),
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        const part = defaultCourseV3TerminalPart(
+          canonical,
+          registration,
+          candidateV3ResultDisposition(state.agentAction!),
+          settlement.settlement,
+          settlement.acknowledgement,
+          state.timeAdmitted,
         )
-        .pipe(
-          Effect.map((result) => result.result),
-          Effect.exit,
-        )
-      if (Exit.isSuccess(reconciled) && reconciled.value) return
-      if (Exit.isFailure(reconciled)) return yield* Effect.failCause(reconciled.cause)
-      return yield* Effect.failCause(exit.cause)
-    }),
-  )
+        return withPartEvent(exactFromPart(part), part, settlement.settlement.settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
 }
 
 function prepareDefaultCourseV2(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
@@ -454,6 +686,7 @@ function prepareDefaultCourseV2(events: EventV2.Interface, modelInput: unknown, 
           providerCallID: registration.callID,
         })
         if (existing?.version === 1) return yield* prepareLegacyDefaultCourseReplay(tx, registration, existing)
+        if (existing && existing.version !== 2) return yield* invocationConflict(registration)
 
         const canonical = {
           toolID: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
@@ -928,6 +1161,237 @@ function legacyDefaultCanonical(tx: EventV2.Transaction, partID: SessionV1.PartI
   })
 }
 
+function loadCommittedDefaultCourseV3Result(
+  events: EventV2.Interface,
+  canonical: DefaultV3Canonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* readDefaultCourseInvocationVersion(tx, {
+          partID: registration.partID,
+          assistantMessageID: registration.assistantMessageID,
+          providerCallID: registration.callID,
+        })
+        if (!state || state.version !== 3 || state.status === "admitted") return noEvent(undefined)
+        return noEvent(exactFromPart(yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, state)))
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function requireDefaultCourseV3State(
+  tx: EventV2.Transaction,
+  canonical: DefaultV3Canonical,
+  registration: Registration,
+) {
+  return Effect.gen(function* () {
+    const state = yield* readDefaultCourseInvocationVersion(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!state || state.version !== 3) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    if (
+      (state.disposition === "agent_action_v3" &&
+        (!state.agentAction || !isDeepStrictEqual(state.agentAction.command, canonical.input))) ||
+      (state.disposition === "semantic_terminal_v3" &&
+        (!state.semanticTerminal || !isDeepStrictEqual(state.semanticTerminal.command, canonical.input)))
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted" && (state.disposition !== "agent_action_v3" || !state.agentAction)) {
+      return yield* Effect.die("Admitted Default-Course V3 invocation is not a complete Agent action")
+    }
+    const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!physical || !physical.turn_id || !physical.input_id) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const envelope = defaultCourseV3Envelope(registration, physical.time_admitted)
+    if (
+      physical.turn_id !== envelope.turnID ||
+      physical.input_id !== envelope.inputID ||
+      physical.occurrence_id !== envelope.occurrenceID ||
+      physical.session_id !== envelope.sessionID ||
+      physical.parent_user_message_id !== envelope.parentUserMessageID ||
+      physical.assistant_message_id !== envelope.assistantMessageID ||
+      physical.emission_ordinal !== envelope.emissionOrdinal ||
+      physical.capability_identity !== envelope.capabilityIdentity ||
+      physical.capability_version !== envelope.capabilityVersion ||
+      physical.authorization_basis !== envelope.authorizationBasis
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted") {
+      if (state.disposition !== "agent_action_v3" || !state.agentAction) {
+        return yield* Effect.die("Admitted Default-Course V3 invocation is not a complete Agent action")
+      }
+      yield* assertDefaultCourseV3AdmittedPart(tx, canonical, registration)
+      return { ...state, status: "admitted" as const, timeAdmitted: physical.time_admitted }
+    }
+    return { ...state, status: state.status, timeAdmitted: physical.time_admitted }
+  })
+}
+
+function defaultCourseV3Envelope(registration: Registration, timeAdmitted: number): LearningCommand.InvocationEnvelope {
+  return {
+    occurrenceID: registration.causalOccurrenceID!,
+    turnID: registration.turnID,
+    inputID: registration.inputID,
+    sessionID: registration.sessionID,
+    parentUserMessageID: registration.parentUserMessageID,
+    assistantMessageID: registration.assistantMessageID,
+    partID: registration.partID,
+    providerCallID: registration.callID,
+    emissionOrdinal: registration.emissionOrdinal,
+    capabilityIdentity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+    capabilityVersion: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
+    authorizationBasis: "agent_action",
+    timeAdmitted,
+  }
+}
+
+function assertDefaultCourseV3AdmittedPart(
+  tx: EventV2.Transaction,
+  canonical: DefaultV3Canonical,
+  registration: Registration,
+) {
+  return readPart(tx, registration.partID).pipe(
+    Effect.flatMap((part) =>
+      part.id === registration.partID &&
+      part.messageID === registration.assistantMessageID &&
+      part.sessionID === registration.sessionID &&
+      part.type === "tool" &&
+      part.tool === canonical.toolID &&
+      part.callID === registration.callID &&
+      part.state.status === "pending" &&
+      isDeepStrictEqual(part.state.input, canonical.input)
+        ? Effect.void
+        : invocationConflict(registration),
+    ),
+  )
+}
+
+function candidateV3ResultDisposition(agentAction: DefaultCourseAgentAction): DefaultCourseV3ResultDisposition {
+  return { kind: "agent_action_v3", agentAction }
+}
+
+function requireSemanticTerminalV3(
+  disposition: DefaultCourseSemanticTerminalDisposition | undefined,
+): Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v3" }> {
+  if (!disposition || disposition.kind !== "semantic_terminal_v3") {
+    throw new Error("Settled semantic-terminal Default-Course V3 invocation lost its evidence")
+  }
+  return disposition
+}
+
+function resultDispositionV3(
+  state: Extract<DefaultCourseInvocationVersion, { readonly version: 3 }>,
+): DefaultCourseV3ResultDisposition {
+  if (state.disposition === "semantic_terminal_v3") return requireSemanticTerminalV3(state.semanticTerminal)
+  if (state.disposition === "agent_action_v3" && state.agentAction) {
+    return candidateV3ResultDisposition(state.agentAction)
+  }
+  throw new Error("Terminal Default-Course V3 state has no closed disposition")
+}
+
+function assertDefaultCourseV3TerminalPart(
+  tx: EventV2.Transaction,
+  canonical: DefaultV3Canonical,
+  registration: Registration,
+  state: Extract<DefaultCourseInvocationVersion, { readonly version: 3 }> & Readonly<{ timeAdmitted?: number }>,
+) {
+  return Effect.gen(function* () {
+    const timeAdmitted = state.timeAdmitted ?? (yield* requireDefaultCourseV2Time(tx, registration))
+    const expected = defaultCourseV3TerminalPart(
+      canonical,
+      registration,
+      resultDispositionV3(state),
+      requirePhysicalSettlement(state.settlement),
+      state.acknowledgement,
+      timeAdmitted,
+    )
+    const part = yield* readPart(tx, registration.partID)
+    if (
+      !isDeepStrictEqual(invocationPart(part), invocationPart(expected)) ||
+      SemanticPresentation.readResult(part, true).type !== "valid"
+    ) {
+      return yield* Effect.die(`Terminal Default-Course V3 Part ${registration.partID} diverged from its settlement`)
+    }
+    return part
+  })
+}
+
+function defaultCourseV3TerminalPart(
+  canonical: DefaultV3Canonical,
+  registration: Registration,
+  disposition: DefaultCourseV3ResultDisposition,
+  settlement: LearningCommand.PhysicalSettlement,
+  acknowledgement: DefaultCourseAcknowledgement | undefined,
+  timeAdmitted: number,
+) {
+  const presentation = LearningCommandPresentation.defaultCourseV3SettlementResult(
+    settlement,
+    disposition,
+    acknowledgement,
+    {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    },
+  )
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Default-Course V3 settlement has no valid semantic projection")
+  const exact = {
+    title: projected.title,
+    metadata: {
+      command: canonical.toolID,
+      commandVersion: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
+      outcome: settlement.outcome,
+      ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+      durablySettled: projected.durablySettled,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    },
+    output: JSON.stringify({
+      settlement,
+      disposition: disposition.kind,
+      ...(disposition.kind === "agent_action_v3"
+        ? { agentAction: disposition.agentAction }
+        : { semanticTerminal: disposition }),
+      ...(acknowledgement ? { acknowledgement } : {}),
+    }),
+  }
+  const part = {
+    id: registration.partID,
+    messageID: registration.assistantMessageID,
+    sessionID: registration.sessionID,
+    type: "tool",
+    tool: canonical.toolID,
+    callID: registration.callID,
+    state: {
+      status: "completed",
+      input: canonical.input,
+      output: exact.output,
+      title: exact.title,
+      metadata: exact.metadata,
+      time: { start: timeAdmitted, end: settlement.settlementTime },
+    },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal Default-Course V3 Part ${registration.partID} is invalid`)
+  }
+  return part
+}
+
 function loadCommittedDefaultCourseV2Result(
   events: EventV2.Interface,
   canonical: DefaultV2Canonical,
@@ -962,9 +1426,6 @@ function requireDefaultCourseV2State(
     if (!state || state.version !== 2) {
       return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
     }
-    if (state.status === "admitted" && (state.disposition !== "candidate_v2" || !state.authorization)) {
-      return yield* Effect.die("Admitted Default-Course V2 invocation is not a complete candidate")
-    }
     const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
       partID: registration.partID,
       assistantMessageID: registration.assistantMessageID,
@@ -989,9 +1450,13 @@ function requireDefaultCourseV2State(
       return yield* invocationConflict(registration)
     }
     if (state.status === "admitted") {
+      if (state.disposition !== "candidate_v2" || !state.authorization) {
+        return yield* Effect.die("Admitted Default-Course V2 invocation is not a complete candidate")
+      }
       yield* assertDefaultCourseV2AdmittedPart(tx, canonical, registration)
+      return { ...state, status: "admitted" as const, timeAdmitted: physical.time_admitted }
     }
-    return { ...state, timeAdmitted: physical.time_admitted }
+    return { ...state, status: state.status, timeAdmitted: physical.time_admitted }
   })
 }
 
@@ -1056,8 +1521,10 @@ function candidateResultDisposition(authorization: DefaultCourseV2Authorization)
 
 function requireSemanticTerminal(
   disposition: DefaultCourseSemanticTerminalDisposition | undefined,
-): DefaultCourseSemanticTerminalDisposition {
-  if (!disposition) throw new Error("Settled semantic-terminal Default-Course invocation lost its evidence")
+): Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v2" }> {
+  if (!disposition || disposition.kind !== "semantic_terminal_v2") {
+    throw new Error("Settled semantic-terminal Default-Course V2 invocation lost its evidence")
+  }
   return disposition
 }
 
@@ -1065,7 +1532,7 @@ function resultDisposition(
   state: Readonly<{
     disposition?: "legacy_v1" | "semantic_terminal_v2" | "candidate_v2"
     authorization?: DefaultCourseV2Authorization
-    semanticTerminal?: DefaultCourseSemanticTerminalDisposition
+    semanticTerminal?: Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v2" }>
   }>,
 ): DefaultCourseV2ResultDisposition {
   if (state.disposition === "semantic_terminal_v2") return requireSemanticTerminal(state.semanticTerminal)
@@ -1084,7 +1551,7 @@ function assertDefaultCourseV2TerminalPart(
     settlement: unknown
     disposition?: "legacy_v1" | "semantic_terminal_v2" | "candidate_v2"
     authorization?: DefaultCourseV2Authorization
-    semanticTerminal?: DefaultCourseSemanticTerminalDisposition
+    semanticTerminal?: Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v2" }>
     acknowledgement?: DefaultCourseAcknowledgement
     timeAdmitted?: number
   }>,
@@ -1248,6 +1715,24 @@ function loadCommittedExactResult(
               input: normalizeDefaultV2(part.state.input),
             } satisfies DefaultV2Canonical
             return exactFromPart(yield* assertDefaultCourseV2TerminalPart(tx, canonical, registration, state))
+          }
+          if (state?.version === 3) {
+            if (state.status === "admitted") return undefined
+            const row = yield* readPartRow(tx, registration.partID)
+            if (!row) {
+              return yield* new LearningCommand.InvocationTranscriptUnavailableError({
+                partID: registration.partID,
+              })
+            }
+            const part = partFromRow(row)
+            if (part.tool !== LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
+              return yield* Effect.die(`Default-Course V3 Part ${registration.partID} changed tool identity`)
+            }
+            const canonical = {
+              toolID: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+              input: normalizeDefaultV3(part.state.input),
+            } satisfies DefaultV3Canonical
+            return exactFromPart(yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, state))
           }
         }
         const canonical = attemptedCanonical ?? (yield* canonicalFromStoredPart(tx, registration.partID))
@@ -2183,6 +2668,7 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
         providerCallID: registration.callID,
       })
       if (state?.version === 2) return yield* interruptDefaultCourseV2Transaction(tx, registration, state)
+      if (state?.version === 3) return yield* interruptDefaultCourseV3Transaction(tx, registration, state)
     }
     const row = yield* readPartRow(tx, registration.partID)
     if (!row) {
@@ -2255,7 +2741,7 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
 function interruptDefaultCourseV2Transaction(
   tx: EventV2.Transaction,
   registration: Registration,
-  initial: DefaultCourseInvocationVersion,
+  initial: Extract<DefaultCourseInvocationVersion, { readonly version: 2 }>,
 ) {
   return Effect.gen(function* () {
     const row = yield* readPartRow(tx, registration.partID)
@@ -2291,6 +2777,53 @@ function interruptDefaultCourseV2Transaction(
       canonical,
       registration,
       candidateResultDisposition(state.authorization!),
+      settlement.settlement,
+      settlement.acknowledgement,
+      state.timeAdmitted,
+    )
+    return withPartEvent(true, terminal, settlement.settlement.settlementTime)
+  })
+}
+
+function interruptDefaultCourseV3Transaction(
+  tx: EventV2.Transaction,
+  registration: Registration,
+  initial: Extract<DefaultCourseInvocationVersion, { readonly version: 3 }>,
+) {
+  return Effect.gen(function* () {
+    const row = yield* readPartRow(tx, registration.partID)
+    if (!row) {
+      return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+    }
+    const part = partFromRow(row)
+    const canonical = {
+      toolID: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      input: normalizeDefaultV3(part.state.input),
+    } satisfies DefaultV3Canonical
+    const state = yield* requireDefaultCourseV3State(tx, canonical, registration)
+    if (state.status !== "admitted") {
+      yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, state)
+      return noEvent(true)
+    }
+    const settlement = yield* recoverDefaultCourseV3(tx, {
+      partID: registration.partID,
+      settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+    })
+    if (settlement.type === "replay") {
+      const replayed = requirePhysicalSettlement(settlement.settlement)
+      yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, {
+        ...initial,
+        status: replayed.outcome,
+        settlement: replayed,
+        acknowledgement: settlement.acknowledgement,
+        timeAdmitted: state.timeAdmitted,
+      })
+      return noEvent(true)
+    }
+    const terminal = defaultCourseV3TerminalPart(
+      canonical,
+      registration,
+      candidateV3ResultDisposition(state.agentAction!),
       settlement.settlement,
       settlement.acknowledgement,
       state.timeAdmitted,

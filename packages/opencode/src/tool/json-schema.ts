@@ -4,12 +4,18 @@ import type * as Tool from "./tool"
 
 type JsonObject = Record<string, unknown>
 const cache = new WeakMap<Schema.Top, JSONSchema7>()
+const closedCache = new WeakMap<Schema.Top, JSONSchema7>()
 
-export function fromSchema(schema: Schema.Top): JSONSchema7 {
-  const cached = cache.get(schema)
+export function fromSchema(
+  schema: Schema.Top,
+  options: Readonly<{ additionalProperties?: boolean }> = {},
+): JSONSchema7 {
+  const additionalProperties = options.additionalProperties ?? true
+  const selectedCache = additionalProperties ? cache : closedCache
+  const cached = selectedCache.get(schema)
   if (cached) return cached
 
-  const document = Schema.toJsonSchemaDocument(schema, { additionalProperties: true })
+  const document = Schema.toJsonSchemaDocument(schema, { additionalProperties })
   const result = normalize({
     $schema: JsonSchema.META_SCHEMA_URI_DRAFT_2020_12,
     ...document.schema,
@@ -17,7 +23,7 @@ export function fromSchema(schema: Schema.Top): JSONSchema7 {
   })
   const inlined = dropDefinitionsIfResolved(inlineLocalReferences(result))
   if (!isJsonSchema(inlined)) throw new Error("tool JSON Schema helper produced a non-schema value")
-  cache.set(schema, inlined)
+  selectedCache.set(schema, inlined)
   return inlined
 }
 

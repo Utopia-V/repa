@@ -3,7 +3,11 @@ import type { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import type { DefaultCourseV2Authorization } from "@opencode-ai/core/learner-navigation/default-course-v2"
-import type { DefaultCourseAcknowledgement, DefaultCourseProposal } from "@opencode-ai/core/learner-navigation/schema"
+import type {
+  DefaultCourseAcknowledgement,
+  DefaultCourseAgentAction,
+  DefaultCourseProposal,
+} from "@opencode-ai/core/learner-navigation/schema"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { SessionV1 } from "@opencode-ai/core/v1/session"
@@ -694,7 +698,7 @@ describe("learning command semantic basis and projection", () => {
       relation: "active",
       timeCommitted: 3,
       commitOrder: 4,
-    } as unknown as DefaultCourseAcknowledgement
+    } as unknown as Extract<DefaultCourseAcknowledgement, { readonly schemaVersion: 1 }>
     const result = LearningCommandPresentation.defaultCourseV2SettlementResult(
       { outcome: "applied", settlementTime: 3, settlementOrder: 4 },
       { kind: "candidate_v2", authorization },
@@ -802,7 +806,7 @@ describe("learning command semantic basis and projection", () => {
       relation: "active",
       timeCommitted: 3,
       commitOrder: 4,
-    } as unknown as DefaultCourseAcknowledgement
+    } as unknown as Extract<DefaultCourseAcknowledgement, { readonly schemaVersion: 1 }>
     const duplicate = LearningCommandPresentation.defaultCourseV2SettlementResult(
       { outcome: "already_applied", settlementTime: 5, settlementOrder: 6 },
       semanticTerminal,
@@ -857,6 +861,170 @@ describe("learning command semantic basis and projection", () => {
       SemanticPresentation.projectResultBasis({
         ...conflict.basis,
         acknowledgement: legacyAcknowledgement,
+      }),
+    ).toBeUndefined()
+  })
+
+  test("projects current V3 Agent issuance without reviving semantic authorization", () => {
+    const binding = {
+      ...envelope,
+      capabilityIdentity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      capabilityVersion: 3,
+      authorizationBasis: "agent_action",
+    } as unknown as LearningCommand.InvocationEnvelope
+    const target = {
+      courseID: "cou_current",
+      title: { availability: "recorded_v2" as const, value: "Distributed Systems" },
+      courseVersion: { availability: "recorded_v2" as const, value: 4 },
+      workingSelection: {
+        availability: "recorded_v2" as const,
+        value: {
+          revisionID: null,
+          selectionVersion: 2,
+          viewID: null,
+          viewName: null,
+          viewVersion: null,
+          revisionVersion: null,
+        },
+      },
+    }
+    const agentAction = {
+      kind: "agent_action_v3",
+      fingerprint: "a".repeat(64),
+      provenance: {
+        schemaVersion: 1,
+        kind: "root",
+        occurrenceID: binding.occurrenceID,
+        causalRootOccurrenceID: binding.occurrenceID,
+        sessionID: binding.sessionID,
+        turnID: binding.turnID,
+        inputID: binding.inputID,
+        assistantMessageID: binding.assistantMessageID,
+        invocationPartID: binding.partID,
+        providerCallID: binding.providerCallID,
+        emissionOrdinal: binding.emissionOrdinal,
+        capabilityIdentity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+        capabilityVersion: 3,
+        lineage: [],
+      },
+      command: { action: "set", courseID: target.courseID },
+      commandFingerprint: "b".repeat(64),
+      preferenceHeadID: null,
+      preferenceVersion: 0,
+      operation: "set",
+      from: { kind: "absent" },
+      to: { kind: "course", locator: target },
+    } as unknown as DefaultCourseAgentAction
+    const proposal = LearningCommandPresentation.defaultCourseV3Capability(agentAction, binding)
+    const exact = request({
+      permission: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      patterns: [target.courseID],
+      always: [target.courseID],
+      metadata: {
+        navigationKind: "default_course_preference",
+        agentAction,
+        [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+    expect(SemanticPresentation.readProposal(exact)).toMatchObject({
+      type: "valid",
+      value: {
+        title: "Set the default Course preference",
+        approval: "policy",
+        facts: expect.arrayContaining([
+          { label: "Issuance", value: "root" },
+          { label: "To", value: `"Distributed Systems"; ${target.courseID}` },
+        ]),
+      },
+    })
+    const invalidProposal = LearningCommandPresentation.defaultCourseV3Capability(
+      {
+        ...agentAction,
+        provenance: { ...agentAction.provenance, causalRootOccurrenceID: "loc_other" },
+      } as DefaultCourseAgentAction,
+      binding,
+    )
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: {
+          ...exact.metadata,
+          agentAction: {
+            ...agentAction,
+            provenance: { ...agentAction.provenance, causalRootOccurrenceID: "loc_other" },
+          },
+          ...SemanticPresentation.metadata(invalidProposal),
+        },
+      }),
+    ).toEqual({ type: "invalid" })
+
+    const acknowledgement = {
+      schemaVersion: 2,
+      invocationPartID: binding.partID,
+      effectAgentActionPartID: binding.partID,
+      agentActionVersion: 3,
+      effectID: "ndp_v3_effect",
+      receiptID: "lcr_v3_receipt",
+      operation: "set",
+      from: agentAction.from,
+      to: agentAction.to,
+      relation: "active",
+      timeCommitted: 3,
+      commitOrder: 4,
+    } as unknown as Extract<DefaultCourseAcknowledgement, { readonly schemaVersion: 2 }>
+    const result = LearningCommandPresentation.defaultCourseV3SettlementResult(
+      { outcome: "applied", settlementTime: 3, settlementOrder: 4 },
+      { kind: "agent_action_v3", agentAction },
+      acknowledgement,
+      binding,
+    )
+    const projected = SemanticPresentation.projectResultBasis(result.basis)
+    if (!projected) throw new Error("Expected a valid V3 Default-Course result")
+    const part = {
+      id: binding.partID,
+      sessionID: binding.sessionID,
+      messageID: binding.assistantMessageID,
+      type: "tool",
+      tool: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      callID: binding.providerCallID,
+      state: {
+        status: "completed",
+        input: agentAction.command,
+        output: "{}",
+        title: projected.title,
+        metadata: {
+          command: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+          commandVersion: 3,
+          outcome: "applied",
+          durablySettled: true,
+          truncated: false,
+          ...SemanticPresentation.metadata(result),
+        },
+        time: { start: 1, end: 3 },
+      },
+    } as SessionV1.ToolPart
+    expect(SemanticPresentation.readResult(part)).toMatchObject({
+      type: "valid",
+      value: {
+        title: "Default Course preference",
+        outcome: "committed",
+        facts: expect.arrayContaining([
+          { label: "Disposition", value: "agent_action_v3" },
+          { label: "Effect Agent action", value: binding.partID },
+        ]),
+      },
+    })
+    if (result.basis.kind !== "default_course_v3_result") throw new Error("Expected the V3 result basis")
+    const v3Acknowledgement = result.basis.acknowledgement
+    if (v3Acknowledgement?.schemaVersion !== 2) throw new Error("Expected the V3 acknowledgement")
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...result.basis,
+        acknowledgement: {
+          ...v3Acknowledgement,
+          effectAgentActionPartID: "prt_shadow_authorization",
+        },
       }),
     ).toBeUndefined()
   })

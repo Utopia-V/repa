@@ -23,6 +23,10 @@ import { MCP } from "@/mcp"
 import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
 import { assertExternalToolID, toolCallPreparation } from "@/tool/learning-command"
 import { Permission } from "@/permission"
+import { Course } from "@opencode-ai/core/course"
+import { Database } from "@opencode-ai/core/database/database"
+import { sql } from "drizzle-orm"
+import { normalizeDefaultV3 } from "@/learning-command/input"
 
 const configLayer = TestConfig.layer({
   directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".repa")])),
@@ -56,7 +60,7 @@ const brokenPluginLayer = Layer.succeed(
   }),
 )
 
-const root = LayerNode.group([ToolRegistry.node, Agent.node])
+const root = LayerNode.group([ToolRegistry.node, Agent.node, Course.node, Database.node])
 const replacements = [
   [Config.node, configLayer],
   [RuntimeFlags.node, RuntimeFlags.layer()],
@@ -269,7 +273,13 @@ describe("tool.registry", () => {
         "mcp tool ID set_default_course_preference is reserved by the learning-command runtime",
       )
       expect(() => assertExternalToolID("propose_default_course_preference", "mcp")).toThrow(
-        "mcp tool ID propose_default_course_preference is reserved by the host-prepared proposal runtime",
+        "mcp tool ID propose_default_course_preference is reserved for historical Default-Course replay",
+      )
+      expect(() => assertExternalToolID("course_query", "custom")).toThrow(
+        "custom tool ID course_query is reserved by Repa's Course/navigation read authority",
+      )
+      expect(() => assertExternalToolID("learning_navigation_query", "mcp")).toThrow(
+        "mcp tool ID learning_navigation_query is reserved by Repa's Course/navigation read authority",
       )
       expect(() => assertExternalToolID("set_course_route_anchor", "mcp")).toThrow(
         "mcp tool ID set_course_route_anchor is reserved by the learning-command runtime",
@@ -283,21 +293,237 @@ describe("tool.registry", () => {
     }),
   )
 
-  it.instance("exposes every closed learning command and host-prepared proposal", () =>
+  it.instance("exposes current learning commands and owner reads but retires the historical proposal producer", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
-      const ids = yield* registry.ids()
-      const proposal = (yield* registry.all()).find((tool) => tool.id === "propose_default_course_preference")
+      const tools = yield* registry.all()
+      const ids = tools.map((tool) => tool.id)
+      const proposal = tools.find((tool) => tool.id === "propose_default_course_preference")
+      const preference = tools.find((tool) => tool.id === "set_default_course_preference")
 
       expect(ids).toContain("accept_course_view_revision")
       expect(ids).toContain("representation.convert")
-      expect(ids).toContain("propose_default_course_preference")
+      expect(ids).not.toContain("propose_default_course_preference")
       expect(ids).toContain("set_default_course_preference")
       expect(ids).toContain("set_course_route_anchor")
       expect(ids).toContain("update_retained_learning_steering")
       expect(ids).toContain("update_learner_goals")
-      expect(proposal).toBeDefined()
-      expect(toolCallPreparation(proposal!)).toBeFunction()
+      expect(ids).toContain("course_query")
+      expect(ids).toContain("learning_navigation_query")
+      expect(proposal).toBeUndefined()
+      expect(preference).toBeDefined()
+      expect(
+        (preference?.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> } | undefined)?.anyOf?.map(
+          (branch) => branch.additionalProperties,
+        ),
+      ).toEqual([false, false])
+      expect(() =>
+        normalizeDefaultV3({
+          action: "clear",
+          authorization: { type: "direct_request_v2" },
+          target: { courseID: "crs_shadow" },
+        }),
+      ).toThrow()
+
+      const agents = yield* Agent.Service
+      const invalid = yield* preference!
+        .execute(
+          {
+            action: "clear",
+            authorization: { type: "direct_request_v2" },
+          } as never,
+          {
+            sessionID: SessionID.descending(),
+            messageID: MessageID.ascending(),
+            agent: (yield* agents.defaultInfo()).name,
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(invalid)).toBe(true)
+      if (Exit.isFailure(invalid)) expect(Cause.pretty(invalid.cause)).toContain("ToolInvalidArgumentsError")
+    }),
+  )
+
+  it.instance("preserves host preparation when the registry publishes learning commands", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent: yield* agents.defaultInfo(),
+      })
+
+      for (const id of [
+        "accept_course_view_revision",
+        "representation.convert",
+        "set_default_course_preference",
+        "set_course_route_anchor",
+        "update_retained_learning_steering",
+        "update_learner_goals",
+      ]) {
+        const tool = tools.find((item) => item.id === id)
+        expect(tool, `${id} should be published`).toBeDefined()
+        expect(toolCallPreparation(tool!), `${id} should retain its host preparation`).toBeFunction()
+      }
+    }),
+  )
+
+  it.instance("intersects Course/navigation reads with restricted and delegated authority", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const agent = yield* agents.defaultInfo()
+      const model = { providerID: ProviderV2.ID.opencode, modelID: ModelV2.ID.make("test"), agent }
+      const defaults = (yield* registry.tools(model)).map((tool) => tool.id)
+      expect(defaults).toContain("course_query")
+      expect(defaults).toContain("learning_navigation_query")
+
+      const restricted = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", course_query: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(restricted).toContain("course_query")
+      expect(restricted).not.toContain("learning_navigation_query")
+      expect(restricted).not.toContain("set_default_course_preference")
+
+      const delegated = (yield* registry.tools({
+        ...model,
+        authority: [
+          {
+            ruleset: Permission.fromConfig({ course_query: "allow" }),
+            absence: "deny",
+          },
+        ],
+      })).map((tool) => tool.id)
+      expect(delegated).toContain("course_query")
+      expect(delegated).not.toContain("learning_navigation_query")
+      expect(delegated).not.toContain("set_default_course_preference")
+    }),
+  )
+
+  it.instance("returns exact paginated Course/navigation owner reads without writing", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const courses = yield* Course.Service
+      const db = (yield* Database.Service).db
+      const agent = yield* agents.defaultInfo()
+      const selected = yield* courses.createCourse({ title: "Shared title" })
+      const duplicate = yield* courses.createCourse({ title: "Shared title" })
+      const third = yield* courses.createCourse({ title: "Third Course" })
+      const withdrawn = yield* courses.createCourse({ title: "Withdrawn Course" })
+      const view = yield* courses.createView({
+        courseID: selected.id,
+        name: "Selected path",
+        expectedCourseVersion: 0,
+        authorship: Course.Authorship.learnerAuthored(),
+        revision: { items: [{ key: "root", title: "Selected path" }] },
+      })
+      yield* courses.select({
+        courseID: selected.id,
+        revisionID: view.revision.id,
+        expectedCourseVersion: 0,
+        expectedSelectionVersion: 0,
+        expectedViewVersion: 0,
+        expectedRevisionVersion: 0,
+      })
+      yield* courses.withdrawCourse({
+        courseID: withdrawn.id,
+        expectedCourseVersion: 0,
+        expectedSelectionVersion: 0,
+      })
+      const changesBefore = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+      const frontierBefore = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })
+      const courseQuery = tools.find((tool) => tool.id === "course_query")
+      const navigationQuery = tools.find((tool) => tool.id === "learning_navigation_query")
+      if (!courseQuery || !navigationQuery) return yield* Effect.die("Course/navigation read tools are unavailable")
+      const context = {
+        sessionID: SessionID.descending(),
+        messageID: MessageID.ascending(),
+        agent: agent.name,
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => Effect.void,
+        ask: () => Effect.void,
+      } satisfies Tool.Context
+      const first = JSON.parse((yield* courseQuery.execute({ action: "list", limit: 2 }, context)).output) as {
+        items: Array<{
+          id: string
+          title: string
+          disposition: "active" | "withdrawn"
+          stateVersion: number
+          withdrawalReason: "removed" | null
+          workingSelection: { revisionID: string | null; version: number }
+        }>
+        cursor?: string
+      }
+      expect(first.items).toHaveLength(2)
+      expect(first.cursor).toBeString()
+      const second = JSON.parse(
+        (yield* courseQuery.execute({ action: "list", limit: 2, cursor: first.cursor }, context)).output,
+      ) as typeof first
+      expect(new Set([...first.items, ...second.items].map((course) => course.id))).toEqual(
+        new Set([selected.id, duplicate.id, third.id]),
+      )
+      expect([...first.items, ...second.items].filter((course) => course.title === "Shared title")).toHaveLength(2)
+      expect([...first.items, ...second.items].find((course) => course.id === selected.id)).toMatchObject({
+        disposition: "active",
+        stateVersion: 0,
+        withdrawalReason: null,
+        workingSelection: { revisionID: view.revision.id, version: 1 },
+      })
+      const exactWithdrawn = JSON.parse(
+        (yield* courseQuery.execute({ action: "get", courseID: withdrawn.id }, context)).output,
+      )
+      expect(exactWithdrawn.course).toMatchObject({
+        id: withdrawn.id,
+        disposition: "withdrawn",
+        stateVersion: 1,
+        withdrawalReason: "removed",
+        workingSelection: { revisionID: null, version: 1 },
+      })
+      expect(
+        Exit.isFailure(
+          yield* courseQuery
+            .execute({ action: "list", limit: 2, cursor: first.cursor, includeWithdrawn: true }, context)
+            .pipe(Effect.exit),
+        ),
+      ).toBe(true)
+      expect(JSON.parse((yield* navigationQuery.execute({ action: "current_default" }, context)).output)).toMatchObject(
+        {
+          current: {
+            headID: null,
+            version: 0,
+            courseID: null,
+            usability: { usable: false, cause: "absent" },
+          },
+        },
+      )
+      expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(changesBefore)
+      expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontierBefore)
+      expect(
+        yield* db.get(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation) AS invocations,
+            (SELECT count(*) FROM learner_default_course_disposition) AS dispositions,
+            (SELECT count(*) FROM learner_default_course_capability_issue) AS issues,
+            (SELECT count(*) FROM learner_default_course_capability_settlement) AS settlements,
+            (SELECT count(*) FROM learner_default_course_transition) AS effects
+        `),
+      ).toEqual({ invocations: 0, dispositions: 0, issues: 0, settlements: 0, effects: 0 })
     }),
   )
 

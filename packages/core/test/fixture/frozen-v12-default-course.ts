@@ -1,10 +1,11 @@
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { Turn } from "@opencode-ai/schema/turn"
-import { sql } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "../../src/database/admission"
 import { migrations } from "../../src/database/migration.gen"
+import domainNeutralLearningCommandLedgerMigration from "../../src/database/migration/repa/20260727121200_domain_neutral_learning_command_ledger"
 import { install as installSchemaExtrasV12 } from "../../src/database/schema-extras-v12"
 import { LearningCommand } from "../../src/learning-command"
 import { LearningCommandInvocationTable } from "../../src/learning-command/sql"
@@ -21,7 +22,22 @@ import { PermissionV1 } from "../../src/v1/permission"
 import { SessionV1 } from "../../src/v1/session"
 import databaseV12Schema from "./database-v12-schema"
 
-export function seedFrozenV12AdmittedDefaultCourse(filename: string) {
+export function seedFrozenV12AdmittedDefaultCourse(
+  filename: string,
+  options: Readonly<{
+    state?: "admitted" | "terminal_no_change"
+    terminalResult?: (
+      settlement: LearningCommand.Settlement,
+      envelope: Readonly<{
+        partID: SessionV1.PartID
+        assistantMessageID: SessionV1.MessageID
+        sessionID: SessionSchema.ID
+        providerCallID: string
+        timeAdmitted: number
+      }>,
+    ) => Readonly<{ title: string; metadata: Record<string, unknown>; output: string }>
+  }> = {},
+) {
   const makeDb = EffectDrizzleSqlite.makeWithDefaults()
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -245,8 +261,85 @@ export function seedFrozenV12AdmittedDefaultCourse(filename: string) {
         .insert(LearnerDefaultCourseCommandTable)
         .values({ invocation_part_id: partID, permission_request_id: permissionRequestID })
         .run()
+      if (options.state === "terminal_no_change") {
+        const terminal = yield* db.transaction((tx) =>
+          LearningCommand.settleNavigation(tx, {
+            envelope: {
+              occurrenceID: occurrence.id,
+              turnID,
+              inputID,
+              sessionID,
+              parentUserMessageID: userMessageID,
+              assistantMessageID,
+              partID,
+              providerCallID: callID,
+              emissionOrdinal: 0,
+              capabilityIdentity: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+              capabilityVersion: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_VERSION,
+              authorizationBasis: "learner_acceptance",
+              timeAdmitted: time,
+            },
+            command,
+            permissionRequestID,
+            permission: { type: "allow" },
+            settlement: { time: time + 1, order: 1 },
+          }),
+        )
+        if (terminal.type !== "settled") {
+          return yield* Effect.die("Frozen V12 terminal fixture did not settle")
+        }
+        if (options.terminalResult) {
+          const exact = options.terminalResult(terminal.settlement, {
+            partID,
+            assistantMessageID,
+            sessionID,
+            providerCallID: callID,
+            timeAdmitted: time,
+          })
+          yield* db
+            .update(PartTable)
+            .set({
+              data: {
+                type: "tool",
+                tool: LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+                callID,
+                state: {
+                  status: "completed",
+                  input,
+                  output: exact.output,
+                  title: exact.title,
+                  metadata: exact.metadata,
+                  time: { start: time, end: terminal.settlement.settlementTime },
+                },
+              } as (typeof PartTable.$inferInsert)["data"],
+              time_updated: terminal.settlement.settlementTime,
+            })
+            .where(eq(PartTable.id, partID))
+            .run()
+          yield* db.transaction((tx) =>
+            Effect.gen(function* () {
+              yield* TurnLifecycle.settleTool(tx, {
+                turnID,
+                partID,
+                state: "completed",
+                time: terminal.settlement.settlementTime,
+              })
+              yield* TurnLifecycle.settle(tx, {
+                turnID,
+                outcome: "completed",
+                reason: "normal",
+                time: terminal.settlement.settlementTime,
+              })
+            }),
+          )
+        }
+      }
 
-      const historical = migrations.slice(0, -1)
+      const lastV12 = migrations.findIndex(
+        (migration) => migration.id === domainNeutralLearningCommandLedgerMigration.id,
+      )
+      if (lastV12 < 0) return yield* Effect.die("Frozen V12 fixture cannot locate the V12 migration boundary")
+      const historical = migrations.slice(0, lastV12 + 1)
       yield* db.run(`
         CREATE TABLE repa_migration (
           version INTEGER PRIMARY KEY,
@@ -281,6 +374,18 @@ export function seedFrozenV12AdmittedDefaultCourse(filename: string) {
         inputID,
         permissionRequestID,
         inputFingerprint,
+        input,
+        registration: {
+          turnID,
+          inputID,
+          causalOccurrenceID: occurrence.id,
+          partID,
+          callID,
+          emissionOrdinal: 0,
+          sessionID,
+          parentUserMessageID: userMessageID,
+          assistantMessageID,
+        },
         rawPart: part.rawPart,
       }
     }).pipe(Effect.provide(SqliteClient.layer({ filename, disableWAL: true })), Effect.scoped),

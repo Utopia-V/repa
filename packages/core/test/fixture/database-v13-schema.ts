@@ -1,5 +1,8 @@
 import { Effect } from "effect"
-import type { DatabaseMigration } from "./migration"
+import type { DatabaseMigration } from "../../src/database/migration"
+
+// Frozen from 0d7ca3987:packages/core/src/database/schema.gen.ts.
+// Only the type-only import path differs from the historical source.
 
 export default {
   up(tx) {
@@ -965,8 +968,7 @@ export default {
           \`previous_course_id\` text,
           \`course_id\` text,
           \`occurrence_id\` text NOT NULL CONSTRAINT \`learner_default_course_occurrence_unique\` UNIQUE,
-          \`authorization_part_id\` text,
-          \`agent_action_part_id\` text,
+          \`authorization_part_id\` text NOT NULL,
           \`permission_request_id\` text,
           \`confirmation_snapshot\` text,
           \`target_course_version\` integer,
@@ -986,13 +988,11 @@ export default {
           CONSTRAINT \`fk_learner_default_course_transition_course_id_target_view_id_target_selection_revision_id_course_view_revision_course_id_view_id_id_fk\` FOREIGN KEY (\`course_id\`,\`target_view_id\`,\`target_selection_revision_id\`) REFERENCES \`course_view_revision\`(\`course_id\`,\`view_id\`,\`id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learner_default_course_transition_occurrence_id_learning_admitted_occurrence_id_fk\` FOREIGN KEY (\`occurrence_id\`) REFERENCES \`learning_admitted_occurrence\`(\`id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learner_default_course_transition_authorization_part_id_learner_default_course_disposition_invocation_part_id_fk\` FOREIGN KEY (\`authorization_part_id\`) REFERENCES \`learner_default_course_disposition\`(\`invocation_part_id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learner_default_course_transition_agent_action_part_id_learner_default_course_disposition_invocation_part_id_fk\` FOREIGN KEY (\`agent_action_part_id\`) REFERENCES \`learner_default_course_disposition\`(\`invocation_part_id\`) ON DELETE RESTRICT,
           CONSTRAINT "learner_default_course_chain_shape" CHECK(("version" = 1 AND "predecessor_id" IS NULL AND "previous_course_id" IS NULL) OR ("version" > 1 AND "predecessor_id" IS NOT NULL)),
           CONSTRAINT "learner_default_course_value_changed" CHECK(NOT ("course_id" IS "previous_course_id")),
           CONSTRAINT "learner_default_course_target_shape" CHECK(("course_id" IS NULL AND "target_course_version" IS NULL AND "target_selection_revision_id" IS NULL AND "target_selection_version" IS NULL AND "target_view_id" IS NULL AND "target_view_version" IS NULL AND "target_revision_version" IS NULL) OR ("course_id" IS NOT NULL AND "target_course_version" IS NOT NULL AND "target_selection_version" IS NOT NULL AND (("target_selection_revision_id" IS NULL AND "target_view_id" IS NULL AND "target_view_version" IS NULL AND "target_revision_version" IS NULL) OR ("target_selection_revision_id" IS NOT NULL AND "target_view_id" IS NOT NULL AND "target_view_version" IS NOT NULL AND "target_revision_version" IS NOT NULL)))),
           CONSTRAINT "learner_default_course_versions" CHECK("version" >= 1 AND ("target_course_version" IS NULL OR "target_course_version" >= 0) AND ("target_selection_version" IS NULL OR "target_selection_version" >= 0) AND ("target_view_version" IS NULL OR "target_view_version" >= 0) AND ("target_revision_version" IS NULL OR "target_revision_version" >= 0)),
           CONSTRAINT "learner_default_course_legacy_confirmation_shape" CHECK(("permission_request_id" IS NULL AND "confirmation_snapshot" IS NULL) OR ("permission_request_id" IS NOT NULL AND length("permission_request_id") > 0 AND json_valid("confirmation_snapshot"))),
-          CONSTRAINT "learner_default_course_provenance_shape" CHECK(("authorization_part_id" IS NOT NULL AND "agent_action_part_id" IS NULL) OR ("authorization_part_id" IS NULL AND "agent_action_part_id" IS NOT NULL AND "permission_request_id" IS NULL AND "confirmation_snapshot" IS NULL)),
           CONSTRAINT "learner_default_course_time_order" CHECK("time_committed" >= 0 AND "commit_order" >= 0 AND "frontier_sequence" >= 1 AND "frontier_time" = "time_committed")
         ) WITHOUT ROWID;
       `)
@@ -1009,10 +1009,8 @@ export default {
       yield* tx.run(`
         CREATE TABLE \`learner_default_course_acknowledgement\` (
           \`invocation_part_id\` text PRIMARY KEY,
-          \`effect_authorization_part_id\` text,
-          \`authorization_version\` integer,
-          \`effect_agent_action_part_id\` text,
-          \`agent_action_version\` integer,
+          \`effect_authorization_part_id\` text NOT NULL,
+          \`authorization_version\` integer NOT NULL,
           \`effect_id\` text NOT NULL,
           \`receipt_id\` text NOT NULL,
           \`operation\` text NOT NULL,
@@ -1025,22 +1023,9 @@ export default {
           \`commit_order\` integer NOT NULL,
           CONSTRAINT \`fk_learner_default_course_acknowledgement_invocation_part_id_learner_default_course_disposition_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learner_default_course_disposition\`(\`invocation_part_id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learner_default_course_acknowledgement_effect_authorization_part_id_learner_default_course_disposition_invocation_part_id_fk\` FOREIGN KEY (\`effect_authorization_part_id\`) REFERENCES \`learner_default_course_disposition\`(\`invocation_part_id\`) ON DELETE RESTRICT,
-          CONSTRAINT \`fk_learner_default_course_acknowledgement_effect_agent_action_part_id_learner_default_course_disposition_invocation_part_id_fk\` FOREIGN KEY (\`effect_agent_action_part_id\`) REFERENCES \`learner_default_course_disposition\`(\`invocation_part_id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learner_default_course_acknowledgement_effect_id_learner_default_course_transition_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learner_default_course_transition\`(\`id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learner_default_course_acknowledgement_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
-          CONSTRAINT "learner_default_course_acknowledgement_shape" CHECK(
-                "operation" IN ('set', 'change', 'clear')
-                AND json_valid("from_locator")
-                AND json_valid("to_locator")
-                AND json_valid("presentation_snapshot")
-                AND "relation" IN ('active', 'superseded')
-                AND (
-                  (
-                    "authorization_version" = 1
-                    AND "effect_authorization_part_id" IS NOT NULL
-                    AND "agent_action_version" IS NULL
-                    AND "effect_agent_action_part_id" IS NULL
-                    AND (
+          CONSTRAINT "learner_default_course_acknowledgement_shape" CHECK("authorization_version" IN (1, 2) AND "operation" IN ('set', 'change', 'clear') AND json_valid("from_locator") AND json_valid("to_locator") AND (("authorization_version" = 1 AND (
             (
               json_extract("from_locator", '$.kind') = 'absent'
               AND json_type("from_locator", '$.locator') IS NULL
@@ -1054,8 +1039,7 @@ export default {
               AND json_extract("from_locator", '$.locator.courseVersion.availability') IN ('recorded_v1', 'not_recorded_v1')
               AND json_extract("from_locator", '$.locator.workingSelection.availability') IN ('recorded_v1', 'not_recorded_v1')
             )
-          )
-                    AND (
+          ) AND (
             (
               json_extract("to_locator", '$.kind') = 'absent'
               AND json_type("to_locator", '$.locator') IS NULL
@@ -1069,396 +1053,35 @@ export default {
               AND json_extract("to_locator", '$.locator.courseVersion.availability') IN ('recorded_v1', 'not_recorded_v1')
               AND json_extract("to_locator", '$.locator.workingSelection.availability') IN ('recorded_v1', 'not_recorded_v1')
             )
-          )
-                    AND json_extract("presentation_snapshot", '$.schemaVersion') = 1
-                    AND json_extract("presentation_snapshot", '$.authorizationVersion') = 1
-                    AND json_extract("presentation_snapshot", '$.effectAuthorizationPartID') =
-                      "effect_authorization_part_id"
-                    AND json_type("presentation_snapshot", '$.agentActionVersion') IS NULL
-                    AND json_type("presentation_snapshot", '$.effectAgentActionPartID') IS NULL
-                  )
-                  OR (
-                    "authorization_version" = 2
-                    AND "effect_authorization_part_id" IS NOT NULL
-                    AND "agent_action_version" IS NULL
-                    AND "effect_agent_action_part_id" IS NULL
-                    AND COALESCE((
-            json_type("from_locator") = 'object'
-            AND (
-              (
-                json_extract("from_locator", '$.kind') = 'absent'
-                AND json_remove("from_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("from_locator", '$.kind') = 'course'
-                AND json_type("from_locator", '$.locator') = 'object'
-                AND json_remove("from_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("from_locator", '$.locator.courseID')) > 0
-                AND json_type("from_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.title.value') = 'text'
-                AND json_type("from_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("from_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("from_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+          )) OR ("authorization_version" = 2 AND (
+            (
+              json_extract("from_locator", '$.kind') = 'absent'
+              AND json_type("from_locator", '$.locator') IS NULL
             )
-          ), 0)
-                    AND COALESCE((
-            json_type("to_locator") = 'object'
-            AND (
-              (
-                json_extract("to_locator", '$.kind') = 'absent'
-                AND json_remove("to_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("to_locator", '$.kind') = 'course'
-                AND json_type("to_locator", '$.locator') = 'object'
-                AND json_remove("to_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("to_locator", '$.locator.courseID')) > 0
-                AND json_type("to_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.title.value') = 'text'
-                AND json_type("to_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("to_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("to_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+            OR
+            (
+              json_extract("from_locator", '$.kind') = 'course'
+              AND json_type("from_locator", '$.locator') = 'object'
+              AND json_type("from_locator", '$.locator.courseID') = 'text'
+              AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
+              AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
+              AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
             )
-          ), 0)
-                    AND json_extract("presentation_snapshot", '$.schemaVersion') = 1
-                    AND json_extract("presentation_snapshot", '$.authorizationVersion') = 2
-                    AND json_extract("presentation_snapshot", '$.effectAuthorizationPartID') =
-                      "effect_authorization_part_id"
-                    AND json_type("presentation_snapshot", '$.agentActionVersion') IS NULL
-                    AND json_type("presentation_snapshot", '$.effectAgentActionPartID') IS NULL
-                  )
-                  OR (
-                    "authorization_version" IS NULL
-                    AND "effect_authorization_part_id" IS NULL
-                    AND "agent_action_version" = 3
-                    AND "effect_agent_action_part_id" IS NOT NULL
-                    AND COALESCE((
-            json_type("from_locator") = 'object'
-            AND (
-              (
-                json_extract("from_locator", '$.kind') = 'absent'
-                AND json_remove("from_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("from_locator", '$.kind') = 'course'
-                AND json_type("from_locator", '$.locator') = 'object'
-                AND json_remove("from_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("from_locator", '$.locator.courseID')) > 0
-                AND json_type("from_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.title.value') = 'text'
-                AND json_type("from_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("from_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("from_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+          ) AND (
+            (
+              json_extract("to_locator", '$.kind') = 'absent'
+              AND json_type("to_locator", '$.locator') IS NULL
             )
-          ), 0)
-                    AND COALESCE((
-            json_type("to_locator") = 'object'
-            AND (
-              (
-                json_extract("to_locator", '$.kind') = 'absent'
-                AND json_remove("to_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("to_locator", '$.kind') = 'course'
-                AND json_type("to_locator", '$.locator') = 'object'
-                AND json_remove("to_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("to_locator", '$.locator.courseID')) > 0
-                AND json_type("to_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.title.value') = 'text'
-                AND json_type("to_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("to_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("to_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+            OR
+            (
+              json_extract("to_locator", '$.kind') = 'course'
+              AND json_type("to_locator", '$.locator') = 'object'
+              AND json_type("to_locator", '$.locator.courseID') = 'text'
+              AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
+              AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
+              AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
             )
-          ), 0)
-                    AND json_extract("presentation_snapshot", '$.schemaVersion') = 2
-                    AND json_extract("presentation_snapshot", '$.agentActionVersion') = 3
-                    AND json_extract("presentation_snapshot", '$.effectAgentActionPartID') =
-                      "effect_agent_action_part_id"
-                    AND json_type("presentation_snapshot", '$.authorizationVersion') IS NULL
-                    AND json_type("presentation_snapshot", '$.effectAuthorizationPartID') IS NULL
-                  )
-                )
-              ),
+          ))) AND "relation" IN ('active', 'superseded') AND json_valid("presentation_snapshot")),
           CONSTRAINT "learner_default_course_acknowledgement_fingerprint" CHECK(length("presentation_fingerprint") = 64 AND "presentation_fingerprint" NOT GLOB '*[^0-9a-f]*'),
           CONSTRAINT "learner_default_course_acknowledgement_time" CHECK("time_committed" >= 0 AND "commit_order" >= 0)
         ) WITHOUT ROWID;
@@ -1467,8 +1090,7 @@ export default {
         CREATE TABLE \`learner_default_course_capability_issue\` (
           \`invocation_part_id\` text PRIMARY KEY,
           \`permission_request_id\` text NOT NULL UNIQUE,
-          \`authorization_fingerprint\` text,
-          \`agent_action_fingerprint\` text,
+          \`authorization_fingerprint\` text NOT NULL,
           \`policy_basis\` text NOT NULL,
           \`policy_fingerprint\` text NOT NULL,
           \`shown_scope\` text NOT NULL,
@@ -1477,7 +1099,7 @@ export default {
           \`issue_order\` integer NOT NULL,
           CONSTRAINT \`fk_learner_default_course_capability_issue_invocation_part_id_learner_default_course_disposition_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learner_default_course_disposition\`(\`invocation_part_id\`) ON DELETE RESTRICT,
           CONSTRAINT \`learner_default_course_capability_issue_invocation_request_unique\` UNIQUE(\`invocation_part_id\`,\`permission_request_id\`),
-          CONSTRAINT "learner_default_course_capability_issue_fingerprints" CHECK(((length("authorization_fingerprint") = 64 AND "authorization_fingerprint" NOT GLOB '*[^0-9a-f]*' AND "agent_action_fingerprint" IS NULL) OR ("authorization_fingerprint" IS NULL AND length("agent_action_fingerprint") = 64 AND "agent_action_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND length("policy_fingerprint") = 64 AND "policy_fingerprint" NOT GLOB '*[^0-9a-f]*' AND length("shown_scope_fingerprint") = 64 AND "shown_scope_fingerprint" NOT GLOB '*[^0-9a-f]*'),
+          CONSTRAINT "learner_default_course_capability_issue_fingerprints" CHECK(length("authorization_fingerprint") = 64 AND "authorization_fingerprint" NOT GLOB '*[^0-9a-f]*' AND length("policy_fingerprint") = 64 AND "policy_fingerprint" NOT GLOB '*[^0-9a-f]*' AND length("shown_scope_fingerprint") = 64 AND "shown_scope_fingerprint" NOT GLOB '*[^0-9a-f]*'),
           CONSTRAINT "learner_default_course_capability_issue_shape" CHECK(length("permission_request_id") > 0 AND json_valid("policy_basis") AND json_valid("shown_scope") AND "time_issued" >= 0 AND "issue_order" >= 0)
         ) WITHOUT ROWID;
       `)
@@ -1486,8 +1108,7 @@ export default {
           \`invocation_part_id\` text PRIMARY KEY,
           \`outcome\` text NOT NULL,
           \`permission_request_id\` text,
-          \`authorization_fingerprint\` text,
-          \`agent_action_fingerprint\` text,
+          \`authorization_fingerprint\` text NOT NULL,
           \`policy_basis\` text,
           \`policy_fingerprint\` text,
           \`reply\` text,
@@ -1496,7 +1117,7 @@ export default {
           \`settlement_order\` integer NOT NULL,
           CONSTRAINT \`fk_learner_default_course_capability_settlement_invocation_part_id_learner_default_course_disposition_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learner_default_course_disposition\`(\`invocation_part_id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learner_default_course_capability_settlement_invocation_part_id_permission_request_id_learner_default_course_capability_issue_invocation_part_id_permission_request_id_fk\` FOREIGN KEY (\`invocation_part_id\`,\`permission_request_id\`) REFERENCES \`learner_default_course_capability_issue\`(\`invocation_part_id\`,\`permission_request_id\`) ON DELETE RESTRICT,
-          CONSTRAINT "learner_default_course_capability_settlement_fingerprints" CHECK(((length("authorization_fingerprint") = 64 AND "authorization_fingerprint" NOT GLOB '*[^0-9a-f]*' AND "agent_action_fingerprint" IS NULL) OR ("authorization_fingerprint" IS NULL AND length("agent_action_fingerprint") = 64 AND "agent_action_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("policy_fingerprint" IS NULL OR (length("policy_fingerprint") = 64 AND "policy_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("reply_fingerprint" IS NULL OR (length("reply_fingerprint") = 64 AND "reply_fingerprint" NOT GLOB '*[^0-9a-f]*'))),
+          CONSTRAINT "learner_default_course_capability_settlement_fingerprints" CHECK(length("authorization_fingerprint") = 64 AND "authorization_fingerprint" NOT GLOB '*[^0-9a-f]*' AND ("policy_fingerprint" IS NULL OR (length("policy_fingerprint") = 64 AND "policy_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("reply_fingerprint" IS NULL OR (length("reply_fingerprint") = 64 AND "reply_fingerprint" NOT GLOB '*[^0-9a-f]*'))),
           CONSTRAINT "learner_default_course_capability_settlement_closed_union" CHECK((
                 "outcome" = 'not_evaluated'
                 AND "permission_request_id" IS NULL
@@ -1554,9 +1175,6 @@ export default {
           \`authorization_version\` integer,
           \`authorization_kind\` text,
           \`authorization_fingerprint\` text,
-          \`agent_action_version\` integer,
-          \`agent_action_fingerprint\` text,
-          \`agent_action_provenance\` text,
           \`command_fingerprint\` text NOT NULL,
           \`semantic_outcome\` text,
           \`semantic_address\` text,
@@ -1590,15 +1208,12 @@ export default {
           \`time_disposed\` integer NOT NULL,
           CONSTRAINT \`fk_learner_default_course_disposition_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_learner_default_course_disposition_proposal_part_id_learner_default_course_proposal_part_id_fk\` FOREIGN KEY (\`proposal_part_id\`) REFERENCES \`learner_default_course_proposal\`(\`part_id\`) ON DELETE RESTRICT,
-          CONSTRAINT "learner_default_course_disposition_fingerprints" CHECK(("authorization_fingerprint" IS NULL OR (length("authorization_fingerprint") = 64 AND "authorization_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("agent_action_fingerprint" IS NULL OR (length("agent_action_fingerprint") = 64 AND "agent_action_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND length("command_fingerprint") = 64 AND "command_fingerprint" NOT GLOB '*[^0-9a-f]*' AND ("semantic_address_fingerprint" IS NULL OR (length("semantic_address_fingerprint") = 64 AND "semantic_address_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("incoming_payload_fingerprint" IS NULL OR (length("incoming_payload_fingerprint") = 64 AND "incoming_payload_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("existing_payload_fingerprint" IS NULL OR (length("existing_payload_fingerprint") = 64 AND "existing_payload_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("resolution_fingerprint" IS NULL OR (length("resolution_fingerprint") = 64 AND "resolution_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("proposal_fingerprint" IS NULL OR (length("proposal_fingerprint") = 64 AND "proposal_fingerprint" NOT GLOB '*[^0-9a-f]*'))),
+          CONSTRAINT "learner_default_course_disposition_fingerprints" CHECK(("authorization_fingerprint" IS NULL OR (length("authorization_fingerprint") = 64 AND "authorization_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND length("command_fingerprint") = 64 AND "command_fingerprint" NOT GLOB '*[^0-9a-f]*' AND ("semantic_address_fingerprint" IS NULL OR (length("semantic_address_fingerprint") = 64 AND "semantic_address_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("incoming_payload_fingerprint" IS NULL OR (length("incoming_payload_fingerprint") = 64 AND "incoming_payload_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("existing_payload_fingerprint" IS NULL OR (length("existing_payload_fingerprint") = 64 AND "existing_payload_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("resolution_fingerprint" IS NULL OR (length("resolution_fingerprint") = 64 AND "resolution_fingerprint" NOT GLOB '*[^0-9a-f]*')) AND ("proposal_fingerprint" IS NULL OR (length("proposal_fingerprint") = 64 AND "proposal_fingerprint" NOT GLOB '*[^0-9a-f]*'))),
           CONSTRAINT "learner_default_course_disposition_closed_union" CHECK((
                 "disposition" = 'legacy_v1'
                 AND "authorization_version" = 1
                 AND "authorization_kind" = 'legacy_v1'
                 AND "authorization_fingerprint" IS NOT NULL
-                AND "agent_action_version" IS NULL
-                AND "agent_action_fingerprint" IS NULL
-                AND "agent_action_provenance" IS NULL
                 AND "semantic_outcome" IS NULL
                 AND "semantic_address" IS NULL
                 AND "semantic_address_fingerprint" IS NULL
@@ -1647,100 +1262,8 @@ export default {
                 AND "authorization_version" IS NULL
                 AND "authorization_kind" IS NULL
                 AND "authorization_fingerprint" IS NULL
-                AND "agent_action_version" IS NULL
-                AND "agent_action_fingerprint" IS NULL
-                AND "agent_action_provenance" IS NULL
                 AND "semantic_outcome" IN ('already_applied', 'semantic_conflict')
                 AND json_valid("command_snapshot")
-                AND json_valid("semantic_address")
-                AND json_extract("semantic_address", '$.slot') = 'default_course_preference'
-                AND "semantic_address_fingerprint" IS NOT NULL
-                AND "incoming_payload_fingerprint" IS NOT NULL
-                AND "existing_effect_id" IS NOT NULL
-                AND "existing_payload_fingerprint" IS NOT NULL
-                AND "legacy_row_class" IS NULL
-                AND "confirmation_availability" IS NULL
-                AND "command_permission_request_id" IS NULL
-                AND "effect_confirmation_request_id" IS NULL
-                AND "legacy_effect_id" IS NULL
-                AND "legacy_receipt_id" IS NULL
-                AND "source_excerpt" IS NULL
-                AND "resolution_scope" IS NULL
-                AND "resolution_fingerprint" IS NULL
-                AND "preference_head_id" IS NULL
-                AND "preference_version" IS NULL
-                AND "operation" IS NULL
-                AND "from_locator" IS NULL
-                AND "to_locator" IS NULL
-                AND "selected_course_id" IS NULL
-                AND "proposal_part_id" IS NULL
-                AND "proposal_presentation_part_id" IS NULL
-                AND "proposal_presentation_assistant_message_id" IS NULL
-                AND "proposal_assistant_message_id" IS NULL
-                AND "proposal_emission_ordinal" IS NULL
-                AND "proposal_fingerprint" IS NULL
-                AND "proposal_selection" IS NULL
-                AND (
-            json_type("command_snapshot") = 'object'
-            AND json_extract("command_snapshot", '$.kind') = 'default_course_preference'
-            AND json_type("command_snapshot", '$.expectedHeadID') IN ('null', 'text')
-            AND json_type("command_snapshot", '$.expectedVersion') = 'integer'
-            AND json_extract("command_snapshot", '$.expectedVersion') >= 0
-            AND json_type("command_snapshot", '$.target') IN ('null', 'object')
-            AND json_remove("command_snapshot", '$.kind', '$.expectedHeadID', '$.expectedVersion', '$.target') = '{}'
-            AND (
-              json_type("command_snapshot", '$.target') = 'null'
-              OR (
-                json_type("command_snapshot", '$.target.courseID') = 'text'
-                AND json_extract("command_snapshot", '$.target.courseID') GLOB 'crs_[0-9A-Za-z]*'
-                AND length(json_extract("command_snapshot", '$.target.courseID')) = 30
-                AND json_type("command_snapshot", '$.target.courseVersion') = 'integer'
-                AND json_extract("command_snapshot", '$.target.courseVersion') >= 0
-                AND json_type("command_snapshot", '$.target.selectionRevisionID') IN ('null', 'text')
-                AND json_type("command_snapshot", '$.target.selectionVersion') = 'integer'
-                AND json_extract("command_snapshot", '$.target.selectionVersion') >= 0
-                AND json_type("command_snapshot", '$.target.viewID') IN ('null', 'text')
-                AND json_type("command_snapshot", '$.target.viewVersion') IN ('null', 'integer')
-                AND json_type("command_snapshot", '$.target.revisionVersion') IN ('null', 'integer')
-                AND json_remove(
-                  json_extract("command_snapshot", '$.target'),
-                  '$.courseID',
-                  '$.courseVersion',
-                  '$.selectionRevisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-              )
-            )
-          )
-              ) OR (
-                "disposition" = 'semantic_terminal_v3'
-                AND "authorization_version" IS NULL
-                AND "authorization_kind" IS NULL
-                AND "authorization_fingerprint" IS NULL
-                AND "agent_action_version" IS NULL
-                AND "agent_action_fingerprint" IS NULL
-                AND "agent_action_provenance" IS NULL
-                AND "semantic_outcome" IN ('already_applied', 'semantic_conflict')
-                AND json_valid("command_snapshot")
-                AND (
-            json_type("command_snapshot") = 'object'
-            AND (
-              (
-                json_extract("command_snapshot", '$.action') = 'clear'
-                AND json_remove("command_snapshot", '$.action') = '{}'
-              )
-              OR (
-                json_extract("command_snapshot", '$.action') = 'set'
-                AND json_type("command_snapshot", '$.courseID') = 'text'
-                AND json_extract("command_snapshot", '$.courseID') GLOB 'crs_[0-9A-Za-z]*'
-                AND length(json_extract("command_snapshot", '$.courseID')) = 30
-                AND json_remove("command_snapshot", '$.action', '$.courseID') = '{}'
-              )
-            )
-          )
                 AND json_valid("semantic_address")
                 AND json_extract("semantic_address", '$.slot') = 'default_course_preference'
                 AND "semantic_address_fingerprint" IS NOT NULL
@@ -1774,9 +1297,6 @@ export default {
                 AND "authorization_version" = 2
                 AND "authorization_kind" IN ('direct_request_v2', 'accepted_proposal_v2')
                 AND "authorization_fingerprint" IS NOT NULL
-                AND "agent_action_version" IS NULL
-                AND "agent_action_fingerprint" IS NULL
-                AND "agent_action_provenance" IS NULL
                 AND "semantic_outcome" IS NULL
                 AND "semantic_address" IS NULL
                 AND "semantic_address_fingerprint" IS NULL
@@ -1790,41 +1310,6 @@ export default {
                 AND "legacy_effect_id" IS NULL
                 AND "legacy_receipt_id" IS NULL
                 AND json_valid("command_snapshot")
-                AND (
-            json_type("command_snapshot") = 'object'
-            AND json_extract("command_snapshot", '$.kind') = 'default_course_preference'
-            AND json_type("command_snapshot", '$.expectedHeadID') IN ('null', 'text')
-            AND json_type("command_snapshot", '$.expectedVersion') = 'integer'
-            AND json_extract("command_snapshot", '$.expectedVersion') >= 0
-            AND json_type("command_snapshot", '$.target') IN ('null', 'object')
-            AND json_remove("command_snapshot", '$.kind', '$.expectedHeadID', '$.expectedVersion', '$.target') = '{}'
-            AND (
-              json_type("command_snapshot", '$.target') = 'null'
-              OR (
-                json_type("command_snapshot", '$.target.courseID') = 'text'
-                AND json_extract("command_snapshot", '$.target.courseID') GLOB 'crs_[0-9A-Za-z]*'
-                AND length(json_extract("command_snapshot", '$.target.courseID')) = 30
-                AND json_type("command_snapshot", '$.target.courseVersion') = 'integer'
-                AND json_extract("command_snapshot", '$.target.courseVersion') >= 0
-                AND json_type("command_snapshot", '$.target.selectionRevisionID') IN ('null', 'text')
-                AND json_type("command_snapshot", '$.target.selectionVersion') = 'integer'
-                AND json_extract("command_snapshot", '$.target.selectionVersion') >= 0
-                AND json_type("command_snapshot", '$.target.viewID') IN ('null', 'text')
-                AND json_type("command_snapshot", '$.target.viewVersion') IN ('null', 'integer')
-                AND json_type("command_snapshot", '$.target.revisionVersion') IN ('null', 'integer')
-                AND json_remove(
-                  json_extract("command_snapshot", '$.target'),
-                  '$.courseID',
-                  '$.courseVersion',
-                  '$.selectionRevisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-              )
-            )
-          )
                 AND length("source_excerpt") > 0
                 AND json_valid("resolution_scope")
                 AND "resolution_fingerprint" IS NOT NULL
@@ -1834,184 +1319,36 @@ export default {
                 AND "operation" IN ('set', 'change', 'clear')
                 AND json_valid("from_locator")
                 AND json_valid("to_locator")
-                AND COALESCE((
-            json_type("from_locator") = 'object'
-            AND (
-              (
-                json_extract("from_locator", '$.kind') = 'absent'
-                AND json_remove("from_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("from_locator", '$.kind') = 'course'
-                AND json_type("from_locator", '$.locator') = 'object'
-                AND json_remove("from_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("from_locator", '$.locator.courseID')) > 0
-                AND json_type("from_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.title.value') = 'text'
-                AND json_type("from_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("from_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("from_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
                 AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+            (
+              json_extract("from_locator", '$.kind') = 'absent'
+              AND json_type("from_locator", '$.locator') IS NULL
             )
-          ), 0)
-                AND COALESCE((
-            json_type("to_locator") = 'object'
-            AND (
-              (
-                json_extract("to_locator", '$.kind') = 'absent'
-                AND json_remove("to_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("to_locator", '$.kind') = 'course'
-                AND json_type("to_locator", '$.locator') = 'object'
-                AND json_remove("to_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("to_locator", '$.locator.courseID')) > 0
-                AND json_type("to_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.title.value') = 'text'
-                AND json_type("to_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("to_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("to_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+            OR
+            (
+              json_extract("from_locator", '$.kind') = 'course'
+              AND json_type("from_locator", '$.locator') = 'object'
+              AND json_type("from_locator", '$.locator.courseID') = 'text'
+              AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
+              AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
+              AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
             )
-          ), 0)
+          )
+                AND (
+            (
+              json_extract("to_locator", '$.kind') = 'absent'
+              AND json_type("to_locator", '$.locator') IS NULL
+            )
+            OR
+            (
+              json_extract("to_locator", '$.kind') = 'course'
+              AND json_type("to_locator", '$.locator') = 'object'
+              AND json_type("to_locator", '$.locator.courseID') = 'text'
+              AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
+              AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
+              AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
+            )
+          )
                 AND (
                   (
                     "authorization_kind" = 'direct_request_v2'
@@ -2037,265 +1374,6 @@ export default {
                     AND "proposal_selection" IN ('sole_presented', 'explicit_reference')
                   )
                 )
-              ) OR (
-                "disposition" = 'agent_action_v3'
-                AND "authorization_version" IS NULL
-                AND "authorization_kind" IS NULL
-                AND "authorization_fingerprint" IS NULL
-                AND "agent_action_version" = 3
-                AND "agent_action_fingerprint" IS NOT NULL
-                AND json_valid("agent_action_provenance")
-                AND json_extract("agent_action_provenance", '$.schemaVersion') = 1
-                AND json_extract("agent_action_provenance", '$.kind') IN ('root', 'delegated')
-                AND json_extract("agent_action_provenance", '$.capabilityIdentity') = 'set_default_course_preference'
-                AND json_extract("agent_action_provenance", '$.capabilityVersion') = 3
-                AND json_type("agent_action_provenance", '$.lineage') = 'array'
-                AND (
-                  (
-                    json_extract("agent_action_provenance", '$.kind') = 'root'
-                    AND json_array_length("agent_action_provenance", '$.lineage') = 0
-                  )
-                  OR (
-                    json_extract("agent_action_provenance", '$.kind') = 'delegated'
-                    AND json_array_length("agent_action_provenance", '$.lineage') > 0
-                  )
-                )
-                AND "semantic_outcome" IS NULL
-                AND "semantic_address" IS NULL
-                AND "semantic_address_fingerprint" IS NULL
-                AND "incoming_payload_fingerprint" IS NULL
-                AND "existing_effect_id" IS NULL
-                AND "existing_payload_fingerprint" IS NULL
-                AND "legacy_row_class" IS NULL
-                AND "confirmation_availability" IS NULL
-                AND "command_permission_request_id" IS NULL
-                AND "effect_confirmation_request_id" IS NULL
-                AND "legacy_effect_id" IS NULL
-                AND "legacy_receipt_id" IS NULL
-                AND json_valid("command_snapshot")
-                AND "source_excerpt" IS NULL
-                AND "resolution_scope" IS NULL
-                AND "resolution_fingerprint" IS NULL
-                AND "preference_version" IS NOT NULL
-                AND (("preference_version" = 0 AND "preference_head_id" IS NULL)
-                  OR ("preference_version" > 0 AND "preference_head_id" IS NOT NULL))
-                AND "operation" IN ('set', 'change', 'clear')
-                AND json_valid("from_locator")
-                AND json_valid("to_locator")
-                AND COALESCE((
-            json_type("from_locator") = 'object'
-            AND (
-              (
-                json_extract("from_locator", '$.kind') = 'absent'
-                AND json_remove("from_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("from_locator", '$.kind') = 'course'
-                AND json_type("from_locator", '$.locator') = 'object'
-                AND json_remove("from_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("from_locator", '$.locator.courseID')) > 0
-                AND json_type("from_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.title.value') = 'text'
-                AND json_type("from_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("from_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("from_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
-            )
-          ), 0)
-                AND COALESCE((
-            json_type("to_locator") = 'object'
-            AND (
-              (
-                json_extract("to_locator", '$.kind') = 'absent'
-                AND json_remove("to_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("to_locator", '$.kind') = 'course'
-                AND json_type("to_locator", '$.locator') = 'object'
-                AND json_remove("to_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("to_locator", '$.locator.courseID')) > 0
-                AND json_type("to_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.title.value') = 'text'
-                AND json_type("to_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("to_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("to_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
-            )
-          ), 0)
-                AND (
-            json_type("command_snapshot") = 'object'
-            AND (
-              (
-                json_extract("command_snapshot", '$.action') = 'clear'
-                AND json_remove("command_snapshot", '$.action') = '{}'
-              )
-              OR (
-                json_extract("command_snapshot", '$.action') = 'set'
-                AND json_type("command_snapshot", '$.courseID') = 'text'
-                AND json_extract("command_snapshot", '$.courseID') GLOB 'crs_[0-9A-Za-z]*'
-                AND length(json_extract("command_snapshot", '$.courseID')) = 30
-                AND json_remove("command_snapshot", '$.action', '$.courseID') = '{}'
-              )
-            )
-          )
-                AND "selected_course_id" IS NULL
-                AND (
-                  (
-                    json_extract("command_snapshot", '$.action') = 'clear'
-                    AND json_extract("to_locator", '$.kind') = 'absent'
-                  )
-                  OR (
-                    json_extract("command_snapshot", '$.action') = 'set'
-                    AND json_extract("to_locator", '$.kind') = 'course'
-                    AND json_extract("command_snapshot", '$.courseID') =
-                      json_extract("to_locator", '$.locator.courseID')
-                  )
-                )
-                AND "proposal_part_id" IS NULL
-                AND "proposal_presentation_part_id" IS NULL
-                AND "proposal_presentation_assistant_message_id" IS NULL
-                AND "proposal_assistant_message_id" IS NULL
-                AND "proposal_emission_ordinal" IS NULL
-                AND "proposal_fingerprint" IS NULL
-                AND "proposal_selection" IS NULL
               )),
           CONSTRAINT "learner_default_course_disposition_time" CHECK("time_disposed" >= 0)
         ) WITHOUT ROWID;
@@ -2324,183 +1402,35 @@ export default {
           CONSTRAINT \`fk_learner_default_course_proposal_part_id_turn_candidate_presentation_part_id_fk\` FOREIGN KEY (\`part_id\`) REFERENCES \`turn_candidate_presentation\`(\`part_id\`) ON DELETE RESTRICT,
           CONSTRAINT \`learner_default_course_proposal_assistant_emission_unique\` UNIQUE(\`assistant_message_id\`,\`emission_ordinal\`),
           CONSTRAINT "learner_default_course_proposal_fingerprints" CHECK(length("command_fingerprint") = 64 AND "command_fingerprint" NOT GLOB '*[^0-9a-f]*' AND length("resolution_fingerprint") = 64 AND "resolution_fingerprint" NOT GLOB '*[^0-9a-f]*' AND length("proposal_fingerprint") = 64 AND "proposal_fingerprint" NOT GLOB '*[^0-9a-f]*' AND length("terminal_part_fingerprint") = 64 AND "terminal_part_fingerprint" NOT GLOB '*[^0-9a-f]*'),
-          CONSTRAINT "learner_default_course_proposal_json" CHECK(json_valid("command_snapshot") AND json_valid("resolution_scope") AND json_valid("from_locator") AND json_valid("to_locator") AND COALESCE((
-            json_type("from_locator") = 'object'
-            AND (
-              (
-                json_extract("from_locator", '$.kind') = 'absent'
-                AND json_remove("from_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("from_locator", '$.kind') = 'course'
-                AND json_type("from_locator", '$.locator') = 'object'
-                AND json_remove("from_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("from_locator", '$.locator.courseID')) > 0
-                AND json_type("from_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.title.value') = 'text'
-                AND json_type("from_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("from_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("from_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("from_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("from_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("from_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("from_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("from_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+          CONSTRAINT "learner_default_course_proposal_json" CHECK(json_valid("command_snapshot") AND json_valid("resolution_scope") AND json_valid("from_locator") AND json_valid("to_locator") AND (
+            (
+              json_extract("from_locator", '$.kind') = 'absent'
+              AND json_type("from_locator", '$.locator') IS NULL
             )
-          ), 0) AND COALESCE((
-            json_type("to_locator") = 'object'
-            AND (
-              (
-                json_extract("to_locator", '$.kind') = 'absent'
-                AND json_remove("to_locator", '$.kind') = '{}'
-              )
-              OR
-              (
-                json_extract("to_locator", '$.kind') = 'course'
-                AND json_type("to_locator", '$.locator') = 'object'
-                AND json_remove("to_locator", '$.kind', '$.locator') = '{}'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator'),
-                  '$.courseID',
-                  '$.title',
-                  '$.courseVersion',
-                  '$.workingSelection'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.courseID') = 'text'
-                AND length(json_extract("to_locator", '$.locator.courseID')) > 0
-                AND json_type("to_locator", '$.locator.title') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.title'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.title.value') = 'text'
-                AND json_type("to_locator", '$.locator.courseVersion') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.courseVersion'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.courseVersion.value') = 'integer'
-                AND json_extract("to_locator", '$.locator.courseVersion.value') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection'),
-                  '$.availability',
-                  '$.value'
-                ) = '{}'
-                AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
-                AND json_type("to_locator", '$.locator.workingSelection.value') = 'object'
-                AND json_remove(
-                  json_extract("to_locator", '$.locator.workingSelection.value'),
-                  '$.revisionID',
-                  '$.selectionVersion',
-                  '$.viewID',
-                  '$.viewName',
-                  '$.viewVersion',
-                  '$.revisionVersion'
-                ) = '{}'
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.selectionVersion') = 'integer'
-                AND json_extract("to_locator", '$.locator.workingSelection.value.selectionVersion') >= 0
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewID') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewName') IN ('text', 'null')
-                AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.viewVersion') >= 0
-                )
-                AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') IN ('integer', 'null')
-                AND (
-                  json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  OR json_extract("to_locator", '$.locator.workingSelection.value.revisionVersion') >= 0
-                )
-                AND (
-                  (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'null'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'null'
-                  )
-                  OR (
-                    json_type("to_locator", '$.locator.workingSelection.value.revisionID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewID') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewName') = 'text'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.viewVersion') = 'integer'
-                    AND json_type("to_locator", '$.locator.workingSelection.value.revisionVersion') = 'integer'
-                  )
-                )
-              )
+            OR
+            (
+              json_extract("from_locator", '$.kind') = 'course'
+              AND json_type("from_locator", '$.locator') = 'object'
+              AND json_type("from_locator", '$.locator.courseID') = 'text'
+              AND json_extract("from_locator", '$.locator.title.availability') = 'recorded_v2'
+              AND json_extract("from_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
+              AND json_extract("from_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
             )
-          ), 0)),
+          ) AND (
+            (
+              json_extract("to_locator", '$.kind') = 'absent'
+              AND json_type("to_locator", '$.locator') IS NULL
+            )
+            OR
+            (
+              json_extract("to_locator", '$.kind') = 'course'
+              AND json_type("to_locator", '$.locator') = 'object'
+              AND json_type("to_locator", '$.locator.courseID') = 'text'
+              AND json_extract("to_locator", '$.locator.title.availability') = 'recorded_v2'
+              AND json_extract("to_locator", '$.locator.courseVersion.availability') = 'recorded_v2'
+              AND json_extract("to_locator", '$.locator.workingSelection.availability') = 'recorded_v2'
+            )
+          )),
           CONSTRAINT "learner_default_course_proposal_head" CHECK(("preference_version" = 0 AND "preference_head_id" IS NULL) OR ("preference_version" > 0 AND "preference_head_id" IS NOT NULL)),
           CONSTRAINT "learner_default_course_proposal_operation" CHECK("operation" IN ('set', 'change', 'clear')),
           CONSTRAINT "learner_default_course_proposal_time_order" CHECK("emission_ordinal" >= 0 AND "time_presented" >= 0)
@@ -2538,7 +1468,7 @@ export default {
           CONSTRAINT "learning_command_invocation_emission_ordinal" CHECK("emission_ordinal" >= 0),
           CONSTRAINT "learning_command_invocation_capability" CHECK(length("capability_identity") > 0),
           CONSTRAINT "learning_command_invocation_capability_version" CHECK("capability_version" >= 1),
-          CONSTRAINT "learning_command_invocation_authorization_basis" CHECK("authorization_basis" IN ('learner_request', 'learner_acceptance', 'agent_action')),
+          CONSTRAINT "learning_command_invocation_authorization_basis" CHECK("authorization_basis" IN ('learner_request', 'learner_acceptance')),
           CONSTRAINT "learning_command_invocation_fingerprint" CHECK(length("input_fingerprint") = 64 AND "input_fingerprint" NOT GLOB '*[^0-9a-f]*'),
           CONSTRAINT "learning_command_invocation_status" CHECK("status" IN ('admitted', 'applied', 'already_applied', 'no_change', 'error')),
           CONSTRAINT "learning_command_invocation_settlement_shape" CHECK(("status" = 'admitted' AND "receipt_id" IS NULL AND "settlement" IS NULL AND "time_settled" IS NULL AND "settlement_order" IS NULL) OR ("status" <> 'admitted' AND json_valid("settlement") AND json_type("settlement") = 'object' AND json_extract("settlement", '$.outcome') = "status" AND json_extract("settlement", '$.settlementTime') = "time_settled" AND json_extract("settlement", '$.settlementOrder') = "settlement_order")),
@@ -2563,7 +1493,7 @@ export default {
           CONSTRAINT \`fk_learning_command_receipt_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT,
           CONSTRAINT "learning_command_receipt_capability" CHECK(length("capability_identity") > 0),
           CONSTRAINT "learning_command_receipt_capability_version" CHECK("capability_version" >= 1),
-          CONSTRAINT "learning_command_receipt_authorization_basis" CHECK("authorization_basis" IN ('learner_request', 'learner_acceptance', 'agent_action')),
+          CONSTRAINT "learning_command_receipt_authorization_basis" CHECK("authorization_basis" IN ('learner_request', 'learner_acceptance')),
           CONSTRAINT "learning_command_receipt_time_order" CHECK("time_committed" >= 0 AND "commit_order" >= 0)
         ) WITHOUT ROWID;
       `)

@@ -37,7 +37,9 @@ import {
 } from "./sql"
 
 export {
+  validateAgentActionRegistration,
   validateLearningCommandRegistration,
+  type ValidatedAgentActionRegistration,
   type LearningCommandRegistration,
   type ValidatedLearningCommandRegistration,
 } from "./learning-command-registration"
@@ -500,14 +502,7 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
     const latest = yield* LearningFrontier.read(tx)
     const observed = LearningFrontier.merge(input.snapshotFrontier, latest)
     if (turn.model_count >= turn.model_limit) {
-      const terminal = yield* exhaustModel(
-        tx,
-        turn,
-        input,
-        baseEnvelope,
-        envelopeFingerprint(baseEnvelope),
-        observed,
-      )
+      const terminal = yield* exhaustModel(tx, turn, input, baseEnvelope, envelopeFingerprint(baseEnvelope), observed)
       return { type: "exhausted", turn: terminal, replay: false }
     }
     const cut = yield* RetainedSteering.prepareCut(tx, {

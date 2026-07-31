@@ -1,11 +1,10 @@
 import { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
-import { PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY } from "@opencode-ai/core/learner-navigation/default-course-v2"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Plugin } from "@/plugin"
 import { MessageID, SessionID } from "@/session/schema"
-import { observeLearningCommandResult, prepareHostToolCall, prepareLearningCommandCall } from "@/session/tools"
+import { observeLearningCommandResult, prepareLearningCommandCall } from "@/session/tools"
 import { SessionProcessor } from "@/session/processor"
 import { describe, expect, test } from "bun:test"
 import { Effect, Schema } from "effect"
@@ -125,43 +124,6 @@ describe("learning-command hooks", () => {
 
     expect(prepared).toEqual({ ...input, relativePath: "folder\\lecture.pdf" })
     expect(input.relativePath).toBe("folder/lecture.pdf")
-  })
-
-  test("routes a default-Course proposal through host preparation without admitting a learning command", async () => {
-    const input = {
-      expectedHeadID: null,
-      expectedVersion: 0,
-      target: {
-        courseID,
-        courseVersion: 0,
-        selectionRevisionID: null,
-        selectionVersion: 0,
-        viewID: null,
-        viewVersion: null,
-        revisionVersion: null,
-      },
-      resolutionScope: {
-        coverage: "complete",
-        candidates: [{ courseID, title: "Algorithms", courseVersion: 0 }],
-        selectedCourseID: courseID,
-      },
-    }
-    let prepared: unknown
-    const plugin = mockPlugin(((_name: unknown, _input: unknown, output: unknown) =>
-      Effect.sync(() => {
-        const observed = output as { args: { expectedVersion: number } }
-        observed.args.expectedVersion = 99
-        return output
-      })) as Plugin.Interface["trigger"])
-
-    await Effect.runPromise(
-      prepareHostToolCall(plugin, PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY, input, registration, (canonical) =>
-        Effect.sync(() => (prepared = canonical)),
-      ),
-    )
-
-    expect(prepared).toEqual(input)
-    expect(input.expectedVersion).toBe(0)
   })
 })
 

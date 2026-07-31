@@ -51,7 +51,7 @@ export const LearningCommandInvocationTable = sqliteTable(
     check("learning_command_invocation_capability_version", sql`${table.capability_version} >= 1`),
     check(
       "learning_command_invocation_authorization_basis",
-      sql`${table.authorization_basis} IN ('learner_request', 'learner_acceptance')`,
+      sql`${table.authorization_basis} IN ('learner_request', 'learner_acceptance', 'agent_action')`,
     ),
     check(
       "learning_command_invocation_fingerprint",
@@ -115,12 +115,9 @@ export const LearningCommandReceiptTable = sqliteTable(
     check("learning_command_receipt_capability_version", sql`${table.capability_version} >= 1`),
     check(
       "learning_command_receipt_authorization_basis",
-      sql`${table.authorization_basis} IN ('learner_request', 'learner_acceptance')`,
+      sql`${table.authorization_basis} IN ('learner_request', 'learner_acceptance', 'agent_action')`,
     ),
-    check(
-      "learning_command_receipt_time_order",
-      sql`${table.time_committed} >= 0 AND ${table.commit_order} >= 0`,
-    ),
+    check("learning_command_receipt_time_order", sql`${table.time_committed} >= 0 AND ${table.commit_order} >= 0`),
     index("learning_command_receipt_occurrence_idx").on(table.occurrence_id, table.id),
   ],
 )

@@ -1,12 +1,8 @@
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY } from "@opencode-ai/core/learner-navigation/default-course-v2"
-import {
-  normalizeCommand,
-  normalizeDefault,
-  normalizeDefaultProposal,
-  normalizeDefaultV2,
-} from "@/learning-command/input"
+import { normalizeCommand } from "@/learning-command/input"
 import type { LearningCommandRuntime } from "@/learning-command/runtime"
+import { COURSE_NAVIGATION_QUERY_TOOL_IDS } from "./course-navigation-query"
 import { Tool } from "./tool"
 
 type Preparation = LearningCommandRuntime.Interface["prepare"]
@@ -32,21 +28,20 @@ export function assertExternalToolID(id: string, source: "custom" | "mcp") {
     throw new Error(`${source} tool ID ${id} is reserved by the learning-command runtime`)
   }
   if (id === PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
-    throw new Error(`${source} tool ID ${id} is reserved by the host-prepared proposal runtime`)
+    throw new Error(`${source} tool ID ${id} is reserved for historical Default-Course replay`)
+  }
+  if (COURSE_NAVIGATION_QUERY_TOOL_IDS.includes(id as (typeof COURSE_NAVIGATION_QUERY_TOOL_IDS)[number])) {
+    throw new Error(`${source} tool ID ${id} is reserved by Repa's Course/navigation read authority`)
   }
 }
 
 export const PROPOSE_DEFAULT_COURSE_PREFERENCE_TOOL_ID = PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY
 
 export function isHostPreparedToolID(id: string) {
-  return isLearningCommandToolID(id) || id === PROPOSE_DEFAULT_COURSE_PREFERENCE_TOOL_ID
+  return isLearningCommandToolID(id)
 }
 
 export function normalizeHostPreparedToolInput(id: string, input: unknown) {
-  if (id === PROPOSE_DEFAULT_COURSE_PREFERENCE_TOOL_ID) return normalizeDefaultProposal(input)
-  if (id === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
-    return isDefaultCourseV2Input(input) ? normalizeDefaultV2(input) : normalizeDefault(input)
-  }
   if (isLearningCommandToolID(id)) return normalizeCommand(id, input)
   return input
 }
@@ -60,8 +55,4 @@ export function isLearningCommandToolID(id: string) {
     id === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY ||
     id === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
   )
-}
-
-function isDefaultCourseV2Input(input: unknown) {
-  return typeof input === "object" && input !== null && !Array.isArray(input) && "authorization" in input
 }

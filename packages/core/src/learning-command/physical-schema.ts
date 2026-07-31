@@ -17,6 +17,7 @@ export const createReceiptID = () => decodeReceiptID(Identifier.create("lcr", "a
 export const AuthorizationBasis = Schema.Union([
   Schema.Literal("learner_request"),
   Schema.Literal("learner_acceptance"),
+  Schema.Literal("agent_action"),
 ])
 export type AuthorizationBasis = typeof AuthorizationBasis.Type
 

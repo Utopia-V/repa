@@ -2034,10 +2034,7 @@ export function readRevisionPresentationLocator(
       .select({ viewID: CourseViewRevisionTable.view_id })
       .from(CourseViewRevisionTable)
       .where(
-        and(
-          eq(CourseViewRevisionTable.course_id, input.courseID),
-          eq(CourseViewRevisionTable.id, input.revisionID),
-        ),
+        and(eq(CourseViewRevisionTable.course_id, input.courseID), eq(CourseViewRevisionTable.id, input.revisionID)),
       )
       .get()
       .pipe(Effect.orDie)
@@ -2105,6 +2102,48 @@ export function preparePreferenceTargetProof(tx: Transaction, expected: Preferen
       viewName: view.name,
       viewVersion: view.state_version,
       revisionVersion: revision.state_version,
+    })
+  })
+}
+
+export function prepareCurrentPreferenceTargetProof(tx: Transaction, courseID: CourseID) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(tx, courseID, undefined, true)
+    const selection = yield* requireSelection(tx, courseID)
+    if (!selection.revision_id) {
+      return new PreferenceTargetProof(preferenceTargetProofToken, {
+        courseID: course.id,
+        courseTitle: course.title,
+        courseVersion: course.state_version,
+        selectionRevisionID: null,
+        selectionVersion: selection.version,
+        viewID: null,
+        viewName: null,
+        viewVersion: null,
+        revisionVersion: null,
+      })
+    }
+    const revision = yield* tx
+      .select({ viewID: CourseViewRevisionTable.view_id })
+      .from(CourseViewRevisionTable)
+      .where(
+        and(eq(CourseViewRevisionTable.course_id, courseID), eq(CourseViewRevisionTable.id, selection.revision_id)),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!revision) return yield* new NotFoundError({ entity: "revision", id: selection.revision_id })
+    const view = yield* requireView(tx, courseID, revision.viewID, undefined, true)
+    const state = yield* requireRevision(tx, courseID, revision.viewID, selection.revision_id, undefined, true)
+    return new PreferenceTargetProof(preferenceTargetProofToken, {
+      courseID: course.id,
+      courseTitle: course.title,
+      courseVersion: course.state_version,
+      selectionRevisionID: selection.revision_id,
+      selectionVersion: selection.version,
+      viewID: view.id,
+      viewName: view.name,
+      viewVersion: view.state_version,
+      revisionVersion: state.state_version,
     })
   })
 }

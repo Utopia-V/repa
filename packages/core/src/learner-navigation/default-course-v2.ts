@@ -32,19 +32,18 @@ import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../
 import type { Transaction } from "../learning-command/transaction"
 import type { SessionSchema } from "../session/schema"
 import { MessageTable, PartTable } from "../session/sql"
-import {
-  TurnCandidatePresentationTable,
-  TurnHistoricalToolPresentationTable,
-  TurnModelOperationTable,
-  TurnToolCandidateTable,
-  TurnToolInvocationTable,
-} from "../turn/sql"
+import { TurnLifecycle, type ValidatedAgentActionRegistration } from "../turn/turn"
+import { TurnHistoricalToolPresentationTable, TurnModelOperationTable } from "../turn/sql"
+import { Wildcard } from "../util/wildcard"
 import type { PermissionV1 } from "../v1/permission"
 import { SessionV1, type MessageID, type PartID } from "../v1/session"
 import {
   createDefaultEffectID,
   IntegrityError,
   type DefaultCourseAcknowledgement,
+  type DefaultCourseAgentAction,
+  type DefaultCourseAgentActionProvenance,
+  type DefaultCourseAgentCommandV3,
   type DefaultCourseCapabilityOutcome,
   type DefaultCourseCommand,
   type DefaultCourseEndpointV2,
@@ -70,24 +69,9 @@ export const PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY = "propose_default_cou
 export const PROPOSE_DEFAULT_COURSE_PREFERENCE_VERSION = 1
 export const SET_DEFAULT_COURSE_PREFERENCE_V2_CAPABILITY = "set_default_course_preference"
 export const SET_DEFAULT_COURSE_PREFERENCE_V2_VERSION = 2
+export const SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY = "set_default_course_preference"
+export const SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION = 3
 const decodeJson = Schema.decodeUnknownOption(Schema.UnknownFromJsonString)
-
-export type DefaultCourseProposalPreparationInput = Readonly<{
-  partID: PartID
-  turnID: Turn.ID
-  sessionID: SessionSchema.ID
-  assistantMessageID: MessageID
-  callID: string
-  emissionOrdinal: number
-  command: DefaultCourseCommand
-  resolutionScope: DefaultCourseResolutionScope
-  timePresented: number
-}>
-
-export type DefaultCourseProposalRecordInput = Readonly<{
-  proposal: DefaultCourseProposal
-  completedPart: SessionV1.ToolPart
-}>
 
 export type ResolvedDefaultCourseProposal = DefaultCourseProposal &
   Readonly<{
@@ -130,7 +114,17 @@ export type DefaultCourseV2Authorization = Readonly<{
 
 export type DefaultCourseV2ResultDisposition =
   | Readonly<{ kind: "candidate_v2"; authorization: DefaultCourseV2Authorization }>
-  | DefaultCourseSemanticTerminalDisposition
+  | Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v2" }>
+
+export type DefaultCourseV3ResultDisposition =
+  | Readonly<{ kind: "agent_action_v3"; agentAction: DefaultCourseAgentAction }>
+  | Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v3" }>
+
+export type DefaultCourseAgentActionInput = Readonly<{
+  envelope: InvocationEnvelope
+  settlement?: SettlementMetadata
+  command: DefaultCourseAgentCommandV3
+}>
 
 export type DirectDefaultCourseAuthorizationInput = Readonly<{
   kind: "direct_request_v2"
@@ -179,239 +173,34 @@ export type DefaultCoursePromptSettlementInput = Readonly<{
   order: number
 }>
 
-export type DefaultCourseInvocationVersion = Readonly<{
-  version: 1 | 2
+type DefaultCourseInvocationState = Readonly<{
   status: "admitted" | "applied" | "already_applied" | "no_change" | "error"
   settlement: unknown
-  disposition: "legacy_v1" | "semantic_terminal_v2" | "candidate_v2"
-  authorizationFingerprint?: string
-  authorization?: DefaultCourseV2Authorization
-  semanticTerminal?: DefaultCourseSemanticTerminalDisposition
   acknowledgement?: DefaultCourseAcknowledgement
 }>
 
-export function prepareDefaultCourseProposal(tx: Transaction, input: DefaultCourseProposalPreparationInput) {
-  return Effect.gen(function* () {
-    const commandFingerprint = fingerprint(input.command)
-    const resolutionFingerprint = fingerprint(input.resolutionScope)
-    const existing = yield* tx
-      .select()
-      .from(LearnerDefaultCourseProposalTable)
-      .where(eq(LearnerDefaultCourseProposalTable.part_id, input.partID))
-      .get()
-      .pipe(Effect.orDie)
-    if (existing) {
-      const stored = proposalInfo(existing)
-      if (
-        stored.turnID !== input.turnID ||
-        stored.sessionID !== input.sessionID ||
-        stored.assistantMessageID !== input.assistantMessageID ||
-        stored.callID !== input.callID ||
-        stored.emissionOrdinal !== input.emissionOrdinal ||
-        stored.commandFingerprint !== commandFingerprint ||
-        stored.resolutionFingerprint !== resolutionFingerprint
-      ) {
-        return yield* integrity("Default-Course proposal identity conflicts with its immutable seal")
-      }
-      return stored
-    }
-
-    yield* validateResolutionScope(tx, input.command, input.resolutionScope, false)
-    const candidate = yield* tx
-      .select({
-        turnID: TurnToolCandidateTable.turn_id,
-        sessionID: TurnToolCandidateTable.session_id,
-        assistantMessageID: TurnToolCandidateTable.assistant_message_id,
-        callID: TurnToolCandidateTable.call_id,
-        tool: TurnToolCandidateTable.tool,
-        emissionOrdinal: TurnToolCandidateTable.emission_ordinal,
-        state: TurnToolCandidateTable.state,
-        timeRegistered: TurnToolCandidateTable.time_registered,
-        part: PartTable.data,
-        partTimeUpdated: PartTable.time_updated,
-        presentationPartID: TurnCandidatePresentationTable.part_id,
-        invocationPartID: TurnToolInvocationTable.part_id,
-        invocationState: TurnToolInvocationTable.state,
-        physicalInvocationPartID: LearningCommandInvocationTable.part_id,
-      })
-      .from(TurnToolCandidateTable)
-      .innerJoin(PartTable, eq(PartTable.id, TurnToolCandidateTable.part_id))
-      .innerJoin(
-        TurnCandidatePresentationTable,
-        eq(TurnCandidatePresentationTable.part_id, TurnToolCandidateTable.part_id),
-      )
-      .leftJoin(TurnToolInvocationTable, eq(TurnToolInvocationTable.part_id, TurnToolCandidateTable.part_id))
-      .leftJoin(
-        LearningCommandInvocationTable,
-        eq(LearningCommandInvocationTable.part_id, TurnToolCandidateTable.part_id),
-      )
-      .where(eq(TurnToolCandidateTable.part_id, input.partID))
-      .get()
-      .pipe(Effect.orDie)
-    if (
-      !candidate ||
-      candidate.turnID !== input.turnID ||
-      candidate.sessionID !== input.sessionID ||
-      candidate.assistantMessageID !== input.assistantMessageID ||
-      candidate.callID !== input.callID ||
-      candidate.tool !== PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY ||
-      candidate.emissionOrdinal !== input.emissionOrdinal ||
-      candidate.state !== "admitted" ||
-      candidate.presentationPartID !== input.partID ||
-      candidate.invocationPartID !== input.partID ||
-      candidate.invocationState !== "running" ||
-      candidate.physicalInvocationPartID !== null ||
-      !isProposalPartIdentity(candidate.part, input.callID) ||
-      input.timePresented < candidate.timeRegistered
-    ) {
-      return yield* integrity("Default-Course proposal was not host-prepared from one admitted running Turn invocation")
-    }
-
-    const snapshot = yield* prepareSnapshot(tx, input.command)
-    return proposalPreparation(input, snapshot, commandFingerprint, resolutionFingerprint)
-  })
-}
-
-export function recordDefaultCourseProposal(tx: Transaction, input: DefaultCourseProposalRecordInput) {
-  return Effect.gen(function* () {
-    const completedPart = storedPart(input.completedPart)
-    const terminalPartFingerprint = fingerprint(completedPart)
-    const existing = yield* tx
-      .select()
-      .from(LearnerDefaultCourseProposalTable)
-      .where(eq(LearnerDefaultCourseProposalTable.part_id, input.proposal.partID))
-      .get()
-      .pipe(Effect.orDie)
-    if (existing) {
-      const part = yield* tx
-        .select({ data: PartTable.data })
-        .from(PartTable)
-        .where(eq(PartTable.id, input.proposal.partID))
-        .get()
-        .pipe(Effect.orDie)
-      const stored = proposalInfo(existing)
-      if (
-        fingerprint(stored) !== fingerprint(input.proposal) ||
-        existing.terminal_part_fingerprint !== terminalPartFingerprint ||
-        !part ||
-        fingerprint(part.data) !== terminalPartFingerprint ||
-        !isTruthfulCompletedProposalPart(input.completedPart, input.proposal)
-      ) {
-        return yield* integrity("Default-Course proposal replay conflicts with its immutable proposal or Tool result")
-      }
-      return stored
-    }
-
-    yield* validateResolutionScope(tx, input.proposal.command, input.proposal.resolutionScope, false)
-    const candidate = yield* tx
-      .select({
-        turnID: TurnToolCandidateTable.turn_id,
-        sessionID: TurnToolCandidateTable.session_id,
-        assistantMessageID: TurnToolCandidateTable.assistant_message_id,
-        callID: TurnToolCandidateTable.call_id,
-        tool: TurnToolCandidateTable.tool,
-        emissionOrdinal: TurnToolCandidateTable.emission_ordinal,
-        state: TurnToolCandidateTable.state,
-        timeRegistered: TurnToolCandidateTable.time_registered,
-        part: PartTable.data,
-        partTimeUpdated: PartTable.time_updated,
-        presentationPartID: TurnCandidatePresentationTable.part_id,
-        invocationPartID: TurnToolInvocationTable.part_id,
-        invocationState: TurnToolInvocationTable.state,
-        physicalInvocationPartID: LearningCommandInvocationTable.part_id,
-      })
-      .from(TurnToolCandidateTable)
-      .innerJoin(PartTable, eq(PartTable.id, TurnToolCandidateTable.part_id))
-      .innerJoin(
-        TurnCandidatePresentationTable,
-        eq(TurnCandidatePresentationTable.part_id, TurnToolCandidateTable.part_id),
-      )
-      .leftJoin(TurnToolInvocationTable, eq(TurnToolInvocationTable.part_id, TurnToolCandidateTable.part_id))
-      .leftJoin(
-        LearningCommandInvocationTable,
-        eq(LearningCommandInvocationTable.part_id, TurnToolCandidateTable.part_id),
-      )
-      .where(eq(TurnToolCandidateTable.part_id, input.proposal.partID))
-      .get()
-      .pipe(Effect.orDie)
-    const snapshot = yield* prepareSnapshot(tx, input.proposal.command)
-    const prepared = proposalPreparation(
-      {
-        partID: input.proposal.partID,
-        turnID: input.proposal.turnID,
-        sessionID: input.proposal.sessionID,
-        assistantMessageID: input.proposal.assistantMessageID,
-        callID: input.proposal.callID,
-        emissionOrdinal: input.proposal.emissionOrdinal,
-        command: input.proposal.command,
-        resolutionScope: input.proposal.resolutionScope,
-        timePresented: input.proposal.timePresented,
-      },
-      snapshot,
-      fingerprint(input.proposal.command),
-      fingerprint(input.proposal.resolutionScope),
-    )
-    if (
-      !candidate ||
-      candidate.turnID !== input.proposal.turnID ||
-      candidate.sessionID !== input.proposal.sessionID ||
-      candidate.assistantMessageID !== input.proposal.assistantMessageID ||
-      candidate.callID !== input.proposal.callID ||
-      candidate.tool !== PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY ||
-      candidate.emissionOrdinal !== input.proposal.emissionOrdinal ||
-      candidate.state !== "admitted" ||
-      candidate.presentationPartID !== input.proposal.partID ||
-      candidate.invocationPartID !== input.proposal.partID ||
-      candidate.invocationState !== "running" ||
-      candidate.physicalInvocationPartID !== null ||
-      !isProposalPartIdentity(candidate.part, input.proposal.callID) ||
-      fingerprint(prepared) !== fingerprint(input.proposal) ||
-      input.completedPart.id !== input.proposal.partID ||
-      input.completedPart.sessionID !== input.proposal.sessionID ||
-      input.completedPart.messageID !== input.proposal.assistantMessageID ||
-      !sameProposalPartInput(candidate.part, input.completedPart) ||
-      !isTruthfulCompletedProposalPart(input.completedPart, input.proposal) ||
-      input.proposal.timePresented < candidate.timeRegistered
-    ) {
-      return yield* integrity("Default-Course proposal completion diverges from its prepared Turn invocation")
-    }
-    yield* tx
-      .update(PartTable)
-      .set({
-        data: completedPart,
-        time_updated: Math.max(candidate.partTimeUpdated, input.proposal.timePresented),
-      })
-      .where(eq(PartTable.id, input.proposal.partID))
-      .run()
-      .pipe(Effect.orDie)
-
-    yield* tx
-      .insert(LearnerDefaultCourseProposalTable)
-      .values({
-        part_id: input.proposal.partID,
-        turn_id: input.proposal.turnID,
-        session_id: input.proposal.sessionID,
-        assistant_message_id: input.proposal.assistantMessageID,
-        call_id: input.proposal.callID,
-        emission_ordinal: input.proposal.emissionOrdinal,
-        command_snapshot: input.proposal.command,
-        command_fingerprint: input.proposal.commandFingerprint,
-        resolution_scope: input.proposal.resolutionScope,
-        resolution_fingerprint: input.proposal.resolutionFingerprint,
-        preference_head_id: input.proposal.preferenceHeadID,
-        preference_version: input.proposal.preferenceVersion,
-        operation: input.proposal.operation,
-        from_locator: input.proposal.from,
-        to_locator: input.proposal.to,
-        proposal_fingerprint: input.proposal.fingerprint,
-        terminal_part_fingerprint: terminalPartFingerprint,
-        time_presented: input.proposal.timePresented,
-      })
-      .run()
-      .pipe(Effect.orDie)
-    return input.proposal
-  })
-}
+export type DefaultCourseInvocationVersion =
+  | (DefaultCourseInvocationState &
+      Readonly<{
+        version: 1
+        disposition: "legacy_v1"
+      }>)
+  | (DefaultCourseInvocationState &
+      Readonly<{
+        version: 2
+        disposition: "semantic_terminal_v2" | "candidate_v2"
+        authorizationFingerprint?: string
+        authorization?: DefaultCourseV2Authorization
+        semanticTerminal?: Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v2" }>
+      }>)
+  | (DefaultCourseInvocationState &
+      Readonly<{
+        version: 3
+        disposition: "semantic_terminal_v3" | "agent_action_v3"
+        agentActionFingerprint?: string
+        agentAction?: DefaultCourseAgentAction
+        semanticTerminal?: Extract<DefaultCourseSemanticTerminalDisposition, { readonly kind: "semantic_terminal_v3" }>
+      }>)
 
 export function readRecordedDefaultCourseProposal(
   tx: Transaction,
@@ -748,6 +537,174 @@ export function reserveDefaultCourseV2(tx: Transaction, input: DefaultCourseAuth
   })
 }
 
+export function reserveDefaultCourseV3(tx: Transaction, input: DefaultCourseAgentActionInput) {
+  return Effect.gen(function* () {
+    const physicalFingerprint = fingerprint({
+      commandName: SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY,
+      commandVersion: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
+      envelope: input.envelope,
+      command: input.command,
+    })
+    const existing = yield* findPhysicalInvocation(tx, input, physicalFingerprint, {
+      name: SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY,
+      version: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
+    })
+    if (existing) {
+      const disposition = yield* requireDefaultCourseDisposition(tx, existing.part_id)
+      const agentAction =
+        disposition.disposition === "agent_action_v3" ? yield* agentActionInfo(disposition) : undefined
+      const semanticTerminal =
+        disposition.disposition === "semantic_terminal_v3" ? yield* semanticTerminalInfo(disposition) : undefined
+      if (existing.status === "admitted") {
+        if (!agentAction) return yield* integrity("Only a complete Default-Course Agent action may remain admitted")
+        return {
+          type: "admitted" as const,
+          agentActionFingerprint: agentAction.fingerprint,
+          agentAction,
+        }
+      }
+      return {
+        type: "replay" as const,
+        settlement: existing.settlement,
+        disposition: disposition.disposition,
+        ...(agentAction ? { agentAction } : {}),
+        ...(semanticTerminal ? { semanticTerminal } : {}),
+        acknowledgement: yield* readDefaultCourseAcknowledgement(tx, { partID: existing.part_id }),
+      }
+    }
+
+    yield* requireV3Envelope(input.envelope)
+    const registration = {
+      turnID: input.envelope.turnID,
+      inputID: input.envelope.inputID,
+      causalOccurrenceID: input.envelope.occurrenceID,
+      partID: input.envelope.partID,
+      callID: input.envelope.providerCallID,
+      emissionOrdinal: input.envelope.emissionOrdinal,
+      sessionID: input.envelope.sessionID,
+      assistantMessageID: input.envelope.assistantMessageID,
+      capabilityIdentity: input.envelope.capabilityIdentity,
+    }
+    yield* TurnLifecycle.validateLearningCommandRegistration(tx, registration).pipe(
+      Effect.mapError((error) => new IntegrityError({ detail: error.reason })),
+    )
+    const commandFingerprint = fingerprint(input.command)
+    const address = semanticAddress(input.envelope.occurrenceID)
+    const addressFingerprint = fingerprint(address)
+    const targetCourseID = v3TargetCourseID(input.command)
+    const incomingPayloadFingerprint = defaultPayloadFingerprint(targetCourseID)
+    const semantic = yield* LearnerNavigation.resolveDefaultEffect(tx, {
+      occurrenceID: input.envelope.occurrenceID,
+      targetCourseID,
+    }).pipe(Effect.orDie)
+    if (semantic.type !== "new") {
+      if (!input.settlement) {
+        return yield* integrity("Default-Course V3 semantic-terminal admission has no settlement metadata")
+      }
+      const semanticTerminal = {
+        kind: "semantic_terminal_v3",
+        outcome: semantic.type,
+        command: input.command,
+        commandFingerprint,
+        semanticAddress: address,
+        semanticAddressFingerprint: addressFingerprint,
+        incomingPayloadFingerprint,
+        existingEffectID: semantic.effect.id,
+        existingPayloadFingerprint: defaultPayloadFingerprint(semantic.effect.courseID),
+      } satisfies DefaultCourseSemanticTerminalDisposition
+      yield* admitPhysicalInvocation(tx, {
+        envelope: input.envelope,
+        fingerprint: physicalFingerprint,
+        command: {
+          name: SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY,
+          version: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
+        },
+      })
+      yield* tx
+        .insert(LearnerDefaultCourseDispositionTable)
+        .values({
+          invocation_part_id: input.envelope.partID,
+          disposition: "semantic_terminal_v3",
+          command_fingerprint: commandFingerprint,
+          semantic_outcome: semantic.type,
+          command_snapshot: input.command,
+          semantic_address: address,
+          semantic_address_fingerprint: addressFingerprint,
+          incoming_payload_fingerprint: incomingPayloadFingerprint,
+          existing_effect_id: semantic.effect.id,
+          existing_payload_fingerprint: defaultPayloadFingerprint(semantic.effect.courseID),
+          time_disposed: input.envelope.timeAdmitted,
+        })
+        .run()
+        .pipe(Effect.orDie)
+      if (semantic.type === "already_applied") {
+        const settled = yield* settleAlreadyApplied(tx, input.envelope.partID, semantic, input.settlement)
+        return { ...settled, semanticTerminal }
+      }
+      const settlement = errorSettlement("semantic_conflict", input.settlement)
+      yield* settlePhysicalInvocation(tx, input.envelope.partID, settlement)
+      return { type: "settled" as const, settlement, semanticTerminal }
+    }
+
+    const trusted = yield* TurnLifecycle.validateAgentActionRegistration(tx, registration).pipe(
+      Effect.mapError((error) => new IntegrityError({ detail: error.reason })),
+    )
+    yield* requireExplicitDelegation(trusted, targetCourseID ?? "clear")
+    const snapshot = yield* prepareV3Snapshot(tx, input.command)
+    const provenance = yield* agentActionProvenance(input.envelope, trusted)
+    const agentActionFingerprint = fingerprint({
+      provenance,
+      commandFingerprint,
+      preferenceHeadID: snapshot.preferenceHeadID,
+      preferenceVersion: snapshot.preferenceVersion,
+      operation: snapshot.operation,
+      from: snapshot.from,
+      to: snapshot.to,
+    })
+    const agentAction = {
+      kind: "agent_action_v3",
+      fingerprint: agentActionFingerprint,
+      provenance,
+      command: input.command,
+      commandFingerprint,
+      preferenceHeadID: snapshot.preferenceHeadID,
+      preferenceVersion: snapshot.preferenceVersion,
+      operation: snapshot.operation,
+      from: snapshot.from,
+      to: snapshot.to,
+    } satisfies DefaultCourseAgentAction
+    yield* admitPhysicalInvocation(tx, {
+      envelope: input.envelope,
+      fingerprint: physicalFingerprint,
+      command: {
+        name: SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY,
+        version: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
+      },
+    })
+    yield* tx
+      .insert(LearnerDefaultCourseDispositionTable)
+      .values({
+        invocation_part_id: input.envelope.partID,
+        disposition: "agent_action_v3",
+        agent_action_version: 3,
+        agent_action_fingerprint: agentActionFingerprint,
+        agent_action_provenance: provenance,
+        command_fingerprint: commandFingerprint,
+        command_snapshot: input.command,
+        preference_head_id: snapshot.preferenceHeadID,
+        preference_version: snapshot.preferenceVersion,
+        operation: snapshot.operation,
+        from_locator: snapshot.from,
+        to_locator: snapshot.to,
+        selected_course_id: null,
+        time_disposed: input.envelope.timeAdmitted,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    return { type: "admitted" as const, agentActionFingerprint, agentAction }
+  })
+}
+
 export function readDefaultCourseInvocationVersion(
   tx: Transaction,
   input: Readonly<{ partID: PartID; assistantMessageID: MessageID; providerCallID: string }>,
@@ -765,33 +722,64 @@ export function readDefaultCourseInvocationVersion(
       .get()
       .pipe(Effect.orDie)
     if (!disposition) return yield* integrity("Default-Course invocation has no domain disposition")
-    const version = disposition.disposition === "legacy_v1" ? 1 : 2
+    const version =
+      disposition.disposition === "legacy_v1"
+        ? 1
+        : disposition.disposition === "semantic_terminal_v3" || disposition.disposition === "agent_action_v3"
+          ? 3
+          : 2
     if (version !== invocation.command_version) {
       return yield* integrity("Default-Course physical version and disposition diverge")
     }
     const acknowledgement = yield* readDefaultCourseAcknowledgement(tx, { partID: invocation.part_id })
-    const authorization =
-      disposition.disposition === "candidate_v2"
-        ? yield* authorizationInfo(disposition, invocation.occurrence_id)
-        : undefined
-    const semanticTerminal =
-      disposition.disposition === "semantic_terminal_v2" ? yield* semanticTerminalInfo(disposition) : undefined
     if (
       invocation.status === "admitted" &&
       disposition.disposition !== "candidate_v2" &&
+      disposition.disposition !== "agent_action_v3" &&
       !(disposition.disposition === "legacy_v1" && disposition.legacy_row_class === "admitted")
     ) {
       return yield* integrity("Only a complete V2 candidate or migrated admitted V1 row may remain admitted")
     }
-    return {
-      version,
+    const state = {
       status: invocation.status,
       settlement: invocation.settlement,
-      disposition: disposition.disposition,
-      ...(authorization ? { authorizationFingerprint: authorization.fingerprint, authorization } : {}),
-      ...(semanticTerminal ? { semanticTerminal } : {}),
       ...(acknowledgement ? { acknowledgement } : {}),
-    } satisfies DefaultCourseInvocationVersion
+    }
+    if (disposition.disposition === "legacy_v1") {
+      return { ...state, version: 1 as const, disposition: "legacy_v1" as const }
+    }
+    if (disposition.disposition === "candidate_v2") {
+      const authorization = yield* authorizationInfo(disposition, invocation.occurrence_id)
+      return {
+        ...state,
+        version: 2 as const,
+        disposition: "candidate_v2" as const,
+        authorizationFingerprint: authorization.fingerprint,
+        authorization,
+      }
+    }
+    if (disposition.disposition === "semantic_terminal_v2") {
+      const semanticTerminal = yield* semanticTerminalInfo(disposition)
+      if (semanticTerminal.kind !== "semantic_terminal_v2") {
+        return yield* integrity("Default-Course V2 semantic-terminal version diverged")
+      }
+      return { ...state, version: 2 as const, disposition: "semantic_terminal_v2" as const, semanticTerminal }
+    }
+    if (disposition.disposition === "agent_action_v3") {
+      const agentAction = yield* agentActionInfo(disposition)
+      return {
+        ...state,
+        version: 3 as const,
+        disposition: "agent_action_v3" as const,
+        agentActionFingerprint: agentAction.fingerprint,
+        agentAction,
+      }
+    }
+    const semanticTerminal = yield* semanticTerminalInfo(disposition)
+    if (semanticTerminal.kind !== "semantic_terminal_v3") {
+      return yield* integrity("Default-Course V3 semantic-terminal version diverged")
+    }
+    return { ...state, version: 3 as const, disposition: "semantic_terminal_v3" as const, semanticTerminal }
   })
 }
 
@@ -804,7 +792,7 @@ export function settleDefaultCoursePolicy(tx: Transaction, input: DefaultCourseP
       if (
         existing.outcome !== input.outcome ||
         existing.policy_fingerprint !== policyFingerprint ||
-        existing.authorization_fingerprint !== state.authorization.authorization_fingerprint
+        !matchesCapabilityBasis(existing, state.basis)
       ) {
         return yield* integrity("Default-Course capability policy settlement conflicts")
       }
@@ -817,7 +805,7 @@ export function settleDefaultCoursePolicy(tx: Transaction, input: DefaultCourseP
       .values({
         invocation_part_id: input.partID,
         outcome: input.outcome,
-        authorization_fingerprint: state.authorization.authorization_fingerprint,
+        ...capabilityBasisColumns(state.basis),
         policy_basis: input.policyBasis,
         policy_fingerprint: policyFingerprint,
         time_settled: input.time,
@@ -827,7 +815,7 @@ export function settleDefaultCoursePolicy(tx: Transaction, input: DefaultCourseP
       .pipe(Effect.orDie)
     return {
       outcome: input.outcome,
-      authorizationFingerprint: state.authorization.authorization_fingerprint,
+      ...capabilityBasisInfo(state.basis),
       policyBasis: input.policyBasis,
       policyFingerprint,
       timeSettled: input.time,
@@ -848,7 +836,7 @@ export function issueDefaultCourseCapabilityPrompt(tx: Transaction, input: Defau
     if (existing) {
       if (
         existing.permission_request_id !== input.requestID ||
-        existing.authorization_fingerprint !== state.authorization.authorization_fingerprint ||
+        !matchesCapabilityBasis(existing, state.basis) ||
         existing.policy_fingerprint !== policyFingerprint ||
         existing.shown_scope_fingerprint !== shownScopeFingerprint
       ) {
@@ -861,7 +849,7 @@ export function issueDefaultCourseCapabilityPrompt(tx: Transaction, input: Defau
       .values({
         invocation_part_id: input.partID,
         permission_request_id: input.requestID,
-        authorization_fingerprint: state.authorization.authorization_fingerprint,
+        ...capabilityBasisColumns(state.basis),
         policy_basis: input.policyBasis,
         policy_fingerprint: policyFingerprint,
         shown_scope: input.shownScope,
@@ -873,7 +861,7 @@ export function issueDefaultCourseCapabilityPrompt(tx: Transaction, input: Defau
       .pipe(Effect.orDie)
     return {
       requestID: input.requestID,
-      authorizationFingerprint: state.authorization.authorization_fingerprint,
+      ...capabilityBasisInfo(state.basis),
       policyBasis: input.policyBasis,
       policyFingerprint,
       shownScope: input.shownScope,
@@ -888,11 +876,7 @@ export function settleDefaultCoursePrompt(tx: Transaction, input: DefaultCourseP
   return Effect.gen(function* () {
     const state = yield* requireCapabilityCandidate(tx, input.partID)
     const issue = yield* capabilityIssue(tx, input.partID)
-    if (
-      !issue ||
-      issue.permission_request_id !== input.requestID ||
-      issue.authorization_fingerprint !== state.authorization.authorization_fingerprint
-    ) {
+    if (!issue || issue.permission_request_id !== input.requestID || !matchesCapabilityBasis(issue, state.basis)) {
       return yield* integrity("Default-Course prompt reply has no exact durable issue")
     }
     const replyFingerprint = fingerprint(input.reply)
@@ -913,7 +897,7 @@ export function settleDefaultCoursePrompt(tx: Transaction, input: DefaultCourseP
         invocation_part_id: input.partID,
         outcome: input.outcome,
         permission_request_id: input.requestID,
-        authorization_fingerprint: state.authorization.authorization_fingerprint,
+        ...capabilityBasisColumns(state.basis),
         reply: input.reply,
         reply_fingerprint: replyFingerprint,
         time_settled: input.time,
@@ -924,7 +908,7 @@ export function settleDefaultCoursePrompt(tx: Transaction, input: DefaultCourseP
     return {
       outcome: input.outcome,
       requestID: input.requestID,
-      authorizationFingerprint: state.authorization.authorization_fingerprint,
+      ...capabilityBasisInfo(state.basis),
       reply: input.reply,
       replyFingerprint,
       timeSettled: input.time,
@@ -949,7 +933,7 @@ export function recoverDefaultCourseCapability(
         invocation_part_id: input.partID,
         outcome,
         permission_request_id: issue?.permission_request_id ?? null,
-        authorization_fingerprint: state.authorization.authorization_fingerprint,
+        ...capabilityBasisColumns(state.basis),
         time_settled: input.time,
         settlement_order: input.order,
       })
@@ -958,7 +942,7 @@ export function recoverDefaultCourseCapability(
     return {
       outcome,
       ...(issue ? { requestID: issue.permission_request_id } : {}),
-      authorizationFingerprint: state.authorization.authorization_fingerprint,
+      ...capabilityBasisInfo(state.basis),
       timeSettled: input.time,
       settlementOrder: input.order,
     }
@@ -1001,7 +985,7 @@ export function recoverDefaultCourseV2(
     const semantic = yield* settleDefaultCourseSemanticRace(tx, {
       partID: input.partID,
       occurrenceID: invocation.occurrence_id,
-      command,
+      targetCourseID: command.target?.courseID ?? null,
       settlement: input.settlement,
     })
     if (semantic) return semantic
@@ -1046,12 +1030,16 @@ export function settleDefaultCourseV2(
     const semantic = yield* settleDefaultCourseSemanticRace(tx, {
       partID: input.partID,
       occurrenceID: invocation.occurrence_id,
-      command,
+      targetCourseID: command.target?.courseID ?? null,
       settlement: input.settlement,
     })
     if (semantic) return semantic
     const capability = yield* capabilitySettlement(tx, input.partID)
-    if (!capability || capability.authorization_fingerprint !== authorization.authorization_fingerprint) {
+    if (
+      !capability ||
+      capability.authorization_fingerprint !== authorization.authorization_fingerprint ||
+      capability.agent_action_fingerprint !== null
+    ) {
       return yield* integrity("Default-Course final settlement has no exact durable capability outcome")
     }
     if (capability.outcome !== "policy_allow" && capability.outcome !== "prompted_allow") {
@@ -1178,6 +1166,227 @@ export function settleDefaultCourseV2(
   })
 }
 
+export function recoverDefaultCourseV3(
+  tx: Transaction,
+  input: Readonly<{ partID: PartID; settlement: SettlementMetadata }>,
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* tx
+      .select()
+      .from(LearningCommandInvocationTable)
+      .where(eq(LearningCommandInvocationTable.part_id, input.partID))
+      .get()
+      .pipe(Effect.orDie)
+    if (
+      !invocation ||
+      invocation.command_name !== SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY ||
+      invocation.command_version !== 3
+    ) {
+      return yield* integrity("Default-Course V3 recovery invocation is unavailable")
+    }
+    if (invocation.status !== "admitted") {
+      return {
+        type: "replay" as const,
+        settlement: invocation.settlement,
+        acknowledgement: yield* readDefaultCourseAcknowledgement(tx, { partID: input.partID }),
+      }
+    }
+    const capability = yield* recoverDefaultCourseCapability(tx, {
+      partID: input.partID,
+      time: input.settlement.time,
+      order: input.settlement.order,
+    })
+    const agentAction = yield* requireV3AgentAction(tx, input.partID)
+    if (!isDefaultCourseV3Command(agentAction.command_snapshot)) {
+      return yield* integrity("Default-Course V3 Agent action lost its command projection")
+    }
+    const semantic = yield* settleDefaultCourseSemanticRace(tx, {
+      partID: input.partID,
+      occurrenceID: invocation.occurrence_id,
+      targetCourseID: v3TargetCourseID(agentAction.command_snapshot),
+      settlement: input.settlement,
+    })
+    if (semantic) return semantic
+    const settlement = errorSettlement(
+      capability.outcome === "policy_allow" || capability.outcome === "prompted_allow"
+        ? "interrupted"
+        : capabilityErrorCode(capability.outcome),
+      input.settlement,
+    )
+    yield* settlePhysicalInvocation(tx, input.partID, settlement)
+    return { type: "settled" as const, settlement }
+  })
+}
+
+export function settleDefaultCourseV3(
+  tx: Transaction,
+  input: Readonly<{ partID: PartID; settlement: SettlementMetadata }>,
+) {
+  return Effect.gen(function* () {
+    const invocation = yield* tx
+      .select()
+      .from(LearningCommandInvocationTable)
+      .where(eq(LearningCommandInvocationTable.part_id, input.partID))
+      .get()
+      .pipe(Effect.orDie)
+    if (
+      !invocation ||
+      invocation.command_name !== SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY ||
+      invocation.command_version !== 3
+    ) {
+      return yield* integrity("Default-Course V3 invocation is unavailable")
+    }
+    if (invocation.status !== "admitted") {
+      return {
+        type: "replay" as const,
+        settlement: invocation.settlement,
+        acknowledgement: yield* readDefaultCourseAcknowledgement(tx, { partID: input.partID }),
+      }
+    }
+    const agentAction = yield* requireV3AgentAction(tx, input.partID)
+    if (!isDefaultCourseV3Command(agentAction.command_snapshot)) {
+      return yield* integrity("Default-Course V3 Agent action lost its command projection")
+    }
+    const command = agentAction.command_snapshot
+    const semantic = yield* settleDefaultCourseSemanticRace(tx, {
+      partID: input.partID,
+      occurrenceID: invocation.occurrence_id,
+      targetCourseID: v3TargetCourseID(command),
+      settlement: input.settlement,
+    })
+    if (semantic) return semantic
+    const capability = yield* capabilitySettlement(tx, input.partID)
+    if (
+      !capability ||
+      capability.authorization_fingerprint !== null ||
+      capability.agent_action_fingerprint !== agentAction.agent_action_fingerprint
+    ) {
+      return yield* integrity("Default-Course V3 final settlement has no exact durable capability outcome")
+    }
+    if (capability.outcome !== "policy_allow" && capability.outcome !== "prompted_allow") {
+      const settlement = errorSettlement(capabilityErrorCode(capability.outcome), input.settlement)
+      yield* settlePhysicalInvocation(tx, input.partID, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const envelope = invocationEnvelope(invocation)
+    if (!(yield* occurrenceAvailable(tx, envelope))) {
+      const settlement = errorSettlement("source_unavailable", input.settlement)
+      yield* settlePhysicalInvocation(tx, input.partID, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const fresh = yield* prepareV3Snapshot(tx, command).pipe(
+      Effect.map((value) => ({ type: "success" as const, value })),
+      Effect.catch(() => Effect.succeed({ type: "failure" as const })),
+    )
+    if (
+      fresh.type === "failure" ||
+      !sameSnapshot(fresh.value, {
+        preferenceHeadID: agentAction.preference_head_id,
+        preferenceVersion: agentAction.preference_version!,
+        operation: agentAction.operation!,
+        from: agentAction.from_locator!,
+        to: agentAction.to_locator!,
+      })
+    ) {
+      const settlement = errorSettlement("stale", input.settlement)
+      yield* settlePhysicalInvocation(tx, input.partID, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const previousCourseID =
+      agentAction.from_locator?.kind === "course" ? agentAction.from_locator.locator.courseID : null
+    const targetCourseID = v3TargetCourseID(command)
+    if (previousCourseID === targetCourseID) {
+      const current = yield* LearnerNavigation.readCurrentDefault(tx)
+      const settlement = {
+        outcome: "no_change",
+        navigationKind: "default_course_preference",
+        current,
+        settlementTime: input.settlement.time,
+        settlementOrder: input.settlement.order,
+      } as const
+      yield* settlePhysicalInvocation(tx, input.partID, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const consumed = yield* LearningFrontier.read(tx)
+    if (input.settlement.time < consumed.time) {
+      const settlement = errorSettlement("stale", input.settlement)
+      yield* settlePhysicalInvocation(tx, input.partID, settlement)
+      return { type: "settled" as const, settlement }
+    }
+    const frontier = yield* LearningFrontier.advance(tx, { time: input.settlement.time, consumed: [consumed] })
+    const effect = {
+      id: createDefaultEffectID(),
+      occurrenceID: invocation.occurrence_id,
+      previousCourseID,
+      courseID: targetCourseID,
+      previousVersion: agentAction.preference_version!,
+      version: agentAction.preference_version! + 1,
+      timeCommitted: input.settlement.time,
+      commitOrder: input.settlement.order,
+      frontierSequence: frontier.sequence,
+    } satisfies DefaultEffect
+    yield* tx
+      .insert(DefaultCoursePreferenceTransitionTable)
+      .values({
+        id: effect.id,
+        version: effect.version,
+        predecessor_id: agentAction.preference_head_id,
+        previous_course_id: effect.previousCourseID,
+        course_id: effect.courseID,
+        occurrence_id: effect.occurrenceID,
+        authorization_part_id: null,
+        agent_action_part_id: input.partID,
+        permission_request_id: null,
+        confirmation_snapshot: null,
+        target_course_version: fresh.value.proof?.receipt.courseVersion ?? null,
+        target_selection_revision_id: fresh.value.proof?.receipt.selectionRevisionID ?? null,
+        target_selection_version: fresh.value.proof?.receipt.selectionVersion ?? null,
+        target_view_id: fresh.value.proof?.receipt.viewID ?? null,
+        target_view_version: fresh.value.proof?.receipt.viewVersion ?? null,
+        target_revision_version: fresh.value.proof?.receipt.revisionVersion ?? null,
+        time_committed: effect.timeCommitted,
+        commit_order: effect.commitOrder,
+        frontier_sequence: effect.frontierSequence,
+        frontier_time: frontier.time,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    const receiptID = yield* insertPhysicalReceipt(tx, envelope, input.settlement)
+    yield* tx
+      .insert(LearnerDefaultCourseCommitSealTable)
+      .values({ effect_id: effect.id, receipt_id: receiptID, invocation_part_id: input.partID })
+      .run()
+      .pipe(Effect.orDie)
+    const acknowledgement = acknowledgementSnapshot({
+      invocationPartID: input.partID,
+      effectAgentActionPartID: input.partID,
+      agentActionVersion: 3,
+      effectID: effect.id,
+      receiptID,
+      operation: agentAction.operation!,
+      from: agentAction.from_locator!,
+      to: agentAction.to_locator!,
+      relation: "active",
+      timeCommitted: effect.timeCommitted,
+      commitOrder: effect.commitOrder,
+    })
+    yield* insertAcknowledgement(tx, acknowledgement)
+    const current = yield* LearnerNavigation.readCurrentDefault(tx)
+    const settlement = {
+      outcome: "applied",
+      navigationKind: "default_course_preference",
+      receiptID,
+      effectID: effect.id,
+      effect,
+      current,
+      settlementTime: input.settlement.time,
+      settlementOrder: input.settlement.order,
+    } as const
+    yield* settlePhysicalInvocation(tx, input.partID, settlement)
+    return { type: "settled" as const, settlement, acknowledgement }
+  })
+}
+
 export function readDefaultCourseAcknowledgement(tx: Transaction, input: Readonly<{ partID: PartID }>) {
   return tx
     .select({ presentation: LearnerDefaultCourseAcknowledgementTable.presentation_snapshot })
@@ -1215,6 +1424,34 @@ function prepareSnapshot(tx: Transaction, command: DefaultCourseCommand) {
       operation: operation(from, to),
       from,
       to,
+    }
+  })
+}
+
+function prepareV3Snapshot(tx: Transaction, command: DefaultCourseAgentCommandV3) {
+  return Effect.gen(function* () {
+    const head = yield* tx
+      .select()
+      .from(DefaultCoursePreferenceTransitionTable)
+      .orderBy(desc(DefaultCoursePreferenceTransitionTable.version))
+      .limit(1)
+      .get()
+      .pipe(Effect.orDie)
+    const from = head?.course_id
+      ? ({ kind: "course", locator: yield* exactLocator(tx, head.course_id) } as const)
+      : ({ kind: "absent" } as const)
+    const proof =
+      command.action === "set" ? yield* Course.prepareCurrentPreferenceTargetProof(tx, command.courseID) : undefined
+    const to = proof
+      ? ({ kind: "course", locator: exactLocatorFromReceipt(proof.receipt) } as const)
+      : ({ kind: "absent" } as const)
+    return {
+      preferenceHeadID: head?.id ?? null,
+      preferenceVersion: head?.version ?? 0,
+      operation: operation(from, to),
+      from,
+      to,
+      proof,
     }
   })
 }
@@ -1377,6 +1614,70 @@ function requireV2Envelope(input: DefaultCourseAuthorizationInput) {
   return valid ? Effect.void : integrity("Default-Course V2 envelope has an incompatible capability or source arm")
 }
 
+function requireV3Envelope(envelope: InvocationEnvelope) {
+  const valid =
+    envelope.capabilityIdentity === SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY &&
+    envelope.capabilityVersion === SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION &&
+    envelope.authorizationBasis === "agent_action"
+  return valid ? Effect.void : integrity("Default-Course V3 envelope has an incompatible Agent-action basis")
+}
+
+function agentActionProvenance(
+  envelope: InvocationEnvelope,
+  trusted: ValidatedAgentActionRegistration,
+): Effect.Effect<DefaultCourseAgentActionProvenance, IntegrityError> {
+  return Effect.gen(function* () {
+    if (
+      trusted.occurrenceID !== envelope.occurrenceID ||
+      trusted.depth !== trusted.lineage.length ||
+      (trusted.admissionKind === "learner" && (trusted.depth !== 0 || trusted.lineage.length !== 0)) ||
+      (trusted.admissionKind === "delegated_task" && (trusted.depth <= 0 || trusted.lineage.length === 0))
+    ) {
+      return yield* integrity("Default-Course Agent action has no exact root-or-delegated Turn lineage")
+    }
+    const common = {
+      schemaVersion: 1 as const,
+      occurrenceID: envelope.occurrenceID,
+      causalRootOccurrenceID: trusted.occurrenceID,
+      sessionID: envelope.sessionID,
+      turnID: envelope.turnID,
+      inputID: envelope.inputID,
+      assistantMessageID: envelope.assistantMessageID,
+      invocationPartID: envelope.partID,
+      providerCallID: envelope.providerCallID,
+      emissionOrdinal: envelope.emissionOrdinal,
+      capabilityIdentity: SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY as "set_default_course_preference",
+      capabilityVersion: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION as 3,
+    }
+    if (trusted.admissionKind === "learner") {
+      return { ...common, kind: "root" as const, lineage: [] }
+    }
+    const lineage = trusted.lineage.map((edge) => ({
+      ...edge,
+      delegatedCapabilityFingerprint: fingerprint(edge.delegatedCapability),
+    }))
+    const effective = lineage.at(-1)
+    if (
+      !effective ||
+      effective.childTurnID !== envelope.turnID ||
+      !isDelegatedCapabilityProjection(effective.delegatedCapability)
+    ) {
+      return yield* integrity("Default-Course delegated Agent action has no exact effective capability")
+    }
+    return {
+      ...common,
+      kind: "delegated" as const,
+      lineage: lineage as [(typeof lineage)[number], ...(typeof lineage)[number][]],
+      effectiveDelegatedCapability: {
+        identity: SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY,
+        version: SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
+        projectionVersion: 2,
+        fingerprint: effective.delegatedCapabilityFingerprint,
+      },
+    }
+  })
+}
+
 function requireSourceExcerpt(tx: Transaction, envelope: InvocationEnvelope, excerpt: string) {
   return Effect.gen(function* () {
     yield* Occurrence.requireAvailableSource(tx, {
@@ -1514,14 +1815,14 @@ function settleDefaultCourseSemanticRace(
   input: Readonly<{
     partID: PartID
     occurrenceID: OccurrenceID
-    command: DefaultCourseCommand
+    targetCourseID: Course.CourseID | null
     settlement: SettlementMetadata
   }>,
 ) {
   return Effect.gen(function* () {
     const resolution = yield* LearnerNavigation.resolveDefaultEffect(tx, {
       occurrenceID: input.occurrenceID,
-      targetCourseID: input.command.target?.courseID ?? null,
+      targetCourseID: input.targetCourseID,
     }).pipe(Effect.orDie)
     if (resolution.type === "new") return
     if (resolution.type === "already_applied") {
@@ -1548,6 +1849,7 @@ function settleAlreadyApplied(
     const effect = yield* tx
       .select({
         authorizationPartID: DefaultCoursePreferenceTransitionTable.authorization_part_id,
+        agentActionPartID: DefaultCoursePreferenceTransitionTable.agent_action_part_id,
         receiptID: LearningCommandReceiptTable.id,
         appliedInvocationPartID: LearnerDefaultCourseCommitSealTable.invocation_part_id,
       })
@@ -1566,11 +1868,19 @@ function settleAlreadyApplied(
     if (!effect) return yield* integrity("Already-applied Default-Course effect has no immutable seal")
     const original = yield* readDefaultCourseAcknowledgement(tx, { partID: effect.appliedInvocationPartID })
     if (!original) return yield* integrity("Already-applied Default-Course effect has no stable locator overlay")
+    if (
+      ("authorizationVersion" in original &&
+        (effect.authorizationPartID !== original.effectAuthorizationPartID || effect.agentActionPartID !== null)) ||
+      ("agentActionVersion" in original &&
+        (effect.agentActionPartID !== original.effectAgentActionPartID || effect.authorizationPartID !== null))
+    ) {
+      return yield* integrity("Already-applied Default-Course effect provenance diverges from its acknowledgement")
+    }
     const acknowledgement =
-      original.authorizationVersion === 1
+      "authorizationVersion" in original && original.authorizationVersion === 1
         ? acknowledgementSnapshot({
             invocationPartID,
-            effectAuthorizationPartID: effect.authorizationPartID,
+            effectAuthorizationPartID: original.effectAuthorizationPartID,
             authorizationVersion: 1,
             effectID: resolution.effect.id,
             receiptID: effect.receiptID,
@@ -1581,19 +1891,33 @@ function settleAlreadyApplied(
             timeCommitted: resolution.effect.timeCommitted,
             commitOrder: resolution.effect.commitOrder,
           })
-        : acknowledgementSnapshot({
-            invocationPartID,
-            effectAuthorizationPartID: effect.authorizationPartID,
-            authorizationVersion: 2,
-            effectID: resolution.effect.id,
-            receiptID: effect.receiptID,
-            operation: original.operation,
-            from: original.from,
-            to: original.to,
-            relation: resolution.relation,
-            timeCommitted: resolution.effect.timeCommitted,
-            commitOrder: resolution.effect.commitOrder,
-          })
+        : "authorizationVersion" in original
+          ? acknowledgementSnapshot({
+              invocationPartID,
+              effectAuthorizationPartID: original.effectAuthorizationPartID,
+              authorizationVersion: 2,
+              effectID: resolution.effect.id,
+              receiptID: effect.receiptID,
+              operation: original.operation,
+              from: original.from,
+              to: original.to,
+              relation: resolution.relation,
+              timeCommitted: resolution.effect.timeCommitted,
+              commitOrder: resolution.effect.commitOrder,
+            })
+          : acknowledgementSnapshot({
+              invocationPartID,
+              effectAgentActionPartID: original.effectAgentActionPartID,
+              agentActionVersion: 3,
+              effectID: resolution.effect.id,
+              receiptID: effect.receiptID,
+              operation: original.operation,
+              from: original.from,
+              to: original.to,
+              relation: resolution.relation,
+              timeCommitted: resolution.effect.timeCommitted,
+              commitOrder: resolution.effect.commitOrder,
+            })
     yield* insertAcknowledgement(tx, acknowledgement)
     const settlement = {
       outcome: "already_applied",
@@ -1618,7 +1942,7 @@ type DefaultCourseAcknowledgementInput = DefaultCourseAcknowledgement extends in
   : never
 
 function acknowledgementSnapshot(input: DefaultCourseAcknowledgementInput): DefaultCourseAcknowledgement {
-  return { schemaVersion: 1, ...input }
+  return "agentActionVersion" in input ? { schemaVersion: 2, ...input } : { schemaVersion: 1, ...input }
 }
 
 function insertAcknowledgement(tx: Transaction, acknowledgement: DefaultCourseAcknowledgement) {
@@ -1626,8 +1950,12 @@ function insertAcknowledgement(tx: Transaction, acknowledgement: DefaultCourseAc
     .insert(LearnerDefaultCourseAcknowledgementTable)
     .values({
       invocation_part_id: acknowledgement.invocationPartID,
-      effect_authorization_part_id: acknowledgement.effectAuthorizationPartID,
-      authorization_version: acknowledgement.authorizationVersion,
+      effect_authorization_part_id:
+        "authorizationVersion" in acknowledgement ? acknowledgement.effectAuthorizationPartID : null,
+      authorization_version: "authorizationVersion" in acknowledgement ? acknowledgement.authorizationVersion : null,
+      effect_agent_action_part_id:
+        "agentActionVersion" in acknowledgement ? acknowledgement.effectAgentActionPartID : null,
+      agent_action_version: "agentActionVersion" in acknowledgement ? acknowledgement.agentActionVersion : null,
       effect_id: acknowledgement.effectID,
       receipt_id: acknowledgement.receiptID,
       operation: acknowledgement.operation,
@@ -1651,10 +1979,27 @@ function requireCapabilityCandidate(tx: Transaction, partID: PartID) {
       .where(eq(LearningCommandInvocationTable.part_id, partID))
       .get()
       .pipe(Effect.orDie)
-    if (!invocation || invocation.status !== "admitted" || invocation.command_version !== 2) {
-      return yield* integrity("Default-Course capability lifecycle requires one admitted V2 invocation")
+    if (
+      !invocation ||
+      invocation.status !== "admitted" ||
+      (invocation.command_version !== 2 && invocation.command_version !== 3)
+    ) {
+      return yield* integrity("Default-Course capability lifecycle requires one admitted candidate")
     }
-    return { invocation, authorization: yield* requireV2Authorization(tx, partID) }
+    if (invocation.command_version === 2) {
+      const authorization = yield* requireV2Authorization(tx, partID)
+      return {
+        invocation,
+        authorization,
+        basis: { kind: "authorization" as const, fingerprint: authorization.authorization_fingerprint },
+      }
+    }
+    const agentAction = yield* requireV3AgentAction(tx, partID)
+    return {
+      invocation,
+      agentAction,
+      basis: { kind: "agent_action" as const, fingerprint: agentAction.agent_action_fingerprint },
+    }
   })
 }
 
@@ -1685,7 +2030,8 @@ function requireV2Authorization(tx: Transaction, partID: PartID) {
       authorization.authorization_version !== 2 ||
       authorization.authorization_kind === null ||
       authorization.authorization_kind === "legacy_v1" ||
-      authorization.authorization_fingerprint === null
+      authorization.authorization_fingerprint === null ||
+      !isDefaultCourseV2Command(authorization.command_snapshot)
     ) {
       return yield* integrity("Default-Course V2 invocation has no closed semantic authorization")
     }
@@ -1695,6 +2041,34 @@ function requireV2Authorization(tx: Transaction, partID: PartID) {
       authorization_version: 2 as const,
       authorization_kind: authorization.authorization_kind,
       authorization_fingerprint: authorization.authorization_fingerprint,
+      command_snapshot: authorization.command_snapshot,
+    }
+  })
+}
+
+function requireV3AgentAction(tx: Transaction, partID: PartID) {
+  return Effect.gen(function* () {
+    const agentAction = yield* tx
+      .select()
+      .from(LearnerDefaultCourseDispositionTable)
+      .where(eq(LearnerDefaultCourseDispositionTable.invocation_part_id, partID))
+      .get()
+      .pipe(Effect.orDie)
+    if (
+      !agentAction ||
+      agentAction.disposition !== "agent_action_v3" ||
+      agentAction.agent_action_version !== 3 ||
+      !agentAction.agent_action_fingerprint ||
+      !isDefaultCourseV3Command(agentAction.command_snapshot)
+    ) {
+      return yield* integrity("Default-Course V3 invocation has no closed Agent-issuance provenance")
+    }
+    return {
+      ...agentAction,
+      disposition: "agent_action_v3" as const,
+      agent_action_version: 3 as const,
+      agent_action_fingerprint: agentAction.agent_action_fingerprint,
+      command_snapshot: agentAction.command_snapshot,
     }
   })
 }
@@ -1703,7 +2077,7 @@ function semanticTerminalInfo(
   row: typeof LearnerDefaultCourseDispositionTable.$inferSelect,
 ): Effect.Effect<DefaultCourseSemanticTerminalDisposition, IntegrityError> {
   if (
-    row.disposition !== "semantic_terminal_v2" ||
+    (row.disposition !== "semantic_terminal_v2" && row.disposition !== "semantic_terminal_v3") ||
     !row.semantic_outcome ||
     !row.command_snapshot ||
     !row.semantic_address ||
@@ -1714,16 +2088,62 @@ function semanticTerminalInfo(
   ) {
     return integrity("Default-Course semantic-terminal disposition is incomplete")
   }
+  if (row.disposition === "semantic_terminal_v2" && isDefaultCourseV2Command(row.command_snapshot)) {
+    return Effect.succeed({
+      kind: "semantic_terminal_v2",
+      outcome: row.semantic_outcome,
+      command: row.command_snapshot,
+      commandFingerprint: row.command_fingerprint,
+      semanticAddress: row.semantic_address,
+      semanticAddressFingerprint: row.semantic_address_fingerprint,
+      incomingPayloadFingerprint: row.incoming_payload_fingerprint,
+      existingEffectID: row.existing_effect_id,
+      existingPayloadFingerprint: row.existing_payload_fingerprint,
+    })
+  }
+  if (row.disposition === "semantic_terminal_v3" && isDefaultCourseV3Command(row.command_snapshot)) {
+    return Effect.succeed({
+      kind: "semantic_terminal_v3",
+      outcome: row.semantic_outcome,
+      command: row.command_snapshot,
+      commandFingerprint: row.command_fingerprint,
+      semanticAddress: row.semantic_address,
+      semanticAddressFingerprint: row.semantic_address_fingerprint,
+      incomingPayloadFingerprint: row.incoming_payload_fingerprint,
+      existingEffectID: row.existing_effect_id,
+      existingPayloadFingerprint: row.existing_payload_fingerprint,
+    })
+  }
+  return integrity("Default-Course semantic-terminal command version is invalid")
+}
+
+function agentActionInfo(
+  row: typeof LearnerDefaultCourseDispositionTable.$inferSelect,
+): Effect.Effect<DefaultCourseAgentAction, IntegrityError> {
+  if (
+    row.disposition !== "agent_action_v3" ||
+    row.agent_action_version !== 3 ||
+    !row.agent_action_fingerprint ||
+    !row.agent_action_provenance ||
+    !isDefaultCourseV3Command(row.command_snapshot) ||
+    row.preference_version === null ||
+    !row.operation ||
+    !row.from_locator ||
+    !row.to_locator
+  ) {
+    return integrity("Default-Course V3 Agent-action projection is incomplete")
+  }
   return Effect.succeed({
-    kind: "semantic_terminal_v2",
-    outcome: row.semantic_outcome,
+    kind: "agent_action_v3",
+    fingerprint: row.agent_action_fingerprint,
+    provenance: row.agent_action_provenance,
     command: row.command_snapshot,
     commandFingerprint: row.command_fingerprint,
-    semanticAddress: row.semantic_address,
-    semanticAddressFingerprint: row.semantic_address_fingerprint,
-    incomingPayloadFingerprint: row.incoming_payload_fingerprint,
-    existingEffectID: row.existing_effect_id,
-    existingPayloadFingerprint: row.existing_payload_fingerprint,
+    preferenceHeadID: row.preference_head_id,
+    preferenceVersion: row.preference_version,
+    operation: row.operation,
+    from: row.from_locator,
+    to: row.to_locator,
   })
 }
 
@@ -1738,7 +2158,7 @@ function authorizationInfo(
       row.authorization_kind === null ||
       row.authorization_kind === "legacy_v1" ||
       row.authorization_fingerprint === null ||
-      !row.command_snapshot ||
+      !isDefaultCourseV2Command(row.command_snapshot) ||
       !row.source_excerpt ||
       !row.resolution_scope ||
       !row.resolution_fingerprint ||
@@ -1815,7 +2235,7 @@ function capabilitySettlement(tx: Transaction, partID: PartID) {
 function capabilityIssueInfo(row: typeof LearnerDefaultCourseCapabilityIssueTable.$inferSelect) {
   return {
     requestID: row.permission_request_id,
-    authorizationFingerprint: row.authorization_fingerprint,
+    ...storedCapabilityBasisInfo(row),
     policyBasis: row.policy_basis,
     policyFingerprint: row.policy_fingerprint,
     shownScope: row.shown_scope,
@@ -1829,7 +2249,7 @@ function capabilitySettlementInfo(row: typeof LearnerDefaultCourseCapabilitySett
   return {
     outcome: row.outcome,
     ...(row.permission_request_id ? { requestID: row.permission_request_id } : {}),
-    authorizationFingerprint: row.authorization_fingerprint,
+    ...storedCapabilityBasisInfo(row),
     ...(row.policy_basis ? { policyBasis: row.policy_basis } : {}),
     ...(row.policy_fingerprint ? { policyFingerprint: row.policy_fingerprint } : {}),
     ...(row.reply ? { reply: row.reply } : {}),
@@ -1837,6 +2257,44 @@ function capabilitySettlementInfo(row: typeof LearnerDefaultCourseCapabilitySett
     timeSettled: row.time_settled,
     settlementOrder: row.settlement_order,
   }
+}
+
+type CapabilityBasis =
+  | Readonly<{ kind: "authorization"; fingerprint: string }>
+  | Readonly<{ kind: "agent_action"; fingerprint: string }>
+
+function capabilityBasisColumns(basis: CapabilityBasis) {
+  return basis.kind === "authorization"
+    ? { authorization_fingerprint: basis.fingerprint, agent_action_fingerprint: null }
+    : { authorization_fingerprint: null, agent_action_fingerprint: basis.fingerprint }
+}
+
+function capabilityBasisInfo(basis: CapabilityBasis) {
+  return basis.kind === "authorization"
+    ? { authorizationFingerprint: basis.fingerprint }
+    : { agentActionFingerprint: basis.fingerprint }
+}
+
+function storedCapabilityBasisInfo(row: {
+  readonly authorization_fingerprint: string | null
+  readonly agent_action_fingerprint: string | null
+}) {
+  if (row.authorization_fingerprint && !row.agent_action_fingerprint) {
+    return { authorizationFingerprint: row.authorization_fingerprint }
+  }
+  if (!row.authorization_fingerprint && row.agent_action_fingerprint) {
+    return { agentActionFingerprint: row.agent_action_fingerprint }
+  }
+  throw new Error("Default-Course capability row has no closed provenance basis")
+}
+
+function matchesCapabilityBasis(
+  row: { readonly authorization_fingerprint: string | null; readonly agent_action_fingerprint: string | null },
+  basis: CapabilityBasis,
+) {
+  return basis.kind === "authorization"
+    ? row.authorization_fingerprint === basis.fingerprint && row.agent_action_fingerprint === null
+    : row.authorization_fingerprint === null && row.agent_action_fingerprint === basis.fingerprint
 }
 
 function capabilityErrorCode(outcome: Exclude<DefaultCourseCapabilityOutcome, "policy_allow" | "prompted_allow">) {
@@ -1907,55 +2365,6 @@ function proposalInfo(row: typeof LearnerDefaultCourseProposalTable.$inferSelect
     to: row.to_locator,
     fingerprint: row.proposal_fingerprint,
     timePresented: row.time_presented,
-  }
-}
-
-function proposalPreparation(
-  input: DefaultCourseProposalPreparationInput,
-  snapshot: Readonly<{
-    preferenceHeadID: DefaultEffect["id"] | null
-    preferenceVersion: number
-    operation: DefaultCourseOperation
-    from: DefaultCourseEndpointV2
-    to: DefaultCourseEndpointV2
-  }>,
-  commandFingerprint: string,
-  resolutionFingerprint: string,
-): DefaultCourseProposal {
-  const proposalFingerprint = fingerprint({
-    partID: input.partID,
-    turnID: input.turnID,
-    sessionID: input.sessionID,
-    assistantMessageID: input.assistantMessageID,
-    callID: input.callID,
-    emissionOrdinal: input.emissionOrdinal,
-    commandFingerprint,
-    resolutionFingerprint,
-    preferenceHeadID: snapshot.preferenceHeadID,
-    preferenceVersion: snapshot.preferenceVersion,
-    operation: snapshot.operation,
-    from: snapshot.from,
-    to: snapshot.to,
-    timePresented: input.timePresented,
-  })
-  return {
-    partID: input.partID,
-    turnID: input.turnID,
-    sessionID: input.sessionID,
-    assistantMessageID: input.assistantMessageID,
-    callID: input.callID,
-    emissionOrdinal: input.emissionOrdinal,
-    command: input.command,
-    commandFingerprint,
-    resolutionScope: input.resolutionScope,
-    resolutionFingerprint,
-    preferenceHeadID: snapshot.preferenceHeadID,
-    preferenceVersion: snapshot.preferenceVersion,
-    operation: snapshot.operation,
-    from: snapshot.from,
-    to: snapshot.to,
-    fingerprint: proposalFingerprint,
-    timePresented: input.timePresented,
   }
 }
 
@@ -2037,12 +2446,6 @@ function historicalPresentationTime(
   })
 }
 
-function isProposalPartIdentity(value: unknown, callID: string) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false
-  const part = value as Record<string, unknown>
-  return part.type === "tool" && part.callID === callID && part.tool === PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY
-}
-
 function isCompletedProposalPart(value: unknown, callID: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false
   const part = value as Record<string, unknown>
@@ -2076,29 +2479,83 @@ function isTruthfulCompletedProposalPart(value: typeof SessionV1.ToolPart.Type, 
   )
 }
 
-function sameProposalPartInput(current: unknown, completed: SessionV1.ToolPart) {
-  if (!isProposalPartIdentity(current, completed.callID) || completed.state.status !== "completed") return false
-  const state = (current as { readonly state?: unknown }).state
-  if (!state || typeof state !== "object" || Array.isArray(state)) return false
-  return fingerprint((state as Record<string, unknown>).input) === fingerprint(completed.state.input)
-}
-
-function storedPart(value: SessionV1.ToolPart) {
-  return {
-    type: value.type,
-    tool: value.tool,
-    callID: value.callID,
-    state: value.state,
-    ...(value.metadata ? { metadata: value.metadata } : {}),
-  } satisfies Omit<SessionV1.ToolPart, "id" | "sessionID" | "messageID">
-}
-
 function semanticAddress(occurrenceID: OccurrenceID): DefaultCourseSemanticAddress {
   return { occurrenceID, slot: "default_course_preference" }
 }
 
 function defaultPayloadFingerprint(courseID: Course.CourseID | null) {
   return fingerprint({ kind: "default_course_preference", courseID })
+}
+
+function v3TargetCourseID(command: DefaultCourseAgentCommandV3) {
+  return command.action === "set" ? command.courseID : null
+}
+
+function isDefaultCourseV2Command(value: unknown): value is DefaultCourseCommand {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const command = value as Record<string, unknown>
+  return (
+    command.kind === "default_course_preference" &&
+    Number.isSafeInteger(command.expectedVersion) &&
+    (command.expectedHeadID === null || typeof command.expectedHeadID === "string") &&
+    (command.target === null ||
+      (!!command.target &&
+        typeof command.target === "object" &&
+        !Array.isArray(command.target) &&
+        typeof (command.target as Record<string, unknown>).courseID === "string"))
+  )
+}
+
+function isDefaultCourseV3Command(value: unknown): value is DefaultCourseAgentCommandV3 {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const command = value as Record<string, unknown>
+  const keys = Object.keys(command).toSorted()
+  if (command.action === "clear") return keys.length === 1 && keys[0] === "action"
+  return (
+    command.action === "set" &&
+    typeof command.courseID === "string" &&
+    keys.length === 2 &&
+    keys[0] === "action" &&
+    keys[1] === "courseID"
+  )
+}
+
+function isDelegatedCapabilityProjection(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const capability = value as Record<string, unknown>
+  return (
+    capability.version === 2 &&
+    Array.isArray(capability.parent) &&
+    Array.isArray(capability.inherited) &&
+    Array.isArray(capability.profile) &&
+    Array.isArray(capability.explicit)
+  )
+}
+
+function requireExplicitDelegation(trusted: ValidatedAgentActionRegistration, pattern: string) {
+  if (trusted.admissionKind === "learner") return Effect.void
+  const effective = trusted.lineage.at(-1)?.delegatedCapability
+  if (!isDelegatedCapabilityProjection(effective)) {
+    return integrity("Default-Course delegated Agent action has no exact capability projection")
+  }
+  const explicit = (effective as Readonly<{ explicit: readonly unknown[] }>).explicit
+  const granted = explicit.some(
+    (value) =>
+      !!value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      (value as Record<string, unknown>).action === "allow" &&
+      typeof (value as Record<string, unknown>).permission === "string" &&
+      typeof (value as Record<string, unknown>).pattern === "string" &&
+      Wildcard.matchIdentifier(
+        SET_DEFAULT_COURSE_PREFERENCE_V3_CAPABILITY,
+        (value as Record<string, unknown>).permission as string,
+      ) &&
+      Wildcard.match(pattern, (value as Record<string, unknown>).pattern as string),
+  )
+  return granted
+    ? Effect.void
+    : integrity("Default-Course delegated Agent action lacks the required explicit capability")
 }
 
 function fingerprint(value: unknown) {
