@@ -2220,11 +2220,22 @@ That exact candidate is integrated at
 `19d0fe933`. This closure retains Gate 8's earlier settlement meaning and does
 not reopen Gate 12, Gate 14, or learning-command domain semantics.
 
-The V15 integration invalidates only Gate 16's derived migration predecessor
-and numbering, not its accepted Agent-native Goal semantics. Gate 16 must now
-consume V15 and produce V16, and that mechanical contract repair must return to
-its original reviewer before implementation. No Gate 16 or Gate 17 authority
-is inferred from the Gate 8 integration.
+The V15 integration invalidated only Gate 16's derived migration predecessor
+and numbering, not its accepted Agent-native Goal semantics. Original reviewer
+`019fb2a3-c902-7882-8134-1bf33f1eb04d` independently returned `Accept` for the
+mechanical repair. Against base `2307787fa17d8dfa19973b8b074cf9dbea1876df`,
+the one-file raw binary diff is 3,978 bytes with SHA-256
+`a3c7c4dc1c1a9b34cd385fb21bf62b31d614ef2c5362dec97aeacadcd44f6b89`.
+The superseding three-file authority bundle against original base
+`0d7ca3987ea69445d23f30ee8386706c0bbc86c9` is 99,027 bytes with SHA-256
+`51fee3228f5b9808221ebaa4515e3eb9f19781681ce5cf422ef4b54a588c376f`;
+its 301-byte ordinal content manifest hashes to
+`5196d596c9a09d3cf5c4d7654b2b0fa7ad19075ad68991b7462f52f59a311d95`.
+
+The exact accepted correction is integrated at `93e2412d3`. Gate 16 must
+consume V15 and produce V16; all `G16-AN-001..003` semantics remain closed.
+Scoped Gate 16 implementation authority is available. No Gate 17 authority is
+inferred from either the Gate 8 integration or this mechanical correction.
 
 ## Historical evidence locators
 

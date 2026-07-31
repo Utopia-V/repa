@@ -1,14 +1,12 @@
 # OpenCode fork Gate 16: learner Goal authority
 
-Status: Agent-native Goal query/write semantics accepted by fresh reviewer
-`019fb2a3-c902-7882-8134-1bf33f1eb04d`. `G16-AN-001..003` are closed against
-the exact semantic binding recorded in the fork ledger. Gate 8 subsequently
-advanced the current native database to V15 at
-`19d0fe933fd8db96c6f22e509294cb93c28ec38c`. This contract's derived migration
-predecessor and output version are therefore under exact mechanical re-review
-by the same reviewer. Scoped
-Gate 16 implementation authority is paused until that V15-to-V16 binding
-closes. Gate 16 implementation has not begun. Gate 17 remains unauthorized.
+Status: Agent-native Goal query/write contract accepted by fresh reviewer
+`019fb2a3-c902-7882-8134-1bf33f1eb04d`. `G16-AN-001..003` are closed, and the
+same reviewer accepted the mechanical V15-to-V16 predecessor correction after
+Gate 8 advanced the current native database at
+`19d0fe933fd8db96c6f22e509294cb93c28ec38c`. Scoped Gate 16 implementation
+authority is available for the contract below. Gate 16 implementation has not
+begun. Gate 17 remains unauthorized.
 
 The decisions under **Accepted maintainer decisions**, the structural Goal
 identity/revision/lifecycle result, and corrective TUI integration
@@ -2140,5 +2138,8 @@ Agent-native candidate above. Fresh reviewer
 `019fb2a3-c902-7882-8134-1bf33f1eb04d` returned `Revise` with
 `G16-AN-001..003`; the current text repairs the Goal disposition/semantic-
 identity boundary, exact V2 target/carry projection, and causal closing
-evidence. It remains an unaccepted exact-diff candidate until that same
-reviewer closes it. Gate 17 remains paused.
+evidence. The same reviewer then closed all three findings and accepted the
+Agent-native semantic contract. After Gate 8 advanced the database predecessor
+to V15, that reviewer also accepted the exact mechanical V15-to-V16 correction
+without reopening Goal semantics. Scoped Gate 16 implementation authority is
+available; Gate 17 remains paused.
