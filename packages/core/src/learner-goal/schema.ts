@@ -1,12 +1,13 @@
 export * as LearnerGoalSchema from "./schema"
 
 import { Schema } from "effect"
+import type { Turn } from "@opencode-ai/schema/turn"
 import type { Course } from "../course"
 import { Identifier } from "../id/id"
 import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import type { AuthorizationBasis, InvocationEnvelope, ReceiptID } from "../learning-command/schema"
 import type { SessionSchema } from "../session/schema"
-import type { MessageID } from "../v1/session"
+import type { MessageID, PartID } from "../v1/session"
 import type { PermissionV1 } from "../v1/permission"
 
 export const GoalID = Schema.String.check(Schema.isPattern(/^gol_[0-9A-Za-z]{26}$/)).pipe(
@@ -33,6 +34,7 @@ export const createRevisionID = () => decodeRevisionID(Identifier.create("glr", 
 export const createEffectID = () => decodeEffectID(Identifier.create("gle", "ascending"))
 
 export const SCHEMA_VERSION = 1 as const
+export const AGENT_COMMAND_VERSION = 2 as const
 export const PERMISSION_PATTERN = "learner_home" as const
 export const MAX_OPERATIONS = 8
 export const MAX_CONDITIONS = 16
@@ -41,6 +43,320 @@ export const MAX_OUTCOME_BYTES = 4_096
 export const MAX_CONDITION_BYTES = 2_048
 export const MAX_SOURCE_EXCERPT_BYTES = 2_048
 export const MAX_AGGREGATE_BYTES = 32_768
+
+export type TimeZoneIntentV2 =
+  | Readonly<{ type: "source" }>
+  | Readonly<{ type: "iana"; name: string }>
+  | Readonly<{ type: "fixed_offset"; offsetMinutes: number }>
+
+export type TargetIntentV2 =
+  | Readonly<{ type: "absent" }>
+  | Readonly<{ type: "instant"; localDateTime: string; timeZone: TimeZoneIntentV2 }>
+  | Readonly<{ type: "local_date"; date: string; timeZone: TimeZoneIntentV2 }>
+
+export type ResolvedZoneV2 =
+  | Readonly<{ type: "iana"; name: string; releaseID: string }>
+  | Readonly<{ type: "fixed_offset"; offsetMinutes: number }>
+
+export type TargetValueV2 =
+  | Readonly<{ type: "absent" }>
+  | Readonly<{
+      type: "instant"
+      instant: number
+      utcOffsetMinutes: number
+      resolvedZone: ResolvedZoneV2
+    }>
+  | Readonly<{ type: "local_date"; date: string; resolvedZone: ResolvedZoneV2 }>
+
+export type ScopeIntentV2 =
+  | Readonly<{ type: "learner_home" }>
+  | Readonly<{ type: "courses"; courseIDs: readonly Course.CourseID[] }>
+
+export type CreateOperationV2 = Readonly<{
+  type: "create"
+  outcome: string
+  conditions?: readonly string[]
+  scope?: ScopeIntentV2
+  target?: TargetIntentV2
+  disposition?: NonSupersededDisposition
+}>
+
+export type GoalPatchV2 = Readonly<{
+  outcome?: string
+  conditions?: readonly string[]
+  scope?: ScopeIntentV2
+  target?: TargetIntentV2
+  disposition?: NonSupersededDisposition
+}>
+
+export type UpdateOperationV2 = Readonly<{
+  type: "update"
+  goalID: GoalID
+  headRevisionID: RevisionID
+  patch: GoalPatchV2
+}>
+
+export type ExistingReplacementTargetV2 = Readonly<{
+  type: "existing"
+  goalID: GoalID
+  headRevisionID: RevisionID
+}>
+
+export type NewReplacementTargetV2 = Readonly<{
+  type: "new"
+  outcome: string
+  conditions?: readonly string[]
+  scope?: ScopeIntentV2
+  target?: TargetIntentV2
+  disposition?: NonSupersededDisposition
+}>
+
+export type ReplaceOperationV2 = Readonly<{
+  type: "replace"
+  goalID: GoalID
+  headRevisionID: RevisionID
+  patch?: Omit<GoalPatchV2, "disposition">
+  target: ExistingReplacementTargetV2 | NewReplacementTargetV2
+}>
+
+export type OperationV2 = CreateOperationV2 | UpdateOperationV2 | ReplaceOperationV2
+export type CommandV2 = Readonly<{ operations: readonly OperationV2[] }>
+
+export type CanonicalFieldIntentV2<A> = Readonly<{ type: "carry" }> | Readonly<{ type: "set"; value: A }>
+
+export type CanonicalCreateOperationV2 = Readonly<{
+  type: "create"
+  outcome: string
+  conditions: readonly string[]
+  scope: ScopeIntentV2
+  target: TargetIntentV2
+  disposition: NonSupersededDisposition
+}>
+
+export type CanonicalPatchV2 = Readonly<{
+  outcome: CanonicalFieldIntentV2<string>
+  conditions: CanonicalFieldIntentV2<readonly string[]>
+  scope: CanonicalFieldIntentV2<ScopeIntentV2>
+  target: CanonicalFieldIntentV2<TargetIntentV2>
+  disposition: CanonicalFieldIntentV2<NonSupersededDisposition>
+}>
+
+export type CanonicalOperationV2 =
+  | CanonicalCreateOperationV2
+  | Readonly<{ type: "update"; goalID: GoalID; headRevisionID: RevisionID; patch: CanonicalPatchV2 }>
+  | Readonly<{
+      type: "replace"
+      goalID: GoalID
+      headRevisionID: RevisionID
+      patch: CanonicalPatchV2
+      target:
+        | ExistingReplacementTargetV2
+        | Readonly<{
+            type: "new"
+            outcome: string
+            conditions: readonly string[]
+            scope: ScopeIntentV2
+            target: TargetIntentV2
+            disposition: NonSupersededDisposition
+          }>
+    }>
+
+export type CanonicalCommandV2 = Readonly<{ operations: readonly CanonicalOperationV2[] }>
+
+export type StoredCourseMembershipV2 = Readonly<{
+  courseID: Course.CourseID
+  courseTitle: string
+  admission:
+    | Readonly<{ type: "bound"; courseVersion: number; courseTimeUpdated: number }>
+    | Readonly<{ type: "carried"; predecessorRevisionID: RevisionID }>
+  availability:
+    | Readonly<{ state: "available"; title: string }>
+    | Readonly<{ state: "unavailable"; cause: "course_not_found" | "course_withdrawn"; title?: string }>
+}>
+
+export type StoredScopeV2 =
+  | Readonly<{ type: "learner_home" }>
+  | Readonly<{ type: "courses"; courses: readonly StoredCourseMembershipV2[] }>
+
+export type RevisionSnapshotV2 = Readonly<{
+  schemaVersion: 2
+  revisionID: RevisionID
+  goalID: GoalID
+  version: number
+  outcome: string
+  conditions: readonly string[]
+  scope: StoredScopeV2
+  target: TargetValueV2
+  disposition: UpdateDisposition
+}>
+
+export type RevisionSnapshotV1 = Readonly<{
+  schemaVersion: 1
+  revisionID: RevisionID
+  goalID: GoalID
+  version: number
+  outcome: string
+  conditions: readonly string[]
+  scope: StoredScope
+  target: Target
+  disposition: UpdateDisposition
+}>
+
+export type VersionedRevisionSnapshot = RevisionSnapshotV1 | RevisionSnapshotV2
+
+export type MaterializedOperationV2 = Readonly<{
+  ordinal: number
+  operation: "create" | "update" | "replace"
+  result: "changed" | "no_change"
+  before?: VersionedRevisionSnapshot
+  after: VersionedRevisionSnapshot
+  replacementTarget?: Readonly<{
+    type: "existing" | "new"
+    before?: VersionedRevisionSnapshot
+    after: VersionedRevisionSnapshot
+  }>
+}>
+
+export type OperationResultV2 = Readonly<{
+  schemaVersion: 2
+  ordinal: number
+  operation: "create" | "update" | "replace"
+  result: "changed" | "no_change"
+  goalID: GoalID
+  revisionID: RevisionID
+  version: number
+  disposition: "active" | "achieved" | "abandoned" | "superseded"
+  meaning: Readonly<{
+    outcome: string
+    conditions: readonly string[]
+    scope: Readonly<{ type: "learner_home" }> | Readonly<{ type: "courses"; courseIDs: readonly Course.CourseID[] }>
+    target: TargetValueV2
+  }>
+  replacementTarget?: Readonly<{
+    type: "existing" | "new"
+    goalID: GoalID
+    revisionID: RevisionID
+    version: number
+  }>
+}>
+
+export type MaterializedChangeSetV2 = Readonly<{
+  schemaVersion: 2
+  canonicalCommand: CanonicalCommandV2
+  operations: readonly MaterializedOperationV2[]
+  sourceTemporalContext:
+    | Readonly<{ state: "resolved"; timeZone: string; utcOffsetMinutes: number }>
+    | Readonly<{ state: "unavailable"; reason: "timezone_unavailable" }>
+  revisionSequenceBefore: number
+  consumedFrontiers: readonly Readonly<{ sequence: number; time: number }>[]
+  timeFloor: number
+}>
+
+export type AgentActionLineageV2 = Readonly<{
+  childTurnID: Turn.ID
+  childSessionID: SessionSchema.ID
+  childDepth: number
+  parentTurnID: Turn.ID
+  parentSessionID: SessionSchema.ID
+  parentDepth: number
+  parentTaskPartID: PartID
+  parentModelMessageID: MessageID
+  delegatedCapability: Readonly<Record<string, unknown>>
+  delegatedCapabilityFingerprint: string
+}>
+
+export type AgentActionProvenanceV2 = Readonly<{
+  schemaVersion: 1
+  kind: "root" | "delegated"
+  occurrenceID: OccurrenceID
+  causalRootOccurrenceID: OccurrenceID
+  sessionID: SessionSchema.ID
+  turnID: Turn.ID
+  inputID: Turn.InputID
+  assistantMessageID: MessageID
+  invocationPartID: PartID
+  providerCallID: string
+  emissionOrdinal: number
+  capabilityIdentity: "update_learner_goals"
+  capabilityVersion: 2
+  lineage: readonly AgentActionLineageV2[]
+  effectiveDelegatedCapability?: Readonly<{
+    identity: "update_learner_goals"
+    version: 2
+    projectionVersion: 2
+    fingerprint: string
+  }>
+}>
+
+export type CapabilityOutcomeV2 =
+  | "not_evaluated"
+  | "policy_allow"
+  | "policy_deny"
+  | "prompted_abort"
+  | "prompted_allow"
+  | "prompted_deny"
+  | "prompted_correct"
+  | "prompted_cancel"
+
+export type SemanticAddressV2 = Readonly<{ occurrenceID: OccurrenceID; slot: "learner_goal_change_set" }>
+
+export type SemanticTerminalV2 = Readonly<{
+  kind: "semantic_terminal_v2"
+  outcome: "already_applied" | "semantic_conflict"
+  canonicalCommand: CanonicalCommandV2
+  commandFingerprint: string
+  semanticAddress: SemanticAddressV2
+  semanticAddressFingerprint: string
+  incomingIntentFingerprint: string
+  existingEffectID: EffectID
+  existingIntentFingerprint: string
+}>
+
+export type CandidateV2 = Readonly<{
+  kind: "candidate_v2"
+  commandFingerprint: string
+  canonicalCommand: CanonicalCommandV2
+  agentActionFingerprint: string
+  agentAction: AgentActionProvenanceV2
+  materialized: MaterializedChangeSetV2
+}>
+
+export type AppliedSettlementV2 = Readonly<{
+  outcome: "applied"
+  goalKind: "learner_goal"
+  schemaVersion: 2
+  receiptID: ReceiptID
+  effectID: EffectID
+  provenance: "agent_action"
+  operations: readonly OperationResultV2[]
+  acknowledgementTitle: string
+  acknowledgementBody: string
+  frontierSequence: number
+  settlementTime: number
+  settlementOrder: number
+}>
+
+export type AlreadyAppliedSettlementV2 = Omit<AppliedSettlementV2, "outcome"> &
+  Readonly<{
+    outcome: "already_applied"
+    currentHeads: readonly Readonly<{ goalID: GoalID; revisionID: RevisionID; version: number }>[]
+  }>
+
+export type NoChangeSettlementV2 = Readonly<{
+  outcome: "no_change"
+  goalKind: "learner_goal"
+  schemaVersion: 2
+  operations: readonly OperationResultV2[]
+  acknowledgementTitle: string
+  acknowledgementBody: string
+  settlementTime: number
+  settlementOrder: number
+}>
+
+export type AgentInvocationV2 = Readonly<{
+  envelope: InvocationEnvelope & Readonly<{ authorizationBasis: "agent_action"; capabilityVersion: 2 }>
+  command: CommandV2
+}>
 
 export type FieldName = "outcome" | "conditions" | "scope" | "target" | "disposition"
 
@@ -219,18 +535,15 @@ export type SourceRead = Readonly<{
   availability: Readonly<{ state: "available" }> | Readonly<{ state: "source_unavailable"; timeDeleted: number }>
 }>
 
-export type Revision = Readonly<{
+type RevisionCommon = Readonly<{
   id: RevisionID
   goalID: GoalID
   version: number
   predecessorID?: RevisionID
   outcome: string
   conditions: readonly string[]
-  scope: StoredScope
-  target: Target
   targetRelation: TargetRelation
   disposition: Disposition
-  fieldBases: FieldBases
   occurrenceID: OccurrenceID
   sourceOrder: number
   effectID: EffectID
@@ -241,6 +554,18 @@ export type Revision = Readonly<{
   frontierSequence: number
   source: SourceRead
 }>
+
+export type Revision = RevisionCommon &
+  (
+    | Readonly<{
+        schemaVersion: 1
+        targetVersion: 1
+        scope: StoredScope
+        target: Target
+        fieldBases: FieldBases
+      }>
+    | Readonly<{ schemaVersion: 2; targetVersion: 2; scope: StoredScopeV2; target: TargetValueV2 }>
+  )
 
 export type GoalRead = Readonly<{
   goalID: GoalID
@@ -290,9 +615,7 @@ export type PresentationCourse = Readonly<{
 export type PresentationMeaning = Readonly<{
   outcome: string
   conditions: readonly string[]
-  scope:
-    | Readonly<{ type: "learner_home" }>
-    | Readonly<{ type: "courses"; courses: readonly PresentationCourse[] }>
+  scope: Readonly<{ type: "learner_home" }> | Readonly<{ type: "courses"; courses: readonly PresentationCourse[] }>
   target: Target
   disposition: "active" | "achieved" | "abandoned" | "superseded"
   fieldBases: FieldBases
@@ -411,20 +734,39 @@ export type NoChangeSettlement = Readonly<{
   settlementOrder: number
 }>
 
-export type EffectRead = Readonly<{
+type EffectReadCommon = Readonly<{
   effectID: EffectID
   receiptID: ReceiptID
   occurrenceID: OccurrenceID
-  authorizationBasis: AuthorizationBasis
   semanticFingerprint: string
-  operations: readonly OperationResult[]
-  confirmation?: ConfirmationSnapshot
   timeCommitted: number
   commitOrder: number
   frontierSequence: number
   acknowledgementTitle: string
   acknowledgementBody: string
 }>
+
+export type EffectRead =
+  | (EffectReadCommon &
+      Readonly<{
+        schemaVersion: 1
+        authorizationBasis: Extract<AuthorizationBasis, "learner_request" | "learner_acceptance">
+        operations: readonly OperationResult[]
+        confirmation?: ConfirmationSnapshot
+      }>)
+  | (EffectReadCommon &
+      Readonly<{
+        schemaVersion: 2
+        authorizationBasis: "agent_action"
+        command: CanonicalCommandV2
+        agentAction: AgentActionProvenanceV2
+        materialized: MaterializedChangeSetV2
+        capability: Readonly<{
+          outcome: Extract<CapabilityOutcomeV2, "policy_allow" | "prompted_allow">
+          permissionRequestID?: PermissionV1.ID
+        }>
+        operations: readonly OperationResultV2[]
+      }>)
 
 export type PageOptions = Readonly<{ limit?: number; cursor?: string }>
 export type DiscoveryFilter = Readonly<{

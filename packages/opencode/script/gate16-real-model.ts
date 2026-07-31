@@ -2,7 +2,12 @@ import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
-import { LearnerGoalCommandTable, LearnerGoalCommitSealTable } from "@opencode-ai/core/learner-goal/sql"
+import {
+  LearnerGoalCapabilitySettlementV2Table,
+  LearnerGoalCommandTable,
+  LearnerGoalCommitSealTable,
+  LearnerGoalDispositionV2Table,
+} from "@opencode-ai/core/learner-goal/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { LearningCommandInvocationTable } from "@opencode-ai/core/learning-command/sql"
@@ -12,11 +17,11 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import type { ToolPart } from "@opencode-ai/sdk/v2"
-import { and, eq } from "drizzle-orm"
-import { Effect, Exit, Layer } from "effect"
+import { eq, sql } from "drizzle-orm"
+import { Effect, Layer } from "effect"
 import { isDeepStrictEqual } from "node:util"
 import { entryBody } from "../src/cli/cmd/run/entry.body"
-import { toolInlineInfo, toolPermissionInfo } from "../src/cli/cmd/run/tool"
+import { toolInlineInfo } from "../src/cli/cmd/run/tool"
 import type { StreamCommit } from "../src/cli/cmd/run/types"
 import { AppRuntime } from "../src/effect/app-runtime"
 import { InstanceRef } from "../src/effect/instance-ref"
@@ -26,12 +31,18 @@ import { InstanceStore } from "../src/project/instance-store"
 import { MessageID, SessionID } from "../src/session/schema"
 import { Session } from "../src/session/session"
 import { SessionPrompt } from "../src/session/prompt"
+import { COURSE_QUERY_TOOL_ID } from "../src/tool/course-navigation-query"
+import { LEARNER_GOAL_QUERY_TOOL_ID } from "../src/tool/learner-goal-query"
 
 if (process.env.REPA_GATE16_REAL_MODEL_APPROVED !== "1") {
-  throw new Error("Set REPA_GATE16_REAL_MODEL_APPROVED=1 only after explicit maintainer authorization")
+  throw new Error("Set REPA_GATE16_REAL_MODEL_APPROVED=1 only for the maintainer-authorized qualification")
 }
-if (!process.env.REPA_CONFIG_CONTENT || !process.env.REPA_AUTH_CONTENT || !process.env.REPA_DB) {
-  throw new Error("The real-model evidence run requires isolated config, auth projection, and database inputs")
+const workspace = process.env.REPA_GATE16_WORKDIR
+
+if (!process.env.REPA_CONFIG_CONTENT || !process.env.REPA_AUTH_CONTENT || !process.env.REPA_DB || !workspace) {
+  throw new Error(
+    "The real-model qualification requires isolated workspace, config, auth projection, and database inputs",
+  )
 }
 
 const capability = LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
@@ -39,30 +50,34 @@ const model = {
   providerID: ProviderV2.ID.openai,
   modelID: ModelV2.ID.make("gpt-5.5"),
 }
-const goalOnly = [
+const goalAgent = [
   { permission: "*", pattern: "*", action: "deny" as const },
+  { permission: COURSE_QUERY_TOOL_ID, pattern: "*", action: "allow" as const },
+  { permission: LEARNER_GOAL_QUERY_TOOL_ID, pattern: "*", action: "allow" as const },
   { permission: capability, pattern: LearnerGoal.PERMISSION_PATTERN, action: "allow" as const },
 ]
-const targetDate = "2026-09-15"
-const targetTimeZone = "Asia/Shanghai"
+const permittedTools = new Set([COURSE_QUERY_TOOL_ID, LEARNER_GOAL_QUERY_TOOL_ID, capability])
+const forbiddenWriteInputKeys = new Set([
+  "authorization",
+  "authorizationBasis",
+  "candidate",
+  "confirmation",
+  "expectedVersion",
+  "fieldBases",
+  "newGoalID",
+  "newRevisionID",
+  "proposal",
+  "sourceExcerpt",
+])
 
 type CompletedToolPart = SessionV1.ToolPart & { state: SessionV1.ToolStateCompleted }
-type GoalInvocationRow = typeof LearningCommandInvocationTable.$inferSelect
-type GoalEffectID = typeof LearnerGoalCommitSealTable.$inferSelect.effect_id
-
-type ConfirmationExpectation = Readonly<{
-  label: string
-  sessionID: SessionID
-  goalsBefore: number
-  validate: (confirmation: LearnerGoal.ConfirmationSnapshot, surface: string) => void
-}>
 
 function requireEvidence(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(`Gate 16 real-model evidence failed: ${message}`)
+  if (!condition) throw new Error(`Gate 16 real-model qualification failed: ${message}`)
 }
 
 function conciseText(value: string) {
-  return value.replace(/\s+/g, " ").trim()
+  return value.replace(/\s+/g, " ").trim().slice(0, 1_200)
 }
 
 function textDigest(value: readonly string[]) {
@@ -73,15 +88,66 @@ function toolParts(messages: readonly SessionV1.WithParts[]) {
   return messages.flatMap((message) => message.parts).filter((part): part is SessionV1.ToolPart => part.type === "tool")
 }
 
-function completedGoalTools(messages: readonly SessionV1.WithParts[]) {
-  return toolParts(messages).filter(
-    (part): part is CompletedToolPart => part.tool === capability && part.state.status === "completed",
-  )
+function completedTools(messages: readonly SessionV1.WithParts[]) {
+  return toolParts(messages).filter((part): part is CompletedToolPart => part.state.status === "completed")
+}
+
+function forbiddenInputPaths(value: unknown, path = "input"): string[] {
+  if (Array.isArray(value)) return value.flatMap((item, index) => forbiddenInputPaths(item, `${path}[${index}]`))
+  if (!value || typeof value !== "object") return []
+  return Object.entries(value).flatMap(([key, item]) => [
+    ...(forbiddenWriteInputKeys.has(key) ? [`${path}.${key}`] : []),
+    ...forbiddenInputPaths(item, `${path}.${key}`),
+  ])
+}
+
+function foreignStatePaths(value: unknown, path = "goal"): string[] {
+  if (Array.isArray(value)) return value.flatMap((item, index) => foreignStatePaths(item, `${path}[${index}]`))
+  if (!value || typeof value !== "object") return []
+  const forbidden = new Set([
+    "assignment",
+    "assignments",
+    "evidence",
+    "mastery",
+    "priorities",
+    "priority",
+    "schedule",
+    "schedules",
+  ])
+  return Object.entries(value).flatMap(([key, item]) => [
+    ...(forbidden.has(key.toLowerCase()) ? [`${path}.${key}`] : []),
+    ...foreignStatePaths(item, `${path}.${key}`),
+  ])
+}
+
+function goalProjection(goal: LearnerGoal.GoalRead) {
+  return {
+    goalID: goal.goalID,
+    revisionID: goal.head.id,
+    version: goal.head.version,
+    schemaVersion: goal.head.schemaVersion,
+    outcome: goal.head.outcome,
+    conditions: goal.head.conditions,
+    scope: goal.head.scope,
+    target: goal.head.target,
+    disposition: goal.head.disposition,
+    occurrenceID: goal.head.occurrenceID,
+    effectID: goal.head.effectID,
+  }
+}
+
+function scopeMeaning(scope: LearnerGoal.GoalRead["head"]["scope"]) {
+  if (scope.type === "learner_home") return scope
+  return {
+    type: scope.type,
+    courseIDs: scope.courses.map((course) => course.courseID).sort(),
+  }
 }
 
 function terminalProjection(part: CompletedToolPart) {
   const projected = part as unknown as ToolPart
   return {
+    title: part.state.title,
     inline: toolInlineInfo(projected),
     final: entryBody({
       kind: "tool",
@@ -95,247 +161,44 @@ function terminalProjection(part: CompletedToolPart) {
   }
 }
 
-function stableGoalPermissionRequestID(partID: SessionV1.PartID, callID: string) {
-  const digest = new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify({ command: capability, partID, callID }))
-    .digest("hex")
-  return PermissionV1.ID.ascending(`per_${digest.slice(0, 26)}`)
-}
-
-function forbiddenGoalKeys(value: unknown, path = "candidate"): string[] {
-  if (Array.isArray(value)) return value.flatMap((item, index) => forbiddenGoalKeys(item, `${path}[${index}]`))
-  if (!value || typeof value !== "object") return []
-  const forbidden = new Set([
-    "assignment",
-    "assignments",
-    "priority",
-    "priorities",
-    "schedule",
-    "schedules",
-    "mastery",
-    "evidence",
-  ])
-  return Object.entries(value).flatMap(([key, item]) => [
-    ...(forbidden.has(key.toLowerCase()) ? [`${path}.${key}`] : []),
-    ...forbiddenGoalKeys(item, `${path}.${key}`),
-  ])
-}
-
-function goalProjection(goal: LearnerGoal.GoalRead) {
-  return {
-    goalID: goal.goalID,
-    revisionID: goal.head.id,
-    version: goal.head.version,
-    outcome: goal.head.outcome,
-    conditions: goal.head.conditions,
-    scope: goal.head.scope,
-    target: goal.head.target,
-    targetRelation: goal.head.targetRelation,
-    disposition: goal.head.disposition,
-    fieldBases: goal.head.fieldBases,
-    occurrenceID: goal.head.occurrenceID,
-    effectID: goal.head.effectID,
-  }
-}
-
-function topicKind(goal: Pick<LearnerGoal.Revision, "outcome" | "conditions">) {
-  const text = `${goal.outcome} ${goal.conditions.join(" ")}`.toLowerCase()
-  if (/virtual memory|page replacement|address translation/.test(text)) return "virtual-memory"
-  if (/cpu scheduling|scheduling algorithm|round[- ]robin|process scheduling/.test(text)) return "cpu-scheduling"
-  return "unknown"
-}
-
 try {
   const evidence = await AppRuntime.runPromise(
     InstanceStore.Service.use((store) =>
-      store.load({ directory: process.cwd() }).pipe(
+      store.load({ directory: workspace }).pipe(
         Effect.flatMap((ctx) =>
           Effect.gen(function* () {
             const database = yield* Database.Service
-            const prompts = yield* SessionPrompt.Service
-            const sessions = yield* Session.Service
             const events = yield* EventV2Bridge.Service
             const permission = yield* Permission.Service
-
-            const readGoals = (asOf = Date.now()) => database.db.transaction((tx) => LearnerGoal.discover(tx, asOf))
-            const readGoalDomain = (partID: SessionV1.PartID) =>
-              Effect.all({
-                command: database.db
-                  .select()
-                  .from(LearnerGoalCommandTable)
-                  .where(eq(LearnerGoalCommandTable.invocation_part_id, partID))
-                  .get()
-                  .pipe(Effect.orDie),
-                seal: database.db
-                  .select()
-                  .from(LearnerGoalCommitSealTable)
-                  .where(eq(LearnerGoalCommitSealTable.invocation_part_id, partID))
-                  .get()
-                  .pipe(Effect.orDie),
-              })
+            const prompts = yield* SessionPrompt.Service
+            const sessions = yield* Session.Service
 
             const courseLayer = LayerNode.compile(Course.node, [
               [Database.node, Layer.succeed(Database.Service, database)],
             ])
-            const course = yield* Course.Service.use((courses) =>
-              courses.createCourse({ title: "Operating Systems" }),
+            const course = yield* Course.Service.use((service) =>
+              service.createCourse({ title: "Operating Systems" }),
             ).pipe(Effect.provide(courseLayer))
+
+            const readGoals = (asOf = Date.now()) => database.db.transaction((tx) => LearnerGoal.discover(tx, asOf))
+            const legacyCommandCount = () =>
+              database.db.get<{ count: number }>(sql`SELECT count(*) AS count FROM ${LearnerGoalCommandTable}`).pipe(
+                Effect.orDie,
+                Effect.map((row) => row?.count ?? 0),
+              )
+
             requireEvidence((yield* readGoals()).items.length === 0, "the isolated Goal owner was not empty")
+            requireEvidence(
+              (yield* legacyCommandCount()) === 0,
+              "the isolated database contained historical Goal commands",
+            )
 
-            let expectedConfirmation: ConfirmationExpectation | undefined
-            const permissionFailures: string[] = []
-            const confirmationCaptures: Array<{
-              label: string
-              requestID: PermissionV1.ID
-              sessionID: SessionID
-              tool: { messageID: string; callID: string }
-              request: {
-                permission: string
-                patterns: readonly string[]
-                always: readonly string[]
-                onceOnly: boolean
-                authorizationBasis: string
-              }
-              preCommit: {
-                invocationStatus: GoalInvocationRow["status"]
-                goalEffectID: GoalEffectID | null
-                ownerGoalCount: number
-                durableDraftPersisted: boolean
-              }
-              confirmation: LearnerGoal.ConfirmationSnapshot
-              surface: { title: string; lines: readonly string[] }
-              reply: "once"
-            }> = []
-
+            const permissionRequests: string[] = []
             const unsubscribe = yield* events.listen((event) => {
               if (event.type !== Permission.Event.Asked.type) return Effect.void
-              return Effect.gen(function* () {
-                const request = event.data as PermissionV1.Request
-                const expected = expectedConfirmation
-                if (!expected) {
-                  permissionFailures.push("unexpected permission prompt")
-                  yield* permission.reply({ requestID: request.id, reply: "reject" }).pipe(Effect.orDie)
-                  return
-                }
-
-                const attempt = yield* Effect.gen(function* () {
-                  requireEvidence(request.sessionID === expected.sessionID, `${expected.label} used another Session`)
-                  requireEvidence(
-                    request.permission === capability,
-                    `${expected.label} prompted for another capability`,
-                  )
-                  requireEvidence(
-                    isDeepStrictEqual(request.patterns, [LearnerGoal.PERMISSION_PATTERN]),
-                    `${expected.label} used another permission pattern`,
-                  )
-                  requireEvidence(request.always.length === 0, `${expected.label} offered persistent approval`)
-                  requireEvidence(request.metadata.onceOnly === true, `${expected.label} was not once-only`)
-                  requireEvidence(
-                    request.metadata.authorizationBasis === "learner_acceptance",
-                    `${expected.label} had another authorization basis`,
-                  )
-                  const requestTool = request.tool
-                  requireEvidence(requestTool, `${expected.label} lost its exact tool path`)
-                  const invocation = yield* database.db
-                    .select()
-                    .from(LearningCommandInvocationTable)
-                    .where(
-                      and(
-                        eq(LearningCommandInvocationTable.assistant_message_id, MessageID.make(requestTool.messageID)),
-                        eq(LearningCommandInvocationTable.provider_call_id, requestTool.callID),
-                      ),
-                    )
-                    .get()
-                    .pipe(Effect.orDie)
-                  requireEvidence(invocation, `${expected.label} had no admitted invocation`)
-                  const domain = yield* readGoalDomain(invocation.part_id)
-                  requireEvidence(domain.command, `${expected.label} lost its Goal command reservation`)
-                  requireEvidence(
-                    invocation.session_id === request.sessionID,
-                    `${expected.label} invocation changed Session`,
-                  )
-                  requireEvidence(invocation.status === "admitted", `${expected.label} committed before confirmation`)
-                  requireEvidence(
-                    domain.seal === undefined,
-                    `${expected.label} had a Goal effect before confirmation`,
-                  )
-                  requireEvidence(invocation.settlement === null, `${expected.label} settled before confirmation`)
-                  requireEvidence(
-                    invocation.authorization_basis === "learner_acceptance",
-                    `${expected.label} invocation lost accepted authority`,
-                  )
-                  requireEvidence(
-                    domain.command.permission_request_id === request.id,
-                    `${expected.label} invocation lost its permission request`,
-                  )
-                  requireEvidence(
-                    request.id === stableGoalPermissionRequestID(invocation.part_id, invocation.provider_call_id),
-                    `${expected.label} permission ID was not the exact stable tool-path ID`,
-                  )
-                  const confirmation = request.metadata.confirmation as LearnerGoal.ConfirmationSnapshot
-                  requireEvidence(
-                    confirmation?.schemaVersion === LearnerGoal.SCHEMA_VERSION,
-                    `${expected.label} had a malformed confirmation`,
-                  )
-                  requireEvidence(
-                    domain.command.confirmation_snapshot === null,
-                    `${expected.label} persisted a forbidden durable draft before learner approval`,
-                  )
-                  const owner = yield* readGoals()
-                  requireEvidence(
-                    owner.items.length === expected.goalsBefore,
-                    `${expected.label} changed Goal owner state before confirmation`,
-                  )
-                  const surface = toolPermissionInfo(
-                    {
-                      ...request,
-                      patterns: [...request.patterns],
-                      always: [...request.always],
-                      metadata: { ...request.metadata },
-                      ...(request.tool ? { tool: { ...request.tool } } : {}),
-                    },
-                    {},
-                  )
-                  requireEvidence(surface, `${expected.label} had no exact CLI confirmation surface`)
-                  const surfaceText = [surface.title, ...surface.lines].join("\n")
-                  requireEvidence(
-                    surfaceText.includes("one-time learner acceptance"),
-                    `${expected.label} surface did not say one-time acceptance`,
-                  )
-                  expected.validate(confirmation, surfaceText)
-                  return {
-                    label: expected.label,
-                    requestID: request.id,
-                    sessionID: request.sessionID,
-                    tool: { messageID: requestTool.messageID, callID: requestTool.callID },
-                    request: {
-                      permission: request.permission,
-                      patterns: [...request.patterns],
-                      always: [...request.always],
-                      onceOnly: request.metadata.onceOnly === true,
-                      authorizationBasis: String(request.metadata.authorizationBasis),
-                    },
-                    preCommit: {
-                      invocationStatus: invocation.status,
-                      goalEffectID: null,
-                      ownerGoalCount: owner.items.length,
-                      durableDraftPersisted: domain.command.confirmation_snapshot !== null,
-                    },
-                    confirmation,
-                    surface: { title: surface.title, lines: [...surface.lines] },
-                    reply: "once" as const,
-                  }
-                }).pipe(Effect.exit)
-
-                expectedConfirmation = undefined
-                if (Exit.isFailure(attempt)) {
-                  permissionFailures.push(`${expected.label} exact confirmation validation failed`)
-                  yield* permission.reply({ requestID: request.id, reply: "reject" }).pipe(Effect.orDie)
-                  return
-                }
-                confirmationCaptures.push(attempt.value)
-                yield* permission.reply({ requestID: request.id, reply: "once" }).pipe(Effect.orDie)
-              })
+              const request = event.data as PermissionV1.Request
+              permissionRequests.push(request.id)
+              return permission.reply({ requestID: request.id, reply: "reject" }).pipe(Effect.orDie)
             })
             yield* Effect.addFinalizer(() => unsubscribe)
 
@@ -357,8 +220,8 @@ try {
                 messageID: MessageID.ascending(),
                 agent: "repa",
                 model,
-                limits: { model: 5, tool: 3 },
-                ...(input.title ? { session: { title: input.title, permission: goalOnly } } : {}),
+                limits: { model: 5, tool: 4 },
+                ...(input.title ? { session: { title: input.title, permission: goalAgent } } : {}),
                 parts: [{ type: "text", text: input.text }],
               })
               const terminal = yield* prompts.awaitTurn(input.sessionID, turnID)
@@ -370,98 +233,117 @@ try {
               const messages = yield* sessions.messages({ sessionID: input.sessionID })
               const current = messages.filter((message) => !beforeIDs.has(message.info.id))
               const assistants = current.filter((message) => message.info.role === "assistant")
-              const text = assistants
-                .flatMap((message) => message.parts)
-                .filter((part): part is SessionV1.TextPart => part.type === "text")
-                .map((part) => conciseText(part.text))
-                .filter(Boolean)
+              const tools = completedTools(assistants)
+              requireEvidence(
+                tools.every((part) => permittedTools.has(part.tool)),
+                `${input.label} reached a tool outside the bounded Goal/Course surface`,
+              )
               return {
                 label: input.label,
                 sessionID: input.sessionID,
                 turnID,
                 messages,
-                current,
-                text,
-                tools: toolParts(assistants),
-                goalTools: completedGoalTools(assistants),
+                text: assistants
+                  .flatMap((message) => message.parts)
+                  .filter((part): part is SessionV1.TextPart => part.type === "text")
+                  .map((part) => conciseText(part.text))
+                  .filter(Boolean),
+                tools,
+                writeTools: tools.filter((part) => part.tool === capability),
               }
             })
 
-            const captureToolPath = Effect.fn("Gate16RealModel.captureToolPath")(function* (
-              messages: readonly SessionV1.WithParts[],
-              part: CompletedToolPart,
-            ) {
+            const captureCommand = Effect.fn("Gate16RealModel.captureCommand")(function* (part: CompletedToolPart) {
               const invocation = yield* database.db
                 .select()
                 .from(LearningCommandInvocationTable)
                 .where(eq(LearningCommandInvocationTable.part_id, part.id))
                 .get()
                 .pipe(Effect.orDie)
-              requireEvidence(invocation, `tool ${part.id} lost its invocation row`)
-              const domain = yield* readGoalDomain(invocation.part_id)
-              requireEvidence(domain.command, `tool ${part.id} lost its Goal command reservation`)
-              requireEvidence(domain.seal, `tool ${part.id} lost its Goal effect seal`)
+              const disposition = yield* database.db
+                .select()
+                .from(LearnerGoalDispositionV2Table)
+                .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, part.id))
+                .get()
+                .pipe(Effect.orDie)
+              const capabilitySettlement = yield* database.db
+                .select()
+                .from(LearnerGoalCapabilitySettlementV2Table)
+                .where(eq(LearnerGoalCapabilitySettlementV2Table.invocation_part_id, part.id))
+                .get()
+                .pipe(Effect.orDie)
+              const seal = yield* database.db
+                .select()
+                .from(LearnerGoalCommitSealTable)
+                .where(eq(LearnerGoalCommitSealTable.invocation_part_id, part.id))
+                .get()
+                .pipe(Effect.orDie)
+
+              requireEvidence(invocation, `tool ${part.id} lost physical admission`)
+              requireEvidence(disposition, `tool ${part.id} lost its Goal disposition`)
+              requireEvidence(capabilitySettlement, `tool ${part.id} lost capability settlement`)
+              requireEvidence(seal, `tool ${part.id} lost its applied effect seal`)
+              requireEvidence(invocation.command_name === capability, `tool ${part.id} changed command identity`)
+              requireEvidence(invocation.command_version === 2, `tool ${part.id} did not use Goal V2`)
+              requireEvidence(invocation.capability_identity === capability, `tool ${part.id} changed capability`)
+              requireEvidence(invocation.capability_version === 2, `tool ${part.id} changed capability version`)
+              requireEvidence(
+                invocation.authorization_basis === "agent_action",
+                `tool ${part.id} used shadow authority`,
+              )
+              requireEvidence(invocation.status === "applied", `tool ${part.id} was not applied`)
+              requireEvidence(disposition.disposition === "candidate_v2", `tool ${part.id} was not a current candidate`)
+              requireEvidence(
+                disposition.legacy_command_part_id === null,
+                `tool ${part.id} created a historical command`,
+              )
+              requireEvidence(
+                disposition.agent_action_provenance?.kind === "root",
+                `tool ${part.id} lost root issuance`,
+              )
+              requireEvidence(
+                disposition.agent_action_provenance.lineage.length === 0,
+                `tool ${part.id} invented delegated lineage`,
+              )
+              requireEvidence(
+                disposition.agent_action_provenance.occurrenceID === invocation.occurrence_id,
+                `tool ${part.id} changed its causal occurrence`,
+              )
+              requireEvidence(
+                capabilitySettlement.outcome === "policy_allow",
+                `tool ${part.id} did not use ordinary configured allow`,
+              )
+              requireEvidence(capabilitySettlement.permission_request_id === null, `tool ${part.id} invented a prompt`)
+              requireEvidence(forbiddenInputPaths(part.state.input).length === 0, `tool ${part.id} used retired input`)
+
               const occurrence = yield* database.db
                 .select()
                 .from(AdmittedLearnerOccurrenceTable)
                 .where(eq(AdmittedLearnerOccurrenceTable.id, invocation.occurrence_id))
                 .get()
                 .pipe(Effect.orDie)
-              requireEvidence(occurrence, `tool ${part.id} lost its source occurrence`)
-              const assistant = messages.find((message) => message.info.id === invocation.assistant_message_id)
-              const parent = messages.find((message) => message.info.id === invocation.parent_user_message_id)
-              requireEvidence(assistant?.info.role === "assistant", `tool ${part.id} lost its assistant message`)
-              requireEvidence(parent?.info.role === "user", `tool ${part.id} lost its parent learner message`)
+              requireEvidence(occurrence, `tool ${part.id} lost its learner occurrence`)
               requireEvidence(
-                assistant.info.parentID === invocation.parent_user_message_id,
-                `tool ${part.id} assistant parent diverged`,
+                occurrence.origin_session_id === invocation.session_id &&
+                  occurrence.origin_message_id === invocation.parent_user_message_id,
+                `tool ${part.id} occurrence changed its learner source`,
               )
               requireEvidence(part.messageID === invocation.assistant_message_id, `tool ${part.id} message diverged`)
               requireEvidence(part.callID === invocation.provider_call_id, `tool ${part.id} call diverged`)
               requireEvidence(part.sessionID === invocation.session_id, `tool ${part.id} Session diverged`)
-              requireEvidence(invocation.turn_id && invocation.input_id, `tool ${part.id} lost its Turn path`)
-              requireEvidence(invocation.command_name === capability, `tool ${part.id} changed command name`)
-              requireEvidence(invocation.command_version === 1, `tool ${part.id} changed command version`)
-              requireEvidence(invocation.capability_identity === capability, `tool ${part.id} changed capability`)
-              requireEvidence(invocation.capability_version === 1, `tool ${part.id} changed capability version`)
-              requireEvidence(invocation.status === "applied", `tool ${part.id} was not applied`)
-              requireEvidence(
-                occurrence.origin_session_id === invocation.session_id &&
-                  occurrence.origin_message_id === invocation.parent_user_message_id,
-                `tool ${part.id} occurrence did not name its exact learner source`,
-              )
-              const input = part.state.input as Record<string, unknown>
-              requireEvidence(
-                input.authorizationBasis === invocation.authorization_basis,
-                `tool ${part.id} input authority diverged`,
-              )
-              if (invocation.authorization_basis === "learner_acceptance") {
-                requireEvidence(
-                  domain.command.permission_request_id ===
-                    stableGoalPermissionRequestID(invocation.part_id, invocation.provider_call_id),
-                  `tool ${part.id} lost its stable accepted permission path`,
-                )
-                requireEvidence(domain.command.confirmation_snapshot, `tool ${part.id} lost its confirmation snapshot`)
-                const capture = confirmationCaptures.find(
-                  (item) =>
-                    item.tool.messageID === invocation.assistant_message_id &&
-                    item.tool.callID === invocation.provider_call_id,
-                )
-                requireEvidence(capture, `tool ${part.id} lost its process-local displayed candidate evidence`)
-                requireEvidence(
-                  isDeepStrictEqual(domain.command.confirmation_snapshot, capture.confirmation),
-                  `tool ${part.id} committed a candidate different from the one displayed for acceptance`,
-                )
-              } else {
-                requireEvidence(
-                  domain.command.permission_request_id === null,
-                  `tool ${part.id} invented a confirmation ID`,
-                )
-                requireEvidence(
-                  domain.command.confirmation_snapshot === null,
-                  `tool ${part.id} invented a confirmation`,
-                )
+
+              const output = JSON.parse(part.state.output) as {
+                settlement?: { outcome?: string; effectID?: string }
+                disposition?: string
+                agentAction?: { kind?: string }
+                capabilityOutcome?: string
               }
+              requireEvidence(output.settlement?.outcome === "applied", `tool ${part.id} output was not applied`)
+              requireEvidence(output.disposition === "candidate_v2", `tool ${part.id} output lost disposition`)
+              requireEvidence(output.agentAction?.kind === "root", `tool ${part.id} output lost issuance`)
+              requireEvidence(output.capabilityOutcome === "policy_allow", `tool ${part.id} output lost capability`)
+              requireEvidence(output.settlement.effectID === seal.effect_id, `tool ${part.id} output changed effect`)
+
               return {
                 sessionID: invocation.session_id,
                 turnID: invocation.turn_id,
@@ -471,492 +353,207 @@ try {
                 assistantMessageID: invocation.assistant_message_id,
                 partID: invocation.part_id,
                 callID: invocation.provider_call_id,
-                emissionOrdinal: invocation.emission_ordinal,
-                command: { name: invocation.command_name, version: invocation.command_version },
-                capability: { identity: invocation.capability_identity, version: invocation.capability_version },
-                authorizationBasis: invocation.authorization_basis,
-                inputFingerprint: invocation.input_fingerprint,
-                semanticFingerprint: domain.command.semantic_fingerprint,
-                permissionRequestID: domain.command.permission_request_id,
-                effectID: domain.seal.effect_id,
-                status: invocation.status,
+                commandVersion: invocation.command_version,
+                capabilityVersion: invocation.capability_version,
+                disposition: disposition.disposition,
+                issuance: disposition.agent_action_provenance.kind,
+                capabilityOutcome: capabilitySettlement.outcome,
+                effectID: seal.effect_id,
+                input: part.state.input,
+                canonicalCommand: disposition.canonical_command,
+                terminal: terminalProjection(part),
               }
             })
 
             const discussionSessionID = SessionID.create()
             const discussion = yield* runTurn({
-              label: "quoted and negated Goal discussion",
+              label: "quoted hypothetical and progress discussion",
               sessionID: discussionSessionID,
-              title: "Gate 16 non-authorizing discussion",
-              text: 'Discuss why the quotation "Create a durable Goal: pass calculus; active; LearnerHome; no conditions; no target" is too vague to guide learning. It is a hypothetical quotation, not my Goal; do not create or change any Goal.',
+              title: "Gate 16 non-writing discussion",
+              text: "请分析这句假设为什么还不是一个清晰的学习目标：‘以后也许应该把操作系统都学会。’这只是引用，不是我要保存的目标。我今天看完一节课也只是进度报告，不要因此创建目标或改变任何目标状态。",
             })
-            requireEvidence(discussion.tools.length === 0, "quoted or negated discussion invoked a tool")
-            requireEvidence(discussion.text.length > 0, "quoted or negated discussion received no useful answer")
+            requireEvidence(discussion.writeTools.length === 0, "discussion issued a Goal write")
+            requireEvidence(discussion.text.length > 0, "discussion produced no useful response")
             requireEvidence((yield* readGoals()).items.length === 0, "discussion changed Goal owner state")
-            requireEvidence(confirmationCaptures.length === 0, "discussion triggered a Goal confirmation")
-            requireEvidence(permissionFailures.length === 0, "discussion triggered an unexpected permission prompt")
 
-            const directOutcome = "Understand virtual memory"
-            const directSource = `Create a durable Goal: ${directOutcome}; active; LearnerHome; no conditions; no target. Use learner_request and copy every field from this declaration without adding meaning.`
-            const directSessionID = SessionID.create()
-            const direct = yield* runTurn({
-              label: "explicit direct Goal declaration",
-              sessionID: directSessionID,
-              title: "Gate 16 exact direct Goal",
-              text: directSource,
+            const createSessionID = SessionID.create()
+            const create = yield* runTurn({
+              label: "clear natural-language Goal creation",
+              sessionID: createSessionID,
+              title: "Gate 16 natural Goal creation",
+              text: "我决定把‘掌握操作系统中的虚拟内存’作为长期学习目标。完成标准是我能解释地址转换，并比较 FIFO、LRU 等页面置换策略。它属于我的 ‘Operating Systems’ 课程。请保存；需要精确课程信息时自己读取，不要让我输入内部 ID。",
             })
-            requireEvidence(direct.tools.length === 1, "direct declaration did not make exactly one tool call")
-            requireEvidence(direct.goalTools.length === 1, "direct declaration did not terminalize one Goal tool")
             requireEvidence(
-              confirmationCaptures.length === 0,
-              "direct declaration triggered an extra Gate confirmation",
+              create.tools.some((part) => part.tool === COURSE_QUERY_TOOL_ID),
+              "clear creation did not lazily read the Course owner",
+            )
+            requireEvidence(create.writeTools.length === 1, "clear creation did not issue exactly one Goal write")
+            const createPath = yield* captureCommand(create.writeTools[0]!)
+            const afterCreate = yield* readGoals()
+            requireEvidence(afterCreate.items.length === 1, "clear creation did not create exactly one Goal")
+            const initialGoal = afterCreate.items[0]!
+            requireEvidence(initialGoal.head.schemaVersion === 2, "clear creation stored a historical Goal revision")
+            requireEvidence(initialGoal.head.scope.type === "courses", "clear creation lost its Course scope")
+            requireEvidence(
+              initialGoal.head.scope.courses.some((item) => item.courseID === course.id),
+              "clear creation selected another Course",
             )
             requireEvidence(
-              permissionFailures.length === 0,
-              "direct declaration triggered an unexpected permission prompt",
+              initialGoal.head.disposition.type === "active",
+              "clear creation invented a lifecycle change",
             )
-            const directPart = direct.goalTools[0]!
-            const directInput = directPart.state.input as Record<string, unknown>
-            requireEvidence(
-              directInput.authorizationBasis === "learner_request",
-              "direct declaration used accepted authority",
-            )
-            requireEvidence(directPart.state.metadata.outcome === "applied", "direct declaration did not apply")
-            const afterDirect = yield* readGoals()
-            requireEvidence(afterDirect.items.length === 1, "direct declaration did not create exactly one Goal")
-            const directGoal = afterDirect.items[0]!
-            requireEvidence(directGoal.head.outcome === directOutcome, "direct declaration changed the exact outcome")
-            requireEvidence(directGoal.head.conditions.length === 0, "direct declaration invented conditions")
-            requireEvidence(directGoal.head.scope.type === "learner_home", "direct declaration narrowed scope")
-            requireEvidence(directGoal.head.target.type === "absent", "direct declaration invented a target")
-            requireEvidence(directGoal.head.disposition.type === "active", "direct declaration changed lifecycle")
-            const directAcknowledgement = terminalProjection(directPart)
-            requireEvidence(
-              JSON.stringify(directAcknowledgement).includes(directOutcome),
-              "direct acknowledgement omitted exact Goal meaning",
-            )
-            requireEvidence(
-              !JSON.stringify(directAcknowledgement).includes('"receiptID"'),
-              "direct acknowledgement exposed raw settlement",
-            )
+            requireEvidence(initialGoal.head.effectID === createPath.effectID, "clear creation lost its tool effect")
 
-            const examSessionID = SessionID.create()
-            const clarification = yield* runTurn({
-              label: "ambiguous exam Goal clarification",
-              sessionID: examSessionID,
-              title: "Gate 16 ambiguous Goal clarification",
-              text: "I have an operating-systems exam later this term and may want two durable Goals, but I have not supplied exact outcomes, done conditions, the Course identity, or a target date. Ask the necessary clarification questions only. Do not propose or save any Goal yet.",
+            const updateSessionID = SessionID.create()
+            const correctedOutcome = "能独立讲清虚拟内存机制并分析页面置换取舍"
+            const update = yield* runTurn({
+              label: "fresh-Session contextual Goal update",
+              sessionID: updateSessionID,
+              title: "Gate 16 contextual Goal update",
+              text: `把我现有的那个关于虚拟内存的学习目标调整一下：结果改成“${correctedOutcome}”，其他内容和状态保持不变。你自己读取当前 Goal 来定位，不要让我提供内部 ID。`,
             })
-            requireEvidence(clarification.tools.length === 0, "ambiguous request wrote or proposed a Goal tool")
-            requireEvidence((yield* readGoals()).items.length === 1, "ambiguous request changed Goal owner state")
-            requireEvidence(confirmationCaptures.length === 0, "ambiguous request triggered a confirmation")
-            requireEvidence(permissionFailures.length === 0, "ambiguous request triggered an unexpected prompt")
-            const clarificationText = clarification.text.join(" ")
-            const clarifiedDimensions = [
-              /outcome|achieve|learn/i.test(clarificationText) ? "outcome" : undefined,
-              /condition|done|demonstrate|success/i.test(clarificationText) ? "conditions" : undefined,
-              /course/i.test(clarificationText) ? "Course" : undefined,
-              /date|deadline|target|when/i.test(clarificationText) ? "target" : undefined,
-            ].filter((value): value is string => Boolean(value))
             requireEvidence(
-              clarificationText.includes("?") && clarifiedDimensions.length >= 3,
-              "ambiguous request did not receive a genuine clarification move",
+              update.tools.some((part) => part.tool === LEARNER_GOAL_QUERY_TOOL_ID),
+              "contextual update did not read the Goal owner",
             )
+            requireEvidence(update.writeTools.length === 1, "contextual update did not issue exactly one Goal write")
+            const updatePath = yield* captureCommand(update.writeTools[0]!)
+            const afterUpdate = yield* readGoals()
+            requireEvidence(afterUpdate.items.length === 1, "contextual update created or removed a Goal")
+            const correctedGoal = afterUpdate.items[0]!
+            requireEvidence(
+              correctedGoal.goalID === initialGoal.goalID,
+              "contextual update chose another Goal identity",
+            )
+            requireEvidence(
+              correctedGoal.head.id !== initialGoal.head.id,
+              "contextual update did not create a revision",
+            )
+            requireEvidence(
+              correctedGoal.head.outcome === correctedOutcome,
+              "contextual update changed learner meaning",
+            )
+            requireEvidence(
+              isDeepStrictEqual(correctedGoal.head.conditions, initialGoal.head.conditions),
+              "contextual update changed carried conditions",
+            )
+            requireEvidence(
+              isDeepStrictEqual(scopeMeaning(correctedGoal.head.scope), scopeMeaning(initialGoal.head.scope)),
+              "contextual update changed carried scope",
+            )
+            requireEvidence(
+              isDeepStrictEqual(correctedGoal.head.target, initialGoal.head.target),
+              "contextual update changed carried target",
+            )
+            requireEvidence(correctedGoal.head.disposition.type === "active", "contextual update changed lifecycle")
+            requireEvidence(correctedGoal.head.effectID === updatePath.effectID, "contextual update lost its effect")
 
-            expectedConfirmation = {
-              label: "two-Goal exam candidate",
-              sessionID: examSessionID,
-              goalsBefore: 1,
-              validate: (confirmation, surface) => {
-                requireEvidence(
-                  confirmation.authorizationBasis === "learner_acceptance",
-                  "exam candidate was not accepted",
-                )
-                requireEvidence(confirmation.goalBases.length === 0, "exam create candidate claimed current Goal bases")
-                requireEvidence(
-                  confirmation.command.operations.length === 2,
-                  "exam candidate did not contain two operations",
-                )
-                requireEvidence(
-                  confirmation.command.operations.every((operation) => operation.type === "create"),
-                  "exam candidate operations were not independent creates",
-                )
-                for (const operation of confirmation.command.operations) {
-                  requireEvidence(operation.type === "create", "exam candidate contained a non-create operation")
-                  requireEvidence(operation.disposition === "active", "exam candidate invented lifecycle state")
-                  requireEvidence(operation.snapshot.conditions.length > 0, "exam candidate had no done condition")
-                  requireEvidence(operation.snapshot.scope.type === "courses", "exam candidate was not Course-scoped")
-                  requireEvidence(operation.snapshot.scope.courses.length === 1, "exam candidate widened Course scope")
-                  const membership = operation.snapshot.scope.courses[0]!
-                  requireEvidence(membership.courseID === course.id, "exam candidate named another Course")
-                  requireEvidence(membership.basis.type === "new", "exam candidate did not bind current Course owner")
-                  requireEvidence(
-                    membership.basis.type === "new" && membership.basis.expectedCourseVersion === course.stateVersion,
-                    "exam candidate used another Course version",
-                  )
-                  requireEvidence(
-                    operation.snapshot.target.type === "local_date",
-                    "exam candidate used another target kind",
-                  )
-                  requireEvidence(
-                    operation.snapshot.target.type === "local_date" &&
-                      operation.snapshot.target.date === targetDate &&
-                      operation.snapshot.target.timeZone === targetTimeZone &&
-                      operation.snapshot.target.sourceExpression === targetDate &&
-                      operation.snapshot.target.normalizationBasis === "explicit_date",
-                    "exam candidate changed the exact local-date target",
-                  )
-                  requireEvidence(
-                    operation.snapshot.fieldBases.outcome.type === "accepted" &&
-                      operation.snapshot.fieldBases.conditions.type === "accepted",
-                    "exam candidate did not mark its model-expanded meaning as accepted",
-                  )
-                  requireEvidence(
-                    operation.snapshot.fieldBases.scope.type === "authored" &&
-                      operation.snapshot.fieldBases.scope.sourceExcerpt.includes(course.id) &&
-                      operation.snapshot.fieldBases.target.type === "authored" &&
-                      operation.snapshot.fieldBases.target.sourceExcerpt.includes(targetDate) &&
-                      operation.snapshot.fieldBases.disposition.type === "authored" &&
-                      operation.snapshot.fieldBases.disposition.sourceExcerpt.includes("active"),
-                    "exam candidate lost exact learner-authored scope, target, or disposition",
-                  )
-                  requireEvidence(surface.includes(operation.snapshot.outcome), "exam surface omitted an outcome")
-                  for (const condition of operation.snapshot.conditions) {
-                    requireEvidence(surface.includes(condition), "exam surface omitted a condition")
-                  }
-                }
-                const topics = confirmation.command.operations.map((operation) => topicKind(operation.snapshot))
-                requireEvidence(topics.includes("virtual-memory"), "exam candidate omitted virtual memory")
-                requireEvidence(topics.includes("cpu-scheduling"), "exam candidate omitted CPU scheduling")
-                requireEvidence(confirmation.courseBases.length === 2, "exam candidate omitted exact Course bases")
-                requireEvidence(
-                  confirmation.courseBases.every(
-                    (basis, index) =>
-                      basis.operationOrdinal === index &&
-                      basis.revisionRole === "source" &&
-                      basis.courseID === course.id &&
-                      basis.courseTitle === course.title &&
-                      basis.admission.type === "new" &&
-                      basis.admission.courseVersion === course.stateVersion &&
-                      basis.availability.state === "available" &&
-                      basis.availability.title === course.title,
-                  ),
-                  "exam candidate Course bases were not exact and available",
-                )
-                requireEvidence(surface.includes(course.id), "exam surface omitted the exact Course")
-                requireEvidence(surface.includes(targetDate), "exam surface omitted the exact target")
-                requireEvidence(
-                  forbiddenGoalKeys(confirmation.command).length === 0,
-                  "exam candidate added foreign state",
-                )
-              },
-            }
-            const examCaptureIndex = confirmationCaptures.length
-            const exam = yield* runTurn({
-              label: "accepted two-Goal exam candidate",
-              sessionID: examSessionID,
-              text: `Here are the clarifications. Use only Course "${course.title}" with exact ID ${course.id} at current version ${course.stateVersion}. Use target local date ${targetDate} in time zone ${targetTimeZone}, with sourceExpression exactly ${targetDate} and normalizationBasis explicit_date. I want exactly two independent active durable Goals: one for virtual memory and one for CPU scheduling. You choose and write the exact outcomes and useful done conditions for exam preparation. Because that meaning is model-expanded, do not use learner_request: submit one update_learner_goals candidate with authorizationBasis learner_acceptance and exactly two create operations. Mark the model-chosen outcomes and conditions accepted; preserve my exact Course scope, target, and active disposition with authored source excerpts. Do not create Assignment, priority, schedule, evidence, or mastery state. The host must show the complete exact candidate once before any commit.`,
+            const acceptanceSessionID = SessionID.create()
+            const suggestion = yield* runTurn({
+              label: "Tutor suggestion without learner acceptance",
+              sessionID: acceptanceSessionID,
+              title: "Gate 16 conversational acceptance",
+              text: "我可能还想为 CPU 调度建立一个学习目标。先按考试复习场景帮我提出一个具体结果和完成标准，但这一步只建议，不要保存；等我确认。",
             })
-            requireEvidence(expectedConfirmation === undefined, "exam candidate never reached exact confirmation")
-            requireEvidence(permissionFailures.length === 0, "exam candidate failed closed")
-            requireEvidence(
-              confirmationCaptures.length === examCaptureIndex + 1,
-              "exam candidate did not produce exactly one confirmation",
-            )
-            requireEvidence(exam.tools.length === 1, "exam candidate made more than one tool call")
-            requireEvidence(exam.goalTools.length === 1, "exam candidate did not terminalize one Goal tool")
-            const examPart = exam.goalTools[0]!
-            const examInput = examPart.state.input as Record<string, unknown>
-            requireEvidence(examInput.authorizationBasis === "learner_acceptance", "exam tool used direct authority")
-            requireEvidence(examPart.state.metadata.outcome === "applied", "exam candidate did not apply")
-            const afterExam = yield* readGoals()
-            requireEvidence(afterExam.items.length === 3, "exam candidate did not create two independent Goals")
-            const examGoals = afterExam.items.filter((goal) => goal.head.source.originSessionID === examSessionID)
-            requireEvidence(examGoals.length === 2, "exam candidate Goals lost their exact source Session")
-            requireEvidence(
-              new Set(examGoals.map((goal) => goal.goalID)).size === 2,
-              "exam candidate reused one Goal identity",
-            )
-            requireEvidence(
-              new Set(examGoals.map((goal) => topicKind(goal.head))).size === 2 &&
-                examGoals.some((goal) => topicKind(goal.head) === "virtual-memory") &&
-                examGoals.some((goal) => topicKind(goal.head) === "cpu-scheduling"),
-              "exam candidate did not persist one Goal per requested topic",
-            )
-            for (const goal of examGoals) {
-              requireEvidence(goal.head.disposition.type === "active", "exam Goal did not remain active")
-              requireEvidence(goal.head.scope.type === "courses", "exam Goal lost Course scope")
-              requireEvidence(
-                goal.head.scope.type === "courses" &&
-                  goal.head.scope.courses.length === 1 &&
-                  goal.head.scope.courses[0]?.courseID === course.id,
-                "exam Goal stored another Course",
-              )
-              requireEvidence(
-                goal.head.target.type === "local_date" &&
-                  goal.head.target.date === targetDate &&
-                  goal.head.target.timeZone === targetTimeZone,
-                "exam Goal stored another target",
-              )
-              requireEvidence(forbiddenGoalKeys(goal.head).length === 0, "exam Goal stored foreign state")
-            }
+            requireEvidence(suggestion.writeTools.length === 0, "Tutor suggestion wrote before learner acceptance")
+            requireEvidence(suggestion.text.length > 0, "Tutor suggestion produced no useful proposal")
+            requireEvidence((yield* readGoals()).items.length === 1, "Tutor suggestion changed Goal owner state")
 
-            const virtualGoal = examGoals.find((goal) => topicKind(goal.head) === "virtual-memory")!
-            requireEvidence(virtualGoal, "virtual-memory Goal was unavailable for correction")
-            const correctionOutcome = "Explain virtual-memory translation and replacement under exam conditions"
-            const correctionSessionID = examSessionID
-            expectedConfirmation = {
-              label: "later contextual Goal correction",
-              sessionID: correctionSessionID,
-              goalsBefore: 3,
-              validate: (confirmation, surface) => {
-                requireEvidence(confirmation.authorizationBasis === "learner_acceptance", "correction was not accepted")
-                requireEvidence(
-                  confirmation.command.operations.length === 1,
-                  "correction contained multiple operations",
-                )
-                const operation = confirmation.command.operations[0]!
-                requireEvidence(operation.type === "update", "correction was not an update")
-                requireEvidence(operation.goalID === virtualGoal.goalID, "correction named another Goal")
-                requireEvidence(operation.expectedHeadID === virtualGoal.head.id, "correction named another head")
-                requireEvidence(
-                  operation.expectedVersion === virtualGoal.head.version,
-                  "correction named another version",
-                )
-                requireEvidence(
-                  operation.snapshot.outcome === correctionOutcome,
-                  "correction changed the requested outcome",
-                )
-                requireEvidence(
-                  isDeepStrictEqual(operation.snapshot.conditions, virtualGoal.head.conditions),
-                  "correction changed conditions",
-                )
-                requireEvidence(operation.snapshot.scope.type === "courses", "correction changed scope kind")
-                const membership = operation.snapshot.scope.courses[0]
-                requireEvidence(
-                  operation.snapshot.scope.courses.length === 1 &&
-                    membership?.courseID === course.id &&
-                    membership.basis.type === "carried" &&
-                    membership.basis.predecessorRevisionID === virtualGoal.head.id,
-                  "correction did not carry exact Course scope",
-                )
-                requireEvidence(
-                  isDeepStrictEqual(operation.snapshot.target, virtualGoal.head.target),
-                  "correction changed target",
-                )
-                requireEvidence(operation.disposition.type === "active", "correction changed active disposition")
-                requireEvidence(
-                  operation.snapshot.fieldBases.conditions.type === "accepted" &&
-                    operation.snapshot.fieldBases.scope.type === "accepted" &&
-                    operation.snapshot.fieldBases.target.type === "accepted" &&
-                    operation.snapshot.fieldBases.disposition.type === "carried" &&
-                    operation.snapshot.fieldBases.disposition.predecessorRevisionID === virtualGoal.head.id,
-                  "correction did not reauthorize dependency-sensitive fields and carry active disposition",
-                )
-                requireEvidence(
-                  operation.snapshot.fieldBases.outcome.type === "authored" &&
-                    operation.snapshot.fieldBases.outcome.sourceExcerpt.includes(correctionOutcome),
-                  "correction did not preserve the exact learner-authored outcome",
-                )
-                requireEvidence(confirmation.goalBases.length === 1, "correction omitted its current Goal base")
-                requireEvidence(
-                  confirmation.goalBases[0]?.goalID === virtualGoal.goalID &&
-                    confirmation.goalBases[0]?.revisionID === virtualGoal.head.id &&
-                    confirmation.goalBases[0]?.version === virtualGoal.head.version &&
-                    confirmation.goalBases[0]?.outcome === virtualGoal.head.outcome &&
-                    confirmation.goalBases[0]?.disposition === "active",
-                  "correction Goal base was not exact",
-                )
-                requireEvidence(confirmation.courseBases.length === 1, "correction omitted its carried Course base")
-                const courseBase = confirmation.courseBases[0]
-                requireEvidence(
-                  courseBase?.courseID === course.id &&
-                    courseBase.courseTitle === course.title &&
-                    courseBase.admission.type === "carried" &&
-                    courseBase.admission.predecessorRevisionID === virtualGoal.head.id &&
-                    courseBase.availability.state === "available",
-                  "correction Course base was not exact and available",
-                )
-                requireEvidence(surface.includes(virtualGoal.goalID), "correction surface omitted Goal identity")
-                requireEvidence(surface.includes(virtualGoal.head.id), "correction surface omitted current head")
-                requireEvidence(surface.includes(correctionOutcome), "correction surface omitted new outcome")
-                requireEvidence(surface.includes(targetDate), "correction surface omitted preserved target")
-                requireEvidence(forbiddenGoalKeys(confirmation.command).length === 0, "correction added foreign state")
-              },
-            }
-            const correctionCaptureIndex = confirmationCaptures.length
-            const correction = yield* runTurn({
-              label: "later contextual Goal correction",
-              sessionID: correctionSessionID,
-              text: `Correct durable Goal ${virtualGoal.goalID} at exact head ${virtualGoal.head.id}, version ${virtualGoal.head.version}. Change only its outcome to exactly "${correctionOutcome}" and keep that exact outcome authored from this sentence. Preserve the exact current conditions, Course scope, and target values, but because the outcome changes, reauthorize those three complete fields for the revised meaning with accepted field bases. Keep the Course membership admission carried from predecessor revision ${virtualGoal.head.id}, and carry only the unchanged active disposition field from that predecessor. This correction depends on contextual continuity, so submit exactly one update operation with authorizationBasis learner_acceptance for one-time exact confirmation. Do not create Assignment, priority, schedule, evidence, mastery, or any automatic lifecycle change.`,
+            const acceptance = yield* runTurn({
+              label: "ordinary short acceptance",
+              sessionID: acceptanceSessionID,
+              text: "对，就按你刚才建议的内容保存为新的学习目标，仍属于 Operating Systems 课程。",
             })
-            requireEvidence(expectedConfirmation === undefined, "correction never reached exact confirmation")
-            requireEvidence(permissionFailures.length === 0, "correction failed closed")
+            requireEvidence(acceptance.writeTools.length === 1, "short acceptance did not issue exactly one Goal write")
+            const acceptancePath = yield* captureCommand(acceptance.writeTools[0]!)
+            const afterAcceptance = yield* readGoals()
+            requireEvidence(afterAcceptance.items.length === 2, "short acceptance did not create one new Goal")
+            const acceptedGoal = afterAcceptance.items.find((item) => item.goalID !== correctedGoal.goalID)
+            requireEvidence(acceptedGoal, "short acceptance reused the contextual Goal identity")
+            requireEvidence(acceptedGoal.head.schemaVersion === 2, "short acceptance stored a historical revision")
+            requireEvidence(acceptedGoal.head.scope.type === "courses", "short acceptance lost Course scope")
             requireEvidence(
-              confirmationCaptures.length === correctionCaptureIndex + 1,
-              "correction did not produce exactly one confirmation",
+              acceptedGoal.head.scope.courses.some((item) => item.courseID === course.id),
+              "short acceptance selected another Course",
             )
-            requireEvidence(correction.tools.length === 1, "correction made more than one tool call")
-            requireEvidence(correction.goalTools.length === 1, "correction did not terminalize one Goal tool")
-            const correctionPart = correction.goalTools[0]!
-            const correctionInput = correctionPart.state.input as Record<string, unknown>
-            requireEvidence(
-              correctionInput.authorizationBasis === "learner_acceptance",
-              "contextual correction incorrectly used direct authority",
-            )
-            requireEvidence(correctionPart.state.metadata.outcome === "applied", "correction did not apply")
+            requireEvidence(acceptedGoal.head.disposition.type === "active", "short acceptance changed lifecycle")
+            requireEvidence(acceptedGoal.head.effectID === acceptancePath.effectID, "short acceptance lost its effect")
 
-            const afterTarget = Date.parse("2026-09-16T12:00:00+08:00")
-            const correctedRead = yield* database.db.transaction((tx) =>
-              LearnerGoal.readCurrent(tx, virtualGoal.goalID, afterTarget),
-            )
-            requireEvidence(correctedRead, "corrected Goal disappeared")
-            const correctedGoal = correctedRead.head
-            requireEvidence(correctedGoal.id !== virtualGoal.head.id, "correction did not create a new revision")
+            const ambiguitySessionID = SessionID.create()
+            const beforeAmbiguity = afterAcceptance.items.map(goalProjection)
+            const ambiguity = yield* runTurn({
+              label: "materially ambiguous contextual change",
+              sessionID: ambiguitySessionID,
+              title: "Gate 16 ordinary clarification",
+              text: "我想把之前那个操作系统学习目标改一下，但‘之前那个’可能指虚拟内存或 CPU 调度，而且我还没决定是改结果还是完成标准。请先问一个必要的澄清问题；在我回答前不要保存或修改。",
+            })
+            requireEvidence(ambiguity.writeTools.length === 0, "ambiguous change wrote before clarification")
+            requireEvidence(ambiguity.text.length > 0, "ambiguous change produced no clarification")
             requireEvidence(
-              correctedGoal.predecessorID === virtualGoal.head.id,
-              "correction lost predecessor continuity",
-            )
-            requireEvidence(
-              correctedGoal.version === virtualGoal.head.version + 1,
-              "correction did not advance one version",
-            )
-            requireEvidence(correctedGoal.outcome === correctionOutcome, "Goal read did not expose corrected outcome")
-            requireEvidence(
-              isDeepStrictEqual(correctedGoal.conditions, virtualGoal.head.conditions),
-              "Goal read changed conditions during correction",
-            )
-            requireEvidence(
-              isDeepStrictEqual(correctedGoal.target, virtualGoal.head.target),
-              "Goal read changed target",
-            )
-            requireEvidence(
-              correctedGoal.disposition.type === "active",
-              "target passage changed lifecycle automatically",
-            )
-            requireEvidence(
-              correctedGoal.targetRelation === "after",
-              "trusted later read did not derive target passage",
-            )
-            requireEvidence(forbiddenGoalKeys(correctedGoal).length === 0, "corrected Goal read exposed foreign state")
-            const afterCorrection = yield* readGoals(afterTarget)
-            requireEvidence(afterCorrection.items.length === 3, "correction created or removed another Goal")
-            const unchanged = afterCorrection.items.filter((goal) => goal.goalID !== virtualGoal.goalID)
-            requireEvidence(
-              unchanged.some((goal) => goal.goalID === directGoal.goalID && goal.head.id === directGoal.head.id),
-              "correction changed the direct Goal",
-            )
-            requireEvidence(
-              unchanged.some((goal) =>
-                examGoals.some((examGoal) => examGoal.goalID === goal.goalID && examGoal.head.id === goal.head.id),
-              ),
-              "correction changed the other exam Goal",
+              isDeepStrictEqual((yield* readGoals()).items.map(goalProjection), beforeAmbiguity),
+              "ambiguous change mutated Goal state",
             )
 
-            const directPath = yield* captureToolPath(direct.messages, directPart)
-            const examPath = yield* captureToolPath(exam.messages, examPart)
-            const correctionPath = yield* captureToolPath(correction.messages, correctionPart)
+            requireEvidence(permissionRequests.length === 0, "effective allow produced a Gate-specific prompt")
+            requireEvidence((yield* legacyCommandCount()) === 0, "current Agent path created a historical V1 command")
             requireEvidence(
-              directGoal.head.occurrenceID === directPath.occurrenceID,
-              "direct Goal lost occurrence path",
-            )
-            requireEvidence(directGoal.head.effectID === directPath.effectID, "direct Goal lost tool effect path")
-            requireEvidence(
-              examGoals.every(
-                (goal) => goal.head.occurrenceID === examPath.occurrenceID && goal.head.effectID === examPath.effectID,
-              ),
-              "exam Goals lost their shared atomic occurrence/tool path",
+              foreignStatePaths(afterAcceptance.items.map(goalProjection)).length === 0,
+              "the Goal owner absorbed Assignment, evidence, mastery, priority, or schedule state",
             )
             requireEvidence(
-              correctedGoal.occurrenceID === correctionPath.occurrenceID,
-              "correction lost occurrence path",
-            )
-            requireEvidence(correctedGoal.effectID === correctionPath.effectID, "correction lost tool effect path")
-            requireEvidence(
-              [discussion, direct, clarification, exam, correction]
-                .flatMap((turn) => turn.tools)
-                .every((part) => part.tool === capability),
-              "the guarded carrier invoked a non-Goal tool",
+              new Set([createPath.occurrenceID, updatePath.occurrenceID, acceptancePath.occurrenceID]).size === 3,
+              "distinct learner Turns reused one occurrence",
             )
             requireEvidence(
-              Number(confirmationCaptures.length) === 2,
-              "the carrier did not observe exactly two confirmations",
-            )
-
-            const examConfirmation = confirmationCaptures.find(
-              (capture) => capture.label === "two-Goal exam candidate",
-            )!
-            const correctionConfirmation = confirmationCaptures.find(
-              (capture) => capture.label === "later contextual Goal correction",
-            )!
-            requireEvidence(
-              examConfirmation && correctionConfirmation,
-              "the exact confirmation evidence was incomplete",
+              new Set([createPath.effectID, updatePath.effectID, acceptancePath.effectID]).size === 3,
+              "distinct Goal writes reused one effect",
             )
 
             return {
-              run: "gate16-openai-oauth-real-model-02",
-              provider: "openai",
-              model: "gpt-5.5",
-              isolatedFixture: {
-                courseID: course.id,
-                courseTitle: course.title,
-                courseVersion: course.stateVersion,
-              },
-              observations: [
-                {
-                  id: 1,
-                  claim: "direct explicit create commits without an extra Gate confirmation",
-                  authorizationBasis: directPath.authorizationBasis,
-                  confirmationPrompts: 0,
-                  goal: goalProjection(directGoal),
-                  acknowledgement: directAcknowledgement,
-                },
-                {
-                  id: 2,
-                  claim: "quoted, hypothetical, and negated discussion does not write",
-                  toolCalls: discussion.tools.length,
-                  ownerGoalsBefore: 0,
-                  ownerGoalsAfter: 0,
+              run: "gate16-openai-oauth-agent-native-01",
+              model,
+              limits: { sessions: 5, turns: 6, maxModelOperationsPerTurn: 5, maxToolCallsPerTurn: 4 },
+              isolatedFixture: { courseID: course.id, courseTitle: course.title },
+              observations: {
+                discussion: {
+                  claim: "quoted, hypothetical, and progress discussion remains useful and does not write",
                   responseCharacters: discussion.text.join("\n").length,
                   responseDigest: textDigest(discussion.text),
+                  tools: discussion.tools.map((part) => part.tool),
                 },
-                {
-                  id: 3,
-                  claim: "ambiguity is clarified and the exact model-expanded candidate is visible before commit",
-                  clarification: {
-                    toolCalls: clarification.tools.length,
-                    dimensions: clarifiedDimensions,
-                    responseCharacters: clarification.text.join("\n").length,
-                    responseDigest: textDigest(clarification.text),
+                creation: {
+                  claim: "clear natural language creates a Course-scoped Goal without learner-entered IDs",
+                  tools: create.tools.map((part) => part.tool),
+                  path: createPath,
+                  goal: goalProjection(initialGoal),
+                },
+                contextualUpdate: {
+                  claim: "a fresh Session resolves a contextual Goal reference through owner reads",
+                  tools: update.tools.map((part) => part.tool),
+                  path: updatePath,
+                  before: goalProjection(initialGoal),
+                  after: goalProjection(correctedGoal),
+                },
+                shortAcceptance: {
+                  claim: "a Tutor suggestion does not write and ordinary short acceptance uses the same typed command",
+                  suggestion: {
+                    responseCharacters: suggestion.text.join("\n").length,
+                    responseDigest: textDigest(suggestion.text),
+                    tools: suggestion.tools.map((part) => part.tool),
                   },
-                  confirmation: examConfirmation,
+                  acceptanceTools: acceptance.tools.map((part) => part.tool),
+                  path: acceptancePath,
+                  goal: goalProjection(acceptedGoal),
                 },
-                {
-                  id: 4,
-                  claim: "one accepted exam candidate creates two independent exact Course/target Goals only",
-                  atomicToolCalls: exam.goalTools.length,
-                  goals: examGoals.map(goalProjection),
-                  forbiddenStateKeys: examGoals.flatMap((goal) => forbiddenGoalKeys(goal.head)),
-                  nonGoalToolCalls: exam.tools.filter((part) => part.tool !== capability).length,
+                ambiguity: {
+                  claim: "material ambiguity produces ordinary clarification before any write",
+                  responseCharacters: ambiguity.text.join("\n").length,
+                  responseDigest: textDigest(ambiguity.text),
+                  tools: ambiguity.tools.map((part) => part.tool),
                 },
-                {
-                  id: 5,
-                  claim:
-                    "each durable change retains its exact occurrence, Turn, message, part, call, authority, and effect path",
-                  paths: { direct: directPath, exam: examPath, correction: correctionPath },
-                },
-                {
-                  id: 6,
-                  claim: "later correction changes Goal read without foreign state or automatic lifecycle",
-                  confirmation: correctionConfirmation,
-                  before: goalProjection(virtualGoal),
-                  after: goalProjection(correctedRead),
-                  trustedReadAfterTarget: { asOf: afterTarget, targetRelation: correctedGoal.targetRelation },
-                  forbiddenStateKeys: forbiddenGoalKeys(correctedGoal),
-                  ownerGoalCount: afterCorrection.items.length,
-                },
-              ],
+              },
+              permissionRequests,
+              historicalCommandRows: yield* legacyCommandCount(),
             }
           }).pipe(Effect.scoped, Effect.provideService(InstanceRef, ctx), Effect.ensuring(store.dispose(ctx))),
         ),
@@ -965,8 +562,9 @@ try {
   )
   const serialized = JSON.stringify(evidence, null, 2)
   for (const secret of [process.env.REPA_CONFIG_CONTENT, process.env.REPA_AUTH_CONTENT]) {
-    if (secret.length >= 16)
+    if (secret.length >= 16) {
       requireEvidence(!serialized.includes(secret), "evidence output included an isolated secret input")
+    }
   }
   console.log(serialized)
 } finally {

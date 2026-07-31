@@ -191,6 +191,59 @@ export const GoalResultOperation = Schema.Struct({
 })
 export interface GoalResultOperation extends Schema.Schema.Type<typeof GoalResultOperation> {}
 
+const GoalV2Meaning = Schema.Struct({
+  outcome: StringValue,
+  conditions: Schema.Array(StringValue),
+  scope: Schema.Union([
+    Schema.Struct({ type: Schema.Literal("learner_home") }),
+    Schema.Struct({ type: Schema.Literal("courses"), courseIDs: Schema.Array(StringValue) }),
+  ]),
+  target: StringValue,
+  disposition: Schema.Literals(["active", "achieved", "abandoned", "superseded"]),
+})
+
+const GoalV2Revision = Schema.Struct({
+  schemaVersion: Schema.Literals([1, 2]),
+  goalID: StringValue,
+  revisionID: StringValue,
+  version: PositiveVersion,
+  meaning: GoalV2Meaning,
+})
+
+const GoalV2MaterializedOperation = Schema.Struct({
+  ordinal: PositiveVersion,
+  operation: Schema.Literals(["create", "update", "replace"]),
+  result: Schema.Literals(["changed", "no_change"]),
+  before: optional(GoalV2Revision),
+  after: GoalV2Revision,
+  replacementTarget: optional(
+    Schema.Struct({
+      type: Schema.Literals(["existing", "new"]),
+      before: optional(GoalV2Revision),
+      after: GoalV2Revision,
+    }),
+  ),
+})
+
+const GoalV2ResultOperation = Schema.Struct({
+  schemaVersion: Schema.Literal(2),
+  ordinal: PositiveVersion,
+  operation: Schema.Literals(["create", "update", "replace"]),
+  result: Schema.Literals(["changed", "no_change"]),
+  goalID: StringValue,
+  revisionID: StringValue,
+  version: PositiveVersion,
+  meaning: GoalV2Meaning,
+  replacementTarget: optional(
+    Schema.Struct({
+      type: Schema.Literals(["existing", "new"]),
+      goalID: StringValue,
+      revisionID: StringValue,
+      version: PositiveVersion,
+    }),
+  ),
+})
+
 const GoalBasis = Schema.Struct({
   authorizationBasis: Schema.Literals(["learner_request", "learner_acceptance"]),
   semanticFingerprint: StringValue,
@@ -629,6 +682,14 @@ const LearnerGoalProposal = Schema.Struct({
   ...GoalBasis.fields,
 })
 
+const LearnerGoalV2CapabilityProposal = Schema.Struct({
+  kind: Schema.Literal("learner_goals_v2_capability"),
+  ...ProposalBinding,
+  commandFingerprint: StringValue,
+  issuance: Schema.Literals(["root", "delegated"]),
+  operations: Schema.Array(GoalV2MaterializedOperation),
+})
+
 export const ProposalBasis = Schema.Union([
   AcceptCourseProposal,
   RepresentationProposal,
@@ -640,6 +701,7 @@ export const ProposalBasis = Schema.Union([
   RouteAnchorProposal,
   RetainedSteeringProposal,
   LearnerGoalProposal,
+  LearnerGoalV2CapabilityProposal,
 ]).annotate({
   discriminator: "kind",
   identifier: "SemanticProposalBasisV1",
@@ -834,6 +896,28 @@ const LearnerGoalResult = Schema.Struct({
   operations: Schema.Array(GoalResultOperation),
 })
 
+const LearnerGoalV2Result = Schema.Struct({
+  kind: Schema.Literal("learner_goals_v2_result"),
+  ...ResultCommon,
+  disposition: Schema.Literals(["semantic_terminal_v2", "candidate_v2", "physical_no_effect"]),
+  semanticOutcome: optional(Schema.Literals(["already_applied", "semantic_conflict"])),
+  issuance: optional(Schema.Literals(["root", "delegated"])),
+  capabilityOutcome: optional(
+    Schema.Literals([
+      "not_evaluated",
+      "policy_allow",
+      "policy_deny",
+      "prompted_abort",
+      "prompted_allow",
+      "prompted_deny",
+      "prompted_correct",
+      "prompted_cancel",
+    ]),
+  ),
+  permissionRequestID: optional(StringValue),
+  operations: Schema.Array(GoalV2ResultOperation),
+})
+
 const ContentWriteResult = Schema.Struct({
   kind: Schema.Literal("content_write_result"),
   ...ResultCommon,
@@ -860,6 +944,7 @@ export const ResultBasis = Schema.Union([
   RouteAnchorResult,
   RetainedSteeringResult,
   LearnerGoalResult,
+  LearnerGoalV2Result,
   ContentWriteResult,
 ]).annotate({
   discriminator: "kind",

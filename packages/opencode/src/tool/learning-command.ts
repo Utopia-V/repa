@@ -3,6 +3,7 @@ import { PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY } from "@opencode-ai/core/
 import { normalizeCommand } from "@/learning-command/input"
 import type { LearningCommandRuntime } from "@/learning-command/runtime"
 import { COURSE_NAVIGATION_QUERY_TOOL_IDS } from "./course-navigation-query"
+import { LEARNER_GOAL_QUERY_TOOL_IDS } from "./learner-goal-query"
 import { Tool } from "./tool"
 
 type Preparation = LearningCommandRuntime.Interface["prepare"]
@@ -32,6 +33,9 @@ export function assertExternalToolID(id: string, source: "custom" | "mcp") {
   }
   if (COURSE_NAVIGATION_QUERY_TOOL_IDS.includes(id as (typeof COURSE_NAVIGATION_QUERY_TOOL_IDS)[number])) {
     throw new Error(`${source} tool ID ${id} is reserved by Repa's Course/navigation read authority`)
+  }
+  if (LEARNER_GOAL_QUERY_TOOL_IDS.includes(id as (typeof LEARNER_GOAL_QUERY_TOOL_IDS)[number])) {
+    throw new Error(`${source} tool ID ${id} is reserved by Repa's learner Goal read authority`)
   }
 }
 

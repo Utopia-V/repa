@@ -25,8 +25,10 @@ import { assertExternalToolID, toolCallPreparation } from "@/tool/learning-comma
 import { Permission } from "@/permission"
 import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
+import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { sql } from "drizzle-orm"
-import { normalizeDefaultV3 } from "@/learning-command/input"
+import { normalizeDefaultV3, normalizeGoalsV2 } from "@/learning-command/input"
 
 const configLayer = TestConfig.layer({
   directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".repa")])),
@@ -281,6 +283,9 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("learning_navigation_query", "mcp")).toThrow(
         "mcp tool ID learning_navigation_query is reserved by Repa's Course/navigation read authority",
       )
+      expect(() => assertExternalToolID("learner_goal_query", "custom")).toThrow(
+        "custom tool ID learner_goal_query is reserved by Repa's learner Goal read authority",
+      )
       expect(() => assertExternalToolID("set_course_route_anchor", "mcp")).toThrow(
         "mcp tool ID set_course_route_anchor is reserved by the learning-command runtime",
       )
@@ -300,6 +305,7 @@ describe("tool.registry", () => {
       const ids = tools.map((tool) => tool.id)
       const proposal = tools.find((tool) => tool.id === "propose_default_course_preference")
       const preference = tools.find((tool) => tool.id === "set_default_course_preference")
+      const goalCommand = tools.find((tool) => tool.id === "update_learner_goals")
 
       expect(ids).toContain("accept_course_view_revision")
       expect(ids).toContain("representation.convert")
@@ -310,8 +316,39 @@ describe("tool.registry", () => {
       expect(ids).toContain("update_learner_goals")
       expect(ids).toContain("course_query")
       expect(ids).toContain("learning_navigation_query")
+      expect(ids).toContain("learner_goal_query")
       expect(proposal).toBeUndefined()
       expect(preference).toBeDefined()
+      expect(goalCommand).toBeDefined()
+      expect(LearningCommand.UPDATE_LEARNER_GOALS_VERSION).toBe(2)
+      expect(LearningCommand.HISTORICAL_UPDATE_LEARNER_GOALS_VERSION).toBe(1)
+      expect(LearningCommand).not.toHaveProperty("HistoricalLearnerGoalV1")
+      expect(LearningCommand).not.toHaveProperty("reserveLearnerGoals")
+      expect(LearningCommand).not.toHaveProperty("prepareLearnerGoalConfirmation")
+      expect(LearningCommand).not.toHaveProperty("settleLearnerGoals")
+      expect(LearnerGoal).not.toHaveProperty("prepareConfirmation")
+      expect(LearnerGoal).not.toHaveProperty("prepareChangeSet")
+      expect(LearnerGoal).not.toHaveProperty("applyChangeSet")
+      expect(LearnerGoal).not.toHaveProperty("preparePresentation")
+      expect(LearnerGoal).not.toHaveProperty("preparedConfirmationSnapshot")
+      expect(LearnerGoal).not.toHaveProperty("acceptedPreparedConfirmation")
+      expect(LearnerGoal).not.toHaveProperty("sealEffect")
+      expect(
+        yield* Effect.promise(() =>
+          Promise.all(
+            ["@opencode-ai/core/learner-goal/learning-command", "@opencode-ai/core/learner-goal-current"].map(
+              async (id) => {
+                try {
+                  await import(id)
+                  return true
+                } catch {
+                  return false
+                }
+              },
+            ),
+          ),
+        ),
+      ).toEqual([false, false])
       expect(
         (preference?.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> } | undefined)?.anyOf?.map(
           (branch) => branch.additionalProperties,
@@ -324,6 +361,75 @@ describe("tool.registry", () => {
           target: { courseID: "crs_shadow" },
         }),
       ).toThrow()
+      const goalID = `gol_${"a".repeat(26)}`
+      const revisionID = `glr_${"b".repeat(26)}`
+      for (const shadow of [
+        {
+          authorization: { type: "learner_acceptance" },
+          operations: [{ type: "create", outcome: "Reject model authorization" }],
+        },
+        {
+          operations: [
+            {
+              type: "create",
+              outcome: "Reject legacy semantic proof",
+              sourceExcerpt: "the model is not the source authority",
+            },
+          ],
+        },
+        {
+          operations: [
+            {
+              type: "create",
+              outcome: "Reject generated identities",
+              goalID,
+              revisionID,
+            },
+          ],
+        },
+        {
+          operations: [
+            {
+              type: "create",
+              outcome: "Reject field bases",
+              fieldBases: { outcome: { type: "accepted" } },
+            },
+          ],
+        },
+        {
+          operations: [
+            {
+              type: "create",
+              outcome: "Reject derived target facts",
+              target: {
+                type: "instant",
+                localDateTime: "2030-08-05T10:30:00",
+                timeZone: { type: "iana", name: "Asia/Shanghai", releaseID: "model-release" },
+                instant: 1,
+                utcOffsetMinutes: 480,
+              },
+            },
+          ],
+        },
+        {
+          operations: [
+            {
+              type: "update",
+              goalID,
+              headRevisionID: revisionID,
+              expectedVersion: 7,
+              patch: { outcome: "Reject caller-owned versions" },
+            },
+          ],
+        },
+        {
+          candidate: { exhaustive: true },
+          confirmation: { approved: true },
+          operations: [{ type: "create", outcome: "Reject retired workflow state" }],
+        },
+      ]) {
+        expect(() => normalizeGoalsV2(shadow)).toThrow()
+      }
 
       const agents = yield* Agent.Service
       const invalid = yield* preference!
@@ -345,6 +451,30 @@ describe("tool.registry", () => {
         .pipe(Effect.exit)
       expect(Exit.isFailure(invalid)).toBe(true)
       if (Exit.isFailure(invalid)) expect(Cause.pretty(invalid.cause)).toContain("ToolInvalidArgumentsError")
+      const invalidGoal = yield* goalCommand!
+        .execute(
+          {
+            operations: [
+              {
+                type: "create",
+                outcome: "Reject a hybrid current Goal input",
+                authorization: { type: "learner_request" },
+              },
+            ],
+          } as never,
+          {
+            sessionID: SessionID.descending(),
+            messageID: MessageID.ascending(),
+            agent: (yield* agents.defaultInfo()).name,
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(invalidGoal)).toBe(true)
+      if (Exit.isFailure(invalidGoal)) expect(Cause.pretty(invalidGoal.cause)).toContain("ToolInvalidArgumentsError")
     }),
   )
 
@@ -382,6 +512,7 @@ describe("tool.registry", () => {
       const defaults = (yield* registry.tools(model)).map((tool) => tool.id)
       expect(defaults).toContain("course_query")
       expect(defaults).toContain("learning_navigation_query")
+      expect(defaults).toContain("learner_goal_query")
 
       const restricted = (yield* registry.tools({
         ...model,
@@ -393,6 +524,17 @@ describe("tool.registry", () => {
       expect(restricted).toContain("course_query")
       expect(restricted).not.toContain("learning_navigation_query")
       expect(restricted).not.toContain("set_default_course_preference")
+      expect(restricted).not.toContain("learner_goal_query")
+
+      const goalReader = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", learner_goal_query: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(goalReader).toContain("learner_goal_query")
+      expect(goalReader).not.toContain("update_learner_goals")
 
       const delegated = (yield* registry.tools({
         ...model,
@@ -406,6 +548,19 @@ describe("tool.registry", () => {
       expect(delegated).toContain("course_query")
       expect(delegated).not.toContain("learning_navigation_query")
       expect(delegated).not.toContain("set_default_course_preference")
+      expect(delegated).not.toContain("learner_goal_query")
+
+      const delegatedGoalReader = (yield* registry.tools({
+        ...model,
+        authority: [
+          {
+            ruleset: Permission.fromConfig({ learner_goal_query: "allow" }),
+            absence: "deny",
+          },
+        ],
+      })).map((tool) => tool.id)
+      expect(delegatedGoalReader).toContain("learner_goal_query")
+      expect(delegatedGoalReader).not.toContain("update_learner_goals")
     }),
   )
 
@@ -524,6 +679,61 @@ describe("tool.registry", () => {
             (SELECT count(*) FROM learner_default_course_transition) AS effects
         `),
       ).toEqual({ invocations: 0, dispositions: 0, issues: 0, settlements: 0, effects: 0 })
+    }),
+  )
+
+  it.instance("publishes a closed Goal command and performs bounded Goal owner reads without writing", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const db = (yield* Database.Service).db
+      const agent = yield* agents.defaultInfo()
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })
+      const command = tools.find((tool) => tool.id === "update_learner_goals")
+      const query = tools.find((tool) => tool.id === "learner_goal_query")
+      if (!command || !query) return yield* Effect.die("Goal command/read tools are unavailable")
+
+      expect((command.jsonSchema as { additionalProperties?: boolean }).additionalProperties).toBe(false)
+      expect(
+        (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
+          (branch) => branch.additionalProperties,
+        ),
+      ).toEqual([false, false, false, false])
+
+      const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+      const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+      const result = JSON.parse(
+        (yield* query.execute(
+          { action: "discover", limit: 3 },
+          {
+            sessionID: SessionID.descending(),
+            messageID: MessageID.ascending(),
+            agent: agent.name,
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )).output,
+      )
+      expect(result).toMatchObject({ page: { items: [], throughRevision: 0 } })
+      expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(before)
+      expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontier)
+      expect(
+        yield* db.get(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation) AS invocations,
+            (SELECT count(*) FROM learner_goal_disposition_v2) AS dispositions,
+            (SELECT count(*) FROM learner_goal_capability_issue_v2) AS issues,
+            (SELECT count(*) FROM learner_goal_capability_settlement_v2) AS settlements,
+            (SELECT count(*) FROM learner_goal_effect) AS effects
+        `),
+      ).toEqual({ invocations: 0, dispositions: 0, issues: 0, settlements: 0, effects: 0 })
+      expect(LearnerGoal.PERMISSION_PATTERN).toBe("learner_home")
     }),
   )
 

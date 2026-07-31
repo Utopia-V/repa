@@ -54,15 +54,32 @@ export {
 } from "./retained-steering/learning-command"
 
 export {
+  UPDATE_LEARNER_GOALS_VERSION as HISTORICAL_UPDATE_LEARNER_GOALS_VERSION,
+  lookupLearnerGoalCommandReservation as lookupHistoricalLearnerGoalCommand,
+  reopenHistoricalLearnerGoalInvocation,
+  settleLearnerGoalReservation as settleHistoricalLearnerGoalReservation,
+} from "./learner-goal/learning-command"
+
+export {
   UPDATE_LEARNER_GOALS_CAPABILITY,
   UPDATE_LEARNER_GOALS_VERSION,
-  lookupLearnerGoalCommandReservation,
-  prepareLearnerGoalConfirmation,
-  reserveLearnerGoals,
-  settleLearnerGoalReservation,
-  settleLearnerGoals,
-} from "./learner-goal/learning-command"
-export type { GoalConfirmationResult } from "./learner-goal/learning-command"
+  canonicalizeCommandV2,
+  commandFingerprintV2,
+  issueLearnerGoalCapabilityPromptV2,
+  readLearnerGoalInvocationVersion,
+  recoverLearnerGoalCapabilityV2,
+  recoverLearnerGoalsV2,
+  reserveLearnerGoalsV2,
+  settleLearnerGoalPolicyV2,
+  settleLearnerGoalPromptV2,
+  settleLearnerGoalsV2,
+} from "./learner-goal/agent-command-v2"
+export type {
+  GoalInvocationVersion,
+  GoalV2PolicyInput,
+  GoalV2PromptIssueInput,
+  GoalV2PromptSettlementInput,
+} from "./learner-goal/agent-command-v2"
 
 export {
   assertAssistantDeletable,
@@ -77,11 +94,7 @@ export {
   removeNoEffectInvocationsForSession,
   removeOccurrencePresentation,
 } from "./learning-command/physical"
-export type {
-  AdmittedInvocation,
-  PhysicalInvocation,
-  PhysicalInvocationIdentity,
-} from "./learning-command/physical"
+export type { AdmittedInvocation, PhysicalInvocation, PhysicalInvocationIdentity } from "./learning-command/physical"
 
 export {
   AppliedAssistantImmutableError,

@@ -32,71 +32,41 @@ function request(): PermissionRequest {
   const operations = Array.from({ length: LearnerGoal.MAX_OPERATIONS }, (_, operationIndex) => {
     const outcome = `Goal outcome ${operationIndex + 1}`
     return {
-      type: "create" as const,
-      resultIntent: "create_new_goal" as const,
-      meaning: {
-        outcome,
-        conditions: Array.from(
-          { length: LearnerGoal.MAX_CONDITIONS },
-          (_, conditionIndex) => `Condition ${operationIndex + 1}.${conditionIndex + 1}`,
-        ),
-        scope: {
-          type: "courses" as const,
-          courses: Array.from({ length: LearnerGoal.MAX_COURSES }, (_, courseIndex) => ({
-            courseID: `course-${operationIndex + 1}-${courseIndex + 1}`,
-            courseTitle: `Course ${operationIndex + 1}.${courseIndex + 1}`,
-            basis: { type: "new" as const, expectedCourseVersion: 1 },
-            availability: {
-              state: "available" as const,
-              title: `Course ${operationIndex + 1}.${courseIndex + 1}`,
-            },
-          })),
-        },
-        target: { type: "absent" as const },
-        disposition: "active" as const,
-        fieldBases: {
-          outcome: { type: "authored" as const, sourceExcerpt: `source outcome ${operationIndex + 1}` },
-          conditions: {
-            type: "authored" as const,
-            sourceExcerpt: `source conditions ${operationIndex + 1}`,
+      ordinal: operationIndex,
+      operation: "create" as const,
+      result: "changed" as const,
+      after: {
+        schemaVersion: 2 as const,
+        goalID: `goal-${operationIndex + 1}`,
+        revisionID: `revision-${operationIndex + 1}`,
+        version: 1,
+        meaning: {
+          outcome,
+          conditions: Array.from({ length: LearnerGoal.MAX_CONDITIONS }, (_, conditionIndex) =>
+            operationIndex === LearnerGoal.MAX_OPERATIONS - 1 && conditionIndex === LearnerGoal.MAX_CONDITIONS - 1
+              ? tail
+              : `Condition ${operationIndex + 1}.${conditionIndex + 1}`,
+          ),
+          scope: {
+            type: "courses" as const,
+            courseIDs: Array.from(
+              { length: LearnerGoal.MAX_COURSES },
+              (_, courseIndex) => `course-${operationIndex + 1}-${courseIndex + 1}`,
+            ),
           },
-          scope: { type: "authored" as const, sourceExcerpt: `source scope ${operationIndex + 1}` },
-          target: { type: "authored" as const, sourceExcerpt: `source target ${operationIndex + 1}` },
-          disposition: {
-            type: "authored" as const,
-            sourceExcerpt:
-              operationIndex === LearnerGoal.MAX_OPERATIONS - 1 ? tail : `source lifecycle ${operationIndex + 1}`,
-          },
+          target: "none",
+          disposition: "active" as const,
         },
       },
     }
   })
   const presentation = SemanticPresentation.proposal({
-    kind: "learner_goals",
+    kind: "learner_goals_v2_capability",
     binding: { sessionID, messageID, callID },
-    authorizationBasis: "learner_request",
-    semanticFingerprint: "f".repeat(64),
+    commandFingerprint: "f".repeat(64),
+    issuance: "root",
     operations,
   })
-  const command = {
-    operations: operations.map((operation) => ({
-      type: "create" as const,
-      snapshot: {
-        outcome: operation.meaning.outcome,
-        conditions: operation.meaning.conditions,
-        scope: {
-          type: "courses" as const,
-          courses: operation.meaning.scope.courses.map((course) => ({
-            courseID: course.courseID,
-            basis: course.basis,
-          })),
-        },
-        target: operation.meaning.target,
-        fieldBases: operation.meaning.fieldBases,
-      },
-      disposition: operation.meaning.disposition,
-    })),
-  }
   return {
     id: requestID,
     sessionID,
@@ -104,8 +74,10 @@ function request(): PermissionRequest {
     patterns: [LearnerGoal.PERMISSION_PATTERN],
     always: [LearnerGoal.PERMISSION_PATTERN],
     metadata: {
-      authorizationBasis: "learner_request",
-      command,
+      goalKind: "learner_goal",
+      commandFingerprint: "f".repeat(64),
+      issuance: "root",
+      operations,
       [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
       ...SemanticPresentation.metadata(presentation),
     },
@@ -179,7 +151,7 @@ test("maximum legal Goal proposal scrolls to its tail without hiding permission 
 
   const app = await testRender(() => <Harness />, { width: 140, height: 24, kittyKeyboard: true })
   try {
-    const initial = await frame(app, "Allow direct learner Goal changes")
+    const initial = await frame(app, "Update these learner Goals")
     expect(initial).not.toContain(tail)
     expect(initial).toContain("Allow once")
     expect(initial).toContain("Allow always")

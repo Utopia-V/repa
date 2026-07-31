@@ -1,10 +1,7 @@
 import { and, asc, eq, ne } from "drizzle-orm"
 import { Effect } from "effect"
 import { LearnerGoal } from "../learner-goal"
-import {
-  LearnerGoalCommandTable,
-  LearnerGoalCommitSealTable,
-} from "../learner-goal/sql"
+import { LearnerGoalCommandTable, LearnerGoalCommitSealTable } from "../learner-goal/sql"
 import {
   admitPhysicalInvocation,
   appliedMutation,
@@ -62,7 +59,10 @@ export function reserveLearnerGoals(tx: Transaction, input: LearnerGoalInvocatio
     const physical = yield* findPhysicalInvocation(tx, input, fingerprint, identity)
     if (physical) {
       const command = yield* lookupLearnerGoalCommandReservation(tx, physical.part_id)
-      if (!command || JSON.stringify(command.command_snapshot) !== JSON.stringify(LearnerGoal.canonicalizeCommand(input.command))) {
+      if (
+        !command ||
+        JSON.stringify(command.command_snapshot) !== JSON.stringify(LearnerGoal.canonicalizeCommand(input.command))
+      ) {
         return yield* invocationConflict(input.envelope)
       }
       if (isAccepted(input) && command.permission_request_id !== input.permissionRequestID) {
@@ -89,6 +89,34 @@ export function reserveLearnerGoals(tx: Transaction, input: LearnerGoalInvocatio
     return decision.type === "candidate"
       ? ({ type: "candidate" } as const)
       : ({ type: "terminal", reason: decision.type } as const)
+  })
+}
+
+/**
+ * Reopens one already persisted V1 invocation for exact replay or interrupted
+ * recovery. Unlike the historical producer above, this boundary can never
+ * admit a physical invocation or create a learner_goal_command row.
+ */
+export function reopenHistoricalLearnerGoalInvocation(tx: Transaction, input: LearnerGoalInvocation) {
+  return Effect.gen(function* () {
+    const fingerprint = invocationFingerprint(input)
+    const physical = yield* findPhysicalInvocation(tx, input, fingerprint, identity)
+    if (!physical) return yield* Effect.die(`Historical learner Goal invocation ${input.envelope.partID} is absent`)
+    const command = yield* lookupLearnerGoalCommandReservation(tx, physical.part_id)
+    if (
+      !command ||
+      JSON.stringify(command.command_snapshot) !== JSON.stringify(LearnerGoal.canonicalizeCommand(input.command))
+    ) {
+      return yield* invocationConflict(input.envelope)
+    }
+    if (isAccepted(input) && command.permission_request_id !== input.permissionRequestID) {
+      return yield* invocationConflict(input.envelope)
+    }
+    if (physical.status === "admitted") return { type: "admitted" as const }
+    return {
+      type: "replay" as const,
+      settlement: requireGoalSettlement(requirePhysicalSettlement(physical)),
+    }
   })
 }
 
@@ -369,10 +397,14 @@ function settlementForDecision(
       Effect.map(() => errorSettlement("semantic_conflict", metadata, { effectID: decision.effect.effectID })),
     )
   }
+  if (decision.effect.schemaVersion !== 1) {
+    return Effect.die(`Historical Goal replay ${decision.effect.effectID} resolved to a current V2 effect`)
+  }
+  const effect = decision.effect
   return Effect.gen(function* () {
-    yield* requireMetadataFloor(metadata, decision.effect.timeCommitted)
+    yield* requireMetadataFloor(metadata, effect.timeCommitted)
     const currentHeads = yield* Effect.forEach(
-      [...new Set(decision.effect.operations.map((operation) => operation.goalID))],
+      [...new Set(effect.operations.map((operation) => operation.goalID))],
       (goalID) =>
         LearnerGoal.readCurrent(tx, goalID, metadata.time).pipe(
           Effect.orDie,
@@ -383,7 +415,7 @@ function settlementForDecision(
           ),
         ),
     )
-    const command = decision.effect.confirmation
+    const command = effect.confirmation
       ? yield* tx
           .select({ permissionRequestID: LearnerGoalCommandTable.permission_request_id })
           .from(LearnerGoalCommitSealTable)
@@ -391,25 +423,25 @@ function settlementForDecision(
             LearnerGoalCommandTable,
             eq(LearnerGoalCommandTable.invocation_part_id, LearnerGoalCommitSealTable.invocation_part_id),
           )
-          .where(eq(LearnerGoalCommitSealTable.effect_id, decision.effect.effectID))
+          .where(eq(LearnerGoalCommitSealTable.effect_id, effect.effectID))
           .get()
           .pipe(Effect.orDie)
       : undefined
-    if (decision.effect.confirmation && !command?.permissionRequestID) {
-      return yield* Effect.die(`Accepted Goal effect ${decision.effect.effectID} lost its permission request`)
+    if (effect.confirmation && !command?.permissionRequestID) {
+      return yield* Effect.die(`Accepted Goal effect ${effect.effectID} lost its permission request`)
     }
     return {
       outcome: "already_applied",
       goalKind: "learner_goal",
-      receiptID: decision.effect.receiptID,
-      effectID: decision.effect.effectID,
-      authorizationBasis: decision.effect.authorizationBasis,
+      receiptID: effect.receiptID,
+      effectID: effect.effectID,
+      authorizationBasis: effect.authorizationBasis,
       ...(command?.permissionRequestID ? { confirmationRequestID: command.permissionRequestID } : {}),
-      operations: decision.effect.operations,
+      operations: effect.operations,
       currentHeads,
-      acknowledgementTitle: decision.effect.acknowledgementTitle,
-      acknowledgementBody: decision.effect.acknowledgementBody,
-      frontierSequence: decision.effect.frontierSequence,
+      acknowledgementTitle: effect.acknowledgementTitle,
+      acknowledgementBody: effect.acknowledgementBody,
+      frontierSequence: effect.frontierSequence,
       settlementTime: metadata.time,
       settlementOrder: metadata.order,
     } as LearnerGoal.AlreadyAppliedSettlement
@@ -420,7 +452,10 @@ function requireInvocation(tx: Transaction, input: LearnerGoalInvocation) {
   return Effect.gen(function* () {
     const row = yield* requirePhysicalInvocation(tx, input, invocationFingerprint(input), identity)
     const command = yield* lookupLearnerGoalCommandReservation(tx, row.part_id)
-    if (!command || JSON.stringify(command.command_snapshot) !== JSON.stringify(LearnerGoal.canonicalizeCommand(input.command))) {
+    if (
+      !command ||
+      JSON.stringify(command.command_snapshot) !== JSON.stringify(LearnerGoal.canonicalizeCommand(input.command))
+    ) {
       return yield* invocationConflict(input.envelope)
     }
     if (isAccepted(input) && command.permission_request_id !== input.permissionRequestID) {
@@ -434,10 +469,7 @@ function isAccepted(input: LearnerGoalInvocation): input is LearnerGoal.Accepted
   return input.envelope.authorizationBasis === "learner_acceptance"
 }
 
-function sameConfirmation(
-  displayed: LearnerGoal.ConfirmationSnapshot,
-  current: LearnerGoal.ConfirmationSnapshot,
-) {
+function sameConfirmation(displayed: LearnerGoal.ConfirmationSnapshot, current: LearnerGoal.ConfirmationSnapshot) {
   const semanticBasis = (confirmation: LearnerGoal.ConfirmationSnapshot) => ({
     ...confirmation,
     courseBases: confirmation.courseBases.map((course) =>

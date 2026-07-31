@@ -5,8 +5,12 @@ Status: Agent-native Goal query/write contract accepted by fresh reviewer
 same reviewer accepted the mechanical V15-to-V16 predecessor correction after
 Gate 8 advanced the current native database at
 `19d0fe933fd8db96c6f22e509294cb93c28ec38c`. Scoped Gate 16 implementation
-authority is available for the contract below. Gate 16 implementation has not
-begun. Gate 17 remains unauthorized.
+authority was available for the contract below. The same reviewer returned
+`Revise` on the first implementation/evidence candidate with
+`G16-AN-IMP-001..003`. The top-level executor has repaired those exact seams;
+the superseding candidate is complete and unstaged, and exact-diff closure by
+the same reviewer is pending. It is not accepted or integrated. Gate 17
+remains unauthorized.
 
 The decisions under **Accepted maintainer decisions**, the structural Goal
 identity/revision/lifecycle result, and corrective TUI integration
@@ -385,7 +389,6 @@ Admission and settlement use this order:
    then atomically reserves `candidate_v2`, its truthful Agent issuance, and
    runtime-bound current command state.
 5. The admitted candidate uses the common capability lifecycle:
-
    - effective `deny` settles denied with no Goal effect while retaining
      truthful candidate issuance and capability history;
    - effective `allow` adds no Gate-specific proposal or confirmation;
@@ -882,16 +885,16 @@ would require a later owning roadmap decision rather than an implicit split now.
 
 ## Decision provenance and revision authority
 
-| Decision | Basis | May be revised by |
-| --- | --- | --- |
-| `G16-MD-001` a learner-rooted Agent action is required; interaction shape is not fixed and program code does not prove the prose | 2026-07-21 maintainer grill as corrected by the 2026-07-30 Agent-native product boundary | maintainer or owning product decision |
-| `G16-MD-002` outcome required; conditions optional and consequentially clarified | 2026-07-21 maintainer grill | maintainer or owning product decision |
-| `G16-MD-003` identity follows the Agent-interpreted learner context; unresolved consequential choice is clarified, while time, ability, evidence, and wording alone do not decide it | 2026-07-21 maintainer grill as corrected by the Agent-native semantic boundary | maintainer or owning product decision |
-| `G16-MD-004` achievement, abandonment, and supersession require a learner-rooted Agent command, create no evidence, and do not erase later interpretive ambiguity | 2026-07-21 maintainer grill plus accepted no-automatic-attainment roadmap boundary and 2026-07-30 correction | maintainer or owning product decision |
-| `G16-MD-005` target time optional; passage has query-time meaning only | 2026-07-21 maintainer grill plus no-background-daemon architecture | maintainer or owning product decision |
-| `G16-MD-006` exam is a representative stress case, not a universal Goal model | 2026-07-21 maintainer grill | maintainer or owning product decision |
-| `G16-MD-007` Gate 21 consumes typed Goal or Assignment planning demands | 2026-07-21 maintainer correction of an Assignment-only roadmap derivation | maintainer or owning product/architecture/roadmap decision |
-| `G16-MD-008` overlapping learning histories remain Agent-interpreted and clarifiable rather than becoming one deterministic identity taxonomy | 2026-07-21 maintainer correction using abandonment, forgetting, shallow understanding, and later-depth counterexamples | maintainer or owning product decision |
+| Decision                                                                                                                                                                             | Basis                                                                                                                  | May be revised by                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `G16-MD-001` a learner-rooted Agent action is required; interaction shape is not fixed and program code does not prove the prose                                                     | 2026-07-21 maintainer grill as corrected by the 2026-07-30 Agent-native product boundary                               | maintainer or owning product decision                      |
+| `G16-MD-002` outcome required; conditions optional and consequentially clarified                                                                                                     | 2026-07-21 maintainer grill                                                                                            | maintainer or owning product decision                      |
+| `G16-MD-003` identity follows the Agent-interpreted learner context; unresolved consequential choice is clarified, while time, ability, evidence, and wording alone do not decide it | 2026-07-21 maintainer grill as corrected by the Agent-native semantic boundary                                         | maintainer or owning product decision                      |
+| `G16-MD-004` achievement, abandonment, and supersession require a learner-rooted Agent command, create no evidence, and do not erase later interpretive ambiguity                    | 2026-07-21 maintainer grill plus accepted no-automatic-attainment roadmap boundary and 2026-07-30 correction           | maintainer or owning product decision                      |
+| `G16-MD-005` target time optional; passage has query-time meaning only                                                                                                               | 2026-07-21 maintainer grill plus no-background-daemon architecture                                                     | maintainer or owning product decision                      |
+| `G16-MD-006` exam is a representative stress case, not a universal Goal model                                                                                                        | 2026-07-21 maintainer grill                                                                                            | maintainer or owning product decision                      |
+| `G16-MD-007` Gate 21 consumes typed Goal or Assignment planning demands                                                                                                              | 2026-07-21 maintainer correction of an Assignment-only roadmap derivation                                              | maintainer or owning product/architecture/roadmap decision |
+| `G16-MD-008` overlapping learning histories remain Agent-interpreted and clarifiable rather than becoming one deterministic identity taxonomy                                        | 2026-07-21 maintainer correction using abandonment, forgetting, shallow understanding, and later-depth counterexamples | maintainer or owning product decision                      |
 
 The Gate 16 contract may make these decisions concrete but may not turn
 optional conditions, model assistance, or one exemplar entry path into a
@@ -1846,7 +1849,7 @@ not evidence by itself.
 - before/on/reached/after target reads create no transition, evidence, event,
   receipt, or frontier write, including after restart; and
 - the mixed input `for the next two months, learn one data structure/algorithm
-  every day` cannot silently store cadence as Goal meaning or drop it while
+every day` cannot silently store cadence as Goal meaning or drop it while
   claiming the whole learner request was persisted.
 
 ### Direct source and model-assisted acceptance
@@ -1989,13 +1992,13 @@ architecture documents, Roadmap 09, and the closed Gate 8, Gate 12, Gate 14, and
 Gate 15 contracts. The implementation audit used the production fork at base
 HEAD `4fa0263e7` with the accepted Gate 15 implementation fixed by `03ea74ec4`.
 
-| Evidence | Preserved invariant | Deliberate Gate 16 difference |
-| --- | --- | --- |
-| `packages/core/src/learning-command/*` and `packages/opencode/src/learning-command/runtime.ts` | trusted occurrence/Turn/invocation envelope, one mutation slot, physical replay, receipt, atomic ToolPart/event settlement, recovery | extend the closed command/effect/receipt union for one Goal-owned bounded change-set effect; do not add another runner |
-| `packages/core/src/retained-steering*` | immutable owner lineage, exact source order/time, strict CAS, bounded source, deterministic acknowledgement, no fabricated backfill | Goal has no expiry policy/cut; one accepted occurrence may produce several Goal operations in one bounded effect |
-| `packages/core/src/learner-navigation*` | exact owner target proof, one-time confirmation when learner acceptance is required, source projection, stale/read behavior | Course membership is Goal scope rather than navigation; new bindings require an active owner proof, exact predecessor carries survive withdrawal, and model-assisted Goal meaning confirms the whole semantic candidate |
-| `packages/core/src/turn/learning-command-registration.ts` and released-v1 tool registry | only frozen current learner input and permitted tool membership authorize a write; copied history is read-only | add one reserved Goal capability without giving internal samples, custom tools, or MCP an alternate writer |
-| `packages/opencode/src/cli/cmd/run/stream.transport.ts` | current slash commands may still enter the ordinary model path | no `/goal` syntax or deterministic parser is required by the contract |
+| Evidence                                                                                       | Preserved invariant                                                                                                                  | Deliberate Gate 16 difference                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/core/src/learning-command/*` and `packages/opencode/src/learning-command/runtime.ts` | trusted occurrence/Turn/invocation envelope, one mutation slot, physical replay, receipt, atomic ToolPart/event settlement, recovery | extend the closed command/effect/receipt union for one Goal-owned bounded change-set effect; do not add another runner                                                                                                  |
+| `packages/core/src/retained-steering*`                                                         | immutable owner lineage, exact source order/time, strict CAS, bounded source, deterministic acknowledgement, no fabricated backfill  | Goal has no expiry policy/cut; one accepted occurrence may produce several Goal operations in one bounded effect                                                                                                        |
+| `packages/core/src/learner-navigation*`                                                        | exact owner target proof, one-time confirmation when learner acceptance is required, source projection, stale/read behavior          | Course membership is Goal scope rather than navigation; new bindings require an active owner proof, exact predecessor carries survive withdrawal, and model-assisted Goal meaning confirms the whole semantic candidate |
+| `packages/core/src/turn/learning-command-registration.ts` and released-v1 tool registry        | only frozen current learner input and permitted tool membership authorize a write; copied history is read-only                       | add one reserved Goal capability without giving internal samples, custom tools, or MCP an alternate writer                                                                                                              |
+| `packages/opencode/src/cli/cmd/run/stream.transport.ts`                                        | current slash commands may still enter the ordinary model path                                                                       | no `/goal` syntax or deterministic parser is required by the contract                                                                                                                                                   |
 
 No external scheduler, goal-management package, or preview-v2 runtime was used
 as product authority. The inherited local mechanisms already own the
@@ -2014,12 +2017,12 @@ pass retested and closed all four, then returned `Revise` with one new
 acceptance-changing Course/Goal separation defect. The next closure pass
 retested that repair and returned `Accept`:
 
-| Finding | Reviewer result | Current contract state |
-| --- | --- | --- |
-| `G16-CT-001` | closed: replacement had been unable to target an already-existing Goal | exact existing-target and generated-new-target arms, same-LearnerHome/distinct-head proof, and final one-to-one/acyclic validation remain in the candidate |
-| `G16-CT-002` | closed: source-head coupling had let ordinary correction silently clear supersession | supersession remains the complete revision's independently preservable disposition, with explicit preserve, clear, and retarget rules |
-| `G16-CT-003` | closed: byte equality had been treated as enough authority to carry terminal or referent-sensitive meaning | per-field basis and minimum dependency closure continue to require exact reauthorization or whole-candidate acceptance |
-| `G16-CT-004` | closed: replay precedence had contradicted the passed duplicate/conflict-before-live-state invariant | the single total order continues to resolve immutable envelope/shape and committed history before live checks for a new effect |
+| Finding      | Reviewer result                                                                                                                                                              | Current contract state                                                                                                                                                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `G16-CT-001` | closed: replacement had been unable to target an already-existing Goal                                                                                                       | exact existing-target and generated-new-target arms, same-LearnerHome/distinct-head proof, and final one-to-one/acyclic validation remain in the candidate                                                                          |
+| `G16-CT-002` | closed: source-head coupling had let ordinary correction silently clear supersession                                                                                         | supersession remains the complete revision's independently preservable disposition, with explicit preserve, clear, and retarget rules                                                                                               |
+| `G16-CT-003` | closed: byte equality had been treated as enough authority to carry terminal or referent-sensitive meaning                                                                   | per-field basis and minimum dependency closure continue to require exact reauthorization or whole-candidate acceptance                                                                                                              |
+| `G16-CT-004` | closed: replay precedence had contradicted the passed duplicate/conflict-before-live-state invariant                                                                         | the single total order continues to resolve immutable envelope/shape and committed history before live checks for a new effect                                                                                                      |
 | `G16-CT-005` | closed: requiring every Course in every successor revision to remain active had let reversible Course withdrawal block learner-owned Goal correction and lifecycle authority | active proof applies only to initial or newly added membership; an identical sealed predecessor membership may be preserved or removed while unavailable, per member in a multi-Course scope, with availability reported separately |
 
 The reviewer retested one-Course and multi-Course wording/target correction,
@@ -2143,3 +2146,166 @@ Agent-native semantic contract. After Gate 8 advanced the database predecessor
 to V15, that reviewer also accepted the exact mechanical V15-to-V16 correction
 without reopening Goal semantics. Scoped Gate 16 implementation authority is
 available; Gate 17 remains paused.
+
+## 2026-07-31 initial Agent-native implementation/evidence candidate
+
+The top-level executor implemented the accepted V15-to-V16 contract without
+starting Gate 17 or changing the retained Gate 5, Gate 8, Gate 12, Gate 14, or
+Gate 15 boundaries. The candidate is deliberately ordinary-Agent native:
+
+- `learner_goal_query` exposes bounded, cursor-scoped, zero-write Goal owner
+  reads, while the retained Course query supplies exact Course identities;
+- `update_learner_goals` publishes one closed V2 create/update/replace semantic
+  intent shape. It contains no caller-selected versions, generated IDs, source
+  excerpts, field bases, proposal, or Goal-specific confirmation protocol;
+- Core binds current heads, generated identities, source occurrence, temporal
+  facts, exact before/after revisions, root or delegated Agent-issuance
+  provenance, capability policy, transaction, replay, recovery, correction,
+  and durable typed result;
+- the durable Goal disposition is exactly `legacy_v1 | semantic_terminal_v2 |
+candidate_v2`. Semantic terminals settle before live owner/capability checks;
+  admitted candidates retain truthful issuance/capability history when they
+  later lose the semantic address; and invalid child Goal-write membership
+  creates no candidate or fabricated Agent provenance;
+- V15-to-V16 preserves exact V1 rows for replay, recovery, and target carry
+  while making the V1 producer/confirmation surface unreachable from current
+  package exports, runtime dispatch, registry, and TUI controls; and
+- the generic configured capability `ask` and existing typed terminal carrier
+  remain the only approval/result surfaces.
+
+Against base HEAD `beebbc5d333109a6fdc301aab49995c223104f71`, the exact
+package candidate contains 31 tracked and eight untracked paths. Its raw binary
+tracked diff is 713,644 bytes with SHA-256
+`38f9a3dac395ba426c9055bc317b1ceb15ea8b7a959a4a5a767dc7fb99d7f5fb`.
+The 39-path JavaScript-default/ordinal UTF-8/LF content manifest is 3,466 bytes
+with one final LF and SHA-256
+`eacb9ac968b8557c9c3b7d0fbc434caddc2b473829cb85bdd5c75315657f47a7`.
+Each manifest line is `<40-hex git hash-object --no-filters output><two
+spaces><path>`. There are no staged paths and no implementation commit.
+
+Fresh deterministic evidence on the final package candidate includes:
+
+- Core Agent-native Goal behavior: 5 pass / 33 assertions; full database
+  migration: 41 pass / 366 assertions; migration drift check and Core typecheck:
+  pass;
+- OpenCode learning-command runtime: 46 pass / 881 assertions, with 13
+  explicitly historical V1 producer tests skipped; semantic presentation: 7 /
+  63; registry/read discovery: 29 / 134; production prompt carrier: 14 / 111;
+- Schema wire: 4 / 11; primary-TUI permission/result carrier: 1 / 12; Schema and
+  TUI typechecks: pass; and
+- exact-path Prettier and `git diff --check`: pass. The full OpenCode typecheck
+  still reports only the unchanged
+  `specs/fixtures/tui-plugins/tui-smoke.tsx` implicit-`any` and obsolete
+  `workspaceID`/`workspace_id` diagnostics; no Gate 16 path diagnostic remains.
+
+The old Core V1 producer suite is preserved as historical source but is skipped
+on V16 because current V16 constraints intentionally reject production of new
+V1 states. Exact historical behavior is instead exercised by the frozen-V15
+migration, admitted-state recovery, terminal replay, and absent/instant/
+local-date carry oracles. Current external deep import of that producer module
+is explicitly blocked, and the current aggregate API exposes only narrow
+historical lookup/reopen/recovery functions plus the V2 writer.
+
+The final bounded released-v1 qualification used the inherited Repa OpenAI
+OAuth credential—no API key—and exact `openai/gpt-5.5` in a fresh isolated
+workspace, database, XDG data/cache/config/state, and test-home root. Six of six
+Turns completed normally through 12 model operations and six tool invocations.
+The run produced three V2 candidate dispositions, three `policy_allow`
+settlements, three effects, and three V2 revisions, with zero permission issues
+and zero historical V1 command rows. It demonstrated useful quoted,
+hypothetical, and progress discussion without a write; natural Course-scoped
+creation without learner-entered IDs; a contextual update in a fresh Session
+through Goal owner reads; a Tutor suggestion without a write followed by a
+short ordinary acceptance through the same typed command; and ordinary
+clarification for material ambiguity without a write.
+
+The exact formatted qualification script is 29,693 bytes with SHA-256
+`7088a72995108f9e69617d08bbd3b4c2c3170e95586ff159b98e1459a30c6fe0`.
+The secret-free evidence JSON is 19,281 bytes with SHA-256
+`66faec3cb0aefa6a49047cfdac9f00cec4d69d8178335355219a51030ef42ddf`;
+the 3,399,680-byte database hashes to
+`5091549a7f565f6e5ca34588c6a7cea9b99c237c68b56efdefe2aa972b264eb5`;
+and the 12,408-byte runtime log hashes to
+`e9c0ca7fcc6f0fb4dfc784286651510f18a82d201e650fed6722b6cb9adc804d`.
+The read-only provider catalog hashes to
+`a5d5df2dbf443edc56af460ffc3f95d761eed7dd450720adb4b5f20d34e91fa1`.
+SQLite integrity returned `ok`, foreign-key check returned no row, the isolated
+workspace remained empty, the log contained no warning/error line, and secret
+canary scanning found zero credential value in the evidence or log. The exact
+transient review root is
+`C:\Users\Discordance\AppData\Local\Temp\repa-gate16-real-c015cf1bf4d1436991befc376f11e4e2`;
+it remains available only for independent review and is not a project/runtime
+dependency.
+
+Earlier diagnostic attempts are excluded from acceptance evidence: one lacked
+the isolated provider catalog, one exposed an over-strict Course-provenance
+oracle, one used the repository as the workspace, and one otherwise-passing run
+logged a background catalog-refresh timeout. Each caused either no product
+write or only an isolated temporary database; none is part of the bound final
+candidate.
+
+This initial candidate was not a closure claim. Original fresh reviewer task
+`019fb2a3-c902-7882-8134-1bf33f1eb04d` independently reproduced its bindings
+and returned `Revise` with `G16-AN-IMP-001..003`. Those bindings remain rejected
+provenance only and are superseded by the repair below. Gate 17 remains
+unauthorized.
+
+## 2026-08-01 implementation/evidence review repair candidate
+
+The original reviewer found three concrete implementation defects without
+reopening the accepted Goal contract:
+
+- `G16-AN-IMP-001`: a mixed V2 change set wrote no new revision for a
+  `no_change` update but the effect-operation trigger required every result to
+  reference a revision owned by the new effect, so the whole atomic command
+  rolled back;
+- `G16-AN-IMP-002`: the aggregate writer hid the V1 producer, but the wildcard
+  package export still exposed `prepareConfirmation`, `prepareChangeSet`, and
+  `applyChangeSet` through the current `LearnerGoal` namespace; and
+- `G16-AN-IMP-003`: syntactically valid pre-epoch civil instants reached a V2
+  candidate with a negative epoch even though the stored V2 target domain is
+  nonnegative, turning an input error into a database defect.
+
+The repaired candidate closes those boundaries directly. The V16
+effect-operation trigger now has a closed changed/no-change union: changed
+results reference a source revision written by the current effect, while a
+no-change update references the exact unchanged predecessor recorded in the
+same effect's immutable materialized operation. One real mixed command proves
+both visible results commit atomically, only the changed Goal gains a revision,
+and foreign keys remain clean. The public `@opencode-ai/core/learner-goal`
+specifier now resolves to a narrow current facade containing schema, bounded
+reads, and the historical terminal-result projector only. The internal V1
+implementation remains available to replay/recovery code and historical tests,
+while both its producer subpath and the facade implementation filename are
+blocked package specifiers. The public namespace and runtime resolver oracles
+prove the retired producer functions and modules are unreachable. Finally,
+both fixed-offset and IANA pre-epoch instants fail as typed `validation_error`
+physical no-effects before any Goal disposition/candidate exists.
+
+Against unchanged base HEAD
+`beebbc5d333109a6fdc301aab49995c223104f71`, the superseding package candidate
+contains 31 tracked and nine untracked paths. Its raw binary tracked diff is
+715,362 bytes with SHA-256
+`86e336d855392ec9e6f0135e45e3ad308cfdafeae5b92aa7170fb42d6b3fe409`.
+The 40-path JavaScript-default/ordinal UTF-8/LF content manifest is 3,550 bytes
+with one final LF and SHA-256
+`dd8e90817944f42ba7a841455f09edb7630f8c55038ac3d26070ea09fe5c50d9`.
+It uses the manifest convention defined above. The rejected
+`38f9a3dac395ba426c9055bc317b1ceb15ea8b7a959a4a5a767dc7fb99d7f5fb`
+and `eacb9ac968b8557c9c3b7d0fbc434caddc2b473829cb85bdd5c75315657f47a7`
+bindings remain provenance only.
+
+Red-first focused execution reproduced both behavioral defects before the
+repair. Fresh final evidence is Core Agent-native Goal 6 pass / 43 assertions,
+full database migration 41 / 366, OpenCode learning-command runtime 46 / 881,
+and registry/current-package reachability 29 / 142. Migration `--check` and
+Core typecheck pass. OpenCode typechecking remains non-green only for the same
+unchanged `specs/fixtures/tui-plugins/tui-smoke.tsx` diagnostics and reports no
+candidate-path error. The previously bound presentation, prompt, Schema, TUI,
+and released-model evidence remains causally valid because none of these three
+repairs changes those carriers, the model-visible command, or provider path.
+
+This superseding candidate remains unstaged, uncommitted, and unaccepted.
+Original reviewer task `019fb2a3-c902-7882-8134-1bf33f1eb04d` must close this
+exact diff before integration or any current Gate 16 acceptance. No Gate 17
+authority follows.

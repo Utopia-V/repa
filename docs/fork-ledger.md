@@ -20,27 +20,27 @@ historical acceptance points. They do not override the current disposition in
 `docs/README.md`; a later audit may preserve the implementation evidence while
 reopening one bounded completion claim.
 
-| Gate                                     | Result                                                                                                                                            | Fork evidence                                                                           | Historical record                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 0. Oracle freeze                         | Pre-fork behavior and assets classified                                                                                                           | pre-fork lineage                                                                        | `docs/roadmap/09-one-time-opencode-fork-baseline.md` at the oracle tag                |
-| 1. Lineage                               | Exact full-history `v1.17.18` fork with MIT provenance                                                                                            | `b1fc8113948b518835c2a39ece49553cffe9b30c`                                              | `docs/research/opencode-fork-gate-01-lineage-2026-07-13.md`                           |
-| 2. Windows baseline                      | Preserved inherited invalid PowerShell test failure                                                                                               | exact upstream tree                                                                     | `docs/research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`         |
-| 2A. Test correction                      | Corrected only the invalid shell test contract                                                                                                    | `a72f507de45788f3fb8556d883cdad919f33db43`                                              | `docs/research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md` |
-| 3. Repa identity                         | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback                                           | `0ffed9f62159b5383b62da73bd270de7f8775e09`                                              | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md`           |
-| 4. Learning-first composition            | Original three-purpose close plus corrected composition authority and Gate 11 `representation` carrier                                            | original `9c7b74f41` + `17e25eab2`; corrected close `df61b7adb6c6e2c3f5f7fb46bee3109d0e16b05c` | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md`        |
-| 5. Inherited product-surface disposition | Valid inherited-surface disconnections plus corrected v2/provider/CORS completion                                                                 | original `25e51861effbddbdb04ae8fe88c4107d34ab91b2`; corrected close `86332c24651c1222339624704496fae2dd27be10` | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
+| Gate                                     | Result                                                                                                                                            | Fork evidence                                                                                                                               | Historical record                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 0. Oracle freeze                         | Pre-fork behavior and assets classified                                                                                                           | pre-fork lineage                                                                                                                            | `docs/roadmap/09-one-time-opencode-fork-baseline.md` at the oracle tag                |
+| 1. Lineage                               | Exact full-history `v1.17.18` fork with MIT provenance                                                                                            | `b1fc8113948b518835c2a39ece49553cffe9b30c`                                                                                                  | `docs/research/opencode-fork-gate-01-lineage-2026-07-13.md`                           |
+| 2. Windows baseline                      | Preserved inherited invalid PowerShell test failure                                                                                               | exact upstream tree                                                                                                                         | `docs/research/opencode-fork-gate-02-pristine-windows-baseline-2026-07-13.md`         |
+| 2A. Test correction                      | Corrected only the invalid shell test contract                                                                                                    | `a72f507de45788f3fb8556d883cdad919f33db43`                                                                                                  | `docs/research/opencode-fork-gate-02a-deterministic-windows-shell-test-2026-07-13.md` |
+| 3. Repa identity                         | Independent binary, paths, config, runtime variables, and database filename; no OpenCode-state fallback                                           | `0ffed9f62159b5383b62da73bd270de7f8775e09`                                                                                                  | `docs/research/opencode-fork-gate-03-repa-identity-isolation-2026-07-13.md`           |
+| 4. Learning-first composition            | Original three-purpose close plus corrected composition authority and Gate 11 `representation` carrier                                            | original `9c7b74f41` + `17e25eab2`; corrected close `df61b7adb6c6e2c3f5f7fb46bee3109d0e16b05c`                                              | `docs/research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md`        |
+| 5. Inherited product-surface disposition | Valid inherited-surface disconnections plus corrected v2/provider/CORS completion                                                                 | original `25e51861effbddbdb04ae8fe88c4107d34ab91b2`; corrected close `86332c24651c1222339624704496fae2dd27be10`                             | `docs/research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md` |
 | 6. Native database admission             | Native Repa database identity, forward lineage, hardened admission, and restored single-owner runtime boundary                                    | original `6c0b7aa5b`; corrected implementation `34588b04182761e1afaaa80bd3cab6b48929cd9f`; close `6ad48455ee8dc4695e19ed9e28e88dfe43adade7` | `docs/research/opencode-fork-gate-06-native-database-admission-2026-07-14.md`         |
-| 7. Course and Course View authority      | LearnerHome-owned Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal | `3bd6eb9d4`                                                                             | `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`             |
-| 8. Learning-command settlement           | Stable admitted occurrence, physical replay, causal receipt, exact Course acceptance settlement, and Session lifecycle closure                    | `293ff6892`                                                                             | `docs/research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md`       |
-| 9. Source and Artifact authority         | Stable Artifact identity, exact observed revisions, location/availability history, provenance, and correction without retargeting                 | `41db7c292aaeb83abfafea9236480d006ccabe0f`                                              | `docs/research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md`         |
-| 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                              | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
-| 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                              | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
-| 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`                                              | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
-| 13. Material Map and Course alignment    | Immutable revision-bound material outlines and exact selectors plus optional neutral alignment to exact Course membership                         | `5e762f8336b33d7d8365c9bc9204b52f52eba114`                                              | `docs/research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md`            |
-| 14. Learner navigation continuity        | Learner-controlled default Course preference and independent exact per-Course route anchors with append-only correction and command provenance    | `a6b542d59879f0a4b1111eaef4ad23e446b473d0`                                              | `docs/research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md`     |
-| 15. Retained scoped steering             | Source-linked, scoped, versioned, correctable Tutor-policy state with an exact immutable model-operation cut                                      | `03ea74ec4f760c83060a6da4fa26ecb9519d1468`                                              | `docs/research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md`          |
-| 16. Learner Goal authority               | Learner-owned Goal identity, revision, correction, optional target semantics, and explicitly authorized lifecycle meaning                         | `69433fc78d383bade1d92319eb3153a2cd7c68bd`                                              | `docs/research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md`            |
-| 2026-07-28 cross-Gate correction         | Gate 5/6/8/10/11/14/15 scoped repairs plus Gate 16 TUI repair, authority reconstruction, and inherited-control retirement                         | `9e91d43c629b66d65c8741e342bca7cf05de5667`                                              | `docs/research/pre-gate-17-global-hazard-audit-2026-07-27.md`                         |
+| 7. Course and Course View authority      | LearnerHome-owned Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible versioned withdrawal | `3bd6eb9d4`                                                                                                                                 | `docs/research/opencode-fork-gate-07-course-view-authority-2026-07-15.md`             |
+| 8. Learning-command settlement           | Stable admitted occurrence, physical replay, causal receipt, exact Course acceptance settlement, and Session lifecycle closure                    | `293ff6892`                                                                                                                                 | `docs/research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md`       |
+| 9. Source and Artifact authority         | Stable Artifact identity, exact observed revisions, location/availability history, provenance, and correction without retargeting                 | `41db7c292aaeb83abfafea9236480d006ccabe0f`                                                                                                  | `docs/research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md`         |
+| 10. Content-root authority               | Approved root identity, bounded observation, separate mutation authority, project-origin quarantine, and exact Gate 9 admission                   | `fb6ed5763ecaa4a95a32ba7f6f352f3dc9794fef`                                                                                                  | `docs/research/opencode-fork-gate-10-content-root-authority-2026-07-17.md`            |
+| 11. Readable representation lineage      | Immutable readable derivations, exact source proof, truthful conversion/current-use/failure semantics, and bounded managed reads                  | `bdbfa0c05322244d405fa26425c04eb7ceb9c9f0`                                                                                                  | `docs/research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md`   |
+| 12. Durable Turn lifecycle               | Finite learner/delegated Turns with exact model/tool membership, budgets, child lineage, terminal truth, and recovery                             | `80f5fa30a22e3e0628cd4a05e2880063a1f8eb2d`                                                                                                  | `docs/research/opencode-fork-gate-12-durable-turn-lifecycle-2026-07-18.md`            |
+| 13. Material Map and Course alignment    | Immutable revision-bound material outlines and exact selectors plus optional neutral alignment to exact Course membership                         | `5e762f8336b33d7d8365c9bc9204b52f52eba114`                                                                                                  | `docs/research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md`            |
+| 14. Learner navigation continuity        | Learner-controlled default Course preference and independent exact per-Course route anchors with append-only correction and command provenance    | `a6b542d59879f0a4b1111eaef4ad23e446b473d0`                                                                                                  | `docs/research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md`     |
+| 15. Retained scoped steering             | Source-linked, scoped, versioned, correctable Tutor-policy state with an exact immutable model-operation cut                                      | `03ea74ec4f760c83060a6da4fa26ecb9519d1468`                                                                                                  | `docs/research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md`          |
+| 16. Learner Goal authority               | Learner-owned Goal identity, revision, correction, optional target semantics, and explicitly authorized lifecycle meaning                         | `69433fc78d383bade1d92319eb3153a2cd7c68bd`                                                                                                  | `docs/research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md`            |
+| 2026-07-28 cross-Gate correction         | Gate 5/6/8/10/11/14/15 scoped repairs plus Gate 16 TUI repair, authority reconstruction, and inherited-control retirement                         | `9e91d43c629b66d65c8741e342bca7cf05de5667`                                                                                                  | `docs/research/pre-gate-17-global-hazard-audit-2026-07-27.md`                         |
 
 Gate 0–3 records and other pre-fork evidence live only in the immutable oracle:
 
@@ -2236,6 +2236,81 @@ The exact accepted correction is integrated at `93e2412d3`. Gate 16 must
 consume V15 and produce V16; all `G16-AN-001..003` semantics remain closed.
 Scoped Gate 16 implementation authority is available. No Gate 17 authority is
 inferred from either the Gate 8 integration or this mechanical correction.
+
+## 2026-07-31 Gate 16 Agent-native implementation candidate
+
+The top-level executor consumed exact base HEAD
+`beebbc5d333109a6fdc301aab49995c223104f71` and implemented only the accepted
+Gate 16 V15-to-V16 boundary. The candidate publishes bounded zero-write Goal
+reads and one closed semantic-intent write, binds runtime-owned identity,
+version, temporal, root/delegated Agent-issuance, permission, semantic-first
+replay/recovery, and complete revision facts, preserves exact V1 history as
+replay-only state, and retains the existing configured-`ask` and typed terminal
+carrier. Gate 17 and the retained Gate 5/8/12/14/15 boundaries are unchanged.
+
+The exact unstaged package projection is 31 tracked plus eight untracked paths.
+Its 713,644-byte raw binary tracked diff hashes to
+`38f9a3dac395ba426c9055bc317b1ceb15ea8b7a959a4a5a767dc7fb99d7f5fb`;
+its 3,466-byte 39-path ordinal UTF-8/LF Git-blob manifest hashes to
+`eacb9ac968b8557c9c3b7d0fbc434caddc2b473829cb85bdd5c75315657f47a7`.
+The Gate record defines the exact manifest convention and records the
+deterministic and released-model evidence.
+
+Fresh causal checks pass: Core V2 Goal 5/33, database migration 41/366,
+OpenCode runtime 46/881, semantic presentation 7/63, registry 29/134, prompt
+14/111, Schema wire 4/11, and primary-TUI permission/result 1/12; migration
+drift plus Core/Schema/TUI typechecks and scoped formatting/diff checks pass.
+OpenCode's full typecheck still reaches only the unchanged
+`specs/fixtures/tui-plugins/tui-smoke.tsx` diagnostics and no Gate 16 path.
+
+The exact formatted real-model script
+`7088a72995108f9e69617d08bbd3b4c2c3170e95586ff159b98e1459a30c6fe0`
+completed six isolated released-v1 Turns through inherited Repa OpenAI OAuth
+and `openai/gpt-5.5`. It produced three V2 candidates, policy allows, effects,
+and revisions, zero permission issues, and zero historical command rows while
+covering discussion/no-write, natural creation, cross-Session contextual
+update, suggestion/no-write plus short acceptance, and ambiguity clarification.
+The secret-free evidence, database, and clean runtime-log hashes are
+`66faec3cb0aefa6a49047cfdac9f00cec4d69d8178335355219a51030ef42ddf`,
+`5091549a7f565f6e5ca34588c6a7cea9b99c237c68b56efdefe2aa972b264eb5`,
+and `e9c0ca7fcc6f0fb4dfc784286651510f18a82d201e650fed6722b6cb9adc804d`.
+Integrity and foreign-key checks pass, and credential-canary hits are zero.
+
+This records a candidate, not acceptance. Original fresh reviewer task
+`019fb2a3-c902-7882-8134-1bf33f1eb04d` must close the exact implementation and
+evidence before staging or integration. No Gate 17 authority follows.
+
+### 2026-08-01 Gate 16 first implementation-review repair
+
+The original reviewer independently reproduced the candidate above and
+returned `Revise` with `G16-AN-IMP-001..003`. It found that mixed changed and
+no-change V2 operations rolled back under the V16 effect-operation trigger;
+the wildcard Core package export still exposed the retired V1 confirmation and
+write producers through the current `LearnerGoal` namespace; and a pre-epoch
+civil instant crossed candidate admission before conflicting with the
+nonnegative stored target domain. The accepted Agent-native contract,
+V15-to-V16 predecessor, migration/replay/provider boundaries, and Gate 17
+exclusion remained closed.
+
+The top-level executor repaired only those seams. V16 now distinguishes a new
+changed revision from the exact unchanged predecessor in one materialized
+effect; the public Goal namespace is a narrow read/replay facade with producer
+and implementation subpaths blocked; and fixed-offset plus IANA pre-epoch
+instants settle as typed validation no-effects before candidate creation. The
+red-first counterexamples now pass. Fresh causal evidence is Core Goal 6/43,
+database migration 41/366, OpenCode runtime 46/881, registry/package
+reachability 29/142, migration no-drift, and Core typecheck. OpenCode
+typechecking still reaches only the unchanged `tui-smoke.tsx` diagnostics.
+
+Against unchanged HEAD `beebbc5d333109a6fdc301aab49995c223104f71`, the
+superseding 31-tracked/nine-untracked package projection is 715,362 raw binary
+diff bytes with SHA-256
+`86e336d855392ec9e6f0135e45e3ad308cfdafeae5b92aa7170fb42d6b3fe409`;
+its 3,550-byte 40-path ordinal manifest hashes to
+`dd8e90817944f42ba7a841455f09edb7630f8c55038ac3d26070ea09fe5c50d9`.
+The first reviewer bindings are rejected provenance only. The repaired
+candidate is unstaged, uncommitted, and unaccepted pending exact-diff closure
+by the same reviewer; no Gate 17 authority follows.
 
 ## Historical evidence locators
 

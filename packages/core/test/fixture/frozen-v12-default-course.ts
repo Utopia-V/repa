@@ -44,6 +44,9 @@ export function seedFrozenV12AdmittedDefaultCourse(
       const db = yield* makeDb
       yield* db.transaction((tx) => databaseV12Schema.up(tx))
       yield* db.transaction((tx) => installSchemaExtrasV12(tx))
+      // Current Turn helpers select the current Message projection while constructing this historical fixture.
+      // Add the later Gate 8 column only for construction, then remove it before the V12 journal is frozen.
+      yield* db.run("ALTER TABLE message ADD COLUMN summary_diffs text")
 
       const time = 24
       const sessionID = SessionSchema.ID.make("ses_frozen_v12_default")
@@ -85,21 +88,16 @@ export function seedFrozenV12AdmittedDefaultCourse(
           time_updated: time,
         })
         .run()
-      yield* db
-        .insert(MessageTable)
-        .values({
-          id: userMessageID,
-          session_id: sessionID,
-          data: {
-            role: "user",
-            time: { created: time },
-            agent: "repa",
-            model,
-          } as (typeof MessageTable.$inferInsert)["data"],
-          time_created: time,
-          time_updated: time,
-        })
-        .run()
+      yield* db.run(sql`
+        INSERT INTO message (id, session_id, time_created, time_updated, data)
+        VALUES (
+          ${userMessageID},
+          ${sessionID},
+          ${time},
+          ${time},
+          ${JSON.stringify({ role: "user", time: { created: time }, agent: "repa", model })}
+        )
+      `)
       yield* db
         .insert(PartTable)
         .values({
@@ -136,12 +134,14 @@ export function seedFrozenV12AdmittedDefaultCourse(
       )
       yield* db.transaction((tx) =>
         Effect.gen(function* () {
-          yield* tx
-            .insert(MessageTable)
-            .values({
-              id: assistantMessageID,
-              session_id: sessionID,
-              data: {
+          yield* tx.run(sql`
+            INSERT INTO message (id, session_id, time_created, time_updated, data)
+            VALUES (
+              ${assistantMessageID},
+              ${sessionID},
+              ${time},
+              ${time},
+              ${JSON.stringify({
                 role: "assistant",
                 time: { created: time },
                 parentID: userMessageID,
@@ -152,11 +152,9 @@ export function seedFrozenV12AdmittedDefaultCourse(
                 path: { cwd: "C:\\frozen-v12", root: "C:\\frozen-v12" },
                 cost: 0,
                 tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-              } as (typeof MessageTable.$inferInsert)["data"],
-              time_created: time,
-              time_updated: time,
-            })
-            .run()
+              })}
+            )
+          `)
           yield* tx
             .insert(PartTable)
             .values({
@@ -335,6 +333,7 @@ export function seedFrozenV12AdmittedDefaultCourse(
         }
       }
 
+      yield* db.run("ALTER TABLE message DROP COLUMN summary_diffs")
       const lastV12 = migrations.findIndex(
         (migration) => migration.id === domainNeutralLearningCommandLedgerMigration.id,
       )

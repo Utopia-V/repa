@@ -6,6 +6,7 @@ import {
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
+import { EventV2 } from "@opencode-ai/core/event"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import {
@@ -18,7 +19,16 @@ import {
   settleDefaultCourseV3,
 } from "@opencode-ai/core/learner-navigation/default-course-v2"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
-import { LearnerGoalCommandTable, LearnerGoalCommitSealTable } from "@opencode-ai/core/learner-goal/sql"
+import {
+  LearnerGoalCapabilityIssueV2Table,
+  LearnerGoalCapabilitySettlementV2Table,
+  LearnerGoalCommandTable,
+  LearnerGoalCommitSealTable,
+  LearnerGoalDispositionV2Table,
+  LearnerGoalEffectTable,
+  LearnerGoalFieldBasisTable,
+  LearnerGoalRevisionTable,
+} from "@opencode-ai/core/learner-goal/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { RetainedSteeringCommandTable, RetainedSteeringCommitSealTable } from "@opencode-ai/core/retained-steering/sql"
@@ -64,6 +74,7 @@ import { join } from "path"
 import { tmpdir } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { seedFrozenV12AdmittedDefaultCourse } from "../../../core/test/fixture/frozen-v12-default-course"
+import { seedFrozenV15AdmittedLearnerGoal } from "../../../core/test/fixture/frozen-v15-learner-goal"
 
 const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 const permissionRequests: Permission.AskInput[] = []
@@ -180,81 +191,142 @@ const it = testEffect(
 )
 const model = { modelID: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
 
-it.effect("confirms one exact accepted learner Goal candidate and replays its durable acknowledgement", () =>
+it.effect("applies one Agent-native learner Goal change without a Goal-specific confirmation", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
     const runtime = yield* LearningCommandRuntime.Service
     const goals = yield* LearnerGoal.ReadService
-    const time = Date.parse("2026-07-21T02:00:00.000Z")
-    const input = acceptedGoalInput("Understand virtual memory well enough to teach it", [
-      "Explain page replacement with a worked example",
-    ])
+    const time = Date.parse("2026-07-31T04:00:00.000Z")
+    const input = {
+      operations: [
+        {
+          type: "create" as const,
+          outcome: "Understand virtual memory well enough to explain it",
+          conditions: ["Explain address translation", "Compare replacement policies"],
+          target: {
+            type: "local_date" as const,
+            date: "2026-08-05",
+            timeZone: { type: "source" as const },
+          },
+        },
+      ],
+    }
     const interaction = yield* seedInteraction(
       db,
-      "accepted-learner-goal",
+      "goal-v2-agent-native",
       input,
       LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: "Please help me turn my virtual-memory aspiration into a concrete durable Goal.", time, timeZone: "UTC" },
+      { text: "我想在 8 月 5 日前学懂虚拟内存，能讲清地址转换并比较页面置换策略。", time, timeZone: "Asia/Shanghai" },
     )
 
     yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
     const result = yield* runtime.executeCommand(
       LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
       input,
-      context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      context(
+        interaction.registration,
+        "allow",
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        [],
+        LearnerGoal.PERMISSION_PATTERN,
+      ),
+    )
+
+    expect(JSON.parse(result.output)).toMatchObject({
+      settlement: {
+        outcome: "applied",
+        goalKind: "learner_goal",
+        schemaVersion: 2,
+        provenance: "agent_action",
+      },
+      disposition: "candidate_v2",
+      capabilityOutcome: "policy_allow",
+    })
+    expect(permissionRequests).toHaveLength(1)
+    expect(
+      SemanticPresentation.readProposal(
+        { ...permissionRequests[0]!, id: permissionRequests[0]!.id ?? PermissionV1.ID.ascending() },
+        true,
+      ).type,
+    ).toBe("valid")
+    const partRow = yield* db.select().from(PartTable).where(eq(PartTable.id, interaction.registration.partID)).get()
+    expect(partRow).toBeDefined()
+    expect(
+      SemanticPresentation.readResult(
+        decodeToolPart({
+          ...partRow!.data,
+          id: partRow!.id,
+          messageID: partRow!.message_id,
+          sessionID: partRow!.session_id,
+        }),
+        true,
+      ).type,
+    ).toBe("valid")
+    const page = yield* goals.discover(time + 1)
+    expect(page.items).toHaveLength(1)
+    expect(page.items[0]?.head).toMatchObject({
+      schemaVersion: 2,
+      outcome: input.operations[0]!.outcome,
+      target: {
+        type: "local_date",
+        date: "2026-08-05",
+        resolvedZone: { type: "iana", name: "Asia/Shanghai" },
+      },
+    })
+  }),
+)
+
+it.effect("uses the ordinary configured ask for one Agent-native Goal candidate and replays its result", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const goals = yield* LearnerGoal.ReadService
+    const time = Date.parse("2026-07-21T02:00:00.000Z")
+    const input = {
+      operations: [
+        {
+          type: "create" as const,
+          outcome: "Understand virtual memory well enough to teach it",
+          conditions: ["Explain page replacement with a worked example"],
+        },
+      ],
+    }
+    const interaction = yield* seedInteraction(
+      db,
+      "accepted-learner-goal",
+      input,
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      { text: "对，就把刚才说的虚拟内存目标记下来。", time, timeZone: "UTC" },
+    )
+
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+    const result = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      input,
+      context(interaction.registration, "ask", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
     )
 
     expect(permissionRequests).toHaveLength(1)
     const asked = permissionRequests[0]!
-    const askedID = asked.id
     expect(asked).toMatchObject({
-      id: expect.stringMatching(/^per_/),
       permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
       patterns: [LearnerGoal.PERMISSION_PATTERN],
-      always: [],
-      requirePrompt: true,
+      always: [LearnerGoal.PERMISSION_PATTERN],
       metadata: {
-        onceOnly: true,
-        authorizationBasis: "learner_acceptance",
-        confirmation: {
-          schemaVersion: 1,
-          authorizationBasis: "learner_acceptance",
-          command: { operations: input.operations },
-        },
+        goalKind: "learner_goal",
+        issuance: "root",
       },
     })
-    const shownConfirmation = permissionRequests[0]!.metadata.confirmation as LearnerGoal.ConfirmationSnapshot
-    expect(Object.isFrozen(shownConfirmation)).toBe(true)
-    expect(Object.isFrozen(shownConfirmation.command)).toBe(true)
-    expect(Object.isFrozen(shownConfirmation.courseBases)).toBe(true)
     expect(
-      Reflect.defineProperty(shownConfirmation, "toJSON", {
-        configurable: true,
-        enumerable: true,
-        value: () => shownConfirmation,
-      }),
-    ).toBe(false)
-    if (!askedID || !asked.tool) throw new Error("Expected a fully bound Goal permission request")
-    expect(
-      SemanticPresentation.readProposal({
-        id: askedID,
-        sessionID: asked.sessionID,
-        permission: asked.permission,
-        patterns: asked.patterns,
-        always: asked.always,
-        tool: asked.tool,
-        metadata: {
-          ...asked.metadata,
-          [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true,
-        },
-      }),
+      SemanticPresentation.readProposal({ ...asked, id: asked.id ?? PermissionV1.ID.ascending() }, true),
     ).toMatchObject({
       type: "valid",
       value: {
         phase: "proposal",
         capability: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-        approval: "once_only",
+        approval: "policy",
       },
     })
     expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
@@ -277,13 +349,17 @@ it.effect("confirms one exact accepted learner Goal candidate and replays its du
       },
     })
     expect(result.title).toBe("Updated learning Goal")
-    expect(result.output).toContain(input.operations[0].snapshot.outcome)
-    expect(result.output).toContain("correct")
+    expect(result.output).toContain(input.operations[0].outcome)
+    expect(JSON.parse(result.output)).toMatchObject({
+      disposition: "candidate_v2",
+      capabilityOutcome: "prompted_allow",
+      permissionRequestID: expect.stringMatching(/^per_/),
+    })
     expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
     expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 1 })
     expect(yield* goalReceiptCount(db)).toEqual({ count: 1 })
     expect((yield* goals.discover(time + 10_000)).items).toMatchObject([
-      { head: { outcome: input.operations[0].snapshot.outcome, disposition: { type: "active" } } },
+      { head: { schemaVersion: 2, outcome: input.operations[0].outcome, disposition: { type: "active" } } },
     ])
 
     const replay = yield* runtime.executeCommand(
@@ -296,14 +372,390 @@ it.effect("confirms one exact accepted learner Goal candidate and replays its du
   }),
 )
 
+it.effect("settles a live Agent-native Goal permission abort without inventing an effect", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    permissionWaits.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const input = {
+      operations: [{ type: "create" as const, outcome: "Cancelled permission must not create this Goal" }],
+    }
+    const interaction = yield* seedInteraction(
+      db,
+      "goal-v2-live-permission-abort",
+      input,
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      { text: "Record this Goal only if the configured capability approval completes.", timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    permissionWaits.push({ entered, release })
+    const controller = new AbortController()
+    const execution = yield* runtime
+      .executeCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, {
+        ...context(interaction.registration, "ask", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+        abort: controller.signal,
+      })
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+
+    const issued = yield* db
+      .select()
+      .from(LearnerGoalCapabilityIssueV2Table)
+      .where(eq(LearnerGoalCapabilityIssueV2Table.invocation_part_id, interaction.registration.partID))
+      .get()
+    expect(issued?.permission_request_id).toBeString()
+    expect(yield* db.select().from(LearnerGoalCapabilitySettlementV2Table).all()).toEqual([])
+    expect(yield* db.select().from(LearnerGoalEffectTable).all()).toEqual([])
+
+    controller.abort()
+    const result = yield* Fiber.join(execution)
+    yield* Deferred.succeed(release, undefined).pipe(Effect.ignore)
+    expect(result.metadata).toMatchObject({ outcome: "error", code: "interrupted", durablySettled: true })
+    expect(JSON.parse(result.output)).toMatchObject({
+      disposition: "candidate_v2",
+      capabilityOutcome: "prompted_abort",
+      permissionRequestID: issued!.permission_request_id,
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+    expect(yield* db.select().from(LearnerGoalEffectTable).all()).toEqual([])
+    expect(permissionRequests).toHaveLength(1)
+  }),
+)
+
+it.effect("keeps populated Goal owner reads bounded, snapshot-stable, exact, and zero-write", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const goals = yield* LearnerGoal.ReadService
+    const execute = (suffix: string, input: Record<string, unknown>) =>
+      Effect.gen(function* () {
+        const interaction = yield* seedInteraction(
+          db,
+          `goal-read-${suffix}`,
+          input,
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          { text: `Goal owner read fixture ${suffix}`, timeZone: "UTC" },
+        )
+        yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+        return yield* runtime.executeCommand(
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          input,
+          context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+        )
+      })
+
+    yield* execute("initial", {
+      operations: [
+        { type: "create", outcome: "Read-stable systems Goal" },
+        { type: "create", outcome: "Read-stable probability Goal" },
+      ],
+    })
+    const initial = yield* goals.discover(Date.now() + 10_000, {}, { limit: 10 })
+    expect(initial.items).toHaveLength(2)
+    const tracked = initial.items[0]!
+    for (const outcome of ["Read-stable systems Goal v2", "Read-stable systems Goal v3"]) {
+      const current = yield* goals.readCurrent(tracked.goalID, Date.now() + 10_000)
+      if (!current) return yield* Effect.die("Tracked Goal disappeared")
+      yield* execute(outcome.endsWith("v2") ? "update-two" : "update-three", {
+        operations: [
+          {
+            type: "update",
+            goalID: tracked.goalID,
+            headRevisionID: current.head.id,
+            patch: { outcome },
+          },
+        ],
+      })
+    }
+
+    const historyFirst = yield* goals.readHistory(tracked.goalID, Date.now() + 10_000, { limit: 1 })
+    const discoveryFirst = yield* goals.discover(Date.now() + 10_000, {}, { limit: 1 })
+    expect(historyFirst.items.map((revision) => revision.version)).toEqual([3])
+    expect(historyFirst.cursor).toBeString()
+    expect(discoveryFirst.items).toHaveLength(1)
+    expect(discoveryFirst.cursor).toBeString()
+
+    yield* execute("late-create", { operations: [{ type: "create", outcome: "Late Goal outside saved cursor" }] })
+    const beforeFourth = yield* goals.readCurrent(tracked.goalID, Date.now() + 10_000)
+    if (!beforeFourth) return yield* Effect.die("Tracked Goal disappeared before its fourth revision")
+    yield* execute("update-four", {
+      operations: [
+        {
+          type: "update",
+          goalID: tracked.goalID,
+          headRevisionID: beforeFourth.head.id,
+          patch: { outcome: "Read-stable systems Goal v4" },
+        },
+      ],
+    })
+
+    const historySecond = yield* goals.readHistory(tracked.goalID, Date.now() + 20_000, {
+      limit: 1,
+      cursor: historyFirst.cursor,
+    })
+    const historyThird = yield* goals.readHistory(tracked.goalID, Date.now() + 20_000, {
+      limit: 1,
+      cursor: historySecond.cursor,
+    })
+    const discoverySecond = yield* goals.discover(
+      Date.now() + 20_000,
+      {},
+      {
+        limit: 1,
+        cursor: discoveryFirst.cursor,
+      },
+    )
+    expect(historySecond.throughRevision).toBe(historyFirst.throughRevision)
+    expect(historySecond.items.map((revision) => revision.version)).toEqual([2])
+    expect(historyThird.items.map((revision) => revision.version)).toEqual([1])
+    expect(discoverySecond.throughRevision).toBe(discoveryFirst.throughRevision)
+    expect(discoverySecond.items).toHaveLength(1)
+    expect(discoverySecond.items[0]!.goalID).not.toBe(discoveryFirst.items[0]!.goalID)
+    expect(discoverySecond.items[0]!.head.outcome).not.toContain("Late Goal")
+
+    const wrongDiscovery = yield* goals
+      .discover(Date.now() + 20_000, { disposition: "achieved" }, { cursor: discoveryFirst.cursor })
+      .pipe(Effect.exit)
+    const wrongHistory = yield* goals
+      .readHistory(initial.items[1]!.goalID, Date.now() + 20_000, { cursor: historyFirst.cursor })
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(wrongDiscovery)).toBe(true)
+    expect(Exit.isFailure(wrongHistory)).toBe(true)
+    if (Exit.isFailure(wrongDiscovery)) expect(Cause.pretty(wrongDiscovery.cause)).toContain("InvalidCursorError")
+    if (Exit.isFailure(wrongHistory)) expect(Cause.pretty(wrongHistory.cause)).toContain("InvalidCursorError")
+
+    const effect = yield* db.select().from(LearnerGoalEffectTable).get()
+    if (!effect) return yield* Effect.die("Goal read fixture created no effect")
+    const changesBefore = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+    const exactCurrent = yield* goals.readCurrent(tracked.goalID, Date.now() + 20_000)
+    const exactHistory = yield* goals.readHistory(tracked.goalID, Date.now() + 20_000, { limit: 2 })
+    const exactDiscovery = yield* goals.discover(Date.now() + 20_000, {}, { limit: 2 })
+    const exactEffect = yield* goals.readEffect(effect.id)
+    expect(exactCurrent?.head).toMatchObject({ schemaVersion: 2, version: 4 })
+    expect(exactHistory.items).toHaveLength(2)
+    expect(exactDiscovery.items).toHaveLength(2)
+    expect(exactEffect).toMatchObject({
+      schemaVersion: 2,
+      effectID: effect.id,
+      authorizationBasis: "agent_action",
+      capability: { outcome: "policy_allow" },
+    })
+    expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(changesBefore)
+  }),
+)
+
+it.effect("preserves Goal identities across correction, renewal, scope change, and both replacement arms", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const goals = yield* LearnerGoal.ReadService
+    const courses = yield* Course.Service
+    const firstCourse = yield* seedCourse(courses, "Systems foundations", "Main")
+    const secondCourse = yield* seedCourse(courses, "Probability foundations", "Main")
+    const execute = (suffix: string, input: Record<string, unknown>) =>
+      Effect.gen(function* () {
+        const interaction = yield* seedInteraction(
+          db,
+          `goal-v2-identity-${suffix}`,
+          input,
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          { text: `Natural-language Goal operation ${suffix}`, timeZone: "Asia/Shanghai" },
+        )
+        yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+        const result = yield* runtime.executeCommand(
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          input,
+          context(
+            interaction.registration,
+            "allow",
+            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            [],
+            LearnerGoal.PERMISSION_PATTERN,
+          ),
+        )
+        return { interaction, result, output: JSON.parse(result.output) }
+      })
+
+    const initial = yield* execute("initial", {
+      operations: [
+        {
+          type: "create",
+          outcome: "Understand systems well enough to explain the trade-offs",
+          conditions: ["Explain one concrete design trade-off"],
+          scope: { type: "courses", courseIDs: [firstCourse.course.id, secondCourse.course.id] },
+        },
+        { type: "create", outcome: "Build a durable probability intuition" },
+      ],
+    })
+    expect(initial.output.settlement).toMatchObject({ outcome: "applied", schemaVersion: 2 })
+    expect(initial.output.settlement.operations).toHaveLength(2)
+    const systemsID = initial.output.settlement.operations[0].goalID as LearnerGoal.GoalID
+    const probabilityID = initial.output.settlement.operations[1].goalID as LearnerGoal.GoalID
+    expect(systemsID).not.toBe(probabilityID)
+    expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 1 })
+
+    const systemsV1 = yield* goals.readCurrent(systemsID, Date.now() + 1)
+    if (!systemsV1) return yield* Effect.die("Expected the systems Goal")
+    const corrected = yield* execute("correct-standard-and-scope", {
+      operations: [
+        {
+          type: "update",
+          goalID: systemsID,
+          headRevisionID: systemsV1.head.id,
+          patch: {
+            outcome: "Understand systems deeply enough to compare two designs",
+            conditions: ["Compare two designs with explicit trade-offs"],
+            scope: { type: "courses", courseIDs: [secondCourse.course.id] },
+            target: {
+              type: "local_date",
+              date: "2026-08-15",
+              timeZone: { type: "source" },
+            },
+          },
+        },
+      ],
+    })
+    expect(corrected.output.settlement.operations[0]).toMatchObject({
+      result: "changed",
+      goalID: systemsID,
+      version: 2,
+      meaning: {
+        scope: { type: "courses", courseIDs: [secondCourse.course.id] },
+        target: { type: "local_date", date: "2026-08-15" },
+      },
+    })
+
+    const systemsV2 = yield* goals.readCurrent(systemsID, Date.now() + 1)
+    if (!systemsV2) return yield* Effect.die("Expected the corrected systems Goal")
+    yield* execute("pause", {
+      operations: [
+        {
+          type: "update",
+          goalID: systemsID,
+          headRevisionID: systemsV2.head.id,
+          patch: { disposition: "abandoned" },
+        },
+      ],
+    })
+    const paused = yield* goals.readCurrent(systemsID, Date.now() + 1)
+    if (!paused) return yield* Effect.die("Expected the paused systems Goal")
+    expect(paused.head.disposition).toEqual({ type: "abandoned" })
+    yield* execute("renew", {
+      operations: [
+        {
+          type: "update",
+          goalID: systemsID,
+          headRevisionID: paused.head.id,
+          patch: { disposition: "active" },
+        },
+      ],
+    })
+
+    const renewed = yield* goals.readCurrent(systemsID, Date.now() + 1)
+    const probability = yield* goals.readCurrent(probabilityID, Date.now() + 1)
+    if (!renewed || !probability) return yield* Effect.die("Expected both replacement participants")
+    const existingReplacement = yield* execute("replace-existing", {
+      operations: [
+        {
+          type: "replace",
+          goalID: systemsID,
+          headRevisionID: renewed.head.id,
+          patch: { outcome: "Preserve the corrected systems purpose in history" },
+          target: {
+            type: "existing",
+            goalID: probabilityID,
+            headRevisionID: probability.head.id,
+          },
+        },
+      ],
+    })
+    expect(existingReplacement.output.settlement.operations[0]).toMatchObject({
+      operation: "replace",
+      goalID: systemsID,
+      disposition: "superseded",
+      replacementTarget: { type: "existing", goalID: probabilityID, revisionID: probability.head.id },
+    })
+
+    const superseded = yield* goals.readCurrent(systemsID, Date.now() + 1)
+    if (!superseded || superseded.head.disposition.type !== "superseded") {
+      return yield* Effect.die("Expected the systems Goal to be superseded")
+    }
+    const acceptedTarget = superseded.head.disposition
+    yield* execute("correct-superseded", {
+      operations: [
+        {
+          type: "update",
+          goalID: systemsID,
+          headRevisionID: superseded.head.id,
+          patch: { conditions: ["Retain the exact replacement while correcting this history"] },
+        },
+      ],
+    })
+    const correctedSuperseded = yield* goals.readCurrent(systemsID, Date.now() + 1)
+    expect(correctedSuperseded?.head.disposition).toEqual(acceptedTarget)
+
+    const probabilityBeforeReplacement = yield* goals.readCurrent(probabilityID, Date.now() + 1)
+    if (!probabilityBeforeReplacement) return yield* Effect.die("Expected the probability Goal before replacement")
+    const generatedReplacement = yield* execute("replace-new", {
+      operations: [
+        {
+          type: "replace",
+          goalID: probabilityID,
+          headRevisionID: probabilityBeforeReplacement.head.id,
+          target: {
+            type: "new",
+            outcome: "Use probability fluently in systems analysis",
+            conditions: ["Explain uncertainty in one systems example"],
+            scope: { type: "courses", courseIDs: [firstCourse.course.id] },
+          },
+        },
+      ],
+    })
+    const generated = generatedReplacement.output.settlement.operations[0].replacementTarget
+    expect(generated).toMatchObject({ type: "new", version: 1 })
+    expect(generated.goalID).not.toBe(systemsID)
+    expect(generated.goalID).not.toBe(probabilityID)
+    expect(yield* goals.readCurrent(generated.goalID, Date.now() + 1)).toMatchObject({
+      head: { outcome: "Use probability fluently in systems analysis", version: 1 },
+    })
+
+    const effectsBeforeAtomicFailure = yield* db.get<{ count: number }>(
+      sql`SELECT count(*) AS count FROM learner_goal_effect`,
+    )
+    const goalsBeforeAtomicFailure = (yield* goals.discover(Date.now() + 1, {}, { limit: 100 })).items.length
+    const stale = yield* execute("atomic-stale", {
+      operations: [
+        { type: "create", outcome: "This Goal must roll back with the stale sibling" },
+        {
+          type: "update",
+          goalID: systemsID,
+          headRevisionID: superseded.head.id,
+          patch: { outcome: "Stale correction" },
+        },
+      ],
+    })
+    expect(stale.result.metadata).toMatchObject({ outcome: "error", code: "stale" })
+    expect(stale.output).toMatchObject({ disposition: "physical_no_effect" })
+    expect(yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual(
+      effectsBeforeAtomicFailure,
+    )
+    expect((yield* goals.discover(Date.now() + 1, {}, { limit: 100 })).items).toHaveLength(goalsBeforeAtomicFailure)
+  }),
+)
+
 it.effect("reconciles committed learner Goal semantics before live authority or confirmation", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
     const runtime = yield* LearningCommandRuntime.Service
     const time = Date.parse("2026-07-21T02:15:00.000Z")
-    const input = acceptedGoalInput("Build intuition for probability")
-    const conflictInput = acceptedGoalInput("Memorize probability formulas")
+    const input = { operations: [{ type: "create" as const, outcome: "Build intuition for probability" }] }
+    const conflictInput = { operations: [{ type: "create" as const, outcome: "Memorize probability formulas" }] }
     const interaction = yield* seedInteraction(
       db,
       "learner-goal-semantic-origin",
@@ -375,11 +827,19 @@ it.effect("reconciles committed learner Goal semantics before live authority or 
     expect(duplicateResult).toMatchObject({
       title: applied.title,
       metadata: { outcome: "already_applied" },
-      output: applied.output,
+    })
+    expect(JSON.parse(duplicateResult.output)).toMatchObject({
+      settlement: { outcome: "already_applied", schemaVersion: 2 },
+      disposition: "semantic_terminal_v2",
+      semanticTerminal: { outcome: "already_applied" },
     })
     expect(conflictResult).toMatchObject({
       title: "Learner Goals not changed",
       metadata: { outcome: "error", code: "semantic_conflict" },
+    })
+    expect(JSON.parse(conflictResult.output)).toMatchObject({
+      disposition: "semantic_terminal_v2",
+      semanticTerminal: { outcome: "semantic_conflict" },
     })
     expect(permissionRequests).toHaveLength(requestsAfterApply)
     expect(yield* exactPartResult(db, duplicate.partID)).toEqual(duplicateResult)
@@ -388,209 +848,1006 @@ it.effect("reconciles committed learner Goal semantics before live authority or 
   }),
 )
 
-it.effect("keeps accepted learner Goal display process-local and rolls back every final commit boundary", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    permissionWaits.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const goals = yield* LearnerGoal.ReadService
-    const snapshot = (registration: LearningCommandRuntime.Registration, occurrenceID: LearningCommand.OccurrenceID) =>
-      Effect.all({
-        part: db.select({ data: PartTable.data }).from(PartTable).where(eq(PartTable.id, registration.partID)).get(),
-        invocation: goalInvocationProjection(db, registration.partID),
-        receipts: goalReceiptCount(db, occurrenceID),
-        effects: db.get(sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${occurrenceID}`),
-        goals: db.get(sql`
-          SELECT count(DISTINCT goal.id) AS count
-          FROM learner_goal AS goal
-          JOIN learner_goal_revision AS revision ON revision.goal_id = goal.id
-          WHERE revision.occurrence_id = ${occurrenceID}
-        `),
-        revisions: db.get(sql`
-          SELECT count(*) AS count FROM learner_goal_revision WHERE occurrence_id = ${occurrenceID}
-        `),
-        conditions: db.get(sql`
-          SELECT count(*) AS count
-          FROM learner_goal_condition AS condition
-          JOIN learner_goal_revision AS revision ON revision.id = condition.revision_id
-          WHERE revision.occurrence_id = ${occurrenceID}
-        `),
-        bases: db.get(sql`
-          SELECT count(*) AS count
-          FROM learner_goal_field_basis AS basis
-          JOIN learner_goal_revision AS revision ON revision.id = basis.revision_id
-          WHERE revision.occurrence_id = ${occurrenceID}
-        `),
-        operations: db.get(sql`
-          SELECT count(*) AS count
-          FROM learner_goal_effect_operation AS operation
-          JOIN learner_goal_effect AS effect ON effect.id = operation.effect_id
-          WHERE effect.occurrence_id = ${occurrenceID}
-        `),
-        seals: db.get(sql`
-          SELECT count(*) AS count
-          FROM learner_goal_commit_seal AS seal
-          JOIN learner_goal_effect AS effect ON effect.id = seal.effect_id
-          WHERE effect.occurrence_id = ${occurrenceID}
-        `),
-        state: db.all(sql`SELECT singleton, revision_sequence FROM learner_goal_state ORDER BY singleton`),
-        frontier: db.transaction((tx) => LearningFrontier.read(tx)),
-        tool: db.get(sql`
-          SELECT state, consumed_shared_frontier_sequence, consumed_shared_frontier_time,
-                 resulting_shared_frontier_sequence, resulting_shared_frontier_time
-          FROM turn_tool_invocation WHERE part_id = ${registration.partID}
-        `),
-        sequence: db
-          .select({ seq: EventSequenceTable.seq })
-          .from(EventSequenceTable)
-          .where(eq(EventSequenceTable.aggregate_id, registration.sessionID))
-          .get(),
-        events: db.get(sql`SELECT count(*) AS count FROM event WHERE aggregate_id = ${registration.sessionID}`),
-      })
-    const boundaries = [
-      { name: "goal_effect", clause: "BEFORE INSERT ON learner_goal_effect" },
-      { name: "part_projection", clause: "BEFORE UPDATE OF data ON part" },
-      { name: "part_event", clause: "BEFORE INSERT ON event" },
-    ] as const
-
-    yield* Effect.forEach(
-      boundaries,
-      (boundary, index) =>
-        Effect.gen(function* () {
-          const time = Date.now() + index * 10_000
-          const input = acceptedGoalInput(`Understand atomic Goal commit boundary ${index}`, [
-            `Explain atomic Goal commit boundary ${index}`,
-          ])
-          const interaction = yield* seedInteraction(
-            db,
-            `goal-rollback-${boundary.name}`,
-            input,
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            { text: `Please help me make atomic Goal commit boundary ${index} concrete.`, time, timeZone: "UTC" },
-          )
-          yield* runtime.prepareCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            input,
-            interaction.registration,
-          )
-          const before = yield* snapshot(interaction.registration, interaction.occurrenceID)
-          const ownerCount = (yield* goals.discover(time + 1)).items.length
-          const entered = yield* Deferred.make<void>()
-          const release = yield* Deferred.make<void>()
-          permissionWaits.push({ entered, release })
-          const execution = yield* runtime
-            .executeCommand(
-              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-              input,
-              context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-            )
-            .pipe(Effect.forkChild)
-          yield* Deferred.await(entered)
-          const request = permissionRequests.at(-1)
-          if (!request) return yield* Effect.die("Expected the accepted Goal confirmation request")
-          const requestID = request.id
-          const displayed = request.metadata.confirmation as LearnerGoal.ConfirmationSnapshot
-          expect(request).toMatchObject({
-            id: requestID,
-            requirePrompt: true,
-            always: [],
-            metadata: { onceOnly: true, authorizationBasis: "learner_acceptance" },
-          })
-          expect((yield* snapshot(interaction.registration, interaction.occurrenceID)).invocation).toMatchObject({
-            status: "admitted",
-            effectID: null,
-            confirmation: null,
-            settlement: null,
-          })
-          expect((yield* goals.discover(time + 1)).items).toHaveLength(ownerCount)
-
-          const trigger = `gate16_goal_rollback_${index}`
-          yield* db.run(
-            sql.raw(
-              `CREATE TEMP TRIGGER ${trigger} ${boundary.clause} BEGIN SELECT RAISE(ABORT, 'gate16 injected rollback'); END`,
-            ),
-          )
-          yield* Deferred.succeed(release, undefined)
-          const failed = yield* Fiber.join(execution).pipe(
-            Effect.ensuring(db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger}`)).pipe(Effect.orDie)),
-          )
-          expect(failed.metadata).toMatchObject({
-            outcome: "error",
-            code: "outcome_unknown",
-            durablySettled: false,
-          })
-          expect(yield* snapshot(interaction.registration, interaction.occurrenceID)).toEqual(before)
-
-          const retried = yield* runtime.executeCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            input,
-            context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-          )
-          const retryRequest = permissionRequests.at(-1)
-          expect(retryRequest?.id).toBe(requestID)
-          expect(retryRequest?.metadata.confirmation).toEqual(displayed)
-          expect(retried.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
-          const after = yield* snapshot(interaction.registration, interaction.occurrenceID)
-          expect(after.invocation).toMatchObject({
-            status: "applied",
-            effectID: expect.stringMatching(/^gle_/),
-            confirmation: displayed,
-            settlement: { outcome: "applied" },
-          })
-          expect(after.receipts).toEqual({ count: 1 })
-          expect(after.effects).toEqual({ count: 1 })
-          expect(after.goals).toEqual({ count: 1 })
-          expect(after.revisions).toEqual({ count: 1 })
-          expect(after.conditions).toEqual({ count: 1 })
-          expect(after.bases).toEqual({ count: 5 })
-          expect(after.operations).toEqual({ count: 1 })
-          expect(after.seals).toEqual({ count: 1 })
-          expect(after.state).not.toEqual(before.state)
-          expect(after.frontier).not.toEqual(before.frontier)
-          expect(after.tool).not.toEqual(before.tool)
-          expect(after.part).not.toEqual(before.part)
-          expect(after.sequence).toBeDefined()
-          expect(after.events).toEqual({ count: 1 })
-        }),
-      { discard: true },
-    )
-  }),
-)
-
-it.effect("effective deny settles an accepted learner Goal before confirmation is constructed", () =>
+it.effect("retains Agent issuance and policy deny while creating no learner Goal effect", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
     const runtime = yield* LearningCommandRuntime.Service
-    const time = Date.parse("2026-07-21T02:30:00.000Z")
-    const input = acceptedGoalInput("Learn relational algebra")
+    const time = Date.parse("2026-07-31T04:30:00.000Z")
+    const input = { operations: [{ type: "create" as const, outcome: "Learn graph algorithms" }] }
     const interaction = yield* seedInteraction(
       db,
-      "denied-accepted-learner-goal",
+      "goal-v2-policy-deny",
       input,
       LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: "Please help me form a durable Goal for relational algebra.", time, timeZone: "UTC" },
+      { text: "把学习图算法记成我的目标。", time, timeZone: "Asia/Shanghai" },
     )
 
     yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
     const result = yield* runtime.executeCommand(
       LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
       input,
-      context(interaction.registration, "deny", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      context(
+        interaction.registration,
+        "deny",
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        [],
+        LearnerGoal.PERMISSION_PATTERN,
+      ),
     )
-    const invocation = yield* goalInvocationProjection(db, interaction.registration.partID)
+    const stored = yield* db.transaction((tx) =>
+      LearningCommand.readLearnerGoalInvocationVersion(tx, {
+        partID: interaction.registration.partID,
+        assistantMessageID: interaction.registration.assistantMessageID,
+        providerCallID: interaction.registration.callID,
+      }),
+    )
 
     expect(result.metadata).toMatchObject({ outcome: "error", code: "permission_rejected" })
-    expect(permissionRequests).toHaveLength(0)
-    expect(invocation?.confirmation).toBeNull()
-    expect(invocation?.effectID).toBeNull()
+    expect(JSON.parse(result.output)).toMatchObject({
+      disposition: "candidate_v2",
+      capabilityOutcome: "policy_deny",
+      agentAction: { kind: "root", causalRootOccurrenceID: interaction.occurrenceID },
+    })
+    expect(stored).toMatchObject({
+      version: 2,
+      disposition: "candidate_v2",
+      status: "error",
+      capabilityOutcome: "policy_deny",
+      candidate: { agentAction: { kind: "root", causalRootOccurrenceID: interaction.occurrenceID } },
+    })
     expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
   }),
 )
 
 it.effect(
-  "settles rejected and corrected accepted Goal prompts without durable drafts or learner-source promotion",
+  "records delegated Goal issuance and rejects a child without Goal-write membership before candidate admission",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const capability = (allow: boolean) => ({
+        version: 2,
+        parent: [],
+        inherited: [],
+        profile: [],
+        explicit: allow
+          ? [
+              {
+                permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+                pattern: LearnerGoal.PERMISSION_PATTERN,
+                action: "allow",
+              },
+            ]
+          : [],
+      })
+
+      const input = { operations: [{ type: "create" as const, outcome: "Explain delegated learning" }] }
+      const grantedCapability = capability(true)
+      const granted = yield* seedDelegatedLearningCommandInteraction(
+        db,
+        "goal-v2-granted",
+        input,
+        grantedCapability,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, granted.registration)
+      const applied = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        input,
+        context(
+          granted.registration,
+          "allow",
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          [],
+          LearnerGoal.PERMISSION_PATTERN,
+        ),
+      )
+      expect(JSON.parse(applied.output)).toMatchObject({
+        disposition: "candidate_v2",
+        settlement: { outcome: "applied" },
+        agentAction: {
+          kind: "delegated",
+          occurrenceID: granted.registration.causalOccurrenceID,
+          causalRootOccurrenceID: granted.occurrenceID,
+          sessionID: granted.child.sessionID,
+          turnID: granted.child.turnID,
+          invocationPartID: granted.registration.partID,
+          lineage: [
+            {
+              childTurnID: granted.child.turnID,
+              childSessionID: granted.child.sessionID,
+              parentSessionID: granted.parent.sessionID,
+              delegatedCapability: grantedCapability,
+              delegatedCapabilityFingerprint: expect.any(String),
+            },
+          ],
+          effectiveDelegatedCapability: {
+            identity: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            version: 2,
+            projectionVersion: 2,
+            fingerprint: expect.any(String),
+          },
+        },
+        capabilityOutcome: "policy_allow",
+      })
+
+      const deniedInput = { operations: [{ type: "create" as const, outcome: "Invent forbidden Goal state" }] }
+      const denied = yield* seedDelegatedLearningCommandInteraction(
+        db,
+        "goal-v2-ungranted",
+        deniedInput,
+        capability(false),
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      )
+      const requestsBeforeDenied = permissionRequests.length
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, deniedInput, denied.registration)
+      const rejected = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        deniedInput,
+        context(
+          denied.registration,
+          "allow",
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          [],
+          LearnerGoal.PERMISSION_PATTERN,
+        ),
+      )
+      expect(JSON.parse(rejected.output)).toMatchObject({
+        disposition: "physical_no_effect",
+        settlement: { outcome: "error", code: "permission_rejected" },
+      })
+      expect(permissionRequests).toHaveLength(requestsBeforeDenied)
+      expect(
+        yield* db.transaction((tx) =>
+          LearningCommand.readLearnerGoalInvocationVersion(tx, {
+            partID: denied.registration.partID,
+            assistantMessageID: denied.registration.assistantMessageID,
+            providerCallID: denied.registration.callID,
+          }),
+        ),
+      ).toMatchObject({ version: 2, disposition: "physical_no_effect", status: "error" })
+      expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 1 })
+
+      const forgedInput = { operations: [{ type: "create" as const, outcome: "Reject forged Goal lineage" }] }
+      const forged = yield* seedDelegatedLearningCommandInteraction(
+        db,
+        "goal-v2-forged-lineage",
+        forgedInput,
+        capability(true),
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      )
+      expect(
+        Exit.isFailure(
+          yield* runtime
+            .prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, forgedInput, {
+              ...forged.registration,
+              causalOccurrenceID: LearningCommand.OccurrenceID.create(),
+            })
+            .pipe(Effect.exit),
+        ),
+      ).toBe(true)
+      expect(
+        yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learning_command_invocation
+            WHERE part_id = ${forged.registration.partID}) AS invocations,
+          (SELECT count(*) FROM learner_goal_disposition_v2
+            WHERE invocation_part_id = ${forged.registration.partID}) AS dispositions
+      `),
+      ).toEqual({ invocations: 0, dispositions: 0 })
+    }),
+)
+
+it.effect("returns typed no_change without a second Goal effect or frontier advance", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const goals = yield* LearnerGoal.ReadService
+    const time = Date.parse("2026-07-31T05:00:00.000Z")
+    const create = { operations: [{ type: "create" as const, outcome: "Understand Bayesian inference" }] }
+    const origin = yield* seedInteraction(
+      db,
+      "goal-v2-no-change-origin",
+      create,
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      { text: "我想理解贝叶斯推断。", time, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, create, origin.registration)
+    yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      create,
+      context(
+        origin.registration,
+        "allow",
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        [],
+        LearnerGoal.PERMISSION_PATTERN,
+      ),
+    )
+    yield* settleInteractionTurn(db, origin, time + 1)
+    const current = (yield* goals.discover(time + 2)).items[0]!
+    const frontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+    const update = {
+      operations: [
+        {
+          type: "update" as const,
+          goalID: current.goalID,
+          headRevisionID: current.head.id,
+          patch: { outcome: current.head.outcome },
+        },
+      ],
+    }
+    const followup = yield* seedFollowupInteraction(
+      db,
+      origin,
+      "goal-v2-no-change-followup",
+      update,
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      { text: "目标还是刚才那个，不用改内容。", time: time + 3, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, update, followup.registration)
+    const result = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      update,
+      context(
+        followup.registration,
+        "allow",
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        [],
+        LearnerGoal.PERMISSION_PATTERN,
+      ),
+    )
+
+    expect(result.metadata).toMatchObject({ outcome: "no_change", durablySettled: true })
+    expect(JSON.parse(result.output)).toMatchObject({
+      settlement: { outcome: "no_change", operations: [{ result: "no_change", goalID: current.goalID }] },
+      capabilityOutcome: "policy_allow",
+    })
+    expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 1 })
+    expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontier)
+    expect((yield* goals.readCurrent(current.goalID, time + 4))?.head.id).toBe(current.head.id)
+  }),
+)
+
+it.effect("recovers every durable Goal V2 capability class without applying an uncommitted allow", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const prompt =
+      (outcome: "prompted_allow" | "prompted_deny" | "prompted_correct" | "prompted_cancel") =>
+      (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+        db.transaction((tx) =>
+          Effect.gen(function* () {
+            const time = Date.now()
+            const requestID = PermissionV1.ID.ascending()
+            yield* LearningCommand.issueLearnerGoalCapabilityPromptV2(tx, {
+              partID,
+              requestID,
+              policyBasis: { source: "recovery-matrix" },
+              shownScope: { patterns: [LearnerGoal.PERMISSION_PATTERN] },
+              time,
+              order: yield* EventV2.nextSequence(tx, sessionID),
+            })
+            yield* LearningCommand.settleLearnerGoalPromptV2(tx, {
+              partID,
+              requestID,
+              outcome,
+              reply: { reply: outcome },
+              time: time + 1,
+              order: yield* EventV2.nextSequence(tx, sessionID),
+            })
+          }),
+        )
+    const cases = [
+      {
+        name: "not-evaluated",
+        prepare: (_partID: SessionV1.PartID, _sessionID: SessionSchema.ID) => Effect.void,
+        outcome: "not_evaluated",
+        code: "interrupted",
+      },
+      {
+        name: "issued-no-reply",
+        prepare: (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+          db.transaction((tx) =>
+            Effect.gen(function* () {
+              const order = yield* EventV2.nextSequence(tx, sessionID)
+              yield* LearningCommand.issueLearnerGoalCapabilityPromptV2(tx, {
+                partID,
+                requestID: PermissionV1.ID.ascending(),
+                policyBasis: { source: "test" },
+                shownScope: { patterns: [LearnerGoal.PERMISSION_PATTERN] },
+                time: Date.now(),
+                order,
+              })
+            }),
+          ),
+        outcome: "prompted_abort",
+        code: "interrupted",
+      },
+      {
+        name: "durable-allow",
+        prepare: (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+          db.transaction((tx) =>
+            Effect.gen(function* () {
+              const time = Date.now()
+              const order = yield* EventV2.nextSequence(tx, sessionID)
+              yield* LearningCommand.settleLearnerGoalPolicyV2(tx, {
+                partID,
+                outcome: "policy_allow",
+                policyBasis: { source: "test" },
+                time,
+                order,
+              })
+            }),
+          ),
+        outcome: "policy_allow",
+        code: "interrupted",
+      },
+      {
+        name: "durable-deny",
+        prepare: (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+          db.transaction((tx) =>
+            Effect.gen(function* () {
+              const time = Date.now()
+              const order = yield* EventV2.nextSequence(tx, sessionID)
+              yield* LearningCommand.settleLearnerGoalPolicyV2(tx, {
+                partID,
+                outcome: "policy_deny",
+                policyBasis: { source: "test" },
+                time,
+                order,
+              })
+            }),
+          ),
+        outcome: "policy_deny",
+        code: "permission_rejected",
+      },
+      { name: "prompted-allow", prepare: prompt("prompted_allow"), outcome: "prompted_allow", code: "interrupted" },
+      {
+        name: "prompted-deny",
+        prepare: prompt("prompted_deny"),
+        outcome: "prompted_deny",
+        code: "permission_rejected",
+      },
+      {
+        name: "prompted-correct",
+        prepare: prompt("prompted_correct"),
+        outcome: "prompted_correct",
+        code: "permission_corrected",
+      },
+      {
+        name: "prompted-cancel",
+        prepare: prompt("prompted_cancel"),
+        outcome: "prompted_cancel",
+        code: "cancelled",
+      },
+    ] as const
+
+    for (const item of cases) {
+      const input = { operations: [{ type: "create" as const, outcome: `Recovery ${item.name}` }] }
+      const interaction = yield* seedInteraction(
+        db,
+        `goal-v2-recovery-${item.name}`,
+        input,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: `Remember Recovery ${item.name}`, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+      yield* item.prepare(interaction.registration.partID, interaction.registration.sessionID)
+      expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
+      const result = yield* exactPartResult(db, interaction.registration.partID)
+      expect(result.metadata).toMatchObject({ outcome: "error", code: item.code })
+      expect(JSON.parse(result.output)).toMatchObject({
+        disposition: "candidate_v2",
+        capabilityOutcome: item.outcome,
+      })
+    }
+    expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
+  }),
+)
+
+it.effect("gives committed Goal semantics precedence across every recovery capability branch", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const prompt =
+      (outcome: "prompted_allow" | "prompted_deny" | "prompted_correct" | "prompted_cancel") =>
+      (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+        db.transaction((tx) =>
+          Effect.gen(function* () {
+            const time = Date.now()
+            const requestID = PermissionV1.ID.ascending()
+            yield* LearningCommand.issueLearnerGoalCapabilityPromptV2(tx, {
+              partID,
+              requestID,
+              policyBasis: { source: "semantic-race-test" },
+              shownScope: { patterns: [LearnerGoal.PERMISSION_PATTERN] },
+              time,
+              order: yield* EventV2.nextSequence(tx, sessionID),
+            })
+            yield* LearningCommand.settleLearnerGoalPromptV2(tx, {
+              partID,
+              requestID,
+              outcome,
+              reply: { reply: outcome },
+              time: time + 1,
+              order: yield* EventV2.nextSequence(tx, sessionID),
+            })
+          }),
+        )
+    const capabilityCases = [
+      {
+        name: "not-evaluated",
+        prepare: (_partID: SessionV1.PartID, _sessionID: SessionSchema.ID) => Effect.void,
+        expected: "not_evaluated",
+      },
+      {
+        name: "issued-no-reply",
+        prepare: (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+          db.transaction((tx) =>
+            Effect.gen(function* () {
+              const time = Date.now()
+              yield* LearningCommand.issueLearnerGoalCapabilityPromptV2(tx, {
+                partID,
+                requestID: PermissionV1.ID.ascending(),
+                policyBasis: { source: "semantic-race-test" },
+                shownScope: { patterns: [LearnerGoal.PERMISSION_PATTERN] },
+                time,
+                order: yield* EventV2.nextSequence(tx, sessionID),
+              })
+            }),
+          ),
+        expected: "prompted_abort",
+      },
+      {
+        name: "durable-allow",
+        prepare: (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+          db.transaction((tx) =>
+            Effect.gen(function* () {
+              const time = Date.now()
+              yield* LearningCommand.settleLearnerGoalPolicyV2(tx, {
+                partID,
+                outcome: "policy_allow",
+                policyBasis: { source: "semantic-race-test" },
+                time,
+                order: yield* EventV2.nextSequence(tx, sessionID),
+              })
+            }),
+          ),
+        expected: "policy_allow",
+      },
+      {
+        name: "durable-deny",
+        prepare: (partID: SessionV1.PartID, sessionID: SessionSchema.ID) =>
+          db.transaction((tx) =>
+            Effect.gen(function* () {
+              const time = Date.now()
+              yield* LearningCommand.settleLearnerGoalPolicyV2(tx, {
+                partID,
+                outcome: "policy_deny",
+                policyBasis: { source: "semantic-race-test" },
+                time,
+                order: yield* EventV2.nextSequence(tx, sessionID),
+              })
+            }),
+          ),
+        expected: "policy_deny",
+      },
+      { name: "prompted-allow", prepare: prompt("prompted_allow"), expected: "prompted_allow" },
+      { name: "prompted-deny", prepare: prompt("prompted_deny"), expected: "prompted_deny" },
+      { name: "prompted-correct", prepare: prompt("prompted_correct"), expected: "prompted_correct" },
+      { name: "prompted-cancel", prepare: prompt("prompted_cancel"), expected: "prompted_cancel" },
+    ] as const
+
+    for (const capabilityCase of capabilityCases) {
+      for (const semanticOutcome of ["already_applied", "semantic_conflict"] as const) {
+        const suffix = `goal-v2-recovery-race-${capabilityCase.name}-${semanticOutcome}`
+        const winnerInput = { operations: [{ type: "create" as const, outcome: `Winner ${suffix}` }] }
+        const loserInput =
+          semanticOutcome === "already_applied"
+            ? winnerInput
+            : { operations: [{ type: "create" as const, outcome: `Conflicting loser ${suffix}` }] }
+        const loser = yield* seedInteraction(
+          db,
+          `${suffix}-loser`,
+          loserInput,
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          { text: `Remember ${suffix}`, timeZone: "UTC" },
+        )
+        const winner = yield* insertAssistant(
+          db,
+          loser,
+          `${suffix}-winner`,
+          winnerInput,
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        )
+        yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, loserInput, loser.registration)
+        yield* capabilityCase.prepare(loser.registration.partID, loser.registration.sessionID)
+        yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, winnerInput, winner)
+        const effectsBefore = yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM learner_goal_effect`)
+        if (!effectsBefore) return yield* Effect.die("Expected learner Goal effect count")
+        const winnerResult = yield* runtime.executeCommand(
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          winnerInput,
+          context(winner, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, [], LearnerGoal.PERMISSION_PATTERN),
+        )
+        expect(winnerResult.metadata).toMatchObject({ outcome: "applied" })
+        expect(yield* runtime.interrupt(loser.registration)).toBe(true)
+        const recovered = yield* exactPartResult(db, loser.registration.partID)
+        const output = JSON.parse(recovered.output)
+        expect(output).toMatchObject({
+          disposition: "candidate_v2",
+          capabilityOutcome: capabilityCase.expected,
+          settlement:
+            semanticOutcome === "already_applied"
+              ? { outcome: "already_applied", effectID: expect.any(String) }
+              : { outcome: "error", code: "semantic_conflict" },
+        })
+        expect(yield* db.get<{ count: number }>(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({
+          count: effectsBefore.count + 1,
+        })
+        expect(yield* runtime.interrupt(loser.registration)).toBe(true)
+        expect(yield* exactPartResult(db, loser.registration.partID)).toEqual(recovered)
+      }
+    }
+  }),
+)
+
+it.effect("retains applied Goal V2 truth while Session deletion removes its no-effect sibling", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const goals = yield* LearnerGoal.ReadService
+    const sessions = yield* Session.Service
+
+    const appliedInput = { operations: [{ type: "create" as const, outcome: "Survive Session deletion" }] }
+    const applied = yield* seedInteraction(
+      db,
+      "goal-v2-session-delete-applied",
+      appliedInput,
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      { text: "把这个学习目标保存下来。", timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, appliedInput, applied.registration)
+    const appliedResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      appliedInput,
+      context(
+        applied.registration,
+        "allow",
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        [],
+        LearnerGoal.PERMISSION_PATTERN,
+      ),
+    )
+    const appliedOutput = JSON.parse(appliedResult.output)
+    const effectID = appliedOutput.settlement.effectID
+    expect(effectID).toBeString()
+    expect(appliedOutput).toMatchObject({ settlement: { outcome: "applied" } })
+    const appliedEffect = yield* db.select().from(LearnerGoalEffectTable).get()
+    if (!appliedEffect) return yield* Effect.die("Expected an applied Goal V2 effect")
+    expect(appliedEffect.id).toBe(effectID)
+    const appliedInvocation = yield* db
+      .select()
+      .from(LearningCommandInvocationTable)
+      .where(eq(LearningCommandInvocationTable.part_id, applied.registration.partID))
+      .get()
+    if (!appliedInvocation?.time_settled) return yield* Effect.die("Expected an applied Goal V2 invocation")
+    yield* settleInteractionTurn(db, applied, appliedInvocation.time_settled)
+
+    const deniedInput = { operations: [{ type: "create" as const, outcome: "Remove denied Goal history" }] }
+    const denied = yield* seedInteraction(
+      db,
+      "goal-v2-session-delete-denied",
+      deniedInput,
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      { text: "不要允许这个目标写入。", timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, deniedInput, denied.registration)
+    const deniedResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      deniedInput,
+      context(
+        denied.registration,
+        "deny",
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        [],
+        LearnerGoal.PERMISSION_PATTERN,
+      ),
+    )
+    expect(deniedResult.metadata).toMatchObject({ outcome: "error", code: "permission_rejected" })
+    const deniedInvocation = yield* db
+      .select()
+      .from(LearningCommandInvocationTable)
+      .where(eq(LearningCommandInvocationTable.part_id, denied.registration.partID))
+      .get()
+    if (!deniedInvocation?.time_settled) return yield* Effect.die("Expected a denied Goal V2 invocation")
+    yield* settleInteractionTurn(db, denied, deniedInvocation.time_settled)
+
+    expect(
+      Exit.isFailure(
+        yield* db
+          .delete(LearnerGoalDispositionV2Table)
+          .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, denied.registration.partID))
+          .run()
+          .pipe(Effect.exit),
+      ),
+    ).toBe(true)
+
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learner_goal_effect WHERE id = ${appliedEffect.id}) AS effects,
+          (SELECT count(*) FROM learner_goal_commit_seal WHERE effect_id = ${appliedEffect.id}) AS seals,
+          (SELECT count(*) FROM learning_command_receipt WHERE invocation_part_id = ${applied.registration.partID}) AS receipts
+      `),
+    ).toEqual({ effects: 1, seals: 1, receipts: 1 })
+
+    yield* sessions.remove(applied.sessionID)
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learner_goal_effect WHERE id = ${appliedEffect.id}) AS effects,
+          (SELECT count(*) FROM learner_goal_commit_seal WHERE effect_id = ${appliedEffect.id}) AS seals,
+          (SELECT count(*) FROM learning_command_receipt WHERE invocation_part_id = ${applied.registration.partID}) AS receipts
+      `),
+    ).toEqual({ effects: 1, seals: 1, receipts: 1 })
+    yield* sessions.remove(denied.sessionID)
+
+    expect(
+      yield* db
+        .select()
+        .from(LearningCommandInvocationTable)
+        .where(eq(LearningCommandInvocationTable.part_id, applied.registration.partID))
+        .get(),
+    ).toMatchObject({ status: "applied" })
+    expect(
+      yield* db
+        .select()
+        .from(LearnerGoalDispositionV2Table)
+        .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, applied.registration.partID))
+        .get(),
+    ).toMatchObject({ disposition: "candidate_v2" })
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learner_goal_effect WHERE id = ${appliedEffect.id}) AS effects,
+          (SELECT count(*) FROM learner_goal_commit_seal WHERE effect_id = ${appliedEffect.id}) AS seals,
+          (SELECT count(*) FROM learning_command_receipt WHERE invocation_part_id = ${applied.registration.partID}) AS receipts
+      `),
+    ).toEqual({ effects: 1, seals: 1, receipts: 1 })
+    expect(yield* goals.readEffect(appliedEffect.id)).toMatchObject({
+      schemaVersion: 2,
+      occurrenceID: applied.occurrenceID,
+    })
+    expect(
+      (yield* goals.discover(Date.now() + 1)).items.find((goal) => goal.head.effectID === appliedEffect.id),
+    ).toMatchObject({
+      head: { source: { occurrenceID: applied.occurrenceID, availability: { state: "source_unavailable" } } },
+    })
+    expect(
+      yield* db.select().from(PartTable).where(eq(PartTable.id, applied.registration.partID)).get(),
+    ).toBeUndefined()
+    expect(
+      yield* db
+        .select()
+        .from(LearningCommandInvocationTable)
+        .where(eq(LearningCommandInvocationTable.part_id, denied.registration.partID))
+        .get(),
+    ).toBeUndefined()
+    expect(
+      yield* db
+        .select()
+        .from(LearnerGoalDispositionV2Table)
+        .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, denied.registration.partID))
+        .get(),
+    ).toBeUndefined()
+    expect(
+      yield* db
+        .select()
+        .from(LearnerGoalCapabilitySettlementV2Table)
+        .where(eq(LearnerGoalCapabilitySettlementV2Table.invocation_part_id, denied.registration.partID))
+        .get(),
+    ).toBeUndefined()
+  }),
+)
+
+it.effect("blocks Goal V2 applied-message revert while removing an eligible no-effect message", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const sessions = yield* Session.Service
+    const execute = (suffix: string, input: Record<string, unknown>, policy: "allow" | "deny") =>
+      Effect.gen(function* () {
+        const interaction = yield* seedInteraction(db, suffix, input, LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, {
+          text: suffix,
+          timeZone: "UTC",
+        })
+        yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+        yield* runtime.executeCommand(
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          input,
+          context(
+            interaction.registration,
+            policy,
+            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            [],
+            LearnerGoal.PERMISSION_PATTERN,
+          ),
+        )
+        const invocation = yield* db
+          .select()
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, interaction.registration.partID))
+          .get()
+        if (!invocation?.time_settled) return yield* Effect.die("Expected a terminal Goal V2 invocation")
+        yield* settleInteractionTurn(db, interaction, invocation.time_settled)
+        return interaction
+      })
+
+    const applied = yield* execute(
+      "goal-v2-revert-applied",
+      { operations: [{ type: "create", outcome: "Protected Goal V2" }] },
+      "allow",
+    )
+    const appliedRemoval = yield* sessions
+      .removeTranscript({
+        sessionID: applied.sessionID,
+        messageIDs: [applied.registration.assistantMessageID],
+        parts: [],
+      })
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(appliedRemoval)).toBe(true)
+    if (Exit.isFailure(appliedRemoval)) {
+      expect(Cause.squash(appliedRemoval.cause)).toMatchObject({
+        _tag: "LearningCommand.AppliedAssistantImmutableError",
+        assistantMessageID: applied.registration.assistantMessageID,
+        partID: applied.registration.partID,
+      })
+    }
+
+    const denied = yield* execute(
+      "goal-v2-revert-denied",
+      { operations: [{ type: "create", outcome: "Removable denied Goal V2" }] },
+      "deny",
+    )
+    yield* sessions.removeTranscript({
+      sessionID: denied.sessionID,
+      messageIDs: [denied.registration.assistantMessageID],
+      parts: [],
+    })
+    expect(
+      yield* db
+        .select()
+        .from(LearningCommandInvocationTable)
+        .where(eq(LearningCommandInvocationTable.part_id, denied.registration.partID))
+        .get(),
+    ).toBeUndefined()
+    expect(
+      yield* db
+        .select()
+        .from(LearnerGoalDispositionV2Table)
+        .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, denied.registration.partID))
+        .get(),
+    ).toBeUndefined()
+  }),
+)
+
+// Historical V1 producer oracles are fenced below. V16 keeps their bytes and replay semantics through
+// frozen migration fixtures, but the sourceExcerpt/field-basis/Goal-confirmation write path is no longer executable.
+it.effect.skip(
+  "historical V1: keeps accepted learner Goal display process-local and rolls back every final commit boundary",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      permissionWaits.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const goals = yield* LearnerGoal.ReadService
+      const snapshot = (
+        registration: LearningCommandRuntime.Registration,
+        occurrenceID: LearningCommand.OccurrenceID,
+      ) =>
+        Effect.all({
+          part: db.select({ data: PartTable.data }).from(PartTable).where(eq(PartTable.id, registration.partID)).get(),
+          invocation: goalInvocationProjection(db, registration.partID),
+          receipts: goalReceiptCount(db, occurrenceID),
+          effects: db.get(sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${occurrenceID}`),
+          goals: db.get(sql`
+          SELECT count(DISTINCT goal.id) AS count
+          FROM learner_goal AS goal
+          JOIN learner_goal_revision AS revision ON revision.goal_id = goal.id
+          WHERE revision.occurrence_id = ${occurrenceID}
+        `),
+          revisions: db.get(sql`
+          SELECT count(*) AS count FROM learner_goal_revision WHERE occurrence_id = ${occurrenceID}
+        `),
+          conditions: db.get(sql`
+          SELECT count(*) AS count
+          FROM learner_goal_condition AS condition
+          JOIN learner_goal_revision AS revision ON revision.id = condition.revision_id
+          WHERE revision.occurrence_id = ${occurrenceID}
+        `),
+          bases: db.get(sql`
+          SELECT count(*) AS count
+          FROM learner_goal_field_basis AS basis
+          JOIN learner_goal_revision AS revision ON revision.id = basis.revision_id
+          WHERE revision.occurrence_id = ${occurrenceID}
+        `),
+          operations: db.get(sql`
+          SELECT count(*) AS count
+          FROM learner_goal_effect_operation AS operation
+          JOIN learner_goal_effect AS effect ON effect.id = operation.effect_id
+          WHERE effect.occurrence_id = ${occurrenceID}
+        `),
+          seals: db.get(sql`
+          SELECT count(*) AS count
+          FROM learner_goal_commit_seal AS seal
+          JOIN learner_goal_effect AS effect ON effect.id = seal.effect_id
+          WHERE effect.occurrence_id = ${occurrenceID}
+        `),
+          state: db.all(sql`SELECT singleton, revision_sequence FROM learner_goal_state ORDER BY singleton`),
+          frontier: db.transaction((tx) => LearningFrontier.read(tx)),
+          tool: db.get(sql`
+          SELECT state, consumed_shared_frontier_sequence, consumed_shared_frontier_time,
+                 resulting_shared_frontier_sequence, resulting_shared_frontier_time
+          FROM turn_tool_invocation WHERE part_id = ${registration.partID}
+        `),
+          sequence: db
+            .select({ seq: EventSequenceTable.seq })
+            .from(EventSequenceTable)
+            .where(eq(EventSequenceTable.aggregate_id, registration.sessionID))
+            .get(),
+          events: db.get(sql`SELECT count(*) AS count FROM event WHERE aggregate_id = ${registration.sessionID}`),
+        })
+      const boundaries = [
+        { name: "goal_effect", clause: "BEFORE INSERT ON learner_goal_effect" },
+        { name: "part_projection", clause: "BEFORE UPDATE OF data ON part" },
+        { name: "part_event", clause: "BEFORE INSERT ON event" },
+      ] as const
+
+      yield* Effect.forEach(
+        boundaries,
+        (boundary, index) =>
+          Effect.gen(function* () {
+            const time = Date.now() + index * 10_000
+            const input = acceptedGoalInput(`Understand atomic Goal commit boundary ${index}`, [
+              `Explain atomic Goal commit boundary ${index}`,
+            ])
+            const interaction = yield* seedInteraction(
+              db,
+              `goal-rollback-${boundary.name}`,
+              input,
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              { text: `Please help me make atomic Goal commit boundary ${index} concrete.`, time, timeZone: "UTC" },
+            )
+            yield* runtime.prepareCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              input,
+              interaction.registration,
+            )
+            const before = yield* snapshot(interaction.registration, interaction.occurrenceID)
+            const ownerCount = (yield* goals.discover(time + 1)).items.length
+            const entered = yield* Deferred.make<void>()
+            const release = yield* Deferred.make<void>()
+            permissionWaits.push({ entered, release })
+            const execution = yield* runtime
+              .executeCommand(
+                LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+                input,
+                context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+              )
+              .pipe(Effect.forkChild)
+            yield* Deferred.await(entered)
+            const request = permissionRequests.at(-1)
+            if (!request) return yield* Effect.die("Expected the accepted Goal confirmation request")
+            const requestID = request.id
+            const displayed = request.metadata.confirmation as LearnerGoal.ConfirmationSnapshot
+            expect(request).toMatchObject({
+              id: requestID,
+              requirePrompt: true,
+              always: [],
+              metadata: { onceOnly: true, authorizationBasis: "learner_acceptance" },
+            })
+            expect((yield* snapshot(interaction.registration, interaction.occurrenceID)).invocation).toMatchObject({
+              status: "admitted",
+              effectID: null,
+              confirmation: null,
+              settlement: null,
+            })
+            expect((yield* goals.discover(time + 1)).items).toHaveLength(ownerCount)
+
+            const trigger = `gate16_goal_rollback_${index}`
+            yield* db.run(
+              sql.raw(
+                `CREATE TEMP TRIGGER ${trigger} ${boundary.clause} BEGIN SELECT RAISE(ABORT, 'gate16 injected rollback'); END`,
+              ),
+            )
+            yield* Deferred.succeed(release, undefined)
+            const failed = yield* Fiber.join(execution).pipe(
+              Effect.ensuring(db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger}`)).pipe(Effect.orDie)),
+            )
+            expect(failed.metadata).toMatchObject({
+              outcome: "error",
+              code: "outcome_unknown",
+              durablySettled: false,
+            })
+            expect(yield* snapshot(interaction.registration, interaction.occurrenceID)).toEqual(before)
+
+            const retried = yield* runtime.executeCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              input,
+              context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+            )
+            const retryRequest = permissionRequests.at(-1)
+            expect(retryRequest?.id).toBe(requestID)
+            expect(retryRequest?.metadata.confirmation).toEqual(displayed)
+            expect(retried.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+            const after = yield* snapshot(interaction.registration, interaction.occurrenceID)
+            expect(after.invocation).toMatchObject({
+              status: "applied",
+              effectID: expect.stringMatching(/^gle_/),
+              confirmation: displayed,
+              settlement: { outcome: "applied" },
+            })
+            expect(after.receipts).toEqual({ count: 1 })
+            expect(after.effects).toEqual({ count: 1 })
+            expect(after.goals).toEqual({ count: 1 })
+            expect(after.revisions).toEqual({ count: 1 })
+            expect(after.conditions).toEqual({ count: 1 })
+            expect(after.bases).toEqual({ count: 5 })
+            expect(after.operations).toEqual({ count: 1 })
+            expect(after.seals).toEqual({ count: 1 })
+            expect(after.state).not.toEqual(before.state)
+            expect(after.frontier).not.toEqual(before.frontier)
+            expect(after.tool).not.toEqual(before.tool)
+            expect(after.part).not.toEqual(before.part)
+            expect(after.sequence).toBeDefined()
+            expect(after.events).toEqual({ count: 1 })
+          }),
+        { discard: true },
+      )
+    }),
+)
+
+it.effect.skip(
+  "historical V1: effective deny settles an accepted learner Goal before confirmation is constructed",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const time = Date.parse("2026-07-21T02:30:00.000Z")
+      const input = acceptedGoalInput("Learn relational algebra")
+      const interaction = yield* seedInteraction(
+        db,
+        "denied-accepted-learner-goal",
+        input,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: "Please help me form a durable Goal for relational algebra.", time, timeZone: "UTC" },
+      )
+
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+      const result = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        input,
+        context(interaction.registration, "deny", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      const invocation = yield* goalInvocationProjection(db, interaction.registration.partID)
+
+      expect(result.metadata).toMatchObject({ outcome: "error", code: "permission_rejected" })
+      expect(permissionRequests).toHaveLength(0)
+      expect(invocation?.confirmation).toBeNull()
+      expect(invocation?.effectID).toBeNull()
+      expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
+    }),
+)
+
+it.effect.skip(
+  "historical V1: settles rejected and corrected accepted Goal prompts without durable drafts or learner-source promotion",
   () =>
     Effect.gen(function* () {
       permissionRequests.length = 0
@@ -665,262 +1922,266 @@ it.effect(
     }),
 )
 
-it.effect("keeps accepted Goal cancellation, interruption, and startup recovery draft-free and effect-free", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    permissionFailures.length = 0
-    permissionWaits.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const events = yield* EventV2Bridge.Service
-    const assertNoGoalWrite = (
-      registration: LearningCommandRuntime.Registration,
-      occurrenceID: LearningCommand.OccurrenceID,
-    ) =>
-      Effect.gen(function* () {
-        expect(yield* goalInvocationProjection(db, registration.partID)).toMatchObject({
-          status: "error",
-          confirmation: null,
-          effectID: null,
-          settlement: { outcome: "error", code: "interrupted" },
-        })
-        expect(yield* goalReceiptCount(db, occurrenceID)).toEqual({ count: 0 })
-        expect(
-          yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${occurrenceID}`),
-        ).toEqual({ count: 0 })
-      })
-
-    const cancelledInput = acceptedGoalInput("Cancelled accepted Goal")
-    const cancelled = yield* seedInteraction(
-      db,
-      "goal-permission-abort",
-      cancelledInput,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: "Please propose a Goal that I may cancel.", timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      cancelledInput,
-      cancelled.registration,
-    )
-    const cancelledEntered = yield* Deferred.make<void>()
-    const cancelledRelease = yield* Deferred.make<void>()
-    permissionWaits.push({ entered: cancelledEntered, release: cancelledRelease })
-    const controller = new AbortController()
-    const cancelledExecution = yield* runtime
-      .executeCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, cancelledInput, {
-        ...context(cancelled.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-        abort: controller.signal,
-      })
-      .pipe(Effect.forkChild)
-    yield* Deferred.await(cancelledEntered)
-    expect(yield* goalInvocationProjection(db, cancelled.registration.partID)).toMatchObject({ confirmation: null })
-    controller.abort()
-    const cancelledResult = yield* Fiber.join(cancelledExecution)
-    expect(cancelledResult.metadata).toMatchObject({ outcome: "error", code: "interrupted" })
-    expect(yield* goalInvocationProjection(db, cancelled.registration.partID)).toMatchObject({
-      confirmation: null,
-      effectID: null,
-    })
-
-    yield* Effect.forEach(
-      ["interrupt", "recovery"] as const,
-      (mode, index) =>
+it.effect.skip(
+  "historical V1: keeps accepted Goal cancellation, interruption, and startup recovery draft-free and effect-free",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      permissionFailures.length = 0
+      permissionWaits.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const events = yield* EventV2Bridge.Service
+      const assertNoGoalWrite = (
+        registration: LearningCommandRuntime.Registration,
+        occurrenceID: LearningCommand.OccurrenceID,
+      ) =>
         Effect.gen(function* () {
-          const input = acceptedGoalInput(`${mode} accepted Goal`)
-          const interaction = yield* seedInteraction(
-            db,
-            `goal-permission-${mode}`,
-            input,
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            { text: `Please propose Goal ${index} before ${mode}.`, timeZone: "UTC" },
-          )
-          yield* runtime.prepareCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            input,
-            interaction.registration,
-          )
-          const entered = yield* Deferred.make<void>()
-          const release = yield* Deferred.make<void>()
-          permissionWaits.push({ entered, release })
-          const execution = yield* runtime
-            .executeCommand(
+          expect(yield* goalInvocationProjection(db, registration.partID)).toMatchObject({
+            status: "error",
+            confirmation: null,
+            effectID: null,
+            settlement: { outcome: "error", code: "interrupted" },
+          })
+          expect(yield* goalReceiptCount(db, occurrenceID)).toEqual({ count: 0 })
+          expect(
+            yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${occurrenceID}`),
+          ).toEqual({ count: 0 })
+        })
+
+      const cancelledInput = acceptedGoalInput("Cancelled accepted Goal")
+      const cancelled = yield* seedInteraction(
+        db,
+        "goal-permission-abort",
+        cancelledInput,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: "Please propose a Goal that I may cancel.", timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        cancelledInput,
+        cancelled.registration,
+      )
+      const cancelledEntered = yield* Deferred.make<void>()
+      const cancelledRelease = yield* Deferred.make<void>()
+      permissionWaits.push({ entered: cancelledEntered, release: cancelledRelease })
+      const controller = new AbortController()
+      const cancelledExecution = yield* runtime
+        .executeCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, cancelledInput, {
+          ...context(cancelled.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+          abort: controller.signal,
+        })
+        .pipe(Effect.forkChild)
+      yield* Deferred.await(cancelledEntered)
+      expect(yield* goalInvocationProjection(db, cancelled.registration.partID)).toMatchObject({ confirmation: null })
+      controller.abort()
+      const cancelledResult = yield* Fiber.join(cancelledExecution)
+      expect(cancelledResult.metadata).toMatchObject({ outcome: "error", code: "interrupted" })
+      expect(yield* goalInvocationProjection(db, cancelled.registration.partID)).toMatchObject({
+        confirmation: null,
+        effectID: null,
+      })
+
+      yield* Effect.forEach(
+        ["interrupt", "recovery"] as const,
+        (mode, index) =>
+          Effect.gen(function* () {
+            const input = acceptedGoalInput(`${mode} accepted Goal`)
+            const interaction = yield* seedInteraction(
+              db,
+              `goal-permission-${mode}`,
+              input,
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              { text: `Please propose Goal ${index} before ${mode}.`, timeZone: "UTC" },
+            )
+            yield* runtime.prepareCommand(
               LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
               input,
-              context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+              interaction.registration,
             )
-            .pipe(Effect.forkChild)
-          yield* Deferred.await(entered)
-          const requestCount = permissionRequests.length
-          expect(yield* goalInvocationProjection(db, interaction.registration.partID)).toMatchObject({
-            confirmation: null,
-          })
-          if (mode === "interrupt") {
-            expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
-          } else {
-            yield* LearningCommandRuntime.recoverAdmitted(events)
-          }
-          yield* Deferred.succeed(release, undefined)
-          expect(yield* Fiber.join(execution)).toMatchObject({
-            metadata: { outcome: "error", code: "interrupted", durablySettled: true },
-          })
-          expect(permissionRequests).toHaveLength(requestCount)
-          yield* assertNoGoalWrite(interaction.registration, interaction.occurrenceID)
-        }),
-      { discard: true },
-    )
-  }),
-)
-
-it.effect("spends accepted Goal once-only authority after deny, correct, cancel, dispose, and interruption", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    permissionFailures.length = 0
-    permissionWaits.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const cases = [
-      { name: "deny", code: "permission_rejected" },
-      { name: "correct", code: "permission_corrected" },
-      { name: "cancel", code: "cancelled" },
-      { name: "dispose", code: "cancelled" },
-      { name: "interruption", code: "interrupted" },
-    ] as const
-
-    const observations = Array.from(
-      yield* Effect.forEach(cases, (item) =>
-        Effect.gen(function* () {
-          const requestsBeforeTerminal = permissionRequests.length
-          const input = acceptedGoalInput(`Terminal accepted Goal ${item.name}`)
-          const directOutcome = `Direct relabel after ${item.name}`
-          const interaction = yield* seedInteraction(
-            db,
-            `goal-terminal-authority-${item.name}`,
-            input,
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            {
-              text: `/goal ${directOutcome}; active; LearnerHome; no conditions; no target.`,
-              timeZone: "UTC",
-            },
-          )
-          yield* runtime.prepareCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            input,
-            interaction.registration,
-          )
-
-          const original = yield* item.name === "deny"
-            ? runtime.executeCommand(
+            const entered = yield* Deferred.make<void>()
+            const release = yield* Deferred.make<void>()
+            permissionWaits.push({ entered, release })
+            const execution = yield* runtime
+              .executeCommand(
                 LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
                 input,
-                context(interaction.registration, "deny", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+                context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
               )
-            : item.name === "correct" || item.name === "cancel"
-              ? Effect.gen(function* () {
-                  permissionFailures.push(
-                    item.name === "correct"
-                      ? new PermissionV1.CorrectedError({ feedback: "Use a new learner input for the correction." })
-                      : new PermissionV1.RejectedError(),
-                  )
-                  return yield* runtime.executeCommand(
-                    LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-                    input,
-                    context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-                  )
-                })
-              : Effect.gen(function* () {
-                  const entered = yield* Deferred.make<void>()
-                  const release = yield* Deferred.make<void>()
-                  permissionWaits.push({
-                    entered,
-                    release,
-                    ...(item.name === "dispose" ? { failure: new PermissionV1.RejectedError() } : {}),
-                  })
-                  const execution = yield* runtime
-                    .executeCommand(
+              .pipe(Effect.forkChild)
+            yield* Deferred.await(entered)
+            const requestCount = permissionRequests.length
+            expect(yield* goalInvocationProjection(db, interaction.registration.partID)).toMatchObject({
+              confirmation: null,
+            })
+            if (mode === "interrupt") {
+              expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
+            } else {
+              yield* LearningCommandRuntime.recoverAdmitted(events)
+            }
+            yield* Deferred.succeed(release, undefined)
+            expect(yield* Fiber.join(execution)).toMatchObject({
+              metadata: { outcome: "error", code: "interrupted", durablySettled: true },
+            })
+            expect(permissionRequests).toHaveLength(requestCount)
+            yield* assertNoGoalWrite(interaction.registration, interaction.occurrenceID)
+          }),
+        { discard: true },
+      )
+    }),
+)
+
+it.effect.skip(
+  "historical V1: spends accepted Goal once-only authority after deny, correct, cancel, dispose, and interruption",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      permissionFailures.length = 0
+      permissionWaits.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const cases = [
+        { name: "deny", code: "permission_rejected" },
+        { name: "correct", code: "permission_corrected" },
+        { name: "cancel", code: "cancelled" },
+        { name: "dispose", code: "cancelled" },
+        { name: "interruption", code: "interrupted" },
+      ] as const
+
+      const observations = Array.from(
+        yield* Effect.forEach(cases, (item) =>
+          Effect.gen(function* () {
+            const requestsBeforeTerminal = permissionRequests.length
+            const input = acceptedGoalInput(`Terminal accepted Goal ${item.name}`)
+            const directOutcome = `Direct relabel after ${item.name}`
+            const interaction = yield* seedInteraction(
+              db,
+              `goal-terminal-authority-${item.name}`,
+              input,
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              {
+                text: `/goal ${directOutcome}; active; LearnerHome; no conditions; no target.`,
+                timeZone: "UTC",
+              },
+            )
+            yield* runtime.prepareCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              input,
+              interaction.registration,
+            )
+
+            const original = yield* item.name === "deny"
+              ? runtime.executeCommand(
+                  LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+                  input,
+                  context(interaction.registration, "deny", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+                )
+              : item.name === "correct" || item.name === "cancel"
+                ? Effect.gen(function* () {
+                    permissionFailures.push(
+                      item.name === "correct"
+                        ? new PermissionV1.CorrectedError({ feedback: "Use a new learner input for the correction." })
+                        : new PermissionV1.RejectedError(),
+                    )
+                    return yield* runtime.executeCommand(
                       LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
                       input,
                       context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
                     )
-                    .pipe(Effect.forkChild)
-                  yield* Deferred.await(entered)
-                  if (item.name === "interruption") {
-                    expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
-                  }
-                  yield* Deferred.succeed(release, undefined)
-                  return yield* Fiber.join(execution)
-                })
-          const requestsAfterTerminal = permissionRequests.length
-          const effectsAfterTerminal = yield* db.get(
-            sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
-          )
+                  })
+                : Effect.gen(function* () {
+                    const entered = yield* Deferred.make<void>()
+                    const release = yield* Deferred.make<void>()
+                    permissionWaits.push({
+                      entered,
+                      release,
+                      ...(item.name === "dispose" ? { failure: new PermissionV1.RejectedError() } : {}),
+                    })
+                    const execution = yield* runtime
+                      .executeCommand(
+                        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+                        input,
+                        context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+                      )
+                      .pipe(Effect.forkChild)
+                    yield* Deferred.await(entered)
+                    if (item.name === "interruption") {
+                      expect(yield* runtime.interrupt(interaction.registration)).toBe(true)
+                    }
+                    yield* Deferred.succeed(release, undefined)
+                    return yield* Fiber.join(execution)
+                  })
+            const requestsAfterTerminal = permissionRequests.length
+            const effectsAfterTerminal = yield* db.get(
+              sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
+            )
 
-          const exact = yield* insertAssistant(
-            db,
-            interaction,
-            `goal-terminal-authority-${item.name}-exact`,
-            input,
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-          )
-          yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, exact)
-          permissionFailures.push(new PermissionV1.RejectedError())
-          const exactResult = yield* runtime.executeCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            input,
-            context(exact, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-          )
-          permissionFailures.length = 0
-          const requestsAfterExact = permissionRequests.length
+            const exact = yield* insertAssistant(
+              db,
+              interaction,
+              `goal-terminal-authority-${item.name}-exact`,
+              input,
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            )
+            yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, exact)
+            permissionFailures.push(new PermissionV1.RejectedError())
+            const exactResult = yield* runtime.executeCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              input,
+              context(exact, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+            )
+            permissionFailures.length = 0
+            const requestsAfterExact = permissionRequests.length
 
-          const changedInput = acceptedGoalInput(`Changed interpretation after ${item.name}`)
-          const changed = yield* insertAssistant(
-            db,
-            interaction,
-            `goal-terminal-authority-${item.name}-changed`,
-            changedInput,
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-          )
-          yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, changedInput, changed)
-          permissionFailures.push(new PermissionV1.RejectedError())
-          const changedResult = yield* runtime.executeCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            changedInput,
-            context(changed, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-          )
-          permissionFailures.length = 0
-          const requestsAfterChanged = permissionRequests.length
+            const changedInput = acceptedGoalInput(`Changed interpretation after ${item.name}`)
+            const changed = yield* insertAssistant(
+              db,
+              interaction,
+              `goal-terminal-authority-${item.name}-changed`,
+              changedInput,
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            )
+            yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, changedInput, changed)
+            permissionFailures.push(new PermissionV1.RejectedError())
+            const changedResult = yield* runtime.executeCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              changedInput,
+              context(changed, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+            )
+            permissionFailures.length = 0
+            const requestsAfterChanged = permissionRequests.length
 
-          const directInput = {
-            authorizationBasis: "learner_request" as const,
-            operations: [
-              directGoalCreate(directOutcome, {
-                outcome: directOutcome,
-                conditions: "no conditions",
-                scope: "LearnerHome",
-                target: "no target",
-                disposition: "active",
-              }),
-            ],
-          }
-          const direct = yield* insertAssistant(
-            db,
-            interaction,
-            `goal-terminal-authority-${item.name}-direct`,
-            directInput,
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-          )
-          yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, directInput, direct)
-          const directResult = yield* runtime.executeCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            directInput,
-            context(direct, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-          )
-          const requestsAfterDirect = permissionRequests.length
-          const sameOccurrenceEffects = yield* db.get(
-            sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
-          )
-          const sameOccurrenceReceipts = yield* goalReceiptCount(db, interaction.occurrenceID)
-          const terminalInvocations = yield* db.get(sql`
+            const directInput = {
+              authorizationBasis: "learner_request" as const,
+              operations: [
+                directGoalCreate(directOutcome, {
+                  outcome: directOutcome,
+                  conditions: "no conditions",
+                  scope: "LearnerHome",
+                  target: "no target",
+                  disposition: "active",
+                }),
+              ],
+            }
+            const direct = yield* insertAssistant(
+              db,
+              interaction,
+              `goal-terminal-authority-${item.name}-direct`,
+              directInput,
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            )
+            yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, directInput, direct)
+            const directResult = yield* runtime.executeCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              directInput,
+              context(direct, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+            )
+            const requestsAfterDirect = permissionRequests.length
+            const sameOccurrenceEffects = yield* db.get(
+              sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${interaction.occurrenceID}`,
+            )
+            const sameOccurrenceReceipts = yield* goalReceiptCount(db, interaction.occurrenceID)
+            const terminalInvocations = yield* db.get(sql`
               SELECT count(*) AS count
               FROM learning_command_invocation AS invocation
               WHERE invocation.part_id IN (${exact.partID}, ${changed.partID}, ${direct.partID})
@@ -928,107 +2189,111 @@ it.effect("spends accepted Goal once-only authority after deny, correct, cancel,
                 AND json_extract(invocation.settlement, '$.effectID') IS NULL
           `)
 
-          const freshInput = acceptedGoalInput(`Fresh learner correction after ${item.name}`)
-          const fresh = yield* seedInteraction(
-            db,
-            `goal-terminal-authority-${item.name}-fresh`,
-            freshInput,
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            { text: `Please propose a fresh accepted Goal after ${item.name}.`, timeZone: "UTC" },
-          )
-          yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, freshInput, fresh.registration)
-          const applied = yield* runtime.executeCommand(
-            LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            freshInput,
-            context(fresh.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-          )
-          return {
-            name: item.name,
-            original: {
-              outcome: original.metadata.outcome,
-              code: original.metadata.code,
-              durablySettled: original.metadata.durablySettled,
-              permissionRequests: requestsAfterTerminal - requestsBeforeTerminal,
-              effects: effectsAfterTerminal,
-            },
-            exact: {
-              outcome: exactResult.metadata.outcome,
-              code: exactResult.metadata.code,
-              durablySettled: exactResult.metadata.durablySettled,
-              permissionRequests: requestsAfterExact - requestsAfterTerminal,
-            },
-            changed: {
-              outcome: changedResult.metadata.outcome,
-              code: changedResult.metadata.code,
-              durablySettled: changedResult.metadata.durablySettled,
-              permissionRequests: requestsAfterChanged - requestsAfterExact,
-            },
-            direct: {
-              outcome: directResult.metadata.outcome,
-              code: directResult.metadata.code,
-              durablySettled: directResult.metadata.durablySettled,
-              permissionRequests: requestsAfterDirect - requestsAfterChanged,
-            },
-            sameOccurrenceEffects,
-            sameOccurrenceReceipts,
-            terminalInvocations,
-            fresh: {
-              outcome: applied.metadata.outcome,
-              durablySettled: applied.metadata.durablySettled,
-              permissionRequests: permissionRequests.length - requestsAfterDirect,
-              effects: yield* db.get(
-                sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${fresh.occurrenceID}`,
-              ),
-            },
-          }
-        }),
-      ),
-    )
+            const freshInput = acceptedGoalInput(`Fresh learner correction after ${item.name}`)
+            const fresh = yield* seedInteraction(
+              db,
+              `goal-terminal-authority-${item.name}-fresh`,
+              freshInput,
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              { text: `Please propose a fresh accepted Goal after ${item.name}.`, timeZone: "UTC" },
+            )
+            yield* runtime.prepareCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              freshInput,
+              fresh.registration,
+            )
+            const applied = yield* runtime.executeCommand(
+              LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              freshInput,
+              context(fresh.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+            )
+            return {
+              name: item.name,
+              original: {
+                outcome: original.metadata.outcome,
+                code: original.metadata.code,
+                durablySettled: original.metadata.durablySettled,
+                permissionRequests: requestsAfterTerminal - requestsBeforeTerminal,
+                effects: effectsAfterTerminal,
+              },
+              exact: {
+                outcome: exactResult.metadata.outcome,
+                code: exactResult.metadata.code,
+                durablySettled: exactResult.metadata.durablySettled,
+                permissionRequests: requestsAfterExact - requestsAfterTerminal,
+              },
+              changed: {
+                outcome: changedResult.metadata.outcome,
+                code: changedResult.metadata.code,
+                durablySettled: changedResult.metadata.durablySettled,
+                permissionRequests: requestsAfterChanged - requestsAfterExact,
+              },
+              direct: {
+                outcome: directResult.metadata.outcome,
+                code: directResult.metadata.code,
+                durablySettled: directResult.metadata.durablySettled,
+                permissionRequests: requestsAfterDirect - requestsAfterChanged,
+              },
+              sameOccurrenceEffects,
+              sameOccurrenceReceipts,
+              terminalInvocations,
+              fresh: {
+                outcome: applied.metadata.outcome,
+                durablySettled: applied.metadata.durablySettled,
+                permissionRequests: permissionRequests.length - requestsAfterDirect,
+                effects: yield* db.get(
+                  sql`SELECT count(*) AS count FROM learner_goal_effect WHERE occurrence_id = ${fresh.occurrenceID}`,
+                ),
+              },
+            }
+          }),
+        ),
+      )
 
-    expect(observations).toEqual(
-      cases.map((item) => ({
-        name: item.name,
-        original: {
-          outcome: "error",
-          code: item.code,
-          durablySettled: true,
-          permissionRequests: item.name === "deny" ? 0 : 1,
-          effects: { count: 0 },
-        },
-        exact: {
-          outcome: "error",
-          code: expect.any(String),
-          durablySettled: true,
-          permissionRequests: 0,
-        },
-        changed: {
-          outcome: "error",
-          code: expect.any(String),
-          durablySettled: true,
-          permissionRequests: 0,
-        },
-        direct: {
-          outcome: "error",
-          code: expect.any(String),
-          durablySettled: true,
-          permissionRequests: 0,
-        },
-        sameOccurrenceEffects: { count: 0 },
-        sameOccurrenceReceipts: { count: 0 },
-        terminalInvocations: { count: 3 },
-        fresh: {
-          outcome: "applied",
-          durablySettled: true,
-          permissionRequests: 1,
-          effects: { count: 1 },
-        },
-      })),
-    )
-  }),
+      expect(observations).toEqual(
+        cases.map((item) => ({
+          name: item.name,
+          original: {
+            outcome: "error",
+            code: item.code,
+            durablySettled: true,
+            permissionRequests: item.name === "deny" ? 0 : 1,
+            effects: { count: 0 },
+          },
+          exact: {
+            outcome: "error",
+            code: expect.any(String),
+            durablySettled: true,
+            permissionRequests: 0,
+          },
+          changed: {
+            outcome: "error",
+            code: expect.any(String),
+            durablySettled: true,
+            permissionRequests: 0,
+          },
+          direct: {
+            outcome: "error",
+            code: expect.any(String),
+            durablySettled: true,
+            permissionRequests: 0,
+          },
+          sameOccurrenceEffects: { count: 0 },
+          sameOccurrenceReceipts: { count: 0 },
+          terminalInvocations: { count: 3 },
+          fresh: {
+            outcome: "applied",
+            durablySettled: true,
+            permissionRequests: 1,
+            effects: { count: 1 },
+          },
+        })),
+      )
+    }),
 )
 
-it.effect(
-  "revalidates new Course ownership after accepted Goal display without persisting the rejected candidate",
+it.effect.skip(
+  "historical V1: revalidates new Course ownership after accepted Goal display without persisting the rejected candidate",
   () =>
     Effect.gen(function* () {
       permissionRequests.length = 0
@@ -1113,388 +2378,410 @@ it.effect(
     }),
 )
 
-it.effect("retains applied Goal authority and removes no-effect Goal invocations across whole Session deletion", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    permissionFailures.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const goals = yield* LearnerGoal.ReadService
-    const sessions = yield* Session.Service
+it.effect.skip(
+  "historical V1: retains applied Goal authority and removes no-effect Goal invocations across whole Session deletion",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      permissionFailures.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const goals = yield* LearnerGoal.ReadService
+      const sessions = yield* Session.Service
 
-    const appliedInput = acceptedGoalInput("Retain this Goal after Session deletion")
-    const applied = yield* seedInteraction(
-      db,
-      "goal-session-delete-applied",
-      appliedInput,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: "Please propose a durable Goal that can outlive this Session.", timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, appliedInput, applied.registration)
-    const appliedResult = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      appliedInput,
-      context(applied.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
-    expect(appliedResult.metadata).toMatchObject({ outcome: "applied" })
-    const appliedInvocation = yield* goalInvocationProjection(db, applied.registration.partID)
-    if (!appliedInvocation?.effectID || !appliedInvocation.confirmation) {
-      return yield* Effect.die("Expected an applied accepted Goal invocation")
-    }
-    yield* settleInteractionTurn(db, applied, appliedInvocation.timeSettled ?? Date.now())
+      const appliedInput = acceptedGoalInput("Retain this Goal after Session deletion")
+      const applied = yield* seedInteraction(
+        db,
+        "goal-session-delete-applied",
+        appliedInput,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: "Please propose a durable Goal that can outlive this Session.", timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, appliedInput, applied.registration)
+      const appliedResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        appliedInput,
+        context(applied.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      expect(appliedResult.metadata).toMatchObject({ outcome: "applied" })
+      const appliedInvocation = yield* goalInvocationProjection(db, applied.registration.partID)
+      if (!appliedInvocation?.effectID || !appliedInvocation.confirmation) {
+        return yield* Effect.die("Expected an applied accepted Goal invocation")
+      }
+      yield* settleInteractionTurn(db, applied, appliedInvocation.timeSettled ?? Date.now())
 
-    const noEffectInput = acceptedGoalInput("Do not retain this rejected Goal")
-    const noEffect = yield* seedInteraction(
-      db,
-      "goal-session-delete-no-effect",
-      noEffectInput,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: "Please propose another Goal that I may reject.", timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, noEffectInput, noEffect.registration)
-    permissionFailures.push(new PermissionV1.RejectedError())
-    const rejected = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      noEffectInput,
-      context(noEffect.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
-    expect(rejected.metadata).toMatchObject({ outcome: "error", code: "cancelled" })
-    const rejectedInvocation = yield* db
-      .select()
-      .from(LearningCommandInvocationTable)
-      .where(eq(LearningCommandInvocationTable.part_id, noEffect.registration.partID))
-      .get()
-    if (!rejectedInvocation) return yield* Effect.die("Expected a rejected Goal invocation")
-    yield* settleInteractionTurn(db, noEffect, rejectedInvocation.time_settled ?? Date.now())
-
-    yield* sessions.remove(applied.sessionID)
-    yield* sessions.remove(noEffect.sessionID)
-
-    expect(yield* goalInvocationProjection(db, applied.registration.partID)).toMatchObject({
-      status: "applied",
-      effectID: appliedInvocation.effectID,
-      confirmation: appliedInvocation.confirmation,
-    })
-    expect(
-      yield* db
-        .select({
-          invocation_part_id: LearningCommandReceiptTable.invocation_part_id,
-          confirmation_snapshot: LearnerGoalCommandTable.confirmation_snapshot,
-        })
-        .from(LearningCommandReceiptTable)
-        .innerJoin(
-          LearnerGoalCommitSealTable,
-          eq(LearnerGoalCommitSealTable.receipt_id, LearningCommandReceiptTable.id),
-        )
-        .innerJoin(
-          LearnerGoalCommandTable,
-          eq(LearnerGoalCommandTable.invocation_part_id, LearnerGoalCommitSealTable.invocation_part_id),
-        )
-        .where(eq(LearnerGoalCommitSealTable.effect_id, appliedInvocation.effectID))
-        .get(),
-    ).toMatchObject({
-      invocation_part_id: applied.registration.partID,
-      confirmation_snapshot: appliedInvocation.confirmation,
-    })
-    expect(
-      yield* db
-        .select()
-        .from(LearnerOccurrenceTombstoneTable)
-        .where(eq(LearnerOccurrenceTombstoneTable.occurrence_id, applied.occurrenceID))
-        .get(),
-    ).toMatchObject({ reason: "source_unavailable" })
-    expect(
-      (yield* goals.discover(Date.now() + 1)).items.find((goal) => goal.head.effectID === appliedInvocation.effectID),
-    ).toMatchObject({
-      head: {
-        outcome: appliedInput.operations[0].snapshot.outcome,
-        source: { occurrenceID: applied.occurrenceID, availability: { state: "source_unavailable" } },
-      },
-    })
-    expect(
-      yield* db.select().from(PartTable).where(eq(PartTable.id, applied.registration.partID)).get(),
-    ).toBeUndefined()
-    expect(
-      yield* db
+      const noEffectInput = acceptedGoalInput("Do not retain this rejected Goal")
+      const noEffect = yield* seedInteraction(
+        db,
+        "goal-session-delete-no-effect",
+        noEffectInput,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: "Please propose another Goal that I may reject.", timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        noEffectInput,
+        noEffect.registration,
+      )
+      permissionFailures.push(new PermissionV1.RejectedError())
+      const rejected = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        noEffectInput,
+        context(noEffect.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      expect(rejected.metadata).toMatchObject({ outcome: "error", code: "cancelled" })
+      const rejectedInvocation = yield* db
         .select()
         .from(LearningCommandInvocationTable)
         .where(eq(LearningCommandInvocationTable.part_id, noEffect.registration.partID))
-        .get(),
-    ).toBeUndefined()
-    expect(
-      yield* db
-        .select()
-        .from(AdmittedLearnerOccurrenceTable)
-        .where(eq(AdmittedLearnerOccurrenceTable.id, noEffect.occurrenceID))
-        .get(),
-    ).toBeUndefined()
-  }),
+        .get()
+      if (!rejectedInvocation) return yield* Effect.die("Expected a rejected Goal invocation")
+      yield* settleInteractionTurn(db, noEffect, rejectedInvocation.time_settled ?? Date.now())
+
+      yield* sessions.remove(applied.sessionID)
+      yield* sessions.remove(noEffect.sessionID)
+
+      expect(yield* goalInvocationProjection(db, applied.registration.partID)).toMatchObject({
+        status: "applied",
+        effectID: appliedInvocation.effectID,
+        confirmation: appliedInvocation.confirmation,
+      })
+      expect(
+        yield* db
+          .select({
+            invocation_part_id: LearningCommandReceiptTable.invocation_part_id,
+            confirmation_snapshot: LearnerGoalCommandTable.confirmation_snapshot,
+          })
+          .from(LearningCommandReceiptTable)
+          .innerJoin(
+            LearnerGoalCommitSealTable,
+            eq(LearnerGoalCommitSealTable.receipt_id, LearningCommandReceiptTable.id),
+          )
+          .innerJoin(
+            LearnerGoalCommandTable,
+            eq(LearnerGoalCommandTable.invocation_part_id, LearnerGoalCommitSealTable.invocation_part_id),
+          )
+          .where(eq(LearnerGoalCommitSealTable.effect_id, appliedInvocation.effectID))
+          .get(),
+      ).toMatchObject({
+        invocation_part_id: applied.registration.partID,
+        confirmation_snapshot: appliedInvocation.confirmation,
+      })
+      expect(
+        yield* db
+          .select()
+          .from(LearnerOccurrenceTombstoneTable)
+          .where(eq(LearnerOccurrenceTombstoneTable.occurrence_id, applied.occurrenceID))
+          .get(),
+      ).toMatchObject({ reason: "source_unavailable" })
+      expect(
+        (yield* goals.discover(Date.now() + 1)).items.find((goal) => goal.head.effectID === appliedInvocation.effectID),
+      ).toMatchObject({
+        head: {
+          outcome: appliedInput.operations[0].snapshot.outcome,
+          source: { occurrenceID: applied.occurrenceID, availability: { state: "source_unavailable" } },
+        },
+      })
+      expect(
+        yield* db.select().from(PartTable).where(eq(PartTable.id, applied.registration.partID)).get(),
+      ).toBeUndefined()
+      expect(
+        yield* db
+          .select()
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, noEffect.registration.partID))
+          .get(),
+      ).toBeUndefined()
+      expect(
+        yield* db
+          .select()
+          .from(AdmittedLearnerOccurrenceTable)
+          .where(eq(AdmittedLearnerOccurrenceTable.id, noEffect.occurrenceID))
+          .get(),
+      ).toBeUndefined()
+    }),
 )
 
-it.effect("blocks revert cleanup across an applied Goal assistant while allowing no-effect Goal cleanup", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    permissionFailures.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const sessions = yield* Session.Service
+it.effect.skip(
+  "historical V1: blocks revert cleanup across an applied Goal assistant while allowing no-effect Goal cleanup",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      permissionFailures.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const sessions = yield* Session.Service
 
-    const appliedInput = acceptedGoalInput("Applied Goal protected from revert cleanup")
-    const applied = yield* seedInteraction(
-      db,
-      "goal-revert-applied",
-      appliedInput,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: "Please propose an applied Goal before I test revert.", timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, appliedInput, applied.registration)
-    yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      appliedInput,
-      context(applied.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
-    const appliedInvocation = yield* db
-      .select()
-      .from(LearningCommandInvocationTable)
-      .where(eq(LearningCommandInvocationTable.part_id, applied.registration.partID))
-      .get()
-    if (!appliedInvocation) return yield* Effect.die("Expected applied Goal invocation")
-    yield* settleInteractionTurn(db, applied, appliedInvocation.time_settled ?? Date.now())
-    const appliedRemoval = yield* sessions
-      .removeTranscript({
-        sessionID: applied.sessionID,
-        messageIDs: [applied.registration.assistantMessageID],
+      const appliedInput = acceptedGoalInput("Applied Goal protected from revert cleanup")
+      const applied = yield* seedInteraction(
+        db,
+        "goal-revert-applied",
+        appliedInput,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: "Please propose an applied Goal before I test revert.", timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, appliedInput, applied.registration)
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        appliedInput,
+        context(applied.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      const appliedInvocation = yield* db
+        .select()
+        .from(LearningCommandInvocationTable)
+        .where(eq(LearningCommandInvocationTable.part_id, applied.registration.partID))
+        .get()
+      if (!appliedInvocation) return yield* Effect.die("Expected applied Goal invocation")
+      yield* settleInteractionTurn(db, applied, appliedInvocation.time_settled ?? Date.now())
+      const appliedRemoval = yield* sessions
+        .removeTranscript({
+          sessionID: applied.sessionID,
+          messageIDs: [applied.registration.assistantMessageID],
+          parts: [],
+        })
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(appliedRemoval)).toBe(true)
+      if (Exit.isFailure(appliedRemoval)) {
+        expect(Cause.squash(appliedRemoval.cause)).toMatchObject({
+          _tag: "LearningCommand.AppliedAssistantImmutableError",
+          assistantMessageID: applied.registration.assistantMessageID,
+          partID: applied.registration.partID,
+        })
+      }
+      expect(yield* exactPartResult(db, applied.registration.partID)).toBeDefined()
+
+      const noEffectInput = acceptedGoalInput("No-effect Goal removable by revert cleanup")
+      const noEffect = yield* seedInteraction(
+        db,
+        "goal-revert-no-effect",
+        noEffectInput,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: "Please propose a Goal I will reject before revert.", timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        noEffectInput,
+        noEffect.registration,
+      )
+      permissionFailures.push(new PermissionV1.RejectedError())
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        noEffectInput,
+        context(noEffect.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      const noEffectInvocation = yield* db
+        .select()
+        .from(LearningCommandInvocationTable)
+        .where(eq(LearningCommandInvocationTable.part_id, noEffect.registration.partID))
+        .get()
+      if (!noEffectInvocation) return yield* Effect.die("Expected no-effect Goal invocation")
+      yield* settleInteractionTurn(db, noEffect, noEffectInvocation.time_settled ?? Date.now())
+      yield* sessions.removeTranscript({
+        sessionID: noEffect.sessionID,
+        messageIDs: [noEffect.registration.assistantMessageID],
         parts: [],
       })
-      .pipe(Effect.exit)
-    expect(Exit.isFailure(appliedRemoval)).toBe(true)
-    if (Exit.isFailure(appliedRemoval)) {
-      expect(Cause.squash(appliedRemoval.cause)).toMatchObject({
-        _tag: "LearningCommand.AppliedAssistantImmutableError",
-        assistantMessageID: applied.registration.assistantMessageID,
-        partID: applied.registration.partID,
+      expect(
+        yield* db
+          .select()
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, noEffect.registration.partID))
+          .get(),
+      ).toBeUndefined()
+      expect(
+        yield* db
+          .select()
+          .from(MessageTable)
+          .where(eq(MessageTable.id, noEffect.registration.assistantMessageID))
+          .get(),
+      ).toBeUndefined()
+    }),
+)
+
+it.effect.skip(
+  "historical V1: uses ordinary permission without a redundant confirmation for an exact direct learner Goal",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const time = Date.parse("2026-07-21T03:00:00.000Z")
+      const source = "Create a durable Goal: Learn operating systems; active; LearnerHome; no conditions; no target."
+      const input = {
+        authorizationBasis: "learner_request" as const,
+        operations: [
+          {
+            type: "create" as const,
+            snapshot: {
+              outcome: "Learn operating systems",
+              conditions: [],
+              scope: { type: "learner_home" as const },
+              target: { type: "absent" as const },
+              fieldBases: {
+                outcome: { type: "authored" as const, sourceExcerpt: "Learn operating systems" },
+                conditions: { type: "authored" as const, sourceExcerpt: "no conditions" },
+                scope: { type: "authored" as const, sourceExcerpt: "LearnerHome" },
+                target: { type: "authored" as const, sourceExcerpt: "no target" },
+                disposition: { type: "authored" as const, sourceExcerpt: "active" },
+              },
+            },
+            disposition: "active" as const,
+          },
+        ],
+      }
+      const interaction = yield* seedInteraction(
+        db,
+        "direct-learner-goal",
+        input,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: source, time, timeZone: "UTC" },
+      )
+
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+      const result = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        input,
+        context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+
+      expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+      expect(permissionRequests).toHaveLength(1)
+      expect(permissionRequests[0]).toMatchObject({
+        permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        patterns: [LearnerGoal.PERMISSION_PATTERN],
+        always: [LearnerGoal.PERMISSION_PATTERN],
+        metadata: { authorizationBasis: "learner_request", command: { operations: input.operations } },
       })
-    }
-    expect(yield* exactPartResult(db, applied.registration.partID)).toBeDefined()
-
-    const noEffectInput = acceptedGoalInput("No-effect Goal removable by revert cleanup")
-    const noEffect = yield* seedInteraction(
-      db,
-      "goal-revert-no-effect",
-      noEffectInput,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: "Please propose a Goal I will reject before revert.", timeZone: "UTC" },
-    )
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, noEffectInput, noEffect.registration)
-    permissionFailures.push(new PermissionV1.RejectedError())
-    yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      noEffectInput,
-      context(noEffect.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
-    const noEffectInvocation = yield* db
-      .select()
-      .from(LearningCommandInvocationTable)
-      .where(eq(LearningCommandInvocationTable.part_id, noEffect.registration.partID))
-      .get()
-    if (!noEffectInvocation) return yield* Effect.die("Expected no-effect Goal invocation")
-    yield* settleInteractionTurn(db, noEffect, noEffectInvocation.time_settled ?? Date.now())
-    yield* sessions.removeTranscript({
-      sessionID: noEffect.sessionID,
-      messageIDs: [noEffect.registration.assistantMessageID],
-      parts: [],
-    })
-    expect(
-      yield* db
-        .select()
-        .from(LearningCommandInvocationTable)
-        .where(eq(LearningCommandInvocationTable.part_id, noEffect.registration.partID))
-        .get(),
-    ).toBeUndefined()
-    expect(
-      yield* db.select().from(MessageTable).where(eq(MessageTable.id, noEffect.registration.assistantMessageID)).get(),
-    ).toBeUndefined()
-  }),
+      expect(permissionRequests[0]?.requirePrompt).toBeUndefined()
+      expect(permissionRequests[0]?.metadata.onceOnly).toBeUndefined()
+    }),
 )
 
-it.effect("uses ordinary permission without a redundant confirmation for an exact direct learner Goal", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const time = Date.parse("2026-07-21T03:00:00.000Z")
-    const source = "Create a durable Goal: Learn operating systems; active; LearnerHome; no conditions; no target."
-    const input = {
-      authorizationBasis: "learner_request" as const,
-      operations: [
+it.effect.skip(
+  "historical V1: rejects a direct learner Goal payload that tries to smuggle accepted meaning past arm routing",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const time = Date.parse("2026-07-21T03:30:00.000Z")
+      const input = {
+        ...acceptedGoalInput("Infer that I have mastered operating systems"),
+        authorizationBasis: "learner_request" as const,
+      }
+      const interaction = yield* seedInteraction(
+        db,
+        "dangerous-direct-learner-goal",
+        input,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
         {
-          type: "create" as const,
-          snapshot: {
-            outcome: "Learn operating systems",
-            conditions: [],
-            scope: { type: "learner_home" as const },
-            target: { type: "absent" as const },
-            fieldBases: {
-              outcome: { type: "authored" as const, sourceExcerpt: "Learn operating systems" },
-              conditions: { type: "authored" as const, sourceExcerpt: "no conditions" },
-              scope: { type: "authored" as const, sourceExcerpt: "LearnerHome" },
-              target: { type: "authored" as const, sourceExcerpt: "no target" },
-              disposition: { type: "authored" as const, sourceExcerpt: "active" },
-            },
-          },
-          disposition: "active" as const,
+          text: "Please discuss whether someone might have mastered operating systems; do not store that as my Goal.",
+          time,
+          timeZone: "UTC",
         },
-      ],
-    }
-    const interaction = yield* seedInteraction(
-      db,
-      "direct-learner-goal",
-      input,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: source, time, timeZone: "UTC" },
-    )
+      )
 
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
-    const result = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      input,
-      context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+      const result = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        input,
+        context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      const physical = yield* goalInvocationProjection(db, interaction.registration.partID)
 
-    expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
-    expect(permissionRequests).toHaveLength(1)
-    expect(permissionRequests[0]).toMatchObject({
-      permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      patterns: [LearnerGoal.PERMISSION_PATTERN],
-      always: [LearnerGoal.PERMISSION_PATTERN],
-      metadata: { authorizationBasis: "learner_request", command: { operations: input.operations } },
-    })
-    expect(permissionRequests[0]?.requirePrompt).toBeUndefined()
-    expect(permissionRequests[0]?.metadata.onceOnly).toBeUndefined()
-  }),
+      expect(result).toMatchObject({
+        title: "Learner Goals not changed",
+        metadata: { outcome: "error", code: "validation_error", durablySettled: true },
+      })
+      expect(permissionRequests).toHaveLength(1)
+      expect(permissionRequests[0]).toMatchObject({
+        permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        patterns: [LearnerGoal.PERMISSION_PATTERN],
+        metadata: { authorizationBasis: "learner_request", command: { operations: input.operations } },
+      })
+      expect(permissionRequests[0]?.requirePrompt).toBeUndefined()
+      expect(permissionRequests[0]?.metadata.onceOnly).toBeUndefined()
+      expect(physical).toMatchObject({ confirmation: null, effectID: null })
+      expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
+    }),
 )
 
-it.effect("rejects a direct learner Goal payload that tries to smuggle accepted meaning past arm routing", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const time = Date.parse("2026-07-21T03:30:00.000Z")
-    const input = {
-      ...acceptedGoalInput("Infer that I have mastered operating systems"),
-      authorizationBasis: "learner_request" as const,
-    }
-    const interaction = yield* seedInteraction(
-      db,
-      "dangerous-direct-learner-goal",
-      input,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      {
-        text: "Please discuss whether someone might have mastered operating systems; do not store that as my Goal.",
-        time,
-        timeZone: "UTC",
-      },
-    )
-
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
-    const result = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      input,
-      context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
-    const physical = yield* goalInvocationProjection(db, interaction.registration.partID)
-
-    expect(result).toMatchObject({
-      title: "Learner Goals not changed",
-      metadata: { outcome: "error", code: "validation_error", durablySettled: true },
-    })
-    expect(permissionRequests).toHaveLength(1)
-    expect(permissionRequests[0]).toMatchObject({
-      permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      patterns: [LearnerGoal.PERMISSION_PATTERN],
-      metadata: { authorizationBasis: "learner_request", command: { operations: input.operations } },
-    })
-    expect(permissionRequests[0]?.requirePrompt).toBeUndefined()
-    expect(permissionRequests[0]?.metadata.onceOnly).toBeUndefined()
-    expect(physical).toMatchObject({ confirmation: null, effectID: null })
-    expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
-  }),
-)
-
-it.effect("rejects a direct Goal mixed with cadence without spending later learner acceptance", () =>
-  Effect.gen(function* () {
-    permissionRequests.length = 0
-    const db = (yield* Database.Service).db
-    const runtime = yield* LearningCommandRuntime.Service
-    const time = Date.parse("2026-07-21T03:45:00.000Z")
-    const source =
-      "Create a durable Goal: Learn compilers; active; LearnerHome; no conditions; no target; study it every day."
-    const input = {
-      authorizationBasis: "learner_request" as const,
-      operations: [
-        {
-          type: "create" as const,
-          snapshot: {
-            outcome: "Learn compilers",
-            conditions: [],
-            scope: { type: "learner_home" as const },
-            target: { type: "absent" as const },
-            fieldBases: {
-              outcome: { type: "authored" as const, sourceExcerpt: "Learn compilers" },
-              conditions: { type: "authored" as const, sourceExcerpt: "no conditions" },
-              scope: { type: "authored" as const, sourceExcerpt: "LearnerHome" },
-              target: { type: "authored" as const, sourceExcerpt: "no target" },
-              disposition: { type: "authored" as const, sourceExcerpt: "active" },
+it.effect.skip(
+  "historical V1: rejects a direct Goal mixed with cadence without spending later learner acceptance",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const time = Date.parse("2026-07-21T03:45:00.000Z")
+      const source =
+        "Create a durable Goal: Learn compilers; active; LearnerHome; no conditions; no target; study it every day."
+      const input = {
+        authorizationBasis: "learner_request" as const,
+        operations: [
+          {
+            type: "create" as const,
+            snapshot: {
+              outcome: "Learn compilers",
+              conditions: [],
+              scope: { type: "learner_home" as const },
+              target: { type: "absent" as const },
+              fieldBases: {
+                outcome: { type: "authored" as const, sourceExcerpt: "Learn compilers" },
+                conditions: { type: "authored" as const, sourceExcerpt: "no conditions" },
+                scope: { type: "authored" as const, sourceExcerpt: "LearnerHome" },
+                target: { type: "authored" as const, sourceExcerpt: "no target" },
+                disposition: { type: "authored" as const, sourceExcerpt: "active" },
+              },
             },
+            disposition: "active" as const,
           },
-          disposition: "active" as const,
-        },
-      ],
-    }
-    const interaction = yield* seedInteraction(
-      db,
-      "cadence-direct-learner-goal",
-      input,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      { text: source, time, timeZone: "UTC" },
-    )
+        ],
+      }
+      const interaction = yield* seedInteraction(
+        db,
+        "cadence-direct-learner-goal",
+        input,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        { text: source, time, timeZone: "UTC" },
+      )
 
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
-    const result = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      input,
-      context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
-    const acceptedInput = acceptedGoalInput("Learn compilers")
-    const accepted = yield* insertAssistant(
-      db,
-      interaction,
-      "cadence-direct-learner-goal-accepted",
-      acceptedInput,
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-    )
-    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, acceptedInput, accepted)
-    const acceptedResult = yield* runtime.executeCommand(
-      LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-      acceptedInput,
-      context(accepted, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
-    )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, input, interaction.registration)
+      const result = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        input,
+        context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      const acceptedInput = acceptedGoalInput("Learn compilers")
+      const accepted = yield* insertAssistant(
+        db,
+        interaction,
+        "cadence-direct-learner-goal-accepted",
+        acceptedInput,
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, acceptedInput, accepted)
+      const acceptedResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        acceptedInput,
+        context(accepted, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
 
-    expect(result).toMatchObject({
-      title: "Learner Goals not changed",
-      metadata: { outcome: "error", code: "validation_error", durablySettled: true },
-    })
-    expect(acceptedResult).toMatchObject({ metadata: { outcome: "applied", durablySettled: true } })
-    expect(permissionRequests).toHaveLength(2)
-    expect(permissionRequests[0]?.requirePrompt).toBeUndefined()
-    expect(permissionRequests[0]?.metadata.onceOnly).toBeUndefined()
-    expect(permissionRequests[1]?.requirePrompt).toBe(true)
-    expect(permissionRequests[1]?.metadata.onceOnly).toBe(true)
-    expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 1 })
-  }),
+      expect(result).toMatchObject({
+        title: "Learner Goals not changed",
+        metadata: { outcome: "error", code: "validation_error", durablySettled: true },
+      })
+      expect(acceptedResult).toMatchObject({ metadata: { outcome: "applied", durablySettled: true } })
+      expect(permissionRequests).toHaveLength(2)
+      expect(permissionRequests[0]?.requirePrompt).toBeUndefined()
+      expect(permissionRequests[0]?.metadata.onceOnly).toBeUndefined()
+      expect(permissionRequests[1]?.requirePrompt).toBe(true)
+      expect(permissionRequests[1]?.metadata.onceOnly).toBe(true)
+      expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 1 })
+    }),
 )
 
-it.effect("rejects revoked, overclaimed, and incomplete direct learner Goal source mappings", () =>
+it.effect.skip("historical V1: rejects revoked, overclaimed, and incomplete direct learner Goal source mappings", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     permissionFailures.length = 0
@@ -1590,7 +2877,7 @@ it.effect("rejects revoked, overclaimed, and incomplete direct learner Goal sour
   }),
 )
 
-it.effect("recovers an admitted learner Goal without re-prompting or creating Goal state", () =>
+it.effect.skip("historical V1: recovers an admitted learner Goal without re-prompting or creating Goal state", () =>
   Effect.gen(function* () {
     permissionRequests.length = 0
     const db = (yield* Database.Service).db
@@ -2773,7 +4060,7 @@ it.effect("records delegated Agent issuance and rejects missing child authority 
     const appliedCourse = yield* courses.createCourse({ title: "Delegated applied default" })
     const appliedInput = { action: "set", courseID: appliedCourse.id } as const
     const appliedCapability = capability(appliedCourse.id, true)
-    const applied = yield* seedDelegatedDefaultCourseInteraction(db, "applied", appliedInput, appliedCapability)
+    const applied = yield* seedDelegatedLearningCommandInteraction(db, "applied", appliedInput, appliedCapability)
     yield* runtime.prepareCommand(
       LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
       appliedInput,
@@ -2819,7 +4106,7 @@ it.effect("records delegated Agent issuance and rejects missing child authority 
 
     const deniedCourse = yield* courses.createCourse({ title: "Delegated denied default" })
     const deniedInput = { action: "set", courseID: deniedCourse.id } as const
-    const denied = yield* seedDelegatedDefaultCourseInteraction(
+    const denied = yield* seedDelegatedLearningCommandInteraction(
       db,
       "denied",
       deniedInput,
@@ -2854,7 +4141,7 @@ it.effect("records delegated Agent issuance and rejects missing child authority 
 
     const ungrantedCourse = yield* courses.createCourse({ title: "Delegated ungranted default" })
     const ungrantedInput = { action: "set", courseID: ungrantedCourse.id } as const
-    const ungranted = yield* seedDelegatedDefaultCourseInteraction(
+    const ungranted = yield* seedDelegatedLearningCommandInteraction(
       db,
       "ungranted",
       ungrantedInput,
@@ -2885,7 +4172,7 @@ it.effect("records delegated Agent issuance and rejects missing child authority 
 
     const invalidCourse = yield* courses.createCourse({ title: "Delegated invalid lineage default" })
     const invalidInput = { action: "set", courseID: invalidCourse.id } as const
-    const invalid = yield* seedDelegatedDefaultCourseInteraction(
+    const invalid = yield* seedDelegatedLearningCommandInteraction(
       db,
       "invalid-lineage",
       invalidInput,
@@ -5564,6 +6851,301 @@ test("upgrades and recovers a frozen V12 admitted Default-Course invocation with
   expect(recovered.effects).toEqual([])
 })
 
+test("upgrades and interrupts a frozen V15 admitted learner Goal without reviving its retired producer", async () => {
+  await using tmp = await tmpdir()
+  const filename = join(tmp.path, "frozen-v15-admitted-learner-goal.sqlite")
+  const frozen = await seedFrozenV15AdmittedLearnerGoal(filename)
+  const migrated = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      return {
+        part: yield* db.select().from(PartTable).where(eq(PartTable.id, frozen.partID)).get(),
+        invocation: yield* db
+          .select({
+            status: LearningCommandInvocationTable.status,
+            settlement: LearningCommandInvocationTable.settlement,
+          })
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, frozen.partID))
+          .get(),
+        command: yield* db
+          .select()
+          .from(LearnerGoalCommandTable)
+          .where(eq(LearnerGoalCommandTable.invocation_part_id, frozen.partID))
+          .get(),
+        disposition: yield* db
+          .select()
+          .from(LearnerGoalDispositionV2Table)
+          .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, frozen.partID))
+          .get(),
+      }
+    }).pipe(Effect.provide(Database.layerFromPath(filename).pipe(Layer.orDie)), Effect.scoped),
+  )
+
+  expect(migrated.part?.data).toMatchObject({ state: { status: "pending", input: frozen.input } })
+  expect(migrated.invocation).toEqual({ status: "admitted", settlement: null })
+  expect(migrated.command).toMatchObject({
+    invocation_part_id: frozen.partID,
+    permission_request_id: frozen.permissionRequestID,
+    command_snapshot: { operations: frozen.input.operations },
+  })
+  expect(migrated.disposition).toMatchObject({
+    invocation_part_id: frozen.partID,
+    disposition: "legacy_v1",
+    legacy_command_part_id: frozen.partID,
+    canonical_command: null,
+    semantic_address: null,
+    agent_action_provenance: null,
+    materialized_snapshot: null,
+  })
+
+  const requestsBeforeRecovery = permissionRequests.length
+  const recovered = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const exact = yield* exactPartResult(db, frozen.partID)
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, frozen.input, frozen.registration)
+      const replay = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        frozen.input,
+        context(frozen.registration, "deny", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      return {
+        exact,
+        replay,
+        invocation: yield* db
+          .select({
+            status: LearningCommandInvocationTable.status,
+            settlement: LearningCommandInvocationTable.settlement,
+          })
+          .from(LearningCommandInvocationTable)
+          .where(eq(LearningCommandInvocationTable.part_id, frozen.partID))
+          .get(),
+        disposition: yield* db
+          .select()
+          .from(LearnerGoalDispositionV2Table)
+          .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, frozen.partID))
+          .get(),
+        capabilityIssues: yield* db.select().from(LearnerGoalCapabilityIssueV2Table).all(),
+        capabilitySettlements: yield* db.select().from(LearnerGoalCapabilitySettlementV2Table).all(),
+        effects: yield* db.select().from(LearnerGoalEffectTable).all(),
+      }
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+
+  expect(recovered.exact).toMatchObject({
+    title: "Learner Goals not changed",
+    metadata: { outcome: "error", code: "interrupted", durablySettled: true },
+  })
+  expect(recovered.exact.output).toContain("did not commit")
+  expect(recovered.replay).toEqual(recovered.exact)
+  expect(recovered.invocation).toMatchObject({
+    status: "error",
+    settlement: { outcome: "error", code: "interrupted" },
+  })
+  expect(recovered.disposition).toEqual(migrated.disposition)
+  expect(recovered.capabilityIssues).toEqual([])
+  expect(recovered.capabilitySettlements).toEqual([])
+  expect(recovered.effects).toEqual([])
+  expect(permissionRequests).toHaveLength(requestsBeforeRecovery)
+})
+
+test("replays a migrated terminal learner Goal V1 Part before V2 decoding or permission", async () => {
+  await using tmp = await tmpdir()
+  const filename = join(tmp.path, "frozen-v15-terminal-learner-goal.sqlite")
+  const frozen = await seedFrozenV15AdmittedLearnerGoal(filename, {
+    state: "terminal_applied",
+    terminalResult: frozenLegacyGoalTerminalResult,
+  })
+  const requestsBeforeReplay = permissionRequests.length
+  const replayed = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const exact = yield* exactPartResult(db, frozen.partID)
+      const effect = yield* db.select().from(LearnerGoalEffectTable).get()
+      if (!effect) return yield* Effect.die("Expected the frozen V1 Goal effect")
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, frozen.input, frozen.registration)
+      const executed = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        frozen.input,
+        context(frozen.registration, "deny", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+      )
+      return {
+        exact,
+        executed,
+        historicalEffect: yield* db.transaction((tx) => LearnerGoal.readEffect(tx, effect.id)),
+        disposition: yield* db
+          .select()
+          .from(LearnerGoalDispositionV2Table)
+          .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, frozen.partID))
+          .get(),
+        effect: yield* db.select().from(LearnerGoalEffectTable).get(),
+        capabilityIssues: yield* db.select().from(LearnerGoalCapabilityIssueV2Table).all(),
+        capabilitySettlements: yield* db.select().from(LearnerGoalCapabilitySettlementV2Table).all(),
+      }
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+
+  expect(replayed.executed).toEqual(replayed.exact)
+  expect(replayed.exact).toMatchObject({
+    title: "Updated learning Goal",
+    metadata: {
+      command: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      commandVersion: 1,
+      outcome: "applied",
+      durablySettled: true,
+    },
+  })
+  expect(replayed.exact.output).toContain("Frozen V15 learner Goal")
+  expect(replayed.disposition).toMatchObject({
+    disposition: "legacy_v1",
+    legacy_command_part_id: frozen.partID,
+    canonical_command: null,
+    agent_action_provenance: null,
+  })
+  expect(replayed.effect).toMatchObject({
+    schema_version: 1,
+    authorization_basis: "learner_acceptance",
+    agent_action_part_id: null,
+    materialized_snapshot: null,
+  })
+  expect(replayed.historicalEffect).toMatchObject({
+    schemaVersion: 1,
+    effectID: replayed.effect?.id,
+    authorizationBasis: "learner_acceptance",
+    confirmation: {
+      authorizationBasis: "learner_acceptance",
+      command: { operations: frozen.input.operations },
+    },
+  })
+  expect(replayed.capabilityIssues).toEqual([])
+  expect(replayed.capabilitySettlements).toEqual([])
+  expect(permissionRequests).toHaveLength(requestsBeforeReplay)
+})
+
+test("carries each historical V1 target into a V2 update without copying retired proof fields", async () => {
+  await using tmp = await tmpdir()
+  const cases: readonly Readonly<{
+    name: string
+    legacy: LearnerGoal.Target
+    expected: LearnerGoal.TargetValueV2
+  }>[] = [
+    { name: "absent", legacy: { type: "absent" }, expected: { type: "absent" } },
+    {
+      name: "instant",
+      legacy: {
+        type: "instant",
+        instant: Date.parse("2030-08-05T10:30:00+08:00"),
+        sourceExpression: "August 5, 2030 at 10:30 in UTC+8",
+        normalized: "2030-08-05T10:30:00+08:00",
+        utcOffsetMinutes: 480,
+        normalizationBasis: "explicit_offset",
+      },
+      expected: {
+        type: "instant",
+        instant: Date.parse("2030-08-05T10:30:00+08:00"),
+        utcOffsetMinutes: 480,
+        resolvedZone: { type: "fixed_offset", offsetMinutes: 480 },
+      },
+    },
+    {
+      name: "local-date",
+      legacy: {
+        type: "local_date",
+        date: "2030-08-05",
+        timeZone: "America/New_York",
+        sourceExpression: "August 5, 2030 in New York",
+        normalizationBasis: "explicit_date",
+      },
+      expected: {
+        type: "local_date",
+        date: "2030-08-05",
+        resolvedZone: { type: "iana", name: "America/New_York", releaseID: "iana-tzdb-2026c" },
+      },
+    },
+  ]
+
+  for (const item of cases) {
+    const filename = join(tmp.path, `frozen-v15-goal-carry-${item.name}.sqlite`)
+    const frozen = await seedFrozenV15AdmittedLearnerGoal(filename, {
+      state: "terminal_applied",
+      target: item.legacy,
+      terminalResult: frozenLegacyGoalTerminalResult,
+    })
+    const legacyGoal = frozen.legacyGoal
+    if (!legacyGoal) throw new Error(`Frozen V15 ${item.name} target did not create a Goal`)
+    const carried = await Effect.runPromise(
+      Effect.gen(function* () {
+        const db = (yield* Database.Service).db
+        const runtime = yield* LearningCommandRuntime.Service
+        const goalID = legacyGoal.goalID as LearnerGoal.GoalID
+        const update = {
+          operations: [
+            {
+              type: "update" as const,
+              goalID,
+              headRevisionID: legacyGoal.revisionID as LearnerGoal.RevisionID,
+              patch: { outcome: `Carried ${item.name} target` },
+            },
+          ],
+        }
+        const interaction = yield* seedInteraction(
+          db,
+          `goal-v1-carry-${item.name}`,
+          update,
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          { text: `Keep the target but revise the ${item.name} Goal.` },
+        )
+        yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY, update, interaction.registration)
+        const exact = yield* runtime.executeCommand(
+          LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+          update,
+          context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY),
+        )
+        const revisions = yield* db
+          .select()
+          .from(LearnerGoalRevisionTable)
+          .where(eq(LearnerGoalRevisionTable.goal_id, goalID))
+          .orderBy(LearnerGoalRevisionTable.version)
+          .all()
+        return {
+          exact,
+          revisions,
+          fieldBases: yield* db
+            .select()
+            .from(LearnerGoalFieldBasisTable)
+            .where(eq(LearnerGoalFieldBasisTable.revision_id, revisions[1]!.id))
+            .all(),
+        }
+      }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+    )
+
+    expect(carried.exact.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    expect(carried.revisions).toHaveLength(2)
+    expect(carried.revisions[0]).toMatchObject({
+      schema_version: 1,
+      target_kind: item.legacy.type,
+      target_value_v2: null,
+    })
+    expect(carried.revisions[1]).toMatchObject({
+      schema_version: 2,
+      target_kind: null,
+      target_instant: null,
+      target_local_date: null,
+      target_timezone: null,
+      target_timezone_release_id: null,
+      target_utc_offset_minutes: null,
+      target_source_expression: null,
+      target_normalized: null,
+      target_normalization_basis: null,
+      target_value_v2: item.expected,
+    })
+    expect(carried.fieldBases).toEqual([])
+  }
+})
+
 test("reopens stored success and recovers admitted work without re-execution", async () => {
   await using tmp = await tmpdir()
   const filename = join(tmp.path, "learning-command-reopen.sqlite")
@@ -6291,6 +7873,23 @@ function context(
   } satisfies LearningCommandRuntime.ExecuteContext
 }
 
+function frozenLegacyGoalTerminalResult(
+  settlement: LearningCommand.Settlement,
+  envelope: NonNullable<Parameters<typeof LearningCommandRuntime.exactResult>[2]>,
+  goalOperations: readonly LearnerGoal.ResultPresentationOperation[],
+) {
+  const exact = LearningCommandRuntime.exactResult(
+    settlement,
+    LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+    {
+      ...envelope,
+      capabilityVersion: LearningCommand.HISTORICAL_UPDATE_LEARNER_GOALS_VERSION,
+    },
+    goalOperations,
+  )
+  return { ...exact, metadata: { ...exact.metadata, commandVersion: 1 } }
+}
+
 function settleInteractionTurn(
   db: Database.Interface["db"],
   interaction: { readonly turnID: Turn.ID; readonly registration: LearningCommandRuntime.Registration },
@@ -6960,11 +8559,12 @@ function insertAssistant(
   }).pipe(Effect.orDie)
 }
 
-function seedDelegatedDefaultCourseInteraction(
+function seedDelegatedLearningCommandInteraction(
   db: Database.Interface["db"],
   suffix: string,
-  input: Readonly<{ action: "set"; courseID: Course.CourseID }> | Readonly<{ action: "clear" }>,
+  input: Record<string, unknown>,
   delegatedCapability: Record<string, unknown>,
+  toolID: LearningCommandRuntime.PrimaryCapability = LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
 ) {
   return Effect.gen(function* () {
     const time = Date.now()
@@ -7186,7 +8786,7 @@ function seedDelegatedDefaultCourseInteraction(
       },
       `delegated-default-${suffix}`,
       input,
-      LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+      toolID,
     )
     const operation = yield* db
       .select({ occurrenceID: TurnModelOperationTable.causal_occurrence_id })

@@ -30,10 +30,14 @@ import {
   createGoalID,
   createRevisionID,
   type Command,
+  type CanonicalCommandV2,
+  type AgentActionProvenanceV2,
+  type MaterializedChangeSetV2,
   type AcceptedInvocation,
   type ConfirmationCourse,
   type ConfirmationSnapshot,
   type DiscoveryFilter,
+  type Disposition,
   type EffectID,
   type EffectRead,
   type FieldBases,
@@ -44,6 +48,7 @@ import {
   type NonSupersededDisposition,
   type Operation,
   type OperationResult,
+  type OperationResultV2,
   type PageOptions,
   type PresentationMeaning,
   type ProposalPresentation,
@@ -51,26 +56,38 @@ import {
   type Revision,
   type RevisionID,
   type ResultPresentationOperation,
+  type ResolvedZoneV2,
   type SemanticSnapshot,
   type StoredCourseMembership,
+  type StoredCourseMembershipV2,
+  type StoredScope,
+  type StoredScopeV2,
   type Target,
+  type TargetValueV2,
   type TargetRelation,
   type UpdateDisposition,
 } from "./learner-goal/schema"
 import {
   LearnerGoalCommandTable,
+  LearnerGoalCapabilitySettlementV2Table,
   LearnerGoalCommitSealTable,
   LearnerGoalConditionTable,
   LearnerGoalCourseScopeTable,
   LearnerGoalEffectOperationTable,
   LearnerGoalEffectTable,
+  LearnerGoalDispositionV2Table,
   LearnerGoalFieldBasisTable,
   LearnerGoalRevisionTable,
   LearnerGoalStateTable,
   LearnerGoalSupersessionTable,
   LearnerGoalTable,
 } from "./learner-goal/sql"
-import { TIME_ZONE_RELEASE_ID, isSupportedTimeZone, localDateAt } from "./learner-goal/time-zone"
+import {
+  TIME_ZONE_RELEASE_ID,
+  isSupportedTimeZone,
+  localDateAt,
+  localDateAtResolvedZone,
+} from "./learner-goal/time-zone"
 import { isOperationResult } from "./learner-goal/operation-result"
 
 export * from "./learner-goal/schema"
@@ -85,13 +102,25 @@ const committedEffect = sql`EXISTS (
     ON goal_receipt.id = goal_seal.receipt_id
   JOIN learning_command_invocation AS goal_invocation
     ON goal_invocation.part_id = goal_seal.invocation_part_id
-  JOIN learner_goal_command AS goal_command
-    ON goal_command.invocation_part_id = goal_invocation.part_id
   WHERE goal_seal.effect_id = ${LearnerGoalEffectTable.id}
     AND goal_receipt.invocation_part_id = goal_seal.invocation_part_id
     AND goal_invocation.receipt_id = goal_receipt.id
-    AND goal_command.semantic_fingerprint = ${LearnerGoalEffectTable.semantic_fingerprint}
     AND goal_invocation.status = 'applied'
+    AND (
+      (${LearnerGoalEffectTable.schema_version} = 1 AND EXISTS (
+        SELECT 1 FROM learner_goal_command AS goal_command
+        WHERE goal_command.invocation_part_id = goal_invocation.part_id
+          AND goal_command.semantic_fingerprint = ${LearnerGoalEffectTable.semantic_fingerprint}
+      ))
+      OR (${LearnerGoalEffectTable.schema_version} = 2
+        AND ${LearnerGoalEffectTable.agent_action_part_id} = goal_invocation.part_id
+        AND EXISTS (
+          SELECT 1 FROM learner_goal_disposition_v2 AS goal_disposition
+          WHERE goal_disposition.invocation_part_id = goal_invocation.part_id
+            AND goal_disposition.disposition = 'candidate_v2'
+            AND goal_disposition.command_fingerprint = ${LearnerGoalEffectTable.semantic_fingerprint}
+        ))
+    )
 )`
 
 const committedRevision = sql`EXISTS (
@@ -370,13 +399,7 @@ export function prepareResultPresentation(
 ): Effect.Effect<readonly ResultPresentationOperation[], IntegrityError> {
   return Effect.forEach(operations, (operation) =>
     Effect.gen(function* () {
-      const revision = yield* exactRevision(
-        tx,
-        operation.goalID,
-        operation.revisionID,
-        operation.version,
-        asOf,
-      )
+      const revision = yield* exactRevision(tx, operation.goalID, operation.revisionID, operation.version, asOf)
       const supersessionTarget =
         revision.disposition.type === "superseded" && operation.operation !== "replace"
           ? yield* exactRevision(
@@ -439,13 +462,7 @@ function proposalPresentationOperation(
         meaning: yield* presentationMeaningFromSnapshot(tx, operation.snapshot, operation.disposition),
       }
     }
-    const source = yield* exactRevision(
-      tx,
-      operation.goalID,
-      operation.expectedHeadID,
-      operation.expectedVersion,
-      asOf,
-    )
+    const source = yield* exactRevision(tx, operation.goalID, operation.expectedHeadID, operation.expectedVersion, asOf)
     const sourcePresentation = {
       goalID: source.goalID,
       revisionID: source.id,
@@ -473,9 +490,7 @@ function proposalPresentationOperation(
       return {
         type: operation.type,
         resultIntent:
-          operation.disposition.type === "superseded"
-            ? "supersede_with_existing_goal"
-            : "update_existing_goal",
+          operation.disposition.type === "superseded" ? "supersede_with_existing_goal" : "update_existing_goal",
         goalID: operation.goalID,
         expectedHeadID: operation.expectedHeadID,
         expectedVersion: operation.expectedVersion,
@@ -489,19 +504,9 @@ function proposalPresentationOperation(
       target.type === "new"
         ? {
             type: "new" as const,
-            meaning: yield* presentationMeaningFromSnapshot(
-              tx,
-              target.snapshot,
-              target.disposition,
-            ),
+            meaning: yield* presentationMeaningFromSnapshot(tx, target.snapshot, target.disposition),
           }
-        : yield* exactRevision(
-            tx,
-            target.goalID,
-            target.revisionID,
-            target.version,
-            asOf,
-          ).pipe(
+        : yield* exactRevision(tx, target.goalID, target.revisionID, target.version, asOf).pipe(
             Effect.map((revision) => ({
               type: "existing" as const,
               goalID: target.goalID,
@@ -512,8 +517,7 @@ function proposalPresentationOperation(
           )
     return {
       type: operation.type,
-      resultIntent:
-        target.type === "new" ? "supersede_with_new_goal" : "supersede_with_existing_goal",
+      resultIntent: target.type === "new" ? "supersede_with_new_goal" : "supersede_with_existing_goal",
       goalID: operation.goalID,
       expectedHeadID: operation.expectedHeadID,
       expectedVersion: operation.expectedVersion,
@@ -550,11 +554,7 @@ function presentationMeaningFromSnapshot(
                     availability: { state: "available" as const, title: availability.title },
                   }
                 }
-                const stored = yield* storedCourse(
-                  tx,
-                  membership.basis.predecessorRevisionID,
-                  membership.courseID,
-                )
+                const stored = yield* storedCourse(tx, membership.basis.predecessorRevisionID, membership.courseID)
                 if (!stored) return yield* invalid("validation_error")
                 return {
                   courseID: membership.courseID,
@@ -562,7 +562,7 @@ function presentationMeaningFromSnapshot(
                   basis: membership.basis,
                   availability:
                     availability.status === "available"
-                      ? ({ state: "available" as const, title: availability.title })
+                      ? { state: "available" as const, title: availability.title }
                       : ({
                           state: "unavailable" as const,
                           cause: availability.cause,
@@ -584,6 +584,9 @@ function presentationMeaningFromSnapshot(
 }
 
 function presentationMeaningFromRevision(revision: Revision): PresentationMeaning {
+  if (revision.schemaVersion !== 1) {
+    throw new IntegrityError({ detail: `Current Goal proposal cannot project V2 revision ${revision.id} as V1` })
+  }
   return {
     outcome: revision.outcome,
     conditions: revision.conditions,
@@ -2304,6 +2307,7 @@ function targetColumns(target: Target) {
     target_source_expression: null,
     target_normalized: null,
     target_normalization_basis: null,
+    target_value_v2: null,
   }
   if (target.type === "absent") return { target_kind: target.type, ...absent } as const
   if (target.type === "instant") {
@@ -2317,6 +2321,7 @@ function targetColumns(target: Target) {
       target_source_expression: target.sourceExpression,
       target_normalized: target.normalized,
       target_normalization_basis: target.normalizationBasis,
+      target_value_v2: null,
     } as const
   }
   return {
@@ -2329,6 +2334,7 @@ function targetColumns(target: Target) {
     target_source_expression: target.sourceExpression,
     target_normalized: null,
     target_normalization_basis: target.normalizationBasis,
+    target_value_v2: null,
   } as const
 }
 
@@ -2372,6 +2378,7 @@ function preparedHead(
   occurrence: typeof AdmittedLearnerOccurrenceTable.$inferSelect & { source_order: number },
 ): StoredHead {
   return {
+    schema_version: 1,
     id: revision.id,
     goal_id: revision.goalID,
     version: revision.version,
@@ -2737,8 +2744,11 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
       .get()
       .pipe(Effect.orDie)
     if (!effect) return undefined
+    if (!validEffectID(effect.id)) return yield* integrity(`Goal effect ${effect.id} has an invalid identity`)
+    if (effect.schema_version === 2) return yield* readEffectV2(tx, effect)
     if (
-      !validEffectID(effect.id) ||
+      effect.schema_version !== 1 ||
+      effect.authorization_basis === "agent_action" ||
       !closedCommand(effect.command) ||
       commandFingerprint(effect.command, effect.authorization_basis) !== effect.semantic_fingerprint
     ) {
@@ -2809,6 +2819,7 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
     const validResults = results as OperationResult[]
     const acknowledgementResult = renderAcknowledgement(validResults)
     return {
+      schemaVersion: 1,
       effectID: effect.id,
       receiptID: authority.receiptID,
       occurrenceID: effect.occurrence_id,
@@ -2825,7 +2836,175 @@ export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<E
   })
 }
 
+function readEffectV2(
+  tx: Transaction,
+  effect: typeof LearnerGoalEffectTable.$inferSelect,
+): Effect.Effect<EffectRead, IntegrityError> {
+  return Effect.gen(function* () {
+    const [rows, authority] = yield* Effect.all([
+      tx
+        .select()
+        .from(LearnerGoalEffectOperationTable)
+        .where(eq(LearnerGoalEffectOperationTable.effect_id, effect.id))
+        .orderBy(asc(LearnerGoalEffectOperationTable.ordinal))
+        .all()
+        .pipe(Effect.orDie),
+      tx
+        .select({
+          receiptID: LearningCommandReceiptTable.id,
+          invocationPartID: LearningCommandReceiptTable.invocation_part_id,
+          authorizationBasis: LearningCommandInvocationTable.authorization_basis,
+          receiptIDOnInvocation: LearningCommandInvocationTable.receipt_id,
+          disposition: LearnerGoalDispositionV2Table.disposition,
+          commandFingerprint: LearnerGoalDispositionV2Table.command_fingerprint,
+          canonicalCommand: LearnerGoalDispositionV2Table.canonical_command,
+          agentAction: LearnerGoalDispositionV2Table.agent_action_provenance,
+          materialized: LearnerGoalDispositionV2Table.materialized_snapshot,
+          capabilityOutcome: LearnerGoalCapabilitySettlementV2Table.outcome,
+          permissionRequestID: LearnerGoalCapabilitySettlementV2Table.permission_request_id,
+        })
+        .from(LearnerGoalCommitSealTable)
+        .innerJoin(
+          LearningCommandReceiptTable,
+          eq(LearningCommandReceiptTable.id, LearnerGoalCommitSealTable.receipt_id),
+        )
+        .innerJoin(
+          LearningCommandInvocationTable,
+          eq(LearningCommandInvocationTable.part_id, LearnerGoalCommitSealTable.invocation_part_id),
+        )
+        .innerJoin(
+          LearnerGoalDispositionV2Table,
+          eq(LearnerGoalDispositionV2Table.invocation_part_id, LearnerGoalCommitSealTable.invocation_part_id),
+        )
+        .innerJoin(
+          LearnerGoalCapabilitySettlementV2Table,
+          eq(LearnerGoalCapabilitySettlementV2Table.invocation_part_id, LearnerGoalCommitSealTable.invocation_part_id),
+        )
+        .where(eq(LearnerGoalCommitSealTable.effect_id, effect.id))
+        .get()
+        .pipe(Effect.orDie),
+    ])
+    if (
+      !authority ||
+      effect.authorization_basis !== "agent_action" ||
+      !effect.agent_action_part_id ||
+      !effect.materialized_snapshot ||
+      authority.authorizationBasis !== "agent_action" ||
+      authority.receiptIDOnInvocation !== authority.receiptID ||
+      authority.invocationPartID !== effect.agent_action_part_id ||
+      authority.disposition !== "candidate_v2" ||
+      authority.commandFingerprint !== effect.semantic_fingerprint ||
+      !authority.canonicalCommand ||
+      !authority.agentAction ||
+      !authority.materialized ||
+      authority.agentAction.schemaVersion !== 1 ||
+      authority.agentAction.invocationPartID !== effect.agent_action_part_id ||
+      authority.materialized.schemaVersion !== 2 ||
+      effect.materialized_snapshot.schemaVersion !== 2 ||
+      canonicalJson(authority.canonicalCommand) !== canonicalJson(effect.command) ||
+      canonicalJson(authority.materialized) !== canonicalJson(effect.materialized_snapshot) ||
+      canonicalJson(authority.materialized.canonicalCommand) !== canonicalJson(authority.canonicalCommand) ||
+      new Bun.CryptoHasher("sha256").update(JSON.stringify(authority.canonicalCommand)).digest("hex") !==
+        effect.semantic_fingerprint ||
+      (authority.capabilityOutcome !== "policy_allow" && authority.capabilityOutcome !== "prompted_allow")
+    ) {
+      return yield* integrity(`Goal V2 effect ${effect.id} lost its Agent-action or capability basis`)
+    }
+    const expected = authority.materialized.operations.map(operationResultV2FromMaterialized)
+    const operations = rows.map(
+      (row): OperationResultV2 => ({
+        schemaVersion: 2,
+        ordinal: row.ordinal,
+        operation: row.operation_kind,
+        result: row.result_kind,
+        goalID: row.goal_id,
+        revisionID: row.revision_id,
+        version: row.version,
+        disposition: row.disposition,
+        meaning: row.meaning as OperationResultV2["meaning"],
+        ...(row.replacement_target_kind
+          ? {
+              replacementTarget: {
+                type: row.replacement_target_kind,
+                goalID: row.replacement_target_goal_id!,
+                revisionID: row.replacement_target_revision_id!,
+                version: row.replacement_target_version!,
+              },
+            }
+          : {}),
+      }),
+    )
+    if (
+      rows.length !== effect.operation_count ||
+      rows.some((row) => row.schema_version !== 2) ||
+      expected.some((operation) => !operation) ||
+      canonicalJson(operations) !== canonicalJson(expected)
+    ) {
+      return yield* integrity(`Goal V2 effect ${effect.id} lost its exact operation projection`)
+    }
+    return {
+      schemaVersion: 2,
+      effectID: effect.id,
+      receiptID: authority.receiptID,
+      occurrenceID: effect.occurrence_id,
+      authorizationBasis: "agent_action",
+      semanticFingerprint: effect.semantic_fingerprint,
+      command: authority.canonicalCommand,
+      agentAction: authority.agentAction,
+      materialized: authority.materialized,
+      capability: {
+        outcome: authority.capabilityOutcome,
+        ...(authority.permissionRequestID ? { permissionRequestID: authority.permissionRequestID } : {}),
+      },
+      operations,
+      timeCommitted: effect.time_committed,
+      commitOrder: effect.commit_order,
+      frontierSequence: effect.frontier_sequence,
+      acknowledgementTitle: effect.acknowledgement_title,
+      acknowledgementBody: effect.acknowledgement_body,
+    }
+  })
+}
+
+function operationResultV2FromMaterialized(
+  operation: MaterializedChangeSetV2["operations"][number],
+): OperationResultV2 | undefined {
+  if (operation.after.schemaVersion !== 2 || !closedTargetValueV2(operation.after.target)) return undefined
+  const replacementTarget = operation.replacementTarget
+  if (replacementTarget && replacementTarget.after.schemaVersion !== 2) return undefined
+  return {
+    schemaVersion: 2,
+    ordinal: operation.ordinal,
+    operation: operation.operation,
+    result: operation.result,
+    goalID: operation.after.goalID,
+    revisionID: operation.after.revisionID,
+    version: operation.after.version,
+    disposition: operation.after.disposition.type,
+    meaning: {
+      outcome: operation.after.outcome,
+      conditions: operation.after.conditions,
+      scope:
+        operation.after.scope.type === "learner_home"
+          ? { type: "learner_home" }
+          : { type: "courses", courseIDs: operation.after.scope.courses.map((course) => course.courseID) },
+      target: operation.after.target,
+    },
+    ...(replacementTarget
+      ? {
+          replacementTarget: {
+            type: replacementTarget.type,
+            goalID: replacementTarget.after.goalID,
+            revisionID: replacementTarget.after.revisionID,
+            version: replacementTarget.after.version,
+          },
+        }
+      : {}),
+  }
+}
+
 function operationResultFromRow(row: typeof LearnerGoalEffectOperationTable.$inferSelect): OperationResult | undefined {
+  if (row.schema_version !== 1) return undefined
   const result = {
     ordinal: row.ordinal,
     operation: row.operation_kind,
@@ -2907,30 +3086,49 @@ function revisionRead(tx: Transaction, row: StoredHead, asOf: number): Effect.Ef
     if (conditions.some((condition, ordinal) => condition.ordinal !== ordinal)) {
       return yield* integrity(`Goal revision ${row.id} has non-contiguous conditions`)
     }
-    const fieldBases = yield* readFieldBases(row.id, fieldRows)
+    const fieldBases = row.schema_version === 1 ? yield* readFieldBases(row.id, fieldRows) : undefined
+    if (row.schema_version === 2 && fieldRows.length !== 0) {
+      return yield* integrity(`Goal V2 revision ${row.id} unexpectedly has historical field bases`)
+    }
     const scopeCourses = yield* Effect.forEach(courses, (course) =>
       Effect.gen(function* () {
         const availability = yield* Course.inspectPreferenceTarget(tx, course.course_id)
-        return {
+        const common = {
           courseID: course.course_id,
           courseTitle: course.course_title,
+          availability:
+            availability.status === "available"
+              ? ({ state: "available", title: availability.title } as const)
+              : {
+                  state: "unavailable" as const,
+                  cause: availability.cause,
+                  ...(availability.title ? { title: availability.title } : {}),
+                },
+        }
+        if (row.schema_version === 1) {
+          return {
+            ...common,
+            admission:
+              course.admission_kind === "new"
+                ? {
+                    type: "new",
+                    courseVersion: course.admitted_course_version!,
+                    courseTimeUpdated: course.admitted_course_time_updated!,
+                  }
+                : { type: "carried", predecessorRevisionID: course.carried_from_revision_id! },
+          } satisfies StoredCourseMembership
+        }
+        return {
+          ...common,
           admission:
             course.admission_kind === "new"
               ? {
-                  type: "new",
+                  type: "bound",
                   courseVersion: course.admitted_course_version!,
                   courseTimeUpdated: course.admitted_course_time_updated!,
                 }
               : { type: "carried", predecessorRevisionID: course.carried_from_revision_id! },
-          availability:
-            availability.status === "available"
-              ? { state: "available", title: availability.title }
-              : {
-                  state: "unavailable",
-                  cause: availability.cause,
-                  ...(availability.title ? { title: availability.title } : {}),
-                },
-        } satisfies StoredCourseMembership
+        } satisfies StoredCourseMembershipV2
       }),
     )
     if (
@@ -2942,27 +3140,25 @@ function revisionRead(tx: Transaction, row: StoredHead, asOf: number): Effect.Ef
       return yield* integrity(`Goal revision ${row.id} has a malformed scope or disposition`)
     }
     const currentTarget = supersession ? yield* goalHead(tx, supersession.target_goal_id) : undefined
-    return {
+    const disposition: Disposition = supersession
+      ? {
+          type: "superseded",
+          targetGoalID: supersession.target_goal_id,
+          targetRevisionID: supersession.target_revision_id,
+          ...(currentTarget
+            ? { targetCurrentHead: { revisionID: currentTarget.id, version: currentTarget.version } }
+            : {}),
+        }
+      : { type: row.disposition as NonSupersededDisposition }
+    const common = {
       id: row.id,
       goalID: row.goal_id,
       version: row.version,
       ...(row.predecessor_id ? { predecessorID: row.predecessor_id } : {}),
       outcome: row.outcome,
       conditions: conditions.map((condition) => condition.content),
-      scope: row.scope_kind === "learner_home" ? { type: "learner_home" } : { type: "courses", courses: scopeCourses },
-      target: target(row),
       targetRelation: targetRelation(row, asOf),
-      disposition: supersession
-        ? {
-            type: "superseded",
-            targetGoalID: supersession.target_goal_id,
-            targetRevisionID: supersession.target_revision_id,
-            ...(currentTarget
-              ? { targetCurrentHead: { revisionID: currentTarget.id, version: currentTarget.version } }
-              : {}),
-          }
-        : { type: row.disposition as NonSupersededDisposition },
-      fieldBases,
+      disposition,
       occurrenceID: row.occurrence_id,
       sourceOrder: row.source_order,
       effectID: row.effect_id,
@@ -2977,9 +3173,37 @@ function revisionRead(tx: Transaction, row: StoredHead, asOf: number): Effect.Ef
         originSessionID: occurrence.origin_session_id,
         originMessageID: occurrence.origin_message_id,
         availability: tombstone
-          ? { state: "source_unavailable", timeDeleted: tombstone.timeDeleted }
-          : { state: "available" },
+          ? ({ state: "source_unavailable", timeDeleted: tombstone.timeDeleted } as const)
+          : ({ state: "available" } as const),
       },
+    }
+    if (row.schema_version === 1 && fieldBases) {
+      const scope: StoredScope =
+        row.scope_kind === "learner_home"
+          ? { type: "learner_home" }
+          : { type: "courses", courses: scopeCourses as readonly StoredCourseMembership[] }
+      return {
+        ...common,
+        schemaVersion: 1 as const,
+        targetVersion: 1 as const,
+        scope,
+        target: target(row),
+        fieldBases,
+      }
+    }
+    if (row.schema_version !== 2 || !closedTargetValueV2(row.target_value_v2)) {
+      return yield* integrity(`Goal revision ${row.id} has an invalid V2 target projection`)
+    }
+    const scope: StoredScopeV2 =
+      row.scope_kind === "learner_home"
+        ? { type: "learner_home" }
+        : { type: "courses", courses: scopeCourses as readonly StoredCourseMembershipV2[] }
+    return {
+      ...common,
+      schemaVersion: 2 as const,
+      targetVersion: 2 as const,
+      scope,
+      target: row.target_value_v2,
     }
   })
 }
@@ -3009,6 +3233,21 @@ function readFieldBases(
 }
 
 function targetRelation(row: StoredHead, asOf: number): TargetRelation {
+  if (row.schema_version === 2) {
+    if (!closedTargetValueV2(row.target_value_v2)) {
+      throw new IntegrityError({ detail: `Goal revision ${row.id} has an invalid V2 target` })
+    }
+    if (row.target_value_v2.type === "absent") return "unknown"
+    if (row.target_value_v2.type === "instant") {
+      if (asOf < row.target_value_v2.instant) return "before"
+      if (asOf === row.target_value_v2.instant) return "reached"
+      return "after"
+    }
+    const current = localDateAtResolvedZone(asOf, row.target_value_v2.resolvedZone)
+    if (current < row.target_value_v2.date) return "before"
+    if (current === row.target_value_v2.date) return "on"
+    return "after"
+  }
   if (row.target_kind === "absent") return "unknown"
   if (row.target_kind === "instant") {
     if (
@@ -3041,14 +3280,64 @@ function targetRelation(row: StoredHead, asOf: number): TargetRelation {
   return "after"
 }
 
+function closedTargetValueV2(value: unknown): value is TargetValueV2 {
+  if (!isRecord(value)) return false
+  const keys = Object.keys(value).toSorted()
+  if (value.type === "absent") return keys.length === 1 && keys[0] === "type"
+  if (value.type === "instant") {
+    return (
+      keys.length === 4 &&
+      keys[0] === "instant" &&
+      keys[1] === "resolvedZone" &&
+      keys[2] === "type" &&
+      keys[3] === "utcOffsetMinutes" &&
+      Number.isInteger(value.instant) &&
+      (value.instant as number) >= 0 &&
+      Number.isInteger(value.utcOffsetMinutes) &&
+      (value.utcOffsetMinutes as number) >= -840 &&
+      (value.utcOffsetMinutes as number) <= 840 &&
+      closedResolvedZoneV2(value.resolvedZone)
+    )
+  }
+  return (
+    value.type === "local_date" &&
+    keys.length === 3 &&
+    keys[0] === "date" &&
+    keys[1] === "resolvedZone" &&
+    keys[2] === "type" &&
+    typeof value.date === "string" &&
+    validDate(value.date) &&
+    closedResolvedZoneV2(value.resolvedZone)
+  )
+}
+
+function closedResolvedZoneV2(value: unknown): value is ResolvedZoneV2 {
+  if (!isRecord(value)) return false
+  const keys = Object.keys(value).toSorted()
+  if (value.type === "fixed_offset") {
+    return (
+      keys.length === 2 &&
+      keys[0] === "offsetMinutes" &&
+      keys[1] === "type" &&
+      Number.isInteger(value.offsetMinutes) &&
+      (value.offsetMinutes as number) >= -840 &&
+      (value.offsetMinutes as number) <= 840
+    )
+  }
+  return (
+    value.type === "iana" &&
+    keys.length === 3 &&
+    keys[0] === "name" &&
+    keys[1] === "releaseID" &&
+    keys[2] === "type" &&
+    typeof value.name === "string" &&
+    isSupportedTimeZone(value.name) &&
+    value.releaseID === TIME_ZONE_RELEASE_ID
+  )
+}
+
 function requireState(tx: Transaction) {
   return Effect.gen(function* () {
-    yield* tx
-      .insert(LearnerGoalStateTable)
-      .values({ singleton: 1, revision_sequence: 0 })
-      .onConflictDoNothing()
-      .run()
-      .pipe(Effect.orDie)
     const row = yield* tx
       .select()
       .from(LearnerGoalStateTable)

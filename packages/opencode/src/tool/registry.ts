@@ -73,8 +73,10 @@ import {
 } from "./content-root"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
+import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { CourseQueryTool, LearningNavigationQueryTool } from "./course-navigation-query"
+import { LearnerGoalQueryTool } from "./learner-goal-query"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -137,6 +139,7 @@ const layer = Layer.effect(
     const setCourseRouteAnchor = yield* SetCourseRouteAnchorTool
     const courseQuery = yield* CourseQueryTool
     const learningNavigationQuery = yield* LearningNavigationQueryTool
+    const learnerGoalQuery = yield* LearnerGoalQueryTool
     const representationConvert = yield* RepresentationConvertTool
     const updateRetainedLearningSteering = yield* UpdateRetainedLearningSteeringTool
     const updateLearnerGoals = yield* UpdateLearnerGoalsTool
@@ -264,6 +267,7 @@ const layer = Layer.effect(
           setCourseRouteAnchor: Tool.init(setCourseRouteAnchor),
           courseQuery: Tool.init(courseQuery),
           learningNavigationQuery: Tool.init(learningNavigationQuery),
+          learnerGoalQuery: Tool.init(learnerGoalQuery),
           representationConvert: Tool.init(representationConvert),
           updateRetainedLearningSteering: Tool.init(updateRetainedLearningSteering),
           updateLearnerGoals: Tool.init(updateLearnerGoals),
@@ -285,6 +289,7 @@ const layer = Layer.effect(
             tool.setCourseRouteAnchor,
             tool.courseQuery,
             tool.learningNavigationQuery,
+            tool.learnerGoalQuery,
             tool.representationConvert,
             tool.updateRetainedLearningSteering,
             tool.updateLearnerGoals,
@@ -535,6 +540,7 @@ export const node = LayerNode.make({
     RepresentationCommandRuntime.node,
     ContentRoot.node,
     Course.node,
+    LearnerGoal.readNode,
     LearnerNavigation.readNode,
   ],
 })

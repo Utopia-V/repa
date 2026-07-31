@@ -19,13 +19,19 @@ import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../
 import type { PartID } from "../v1/session"
 import type { PermissionV1 } from "../v1/permission"
 import type {
+  AgentActionProvenanceV2,
+  CanonicalCommandV2,
+  CapabilityOutcomeV2,
   Command,
   EffectID,
   FieldName,
   GoalID,
+  MaterializedChangeSetV2,
   NonSupersededDisposition,
   OperationResult,
   RevisionID,
+  SemanticAddressV2,
+  TargetValueV2,
 } from "./schema"
 
 export const LearnerGoalStateTable = sqliteTable(
@@ -133,10 +139,219 @@ export const LearnerGoalCommandTable = sqliteTable(
   ],
 )
 
+export const LearnerGoalDispositionV2Table = sqliteTable(
+  "learner_goal_disposition_v2",
+  {
+    invocation_part_id: text().$type<PartID>().primaryKey(),
+    disposition: text().$type<"legacy_v1" | "semantic_terminal_v2" | "candidate_v2">().notNull(),
+    legacy_command_part_id: text().$type<PartID>(),
+    command_fingerprint: text().notNull(),
+    canonical_command: text({ mode: "json" }).$type<CanonicalCommandV2>(),
+    semantic_address: text({ mode: "json" }).$type<SemanticAddressV2>(),
+    semantic_address_fingerprint: text(),
+    incoming_intent_fingerprint: text(),
+    semantic_outcome: text().$type<"already_applied" | "semantic_conflict">(),
+    existing_effect_id: text().$type<EffectID>(),
+    existing_intent_fingerprint: text(),
+    agent_action_fingerprint: text(),
+    agent_action_provenance: text({ mode: "json" }).$type<AgentActionProvenanceV2>(),
+    materialized_snapshot: text({ mode: "json" }).$type<MaterializedChangeSetV2>(),
+    time_disposed: integer().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearningCommandInvocationTable.part_id],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.legacy_command_part_id],
+      foreignColumns: [LearnerGoalCommandTable.invocation_part_id],
+    }).onDelete("cascade"),
+    check(
+      "learner_goal_disposition_v2_fingerprints",
+      sql`length(${table.command_fingerprint}) = 64
+        AND ${table.command_fingerprint} NOT GLOB '*[^0-9a-f]*'
+        AND (${table.semantic_address_fingerprint} IS NULL OR
+          (length(${table.semantic_address_fingerprint}) = 64 AND ${table.semantic_address_fingerprint} NOT GLOB '*[^0-9a-f]*'))
+        AND (${table.incoming_intent_fingerprint} IS NULL OR
+          (length(${table.incoming_intent_fingerprint}) = 64 AND ${table.incoming_intent_fingerprint} NOT GLOB '*[^0-9a-f]*'))
+        AND (${table.existing_intent_fingerprint} IS NULL OR
+          (length(${table.existing_intent_fingerprint}) = 64 AND ${table.existing_intent_fingerprint} NOT GLOB '*[^0-9a-f]*'))
+        AND (${table.agent_action_fingerprint} IS NULL OR
+          (length(${table.agent_action_fingerprint}) = 64 AND ${table.agent_action_fingerprint} NOT GLOB '*[^0-9a-f]*'))`,
+    ),
+    check(
+      "learner_goal_disposition_v2_closed_union",
+      sql`(
+        ${table.disposition} = 'legacy_v1'
+        AND ${table.legacy_command_part_id} = ${table.invocation_part_id}
+        AND ${table.canonical_command} IS NULL
+        AND ${table.semantic_address} IS NULL
+        AND ${table.semantic_address_fingerprint} IS NULL
+        AND ${table.incoming_intent_fingerprint} IS NULL
+        AND ${table.semantic_outcome} IS NULL
+        AND ${table.existing_effect_id} IS NULL
+        AND ${table.existing_intent_fingerprint} IS NULL
+        AND ${table.agent_action_fingerprint} IS NULL
+        AND ${table.agent_action_provenance} IS NULL
+        AND ${table.materialized_snapshot} IS NULL
+      ) OR (
+        ${table.disposition} = 'semantic_terminal_v2'
+        AND ${table.legacy_command_part_id} IS NULL
+        AND json_valid(${table.canonical_command})
+        AND json_type(${table.canonical_command}) = 'object'
+        AND json_valid(${table.semantic_address})
+        AND json_type(${table.semantic_address}) = 'object'
+        AND json_type(${table.semantic_address}, '$.occurrenceID') = 'text'
+        AND json_extract(${table.semantic_address}, '$.slot') = 'learner_goal_change_set'
+        AND ${table.semantic_address_fingerprint} IS NOT NULL
+        AND ${table.incoming_intent_fingerprint} IS NOT NULL
+        AND ${table.semantic_outcome} IN ('already_applied', 'semantic_conflict')
+        AND ${table.existing_effect_id} IS NOT NULL
+        AND ${table.existing_intent_fingerprint} IS NOT NULL
+        AND ${table.agent_action_fingerprint} IS NULL
+        AND ${table.agent_action_provenance} IS NULL
+        AND ${table.materialized_snapshot} IS NULL
+      ) OR (
+        ${table.disposition} = 'candidate_v2'
+        AND ${table.legacy_command_part_id} IS NULL
+        AND json_valid(${table.canonical_command})
+        AND json_type(${table.canonical_command}) = 'object'
+        AND json_valid(${table.semantic_address})
+        AND json_type(${table.semantic_address}) = 'object'
+        AND json_type(${table.semantic_address}, '$.occurrenceID') = 'text'
+        AND json_extract(${table.semantic_address}, '$.slot') = 'learner_goal_change_set'
+        AND ${table.semantic_address_fingerprint} IS NOT NULL
+        AND ${table.incoming_intent_fingerprint} IS NOT NULL
+        AND ${table.semantic_outcome} IS NULL
+        AND ${table.existing_effect_id} IS NULL
+        AND ${table.existing_intent_fingerprint} IS NULL
+        AND ${table.agent_action_fingerprint} IS NOT NULL
+        AND json_valid(${table.agent_action_provenance})
+        AND json_extract(${table.agent_action_provenance}, '$.schemaVersion') = 1
+        AND json_extract(${table.agent_action_provenance}, '$.kind') IN ('root', 'delegated')
+        AND json_extract(${table.agent_action_provenance}, '$.capabilityIdentity') = 'update_learner_goals'
+        AND json_extract(${table.agent_action_provenance}, '$.capabilityVersion') = 2
+        AND json_type(${table.agent_action_provenance}, '$.lineage') = 'array'
+        AND ((json_extract(${table.agent_action_provenance}, '$.kind') = 'root'
+              AND json_array_length(${table.agent_action_provenance}, '$.lineage') = 0
+              AND json_type(${table.agent_action_provenance}, '$.effectiveDelegatedCapability') IS NULL)
+          OR (json_extract(${table.agent_action_provenance}, '$.kind') = 'delegated'
+              AND json_array_length(${table.agent_action_provenance}, '$.lineage') > 0
+              AND json_type(${table.agent_action_provenance}, '$.effectiveDelegatedCapability') = 'object'))
+        AND json_valid(${table.materialized_snapshot})
+        AND json_type(${table.materialized_snapshot}) = 'object'
+        AND json_extract(${table.materialized_snapshot}, '$.schemaVersion') = 2
+        AND json(${table.canonical_command}) = json(json_extract(${table.materialized_snapshot}, '$.canonicalCommand'))
+        AND json_type(${table.materialized_snapshot}, '$.operations') = 'array'
+        AND json_array_length(${table.materialized_snapshot}, '$.operations') BETWEEN 1 AND 8
+        AND json_type(${table.materialized_snapshot}, '$.revisionSequenceBefore') = 'integer'
+        AND json_extract(${table.materialized_snapshot}, '$.revisionSequenceBefore') >= 0
+        AND json_type(${table.materialized_snapshot}, '$.consumedFrontiers') = 'array'
+        AND json_type(${table.materialized_snapshot}, '$.timeFloor') = 'integer'
+        AND json_extract(${table.materialized_snapshot}, '$.timeFloor') >= 0
+      )`,
+    ),
+    check("learner_goal_disposition_v2_time", sql`${table.time_disposed} >= 0`),
+  ],
+)
+
+export const LearnerGoalCapabilityIssueV2Table = sqliteTable(
+  "learner_goal_capability_issue_v2",
+  {
+    invocation_part_id: text().$type<PartID>().primaryKey(),
+    permission_request_id: text().$type<PermissionV1.ID>().notNull().unique(),
+    agent_action_fingerprint: text().notNull(),
+    policy_basis: text({ mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    policy_fingerprint: text().notNull(),
+    shown_scope: text({ mode: "json" }).$type<Record<string, unknown>>().notNull(),
+    shown_scope_fingerprint: text().notNull(),
+    time_issued: integer().notNull(),
+    issue_order: integer().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearnerGoalDispositionV2Table.invocation_part_id],
+    }).onDelete("cascade"),
+    unique("learner_goal_capability_issue_v2_invocation_request_unique").on(
+      table.invocation_part_id,
+      table.permission_request_id,
+    ),
+    check(
+      "learner_goal_capability_issue_v2_fingerprints",
+      sql`length(${table.agent_action_fingerprint}) = 64 AND ${table.agent_action_fingerprint} NOT GLOB '*[^0-9a-f]*'
+        AND length(${table.policy_fingerprint}) = 64 AND ${table.policy_fingerprint} NOT GLOB '*[^0-9a-f]*'
+        AND length(${table.shown_scope_fingerprint}) = 64 AND ${table.shown_scope_fingerprint} NOT GLOB '*[^0-9a-f]*'`,
+    ),
+    check(
+      "learner_goal_capability_issue_v2_shape",
+      sql`length(${table.permission_request_id}) > 0 AND json_valid(${table.policy_basis})
+        AND json_valid(${table.shown_scope}) AND ${table.time_issued} >= 0 AND ${table.issue_order} >= 0`,
+    ),
+  ],
+)
+
+export const LearnerGoalCapabilitySettlementV2Table = sqliteTable(
+  "learner_goal_capability_settlement_v2",
+  {
+    invocation_part_id: text().$type<PartID>().primaryKey(),
+    outcome: text().$type<CapabilityOutcomeV2>().notNull(),
+    permission_request_id: text().$type<PermissionV1.ID>(),
+    agent_action_fingerprint: text().notNull(),
+    policy_basis: text({ mode: "json" }).$type<Record<string, unknown>>(),
+    policy_fingerprint: text(),
+    reply: text({ mode: "json" }).$type<Record<string, unknown>>(),
+    reply_fingerprint: text(),
+    time_settled: integer().notNull(),
+    settlement_order: integer().notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.invocation_part_id],
+      foreignColumns: [LearnerGoalDispositionV2Table.invocation_part_id],
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.invocation_part_id, table.permission_request_id],
+      foreignColumns: [
+        LearnerGoalCapabilityIssueV2Table.invocation_part_id,
+        LearnerGoalCapabilityIssueV2Table.permission_request_id,
+      ],
+    }).onDelete("cascade"),
+    check(
+      "learner_goal_capability_settlement_v2_fingerprints",
+      sql`length(${table.agent_action_fingerprint}) = 64 AND ${table.agent_action_fingerprint} NOT GLOB '*[^0-9a-f]*'
+        AND (${table.policy_fingerprint} IS NULL OR (length(${table.policy_fingerprint}) = 64 AND ${table.policy_fingerprint} NOT GLOB '*[^0-9a-f]*'))
+        AND (${table.reply_fingerprint} IS NULL OR (length(${table.reply_fingerprint}) = 64 AND ${table.reply_fingerprint} NOT GLOB '*[^0-9a-f]*'))`,
+    ),
+    check(
+      "learner_goal_capability_settlement_v2_closed_union",
+      sql`(${table.outcome} = 'not_evaluated' AND ${table.permission_request_id} IS NULL
+          AND ${table.policy_basis} IS NULL AND ${table.policy_fingerprint} IS NULL
+          AND ${table.reply} IS NULL AND ${table.reply_fingerprint} IS NULL)
+        OR (${table.outcome} IN ('policy_allow', 'policy_deny') AND ${table.permission_request_id} IS NULL
+          AND json_valid(${table.policy_basis}) AND ${table.policy_fingerprint} IS NOT NULL
+          AND ${table.reply} IS NULL AND ${table.reply_fingerprint} IS NULL)
+        OR (${table.outcome} = 'prompted_abort' AND ${table.permission_request_id} IS NOT NULL
+          AND ${table.policy_basis} IS NULL AND ${table.policy_fingerprint} IS NULL
+          AND ${table.reply} IS NULL AND ${table.reply_fingerprint} IS NULL)
+        OR (${table.outcome} IN ('prompted_allow', 'prompted_deny', 'prompted_correct', 'prompted_cancel')
+          AND ${table.permission_request_id} IS NOT NULL
+          AND ${table.policy_basis} IS NULL AND ${table.policy_fingerprint} IS NULL
+          AND json_valid(${table.reply}) AND ${table.reply_fingerprint} IS NOT NULL)`,
+    ),
+    check(
+      "learner_goal_capability_settlement_v2_time",
+      sql`${table.time_settled} >= 0 AND ${table.settlement_order} >= 0`,
+    ),
+  ],
+)
+
 export const LearnerGoalEffectTable = sqliteTable(
   "learner_goal_effect",
   {
     id: text().$type<EffectID>().primaryKey(),
+    schema_version: integer().$type<1 | 2>().notNull().default(1),
     commit_seal_id: text()
       .$type<EffectID>()
       .notNull()
@@ -145,7 +360,9 @@ export const LearnerGoalEffectTable = sqliteTable(
     source_order: integer().notNull(),
     semantic_fingerprint: text().notNull(),
     authorization_basis: text().$type<AuthorizationBasis>().notNull(),
-    command: text({ mode: "json" }).$type<Command>().notNull(),
+    command: text({ mode: "json" }).$type<Command | CanonicalCommandV2>().notNull(),
+    agent_action_part_id: text().$type<PartID>(),
+    materialized_snapshot: text({ mode: "json" }).$type<MaterializedChangeSetV2>(),
     operation_count: integer().notNull(),
     change_count: integer().notNull(),
     time_committed: integer().notNull(),
@@ -159,6 +376,10 @@ export const LearnerGoalEffectTable = sqliteTable(
     foreignKey({ columns: [table.occurrence_id], foreignColumns: [AdmittedLearnerOccurrenceTable.id] }).onDelete(
       "restrict",
     ),
+    foreignKey({
+      columns: [table.agent_action_part_id],
+      foreignColumns: [LearnerGoalDispositionV2Table.invocation_part_id],
+    }).onDelete("restrict"),
     unique("learner_goal_effect_occurrence_unique").on(table.occurrence_id),
     unique("learner_goal_effect_frontier_unique").on(table.frontier_sequence),
     check("learner_goal_effect_seal_identity", sql`${table.commit_seal_id} = ${table.id}`),
@@ -171,8 +392,18 @@ export const LearnerGoalEffectTable = sqliteTable(
       sql`length(${table.semantic_fingerprint}) = 64 AND ${table.semantic_fingerprint} NOT GLOB '*[^0-9a-f]*'`,
     ),
     check(
-      "learner_goal_effect_authorization",
-      sql`${table.authorization_basis} IN ('learner_request', 'learner_acceptance')`,
+      "learner_goal_effect_versioned_provenance",
+      sql`(${table.schema_version} = 1
+          AND ${table.authorization_basis} IN ('learner_request', 'learner_acceptance')
+          AND ${table.agent_action_part_id} IS NULL
+          AND ${table.materialized_snapshot} IS NULL)
+        OR (${table.schema_version} = 2
+          AND ${table.authorization_basis} = 'agent_action'
+          AND ${table.agent_action_part_id} IS NOT NULL
+          AND json_valid(${table.command})
+          AND json_type(${table.command}) = 'object'
+          AND json_valid(${table.materialized_snapshot})
+          AND json_type(${table.materialized_snapshot}) = 'object')`,
     ),
     check("learner_goal_effect_command_json", sql`json_valid(${table.command})`),
     check(
@@ -199,9 +430,7 @@ export const LearnerGoalCommitSealTable = sqliteTable(
   },
   (table) => [
     foreignKey({ columns: [table.effect_id], foreignColumns: [LearnerGoalEffectTable.id] }).onDelete("restrict"),
-    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete(
-      "restrict",
-    ),
+    foreignKey({ columns: [table.receipt_id], foreignColumns: [LearningCommandReceiptTable.id] }).onDelete("restrict"),
     foreignKey({
       columns: [table.invocation_part_id],
       foreignColumns: [LearningCommandInvocationTable.part_id],
@@ -215,6 +444,7 @@ export const LearnerGoalRevisionTable = sqliteTable(
   "learner_goal_revision",
   {
     id: text().$type<RevisionID>().primaryKey(),
+    schema_version: integer().$type<1 | 2>().notNull().default(1),
     goal_id: text().$type<GoalID>().notNull(),
     version: integer().notNull(),
     predecessor_id: text().$type<RevisionID>(),
@@ -225,7 +455,7 @@ export const LearnerGoalRevisionTable = sqliteTable(
     source_order: integer().notNull(),
     outcome: text().notNull(),
     scope_kind: text().$type<"learner_home" | "courses">().notNull(),
-    target_kind: text().$type<"absent" | "instant" | "local_date">().notNull(),
+    target_kind: text().$type<"absent" | "instant" | "local_date">(),
     target_instant: integer(),
     target_local_date: text(),
     target_timezone: text(),
@@ -234,6 +464,7 @@ export const LearnerGoalRevisionTable = sqliteTable(
     target_source_expression: text(),
     target_normalized: text(),
     target_normalization_basis: text().$type<"explicit_offset" | "source_temporal_context" | "explicit_date">(),
+    target_value_v2: text({ mode: "json" }).$type<TargetValueV2>(),
     disposition: text().$type<NonSupersededDisposition | "superseded">().notNull(),
     revision_order: integer().notNull(),
     time_committed: integer().notNull(),
@@ -272,8 +503,29 @@ export const LearnerGoalRevisionTable = sqliteTable(
     check("learner_goal_revision_outcome", sql`length(trim(${table.outcome})) > 0`),
     check("learner_goal_revision_scope", sql`${table.scope_kind} IN ('learner_home', 'courses')`),
     check(
-      "learner_goal_revision_target",
-      sql`COALESCE((${table.target_kind} = 'absent' AND ${table.target_instant} IS NULL AND ${table.target_local_date} IS NULL AND ${table.target_timezone} IS NULL AND ${table.target_timezone_release_id} IS NULL AND ${table.target_utc_offset_minutes} IS NULL AND ${table.target_source_expression} IS NULL AND ${table.target_normalized} IS NULL AND ${table.target_normalization_basis} IS NULL) OR (${table.target_kind} = 'instant' AND ${table.target_instant} IS NOT NULL AND ${table.target_instant} >= 0 AND ${table.target_local_date} IS NULL AND ${table.target_timezone} IS NULL AND ${table.target_timezone_release_id} IS NULL AND ${table.target_utc_offset_minutes} BETWEEN -840 AND 840 AND ${table.target_source_expression} IS NOT NULL AND length(${table.target_source_expression}) > 0 AND ${table.target_normalized} IS NOT NULL AND length(${table.target_normalized}) > 0 AND round(unixepoch(${table.target_normalized}, 'subsec') * 1000) = ${table.target_instant} AND ${table.target_normalization_basis} = 'explicit_offset') OR (${table.target_kind} = 'local_date' AND ${table.target_instant} IS NULL AND ${table.target_local_date} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(${table.target_local_date}) = ${table.target_local_date} AND ${table.target_timezone} IS NOT NULL AND length(${table.target_timezone}) > 0 AND ${table.target_timezone_release_id} IS NOT NULL AND length(${table.target_timezone_release_id}) > 0 AND ${table.target_utc_offset_minutes} IS NULL AND ${table.target_source_expression} IS NOT NULL AND length(${table.target_source_expression}) > 0 AND ${table.target_normalized} IS NULL AND ${table.target_normalization_basis} IN ('explicit_date', 'source_temporal_context')), 0)`,
+      "learner_goal_revision_versioned_target",
+      sql`COALESCE((
+        ${table.schema_version} = 1
+        AND ${table.target_value_v2} IS NULL
+        AND (
+          (${table.target_kind} = 'absent' AND ${table.target_instant} IS NULL AND ${table.target_local_date} IS NULL AND ${table.target_timezone} IS NULL AND ${table.target_timezone_release_id} IS NULL AND ${table.target_utc_offset_minutes} IS NULL AND ${table.target_source_expression} IS NULL AND ${table.target_normalized} IS NULL AND ${table.target_normalization_basis} IS NULL)
+          OR (${table.target_kind} = 'instant' AND ${table.target_instant} IS NOT NULL AND ${table.target_instant} >= 0 AND ${table.target_local_date} IS NULL AND ${table.target_timezone} IS NULL AND ${table.target_timezone_release_id} IS NULL AND ${table.target_utc_offset_minutes} BETWEEN -840 AND 840 AND ${table.target_source_expression} IS NOT NULL AND length(${table.target_source_expression}) > 0 AND ${table.target_normalized} IS NOT NULL AND length(${table.target_normalized}) > 0 AND round(unixepoch(${table.target_normalized}, 'subsec') * 1000) = ${table.target_instant} AND ${table.target_normalization_basis} = 'explicit_offset')
+          OR (${table.target_kind} = 'local_date' AND ${table.target_instant} IS NULL AND ${table.target_local_date} GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(${table.target_local_date}) = ${table.target_local_date} AND ${table.target_timezone} IS NOT NULL AND length(${table.target_timezone}) > 0 AND ${table.target_timezone_release_id} IS NOT NULL AND length(${table.target_timezone_release_id}) > 0 AND ${table.target_utc_offset_minutes} IS NULL AND ${table.target_source_expression} IS NOT NULL AND length(${table.target_source_expression}) > 0 AND ${table.target_normalized} IS NULL AND ${table.target_normalization_basis} IN ('explicit_date', 'source_temporal_context'))
+        )
+      ) OR (
+        ${table.schema_version} = 2
+        AND ${table.target_kind} IS NULL
+        AND ${table.target_instant} IS NULL
+        AND ${table.target_local_date} IS NULL
+        AND ${table.target_timezone} IS NULL
+        AND ${table.target_timezone_release_id} IS NULL
+        AND ${table.target_utc_offset_minutes} IS NULL
+        AND ${table.target_source_expression} IS NULL
+        AND ${table.target_normalized} IS NULL
+        AND ${table.target_normalization_basis} IS NULL
+        AND json_valid(${table.target_value_v2})
+        AND json_type(${table.target_value_v2}) = 'object'
+      ), 0)`,
     ),
     check(
       "learner_goal_revision_disposition",
@@ -382,13 +634,14 @@ export const LearnerGoalEffectOperationTable = sqliteTable(
   {
     effect_id: text().$type<EffectID>().notNull(),
     ordinal: integer().notNull(),
+    schema_version: integer().$type<1 | 2>().notNull().default(1),
     operation_kind: text().$type<"create" | "update" | "replace">().notNull(),
     result_kind: text().$type<"changed" | "no_change">().notNull(),
     goal_id: text().$type<GoalID>().notNull(),
     revision_id: text().$type<RevisionID>().notNull(),
     version: integer().notNull(),
     disposition: text().$type<NonSupersededDisposition | "superseded">().notNull(),
-    meaning: text({ mode: "json" }).$type<OperationResult["meaning"]>().notNull(),
+    meaning: text({ mode: "json" }).$type<OperationResult["meaning"] | Record<string, unknown>>().notNull(),
     replacement_target_kind: text().$type<"existing" | "new">(),
     replacement_target_goal_id: text().$type<GoalID>(),
     replacement_target_revision_id: text().$type<RevisionID>(),
@@ -413,7 +666,7 @@ export const LearnerGoalEffectOperationTable = sqliteTable(
     ),
     check(
       "learner_goal_effect_operation_result",
-      sql`(${table.operation_kind} = 'update' OR ${table.result_kind} = 'changed') AND ${table.version} >= 1 AND ${table.disposition} IN ('active', 'achieved', 'abandoned', 'superseded') AND json_valid(${table.meaning})`,
+      sql`${table.schema_version} IN (1, 2) AND (${table.operation_kind} = 'update' OR ${table.result_kind} = 'changed') AND ${table.version} >= 1 AND ${table.disposition} IN ('active', 'achieved', 'abandoned', 'superseded') AND json_valid(${table.meaning})`,
     ),
     check(
       "learner_goal_effect_operation_replacement",

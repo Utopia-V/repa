@@ -17,6 +17,9 @@
     "./effect/app-node": "./src/effect/app-node.ts",
     "./session/runner": "./src/session/runner/index.ts",
     "./system-context": "./src/system-context/index.ts",
+    "./learner-goal": "./src/learner-goal-current.ts",
+    "./learner-goal-current": null,
+    "./learner-goal/learning-command": null,
     "./*": "./src/*.ts"
   },
   "imports": {

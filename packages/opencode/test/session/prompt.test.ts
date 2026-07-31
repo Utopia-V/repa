@@ -1334,24 +1334,10 @@ it.instance(
       const turnID = Turn.ID.create()
       const source = "Create a durable Goal: Learn operating systems; active; LearnerHome; no conditions; no target."
       const input = {
-        authorizationBasis: "learner_request" as const,
         operations: [
           {
             type: "create" as const,
-            snapshot: {
-              outcome: "Learn operating systems",
-              conditions: [],
-              scope: { type: "learner_home" as const },
-              target: { type: "absent" as const },
-              fieldBases: {
-                outcome: { type: "authored" as const, sourceExcerpt: "Learn operating systems" },
-                conditions: { type: "authored" as const, sourceExcerpt: "no conditions" },
-                scope: { type: "authored" as const, sourceExcerpt: "LearnerHome" },
-                target: { type: "authored" as const, sourceExcerpt: "no target" },
-                disposition: { type: "authored" as const, sourceExcerpt: "active" },
-              },
-            },
-            disposition: "active" as const,
+            outcome: "Learn operating systems",
           },
         ],
       }
@@ -1388,7 +1374,7 @@ it.instance(
       expect(inline).toMatchObject({
         title: "Updated learning Goal — Committed",
         mode: "block",
-        body: expect.stringContaining(input.operations[0].snapshot.outcome),
+        body: expect.stringContaining(input.operations[0].outcome),
       })
       if (!inline.body) return yield* Effect.die("Expected Goal semantic result body")
       const final = entryBody({
@@ -1404,7 +1390,7 @@ it.instance(
       expect(JSON.stringify(final)).not.toContain(" completed")
       expect(JSON.stringify(final)).not.toContain('"receiptID"')
       expect((yield* database.db.transaction((tx) => LearnerGoal.discover(tx, Date.now()))).items).toMatchObject([
-        { head: { outcome: input.operations[0].snapshot.outcome, disposition: { type: "active" } } },
+        { head: { schemaVersion: 2, outcome: input.operations[0].outcome, disposition: { type: "active" } } },
       ])
       yield* sessions.remove(sessionID)
     }),

@@ -473,7 +473,7 @@ describe("learning command semantic basis and projection", () => {
         title,
         metadata: {
           command: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-          commandVersion: LearningCommand.UPDATE_LEARNER_GOALS_VERSION,
+          commandVersion: LearningCommand.HISTORICAL_UPDATE_LEARNER_GOALS_VERSION,
           outcome: "applied",
           durablySettled: true,
           truncated: false,
@@ -1027,5 +1027,122 @@ describe("learning command semantic basis and projection", () => {
         },
       }),
     ).toBeUndefined()
+  })
+
+  test("projects every current learner Goal terminal class through the typed carrier", () => {
+    const binding = {
+      sessionID: envelope.sessionID,
+      messageID: envelope.assistantMessageID,
+      callID: envelope.providerCallID,
+      partID: envelope.partID,
+    }
+    const operation = {
+      schemaVersion: 2 as const,
+      ordinal: 0,
+      operation: "create" as const,
+      result: "changed" as const,
+      goalID: "goal-current",
+      revisionID: "revision-current",
+      version: 1,
+      meaning: {
+        outcome: "Understand virtual memory",
+        conditions: ["Explain address translation"],
+        scope: { type: "learner_home" as const },
+        target: "none",
+        disposition: "active" as const,
+      },
+    }
+    const cases = [
+      {
+        name: "committed",
+        basis: {
+          kind: "learner_goals_v2_result" as const,
+          binding,
+          settlement: { outcome: "applied" as const },
+          disposition: "candidate_v2" as const,
+          issuance: "root" as const,
+          capabilityOutcome: "policy_allow" as const,
+          operations: [operation],
+        },
+        title: "Updated learning Goal",
+        outcome: "committed",
+      },
+      {
+        name: "already applied",
+        basis: {
+          kind: "learner_goals_v2_result" as const,
+          binding,
+          settlement: { outcome: "already_applied" as const },
+          disposition: "semantic_terminal_v2" as const,
+          semanticOutcome: "already_applied" as const,
+          operations: [operation],
+        },
+        title: "Updated learning Goal",
+        outcome: "already_applied",
+      },
+      {
+        name: "no effect",
+        basis: {
+          kind: "learner_goals_v2_result" as const,
+          binding,
+          settlement: { outcome: "no_change" as const },
+          disposition: "candidate_v2" as const,
+          issuance: "delegated" as const,
+          capabilityOutcome: "prompted_allow" as const,
+          permissionRequestID: "per_goal_current",
+          operations: [{ ...operation, result: "no_change" as const }],
+        },
+        title: "Learning Goals unchanged",
+        outcome: "no_effect",
+      },
+      {
+        name: "failed",
+        basis: {
+          kind: "learner_goals_v2_result" as const,
+          binding,
+          settlement: { outcome: "error" as const, code: "permission_rejected" },
+          disposition: "candidate_v2" as const,
+          issuance: "root" as const,
+          capabilityOutcome: "policy_deny" as const,
+          operations: [],
+        },
+        title: "Learner Goals not changed",
+        outcome: "failed",
+      },
+    ] as const
+
+    for (const item of cases) {
+      const result = SemanticPresentation.result(item.basis)
+      const projection = SemanticPresentation.projectResultBasis(result.basis)
+      expect(projection).toMatchObject({ title: item.title, outcome: item.outcome })
+      const part = {
+        id: binding.partID,
+        sessionID: binding.sessionID,
+        messageID: binding.messageID,
+        type: "tool",
+        tool: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        callID: binding.callID,
+        state: {
+          status: "completed",
+          input: { operations: [{ type: "create", outcome: operation.meaning.outcome }] },
+          output: "{}",
+          title: projection!.title,
+          metadata: {
+            command: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            commandVersion: 2,
+            outcome: item.basis.settlement.outcome,
+            ...(item.basis.settlement.outcome === "error" ? { code: item.basis.settlement.code } : {}),
+            durablySettled: true,
+            truncated: false,
+            ...SemanticPresentation.metadata(result),
+          },
+          time: { start: 1, end: 2 },
+        },
+      } as SessionV1.ToolPart
+      expect(SemanticPresentation.readResult(part)).toMatchObject({
+        type: "valid",
+        value: { title: item.title, outcome: item.outcome },
+      })
+    }
   })
 })

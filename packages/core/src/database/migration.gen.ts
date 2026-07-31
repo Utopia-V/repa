@@ -16,5 +16,6 @@ export const migrations = (
     import("./migration/repa/20260729144139_gate14_default_course_v2"),
     import("./migration/repa/20260730115237_gate14_agent_native_default_course"),
     import("./migration/repa/20260731120541_gate08_message_diff_projection"),
+    import("./migration/repa/20260731144324_gate16_agent_native_learner_goals"),
   ])
 ).map((module) => module.default) satisfies DatabaseMigration.Migration[]

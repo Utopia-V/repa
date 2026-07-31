@@ -288,10 +288,111 @@ const GoalOperationsInput = Schema.Array(GoalOperationInput).check(
   Schema.isLengthBetween(1, LearnerGoal.MAX_OPERATIONS),
 )
 
-export const UpdateLearnerGoalsInput = Schema.Union([
+export const LegacyUpdateLearnerGoalsInput = Schema.Union([
   Schema.Struct({ authorizationBasis: Schema.Literal("learner_request"), operations: GoalOperationsInput }),
   Schema.Struct({ authorizationBasis: Schema.Literal("learner_acceptance"), operations: GoalOperationsInput }),
 ])
+
+export type LegacyUpdateLearnerGoalsInput = typeof LegacyUpdateLearnerGoalsInput.Type
+
+const GoalTimeZoneIntentV2 = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("source") }),
+  Schema.Struct({
+    type: Schema.Literal("iana"),
+    name: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(255)),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("fixed_offset"),
+    offsetMinutes: Schema.Number.check(
+      Schema.isInt(),
+      Schema.isGreaterThanOrEqualTo(-840),
+      Schema.isLessThanOrEqualTo(840),
+    ),
+  }),
+])
+
+const GoalTargetIntentV2 = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("absent") }),
+  Schema.Struct({
+    type: Schema.Literal("instant"),
+    localDateTime: Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?$/)),
+    timeZone: GoalTimeZoneIntentV2,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("local_date"),
+    date: Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)),
+    timeZone: GoalTimeZoneIntentV2,
+  }),
+])
+
+const GoalScopeIntentV2 = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("learner_home") }),
+  Schema.Struct({
+    type: Schema.Literal("courses"),
+    courseIDs: Schema.Array(Course.CourseID).check(Schema.isLengthBetween(1, LearnerGoal.MAX_COURSES)),
+  }),
+])
+
+const GoalDispositionV2 = Schema.Literals(["active", "achieved", "abandoned"])
+
+const GoalPatchV2 = Schema.Struct({
+  outcome: Schema.optional(GoalOutcome),
+  conditions: Schema.optional(Schema.Array(GoalCondition).check(Schema.isMaxLength(LearnerGoal.MAX_CONDITIONS))),
+  scope: Schema.optional(GoalScopeIntentV2),
+  target: Schema.optional(GoalTargetIntentV2),
+  disposition: Schema.optional(GoalDispositionV2),
+})
+
+const GoalCreateOperationV2 = Schema.Struct({
+  type: Schema.Literal("create"),
+  outcome: GoalOutcome,
+  conditions: Schema.optional(Schema.Array(GoalCondition).check(Schema.isMaxLength(LearnerGoal.MAX_CONDITIONS))),
+  scope: Schema.optional(GoalScopeIntentV2),
+  target: Schema.optional(GoalTargetIntentV2),
+  disposition: Schema.optional(GoalDispositionV2),
+})
+
+const GoalUpdateOperationV2 = Schema.Struct({
+  type: Schema.Literal("update"),
+  goalID: LearnerGoal.GoalID,
+  headRevisionID: LearnerGoal.RevisionID,
+  patch: GoalPatchV2,
+})
+
+const GoalReplaceOperationV2 = Schema.Struct({
+  type: Schema.Literal("replace"),
+  goalID: LearnerGoal.GoalID,
+  headRevisionID: LearnerGoal.RevisionID,
+  patch: Schema.optional(
+    Schema.Struct({
+      outcome: Schema.optional(GoalOutcome),
+      conditions: Schema.optional(Schema.Array(GoalCondition).check(Schema.isMaxLength(LearnerGoal.MAX_CONDITIONS))),
+      scope: Schema.optional(GoalScopeIntentV2),
+      target: Schema.optional(GoalTargetIntentV2),
+    }),
+  ),
+  target: Schema.Union([
+    Schema.Struct({
+      type: Schema.Literal("existing"),
+      goalID: LearnerGoal.GoalID,
+      headRevisionID: LearnerGoal.RevisionID,
+    }),
+    Schema.Struct({
+      type: Schema.Literal("new"),
+      outcome: GoalOutcome,
+      conditions: Schema.optional(Schema.Array(GoalCondition).check(Schema.isMaxLength(LearnerGoal.MAX_CONDITIONS))),
+      scope: Schema.optional(GoalScopeIntentV2),
+      target: Schema.optional(GoalTargetIntentV2),
+      disposition: Schema.optional(GoalDispositionV2),
+    }),
+  ]),
+})
+
+export const UpdateLearnerGoalsInput = Schema.Struct({
+  operations: Schema.Array(Schema.Union([GoalCreateOperationV2, GoalUpdateOperationV2, GoalReplaceOperationV2])).check(
+    Schema.isLengthBetween(1, LearnerGoal.MAX_OPERATIONS),
+  ),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
 
 export type UpdateLearnerGoalsInput = typeof UpdateLearnerGoalsInput.Type
 
@@ -303,7 +404,8 @@ const decodeDefaultV2 = Schema.decodeUnknownSync(SetDefaultCoursePreferenceV2Inp
 const decodeDefaultV3 = Schema.decodeUnknownSync(SetDefaultCoursePreferenceV3Input)
 const decodeAnchor = Schema.decodeUnknownSync(SetCourseRouteAnchorInput)
 const decodeSteering = Schema.decodeUnknownSync(UpdateRetainedLearningSteeringInput)
-const decodeGoals = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
+const decodeLegacyGoals = Schema.decodeUnknownSync(LegacyUpdateLearnerGoalsInput)
+const decodeGoalsV2 = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
   const value = decode(input)
@@ -390,8 +492,13 @@ export function normalizeSteering(input: unknown): UpdateRetainedLearningSteerin
   return { ...value, validUntil: normalizeBoundary(value.validUntil) }
 }
 
-export function normalizeGoals(input: unknown): UpdateLearnerGoalsInput {
-  return decodeGoals(input)
+export function normalizeLegacyGoals(input: unknown): LegacyUpdateLearnerGoalsInput {
+  return decodeLegacyGoals(input)
+}
+
+export function normalizeGoalsV2(input: unknown): UpdateLearnerGoalsInput {
+  LearningCommand.canonicalizeCommandV2(input as LearnerGoal.CommandV2)
+  return decodeGoalsV2(input)
 }
 
 function normalizeBoundary(input: string) {
@@ -409,7 +516,7 @@ export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) return normalizeDefaultV3(input)
   if (toolID === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY) return normalizeAnchor(input)
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) return normalizeSteering(input)
-  if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return normalizeGoals(input)
+  if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return normalizeGoalsV2(input)
   throw new Error(`Unknown reserved learning command ${toolID}`)
 }
 
@@ -459,7 +566,7 @@ export function retainedSteeringCommand(input: UpdateRetainedLearningSteeringInp
   return { ...input }
 }
 
-export function learnerGoalCommand(input: UpdateLearnerGoalsInput): LearnerGoal.Command {
+export function learnerGoalCommand(input: LegacyUpdateLearnerGoalsInput): LearnerGoal.Command {
   return { operations: input.operations }
 }
 

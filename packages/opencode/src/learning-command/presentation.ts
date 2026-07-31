@@ -134,6 +134,129 @@ export function defaultCourseV3SettlementResult(
   })
 }
 
+export function learnerGoalsV2Capability(candidate: LearnerGoal.CandidateV2, envelope: BindingInput) {
+  return SemanticPresentation.proposal({
+    kind: "learner_goals_v2_capability",
+    binding: binding(envelope),
+    commandFingerprint: candidate.commandFingerprint,
+    issuance: candidate.agentAction.kind,
+    operations: candidate.materialized.operations.map(learnerGoalV2MaterializedOperation),
+  })
+}
+
+export function learnerGoalsV2SettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  state: Extract<LearningCommand.GoalInvocationVersion, { readonly version: 2 }>,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed learner Goal V2 settlement has no exact error code")
+  }
+  const operations =
+    settlement.outcome !== "error" &&
+    settlement.goalKind === "learner_goal" &&
+    settlement.schemaVersion === 2 &&
+    Array.isArray(settlement.operations)
+      ? (settlement.operations as readonly LearnerGoal.OperationResultV2[]).map(goalV2ResultOperation)
+      : []
+  return SemanticPresentation.result({
+    kind: "learner_goals_v2_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition: state.disposition,
+    ...(state.semanticTerminal ? { semanticOutcome: state.semanticTerminal.outcome } : {}),
+    ...(state.candidate ? { issuance: state.candidate.agentAction.kind } : {}),
+    ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+    ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+    operations,
+  })
+}
+
+export function learnerGoalV2MaterializedOperation(operation: LearnerGoal.MaterializedOperationV2) {
+  return {
+    ordinal: operation.ordinal,
+    operation: operation.operation,
+    result: operation.result,
+    ...(operation.before ? { before: goalV2Revision(operation.before) } : {}),
+    after: goalV2Revision(operation.after),
+    ...(operation.replacementTarget
+      ? {
+          replacementTarget: {
+            type: operation.replacementTarget.type,
+            ...(operation.replacementTarget.before
+              ? { before: goalV2Revision(operation.replacementTarget.before) }
+              : {}),
+            after: goalV2Revision(operation.replacementTarget.after),
+          },
+        }
+      : {}),
+  }
+}
+
+function goalV2Revision(revision: LearnerGoal.VersionedRevisionSnapshot) {
+  return {
+    schemaVersion: revision.schemaVersion,
+    goalID: revision.goalID,
+    revisionID: revision.revisionID,
+    version: revision.version,
+    meaning: {
+      outcome: revision.outcome,
+      conditions: revision.conditions,
+      scope:
+        revision.scope.type === "learner_home"
+          ? ({ type: "learner_home" } as const)
+          : ({ type: "courses", courseIDs: revision.scope.courses.map((course) => course.courseID) } as const),
+      target: goalV2Target(revision.target),
+      disposition: revision.disposition.type,
+    },
+  }
+}
+
+function goalV2ResultOperation(operation: LearnerGoal.OperationResultV2) {
+  return {
+    schemaVersion: operation.schemaVersion,
+    ordinal: operation.ordinal,
+    operation: operation.operation,
+    result: operation.result,
+    goalID: operation.goalID,
+    revisionID: operation.revisionID,
+    version: operation.version,
+    meaning: {
+      outcome: operation.meaning.outcome,
+      conditions: operation.meaning.conditions,
+      scope: operation.meaning.scope,
+      target: goalV2Target(operation.meaning.target),
+      disposition: operation.disposition,
+    },
+    ...(operation.replacementTarget ? { replacementTarget: operation.replacementTarget } : {}),
+  }
+}
+
+function goalV2Target(target: LearnerGoal.Target | LearnerGoal.TargetValueV2) {
+  if (target.type === "absent") return "none"
+  if (target.type === "instant") {
+    return "resolvedZone" in target
+      ? `${new Date(target.instant).toISOString()} (${goalV2Zone(target.resolvedZone)}; UTC${offsetText(target.utcOffsetMinutes)})`
+      : `${target.normalized} (UTC${offsetText(target.utcOffsetMinutes)}; historical V1)`
+  }
+  return "resolvedZone" in target
+    ? `${target.date} (${goalV2Zone(target.resolvedZone)})`
+    : `${target.date} (${target.timeZone}; historical V1)`
+}
+
+function goalV2Zone(zone: LearnerGoal.ResolvedZoneV2) {
+  return zone.type === "iana" ? `${zone.name}; ${zone.releaseID}` : `UTC${offsetText(zone.offsetMinutes)}`
+}
+
+function offsetText(minutes: number) {
+  const sign = minutes < 0 ? "-" : "+"
+  const absolute = Math.abs(minutes)
+  return `${sign}${String(Math.floor(absolute / 60)).padStart(2, "0")}:${String(absolute % 60).padStart(2, "0")}`
+}
+
 export function acceptCourseProposal(
   invocation: LearningCommand.AcceptCourseViewRevisionInvocation,
   locator: Course.PresentationLocator,

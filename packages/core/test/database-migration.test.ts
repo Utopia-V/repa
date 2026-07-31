@@ -4,7 +4,7 @@ import { fileURLToPath } from "url"
 import path from "path"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
-import { Effect, Layer } from "effect"
+import { Effect, Exit, Layer } from "effect"
 import { eq, inArray, sql } from "drizzle-orm"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "@opencode-ai/core/database/admission"
@@ -33,6 +33,7 @@ import domainNeutralLearningCommandLedgerMigration from "@opencode-ai/core/datab
 import defaultCourseV2Migration from "@opencode-ai/core/database/migration/repa/20260729144139_gate14_default_course_v2"
 import agentNativeDefaultCourseMigration from "@opencode-ai/core/database/migration/repa/20260730115237_gate14_agent_native_default_course"
 import messageDiffProjectionMigration from "@opencode-ai/core/database/migration/repa/20260731120541_gate08_message_diff_projection"
+import agentNativeLearnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260731144324_gate16_agent_native_learner_goals"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -1303,6 +1304,7 @@ function removeMessageDiffProjection(db: TestDatabase) {
 
 function dropGate16(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 15}`)
     yield* removeMessageDiffProjection(db)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
     yield* db.run(sql`DROP VIEW IF EXISTS learning_command_invocation_constraint_v12`)
@@ -1315,6 +1317,9 @@ function dropGate16(db: TestDatabase) {
     })
     yield* restoreV12DefaultCourseTransition(db)
     for (const table of [
+      "learner_goal_capability_settlement_v2",
+      "learner_goal_capability_issue_v2",
+      "learner_goal_disposition_v2",
       "learner_default_course_acknowledgement",
       "learner_default_course_capability_settlement",
       "learner_default_course_capability_issue",
@@ -1707,6 +1712,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
           { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
           { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
+          { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -2352,6 +2358,8 @@ describe("DatabaseMigration", () => {
         yield* db.run("PRAGMA foreign_keys = OFF")
         yield* db.transaction((tx) => defaultCourseV2Migration.up(tx))
         yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
+        yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
+        yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
         return {
           structures: yield* structuralManifest(db),
@@ -2476,6 +2484,8 @@ describe("DatabaseMigration", () => {
 
         yield* db.run("PRAGMA foreign_keys = OFF")
         yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
+        yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
+        yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
 
         const after = yield* snapshot(db, columns)
@@ -2925,6 +2935,129 @@ describe("DatabaseMigration", () => {
     expect(upgraded.validRecordedSelection._tag).toBe("Success")
     expect(upgraded.mixedMissingRevision._tag).toBe("Failure")
     expect(upgraded.mixedMissingView._tag).toBe("Failure")
+  })
+
+  test("classifies a frozen V15 admitted Goal as exact historical V1 without fabricating current facts", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.transaction((tx) => databaseV13Schema.up(tx))
+        yield* db.transaction((tx) => installSchemaExtrasV13(tx))
+        yield* db.run("PRAGMA foreign_keys = OFF")
+        yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
+        yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
+        yield* db.run("PRAGMA foreign_keys = ON")
+        const triggers = yield* db.all<{ name: string }>(
+          sql`SELECT name FROM sqlite_schema WHERE type = 'trigger' ORDER BY name`,
+        )
+        yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
+          discard: true,
+        })
+        yield* db.run(sql`
+          INSERT INTO learning_admitted_occurrence (
+            id, origin_session_id, origin_message_id, time_admitted
+          ) VALUES (
+            'lco_v15_goal_admitted', 'ses_v15_goal', 'msg_v15_goal_user', 41
+          )
+        `)
+        yield* db.run(sql`
+          INSERT INTO learning_command_invocation (
+            part_id, session_id, parent_user_message_id, assistant_message_id,
+            provider_call_id, occurrence_id, command_name, command_version,
+            emission_ordinal, capability_identity, capability_version,
+            authorization_basis, input_fingerprint, status, time_admitted,
+            turn_id, input_id
+          ) VALUES (
+            'prt_v15_goal_admitted', 'ses_v15_goal', 'msg_v15_goal_user',
+            'msg_v15_goal_assistant', 'call_v15_goal', 'lco_v15_goal_admitted',
+            'update_learner_goals', 1, 0, 'update_learner_goals', 1,
+            'learner_acceptance', ${"1".repeat(64)}, 'admitted', 42,
+            'trn_v15_goal', 'inp_v15_goal'
+          )
+        `)
+        const command =
+          '{"operations":[{"type":"create","snapshot":{"outcome":"Frozen V1 Goal","conditions":[],"scope":{"type":"learner_home"},"target":{"type":"absent"},"fieldBases":{"outcome":{"type":"accepted"},"conditions":{"type":"accepted"},"scope":{"type":"accepted"},"target":{"type":"accepted"},"disposition":{"type":"accepted"}}},"disposition":"active"}]}'
+        yield* db.run(sql`
+          INSERT INTO learner_goal_command (
+            invocation_part_id, semantic_fingerprint, command_snapshot,
+            permission_request_id, confirmation_snapshot
+          ) VALUES (
+            'prt_v15_goal_admitted', ${"2".repeat(64)}, ${command},
+            'per_v15_goal', NULL
+          )
+        `)
+        const rawBefore = yield* db.get(sql`
+          SELECT
+            CAST(invocation.input_fingerprint AS blob) AS input_fingerprint,
+            CAST(command.command_snapshot AS blob) AS command_snapshot,
+            CAST(command.semantic_fingerprint AS blob) AS semantic_fingerprint,
+            CAST(command.permission_request_id AS blob) AS permission_request_id
+          FROM learning_command_invocation AS invocation
+          JOIN learner_goal_command AS command
+            ON command.invocation_part_id = invocation.part_id
+          WHERE invocation.part_id = 'prt_v15_goal_admitted'
+        `)
+
+        yield* db.run("PRAGMA foreign_keys = OFF")
+        yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
+        yield* db.run("PRAGMA foreign_keys = ON")
+
+        expect(
+          yield* db.get(sql`
+            SELECT disposition, legacy_command_part_id, command_fingerprint,
+                   canonical_command, agent_action_provenance, materialized_snapshot,
+                   semantic_outcome, existing_effect_id
+            FROM learner_goal_disposition_v2
+            WHERE invocation_part_id = 'prt_v15_goal_admitted'
+          `),
+        ).toEqual({
+          disposition: "legacy_v1",
+          legacy_command_part_id: "prt_v15_goal_admitted",
+          command_fingerprint: "2".repeat(64),
+          canonical_command: null,
+          agent_action_provenance: null,
+          materialized_snapshot: null,
+          semantic_outcome: null,
+          existing_effect_id: null,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT
+              CAST(invocation.input_fingerprint AS blob) AS input_fingerprint,
+              CAST(command.command_snapshot AS blob) AS command_snapshot,
+              CAST(command.semantic_fingerprint AS blob) AS semantic_fingerprint,
+              CAST(command.permission_request_id AS blob) AS permission_request_id
+            FROM learning_command_invocation AS invocation
+            JOIN learner_goal_command AS command
+              ON command.invocation_part_id = invocation.part_id
+            WHERE invocation.part_id = 'prt_v15_goal_admitted'
+          `),
+        ).toEqual(rawBefore)
+        expect(yield* db.get(sql`SELECT * FROM learner_goal_state`)).toEqual({ singleton: 1, revision_sequence: 0 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_capability_issue_v2`)).toEqual({ count: 0 })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_capability_settlement_v2`)).toEqual({
+          count: 0,
+        })
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+        expect(
+          Exit.isFailure(
+            yield* db
+              .run(sql`DELETE FROM learner_goal_disposition_v2 WHERE invocation_part_id = 'prt_v15_goal_admitted'`)
+              .pipe(Effect.exit),
+          ),
+        ).toBe(true)
+        yield* db.run(sql`DELETE FROM learning_command_invocation WHERE part_id = 'prt_v15_goal_admitted'`)
+        expect(
+          yield* db.get(sql`
+            SELECT
+              (SELECT count(*) FROM learner_goal_command WHERE invocation_part_id = 'prt_v15_goal_admitted') AS commands,
+              (SELECT count(*) FROM learner_goal_disposition_v2 WHERE invocation_part_id = 'prt_v15_goal_admitted') AS dispositions
+          `),
+        ).toEqual({ commands: 0, dispositions: 0 })
+        expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
+      }),
+    )
   })
 
   test("preserves the v12 route-anchor branch inside the v13 shared no-effect wrapper", () => {
@@ -3436,10 +3569,11 @@ describe("DatabaseMigration", () => {
         expect(retainedSeal).toContain("invocation.capability_identity = 'update_retained_learning_steering'")
         expect(retainedSeal).toContain("invocation.capability_version = 1")
         const goalSeal = freshStructuralManifest.find(
-          (entry) => entry.name === "learner_goal_commit_seal_validate_insert_v12",
+          (entry) => entry.name === "learner_goal_commit_seal_validate_insert_v16",
         )?.definition
-        expect(goalSeal).toContain("invocation.capability_identity = 'update_learner_goals'")
-        expect(goalSeal).toContain("invocation.capability_version = 1")
+        expect(goalSeal).toContain("receipt.capability_identity = 'update_learner_goals'")
+        expect(goalSeal).toContain("receipt.capability_version = 2")
+        expect(goalSeal).toContain("receipt.authorization_basis = 'agent_action'")
         expect(
           freshStructuralManifest.some(
             (entry) =>
@@ -6078,6 +6212,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
           { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
           { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
+          { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
         ])
       }),
     )

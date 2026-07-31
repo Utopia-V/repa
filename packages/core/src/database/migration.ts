@@ -4,8 +4,7 @@ import { sql } from "drizzle-orm"
 import { Effect, Semaphore } from "effect"
 import type { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { migrations } from "./migration.gen"
-import { DatabaseSchemaExtras } from "./schema-extras"
-import { triggerStatements, viewStatements } from "./schema-extras-v14"
+import { DatabaseSchemaExtras, triggerStatements, viewStatements } from "./schema-extras"
 import schema from "./schema.gen"
 import {
   APPLICATION_ID,

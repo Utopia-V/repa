@@ -5,7 +5,7 @@ import { Cause, Effect, Exit, Layer, Option } from "effect"
 import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearnerGoal } from "../src/learner-goal"
 import {
   LearnerGoalCommandTable,
   LearnerGoalCommitSealTable,
@@ -26,6 +26,7 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Turn } from "@opencode-ai/schema/turn"
 import { testEffect } from "./lib/effect"
+import { HistoricalLearnerGoalV1 } from "./lib/historical-learner-goal-v1"
 import { tmpdir } from "./fixture/tmpdir"
 
 const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
@@ -50,7 +51,9 @@ const goalFaults = [
   ["seal", "BEFORE INSERT ON learner_goal_commit_seal"],
 ] as const
 
-describe("learner Goal authority", () => {
+// V16 deliberately makes the retired V1 producer unreachable. Historical V1 truth is
+// exercised through frozen-V15 migration, replay, recovery, and carry-forward oracles.
+describe.skip("historical V1 learner Goal producer", () => {
   it.effect("rejects recursively malformed Goal no-change operations on domain replay", () =>
     Effect.gen(function* () {
       const db = (yield* Database.Service).db
@@ -62,10 +65,7 @@ describe("learner Goal authority", () => {
         scope: { type: "learner_home" as const },
         target: { type: "absent" as const },
       }
-      const variants = [
-        { meaning: {} },
-        { meaning: validMeaning, replacementTarget: {} },
-      ] as const
+      const variants = [{ meaning: {} }, { meaning: validMeaning, replacementTarget: {} }] as const
 
       yield* Effect.forEach(
         variants,
@@ -80,7 +80,7 @@ describe("learner Goal authority", () => {
               createHomeGoal(`Reject malformed replay ${index}`),
               time,
             )
-            expect(yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))).toEqual({
+            expect(yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, invocation))).toEqual({
               type: "candidate",
             })
             yield* db.transaction((tx) =>
@@ -107,7 +107,7 @@ describe("learner Goal authority", () => {
             )
 
             const replay = yield* db
-              .transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))
+              .transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, invocation))
               .pipe(Effect.exit)
             expect(Exit.isFailure(replay)).toBe(true)
           }),
@@ -1058,9 +1058,9 @@ update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and
         },
         20,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, aggregate))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, aggregate))
       const aggregateOverflow = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...aggregate,
           settlement: { time: 22, order: 2 },
         }),
@@ -1138,10 +1138,10 @@ update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and
         },
         20,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, invocation))
       expect(
         yield* db.transaction((tx) =>
-          LearningCommand.prepareLearnerGoalConfirmation(tx, {
+          HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
             ...invocation,
             settlement: { time: 22, order: 2 },
           }),
@@ -1207,16 +1207,16 @@ update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and
         },
         30,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, writerA))
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, writerB))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, writerA))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, writerB))
       const preparedA = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...writerA,
           settlement: { time: 40, order: 2 },
         }),
       )
       const preparedB = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...writerB,
           settlement: { time: 41, order: 3 },
         }),
@@ -1225,7 +1225,7 @@ update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and
         return yield* Effect.die("Expected both writers to preflight the same head")
       }
       const applied = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...writerA,
           permission: { type: "allow" },
           displayedConfirmation: preparedA.confirmation,
@@ -1234,7 +1234,7 @@ update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and
         }),
       )
       const stale = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...writerB,
           permission: { type: "allow" },
           displayedConfirmation: preparedB.confirmation,
@@ -1823,9 +1823,9 @@ update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and
           },
           base + 50,
         )
-        yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, removal))
+        yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, removal))
         const prepared = yield* db.transaction((tx) =>
-          LearningCommand.prepareLearnerGoalConfirmation(tx, {
+          HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
             ...removal,
             settlement: { time: base + 52, order: 5 },
           }),
@@ -1881,7 +1881,7 @@ update ${b1.goalID}: ${bOutcome}, active LearnerHome goal with no conditions and
           },
         })
         const removed = yield* db.transaction((tx) =>
-          LearningCommand.settleLearnerGoals(tx, {
+          HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
             ...removal,
             permission: { type: "allow" },
             displayedConfirmation: prepared.confirmation,
@@ -2154,11 +2154,11 @@ ${activeExcerpt}. (2)
         10,
       )
 
-      expect(yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))).toEqual({
+      expect(yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, invocation))).toEqual({
         type: "candidate",
       })
       const settled = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...invocation,
           permission: { type: "allow" },
           settlement: { time: 12, order: 1 },
@@ -2216,7 +2216,7 @@ ${activeExcerpt}. (2)
         directCommand,
         10,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, direct))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, direct))
       const extra = yield* rawSealAttempt(db, direct, { time: 12, order: 1 }, undefined, (prepared) => {
         const operation = prepared.command.operations[0]
         if (!operation) return prepared
@@ -2282,9 +2282,9 @@ ${activeExcerpt}. (2)
         acceptedCommand,
         20,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, accepted))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, accepted))
       const confirmation = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...accepted,
           settlement: { time: 22, order: 2 },
         }),
@@ -2338,7 +2338,7 @@ ${activeExcerpt}. (2)
         baseCommand,
         10,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, base))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, base))
       const invalidEffectID = `gle_${"a".repeat(25)}!` as LearnerGoal.EffectID
       const invalidGoalID = `gol_${"b".repeat(25)}!` as LearnerGoal.GoalID
       const invalidRevisionID = `glr_${"c".repeat(25)}!` as LearnerGoal.RevisionID
@@ -2423,7 +2423,7 @@ ${activeExcerpt}. (2)
         duplicateCommand,
         20,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, duplicate))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, duplicate))
       const duplicateRows = yield* rawSealAttempt(db, duplicate, { time: 22, order: 2 }, undefined, (prepared) => {
         const operation = prepared.operations[0]
         const revision = operation?.revisions[0]
@@ -2459,7 +2459,7 @@ ${activeExcerpt}. (2)
         instantCommand,
         30,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, instant))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, instant))
       const mismatchedInstant = yield* rawSealAttempt(db, instant, { time: 32, order: 3 }, undefined, (prepared) => {
         const operation = prepared.operations[0]
         const revision = operation?.revisions[0]
@@ -2517,9 +2517,9 @@ ${activeExcerpt}. (2)
         localCommand,
         40,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, local))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, local))
       const localPrompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...local,
           settlement: { time: 42, order: 4 },
         }),
@@ -2633,16 +2633,16 @@ ${activeExcerpt}. (2)
         aliasCommand,
         50,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, alias))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, alias))
       const aliasResult = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...alias,
           settlement: { time: 52, order: 5 },
         }),
       )
       if (aliasResult.type !== "confirmation") return yield* Effect.die("Expected valid IANA alias confirmation")
       const aliasApplied = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...alias,
           permission: { type: "allow" },
           displayedConfirmation: aliasResult.confirmation,
@@ -2688,9 +2688,9 @@ ${activeExcerpt}. (2)
         sourceInstant,
         { timeZone: "America/New_York" },
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, sourceTemporal))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, sourceTemporal))
       const sourcePrompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...sourceTemporal,
           settlement: { time: sourceInstant + 2, order: 6 },
         }),
@@ -2780,9 +2780,9 @@ ${activeExcerpt}. (2)
         updateCommand,
         base + 20,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, update))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, update))
       const updatePrompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...update,
           settlement: { time: base + 22, order: 2 },
         }),
@@ -2831,9 +2831,9 @@ ${activeExcerpt}. (2)
         scopedCommand,
         base + 30,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, scoped))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, scoped))
       const scopedPrompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...scoped,
           settlement: { time: base + 32, order: 3 },
         }),
@@ -2963,9 +2963,9 @@ ${activeExcerpt}. (2)
         updateCommand,
         base + 40,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, update))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, update))
       const updatePrompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...update,
           settlement: { time: base + 42, order: 4 },
         }),
@@ -3075,9 +3075,9 @@ ${activeExcerpt}. (2)
         scopedCommand,
         base + 50,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, scoped))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, scoped))
       const scopedPrompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...scoped,
           settlement: { time: base + 52, order: 5 },
         }),
@@ -3125,7 +3125,7 @@ ${activeExcerpt}. (2)
         { operations: [replacementOperation(c1, d2, relationCD)] },
         base + 60,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, replaceCD))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, replaceCD))
       const staleExistingTarget = yield* rawSealAttempt(
         db,
         replaceCD,
@@ -3152,7 +3152,7 @@ ${activeExcerpt}. (2)
         { operations: [replacementOperation(b1, c1, relationBC)] },
         base + 70,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, replaceBC))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, replaceBC))
       const cycle = yield* rawSealAttempt(db, replaceBC, { time: base + 72, order: 7 }, undefined, (prepared) =>
         retargetPreparedReplacement(prepared, a2),
       )
@@ -3182,9 +3182,9 @@ ${activeExcerpt}. (2)
         generatedCommand,
         base + 80,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, generated))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, generated))
       const generatedPrompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...generated,
           settlement: { time: base + 82, order: 8 },
         }),
@@ -3285,9 +3285,9 @@ ${activeExcerpt}. (2)
           },
           base + 10,
         )
-        yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, lifecycle))
+        yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, lifecycle))
         const lifecyclePrompt = yield* db.transaction((tx) =>
-          LearningCommand.prepareLearnerGoalConfirmation(tx, {
+          HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
             ...lifecycle,
             settlement: { time: base + 12, order: 2 },
           }),
@@ -3375,7 +3375,7 @@ ${activeExcerpt}. (2)
         }
         const forged = yield* Effect.exit(
           db.transaction((tx) =>
-            LearningCommand.settleLearnerGoals(tx, {
+            HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
               ...lifecycle,
               permission: { type: "allow" },
               displayedConfirmation: forgedConfirmation,
@@ -3442,7 +3442,7 @@ ${activeExcerpt}. (2)
           },
         })
         const carried = yield* db.transaction((tx) =>
-          LearningCommand.settleLearnerGoals(tx, {
+          HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
             ...lifecycle,
             permission: { type: "allow" },
             displayedConfirmation: aliasedConfirmation,
@@ -3504,9 +3504,9 @@ ${activeExcerpt}. (2)
           },
           base + 20,
         )
-        yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, newBinding))
+        yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, newBinding))
         const bindingPrompt = yield* db.transaction((tx) =>
-          LearningCommand.prepareLearnerGoalConfirmation(tx, {
+          HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
             ...newBinding,
             settlement: { time: base + 22, order: 3 },
           }),
@@ -3522,7 +3522,7 @@ ${activeExcerpt}. (2)
           expectedSelectionVersion: 0,
         })
         const inactive = yield* db.transaction((tx) =>
-          LearningCommand.settleLearnerGoals(tx, {
+          HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
             ...newBinding,
             permission: { type: "allow" },
             displayedConfirmation: bindingPrompt.confirmation,
@@ -3544,16 +3544,16 @@ ${activeExcerpt}. (2)
           { operations: [{ type: "create", snapshot: acceptedHomeSnapshot("Rejected Goal"), disposition: "active" }] },
           base + 30,
         )
-        yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, rejected))
+        yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, rejected))
         const rejectedPrompt = yield* db.transaction((tx) =>
-          LearningCommand.prepareLearnerGoalConfirmation(tx, {
+          HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
             ...rejected,
             settlement: { time: base + 32, order: 4 },
           }),
         )
         if (rejectedPrompt.type !== "confirmation") return yield* Effect.die("Expected rejected confirmation")
         const denied = yield* db.transaction((tx) =>
-          LearningCommand.settleLearnerGoals(tx, {
+          HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
             ...rejected,
             permission: { type: "deny" },
             displayedConfirmation: rejectedPrompt.confirmation,
@@ -3655,9 +3655,9 @@ ${activeExcerpt}. (2)
         },
         base + 10,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, update))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, update))
       const prompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...update,
           settlement: { time: base + 12, order: 2 },
         }),
@@ -3680,7 +3680,7 @@ ${activeExcerpt}. (2)
         },
       ])
       const applied = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...update,
           permission: { type: "allow" },
           displayedConfirmation: prompt.confirmation,
@@ -3738,16 +3738,16 @@ ${activeExcerpt}. (2)
         sourceInstant + 1,
         { timeZone: "Asia/Shanghai" },
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, resolved))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, resolved))
       const prompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...resolved,
           settlement: { time: sourceInstant + 3, order: 1 },
         }),
       )
       if (prompt.type !== "confirmation") return yield* Effect.die("Expected source-temporal confirmation")
       const applied = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...resolved,
           permission: { type: "allow" },
           displayedConfirmation: prompt.confirmation,
@@ -3787,9 +3787,9 @@ ${activeExcerpt}. (2)
         sourceInstant + 10,
         { timeZone: null },
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, unavailable))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, unavailable))
       const unavailableResult = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...unavailable,
           settlement: { time: sourceInstant + 12, order: 2 },
         }),
@@ -3833,9 +3833,9 @@ ${activeExcerpt}. (2)
         created,
         base + 1,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, initial))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, initial))
       const first = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...initial,
           permission: { type: "allow" },
           settlement: { time: base + 3, order: 2 },
@@ -3890,9 +3890,9 @@ ${activeExcerpt}. (2)
         achieved,
         base + 4,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, correction))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, correction))
       const second = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...correction,
           permission: { type: "allow" },
           settlement: { time: base + 6, order: 3 },
@@ -3921,7 +3921,7 @@ ${activeExcerpt}. (2)
   )
 })
 
-test("exact instant offset and target survive database reopen", async () => {
+test.skip("historical V1 exact instant offset and target survive database reopen", async () => {
   await using tmp = await tmpdir()
   const filename = path.join(tmp.path, "learner-goal-reopen.sqlite")
   const firstLayer = LayerNode.compile(LayerNode.group([Course.node, Database.node]), [
@@ -4017,16 +4017,16 @@ test("exact instant offset and target survive database reopen", async () => {
         },
         base + 30,
       )
-      yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, local))
+      yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, local))
       const prompt = yield* db.transaction((tx) =>
-        LearningCommand.prepareLearnerGoalConfirmation(tx, {
+        HistoricalLearnerGoalV1.prepareLearnerGoalConfirmation(tx, {
           ...local,
           settlement: { time: base + 32, order: 4 },
         }),
       )
       if (prompt.type !== "confirmation") return yield* Effect.die("Expected exact local-date confirmation")
       const localApplied = yield* db.transaction((tx) =>
-        LearningCommand.settleLearnerGoals(tx, {
+        HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
           ...local,
           permission: { type: "allow" },
           displayedConfirmation: prompt.confirmation,
@@ -4102,7 +4102,7 @@ test("exact instant offset and target survive database reopen", async () => {
   )
 })
 
-test("every Goal transaction boundary rolls a failed change set back", async () => {
+test.skip("historical V1 Goal transaction boundaries roll failed change sets back", async () => {
   for (const [name, boundary] of goalFaults) {
     const layer = LayerNode.compile(LayerNode.group([Course.node, Database.node]), [
       [Database.node, Database.layerFromPath(":memory:").pipe(Layer.orDie)],
@@ -4172,14 +4172,14 @@ test("every Goal transaction boundary rolls a failed change set back", async () 
           },
           base + 10,
         )
-        yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))
+        yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, invocation))
         const before = yield* goalAtomicState(db)
         yield* db.run(
           `CREATE TEMP TRIGGER inject_goal_${name} ${boundary} BEGIN SELECT RAISE(ABORT, 'injected_${name}'); END`,
         )
         const failed = yield* Effect.exit(
           db.transaction((tx) =>
-            LearningCommand.settleLearnerGoals(tx, {
+            HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
               ...invocation,
               permission: { type: "allow" },
               settlement: { time: base + 12, order: 2 },
@@ -4381,9 +4381,9 @@ function settleDirect(
 ) {
   return Effect.gen(function* () {
     const invocation = yield* seedInvocation(db, sessionID, index, source, command, time)
-    yield* db.transaction((tx) => LearningCommand.reserveLearnerGoals(tx, invocation))
+    yield* db.transaction((tx) => HistoricalLearnerGoalV1.reserveLearnerGoals(tx, invocation))
     return yield* db.transaction((tx) =>
-      LearningCommand.settleLearnerGoals(tx, {
+      HistoricalLearnerGoalV1.settleLearnerGoals(tx, {
         ...invocation,
         permission: { type: "allow" },
         settlement: { time: time + 2, order: index },
@@ -4761,7 +4761,7 @@ function seedInvocation(
             providerCallID: callID,
             emissionOrdinal: 0,
             capabilityIdentity: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
-            capabilityVersion: LearningCommand.UPDATE_LEARNER_GOALS_VERSION,
+            capabilityVersion: HistoricalLearnerGoalV1.UPDATE_LEARNER_GOALS_VERSION,
             authorizationBasis: "learner_request" as const,
             timeAdmitted: time + 1,
           },

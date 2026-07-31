@@ -340,6 +340,22 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       },
     })
   }
+  if (basis.kind === "learner_goals_v2_capability") {
+    if (basis.operations.length === 0) return undefined
+    return expected(value, {
+      capability: "update_learner_goals",
+      patterns: ["learner_home"],
+      always: ["learner_home"],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        goalKind: "learner_goal",
+        commandFingerprint: basis.commandFingerprint,
+        issuance: basis.issuance,
+        operations: basis.operations,
+      },
+    })
+  }
   if (basis.kind === "course_route_anchor") {
     if (
       (basis.target === null && basis.locator !== undefined) ||
@@ -737,6 +753,21 @@ function projectProposal(
       ],
     )
   }
+  if (basis.kind === "learner_goals_v2_capability") {
+    return proposalProjection(
+      basis,
+      approval,
+      "update_learner_goals",
+      basis.operations.length === 1 ? "Update this learner Goal" : "Update these learner Goals",
+      "This configured capability approval is bound to the exact Agent-issued change set and its runtime-materialized before/after Goal state.",
+      [
+        fact("Issuance", basis.issuance),
+        ...basis.operations.map((operation) =>
+          fact(`Goal change ${operation.ordinal + 1}`, goalV2MaterializedText(operation)),
+        ),
+      ],
+    )
+  }
   if (basis.kind === "default_course_command") {
     return proposalProjection(
       basis,
@@ -832,7 +863,12 @@ function expectedResultMetadata(presentation: SemanticPresentationV1.Result, pro
   const basis = presentation.basis
   const common = {
     command: projection.capability,
-    commandVersion: basis.kind === "default_course_v3_result" ? 3 : basis.kind === "default_course_v2_result" ? 2 : 1,
+    commandVersion:
+      basis.kind === "default_course_v3_result"
+        ? 3
+        : basis.kind === "default_course_v2_result" || basis.kind === "learner_goals_v2_result"
+          ? 2
+          : 1,
     outcome: basis.settlement.outcome,
     ...(basis.settlement.outcome === "error" ? { code: basis.settlement.code } : {}),
     durablySettled: projection.durablySettled,
@@ -1274,6 +1310,40 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       ],
     )
   }
+  if (basis.kind === "learner_goals_v2_result") {
+    const semanticTerminal = basis.disposition === "semantic_terminal_v2"
+    const candidate = basis.disposition === "candidate_v2"
+    if (
+      semanticTerminal !== (basis.semanticOutcome !== undefined) ||
+      candidate !== (basis.issuance !== undefined) ||
+      candidate !== (basis.capabilityOutcome !== undefined) ||
+      (!candidate && basis.permissionRequestID !== undefined) ||
+      (semanticTerminal &&
+        (basis.semanticOutcome === "already_applied"
+          ? settlement.outcome !== "already_applied"
+          : settlement.outcome !== "error" || settlement.code !== "semantic_conflict")) ||
+      (settlement.outcome === "error" && basis.operations.length !== 0) ||
+      (settlement.outcome !== "error" && basis.operations.length === 0)
+    ) {
+      return undefined
+    }
+    return resultProjection(
+      basis,
+      "update_learner_goals",
+      goalV2ResultTitle(basis, outcome),
+      goalV2ResultSummary(basis, outcome),
+      [
+        ...failure,
+        fact("Disposition", basis.disposition),
+        ...(basis.issuance ? [fact("Issuance", basis.issuance)] : []),
+        ...(basis.capabilityOutcome ? [fact("Capability", basis.capabilityOutcome)] : []),
+        ...(basis.permissionRequestID ? [fact("Permission request", basis.permissionRequestID)] : []),
+        ...basis.operations.map((operation) =>
+          fact(`Goal change ${operation.ordinal + 1}`, goalV2ResultText(operation)),
+        ),
+      ],
+    )
+  }
   if (settlement.outcome !== "applied") return undefined
   return resultProjection(
     basis,
@@ -1330,6 +1400,68 @@ function resultSummary(title: string, outcome: ResultProjection["outcome"]) {
   if (outcome === "no_effect") return `${title} made no durable change.`
   if (outcome === "outcome_unknown") return `${title} has an unknown outcome; no success is claimed.`
   return `${title} failed; no success is claimed.`
+}
+
+function goalV2MaterializedText(
+  operation: Extract<
+    SemanticPresentationV1.ProposalBasis,
+    { kind: "learner_goals_v2_capability" }
+  >["operations"][number],
+) {
+  const before = operation.before
+    ? `from Goal version ${operation.before.version} “${operation.before.meaning.outcome}”`
+    : "from no prior Goal"
+  const after = `to Goal version ${operation.after.version} “${operation.after.meaning.outcome}”; ${goalV2MeaningText(operation.after.meaning)}`
+  const replacement = operation.replacementTarget
+    ? `; replacement target Goal version ${operation.replacementTarget.after.version} “${operation.replacementTarget.after.meaning.outcome}”`
+    : ""
+  return `${titleCase(operation.operation)}; ${operation.result === "changed" ? "change" : "no change"}; ${before}; ${after}${replacement}`
+}
+
+function goalV2ResultTitle(
+  basis: Extract<SemanticPresentationV1.ResultBasis, { kind: "learner_goals_v2_result" }>,
+  outcome: ResultProjection["outcome"],
+) {
+  if (outcome === "failed") return "Learner Goals not changed"
+  if (outcome === "outcome_unknown") return "Learner Goal outcome unknown"
+  if (outcome === "no_effect") return "Learning Goals unchanged"
+  return basis.operations.filter((operation) => operation.result === "changed").length === 1
+    ? "Updated learning Goal"
+    : "Updated learning Goals"
+}
+
+function goalV2ResultSummary(
+  basis: Extract<SemanticPresentationV1.ResultBasis, { kind: "learner_goals_v2_result" }>,
+  outcome: ResultProjection["outcome"],
+) {
+  if (outcome === "failed" || outcome === "outcome_unknown") return resultSummary("Learner Goal update", outcome)
+  if (outcome === "already_applied") {
+    return "The exact Goal change set was already applied; no duplicate effect was created."
+  }
+  if (outcome === "no_effect") return "The exact Goal change set made no durable change."
+  const unchanged = basis.operations.filter((operation) => operation.result === "no_change").length
+  return `The displayed Goal changes committed${unchanged ? `; ${unchanged} remained unchanged` : ""}. The stored Goals remain correctable.`
+}
+
+function goalV2ResultText(
+  operation: Extract<SemanticPresentationV1.ResultBasis, { kind: "learner_goals_v2_result" }>["operations"][number],
+) {
+  const replacement = operation.replacementTarget
+    ? `; replacement ${operation.replacementTarget.type} Goal at version ${operation.replacementTarget.version}`
+    : ""
+  return `${titleCase(operation.operation)}; ${operation.result === "changed" ? "changed" : "no change"}; Goal version ${operation.version}; ${goalV2MeaningText(operation.meaning)}${replacement}`
+}
+
+function goalV2MeaningText(
+  meaning:
+    | Extract<
+        SemanticPresentationV1.ProposalBasis,
+        { kind: "learner_goals_v2_capability" }
+      >["operations"][number]["after"]["meaning"]
+    | Extract<SemanticPresentationV1.ResultBasis, { kind: "learner_goals_v2_result" }>["operations"][number]["meaning"],
+) {
+  const scope = meaning.scope.type === "learner_home" ? "LearnerHome" : meaning.scope.courseIDs.join(", ")
+  return `outcome “${meaning.outcome}”; conditions ${meaning.conditions.length ? meaning.conditions.join("; ") : "none"}; scope ${scope}; target ${meaning.target}; lifecycle ${meaning.disposition}`
 }
 
 function goalResultTitle(

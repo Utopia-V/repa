@@ -54,7 +54,8 @@ import {
   normalizeDefault,
   normalizeDefaultV2,
   normalizeDefaultV3,
-  normalizeGoals,
+  normalizeGoalsV2,
+  normalizeLegacyGoals,
   normalizeSteering,
   retainedSteeringCommand,
   type AcceptCourseViewRevisionInput,
@@ -62,6 +63,7 @@ import {
   type SetDefaultCoursePreferenceInput,
   type SetDefaultCoursePreferenceV2Input,
   type SetDefaultCoursePreferenceV3Input,
+  type LegacyUpdateLearnerGoalsInput,
   type UpdateLearnerGoalsInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
@@ -126,7 +128,7 @@ type Canonical =
     }>
   | Readonly<{
       toolID: typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
-      input: UpdateLearnerGoalsInput
+      input: LegacyUpdateLearnerGoalsInput
     }>
 
 type Invocation =
@@ -146,24 +148,11 @@ type RetainedExecutionReconciliation =
   | { readonly type: "candidate" }
   | { readonly type: "settled"; readonly exact: ExactResult }
 
-type GoalExecutionReconciliation =
-  | { readonly type: "candidate" }
-  | {
-      readonly type: "settled"
-      readonly settlement: LearningCommand.Settlement
-      readonly exact: ExactResult
-    }
-
-type GoalConfirmationPresentationResult =
-  | (Exclude<LearningCommand.GoalConfirmationResult, { readonly type: "confirmation" }> &
-      Readonly<{ exact: ExactResult }>)
-  | (Extract<LearningCommand.GoalConfirmationResult, { readonly type: "confirmation" }> &
-      Readonly<{ presentation: LearnerGoal.ProposalPresentation }>)
-
 type TerminalPartEnvelope = Pick<
   LearningCommand.InvocationEnvelope,
   "partID" | "assistantMessageID" | "sessionID" | "providerCallID" | "timeAdmitted"
->
+> &
+  Partial<Pick<LearningCommand.InvocationEnvelope, "capabilityVersion">>
 
 type Active = Readonly<{
   canonical: Canonical
@@ -203,6 +192,21 @@ type DefaultV3ExecutionPreparation =
   | Readonly<{ type: "candidate"; agentAction: DefaultCourseAgentAction }>
   | Readonly<{ type: "settled"; exact: ExactResult }>
 
+type GoalV2Canonical = Readonly<{
+  toolID: typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
+  input: UpdateLearnerGoalsInput
+}>
+
+type GoalV2Active = Readonly<{
+  canonical: GoalV2Canonical
+  registration: Registration
+  deferred: Deferred.Deferred<ExactResult, unknown>
+}>
+
+type GoalV2ExecutionPreparation =
+  | Readonly<{ type: "candidate"; candidate: LearnerGoal.CandidateV2 }>
+  | Readonly<{ type: "settled"; exact: ExactResult }>
+
 export interface Interface {
   readonly prepare: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly execute: (input: unknown, context: ExecuteContext) => Effect.Effect<ExactResult, unknown>
@@ -231,6 +235,7 @@ const layer = Layer.effect(
     const inflight = new Map<SessionV1.PartID, Active>()
     const defaultV2Inflight = new Map<SessionV1.PartID, DefaultV2Active>()
     const defaultV3Inflight = new Map<SessionV1.PartID, DefaultV3Active>()
+    const goalV2Inflight = new Map<SessionV1.PartID, GoalV2Active>()
 
     yield* recoverAdmitted(events)
 
@@ -241,6 +246,9 @@ const layer = Layer.effect(
     ) {
       if (toolID === LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY) {
         return yield* prepareDefaultCourse(events, modelInput, registration)
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+        return yield* prepareLearnerGoalsV2(events, modelInput, registration)
       }
       const canonical = canonicalInput(toolID, modelInput)
       const transaction = events.transaction((tx) =>
@@ -314,6 +322,9 @@ const layer = Layer.effect(
           modelInput,
           context,
         )
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+        return yield* executeLearnerGoalsV2(events, permission, goalV2Inflight, modelInput, context)
       }
       const registration = requireRegistration(context)
       const canonical = canonicalInput(toolID, modelInput)
@@ -389,6 +400,511 @@ const layer = Layer.effect(
     })
   }),
 )
+
+function prepareLearnerGoalsV2(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
+  return Effect.gen(function* () {
+    const stored = yield* readStoredLearnerGoalState(events, registration)
+    if (stored?.version === 1) {
+      yield* interruptInvocation(events, registration)
+      return
+    }
+    return yield* events
+      .transaction((tx) =>
+        Effect.gen(function* () {
+          const canonical = {
+            toolID: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+            input: normalizeGoalsV2(modelInput),
+          } satisfies GoalV2Canonical
+          const existing = yield* readLearnerGoalV2State(tx, registration)
+          if (existing) {
+            const state = yield* requireLearnerGoalV2State(tx, canonical, registration)
+            if (state.status !== "admitted") {
+              yield* assertLearnerGoalV2TerminalPart(tx, canonical, registration, state)
+            }
+            return noEvent(undefined)
+          }
+
+          const consumed = yield* LearningFrontier.read(tx)
+          yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+          const row = yield* readPartRow(tx, registration.partID)
+          if (!row) {
+            return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+          }
+          const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+            turnID: registration.turnID,
+            inputID: registration.inputID,
+            causalOccurrenceID: registration.causalOccurrenceID,
+            partID: registration.partID,
+            callID: registration.callID,
+            emissionOrdinal: registration.emissionOrdinal,
+            sessionID: registration.sessionID,
+            assistantMessageID: registration.assistantMessageID,
+            capabilityIdentity: canonical.toolID,
+          })
+          const timeAdmitted = Math.max(
+            row.time_created,
+            trusted.modelTimeAdmitted,
+            trusted.candidateTimeRegistered,
+            trusted.toolTimeAdmitted,
+          )
+          yield* assertLearnerGoalV2AdmittedPart(tx, canonical, registration)
+          const reserved = yield* LearningCommand.reserveLearnerGoalsV2(tx, {
+            envelope: learnerGoalV2Envelope(registration, timeAdmitted),
+            command: canonical.input,
+            settlement: yield* settlementMetadata(tx, registration.sessionID, timeAdmitted),
+          })
+          if (reserved.type === "admitted") return noEvent(undefined)
+          if (reserved.type === "replay") {
+            return yield* Effect.die("New learner Goal V2 admission unexpectedly replayed")
+          }
+          const state = yield* requireLearnerGoalV2State(tx, canonical, registration)
+          const part = learnerGoalV2TerminalPart(canonical, registration, state)
+          return withPartEvent(undefined, part, requirePhysicalSettlement(state.settlement).settlementTime)
+        }).pipe(Effect.orDie),
+      )
+      .pipe(Effect.asVoid)
+  })
+}
+
+function executeLearnerGoalsV2(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  inflight: Map<SessionV1.PartID, GoalV2Active>,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const legacy = yield* loadLegacyLearnerGoalResult(events, registration)
+    if (legacy) return legacy
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      input: normalizeGoalsV2(modelInput),
+    } satisfies GoalV2Canonical
+    const active = inflight.get(registration.partID)
+    if (active) {
+      if (!isDeepStrictEqual(active.registration, registration) || !isDeepStrictEqual(active.canonical, canonical)) {
+        return yield* invocationConflict(registration)
+      }
+      return yield* Deferred.await(active.deferred)
+    }
+
+    const deferred = Deferred.makeUnsafe<ExactResult, unknown>()
+    const token = { canonical, registration, deferred } satisfies GoalV2Active
+    inflight.set(registration.partID, token)
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const exit = yield* restore(
+          executeLearnerGoalsV2Once(events, permission, canonical, registration, context),
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(exit)) {
+          const reconciled = yield* loadCommittedLearnerGoalV2Result(events, canonical, registration).pipe(Effect.exit)
+          if (Exit.isSuccess(reconciled) && reconciled.value) {
+            yield* Deferred.succeed(deferred, reconciled.value).pipe(Effect.ignore)
+            if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+            return reconciled.value
+          }
+          const cause = Exit.isFailure(reconciled) ? reconciled.cause : exit.cause
+          yield* Deferred.failCause(deferred, cause).pipe(Effect.ignore)
+          if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+          return yield* Effect.failCause(cause)
+        }
+        yield* Deferred.succeed(deferred, exit.value).pipe(Effect.ignore)
+        if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+        return exit.value
+      }),
+    )
+  })
+}
+
+function executeLearnerGoalsV2Once(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: GoalV2Canonical,
+  registration: Registration,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* events.transaction<GoalV2ExecutionPreparation, typeof SessionV1.Event.PartUpdated>((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerGoalV2State(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent({
+            type: "settled" as const,
+            exact: exactFromPart(yield* assertLearnerGoalV2TerminalPart(tx, canonical, registration, state)),
+          })
+        }
+        if (state.disposition !== "candidate_v2" || !state.candidate) {
+          return yield* Effect.die("Admitted learner Goal V2 invocation is not a complete candidate")
+        }
+        return noEvent({ type: "candidate" as const, candidate: state.candidate })
+      }).pipe(Effect.orDie),
+    )
+    if (prepared.result.type === "settled") return prepared.result.exact
+
+    const authority = requirePermissionContext(context)
+    const candidate = prepared.result.candidate
+    const presentation = LearningCommandPresentation.learnerGoalsV2Capability(candidate, {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    })
+    const shownScope = {
+      patterns: [LearnerGoal.PERMISSION_PATTERN],
+      agentAction: candidate.agentAction,
+      materialized: candidate.materialized,
+      semanticPresentation: presentation,
+    }
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        sessionID: registration.sessionID,
+        permission: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+        patterns: [LearnerGoal.PERMISSION_PATTERN],
+        always: [LearnerGoal.PERMISSION_PATTERN],
+        metadata: {
+          goalKind: "learner_goal",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: candidate.agentAction.kind,
+          operations: candidate.materialized.operations.map((operation) =>
+            LearningCommandPresentation.learnerGoalV2MaterializedOperation(operation),
+          ),
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: { messageID: registration.assistantMessageID, callID: registration.callID },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+        lifecycle: {
+          resolution: "request_exact",
+          selected: (selection) => persistLearnerGoalSelection(events, registration, selection, shownScope),
+          replied: (input) => persistLearnerGoalReply(events, registration, input),
+        },
+      },
+      context.abort,
+    )
+    return yield* commitLearnerGoalsV2(events, canonical, registration, permissionOutcome)
+  })
+}
+
+function persistLearnerGoalSelection(
+  events: EventV2.Interface,
+  registration: Registration,
+  selection: Permission.Selection,
+  shownScope: Readonly<Record<string, unknown>>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        if (selection.action === "ask") {
+          yield* LearningCommand.issueLearnerGoalCapabilityPromptV2(tx, {
+            partID: registration.partID,
+            requestID: selection.request.id,
+            policyBasis: { ...selection.basis },
+            shownScope,
+            time: metadata.time,
+            order: metadata.order,
+          })
+          return noEvent(undefined)
+        }
+        yield* LearningCommand.settleLearnerGoalPolicyV2(tx, {
+          partID: registration.partID,
+          outcome: selection.action === "allow" ? "policy_allow" : "policy_deny",
+          policyBasis: { ...selection.basis },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function persistLearnerGoalReply(
+  events: EventV2.Interface,
+  registration: Registration,
+  input: Readonly<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        yield* LearningCommand.settleLearnerGoalPromptV2(tx, {
+          partID: registration.partID,
+          requestID: input.request.id,
+          outcome:
+            input.reply.reply === "once" || input.reply.reply === "always"
+              ? "prompted_allow"
+              : input.reply.reply === "cancel"
+                ? "prompted_cancel"
+                : input.reply.message
+                  ? "prompted_correct"
+                  : "prompted_deny",
+          reply: { ...input.reply },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function commitLearnerGoalsV2(
+  events: EventV2.Interface,
+  canonical: GoalV2Canonical,
+  registration: Registration,
+  permission: LearningCommand.PermissionOutcome,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerGoalV2State(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(exactFromPart(yield* assertLearnerGoalV2TerminalPart(tx, canonical, registration, state)))
+        }
+        const settlement = yield* permission.type === "abort"
+          ? LearningCommand.recoverLearnerGoalsV2(tx, {
+              partID: registration.partID,
+              settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+            })
+          : Effect.gen(function* () {
+              const consumed = yield* LearningFrontier.read(tx)
+              yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+              return yield* LearningCommand.settleLearnerGoalsV2(tx, {
+                partID: registration.partID,
+                settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+              })
+            })
+        if (settlement.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: registration.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        const terminal = yield* requireLearnerGoalV2State(tx, canonical, registration)
+        const part = learnerGoalV2TerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function readStoredLearnerGoalState(events: EventV2.Interface, registration: Registration) {
+  return events
+    .transaction((tx) => readLearnerGoalV2State(tx, registration).pipe(Effect.map(noEvent), Effect.orDie))
+    .pipe(Effect.map((result) => result.result))
+}
+
+function readLearnerGoalV2State(tx: EventV2.Transaction, registration: Registration) {
+  return LearningCommand.readLearnerGoalInvocationVersion(tx, {
+    partID: registration.partID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+  })
+}
+
+function loadLegacyLearnerGoalResult(events: EventV2.Interface, registration: Registration) {
+  return Effect.gen(function* () {
+    const state = yield* readStoredLearnerGoalState(events, registration)
+    if (!state || state.version !== 1) return undefined
+    yield* interruptInvocation(events, registration)
+    return yield* events
+      .transaction((tx) =>
+        readPart(tx, registration.partID).pipe(
+          Effect.map((part) => noEvent(exactFromPart(part))),
+          Effect.orDie,
+        ),
+      )
+      .pipe(Effect.map((result) => result.result))
+  })
+}
+
+function loadCommittedLearnerGoalV2Result(
+  events: EventV2.Interface,
+  canonical: GoalV2Canonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* readLearnerGoalV2State(tx, registration)
+        if (!state || state.version !== 2 || state.status === "admitted") return noEvent(undefined)
+        return noEvent(exactFromPart(yield* assertLearnerGoalV2TerminalPart(tx, canonical, registration, state)))
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function requireLearnerGoalV2State(tx: EventV2.Transaction, canonical: GoalV2Canonical, registration: Registration) {
+  return Effect.gen(function* () {
+    const state = yield* readLearnerGoalV2State(tx, registration)
+    if (!state || state.version !== 2) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const storedCommand =
+      state.disposition === "candidate_v2"
+        ? state.candidate?.canonicalCommand
+        : state.disposition === "semantic_terminal_v2"
+          ? state.semanticTerminal?.canonicalCommand
+          : undefined
+    if (storedCommand && !isDeepStrictEqual(storedCommand, LearningCommand.canonicalizeCommandV2(canonical.input))) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted" && (state.disposition !== "candidate_v2" || !state.candidate)) {
+      return yield* Effect.die("Admitted learner Goal V2 invocation is not a complete candidate")
+    }
+    const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!physical || !physical.turn_id || !physical.input_id) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const envelope = learnerGoalV2Envelope(registration, physical.time_admitted)
+    if (
+      physical.turn_id !== envelope.turnID ||
+      physical.input_id !== envelope.inputID ||
+      physical.occurrence_id !== envelope.occurrenceID ||
+      physical.session_id !== envelope.sessionID ||
+      physical.parent_user_message_id !== envelope.parentUserMessageID ||
+      physical.assistant_message_id !== envelope.assistantMessageID ||
+      physical.emission_ordinal !== envelope.emissionOrdinal ||
+      physical.capability_identity !== envelope.capabilityIdentity ||
+      physical.capability_version !== envelope.capabilityVersion ||
+      physical.authorization_basis !== envelope.authorizationBasis
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted") yield* assertLearnerGoalV2AdmittedPart(tx, canonical, registration)
+    return { ...state, timeAdmitted: physical.time_admitted }
+  })
+}
+
+function learnerGoalV2Envelope(
+  registration: Registration,
+  timeAdmitted: number,
+): LearningCommand.InvocationEnvelope & Readonly<{ authorizationBasis: "agent_action"; capabilityVersion: 2 }> {
+  return {
+    occurrenceID: registration.causalOccurrenceID!,
+    turnID: registration.turnID,
+    inputID: registration.inputID,
+    sessionID: registration.sessionID,
+    parentUserMessageID: registration.parentUserMessageID,
+    assistantMessageID: registration.assistantMessageID,
+    partID: registration.partID,
+    providerCallID: registration.callID,
+    emissionOrdinal: registration.emissionOrdinal,
+    capabilityIdentity: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+    capabilityVersion: 2,
+    authorizationBasis: "agent_action",
+    timeAdmitted,
+  }
+}
+
+function assertLearnerGoalV2AdmittedPart(
+  tx: EventV2.Transaction,
+  canonical: GoalV2Canonical,
+  registration: Registration,
+) {
+  return readPart(tx, registration.partID).pipe(
+    Effect.flatMap((part) =>
+      part.id === registration.partID &&
+      part.messageID === registration.assistantMessageID &&
+      part.sessionID === registration.sessionID &&
+      part.type === "tool" &&
+      part.tool === canonical.toolID &&
+      part.callID === registration.callID &&
+      part.state.status === "pending" &&
+      isDeepStrictEqual(part.state.input, canonical.input)
+        ? Effect.void
+        : invocationConflict(registration),
+    ),
+  )
+}
+
+function assertLearnerGoalV2TerminalPart(
+  tx: EventV2.Transaction,
+  canonical: GoalV2Canonical,
+  registration: Registration,
+  state: Extract<LearningCommand.GoalInvocationVersion, { readonly version: 2 }> & Readonly<{ timeAdmitted?: number }>,
+) {
+  return Effect.gen(function* () {
+    const expected = learnerGoalV2TerminalPart(canonical, registration, state)
+    const part = yield* readPart(tx, registration.partID)
+    if (
+      !isDeepStrictEqual(invocationPart(part), invocationPart(expected)) ||
+      SemanticPresentation.readResult(part, true).type !== "valid"
+    ) {
+      return yield* Effect.die(`Terminal learner Goal V2 Part ${registration.partID} diverged from its settlement`)
+    }
+    return part
+  })
+}
+
+function learnerGoalV2TerminalPart(
+  canonical: GoalV2Canonical,
+  registration: Registration,
+  state: Extract<LearningCommand.GoalInvocationVersion, { readonly version: 2 }> & Readonly<{ timeAdmitted?: number }>,
+) {
+  const settlement = requirePhysicalSettlement(state.settlement)
+  const presentation = LearningCommandPresentation.learnerGoalsV2SettlementResult(settlement, state, {
+    sessionID: registration.sessionID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+    partID: registration.partID,
+  })
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Learner Goal V2 settlement has no valid semantic projection")
+  const exact = {
+    title: projected.title,
+    metadata: {
+      command: canonical.toolID,
+      commandVersion: 2,
+      outcome: settlement.outcome,
+      ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+      durablySettled: projected.durablySettled,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    },
+    output: JSON.stringify({
+      settlement,
+      disposition: state.disposition,
+      ...(state.disposition === "candidate_v2" && state.candidate
+        ? {
+            agentAction: state.candidate.agentAction,
+            ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+            ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+          }
+        : {}),
+      ...(state.disposition === "semantic_terminal_v2" && state.semanticTerminal
+        ? { semanticTerminal: state.semanticTerminal }
+        : {}),
+    }),
+  }
+  const part = {
+    id: registration.partID,
+    messageID: registration.assistantMessageID,
+    sessionID: registration.sessionID,
+    type: "tool",
+    tool: canonical.toolID,
+    callID: registration.callID,
+    state: {
+      status: "completed",
+      input: canonical.input,
+      output: exact.output,
+      title: exact.title,
+      metadata: exact.metadata,
+      time: { start: state.timeAdmitted!, end: settlement.settlementTime },
+    },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal learner Goal V2 Part ${registration.partID} is invalid`)
+  }
+  return part
+}
 
 function prepareDefaultCourse(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
   return Effect.gen(function* () {
@@ -1735,6 +2251,27 @@ function loadCommittedExactResult(
             return exactFromPart(yield* assertDefaultCourseV3TerminalPart(tx, canonical, registration, state))
           }
         }
+        if (physical?.command_name === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+          const state = yield* readLearnerGoalV2State(tx, registration)
+          if (state?.version === 2) {
+            if (state.status === "admitted") return undefined
+            const row = yield* readPartRow(tx, registration.partID)
+            if (!row) {
+              return yield* new LearningCommand.InvocationTranscriptUnavailableError({
+                partID: registration.partID,
+              })
+            }
+            const part = partFromRow(row)
+            if (part.tool !== LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+              return yield* Effect.die(`Learner Goal V2 Part ${registration.partID} changed tool identity`)
+            }
+            const canonical = {
+              toolID: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+              input: normalizeGoalsV2(part.state.input),
+            } satisfies GoalV2Canonical
+            return exactFromPart(yield* assertLearnerGoalV2TerminalPart(tx, canonical, registration, state))
+          }
+        }
         const canonical = attemptedCanonical ?? (yield* canonicalFromStoredPart(tx, registration.partID))
         if (!canonical) return undefined
         const prepared = yield* loadPhysicalPrepared(tx, canonical, registration)
@@ -1821,7 +2358,7 @@ function invocationFromPhysical(
       if (canonical.input.authorizationBasis === "learner_request") {
         return invocation as LearnerGoal.DirectInvocation
       }
-      const reservation = yield* LearningCommand.lookupLearnerGoalCommandReservation(tx, physical.part_id)
+      const reservation = yield* LearningCommand.lookupHistoricalLearnerGoalCommand(tx, physical.part_id)
       if (!reservation?.permission_request_id) {
         return yield* Effect.die(`Learner Goal invocation ${physical.part_id} has no stable permission request`)
       }
@@ -1867,7 +2404,7 @@ function reserveTransaction(tx: EventV2.Transaction, canonical: Canonical, invoc
     const settlement = isRetainedSteeringInvocation(invocation)
       ? yield* LearningCommand.settleRetainedSteeringReservation(tx, { ...invocation, settlement: metadata })
       : isLearnerGoalInvocation(invocation)
-        ? yield* LearningCommand.settleLearnerGoalReservation(tx, { ...invocation, settlement: metadata })
+        ? yield* LearningCommand.settleHistoricalLearnerGoalReservation(tx, { ...invocation, settlement: metadata })
         : isNavigationInvocation(invocation)
           ? yield* LearningCommand.settleNavigationReservation(tx, { ...invocation, settlement: metadata })
           : yield* LearningCommand.settleReservation(tx, { ...invocation, settlement: metadata })
@@ -1903,7 +2440,7 @@ function executePrepared(
     return executeNavigationPrepared(events, permission, prepared.canonical, prepared.invocation, context)
   }
   if (isLearnerGoalInvocation(prepared.invocation)) {
-    return executeLearnerGoalsPrepared(events, permission, prepared.canonical, prepared.invocation, context)
+    return Effect.die("Historical learner Goal V1 invocations may only replay or recover")
   }
   if (prepared.canonical.toolID !== LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
     return Effect.die("Course acceptance invocation has a different canonical command")
@@ -2027,267 +2564,6 @@ function executeNavigationPrepared(
       prepared.type === "success" ? prepared.value : undefined,
     )
   })
-}
-
-function executeLearnerGoalsPrepared(
-  events: EventV2.Interface,
-  permission: Permission.Interface,
-  canonical: Canonical,
-  invocation: LearnerGoal.Invocation,
-  context: ExecuteContext,
-) {
-  return Effect.gen(function* () {
-    if (
-      canonical.toolID !== LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY ||
-      canonical.input.authorizationBasis !== invocation.envelope.authorizationBasis
-    ) {
-      return yield* Effect.die("Learner Goal invocation has a different canonical command")
-    }
-    const reconciled = yield* reconcileLearnerGoalCandidate(events, canonical, invocation)
-    if (reconciled.type === "settled") return reconciled.exact
-    const authority = requirePermissionContext(context)
-    const rule = Permission.evaluateAuthority(
-      invocation.envelope.capabilityIdentity,
-      LearnerGoal.PERMISSION_PATTERN,
-      authority.ruleset,
-      authority.authority,
-    )
-    if (rule.action === "deny") {
-      return yield* commitLearnerGoals(events, canonical, invocation, { type: "deny" })
-    }
-    if (!isAcceptedLearnerGoalInvocation(invocation)) {
-      const presentation = yield* prepareLearnerGoalPresentation(events, invocation)
-      const permissionOutcome = yield* LearningCommandPermission.ask(
-        permission,
-        {
-          sessionID: invocation.envelope.sessionID,
-          permission: invocation.envelope.capabilityIdentity,
-          patterns: [LearnerGoal.PERMISSION_PATTERN],
-          always: [LearnerGoal.PERMISSION_PATTERN],
-          metadata: {
-            authorizationBasis: invocation.envelope.authorizationBasis,
-            command: invocation.command,
-            ...SemanticPresentation.metadata(
-              LearningCommandPresentation.learnerGoalsProposal(invocation, presentation),
-            ),
-          },
-          tool: {
-            messageID: invocation.envelope.assistantMessageID,
-            callID: invocation.envelope.providerCallID,
-          },
-          ruleset: authority.ruleset,
-          authority: authority.authority,
-        },
-        context.abort,
-      )
-      return yield* commitLearnerGoals(events, canonical, invocation, permissionOutcome)
-    }
-
-    const prepared = yield* prepareLearnerGoalConfirmation(events, canonical, invocation)
-    if (prepared.type !== "confirmation") return prepared.exact
-    const permissionOutcome = yield* LearningCommandPermission.ask(
-      permission,
-      {
-        id: invocation.permissionRequestID,
-        requirePrompt: true,
-        sessionID: invocation.envelope.sessionID,
-        permission: invocation.envelope.capabilityIdentity,
-        patterns: [LearnerGoal.PERMISSION_PATTERN],
-        always: [],
-        metadata: {
-          onceOnly: true,
-          authorizationBasis: invocation.envelope.authorizationBasis,
-          confirmation: prepared.confirmation,
-          ...SemanticPresentation.metadata(
-            LearningCommandPresentation.learnerGoalsProposal(invocation, prepared.presentation, prepared.confirmation),
-          ),
-        },
-        tool: {
-          messageID: invocation.envelope.assistantMessageID,
-          callID: invocation.envelope.providerCallID,
-        },
-        ruleset: authority.ruleset,
-        authority: authority.authority,
-      },
-      context.abort,
-    )
-    return yield* commitLearnerGoals(
-      events,
-      canonical,
-      invocation,
-      permissionOutcome,
-      prepared.confirmation,
-      prepared.preparedConfirmation,
-    )
-  })
-}
-
-function reconcileLearnerGoalCandidate(
-  events: EventV2.Interface,
-  canonical: Canonical,
-  invocation: LearnerGoal.Invocation,
-) {
-  return events
-    .transaction<GoalExecutionReconciliation, typeof SessionV1.Event.PartUpdated>((tx) =>
-      Effect.gen(function* () {
-        const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
-        if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) {
-          if (!current.exact) return yield* Effect.die("Settled Goal command lost its exact terminal result")
-          return noEvent({
-            type: "settled" as const,
-            settlement: current.settlement,
-            exact: current.exact,
-          })
-        }
-        if (!isLearnerGoalInvocation(current.invocation)) {
-          return yield* Effect.die("Learner Goal invocation changed command kind")
-        }
-        const settlement = yield* LearningCommand.settleLearnerGoalReservation(tx, {
-          ...current.invocation,
-          settlement: yield* settlementMetadata(
-            tx,
-            current.invocation.envelope.sessionID,
-            current.invocation.envelope.timeAdmitted,
-          ),
-        })
-        if (settlement.type === "candidate") return noEvent({ type: "candidate" as const })
-        if (settlement.type === "replay") {
-          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent({
-            type: "settled" as const,
-            settlement: settlement.settlement,
-            exact: exactFromPart(part),
-          })
-        }
-        const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-        return withPartEvent(
-          {
-            type: "settled" as const,
-            settlement: settlement.settlement,
-            exact: exactFromPart(part),
-          },
-          part,
-          settlement.settlement.settlementTime,
-        )
-      }).pipe(Effect.orDie),
-    )
-    .pipe(Effect.map((result) => result.result))
-}
-
-function prepareLearnerGoalConfirmation(
-  events: EventV2.Interface,
-  canonical: Canonical,
-  invocation: LearnerGoal.AcceptedInvocation,
-) {
-  return events
-    .transaction<GoalConfirmationPresentationResult, typeof SessionV1.Event.PartUpdated>((tx) =>
-      Effect.gen(function* () {
-        const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
-        if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) {
-          if (!current.exact) return yield* Effect.die("Settled Goal command lost its exact terminal result")
-          return noEvent({
-            type: "replay" as const,
-            settlement: current.settlement,
-            exact: current.exact,
-          })
-        }
-        if (!isLearnerGoalInvocation(current.invocation) || !isAcceptedLearnerGoalInvocation(current.invocation)) {
-          return yield* Effect.die("Learner Goal acceptance invocation changed command kind")
-        }
-        const metadata = yield* settlementMetadata(
-          tx,
-          current.invocation.envelope.sessionID,
-          current.invocation.envelope.timeAdmitted,
-        )
-        const prepared = yield* LearningCommand.prepareLearnerGoalConfirmation(tx, {
-          ...current.invocation,
-          settlement: metadata,
-        })
-        if (prepared.type === "replay") {
-          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, prepared.settlement)
-          return noEvent({ ...prepared, exact: exactFromPart(part) })
-        }
-        if (prepared.type === "settled") {
-          const part = yield* terminalPart(tx, canonical, current.invocation.envelope, prepared.settlement)
-          return withPartEvent({ ...prepared, exact: exactFromPart(part) }, part, prepared.settlement.settlementTime)
-        }
-        return noEvent({
-          ...prepared,
-          presentation: yield* LearnerGoal.preparePresentation(tx, {
-            command: current.invocation.command,
-            authorizationBasis: current.invocation.envelope.authorizationBasis,
-            asOf: metadata.time,
-          }),
-        })
-      }).pipe(Effect.orDie),
-    )
-    .pipe(Effect.map((result) => result.result))
-}
-
-function prepareLearnerGoalPresentation(events: EventV2.Interface, invocation: LearnerGoal.DirectInvocation) {
-  return events
-    .transaction((tx) =>
-      LearnerGoal.preparePresentation(tx, {
-        command: invocation.command,
-        authorizationBasis: invocation.envelope.authorizationBasis,
-        asOf: Math.max(Date.now(), invocation.envelope.timeAdmitted),
-      }).pipe(Effect.map(noEvent), Effect.orDie),
-    )
-    .pipe(Effect.map((result) => result.result))
-}
-
-function commitLearnerGoals(
-  events: EventV2.Interface,
-  canonical: Canonical,
-  invocation: LearnerGoal.Invocation,
-  permission: LearningCommand.PermissionOutcome,
-  displayedConfirmation?: LearnerGoal.ConfirmationSnapshot,
-  preparedConfirmation?: LearnerGoal.PreparedConfirmation,
-) {
-  return events
-    .transaction((tx) =>
-      Effect.gen(function* () {
-        const current = yield* loadPhysicalPrepared(tx, canonical, registrationFromEnvelope(invocation.envelope))
-        if (!current) return yield* Effect.die(`Learning invocation ${invocation.envelope.partID} disappeared`)
-        if (current.settlement) {
-          if (!current.exact) return yield* Effect.die("Settled Goal command lost its exact terminal result")
-          return noEvent(current.exact)
-        }
-        if (!isLearnerGoalInvocation(current.invocation)) {
-          return yield* Effect.die("Learner Goal invocation changed command kind")
-        }
-        yield* TurnLifecycle.consumeToolFrontier(tx, {
-          partID: current.invocation.envelope.partID,
-          frontier: yield* LearningFrontier.read(tx),
-        })
-        const settlement = yield* LearningCommand.settleLearnerGoals(tx, {
-          ...current.invocation,
-          permission,
-          ...(displayedConfirmation ? { displayedConfirmation } : {}),
-          ...(preparedConfirmation ? { preparedConfirmation } : {}),
-          settlement: yield* settlementMetadata(
-            tx,
-            current.invocation.envelope.sessionID,
-            current.invocation.envelope.timeAdmitted,
-          ),
-        })
-        if (settlement.type === "replay") {
-          const part = yield* assertTerminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-          return noEvent(exactFromPart(part))
-        }
-        if (settlement.settlement.outcome === "applied") {
-          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
-            partID: current.invocation.envelope.partID,
-            frontier: yield* LearningFrontier.read(tx),
-          })
-        }
-        const part = yield* terminalPart(tx, canonical, current.invocation.envelope, settlement.settlement)
-        return withPartEvent(exactFromPart(part), part, settlement.settlement.settlementTime)
-      }).pipe(Effect.orDie),
-    )
-    .pipe(Effect.map((result) => result.result))
 }
 
 function executeRetainedSteeringPrepared(
@@ -2670,6 +2946,10 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
       if (state?.version === 2) return yield* interruptDefaultCourseV2Transaction(tx, registration, state)
       if (state?.version === 3) return yield* interruptDefaultCourseV3Transaction(tx, registration, state)
     }
+    if (physical.command_name === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+      const state = yield* readLearnerGoalV2State(tx, registration)
+      if (state?.version === 2) return yield* interruptLearnerGoalV2Transaction(tx, registration)
+    }
     const row = yield* readPartRow(tx, registration.partID)
     if (!row) {
       return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
@@ -2708,7 +2988,7 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
       }
     }
     if (isLearnerGoalInvocation(prepared.invocation)) {
-      const reconciled = yield* LearningCommand.settleLearnerGoalReservation(tx, {
+      const reconciled = yield* LearningCommand.settleHistoricalLearnerGoalReservation(tx, {
         ...prepared.invocation,
         settlement: metadata,
       })
@@ -2735,6 +3015,35 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
     const interrupted = requireInterruptedSettlement(settlement.settlement)
     const terminal = yield* terminalPart(tx, canonical, prepared.invocation.envelope, interrupted)
     return withPartEvent(true, terminal, interrupted.settlementTime)
+  })
+}
+
+function interruptLearnerGoalV2Transaction(tx: EventV2.Transaction, registration: Registration) {
+  return Effect.gen(function* () {
+    const row = yield* readPartRow(tx, registration.partID)
+    if (!row) {
+      return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+    }
+    const part = partFromRow(row)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY,
+      input: normalizeGoalsV2(part.state.input),
+    } satisfies GoalV2Canonical
+    const state = yield* requireLearnerGoalV2State(tx, canonical, registration)
+    if (state.status !== "admitted") {
+      yield* assertLearnerGoalV2TerminalPart(tx, canonical, registration, state)
+      return noEvent(true)
+    }
+    yield* LearningCommand.recoverLearnerGoalsV2(tx, {
+      partID: registration.partID,
+      settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+    })
+    const terminal = yield* requireLearnerGoalV2State(tx, canonical, registration)
+    if (terminal.status === "admitted") {
+      return yield* Effect.die(`Recovered learner Goal V2 invocation ${registration.partID} remained admitted`)
+    }
+    const completed = learnerGoalV2TerminalPart(canonical, registration, terminal)
+    return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
   })
 }
 
@@ -2928,7 +3237,7 @@ export function exactResult(
       title: projected.title,
       metadata: {
         command: toolID,
-        commandVersion: capabilityVersion(toolID),
+        commandVersion: envelope.capabilityVersion ?? capabilityVersion(toolID),
         outcome: settlement.outcome,
         ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
         durablySettled: projected.durablySettled,
@@ -2950,7 +3259,7 @@ export function exactResult(
       title: projected.title,
       metadata: {
         command: toolID,
-        commandVersion: capabilityVersion(toolID),
+        commandVersion: envelope.capabilityVersion ?? capabilityVersion(toolID),
         outcome: settlement.outcome,
         ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
         durablySettled: projected.durablySettled,
@@ -2967,7 +3276,7 @@ export function exactResult(
     title: projected.title,
     metadata: {
       command: toolID,
-      commandVersion: capabilityVersion(toolID),
+      commandVersion: envelope.capabilityVersion ?? capabilityVersion(toolID),
       outcome: settlement.outcome,
       ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
       durablySettled: projected.durablySettled,
@@ -3075,7 +3384,7 @@ function outcomeUnknown(toolID: PrimaryCapability, envelope: TerminalPartEnvelop
     title: projected.title,
     metadata: {
       command: toolID,
-      commandVersion: capabilityVersion(toolID),
+      commandVersion: envelope.capabilityVersion ?? capabilityVersion(toolID),
       outcome: "error",
       code: "outcome_unknown" satisfies LearningCommand.ErrorCode,
       durablySettled: projected.durablySettled,
@@ -3226,6 +3535,7 @@ function terminalEnvelopeFromPhysical(physical: LearningCommand.PhysicalInvocati
     assistantMessageID: physical.assistant_message_id,
     sessionID: physical.session_id,
     providerCallID: physical.provider_call_id,
+    capabilityVersion: physical.capability_version,
     timeAdmitted: physical.time_admitted,
   }
 }
@@ -3310,7 +3620,7 @@ function canonicalInput(toolID: PrimaryCapability, input: unknown): Canonical {
     return { toolID, input: normalizeSteering(input) }
   }
   if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
-    return { toolID, input: normalizeGoals(input) }
+    return { toolID, input: normalizeLegacyGoals(input) }
   }
   return { toolID, input: normalizeAnchor(input) }
 }
@@ -3327,7 +3637,7 @@ function invocationFor(canonical: Canonical, registration: Registration, timeAdm
     providerCallID: registration.callID,
     emissionOrdinal: registration.emissionOrdinal,
     capabilityIdentity: canonical.toolID,
-    capabilityVersion: capabilityVersion(canonical.toolID),
+    capabilityVersion: canonicalVersion(canonical),
     authorizationBasis: authorizationBasis(canonical),
     timeAdmitted,
   }
@@ -3388,7 +3698,9 @@ function stableGoalPermissionRequestID(registration: Registration) {
 
 function reservePrimary(tx: EventV2.Transaction, invocation: Invocation) {
   if (isRetainedSteeringInvocation(invocation)) return LearningCommand.reserveRetainedSteering(tx, invocation)
-  if (isLearnerGoalInvocation(invocation)) return LearningCommand.reserveLearnerGoals(tx, invocation)
+  if (isLearnerGoalInvocation(invocation)) {
+    return LearningCommand.reopenHistoricalLearnerGoalInvocation(tx, invocation)
+  }
   return isNavigationInvocation(invocation)
     ? LearningCommand.reserveNavigation(tx, invocation)
     : LearningCommand.reserveAcceptance(tx, invocation)
@@ -3406,12 +3718,6 @@ function isNavigationInvocation(invocation: Invocation): invocation is LearningC
 
 function isLearnerGoalInvocation(invocation: Invocation): invocation is LearnerGoal.Invocation {
   return "operations" in invocation.command
-}
-
-function isAcceptedLearnerGoalInvocation(
-  invocation: LearnerGoal.Invocation,
-): invocation is LearnerGoal.AcceptedInvocation {
-  return invocation.envelope.authorizationBasis === "learner_acceptance"
 }
 
 function isDefaultNavigationInvocation(
@@ -3459,6 +3765,13 @@ function capabilityVersion(toolID: PrimaryCapability) {
   return LearningCommand.SET_COURSE_ROUTE_ANCHOR_VERSION
 }
 
+function canonicalVersion(canonical: Canonical) {
+  if (canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
+    return LearningCommand.HISTORICAL_UPDATE_LEARNER_GOALS_VERSION
+  }
+  return capabilityVersion(canonical.toolID)
+}
+
 function authorizationBasis(canonical: Canonical): LearningCommand.AuthorizationBasis {
   if (canonical.toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
     return canonical.input.authorizationBasis
@@ -3484,7 +3797,7 @@ function sameRegistration(
     envelope.parentUserMessageID === registration.parentUserMessageID &&
     envelope.assistantMessageID === registration.assistantMessageID &&
     envelope.capabilityIdentity === canonical.toolID &&
-    envelope.capabilityVersion === capabilityVersion(canonical.toolID) &&
+    envelope.capabilityVersion === canonicalVersion(canonical) &&
     envelope.authorizationBasis === authorizationBasis(canonical)
   )
 }
