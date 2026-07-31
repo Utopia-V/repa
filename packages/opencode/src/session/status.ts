@@ -14,6 +14,7 @@ export interface Interface {
   readonly get: (sessionID: SessionID) => Effect.Effect<Info>
   readonly list: () => Effect.Effect<Map<SessionID, Info>>
   readonly set: (sessionID: SessionID, status: Info) => Effect.Effect<void>
+  readonly setIdleIf: (sessionID: SessionID, current: () => boolean) => Effect.Effect<boolean>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionStatus") {}
@@ -26,6 +27,8 @@ const layer = Layer.effect(
     const state = yield* InstanceState.make(
       Effect.fn("SessionStatus.state")(() => Effect.succeed(new Map<SessionID, Info>())),
     )
+    const revisions = new Map<SessionID, number>()
+    let sequence = 0
 
     const get = Effect.fn("SessionStatus.get")(function* (sessionID: SessionID) {
       const data = yield* InstanceState.get(state)
@@ -38,16 +41,43 @@ const layer = Layer.effect(
 
     const set = Effect.fn("SessionStatus.set")(function* (sessionID: SessionID, status: Info) {
       const data = yield* InstanceState.get(state)
+      const revision = ++sequence
+      revisions.set(sessionID, revision)
       yield* events.publish(Event.Status, { sessionID, status })
       if (status.type === "idle") {
+        if (revisions.get(sessionID) !== revision) return
         yield* events.publish(Event.Idle, { sessionID })
-        data.delete(sessionID)
+        yield* Effect.sync(() => {
+          if (revisions.get(sessionID) === revision) data.delete(sessionID)
+        })
         return
       }
-      data.set(sessionID, status)
+      yield* Effect.sync(() => {
+        if (revisions.get(sessionID) === revision) data.set(sessionID, status)
+      })
     })
 
-    return Service.of({ get, list, set })
+    const setIdleIf = Effect.fn("SessionStatus.setIdleIf")(function* (sessionID: SessionID, current: () => boolean) {
+      const data = yield* InstanceState.get(state)
+      const revision = yield* Effect.sync(() => {
+        if (!current()) return
+        const next = ++sequence
+        revisions.set(sessionID, next)
+        return next
+      })
+      if (revision === undefined) return false
+
+      yield* events.publish(Event.Status, { sessionID, status: { type: "idle" } })
+      if (!(yield* Effect.sync(() => revisions.get(sessionID) === revision && current()))) return false
+      yield* events.publish(Event.Idle, { sessionID })
+      return yield* Effect.sync(() => {
+        if (revisions.get(sessionID) !== revision || !current()) return false
+        data.delete(sessionID)
+        return true
+      })
+    })
+
+    return Service.of({ get, list, set, setIdleIf })
   }),
 )
 

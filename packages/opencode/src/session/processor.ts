@@ -2,7 +2,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Image } from "@/image/image"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
-import { Cause, DateTime, Effect, Exit, Layer, Context, Scope, Schema } from "effect"
+import { Cause, DateTime, Effect, Exit, Layer, Context, Schema } from "effect"
 import * as Stream from "effect/Stream"
 import { Agent } from "@/agent/agent"
 import { Config } from "@/config/config"
@@ -30,7 +30,12 @@ import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { RepresentationCommandRuntime } from "@/learning-command/representation-runtime"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { isDeepStrictEqual } from "node:util"
-import { isHostPreparedToolID, isLearningCommandToolID, normalizeHostPreparedToolInput } from "@/tool/learning-command"
+import {
+  PROPOSE_DEFAULT_COURSE_PREFERENCE_TOOL_ID,
+  isHostPreparedToolID,
+  isLearningCommandToolID,
+  normalizeHostPreparedToolInput,
+} from "@/tool/learning-command"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
@@ -117,9 +122,10 @@ function assertProviderDoesNotExecuteHostPreparedTool(
   input: { name: string; providerExecuted?: boolean },
   existing?: Pick<ToolCall, "name" | "providerExecuted">,
 ) {
+  const forbidden = (name: string) => isHostPreparedToolID(name) || name === PROPOSE_DEFAULT_COURSE_PREFERENCE_TOOL_ID
   const name =
-    (input.providerExecuted === true && isHostPreparedToolID(input.name) ? input.name : undefined) ??
-    (existing?.providerExecuted === true && isHostPreparedToolID(existing.name) ? existing.name : undefined)
+    (input.providerExecuted === true && forbidden(input.name) ? input.name : undefined) ??
+    (existing?.providerExecuted === true && forbidden(existing.name) ? existing.name : undefined)
   if (!name) return
   const kind = isLearningCommandToolID(name) ? "learning command" : "host-prepared proposal"
   throw new ProcessorIntegrityFailure(`Provider-executed ${kind} is forbidden: ${name}`)
@@ -154,7 +160,6 @@ const layer = Layer.effect(
     const permission = yield* Permission.Service
     const plugin = yield* Plugin.Service
     const summary = yield* SessionSummary.Service
-    const scope = yield* Scope.Scope
     const status = yield* SessionStatus.Service
     const image = yield* Image.Service
     const events = yield* EventV2Bridge.Service
@@ -901,7 +906,14 @@ const layer = Layer.effect(
                 sessionID: ctx.sessionID,
                 messageID: ctx.assistantMessage.parentID,
               })
-              .pipe(Effect.ignore, Effect.forkIn(scope))
+              .pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logWarning("session summary skipped", {
+                    sessionID: ctx.sessionID,
+                    error: Cause.squash(cause),
+                  }),
+                ),
+              )
             if (
               !ctx.assistantMessage.summary &&
               isOverflow({ cfg: yield* config.get(), tokens: usage.tokens, model: ctx.model })

@@ -89,7 +89,7 @@ export interface Interface {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/SessionRunState") {}
 
-type TurnOwnerPhase = "admitting" | "running" | "terminalizing"
+type TurnOwnerPhase = "admitting" | "running" | "terminalizing" | "releasing"
 
 interface PendingSteer {
   readonly inputID: Turn.InputID
@@ -177,6 +177,20 @@ const layer = Layer.effect(
         if (turnOwners.get(owner.sessionID) === owner) turnOwners.delete(owner.sessionID)
       })
 
+    const releaseOwner = Effect.fnUntraced(function* (owner: TurnOwner) {
+      const publishIdle = yield* owner.control.withPermits(1)(
+        Effect.sync(() => {
+          if (turnOwners.get(owner.sessionID) !== owner || !owner.runner) return false
+          owner.phase = "releasing"
+          return true
+        }),
+      )
+      if (!publishIdle) return yield* removeOwner(owner)
+      yield* status
+        .setIdleIf(owner.sessionID, () => turnOwners.get(owner.sessionID) === owner)
+        .pipe(Effect.ensuring(removeOwner(owner)))
+    })
+
     const rejectPending = Effect.fnUntraced(function* (owner: TurnOwner, turn: Turn.Info) {
       const pending = owner.pendingSteers.splice(0)
       yield* Effect.forEach(
@@ -200,7 +214,6 @@ const layer = Layer.effect(
       const turn = yield* settleTurn({ turnID: owner.turnID, outcome, reason })
       owner.terminal = turn
       yield* rejectPending(owner, turn)
-      if (!owner.runner) yield* removeOwner(owner)
       yield* Deferred.succeed(owner.ready, turn).pipe(Effect.asVoid)
       yield* Deferred.succeed(owner.finished, turn).pipe(Effect.asVoid)
       return turn
@@ -293,10 +306,7 @@ const layer = Layer.effect(
     })
 
     const cleanupHandoff = Effect.fnUntraced(function* (owner: TurnOwner, exit: Exit.Exit<Turn.Info, unknown>) {
-      if (Exit.isSuccess(exit)) {
-        if (owner.terminal) yield* removeOwner(owner)
-        return
-      }
+      if (Exit.isSuccess(exit)) return
 
       const inspect =
         owner.durableRunning || Cause.hasInterrupts(exit.cause) || Cause.hasDies(exit.cause)
@@ -311,16 +321,13 @@ const layer = Layer.effect(
         owner.phase = "terminalizing"
         const terminal = yield* recoverTerminalizing(owner)
         yield* Deferred.succeed(owner.ready, terminal).pipe(Effect.asVoid)
-        yield* removeOwner(owner)
         return
       }
       if (owner.terminal) {
         yield* Deferred.succeed(owner.ready, owner.terminal).pipe(Effect.asVoid)
-        yield* removeOwner(owner)
         return
       }
       yield* Deferred.failCause(owner.ready, exit.cause).pipe(Effect.asVoid)
-      yield* removeOwner(owner)
     })
 
     const handoffOwner = <E, E2, E3, R>(owner: TurnOwner, input: StartTurnInput<E, E2, E3, R>) =>
@@ -347,7 +354,7 @@ const layer = Layer.effect(
               const workContext = yield* Effect.context<R>()
               const gate = yield* Latch.make()
               const current = Runner.make<Turn.Info, Turn.Error>(scope, {
-                onIdle: status.set(owner.sessionID, { type: "idle" }),
+                onIdle: Effect.void,
                 onInterrupt: recoverTerminalizing(owner),
               })
               const awaitResult = yield* current.enterRunning(
@@ -438,22 +445,25 @@ const layer = Layer.effect(
               return yield* readTurn(input.turnID)
             }
 
-            const stored = yield* lookupTurn(input.turnID)
-            if (stored.type === "source_unavailable") {
-              return yield* TurnLifecycle.sourceUnavailableError(stored)
+            if (current.phase !== "releasing") {
+              const stored = yield* lookupTurn(input.turnID)
+              if (stored.type === "source_unavailable") {
+                return yield* TurnLifecycle.sourceUnavailableError(stored)
+              }
+              if (stored.type === "available" && stored.turn.state !== "running") {
+                return (yield* input.admit).turn
+              }
+              return yield* new Turn.AlreadyRunningError({
+                sessionID: input.sessionID,
+                activeTurnID: current.turnID,
+              })
             }
-            if (stored.type === "available" && stored.turn.state !== "running") {
-              return (yield* input.admit).turn
-            }
-            return yield* new Turn.AlreadyRunningError({
-              sessionID: input.sessionID,
-              activeTurnID: current.turnID,
-            })
           }
 
           const owner = makeTurnOwner(input)
           turnOwners.set(input.sessionID, owner)
           const handoff = yield* handoffOwner(owner, input).pipe(
+            Effect.ensuring(releaseOwner(owner)),
             Effect.catchCause((cause) =>
               Effect.logError(`Turn owner handoff failed: ${Cause.pretty(cause)}`, {
                 sessionID: owner.sessionID,
@@ -549,8 +559,11 @@ const layer = Layer.effect(
       turnID: Turn.ID,
     ) {
       const turn = yield* getTurn(sessionID, turnID)
-      if (turn.state !== "running") return turn
       const owner = turnOwners.get(sessionID)
+      if (turn.state !== "running") {
+        if (owner?.turnID === turnID && owner.handoff) yield* Fiber.join(owner.handoff)
+        return turn
+      }
       if (!owner || owner.turnID !== turnID) {
         return yield* new Turn.IntegrityError({ turnID, reason: "Running Turn has no exact awaitable owner" })
       }
@@ -610,7 +623,7 @@ const layer = Layer.effect(
         if (owner.phase === "admitting") {
           return yield* new Turn.NoActiveTurnError({ sessionID: input.sessionID })
         }
-        if (owner.phase === "terminalizing") {
+        if (owner.phase === "terminalizing" || owner.phase === "releasing") {
           const terminal = yield* recoverTerminalizing(owner)
           return yield* new Turn.NotSteerableError({
             sessionID: input.sessionID,
@@ -751,7 +764,8 @@ const layer = Layer.effect(
       interruptOwned(sessionID, turnID, "learner_interrupt")
 
     const assertNotBusy = Effect.fn("SessionRunState.assertNotBusy")(function* (sessionID: SessionID) {
-      if (turnOwners.has(sessionID)) yield* busyError(sessionID)
+      const owner = turnOwners.get(sessionID)
+      if (owner) yield* busyError(sessionID)
       const existing = runners.get(sessionID)
       if (existing?.runner.busy) yield* busyError(sessionID)
     })
@@ -779,7 +793,8 @@ const layer = Layer.effect(
       work: Effect.Effect<SessionV1.WithParts>,
       ready?: Latch.Latch,
     ) {
-      if (turnOwners.has(sessionID)) return yield* busyError(sessionID)
+      const owner = turnOwners.get(sessionID)
+      if (owner) return yield* busyError(sessionID)
       return yield* lifecycle
         .handoff(
           sessionID,

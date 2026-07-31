@@ -129,6 +129,27 @@ function errorTool(parts: SessionV1.Part[]) {
 
 const contextBuildHooks: Array<() => PromiseLike<void>> = []
 const resourceReadHooks: Array<() => PromiseLike<void>> = []
+const compactionPruneHooks: Array<() => Effect.Effect<void>> = []
+const summaryHooks: Array<() => Effect.Effect<void>> = []
+
+const hookedCompaction = Layer.succeed(
+  SessionCompaction.Service,
+  SessionCompaction.Service.of({
+    isOverflow: () => Effect.succeed(false),
+    prune: () => compactionPruneHooks.shift()?.() ?? Effect.void,
+    process: () => Effect.succeed("stop"),
+    create: () => Effect.void,
+  }),
+)
+
+const hookedSummary = Layer.succeed(
+  SessionSummary.Service,
+  SessionSummary.Service.of({
+    summarize: () => summaryHooks.shift()?.() ?? Effect.void,
+    diff: () => Effect.succeed([]),
+    computeDiff: () => Effect.succeed([]),
+  }),
+)
 
 function makeMcp(instructions: MCP.ServerInstructions[] = []) {
   return Layer.succeed(
@@ -272,6 +293,23 @@ function makeHttpNoLLMServer(input?: { mcpInstructions?: MCP.ServerInstructions[
 const it = testEffect(makeHttp())
 const noLLMServer = testEffect(makeHttpNoLLMServer())
 const raceNoLLMServer = testEffect(makeHttpNoLLMServer({ processor: "blocking" }))
+const compactionBoundary = testEffect(
+  LayerNode.compile(promptRoot, [
+    [SessionSummary.node, summary],
+    [LSP.node, lsp],
+    [MCP.node, makeMcp()],
+    [RuntimeFlags.node, runtimeFlags],
+    [SessionCompaction.node, hookedCompaction],
+  ]),
+)
+const internalSessionWorkBoundary = testEffect(
+  LayerNode.compile(LayerNode.group([promptRoot, testLLMServerNode]), [
+    [SessionSummary.node, hookedSummary],
+    [LSP.node, lsp],
+    [MCP.node, makeMcp()],
+    [RuntimeFlags.node, runtimeFlags],
+  ]),
+)
 const withMcpInstructions = testEffect(
   makeHttp({
     mcpInstructions: [
@@ -380,6 +418,21 @@ const waitForBusy = (sessionID: SessionID, duration: Duration.Input = "2 seconds
     }),
     `session ${sessionID} never became busy`,
     duration,
+  )
+
+const waitForSettledModelOperation = (turnID: Turn.ID) =>
+  pollWithTimeout(
+    Effect.gen(function* () {
+      const database = yield* Database.Service
+      const operation = yield* database.db
+        .select({ state: TurnModelOperationTable.state })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, turnID))
+        .get()
+        .pipe(Effect.orDie)
+      return operation?.state !== "running" ? true : undefined
+    }),
+    `Turn ${turnID} model operation did not settle`,
   )
 
 const hasBash = Effect.sync(() => Bun.which("bash") !== null)
@@ -589,6 +642,253 @@ noLLMServer.instance(
         .pipe(Effect.exit)
       expect(Exit.isFailure(conflict)).toBe(true)
       if (Exit.isFailure(conflict)) expect(Cause.squash(conflict.cause)).toBeInstanceOf(Turn.AdmissionConflictError)
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+)
+
+compactionBoundary.instance(
+  "keeps post-loop pruning inside the exact Turn handoff before a later start",
+  () =>
+    Effect.gen(function* () {
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const pruneEntered = yield* Deferred.make<void>()
+      const releasePrune = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() =>
+        Deferred.succeed(releasePrune, undefined).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              compactionPruneHooks.length = 0
+            }),
+          ),
+          Effect.asVoid,
+        ),
+      )
+      compactionPruneHooks.push(() =>
+        Deferred.succeed(pruneEntered, undefined).pipe(Effect.andThen(Deferred.await(releasePrune))),
+      )
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 0, tool: 0 },
+        session: { title: "post-loop pruning boundary" },
+        parts: [{ type: "text", text: "finish this Turn before accepting another" }],
+      })
+      yield* awaitWithTimeout(Deferred.await(pruneEntered), "Turn did not reach post-loop pruning")
+      const awaiting = yield* prompt.awaitTurn(sessionID, turnID).pipe(Effect.forkChild)
+      expect(
+        yield* Effect.race(
+          Fiber.join(awaiting).pipe(Effect.as(true)),
+          Effect.sleep("50 millis").pipe(Effect.as(false)),
+        ),
+      ).toBe(false)
+
+      yield* Deferred.succeed(releasePrune, undefined)
+      expect((yield* Fiber.join(awaiting)).terminal).toMatchObject({ outcome: "exhausted", reason: "model_limit" })
+
+      const laterTurnID = Turn.ID.create()
+      yield* prompt.start({
+        sessionID,
+        turnID: laterTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 0, tool: 0 },
+        parts: [{ type: "text", text: "start only after the prior handoff is released" }],
+      })
+      expect((yield* prompt.awaitTurn(sessionID, laterTurnID)).terminal).toMatchObject({
+        outcome: "exhausted",
+        reason: "model_limit",
+      })
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+)
+
+compactionBoundary.instance(
+  "logs a post-loop pruning failure without changing the Turn result",
+  () =>
+    Effect.gen(function* () {
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const marker = "focused post-loop prune failure"
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          compactionPruneHooks.length = 0
+        }),
+      )
+      compactionPruneHooks.push(() => Effect.die(new Error(marker)))
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 0, tool: 0 },
+        session: { title: "non-fatal post-loop pruning failure" },
+        parts: [{ type: "text", text: "finish truthfully even when pruning fails" }],
+      })
+      expect((yield* prompt.awaitTurn(sessionID, turnID)).terminal).toMatchObject({
+        outcome: "exhausted",
+        reason: "model_limit",
+      })
+
+      const logs = yield* TestConsole.logLines
+      expect(logs).toContain("session pruning skipped")
+      const annotation = logs.find(
+        (item): item is Record<string, unknown> =>
+          typeof item === "object" && item !== null && "sessionID" in item && "error" in item,
+      )
+      expect(annotation?.sessionID).toBe(sessionID)
+      expect(annotation?.error).toBeInstanceOf(Error)
+      expect((annotation?.error as Error | undefined)?.message).toBe(marker)
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+)
+
+internalSessionWorkBoundary.instance(
+  "keeps first-step summary inside the exact Turn handoff before a later start",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const summaryEntered = yield* Deferred.make<void>()
+      const releaseSummary = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() =>
+        Deferred.succeed(releaseSummary, undefined).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              summaryHooks.length = 0
+            }),
+          ),
+          Effect.asVoid,
+        ),
+      )
+      summaryHooks.push(() =>
+        Deferred.succeed(summaryEntered, undefined).pipe(Effect.andThen(Deferred.await(releaseSummary))),
+      )
+      yield* llm.text("summary-bound response")
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "summary handoff boundary" },
+        parts: [{ type: "text", text: "finish only after the summary releases" }],
+      })
+      yield* awaitWithTimeout(Deferred.await(summaryEntered), "Turn did not start first-step summary")
+      expect(
+        yield* Effect.race(llm.wait(1).pipe(Effect.as(true)), Effect.sleep("1 second").pipe(Effect.as(false))),
+      ).toBe(false)
+      const awaiting = yield* prompt.awaitTurn(sessionID, turnID).pipe(Effect.forkChild)
+      expect(
+        yield* Effect.race(
+          Fiber.join(awaiting).pipe(Effect.as(true)),
+          Effect.sleep("50 millis").pipe(Effect.as(false)),
+        ),
+      ).toBe(false)
+
+      yield* Deferred.succeed(releaseSummary, undefined)
+      yield* waitForSettledModelOperation(turnID)
+      expect((yield* Fiber.join(awaiting)).terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+
+      const laterTurnID = Turn.ID.create()
+      yield* llm.text("later response")
+      yield* prompt.start({
+        sessionID,
+        turnID: laterTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        parts: [{ type: "text", text: "start after the summary handoff" }],
+      })
+      expect((yield* prompt.awaitTurn(sessionID, laterTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        reason: "normal",
+      })
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+)
+
+internalSessionWorkBoundary.instance(
+  "keeps title generation inside the exact Turn handoff before a later start",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const releaseTitle = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() => Deferred.succeed(releaseTitle, undefined).pipe(Effect.asVoid))
+      yield* llm.holdTitle("Generated title", deferredAsPromise(releaseTitle))
+      yield* llm.text("title-bound response")
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "New session - 2026-07-31T00:00:00.000Z" },
+        parts: [{ type: "text", text: "finish only after title generation releases" }],
+      })
+      yield* llm.wait(2)
+      yield* waitForSettledModelOperation(turnID)
+      const awaiting = yield* prompt.awaitTurn(sessionID, turnID).pipe(Effect.forkChild)
+      expect(
+        yield* Effect.race(
+          Fiber.join(awaiting).pipe(Effect.as(true)),
+          Effect.sleep("50 millis").pipe(Effect.as(false)),
+        ),
+      ).toBe(false)
+
+      yield* Deferred.succeed(releaseTitle, undefined)
+      expect((yield* Fiber.join(awaiting)).terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+      expect((yield* sessions.get(sessionID)).title).toBe("Generated title")
+
+      const laterTurnID = Turn.ID.create()
+      yield* llm.text("later response")
+      yield* prompt.start({
+        sessionID,
+        turnID: laterTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        parts: [{ type: "text", text: "start after the title handoff" }],
+      })
+      expect((yield* prompt.awaitTurn(sessionID, laterTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        reason: "normal",
+      })
       yield* sessions.remove(sessionID)
     }),
   { config: cfg },

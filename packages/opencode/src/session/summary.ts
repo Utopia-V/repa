@@ -105,38 +105,46 @@ const layer = Layer.effect(
       sessionID: SessionID
       messageID: MessageID
     }) {
+      const all = yield* sessions.messages({ sessionID: input.sessionID }).pipe(Effect.orDie)
+      const messages = all.filter(
+        (message) =>
+          message.info.id === input.messageID ||
+          (message.info.role === "assistant" && message.info.parentID === input.messageID),
+      )
+      const target = messages.find((message) => message.info.id === input.messageID)
+      if (!target || target.info.role !== "user") return
+      const diffs = (yield* config.get()).snapshot === false ? [] : yield* computeDiff({ messages })
       yield* sessions.setSummary({
         sessionID: input.sessionID,
         summary: {
-          additions: 0,
-          deletions: 0,
-          files: 0,
+          additions: diffs.reduce((total, diff) => total + diff.additions, 0),
+          deletions: diffs.reduce((total, diff) => total + diff.deletions, 0),
+          files: diffs.length,
+          diffs,
         },
       })
-      yield* events.publish(Session.Event.Diff, { sessionID: input.sessionID, diff: [] })
-      if ((yield* config.get()).snapshot === false) return
-      const all = yield* sessions.messages({ sessionID: input.sessionID }).pipe(Effect.orDie)
-      if (!all.length) return
-
-      const messages = all.filter(
-        (m) => m.info.id === input.messageID || (m.info.role === "assistant" && m.info.parentID === input.messageID),
-      )
-      const target = messages.find((m) => m.info.id === input.messageID)
-      if (!target || target.info.role !== "user") return
-      const msgDiffs = yield* computeDiff({ messages })
-      target.info.summary = { ...target.info.summary, diffs: msgDiffs }
-      yield* sessions.updateMessage(target.info)
+      yield* events.publish(Session.Event.Diff, { sessionID: input.sessionID, diff: diffs })
     })
 
     const summarize: Interface["summarize"] = (input) => runState.shared(input.sessionID, summarizeUnlocked(input))
 
     const diff = Effect.fn("SessionSummary.diff")(function* (input: { sessionID: SessionID; messageID?: MessageID }) {
-      if (!input.messageID) return []
-      const message = (yield* sessions.messages({ sessionID: input.sessionID }).pipe(Effect.orDie)).find(
-        (item) => item.info.id === input.messageID,
-      )
+      if (!input.messageID) {
+        const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
+        return session.summary?.diffs ?? []
+      }
+      const all = yield* sessions.messages({ sessionID: input.sessionID }).pipe(Effect.orDie)
+      const message = all.find((item) => item.info.id === input.messageID)
       if (!message || message.info.role !== "user") return []
-      const diffs = message.info.summary?.diffs ?? []
+      const diffs =
+        message.info.summary?.diffs ??
+        (yield* computeDiff({
+          messages: all.filter(
+            (item) =>
+              item.info.id === input.messageID ||
+              (item.info.role === "assistant" && item.info.parentID === input.messageID),
+          ),
+        }))
       return diffs.map((item) => {
         if (item.file === undefined) return item
         const file = unquoteGitPath(item.file)

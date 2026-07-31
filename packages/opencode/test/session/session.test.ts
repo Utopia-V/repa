@@ -11,6 +11,7 @@ import {
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
 import { Session as SessionNs } from "@/session/session"
 import { SessionRunState } from "@/session/run-state"
+import { SessionStatus } from "@/session/status"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
@@ -66,6 +67,50 @@ const sessionReplacements: LayerNode.Replacements = [
   ],
 ]
 const it = testEffect(AppNodeBuilder.build(sessionRoot, sessionReplacements))
+const pausedIdleEntered = Deferred.makeUnsafe<void>()
+const releasePausedIdle = Deferred.makeUnsafe<void>()
+const pausedIdleFinished = Deferred.makeUnsafe<void>()
+const pausedStatusTransitions: SessionStatus.Info["type"][] = []
+const pausedStatusObserved = new Map<SessionID, SessionStatus.Info>()
+let pausedStatusIdleCalls = 0
+const pausedStatusLayer = Layer.succeed(
+  SessionStatus.Service,
+  SessionStatus.Service.of({
+    get: (sessionID) => Effect.succeed(pausedStatusObserved.get(sessionID) ?? { type: "idle" as const }),
+    list: () => Effect.succeed(new Map(pausedStatusObserved)),
+    set: (sessionID, value) =>
+      Effect.sync(() => {
+        pausedStatusTransitions.push(value.type)
+        if (value.type === "idle") {
+          pausedStatusObserved.delete(sessionID)
+          return
+        }
+        pausedStatusObserved.set(sessionID, value)
+      }),
+    setIdleIf: (sessionID, current) =>
+      Effect.gen(function* () {
+        pausedStatusIdleCalls += 1
+        if (pausedStatusIdleCalls === 1) {
+          yield* Deferred.succeed(pausedIdleEntered, undefined)
+          yield* Deferred.await(releasePausedIdle)
+        }
+        const published = yield* Effect.sync(() => {
+          if (!current()) return false
+          pausedStatusTransitions.push("idle")
+          pausedStatusObserved.delete(sessionID)
+          return true
+        })
+        if (pausedStatusIdleCalls === 1) yield* Deferred.succeed(pausedIdleFinished, undefined)
+        return published
+      }),
+  }),
+)
+const idlePublicationIt = testEffect(
+  AppNodeBuilder.build(LayerNode.group([sessionRoot, SessionStatus.node]), [
+    ...sessionReplacements,
+    [SessionStatus.node, pausedStatusLayer],
+  ]),
+)
 
 function sessionLayer(filename: string) {
   return AppNodeBuilder.build(sessionRoot, [
@@ -155,6 +200,60 @@ const admitRootTurn = Effect.fn("test.admitRootTurn")(function* (input: {
     }),
   )
   return committed.result
+})
+
+const recordCompletedModelSample = Effect.fn("test.recordCompletedModelSample")(function* (input: {
+  sessionID: SessionID
+  turnID: Turn.ID
+  parentMessageID: MessageID
+  directory: string
+}) {
+  const session = yield* SessionNs.Service
+  const events = yield* EventV2Bridge.Service
+  const time = Date.now()
+  const assistant = yield* session.updateMessage({
+    id: MessageID.ascending(),
+    parentID: input.parentMessageID,
+    role: "assistant" as const,
+    sessionID: input.sessionID,
+    mode: "repa",
+    agent: "repa",
+    path: { cwd: input.directory, root: input.directory },
+    cost: 0,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    modelID: ModelV2.ID.make("test"),
+    providerID: ProviderV2.ID.make("test"),
+    time: { created: time, completed: time + 2 },
+    finish: "stop",
+  })
+  yield* events.transaction((tx) =>
+    Effect.gen(function* () {
+      const model = yield* TurnLifecycle.admitModel(tx, {
+        turnID: input.turnID,
+        sessionID: input.sessionID,
+        assistantMessageID: assistant.id,
+        requestEnvelope: { request: "sample current input before steering" },
+        contextFingerprint: TurnLifecycle.envelopeFingerprint({ context: "steer boundary" }),
+        snapshotFrontier: { sequence: 0, time: 0 },
+        timeAdmitted: time,
+      })
+      if (model.type !== "admitted") return yield* Effect.die("steer-boundary model unexpectedly exhausted")
+      yield* TurnLifecycle.sealCandidateSet(tx, {
+        turnID: input.turnID,
+        sessionID: input.sessionID,
+        assistantMessageID: assistant.id,
+        candidates: [],
+        timeSealed: time + 1,
+      })
+      yield* TurnLifecycle.settleModel(tx, {
+        turnID: input.turnID,
+        assistantMessageID: assistant.id,
+        state: "completed",
+        time: time + 2,
+      })
+      return { result: undefined }
+    }),
+  )
 })
 
 const seedTurnFixture = Effect.fn("test.seedTurnFixture")(function* (title: string) {
@@ -395,35 +494,46 @@ const addNoEffectInvocation = Effect.fn("test.addNoEffectInvocation")(function* 
     },
   })
   yield* events.transaction((tx) =>
-    tx
-      .insert(LearningCommandInvocationTable)
-      .values({
-        part_id: tool.id,
-        session_id: sessionID,
-        parent_user_message_id: parentUserMessageID,
-        assistant_message_id: assistant.id,
-        provider_call_id: tool.callID,
-        occurrence_id: occurrenceID,
-        command_name: "accept_course_view_revision",
-        command_version: 1,
-        emission_ordinal: 0,
-        capability_identity: "accept_course_view_revision",
-        capability_version: 1,
-        authorization_basis: "learner_request",
-        input_fingerprint: "0".repeat(64),
-        status: "error",
-        settlement: {
-          outcome: "error",
-          code: "permission_rejected",
-          settlementTime: time,
-          settlementOrder: 0,
-        },
-        time_admitted: time,
-        time_settled: time,
-        settlement_order: 0,
-      })
-      .run()
-      .pipe(Effect.orDie, Effect.as({ result: undefined })),
+    Effect.gen(function* () {
+      yield* tx
+        .insert(LearningCommandInvocationTable)
+        .values({
+          part_id: tool.id,
+          session_id: sessionID,
+          parent_user_message_id: parentUserMessageID,
+          assistant_message_id: assistant.id,
+          provider_call_id: tool.callID,
+          occurrence_id: occurrenceID,
+          command_name: "accept_course_view_revision",
+          command_version: 1,
+          emission_ordinal: 0,
+          capability_identity: "accept_course_view_revision",
+          capability_version: 1,
+          authorization_basis: "learner_request",
+          input_fingerprint: "0".repeat(64),
+          status: "admitted",
+          time_admitted: time,
+        })
+        .run()
+        .pipe(Effect.orDie)
+      yield* tx
+        .update(LearningCommandInvocationTable)
+        .set({
+          status: "error",
+          settlement: {
+            outcome: "error",
+            code: "permission_rejected",
+            settlementTime: time,
+            settlementOrder: 0,
+          },
+          time_settled: time,
+          settlement_order: 0,
+        })
+        .where(eq(LearningCommandInvocationTable.part_id, tool.id))
+        .run()
+        .pipe(Effect.orDie)
+      return { result: undefined }
+    }),
   )
   return { assistant, tool }
 })
@@ -1245,7 +1355,7 @@ describe("Session", () => {
               .where(eq(LearningCommandInvocationTable.part_id, persisted.appliedPartID))
               .get()
               .pipe(Effect.orDie),
-          ).toMatchObject({ status: "applied", effect_id: persisted.effectID })
+          ).toMatchObject({ status: "applied", settlement: { effectID: persisted.effectID } })
           expect(
             yield* database.db
               .select()
@@ -1791,7 +1901,7 @@ describe("Session", () => {
   it.instance("fork holds the source lifecycle before publishing its destination", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service
-      const events = yield* EventV2Bridge.Service
+      const state = yield* SessionRunState.Service
       const database = yield* Database.Service
       const source = yield* materializeTestSessionInfo({ title: "source lifecycle" })
       const user = yield* session.updateMessage({
@@ -1814,31 +1924,26 @@ describe("Session", () => {
 
       const destinationStarted = yield* Deferred.make<void>()
       const releaseDestination = yield* Deferred.make<void>()
-      const originalPublish = events.publish
-      const mutableEvents = events as { publish: typeof events.publish }
-      mutableEvents.publish = (definition, data, options) =>
-        definition.type === SessionV1.Event.Created.type &&
-        (data as typeof SessionV1.Event.Created.data.Type).sessionID !== source.id
-          ? Deferred.succeed(destinationStarted, undefined).pipe(
-              Effect.andThen(Deferred.await(releaseDestination)),
-              Effect.andThen(originalPublish(definition, data, options)),
-            )
-          : originalPublish(definition, data, options)
-      yield* Effect.addFinalizer(() =>
-        Deferred.succeed(releaseDestination, undefined).pipe(
-          Effect.andThen(
-            Effect.sync(() => {
-              mutableEvents.publish = originalPublish
-            }),
-          ),
-          Effect.asVoid,
-        ),
-      )
+      yield* Effect.addFinalizer(() => Deferred.succeed(releaseDestination, undefined).pipe(Effect.asVoid))
 
-      const forkFiber = yield* materializeTestSessionInfo({ fork: { sourceSessionID: source.id } }).pipe(
-        Effect.forkChild,
-      )
-      yield* Deferred.await(destinationStarted)
+      const targetSessionID = SessionID.create()
+      const forkFiber = yield* state
+        .mutateThenAdmitGuarded(
+          targetSessionID,
+          [source.id],
+          Deferred.succeed(destinationStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseDestination)),
+            Effect.andThen(
+              materializeTestSessionInfo({
+                id: targetSessionID,
+                fork: { sourceSessionID: source.id },
+              }),
+            ),
+            Effect.map((forked) => Effect.succeed(forked)),
+          ),
+        )
+        .pipe(Effect.forkChild)
+      yield* awaitDeferred(destinationStarted, "fork did not acquire its source lifecycle guard")
       const deletion = yield* session.remove(source.id).pipe(Effect.exit)
       expect(Exit.isFailure(deletion)).toBe(true)
       if (Exit.isFailure(deletion)) expect(Cause.squash(deletion.cause)).toMatchObject({ _tag: "SessionBusyError" })
@@ -1846,7 +1951,6 @@ describe("Session", () => {
 
       yield* Deferred.succeed(releaseDestination, undefined)
       const forked = yield* Fiber.join(forkFiber)
-      mutableEvents.publish = originalPublish
       const forkedMessages = yield* session.messages({ sessionID: forked.id })
       const userClone = forkedMessages.find((message) =>
         message.parts.some((part) => part.type === "text" && part.text === "copy while source is stable"),
@@ -1932,35 +2036,49 @@ describe("Session", () => {
         },
       })
       yield* events.transaction((tx) =>
-        tx
-          .insert(LearningCommandInvocationTable)
-          .values({
-            part_id: tool.id,
-            session_id: source.id,
-            parent_user_message_id: user.id,
-            assistant_message_id: assistant.id,
-            provider_call_id: tool.callID,
-            occurrence_id: admitted.id,
-            command_name: "accept_course_view_revision",
-            command_version: 1,
-            emission_ordinal: 0,
-            capability_identity: "accept_course_view_revision",
-            capability_version: 1,
-            authorization_basis: "learner_request",
-            input_fingerprint: "0".repeat(64),
-            status: "error",
-            settlement: {
-              outcome: "error",
-              code: "permission_rejected",
-              settlementTime: settledAt,
-              settlementOrder: 0,
-            },
-            time_admitted: settledAt,
-            time_settled: settledAt,
-            settlement_order: 0,
-          })
-          .run()
-          .pipe(Effect.orDie, Effect.as({ result: undefined })),
+        Effect.gen(function* () {
+          yield* tx
+            .insert(LearningCommandInvocationTable)
+            .values({
+              part_id: tool.id,
+              session_id: source.id,
+              parent_user_message_id: user.id,
+              assistant_message_id: assistant.id,
+              provider_call_id: tool.callID,
+              occurrence_id: admitted.id,
+              command_name: "accept_course_view_revision",
+              command_version: 1,
+              emission_ordinal: 0,
+              capability_identity: "accept_course_view_revision",
+              capability_version: 1,
+              authorization_basis: "learner_request",
+              input_fingerprint: "0".repeat(64),
+              status: "admitted",
+              settlement: null,
+              time_admitted: settledAt,
+              time_settled: null,
+              settlement_order: null,
+            })
+            .run()
+            .pipe(Effect.orDie)
+          yield* tx
+            .update(LearningCommandInvocationTable)
+            .set({
+              status: "error",
+              settlement: {
+                outcome: "error",
+                code: "permission_rejected",
+                settlementTime: settledAt,
+                settlementOrder: 0,
+              },
+              time_settled: settledAt,
+              settlement_order: 0,
+            })
+            .where(eq(LearningCommandInvocationTable.part_id, tool.id))
+            .run()
+            .pipe(Effect.orDie)
+          return { result: undefined }
+        }),
       )
 
       const fork = yield* materializeTestSessionInfo({ fork: { sourceSessionID: source.id } })
@@ -2691,6 +2809,313 @@ describe("Session", () => {
     )
   }
 
+  it.instance("awaits the exact owner handoff when terminal state wins before await begins", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("terminal before await handoff")
+      const state = yield* SessionRunState.Service
+      const events = yield* EventV2Bridge.Service
+      const turnID = Turn.ID.create()
+      const envelope = { request: "terminal before await handoff" }
+      const workEntered = yield* Deferred.make<void>()
+      const releaseWork = yield* Deferred.make<void>()
+      const idleEntered = yield* Deferred.make<void>()
+      const releaseIdle = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() => Deferred.succeed(releaseIdle, undefined).pipe(Effect.asVoid))
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== SessionStatus.Event.Status.type) return Effect.void
+        const data = event.data as typeof SessionStatus.Event.Status.data.Type
+        if (data.sessionID !== fixture.info.id || data.status.type !== "idle") return Effect.void
+        return Deferred.succeed(idleEntered, undefined).pipe(Effect.andThen(Deferred.await(releaseIdle)))
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(envelope),
+        admit: admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: fixture.user.id,
+          envelope,
+        }),
+        work: Deferred.succeed(workEntered, undefined).pipe(
+          Effect.andThen(Deferred.await(releaseWork)),
+          Effect.as({ outcome: "completed" as const, reason: "normal" as const }),
+        ),
+      })
+      yield* awaitDeferred(workEntered, "Turn work did not start")
+      yield* Deferred.succeed(releaseWork, undefined)
+      yield* awaitDeferred(idleEntered, "Turn did not reach the post-terminal idle publication")
+      const stored = yield* state.getTurn(fixture.info.id, turnID)
+      expect(stored.state).not.toBe("running")
+
+      const awaiting = yield* state.awaitTurn(fixture.info.id, turnID).pipe(Effect.forkChild)
+      expect(
+        yield* Effect.race(
+          Fiber.join(awaiting).pipe(Effect.as(true)),
+          Effect.sleep("50 millis").pipe(Effect.as(false)),
+        ),
+      ).toBe(false)
+
+      yield* Deferred.succeed(releaseIdle, undefined)
+      expect((yield* Fiber.join(awaiting)).terminal).toEqual(stored.terminal)
+      yield* state.assertNotBusy(fixture.info.id)
+      yield* state.idle(fixture.info.id, Effect.void)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  it.instance("admits a distinct Turn directly from the terminal owner's idle listener", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("idle listener owner promotion")
+      const state = yield* SessionRunState.Service
+      const events = yield* EventV2Bridge.Service
+      const firstTurnID = Turn.ID.create()
+      const secondTurnID = Turn.ID.create()
+      const firstEnvelope = { request: "finish before publishing promotion-ready idle" }
+      const secondEnvelope = { request: "start directly from the observed idle boundary" }
+      const secondUser = yield* fixture.session.updateMessage({
+        id: MessageID.ascending(),
+        role: "user" as const,
+        sessionID: fixture.info.id,
+        agent: "repa",
+        model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+        time: { created: Date.now() + 2 },
+      })
+      yield* fixture.session.updatePart({
+        id: PartID.ascending(),
+        messageID: secondUser.id,
+        sessionID: fixture.info.id,
+        type: "text" as const,
+        text: secondEnvelope.request,
+      })
+      yield* admitOccurrence(fixture.info.id, secondUser.id)
+      const firstWorkEntered = yield* Deferred.make<void>()
+      const releaseFirstWork = yield* Deferred.make<void>()
+      const secondStart = yield* Deferred.make<Exit.Exit<Turn.Info, unknown>>()
+      const firstAtIdle = yield* Deferred.make<Turn.Info>()
+      const secondWorkEntered = yield* Deferred.make<void>()
+      const releaseSecondWork = yield* Deferred.make<void>()
+      let promoted = false
+      yield* Effect.addFinalizer(() =>
+        Effect.all([Deferred.succeed(releaseFirstWork, undefined), Deferred.succeed(releaseSecondWork, undefined)], {
+          discard: true,
+        }),
+      )
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== SessionStatus.Event.Status.type) return Effect.void
+        const data = event.data as typeof SessionStatus.Event.Status.data.Type
+        if (data.sessionID !== fixture.info.id || data.status.type !== "idle" || promoted) return Effect.void
+        promoted = true
+        return state.getTurn(fixture.info.id, firstTurnID).pipe(
+          Effect.flatMap((turn) => Deferred.succeed(firstAtIdle, turn)),
+          Effect.andThen(
+            state.startTurn({
+              sessionID: fixture.info.id,
+              turnID: secondTurnID,
+              envelopeFingerprint: TurnLifecycle.envelopeFingerprint(secondEnvelope),
+              admit: admitRootTurn({
+                sessionID: fixture.info.id,
+                turnID: secondTurnID,
+                inputID: Turn.InputID.create(),
+                messageID: secondUser.id,
+                envelope: secondEnvelope,
+              }).pipe(Effect.provideService(EventV2Bridge.Service, events)),
+              work: Effect.gen(function* () {
+                yield* Deferred.succeed(secondWorkEntered, undefined)
+                yield* Deferred.await(releaseSecondWork)
+                yield* recordCompletedModelSample({
+                  sessionID: fixture.info.id,
+                  turnID: secondTurnID,
+                  parentMessageID: secondUser.id,
+                  directory: fixture.info.directory,
+                })
+                return { outcome: "completed" as const, reason: "normal" as const }
+              }).pipe(
+                Effect.provideService(SessionNs.Service, fixture.session),
+                Effect.provideService(EventV2Bridge.Service, events),
+              ),
+            }),
+          ),
+          Effect.exit,
+          Effect.flatMap((exit) => Deferred.succeed(secondStart, exit)),
+          Effect.asVoid,
+        )
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID: firstTurnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(firstEnvelope),
+        admit: admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID: firstTurnID,
+          inputID: Turn.InputID.create(),
+          messageID: fixture.user.id,
+          envelope: firstEnvelope,
+        }),
+        work: Effect.gen(function* () {
+          yield* Deferred.succeed(firstWorkEntered, undefined)
+          yield* Deferred.await(releaseFirstWork)
+          yield* recordCompletedModelSample({
+            sessionID: fixture.info.id,
+            turnID: firstTurnID,
+            parentMessageID: fixture.user.id,
+            directory: fixture.info.directory,
+          })
+          return { outcome: "completed" as const, reason: "normal" as const }
+        }),
+      })
+      yield* awaitDeferred(firstWorkEntered, "First Turn work did not start")
+      yield* Deferred.succeed(releaseFirstWork, undefined)
+
+      const started = yield* awaitDeferred(secondStart, "Idle listener did not attempt the distinct Turn")
+      const observedFirst = yield* awaitDeferred(firstAtIdle, "Idle listener did not observe the first Turn")
+      expect(Exit.isSuccess(started)).toBe(true)
+      if (Exit.isFailure(started)) return yield* Effect.failCause(started.cause)
+      expect(started.value).toMatchObject({ id: secondTurnID, state: "running" })
+      yield* awaitDeferred(secondWorkEntered, "Distinct Turn did not enter work from the idle listener")
+      const firstStored = yield* state.getTurn(fixture.info.id, firstTurnID)
+      expect(observedFirst.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+      expect(firstStored.terminal).toMatchObject({
+        outcome: "completed",
+        reason: "normal",
+      })
+
+      yield* Deferred.succeed(releaseSecondWork, undefined)
+      expect((yield* state.awaitTurn(fixture.info.id, secondTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        reason: "normal",
+      })
+      yield* state.assertNotBusy(fixture.info.id)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
+  idlePublicationIt.instance("does not let a paused terminal idle publication clobber a distinct busy successor", () =>
+    Effect.gen(function* () {
+      const fixture = yield* seedTurnFixture("paused idle successor")
+      const state = yield* SessionRunState.Service
+      const status = yield* SessionStatus.Service
+      const firstTurnID = Turn.ID.create()
+      const secondTurnID = Turn.ID.create()
+      const firstEnvelope = { request: "finish before a paused idle publication" }
+      const secondEnvelope = { request: "start while the predecessor idle publication is paused" }
+      const secondUser = yield* fixture.session.updateMessage({
+        id: MessageID.ascending(),
+        role: "user" as const,
+        sessionID: fixture.info.id,
+        agent: "repa",
+        model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+        time: { created: Date.now() + 2 },
+      })
+      yield* fixture.session.updatePart({
+        id: PartID.ascending(),
+        messageID: secondUser.id,
+        sessionID: fixture.info.id,
+        type: "text" as const,
+        text: secondEnvelope.request,
+      })
+      yield* admitOccurrence(fixture.info.id, secondUser.id)
+      const firstWorkEntered = yield* Deferred.make<void>()
+      const releaseFirstWork = yield* Deferred.make<void>()
+      const secondBusy = yield* Deferred.make<void>()
+      const releaseSecondWork = yield* Deferred.make<void>()
+      let firstWorkCalls = 0
+      let secondWorkCalls = 0
+      yield* Effect.addFinalizer(() =>
+        Effect.all(
+          [
+            Deferred.succeed(releaseFirstWork, undefined),
+            Deferred.succeed(releaseSecondWork, undefined),
+            Deferred.succeed(releasePausedIdle, undefined),
+          ],
+          { discard: true },
+        ),
+      )
+
+      yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID: firstTurnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(firstEnvelope),
+        admit: admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID: firstTurnID,
+          inputID: Turn.InputID.create(),
+          messageID: fixture.user.id,
+          envelope: firstEnvelope,
+        }),
+        work: Effect.gen(function* () {
+          firstWorkCalls += 1
+          yield* Deferred.succeed(firstWorkEntered, undefined)
+          yield* Deferred.await(releaseFirstWork)
+          yield* recordCompletedModelSample({
+            sessionID: fixture.info.id,
+            turnID: firstTurnID,
+            parentMessageID: fixture.user.id,
+            directory: fixture.info.directory,
+          })
+          return { outcome: "completed" as const, reason: "normal" as const }
+        }),
+      })
+      yield* awaitDeferred(firstWorkEntered, "First Turn work did not start")
+      yield* Deferred.succeed(releaseFirstWork, undefined)
+      yield* awaitDeferred(pausedIdleEntered, "First Turn did not pause before idle publication")
+
+      const second = yield* state.startTurn({
+        sessionID: fixture.info.id,
+        turnID: secondTurnID,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint(secondEnvelope),
+        admit: admitRootTurn({
+          sessionID: fixture.info.id,
+          turnID: secondTurnID,
+          inputID: Turn.InputID.create(),
+          messageID: secondUser.id,
+          envelope: secondEnvelope,
+        }),
+        work: Effect.gen(function* () {
+          secondWorkCalls += 1
+          yield* status.set(fixture.info.id, { type: "busy" })
+          yield* Deferred.succeed(secondBusy, undefined)
+          yield* Deferred.await(releaseSecondWork)
+          yield* recordCompletedModelSample({
+            sessionID: fixture.info.id,
+            turnID: secondTurnID,
+            parentMessageID: secondUser.id,
+            directory: fixture.info.directory,
+          })
+          return { outcome: "completed" as const, reason: "normal" as const }
+        }),
+      })
+      expect(second).toMatchObject({ id: secondTurnID, state: "running" })
+      yield* awaitDeferred(secondBusy, "Successor Turn did not publish busy")
+      expect(yield* status.get(fixture.info.id)).toEqual({ type: "busy" })
+      expect(pausedStatusTransitions).toEqual(["busy"])
+
+      yield* Deferred.succeed(releasePausedIdle, undefined)
+      yield* awaitDeferred(pausedIdleFinished, "Predecessor idle publication did not resume")
+      expect(yield* status.get(fixture.info.id)).toEqual({ type: "busy" })
+      expect(pausedStatusTransitions).toEqual(["busy"])
+      expect(yield* state.activeTurn(fixture.info.id)).toMatchObject({ id: secondTurnID, state: "running" })
+      expect(Exit.isFailure(yield* state.assertNotBusy(fixture.info.id).pipe(Effect.exit))).toBe(true)
+      expect(firstWorkCalls).toBe(1)
+      expect(secondWorkCalls).toBe(1)
+
+      yield* Deferred.succeed(releaseSecondWork, undefined)
+      expect((yield* state.awaitTurn(fixture.info.id, secondTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        reason: "normal",
+      })
+      expect(yield* status.get(fixture.info.id)).toEqual({ type: "idle" })
+      expect(pausedStatusTransitions).toEqual(["busy", "idle"])
+      yield* state.assertNotBusy(fixture.info.id)
+      yield* fixture.session.remove(fixture.info.id)
+    }),
+  )
+
   it.instance("settles a same-process ownerless durable running Turn without dispatch", () =>
     Effect.gen(function* () {
       const fixture = yield* seedTurnFixture("same-process ownerless recovery")
@@ -2726,6 +3151,11 @@ describe("Session", () => {
       const boundaryResult = yield* Deferred.make<boolean>()
       const steerStarted = yield* Deferred.make<void>()
       const keepRunning = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() =>
+        Effect.all([Deferred.succeed(allowBoundary, undefined), Deferred.succeed(keepRunning, undefined)], {
+          discard: true,
+        }),
+      )
       const work = Effect.gen(function* () {
         yield* Deferred.succeed(workEntered, undefined)
         yield* Deferred.await(allowBoundary)
@@ -2755,6 +3185,12 @@ describe("Session", () => {
         work,
       })
       yield* awaitDeferred(workEntered, "Turn work did not reach steering boundary")
+      yield* recordCompletedModelSample({
+        sessionID: fixture.info.id,
+        turnID,
+        parentMessageID: fixture.user.id,
+        directory: fixture.info.directory,
+      })
 
       const steerMessage = yield* fixture.session.updateMessage({
         ...fixture.user,
@@ -2799,24 +3235,26 @@ describe("Session", () => {
       yield* awaitDeferred(steerStarted, "steer did not enter the exact owner queue")
       yield* Deferred.succeed(allowBoundary, undefined)
       expect(yield* awaitDeferred(boundaryResult, "steer was not considered at the safe boundary")).toBe(true)
-      const promoted = yield* Fiber.join(steering)
+      const promoted = yield* Fiber.join(steering).pipe(Effect.timeout("5 seconds"))
       expect(promoted.id).toBe(steerInputID)
       expect(promoted.turnID).toBe(turnID)
 
-      const replay = yield* state.steerTurn({
-        sessionID: fixture.info.id,
-        expectedTurnID: turnID,
-        inputID: steerInputID,
-        envelopeFingerprint: steerFingerprint,
-        replay: Effect.succeed(promoted),
-        promote: Effect.die("exact steer replay must not promote twice"),
-      })
+      const replay = yield* state
+        .steerTurn({
+          sessionID: fixture.info.id,
+          expectedTurnID: turnID,
+          inputID: steerInputID,
+          envelopeFingerprint: steerFingerprint,
+          replay: Effect.succeed(promoted),
+          promote: Effect.die("exact steer replay must not promote twice"),
+        })
+        .pipe(Effect.timeout("5 seconds"))
       expect(replay).toEqual(promoted)
 
-      const terminal = yield* state.interruptTurn(fixture.info.id, turnID)
+      const terminal = yield* state.interruptTurn(fixture.info.id, turnID).pipe(Effect.timeout("5 seconds"))
       expect(terminal.terminal).toMatchObject({ outcome: "interrupted", reason: "learner_interrupt" })
       yield* Deferred.succeed(keepRunning, undefined).pipe(Effect.ignore)
-      yield* fixture.session.remove(fixture.info.id)
+      yield* fixture.session.remove(fixture.info.id).pipe(Effect.timeout("5 seconds"))
     }),
   )
 
@@ -2854,6 +3292,12 @@ describe("Session", () => {
         }),
       })
       yield* awaitDeferred(workEntered, "Turn work did not reach pending-steer boundary")
+      yield* recordCompletedModelSample({
+        sessionID: fixture.info.id,
+        turnID,
+        parentMessageID: fixture.user.id,
+        directory: fixture.info.directory,
+      })
 
       const steerMessage = yield* fixture.session.updateMessage({
         ...fixture.user,

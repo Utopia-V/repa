@@ -40,7 +40,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Truncate } from "@/tool/truncate"
 import { Image } from "@/image/image"
 import { decodeDataUrl } from "@/util/data-url"
-import { Cause, Effect, Exit, Latch, Layer, Option, Scope, Context, Schema, Types } from "effect"
+import { Cause, Effect, Exit, Fiber, Latch, Layer, Option, Context, Schema, Types } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import type { TaskPromptOps } from "@/tool/task"
 import { SessionRunState } from "./run-state"
@@ -204,7 +204,6 @@ const layer = Layer.effect(
     const truncate = yield* Truncate.Service
     const image = yield* Image.Service
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
-    const scope = yield* Scope.Scope
     const instruction = yield* Instruction.Service
     const state = yield* SessionRunState.Service
     const revert = yield* SessionRevert.Service
@@ -337,7 +336,7 @@ const layer = Layer.effect(
         return true
       })
       if (!start) return
-      yield* title(input).pipe(
+      return yield* title(input).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("title generation skipped", {
             sessionID: input.sessionID,
@@ -352,7 +351,6 @@ const layer = Layer.effect(
               })
             : Effect.void,
         ),
-        Effect.forkIn(scope),
       )
     })
 
@@ -1529,6 +1527,7 @@ const layer = Layer.effect(
       let step = 0
       let turnExhausted = false
       let failureReason: SessionProcessor.FailureReason | undefined
+      let titleWork: Fiber.Fiber<void, never> | undefined
       const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
       const authority = yield* state.getTurn(sessionID, turnID).pipe(Effect.flatMap(turnAuthority))
 
@@ -1825,13 +1824,20 @@ const layer = Layer.effect(
           }
           step = nextStep
           if (step === 1) {
-            yield* scheduleTitle({
+            titleWork = yield* scheduleTitle({
               sessionID,
               modelID: lastUser.model.modelID,
               providerID: lastUser.model.providerID,
               history: msgs,
-            })
-            yield* summary.summarize({ sessionID, messageID: lastUser.id }).pipe(Effect.ignore, Effect.forkIn(scope))
+            }).pipe(Effect.asVoid, Effect.forkChild)
+            yield* summary.summarize({ sessionID, messageID: lastUser.id }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("session summary skipped", {
+                  sessionID,
+                  error: Cause.squash(cause),
+                }),
+              ),
+            )
           }
           yield* handle.bindModelOperation(admitted.operation)
           const result = yield* handle.process({
@@ -1903,7 +1909,15 @@ const layer = Layer.effect(
         continue
       }
 
-      yield* state.shared(sessionID, compaction.prune({ sessionID })).pipe(Effect.ignore, Effect.forkIn(scope))
+      if (titleWork) yield* Fiber.join(titleWork)
+      yield* state.shared(sessionID, compaction.prune({ sessionID })).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("session pruning skipped", {
+            sessionID,
+            error: Cause.squash(cause),
+          }),
+        ),
+      )
       if (turnExhausted) {
         const assistant = yield* sessions.findMessage(sessionID, (message) => message.info.role === "assistant")
         if (Option.isNone(assistant)) return { failureReason }
