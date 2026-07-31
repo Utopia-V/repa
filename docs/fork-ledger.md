@@ -2157,9 +2157,74 @@ The accepted Gate 14 projection is locally integrated at
 `ff0ef1fd7e0cbf048642fcb3ed1a8e32ba7f78db`. Its companion Gate 12
 owner-handoff correction landed separately at
 `29f5a140ffd9595a5de60d5bee517bba1b029cf2`. The ten OAuth paths and the
-one Gate 8 oracle were excluded from both commits and remain dirty under their
-own review obligations. This integration satisfies Gate 16's accepted V14
-predecessor dependency but grants no Gate 17 authority.
+one Gate 8 oracle were excluded from both commits and remained dirty at that
+checkpoint under their own review obligations. Their final closures are
+recorded below. Gate 14 integration satisfied the then-accepted Gate 16 V14
+predecessor dependency but granted no Gate 17 authority.
+
+### Gate 5 retained OAuth final closure and integration
+
+Replacement top-level reviewer task
+`019fb7fb-c516-7ee0-9741-7760b0cd548d` independently reproduced the exact
+ten-path OAuth binding and returned `Accept` with no blocker. The candidate
+restores the released-v1 `CodexAuthPlugin` and existing Core browser/headless
+registrations rather than adding a credential bridge, alternate runner, or
+second authentication store. ChatGPT Plus/Pro and manual API-key methods remain
+truthfully distinct; refresh retains the inherited Repa-owned credential and
+request path. No Codex Desktop credential is read or copied, and no excluded
+account/share/cloud/Web/Desktop/updater/release surface is reactivated.
+
+The accepted package projection is 11,834 raw binary diff bytes with SHA-256
+`456ddd6f9b31e092823b9e8142148198584ead1169ae2a0697aff6d201b5fe34`;
+its 893-byte ordinal content manifest hashes to
+`02d2b37d5036ee866e5df671d776d29294edfcd5ebce1d30bd650dcd81a96dab`.
+The reviewer reproduced 44 tests / 68 assertions across Core, OpenCode, and
+TUI. The maintainer-completed real login wrote exactly one `openai:oauth`
+credential without an API key, and the unchanged released path completed the
+four bounded Gate 14 model Turns. The exact correction is integrated at
+`16b5589c144c61f8542a40554ea5169c3e0f8fe7`. The unverified xAI browser
+referrer remains explicitly unclaimed.
+
+### Gate 8 immutable presentation final closure and integration
+
+Original Gate 8 reviewer task `019f68d9-5853-7e23-8592-dc41b90ac9bb`
+returned final `Accept` and closed `G8-IMM-001`. The repaired owner is the
+nullable `message.summary_diffs` projection beside immutable Message `data`.
+The exact running Turn commits the current Session summary and its bound
+per-message projection in one EventV2/SQLite transaction. Message-specific
+reads use durable projection, then historical `UserMessage.summary.diffs`,
+then best-effort Snapshot recomputation; an authoritative empty projection is
+not confused with absence. Fork copies the projection and source-Session
+deletion does not remove the clone.
+
+Forward migration `20260731120541_gate08_message_diff_projection` advances the
+current native database from V14 to V15 and backfills only exact historical
+diff arrays without assigning to legacy Message data. The reviewer reproduced
+the real U1/U2 plus missing-Snapshot cases at 3 tests / 22 assertions, the fork
+case at 1 / 3, the focused migration case at 1 / 3, migration no-drift, and
+format/diff checks. It retained the executor-bound complete migration 40 / 355,
+Session 34 / 237, Prompt 14 / 111, Processor 30 / 158, and Core typecheck
+evidence. OpenCode typechecking remains non-green only in the unchanged
+`tui-smoke.tsx` fixture.
+
+Against base `16b5589c144c61f8542a40554ea5169c3e0f8fe7`, the accepted
+nine-tracked/one-untracked package diff is 29,847 raw binary bytes with SHA-256
+`cc09ad480b516a1417971a19582d7981de390370bab0dd2759114d990eef56e8`;
+the 888-byte ten-path manifest hashes to
+`0b579eed7937f8824c94c2a67f0ebb238d501bc9528f8a971b87170daadad790`.
+The reviewed Gate record diff hashes to
+`e7a72f36ddf73ea9b567c5e6544981060a7c201f695628a7a5e2212556443982`,
+and the complete 1,008-byte eleven-path manifest hashes to
+`12db8c7a71d1623f41ea5d473cb0c90119e094ce2bc7961e3a32896fe1d20a7c`.
+That exact candidate is integrated at
+`19d0fe933`. This closure retains Gate 8's earlier settlement meaning and does
+not reopen Gate 12, Gate 14, or learning-command domain semantics.
+
+The V15 integration invalidates only Gate 16's derived migration predecessor
+and numbering, not its accepted Agent-native Goal semantics. Gate 16 must now
+consume V15 and produce V16, and that mechanical contract repair must return to
+its original reviewer before implementation. No Gate 16 or Gate 17 authority
+is inferred from the Gate 8 integration.
 
 ## Historical evidence locators
 

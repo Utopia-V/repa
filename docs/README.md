@@ -18,13 +18,12 @@ is materialized by the Goal owner. Neither model payload contains internal
 versions, candidate universes, source-proof excerpts, per-field proof labels,
 or Gate-specific confirmations. Gate 14's fresh reviewer closed
 `G14-AN-001..003` and accepted the repaired contract; scoped Gate 14
-implementation/evidence is now integrated. Its
-focused migration, runtime, registry, processor, presentation, permission,
-schema, SDK, and TUI checks pass. The working tree also restores the inherited
-ChatGPT Plus/Pro OAuth path that corrective integration `9e91d43c6` had
-wrongly disconnected; one real login into Repa's own credential store and the
-bounded four-Turn released-Agent qualification now pass without an OpenAI API
-key. That real run exposed three composition defects outside the default-Course
+implementation/evidence is now integrated. Its focused migration, runtime,
+registry, processor, presentation, permission, schema, SDK, and TUI checks
+pass. Retained ChatGPT Plus/Pro OAuth is restored at `16b5589c1`; one real
+login into Repa's own credential store and the bounded four-Turn
+released-Agent qualification pass without an OpenAI API key. That real run
+exposed three composition defects outside the default-Course
 domain contract: registry publication dropped host preparation, a terminal
 Turn became visible before its exact owner handoff ended, and inherited
 detached title/summary/prune work outlived Repa's durable Turn. The working tree
@@ -38,7 +37,11 @@ still owns the Session, versions nested status writes, and keeps
 oracle proves B remains busy without queue, retry, steer, or retarget. Original
 reviewer `019fad21-8a6a-7450-af90-505c0bce53f8` returned final exact-diff
 `Accept`; `G12-OH-001-R1` and `G12-OH-002` are closed and scoped Gate 12
-integration is fixed at `29f5a140f`. Gate 14's original Agent-native reviewer
+integration is fixed at `29f5a140f`. Gate 8's durable per-message diff
+projection is independently accepted and integrated at `19d0fe933`; it leaves
+the frozen User presentation unchanged and survives later Session summaries,
+Snapshot cleanup, fork, and source-Session deletion. Gate 14's original
+Agent-native reviewer
 then found three exact implementation seams: the V14 trigger admitted malformed
 Agent-issuance shapes, public V3 input accepted hybrid legacy fields, and
 historical proposal producer functions remained callable. The top-level
@@ -53,12 +56,13 @@ to be wholly absent or wholly recorded and rejects both mixed directions on
 fresh V14 and V13→V14 while retaining both valid forms; complete migration and
 runtime evidence passes. The same reviewer returned final `Accept` with no
 blocker, and exact Agent-native Gate 14 implementation is integrated at
-`ff0ef1fd7`. Gate 5 OAuth and the separate Gate 8 presentation-immutability
-oracle remain unintegrated candidates pending their own independent closure.
-Gate 16's fresh reviewer closed all three contract findings and accepted its
-Agent-native Goal contract. Its required accepted V14 predecessor now exists,
-so scoped Gate 16 implementation authority is actionable; implementation has
-not begun, and Gate 17 remains unauthorized.
+`ff0ef1fd7`. Gate 5 OAuth and Gate 8 presentation immutability are now
+independently accepted and integrated. Gate 16's fresh reviewer closed all
+three contract findings and accepted its Agent-native Goal contract, but that
+contract names the former V14 predecessor and a V14→V15 migration. Gate 8 now
+makes the actual predecessor V15, so Gate 16 implementation is paused until
+its migration numbering/predecessor is mechanically rebased and reclosed by
+the original reviewer. Gate 17 remains unauthorized.
 
 On 2026-07-29, a follow-up product-flow audit reopened and reclosed one
 different bounded question: the future route could satisfy its existing traces
@@ -164,11 +168,12 @@ maintainer correction supersedes that implementation authority: exhaustive
 candidate coverage is useful read metadata but cannot prove natural-language
 meaning. Gate 14 and Gate 16 now have simpler Agent-visible owner-read and
 typed-write boundaries, and both fresh contract reviews are accepted. The
-Gate 12 owner handoff and Agent-native Gate 14 V14 implementation are now
-integrated at `29f5a140f` and `ff0ef1fd7`. The current control point is the
-unblocked Gate 16 implementation boundary, while the restored Gate 5 OAuth and
-Gate 8 presentation corrections retain separate review ownership. Gate 17
-remains paused; the unaffected audit reconciliation is not reopened.
+Gate 12 owner handoff, Agent-native Gate 14 V14 implementation, restored Gate 5
+OAuth, and Gate 8 durable message-diff correction are integrated at
+`29f5a140f`, `ff0ef1fd7`, `16b5589c1`, and `19d0fe933`. The current control
+point is Gate 16's mechanical V15-predecessor/V16-migration contract rebase and
+original-reviewer closure; Gate 16 implementation has not begun. Gate 17
+remains paused, and the unaffected audit reconciliation is not reopened.
 Documentation reconciliation and inherited-material classification are
 current evidence, not proof against future counterexample. “Accepted” records
 a decision and its provenance; it is not a correctness axiom.
@@ -196,10 +201,10 @@ in the [inherited-material index](inherited/README.md).
 | 2/2A. Windows baseline | Recorded the inherited Windows failure and corrected only the invalid shell-test oracle. | Closed. |
 | 3. Repa identity | Isolated executable, paths, configuration, environment, and database identity from OpenCode state. | Closed. |
 | 4. [Learning-first composition](research/opencode-fork-gate-04-learning-first-composition-2026-07-14.md) | Separates interactive Repa samples from narrow trusted internal model operations. | Closed at corrected implementation commit `df61b7adb`. The later `representation` carrier extension belongs to Gate 11 and is fixed at `bdbfa0c05`. |
-| 5. [Inherited product-surface disposition](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md) | Disconnects excluded inherited product behavior while retaining independently useful local capabilities and harmless hibernated source. | **Scoped corrective candidate pending independent closure.** Corrective integration `9e91d43c6` remains accepted for terminal-only composition, upstream help/schema identity removal, preview-v2 `customize-opencode` retirement, and the restricted-Agent/permission repairs. Its removal of the released-v1 `CodexAuthPlugin` and Core browser/headless methods contradicted this Gate's accepted ordinary-OAuth boundary and prior real runs. The working tree restores ChatGPT Plus/Pro login without requiring an API key; 44 focused tests / 68 assertions, Core/TUI typechecks, one real `openai:oauth` login into Repa's own credential store, and Gate 14's four-Turn released-model run pass. Independent implementation/evidence closure remains pending. Commit `86332c246` remains historical provenance. Explicitly enabled dormant upstream release material still blocks a later release-readiness claim. |
+| 5. [Inherited product-surface disposition](research/opencode-fork-gate-05-terminal-only-surface-disposition-2026-07-14.md) | Disconnects excluded inherited product behavior while retaining independently useful local capabilities and harmless hibernated source. | **Retained OAuth regression corrected at `16b5589c1`.** Reviewer `019fb7fb-c516-7ee0-9741-7760b0cd548d` accepted the exact ten-path restoration of the released-v1 `CodexAuthPlugin` and Core browser/headless registrations. ChatGPT Plus/Pro login works without an API key and writes only Repa's existing credential store; 44 focused tests / 68 assertions and the real four-Turn released-model path pass. Corrective integration `9e91d43c6` remains accepted for the other terminal-only, identity, preview-v2, and restricted-Agent boundaries; `86332c246` remains historical provenance. Explicitly enabled dormant upstream release material still blocks a later release-readiness claim. |
 | 6. [Native database admission](research/opencode-fork-gate-06-native-database-admission-2026-07-14.md) | Owns Repa database admission, migration lineage, and the single state-owner boundary. | Closed again at corrective integration `9e91d43c6`. Historical trigger/schema evidence is frozen, v12 has an explicit migration and manifest, a real six-domain v11 fixture upgrades through domain-owned recursive validation, and fresh/existing same-version behavior is aligned. Historical corrected implementation remains fixed at `34588b041`. |
 | 7. [Course and Course View authority](research/opencode-fork-gate-07-course-view-authority-2026-07-15.md) | Adds independent Courses, stable View identities, immutable revisions and mappings, exact working selection, and reversible withdrawal. | Closed at implementation commit `3bd6eb9d4`. |
-| 8. [Learning-command settlement](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md) | Binds trusted occurrence and physical invocation identity to one real Course-owned semantic effect. | **Accepted boundary retained; scoped implementation correction pending review.** Corrective integration `9e91d43c6` and the original Course proof at `293ff6892` remain accepted. Gate 14's real run exposed inherited summary code mutating `summary.diffs` on an occurrence-linked User Message after its exact presentation had frozen. The working tree now stores derived current diffs on the Session summary, computes a historical per-message view on demand, and leaves admitted User bytes immutable; the focused tool/snapshot race passes 1 test / 6 assertions. |
+| 8. [Learning-command settlement](research/opencode-fork-gate-08-learning-command-settlement-2026-07-16.md) | Binds trusted occurrence and physical invocation identity to one real Course-owned semantic effect. | **`G8-IMM-001` correction integrated at `19d0fe933`.** Original reviewer `019f68d9-5853-7e23-8592-dc41b90ac9bb` accepted the exact V15 per-message diff projection. It commits outside immutable User `data`, reads before legacy/fallback recomputation, backfills historical arrays, and survives Snapshot cleanup and fork/source deletion. Core migration 40/355, Session 34/237, Prompt 14/111, Processor 30/158, and the real U1/U2 regression 3/22 pass. Corrective integration `9e91d43c6` and original Course proof `293ff6892` remain retained. |
 | 9. [Source and Artifact authority](research/opencode-fork-gate-09-source-artifact-authority-2026-07-16.md) | Adds stable Artifact identity, exact observed revisions, location and availability history, provenance, and correction. | Closed at implementation commit `41db7c292`. |
 | 10. [Content-root authority](research/opencode-fork-gate-10-content-root-authority-2026-07-17.md) | Adds approved roots, bounded observation, separate mutation authority, and exact Gate 9 admission. | Closed again at corrective integration `9e91d43c6`. The primary TUI shows the exact canonical anchor, relative path, operation, one-shot scope, rights, and warning before approval and keeps the committed result visible afterward. Commit `fb6ed5763` remains historical provenance; the domain authority and Windows/NTFS evidence scope are unchanged. |
 | 11. [Readable representation lineage](research/opencode-fork-gate-11-readable-representation-lineage-2026-07-17.md) | Adds optional immutable readable derivations with truthful conversion, drift, availability, and bounded-read semantics. | Closed again at corrective integration `9e91d43c6`. Typed conversion outcomes are default-visible in TUI and direct-run, while one domain-owned v12 failure-code tuple keeps the TypeScript API, validator, and trigger vocabulary in parity. Commit `bdbfa0c05` remains the historical closed snapshot. |
@@ -207,7 +212,7 @@ in the [inherited-material index](inherited/README.md).
 | 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md) | Adds immutable revision-bound material outlines/selectors and optional neutral alignment to exact Course membership. | Closed at the domain-authority boundary at implementation commit `5e762f833`. Hostile arbitrary-SQL evidence is reclassified and the cross-Gate trigger-migration correction is integrated at `9e91d43c6`; Gate 18 still must not use the observation-writing current-use resolver as a pure context read. |
 | 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md) | Adds a learner-controlled default Course preference and independent exact per-Course route anchors. | **Agent-native implementation integrated at `ff0ef1fd7`.** Fresh reviewer `019fb27f-4416-7c42-bcad-97d473803750` accepted the contract binding `52909e932fa7602d1c29f30886ddd644592c5220711146cd1a641fb237614a67` and the final 30-tracked/seven-untracked implementation projection after closing `G14-STO-001-R2`. Current writes use bounded Course/navigation reads, exact `{set courseID}|{clear}` input, runtime-bound identity/version/locator, root/delegated Agent-issuance provenance, semantic-first V3 settlement, and configured capability policy; proposal production is retired while V1/V2 replay and route anchors remain exact. Core migration 39/352, runtime 45/791, and registry 28/102 pass. Gate 12 landed separately at `29f5a140f`; OAuth and Gate 8 were excluded. Historical V2/route integration `80fde2012` remains retained. |
 | 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md) | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, correctable policy state. | Closed again at corrective integration `9e91d43c6`. The shared presenter preserves committed create/replace/retract instruction, scope, normalized expiry/timezone, state/version, relation, and correction guidance across TUI, direct-run, replay, and later provider failure. Commit `03ea74ec4` remains historical provenance. |
-| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md) | Preserves learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning. | **Agent-native contract accepted; scoped implementation is now unblocked.** Reviewer `019fb2a3-c902-7882-8134-1bf33f1eb04d` closed `G16-AN-001..003` against binding `614569047251989fc7eb6ee90b53fd8991f704370517a8e311f2f28a2e3bede4`. The accepted contract covers bounded Goal/Course reads, one typed change set, the V1/semantic-terminal/candidate union, exact V2 target/carry projection, runtime-owned state, V14→V15 migration, and focused evidence. Required Gate 14 predecessor `ff0ef1fd7` is integrated; Gate 16 implementation has not begun. |
+| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md) | Preserves learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning. | **Agent-native contract accepted; implementation paused for predecessor rebase.** Reviewer `019fb2a3-c902-7882-8134-1bf33f1eb04d` closed `G16-AN-001..003` against binding `614569047251989fc7eb6ee90b53fd8991f704370517a8e311f2f28a2e3bede4`. Its semantic boundary remains accepted, but its V14 predecessor and V14→V15 migration numbering are stale after Gate 8 integrated current V15. The contract must consume V15 and produce V16, then return to the same reviewer before implementation. No Gate 16 implementation has begun. |
 | 17. [Natural-language learning bootstrap draft](research/opencode-fork-gate-17-natural-language-learning-bootstrap-2026-07-22.md) | Candidate boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn. | Maintainer grill remains paused behind the Gate 14/16 Agent-semantic correction. Natural language through the ordinary Agent is primary; `/learn` may be an optional shortcut but is neither required nor authoritative. Gate 17 owns request-bound Course creation/replay, atomic-versus-staged domain composition, truthful partial settlement, TUI acknowledgement, anchor consequences, and remote-source provenance—not a second language interpreter. Session topology, queue/steer, macro continuation, and detour/rejoin remain outside this Gate. Implementation is unauthorized. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
