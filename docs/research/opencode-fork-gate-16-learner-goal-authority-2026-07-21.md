@@ -1,13 +1,14 @@
 # OpenCode fork Gate 16: learner Goal authority
 
-Status: Agent-native Goal query/write contract accepted by fresh reviewer
+Status: Agent-native Goal query/write semantics accepted by fresh reviewer
 `019fb2a3-c902-7882-8134-1bf33f1eb04d`. `G16-AN-001..003` are closed against
-the exact semantic binding recorded in the fork ledger. Scoped Gate 16
-implementation authority is available for the contract below, but execution
-must consume an accepted Gate 14 V14 implementation/evidence predecessor.
-Agent-native Gate 14 is now integrated at
-`ff0ef1fd7e0cbf048642fcb3ed1a8e32ba7f78db`, so that dependency is satisfied;
-Gate 16 implementation has not begun. Gate 17 remains unauthorized.
+the exact semantic binding recorded in the fork ledger. Gate 8 subsequently
+advanced the current native database to V15 at
+`19d0fe933fd8db96c6f22e509294cb93c28ec38c`. This contract's derived migration
+predecessor and output version are therefore under exact mechanical re-review
+by the same reviewer. Scoped
+Gate 16 implementation authority is paused until that V15-to-V16 binding
+closes. Gate 16 implementation has not begun. Gate 17 remains unauthorized.
 
 The decisions under **Accepted maintainer decisions**, the structural Goal
 identity/revision/lifecycle result, and corrective TUI integration
@@ -416,14 +417,15 @@ history and truthful source tombstones.
 
 ### Persistence and forward migration
 
-After the accepted Gate 14 V13-to-V14 migration, Gate 16 requires one
-V14-to-V15 forward migration from a frozen exact then-current database and
-matching fresh-schema generation. It must:
+After the accepted Gate 14 V13-to-V14 migration and Gate 8 V14-to-V15
+per-message projection migration, Gate 16 requires one V15-to-V16 forward
+migration from a frozen exact then-current database and matching fresh-schema
+generation. It must:
 
 - remove fixed English/Chinese phrase, internal-ID-in-source,
   keyword/cadence, source-entailment, and dependency-prompt checks from current
   application validators. Preserve the frozen V11 DDL/fixture that proves the
-  old rows, while ensuring the current V15 manifest does not reinstall those
+  old rows, while ensuring the current V16 manifest does not reinstall those
   already-retired phrase triggers;
 - make old confirmation snapshots, prepared confirmations, accepted-candidate
   bindings, and resolution bases historical-read fields only, with no current
@@ -456,7 +458,7 @@ matching fresh-schema generation. It must:
   one-to-one/cycle protection, effect/receipt/commit-seal completeness, and
   legal settlement;
   and
-- prove fresh/upgrade parity plus restart recovery from the frozen V14 fixture:
+- prove fresh/upgrade parity plus restart recovery from the frozen V15 fixture:
   terminal V1 direct/accepted effects retain exact replay, while every admitted
   nonterminal V1 row—including old confirmation and permission states—settles
   interrupted/no-effect without re-prompting, applying, or fabricating facts;
@@ -532,7 +534,7 @@ Implementation/evidence may close only if fresh causal checks establish:
   interpretation; and
 - the V1 field-basis, complete-candidate, prepared-confirmation, and once-only
   confirmation producers, registry entries, TUI controls, and current command
-  branches are unreachable after V15, while their identifiers/discriminators
+  branches are unreachable after V16, while their identifiers/discriminators
   remain reserved where collision safety requires and historical V1
   read/replay remains exact; and
 - the primary TUI and retained carriers show the exact configured permission
