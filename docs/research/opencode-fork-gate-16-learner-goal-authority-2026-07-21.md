@@ -1,22 +1,23 @@
 # OpenCode fork Gate 16: learner Goal authority
 
-Status: Contract/theory reopened at the Agent-semantic boundary. The 2026-07-30
-maintainer correction rejects both the historical fixed-language admission
-implementation and the later attempt to replace it with exhaustive
-command-specific candidate provenance. Open-language interpretation and
-contextual reference belong to the ordinary interactive Agent using bounded
-model-visible owner reads; program authority begins at trusted identity,
-version, permission, legal transition, transaction, replay, visible result,
-and correction. No current Gate 16 implementation authority exists.
+Status: Agent-native Goal query/write contract accepted by fresh reviewer
+`019fb2a3-c902-7882-8134-1bf33f1eb04d`. `G16-AN-001..003` are closed against
+the exact semantic binding recorded in the fork ledger. Scoped Gate 16
+implementation authority is available for the contract below, but execution
+must consume an accepted Gate 14 V14 implementation/evidence predecessor.
+Agent-native Gate 14 is now integrated at
+`ff0ef1fd7e0cbf048642fcb3ed1a8e32ba7f78db`, so that dependency is satisfied;
+Gate 16 implementation has not begun. Gate 17 remains unauthorized.
 
 The decisions under **Accepted maintainer decisions**, the structural Goal
 identity/revision/lifecycle result, and corrective TUI integration
-`9e91d43c629b66d65c8741e342bca7cf05de5667` remain retained inputs. Fresh
-review task `019fa8a5-eea1-79f0-abd8-50df4f3cdaa0` and historical run
-`gate16-whole-20260721-01` remain provenance for the contracts they actually
-reviewed, not acceptance of the newly corrected boundary. Commit
-`69433fc78d383bade1d92319eb3153a2cd7c68bd` remains a historical implementation
-snapshot.
+`9e91d43c629b66d65c8741e342bca7cf05de5667` remain retained inputs. Its exact
+post-commit result surface and generic configured-`ask` projection remain
+accepted; the Gate-specific proposal/confirmation path is part of the reopened
+semantic seam. Review task `019fa8a5-eea1-79f0-abd8-50df4f3cdaa0`, historical
+run `gate16-whole-20260721-01`, and commit
+`69433fc78d383bade1d92319eb3153a2cd7c68bd` remain provenance for their
+historical candidates, not acceptance of the contract below.
 
 Date: 2026-07-21
 
@@ -94,6 +95,458 @@ natural-reference write path. The new contract must simplify the model-facing
 query/write surface, remove semantic phrase forensics from application code and
 SQLite, preserve the retained structural Goal invariants that still earn their
 cost, and receive fresh separate contract/theory review before implementation.
+
+## Current Agent-native Goal contract candidate
+
+This section is the only current contract for the reopened query/write seam.
+The accepted maintainer decisions and retained structural Goal sections below
+remain current. Later source-authorization, dependency-prompt,
+proposal/confirmation, migration, and closing-evidence clauses labelled
+historical or superseded are provenance only where they conflict with this
+section.
+
+### Learner behavior and owner reads
+
+The ordinary interaction is:
+
+```text
+learner natural language
+-> Agent optionally discovers and reads exact Goal/Course state
+-> Agent interprets identity and meaning or clarifies only as needed
+-> Agent issues one bounded typed Goal change set
+-> configured capability policy and atomic settlement
+-> exact visible, correctable result
+```
+
+Gate 16 exposes thin read-only Agent tools over existing owner APIs:
+
+- Goal discovery returns bounded current Goal summaries under an optional
+  owner-defined filter and an opaque revision-fenced continuation cursor;
+- exact Goal read returns one current complete revision, and history read pages
+  immutable revisions when identity/lifecycle context is needed;
+- Course list/get is the same Course-owner read introduced by Gate 14 rather
+  than a Goal-owned copy; and
+- trusted runtime time supplies each Goal read's `asOf` value. The model cannot
+  forge the clock used for target-time relations.
+
+Every result includes the exact identities, current versions, semantic
+snapshot, disposition, source availability, and pagination state owned by that
+query. A cursor says more owner rows remain; no cursor says only that the exact
+query completed. Reads create no Goal command, candidate, confirmation,
+authorization, or durable query snapshot and never advance the learning
+frontier. The Agent decides whether to page, read exact history, select a
+referent, or clarify. The learner never needs to know a Goal or Course ID.
+
+The default Tutor Agent can call these reads. A restricted or delegated Agent
+sees them only through the authoritative capability/permission intersection;
+read authority never implies Goal write authority. Their built-in identifiers
+are reserved against custom, plugin, and MCP collision, and a read creates no
+write-policy, permission-request, or settlement row.
+
+### One Agent-issued Goal command
+
+Gate 16 retains one reserved versioned capability whose canonical command is
+one nonempty bounded ordered change set over the existing `create`, `update`,
+and `replace` meanings. Its model-visible payload contains only delegated
+semantic choices:
+
+- `create` supplies a required outcome and may supply conditions, a complete
+  LearnerHome-or-Course-ID scope, the structured V2 target intent defined
+  below, and an initial
+  disposition;
+- `update` names one Goal and exact head Revision selected from owner reads,
+  then supplies a nonempty patch over outcome, conditions, scope, target,
+  and non-superseded disposition. Omitting disposition preserves the exact
+  current disposition/relation; explicitly choosing active, achieved, or
+  abandoned clears a current supersession. `update` cannot establish or
+  retarget supersession;
+- `replace` names one source Goal and exact head Revision, may include a
+  semantic patch for that source successor, then identifies either one existing
+  target Goal/head Revision or the semantic fields for one runtime-created
+  target. Only `replace` establishes or retargets supersession; and
+- omission in an update means carry the exact predecessor field, while explicit
+  empty/null arms perform the field's legal clear. The runtime materializes the
+  complete resulting snapshot before permission or commit.
+
+The payload contains no numeric owner versions, model-invented or newly
+generated Goal/Revision identities, effect/receipt/permission/time/order
+identities, field-basis declarations, source excerpts, candidate universe,
+confirmation snapshot, or authorization label. Exact existing Goal, head
+Revision, and Course references come only from owner reads or protected
+context.
+New or changed Course membership supplies only exact Course IDs; the runtime
+captures and validates current Course owner state.
+
+#### Closed V2 target intent and normalized projection
+
+The current command has one closed target field. Its model-visible arms are:
+
+```text
+TimeZoneIntentV2 =
+  { type: "source" }
+  | { type: "iana", name: IANAZoneName }
+  | { type: "fixed_offset", offsetMinutes: Integer[-840, 840] }
+
+TargetIntentV2 =
+  { type: "absent" }
+  | {
+      type: "instant"
+      localDateTime: YYYY-MM-DDTHH:mm:ss[.SSS]
+      timeZone: TimeZoneIntentV2
+    }
+  | {
+      type: "local_date"
+      date: YYYY-MM-DD
+      timeZone: TimeZoneIntentV2
+    }
+```
+
+`source` means the exact time zone already captured on the admitted learner
+occurrence; it is not a model-supplied clock or a later process default.
+`iana` names the semantic civil-time zone chosen by the Agent. `fixed_offset`
+is an exact signed minute offset in `[-840, 840]`. The Agent selects the target
+kind, civil date or local date-time, and zone selector when it changes target
+meaning. It never supplies an epoch, tzdb release, derived UTC offset,
+normalization basis, source expression, normalized display string, or `asOf`.
+
+The runtime validates the closed calendar syntax and zone name, binds the
+exact trusted source zone or current installed tzdb release, and derives the
+epoch millisecond and effective offset for an instant. A nonexistent or
+ambiguous IANA local time at a free semantic address is unrepresentable and
+creates no candidate; the Agent may clarify and issue an exact fixed-offset
+intent. An already occupied address still settles from its immutable canonical
+intent before this live binding. Display formatting is derived from the stored
+value and is never semantic authority.
+
+Create and runtime-created replacement-target omission canonicalize to
+`absent`. In an update or the source patch of `replace`, omission canonicalizes
+to the distinct typed intent `carry`; explicit `absent` clears the target.
+These canonical arms, not spelling variants, enter the semantic fingerprint.
+
+A current V2 revision stores only one normalized target value:
+
+```text
+ResolvedZoneV2 =
+  { type: "iana", name: IANAZoneName, releaseID: TimeZoneReleaseID }
+  | { type: "fixed_offset", offsetMinutes: Integer[-840, 840] }
+
+TargetValueV2 =
+  { type: "absent" }
+  | {
+      type: "instant"
+      instant: EpochMilliseconds
+      utcOffsetMinutes: Integer[-840, 840]
+      resolvedZone: ResolvedZoneV2
+    }
+  | {
+      type: "local_date"
+      date: YYYY-MM-DD
+      resolvedZone: ResolvedZoneV2
+    }
+```
+
+The command/effect additionally retains the exact canonical target intent and
+the complete versioned before/after snapshots. Reads expose a discriminated V1
+historical target or this V2 normalized target; they never flatten the two
+shapes or present display text as stored semantics.
+
+When a V2 update omits target over a V1 predecessor, the owner projects only
+the predecessor's immutable target value into V2: absent remains absent; an
+instant retains its exact epoch and offset as a fixed-offset resolved value;
+and a local date retains its exact date plus recorded IANA zone/release. The
+V1 predecessor keeps its `sourceExpression`, `normalized`,
+`normalizationBasis`, raw bytes, and historical field basis. None is copied,
+discarded, or reclassified as current V2 semantic proof. The ordinary revision
+predecessor link and the V2 effect's versioned before/after snapshots make the
+carry truthful without reintroducing a per-field authorization map.
+
+The trusted runtime supplies the admitted learner occurrence,
+Session/Turn/model-operation, Assistant/tool-call identity, source temporal
+context, capability version, physical invocation, and generated effect/receipt
+identities, current heads/versions, current Course descriptors, and trusted
+calendar facts. It materializes the complete resulting revision from the
+semantic intent and exact current head. The applied effect preserves the
+canonical typed intent and exact owner-resolved before/after snapshots; the
+revision preserves its causal occurrence. Omitted fields and initial defaults
+are therefore reconstructable without a second model-supplied or durable
+per-field proof map.
+
+The shared learning-command `agent_action` basis is Agent
+issuance/admission provenance, not capability authorization, learner assent, or
+semantic proof. It records the actual issuing root or delegated Agent operation
+and, for a child, the exact Gate 12 parent task/delegated-capability chain and
+causal root occurrence. It does not claim that source prose literally entailed
+every structured field. Capability policy and settlement remain separate.
+`agent_action_v2` is the Goal command's versioned foreign-key projection to
+that accepted shared record, not another authorization relation: its `root`
+arm binds the exact model operation and causal root learner occurrence; its
+`delegated` arm additionally binds the exact child task, parent task, and
+non-escalating delegated-capability chain back to that same root occurrence.
+
+Historical `learner_request`/`learner_acceptance`, per-field bases, authored
+excerpts, and confirmation snapshots remain readable for old effects but are
+not current write inputs. When a materially different outcome, condition, scope,
+target, identity/lifecycle relation, or replacement remains unresolved, the
+Agent asks in ordinary conversation, waits for the answer, and then issues the
+same Goal command. A short answer such as “对，就这样” does not require a
+host-prepared candidate or another approval under effective `allow`.
+
+### Semantic choices versus program invariants
+
+The Agent owns open interpretation:
+
+- whether an utterance creates durable intent at all;
+- which existing Goal a contextual reference denotes;
+- whether a changed expression continues, corrects, resumes, supersedes, or
+  begins a distinct Goal;
+- which outcome/conditions/scope/target meaning the learner authored or
+  accepted; and
+- whether ambiguity materially changes durable history and therefore needs
+  clarification.
+
+The program owns:
+
+- closed semantic-intent and resolved snapshot shapes, bounded sizes, exact current
+  occurrence and owner references, generated identities, capability policy,
+  and one-mutation admission;
+- linear Goal revisions, complete snapshots, exact CAS, Course admission for
+  newly added scope members, immutable history, legal lifecycle tags,
+  one-to-one acyclic current supersession, and atomic multi-operation effects;
+- calendar/zone validity and arithmetic over the Agent-selected target arm,
+  while preserving the causal occurrence, structured target, and trusted
+  temporal context without parsing language to prove the interpretation;
+- physical replay, semantic duplicate/conflict, permission, cancellation,
+  recovery, commit sealing, source tombstones, and exact terminal
+  presentation; and
+- exact causal occurrence and immutable intent/before/after provenance without
+  source-language forensics or a separate per-field proof protocol.
+
+The previous dependency-complete carry rules are not current prompt-forcing
+policy. Omitted update fields carry mechanically from the exact predecessor;
+supplied fields replace them. The full runtime-materialized snapshot and any
+retained disposition/relation remain visible before configured `ask` and after
+settlement. Whether an omitted meaning should continue is an Agent judgment,
+which clarifies when the choice is consequential. Text similarity, elapsed
+time, evidence, current ability, Course progress, and Tutor prose still never
+alter identity or lifecycle automatically.
+
+### Admission, permission, settlement, and recovery
+
+The retained semantic address is
+`(admitted learner occurrence, Goal change-set slot)`. Exact physical replay and
+a committed same-address `already_applied` or `semantic_conflict` settle before
+live Goal/Course/source state, cancellation, delegated-capability membership,
+or capability-policy checks.
+
+Goal persistence has one closed disposition projection:
+
+- `legacy_v1` preserves each historical direct/accepted command,
+  authorization/confirmation shape, physical state, and terminal replay
+  exactly;
+- `semantic_terminal_v2` is a physically new invocation whose semantic address
+  was already committed. It stores the physical identity, semantic address,
+  canonical incoming typed-intent fingerprint, immutable existing
+  effect/address evidence, and `already_applied` or `semantic_conflict`. It has
+  no current Agent-issuance row, capability evaluation/request/reply/outcome,
+  live Goal/Course snapshot, new before/after locator, candidate effect, or
+  fabricated target facts; and
+- `candidate_v2` is a genuinely free semantic address admitted only after the
+  issuing root/child operation and its Goal-write membership are valid. It
+  stores the physical/semantic identity, canonical typed intent, exact
+  `agent_action_v2` root or delegated issuance chain, runtime-bound
+  source/Goal/Course/temporal input snapshot, capability lifecycle, and later
+  no-effect or effect settlement.
+
+The universal Gate 8 physical ledger remains outside this Goal disposition
+union. A structurally malformed or forged root/child causal envelope fails
+physical validation. An authentic delegated operation whose admitted
+capability set omits Goal write can still name a pre-existing semantic address,
+so duplicate/conflict wins without inventing Agent provenance; when the
+address is free it receives a truthful physical no-effect denial but no Goal
+candidate or `agent_action_v2` row. This pre-admission denial is distinct from
+effective policy `deny` after a valid candidate admission.
+
+The semantic fingerprint is the canonical typed Goal change-set intent,
+including exact protected Goal/Revision/Course references and the target arms
+above. It excludes root-versus-child identity, Agent-action lineage, capability
+policy/outcome, permission request/reply, and live materialized owner state.
+Changing who issued an otherwise identical command therefore cannot turn a
+duplicate into a conflict, while changing the typed Goal meaning must.
+
+Admission and settlement use this order:
+
+1. Exact physical replay returns its stored result; physical identity reuse
+   with a different trusted envelope or canonical typed intent is conflict.
+2. A physically new authentic invocation computes the immutable semantic
+   address and canonical intent fingerprint without consulting live
+   Goal/Course/source state.
+3. An occupied address atomically records and settles
+   `semantic_terminal_v2` as duplicate/conflict.
+4. Only a free address evaluates exact root/delegated Goal-write membership,
+   then atomically reserves `candidate_v2`, its truthful Agent issuance, and
+   runtime-bound current command state.
+5. The admitted candidate uses the common capability lifecycle:
+
+   - effective `deny` settles denied with no Goal effect while retaining
+     truthful candidate issuance and capability history;
+   - effective `allow` adds no Gate-specific proposal or confirmation;
+   - effective `ask` uses the ordinary typed permission projection for the
+     exact complete change set; and
+   - rejection, correction feedback, cancellation, or lost prompt settlement
+     is a truthful no-effect result.
+
+Final settlement rechecks semantic replay/conflict first, then source
+availability, one-mutation ownership, all runtime-bound Goal/Course heads,
+the exact materialized result, legal final supersession projection, and Turn/tool
+frontier in one transaction. Invalid, stale, over-limit, or unauthorized
+operations reject the whole change set. Authorized no-change operations remain
+visible but create no revision; an all-no-change set creates no effect,
+mutation-slot use, or frontier advance. A real set atomically commits Goal
+identities/revisions, effect, receipt, commit seal, physical Tool settlement,
+and exact result.
+
+A `candidate_v2` that loses the semantic address during capability wait or
+recovery settles `already_applied`/`semantic_conflict` first, keeps its already
+truthful Agent-issuance and capability history, and creates no losing effect.
+Startup recovery and live abort derive or replay the exact durable capability
+outcome and then run that same semantic-first final check. With no winner they
+settle the applicable interrupted/no-effect result; even a durable allow never
+applies an uncommitted Goal change. Session or source deletion preserves Goal
+history and truthful source tombstones.
+
+### Persistence and forward migration
+
+After the accepted Gate 14 V13-to-V14 migration, Gate 16 requires one
+V14-to-V15 forward migration from a frozen exact then-current database and
+matching fresh-schema generation. It must:
+
+- remove fixed English/Chinese phrase, internal-ID-in-source,
+  keyword/cadence, source-entailment, and dependency-prompt checks from current
+  application validators. Preserve the frozen V11 DDL/fixture that proves the
+  old rows, while ensuring the current V15 manifest does not reinstall those
+  already-retired phrase triggers;
+- make old confirmation snapshots, prepared confirmations, accepted-candidate
+  bindings, and resolution bases historical-read fields only, with no current
+  producer, tool path, or new-row requirement;
+- preserve every historical Goal identity, revision, field basis, Course
+  membership, target, disposition, supersession, effect, receipt, source,
+  confirmation, and raw command byte-for-byte in meaning, without upgrading old
+  evidence or inventing defaults;
+- admit exactly the new semantic-intent command version for current writes and
+  store the closed `legacy_v1 | semantic_terminal_v2 | candidate_v2`
+  disposition. `semantic_terminal_v2` stores only immutable existing-effect
+  evidence; `candidate_v2` stores exact Agent issuance, runtime-bound state,
+  capability history, and owner-resolved before/after result. Legacy
+  basis-input/confirmation/resolution fields are absent from both V2 arms;
+- version Goal revision targets and command/effect/read projections explicitly:
+  V1 retains its exact source/proof-bearing absent/instant/local-date shapes,
+  while V2 uses only the normalized target value defined above. A V2 omitted
+  carry from V1 projects the predecessor value into V2 inside candidate
+  materialization without rewriting the V1 row or copying its proof fields;
+- make historical per-field-basis rows and constraints read/replay-only for old
+  revisions rather than requiring them for current revisions;
+- reuse the shared `agent_action` learning-command basis introduced by Gate 14
+  while preserving historical basis bytes and replay projections;
+- replace the current V1-only Goal basis/confirmation constraints with the
+  closed versioned disposition and target unions through the migration rather
+  than mutating a predecessor artifact;
+- retain only structural database checks reachable through supported
+  transitions: closed JSON/row shapes, foreign keys, version chains, immutable
+  rows, bounds, exact historical-basis references, unique heads,
+  one-to-one/cycle protection, effect/receipt/commit-seal completeness, and
+  legal settlement;
+  and
+- prove fresh/upgrade parity plus restart recovery from the frozen V14 fixture:
+  terminal V1 direct/accepted effects retain exact replay, while every admitted
+  nonterminal V1 row—including old confirmation and permission states—settles
+  interrupted/no-effect without re-prompting, applying, or fabricating facts;
+  V2 semantic terminals remain lifecycle-free, and V2 candidates recover
+  semantic-first across absent policy, issued/no-reply, and every durable
+  capability outcome.
+
+Legacy rows remain readable and replayable through explicit historical
+projections. They do not keep the old semantic parser or confirmation producer
+reachable. Removing a wrong current path while retaining immutable historical
+truth is not a second runtime.
+
+### Closing evidence for this correction
+
+Implementation/evidence may close only if fresh causal checks establish:
+
+- Goal discover/current/history and reused Course reads are bounded,
+  cursor-truthful, exact, and zero-write. Registry/policy tests prove their
+  default availability, restricted default-deny plus explicit allow behavior,
+  delegated capability intersection, and that read visibility never implies
+  Goal write. Goal read identifiers remain reserved against built-in,
+  custom/plugin, and MCP collision;
+- clear natural-language creation and contextual update work without `/goal`,
+  learner-entered IDs, fixed phrases, exhaustive pages, or a Gate-specific
+  confirmation under effective `allow`;
+- the public current-write schema rejects model-supplied versions, generated
+  identities, field bases, excerpts, candidate/proposal, confirmation, and
+  authorization fields;
+- the closed V2 target schema accepts only absent, civil instant plus exact zone
+  selector, or local date plus exact zone selector; runtime tests own calendar,
+  tzdb-release, offset/epoch, ambiguous/nonexistent local-time, trusted-source-
+  zone, and display derivation. Versioned storage/read tests prove exact V1
+  history, exact V2 normalization, and every V1→V2 omitted-target carry arm
+  without copied or fabricated proof fields;
+- a same-purpose correction, changed standard, renewed pursuit, existing/new
+  replacement, multi-Course scope change, target-time interpretation, ordinary
+  short acceptance, and atomic multi-Goal utterance preserve exact identities,
+  runtime-bound owner facts, versions, and visible results;
+- real ambiguity causes ordinary conversational clarification only as needed
+  and no prior Goal write, while a truncated read is contextual input that may
+  invite paging or clarification rather than runtime authorization failure;
+- ordinary discussion, a hypothetical/quoted/negated aspiration, Tutor
+  suggestion without learner acceptance, elapsed time, evidence, task
+  execution, and Course progress create no Goal or lifecycle transition in the
+  bounded released-Agent qualification;
+- intent materialization, omitted-field carry/default behavior, stale state,
+  no-change, duplicate/conflict, allow/ask/deny, cancellation, provider failure,
+  Session deletion, revert, restart, and recovery retain deterministic
+  no-fabrication behavior;
+- exact root and delegated issuance tests preserve the causal root occurrence
+  and complete parent-task/delegated-capability chain. A forged chain fails
+  physical validation; an authentic child without Goal-write membership
+  produces no Goal candidate or Agent-issuance row at a free address; an
+  effective policy deny after valid admission retains exact candidate issuance
+  and capability-deny history but no effect;
+- table-driven replay/race tests distinguish `semantic_terminal_v2` from
+  `candidate_v2`: a pre-existing same-address duplicate/conflict wins before
+  stale owners, missing Goal delegation, cancellation, and policy with no
+  Agent/capability/current-target facts; a candidate losing at final settlement
+  returns duplicate/conflict while retaining its prior issuance/capability
+  history and creating no effect. Root-versus-child provenance never changes
+  semantic equality;
+- fault-injected recovery covers candidate admission before capability
+  evaluation, atomic effective-`ask` selection plus durable request issue,
+  issued/no-reply, durable allow/deny or prompt reply before final settlement,
+  and a capability-wait semantic loser. Each branch runs the same
+  semantic-first final check, and an otherwise uncommitted allow with no winner
+  recovers interrupted/no-effect;
+- frozen-current migration and fresh installation agree, historical rows replay
+  exactly, admitted nonterminal V1 direct/accepted rows recover
+  interrupted/no-effect without re-prompt or application, new rows cannot use
+  legacy semantic/confirmation shapes, and SQLite contains no source-language
+  interpretation; and
+- the V1 field-basis, complete-candidate, prepared-confirmation, and once-only
+  confirmation producers, registry entries, TUI controls, and current command
+  branches are unreachable after V15, while their identifiers/discriminators
+  remain reserved where collision safety requires and historical V1
+  read/replay remains exact; and
+- the primary TUI and retained carriers show the exact configured permission
+  when asked and the exact committed/already-applied/no-effect/failed result
+  afterward.
+
+Provider evidence is one bounded qualification of ordinary Agent tool use and
+ambiguity behavior, not a language benchmark or proof of every phrasing.
+Deterministic suites remain authoritative for schema, transaction, replay,
+permission, migration, and recovery.
+
+This candidate does not authorize Gate 17, Gate 18 context injection, Goal
+planning, learner-state inference, a learner-facing Goal browser, a generic
+semantic resolver, or another Agent runtime.
 
 ## Historical 2026-07-27 reopen finding
 
@@ -287,19 +740,22 @@ These decisions were accepted during the Gate 16 grill. They are recorded by
 consequence rather than as an interview transcript. Examples explain the
 boundary but do not become universal schemas or algorithms.
 
-### Durable admission requires learner authorship or acceptance
+### Durable admission requires a learner-rooted Agent action
 
-A Goal may be persisted only after explicit learner initiation or explicit
-learner acceptance. Entry is not restricted to `/goal`, another direct command,
-or any fixed interaction shape. Model-assisted clarification is allowed and may
-iterate until the consequential ambiguity is resolved.
+A Goal may be persisted only from an ordinary interactive Agent operation
+rooted in the learner's current request, correction, or conversational
+acceptance. Entry is not restricted to `/goal`, another direct command, or any
+fixed interaction shape. Agent clarification may iterate until a consequential
+learner-owned ambiguity is resolved.
 
-A clear, fully learner-authored Goal expression may be committed and surfaced
-visibly without a redundant confirmation round. Ordinary conversation may not
-be silently promoted merely because a model detects an aspiration. If the
-model adds or changes outcome meaning, conditions, target time, or scope, the
-resulting candidate must be shown to and accepted by the learner before it
-becomes durable Goal state.
+A clear request may be structured, committed, and surfaced visibly without a
+redundant confirmation round. Ordinary discussion or an unaccepted Tutor
+suggestion may not be silently promoted merely because a model detects an
+aspiration. If a different outcome, condition, target, scope, identity,
+lifecycle, or replacement choice remains materially unresolved, the Agent asks
+in ordinary conversation before issuing the write. Program code does not
+classify prose as learner-authored versus model-supplied or require a special
+candidate protocol to prove that judgment.
 
 The direct-command and model-clarification paths are possible mechanisms, not
 separate Goal meanings and not mandatory product flows.
@@ -321,17 +777,17 @@ criterion does not authorize model inference.
 Wording and thresholds do not by themselves define Goal identity. For example,
 `pass the data-structures final` and `score at least 85` will usually be two
 expressions or condition revisions of one exam-oriented purpose rather than two
-Goals. When that relationship is ambiguous at creation, the model should ask
+Goals. When that relationship is ambiguous at creation, the Agent should ask
 before the first durable commit. Later changes that retain the purpose append a
 revision under the same identity.
 
 That is a common interpretation, not an exhaustive identity rule. A learner may
 resume the same purpose after real abandonment, may treat a repeated target
 occurrence as a new Goal, or may explicitly want a renewed pursuit recorded
-separately. The model may propose an interpretation and ask when the choice
-changes history or later behavior; the learner accepts the consequential
-relation. The program may not infer it from a time gap, forgetting, current
-performance, or wording similarity alone.
+separately. The Agent clarifies when the choice changes history or later
+behavior, then records the resolved relation in the same typed command. Program
+code may not infer it from a time gap, forgetting, current performance, or
+wording similarity alone.
 
 ### Closure declarations are explicit but do not settle later learning history
 
@@ -340,13 +796,14 @@ not create mastery, assessment evidence, or proof that an external result
 occurred. `abandoned` means the learner has stopped pursuing it without claiming
 attainment. `superseded` means a new Goal has replaced its underlying purpose.
 
-Only explicit learner authorization, including acceptance of a surfaced model
-proposal, may cause those transitions. Tutor behavior, Agent execution, Course
-progress, elapsed time, a deadline, or learning evidence cannot automatically
-achieve, abandon, supersede, or fail a Goal.
+Only a learner-rooted Agent command interpreting the current learner request or
+ordinary conversational acceptance may cause those transitions. Tutor
+behavior, background Agent execution, Course progress, elapsed time, a
+deadline, or learning evidence cannot automatically achieve, abandon,
+supersede, or fail a Goal.
 
-Each declaration preserves what the learner authorized about the exact Goal
-meaning at that time. It does not erase history or force every later situation
+Each declaration preserves the exact source-linked Agent interpretation
+recorded at that time. It does not erase history or force every later situation
 into a permanent terminal interpretation. A later interaction may correct a
 mistaken achievement, resume an abandoned pursuit after substantial forgetting,
 retain a once-true achievement while acknowledging later decay, raise the
@@ -358,30 +815,32 @@ readings can overlap and none is inferred merely from the observable facts.
 Real learning situations do not form an exhaustive set of mutually exclusive
 Goal cases. Abandonment, forgetting, shallow understanding, mistaken confidence,
 later decay, a higher standard, a renewed attempt, and a changed purpose may
-co-occur. Gate 16 therefore preserves the learner-accepted Goal interpretation
-and its source rather than claiming the system has discovered the one true
-classification of the learner's history.
+co-occur. Gate 16 therefore preserves the source-linked Goal interpretation
+rather than claiming the system has discovered the one true classification of
+the learner's history.
 
 The program owns the legal identity, revision, correction, and lifecycle
-effects and the provenance of the accepted choice. A model may interpret the
-situation, compare plausible readings, and ask only when their difference would
-materially change durable history, context, teaching, or planning. The learner
-accepts any model-supplied consequential interpretation. Gate 16 does not earn
-an exhaustive learning-history enum or a mandatory durable pursuit-episode
-entity merely to remove semantic ambiguity.
+effects and the provenance of the recorded choice. The Agent may interpret the
+situation, compare plausible readings, and clarify only when their difference
+would materially change durable history, context, teaching, or planning. Gate
+16 does not earn an exhaustive learning-history enum or a mandatory durable
+pursuit-episode entity merely to remove semantic ambiguity.
 
 Forgetting, current depth, observed performance, learner report, evidence, and
 model inference remain distinct learner-state meanings. They may later inform a
 Goal decision or plan, but they neither become Goal identity nor automatically
-rewrite Goal lifecycle. A later consumer must earn any durable learner-state
+rewrite Goal lifecycle. When a consequential relation remains unresolved, the
+Agent clarifies before writing; no host-side acceptance protocol proves the
+interpretation. A later consumer must earn any durable learner-state
 representation outside Gate 16.
 
 ### Target time is optional and is not a schedule
 
-A Goal may carry an optional structured target time or boundary. When the model
+A Goal may carry an optional structured target time or boundary. When the Agent
 interprets a learner's natural-language time expression, the normalized meaning
-must be visible to and accepted by the learner. Reaching or passing that time is
-a query-time fact only.
+must be visible and correctable; it asks before writing only when different
+plausible readings materially matter. Reaching or passing that time is a
+query-time fact only.
 
 Frequency, cadence, daily allocation, and a study schedule do not belong to the
 Goal. They may later be planning inputs or outputs, but they are not silently
@@ -425,48 +884,48 @@ would require a later owning roadmap decision rather than an implicit split now.
 
 | Decision | Basis | May be revised by |
 | --- | --- | --- |
-| `G16-MD-001` learner initiation or acceptance is required; interaction shape is not fixed | 2026-07-21 maintainer grill, under learner-intent and non-silent-write product policy | maintainer or owning product decision |
+| `G16-MD-001` a learner-rooted Agent action is required; interaction shape is not fixed and program code does not prove the prose | 2026-07-21 maintainer grill as corrected by the 2026-07-30 Agent-native product boundary | maintainer or owning product decision |
 | `G16-MD-002` outcome required; conditions optional and consequentially clarified | 2026-07-21 maintainer grill | maintainer or owning product decision |
-| `G16-MD-003` identity follows the learner-accepted contextual relation; time, ability, evidence, and wording do not decide it | 2026-07-21 maintainer grill | maintainer or owning product decision |
-| `G16-MD-004` achievement, abandonment, and supersession require learner authorization, create no evidence, and do not erase later interpretive ambiguity | 2026-07-21 maintainer grill plus accepted no-automatic-attainment roadmap boundary | maintainer or owning product decision |
+| `G16-MD-003` identity follows the Agent-interpreted learner context; unresolved consequential choice is clarified, while time, ability, evidence, and wording alone do not decide it | 2026-07-21 maintainer grill as corrected by the Agent-native semantic boundary | maintainer or owning product decision |
+| `G16-MD-004` achievement, abandonment, and supersession require a learner-rooted Agent command, create no evidence, and do not erase later interpretive ambiguity | 2026-07-21 maintainer grill plus accepted no-automatic-attainment roadmap boundary and 2026-07-30 correction | maintainer or owning product decision |
 | `G16-MD-005` target time optional; passage has query-time meaning only | 2026-07-21 maintainer grill plus no-background-daemon architecture | maintainer or owning product decision |
 | `G16-MD-006` exam is a representative stress case, not a universal Goal model | 2026-07-21 maintainer grill | maintainer or owning product decision |
 | `G16-MD-007` Gate 21 consumes typed Goal or Assignment planning demands | 2026-07-21 maintainer correction of an Assignment-only roadmap derivation | maintainer or owning product/architecture/roadmap decision |
-| `G16-MD-008` overlapping learning histories remain semantically clarifiable rather than becoming one deterministic identity taxonomy | 2026-07-21 maintainer correction using abandonment, forgetting, shallow understanding, and later-depth counterexamples | maintainer or owning product decision |
+| `G16-MD-008` overlapping learning histories remain Agent-interpreted and clarifiable rather than becoming one deterministic identity taxonomy | 2026-07-21 maintainer correction using abandonment, forgetting, shallow understanding, and later-depth counterexamples | maintainer or owning product decision |
 
 The Gate 16 contract may make these decisions concrete but may not turn
 optional conditions, model assistance, or one exemplar entry path into a
 requirement. A reviewer may reject an engineering derivation without changing
 the accepted decisions above.
 
-## Proposed Gate result
+## Retained structural Gate result
 
 After Gate 16:
 
 - one LearnerHome may contain no Goals or several independent Goal identities;
 - each Goal has one immutable linear revision history and one exact current
-  head, while semantically similar Goals remain distinct unless the learner
-  accepts an explicit replacement relation;
+  head, while semantically similar Goals remain distinct unless a learner-rooted
+  Agent command records an explicit replacement relation;
 - every revision contains one nonempty intended outcome, zero or more ordered
   optional attainment conditions, one exact LearnerHome/Course/multi-Course
-  scope, one optional normalized target boundary, and one learner-authorized
+  scope, one optional normalized target boundary, and one learner-rooted
   lifecycle disposition;
 - `achieved` and `abandoned` remain learner declarations attached to exact
   revisions rather than mastery or evidence, while `superseded` preserves one
   explicit relation to a distinct new or already-existing Goal and the exact
-  target revision on which the learner based that relation;
+  target revision on which the Agent bound that relation;
 - an unrelated semantic correction preserves the exact accepted lifecycle
   disposition unless the learner explicitly changes it; it cannot silently
   achieve, abandon, restore, retarget, or unsupersede a Goal;
 - a later accepted revision may correct, resume, deepen, or otherwise reinterpret
   the same Goal without erasing the earlier declaration or encoding a taxonomy
   of why the learner's situation changed;
-- one exact learner occurrence may authorize one bounded atomic Goal change set
+- one exact learner occurrence may causally anchor one bounded atomic Goal change set
   containing several Goal operations, so a natural request with two exam Goals
   does not require invented extra learner occurrences or partial commits;
-- a fully learner-authored change set can commit visibly without a Gate-imposed
-  confirmation, while any model-supplied consequential meaning is shown as one
-  exact once-only candidate and commits only after learner acceptance;
+- a learner-rooted Agent change set can commit visibly without a Gate-imposed
+  confirmation; unresolved consequential meaning is clarified in ordinary
+  conversation before the same command is issued;
 - every applied change set reuses Gate 8/12 physical invocation, Turn,
   permission, receipt, ToolPart, frontier, cancellation, and recovery mechanics;
 - exact physical replay and semantic duplicate return stored results, conflicting
@@ -511,10 +970,12 @@ schema must nevertheless keep these meanings distinct and database-enforced.
    revision. Scope membership never names a View, Revision, item, material,
    directory, or LearningSpace.
 5. **Optional target boundary.** One closed absent, exact-instant, or local-date
-   arm with the accepted source expression and normalized display/timezone
-   facts needed to interpret it without consulting future host defaults. A
-   local date remains a civil date; the system does not invent an exam time or
-   silently convert it to end of day.
+   arm with the versioned normalized value and exact runtime-bound zone/release
+   or fixed-offset facts needed to interpret it without consulting future host
+   defaults. Display is derived. Its causal occurrence and exact typed Agent
+   intent remain available without treating a model-supplied excerpt as proof.
+   A local date remains a civil date; the system does not invent an exam time
+   or silently convert it to end of day.
 6. **Explicit supersession membership.** A `superseded` revision names exactly
    one distinct target Goal and the exact target revision that the learner saw
    when accepting the relation. The target may already exist or may be created
@@ -525,16 +986,20 @@ schema must nevertheless keep these meanings distinct and database-enforced.
    target per source and one incoming supersession per target, and rejects a
    current cycle.
 7. **Goal change-set effect.** A generated Goal-owned effect ID, one admitted
-   learner occurrence, canonical semantic fingerprint, authorization arm,
-   bounded ordered operations with per-field authored/accepted/carried bases,
-   exact changed/no-change results, trusted settlement values, and deterministic
-   acknowledgement. It is one domain effect for Gate 8's mutation slot even
-   when several Goal revisions commit.
-8. **Learning-command receipt arm.** The Gate 8 receipt and physical invocation
-   link the exact occurrence, Turn/input, issuing model operation, Tool Part,
-   provider call, capability/version, authorization basis, permission request
-   when present, Goal change-set effect, and terminal settlement. Goal content
-   stays Goal-owned rather than being embedded in a universal receipt payload.
+   learner occurrence, canonical semantic fingerprint, current command version,
+   bounded ordered semantic intents with exact owner-resolved before/after
+   snapshots, exact changed/no-change results, trusted settlement values, and
+   deterministic acknowledgement. It is one domain effect for Gate 8's
+   mutation slot even when several Goal revisions commit.
+8. **Learning-command receipt/disposition arm.** The Gate 8 receipt and
+   physical invocation link the exact occurrence, Turn/input, Tool Part,
+   provider call, command version, and terminal settlement. A current
+   `candidate_v2` additionally links exact Agent-issuance provenance,
+   capability lifecycle/request when present, runtime-bound command state, and
+   any Goal effect. A current `semantic_terminal_v2` has only immutable
+   existing-effect/address evidence. Historical V1 retains its exact recorded
+   authorization/confirmation projection. Goal content stays Goal-owned rather
+   than being embedded in a universal receipt payload.
 
 Receipt, effect, Goal identity, revisions, conditions, scopes, and the first
 applied settlement do not use Session, Message, or Part rows as cascade-owning
@@ -551,10 +1016,11 @@ effect, receipt, and terminal settlement.
 
 ### Intended outcome and optional conditions
 
-Every revision stores one bounded nonempty intended outcome. The direct
-learner-request path retains the exact learner-authored wording except for
-closed mechanical normalization such as line endings and Unicode validation; a
-model paraphrase is model-supplied meaning and requires the acceptance path.
+Every revision stores one bounded nonempty intended outcome. The Agent supplies
+that semantic field from the learner-rooted operation; the runtime applies only
+closed mechanical normalization such as line endings and Unicode validation.
+It does not compare the outcome with source prose or route a paraphrase through
+a second acceptance path.
 
 Attainment conditions are an ordered optional list. Empty, duplicate after
 canonical equality, over-count, over-byte, malformed, or silently truncated
@@ -567,11 +1033,11 @@ rules.
 
 A mixed learner utterance may include Goal meaning plus cadence, planned work,
 or another authority's meaning. Gate 16 may commit only the exact Goal portion
-after the learner authors or accepts that separation. Dropping `daily`,
-inventing a broader outcome, or turning schedule language into an attainment
-condition is a semantic change and therefore requires an exact accepted
-candidate. The absence of Gate 21 does not authorize Goal to absorb deferred
-planning work.
+the Agent selects; if that separation remains consequentially ambiguous, it
+clarifies before writing. Dropping `daily`, inventing a broader outcome, or
+turning schedule language into an attainment condition may be a model error,
+which the visible result and correction path must expose. The absence of Gate
+21 does not authorize Goal to absorb deferred planning work.
 
 ### LearnerHome, Course, and multi-Course scope
 
@@ -585,25 +1051,28 @@ accepted Course restriction uses LearnerHome-wide scope. That records the
 absence of Course scoping rather than inferring that every Course is a target.
 An ambient directory, default Course, current route, or model guess cannot
 silently narrow it. Explicit language such as “this Course” may resolve through
-one exact trusted current Course identity; if that referent is not exact, the
-scope requires clarification or candidate acceptance.
+one exact trusted current Course identity selected from the Course-owner read;
+if the Agent cannot resolve the referent safely, it clarifies in ordinary
+conversation before issuing a command.
 
 On initial scoped creation, every Course membership is newly bound. On a later
 revision, a Course ID absent from the exact predecessor scope and present in
 the result is newly bound; an identical predecessor/result membership is
 carried; and a predecessor member absent from the result is removed. Each newly
-bound member must name an exact Course-owner snapshot and still be active in
-the final transaction. A carried member instead proves the exact sealed
+bound member is resolved by ID to a runtime-captured exact Course-owner snapshot
+and must still be active in the final transaction. A carried member instead
+proves the exact sealed
 predecessor membership and remains preservable when that Course is withdrawn
 or otherwise unavailable. A removal likewise requires no current Course
-eligibility. Semantic authorization for the complete resulting scope remains
-subject to the dependency rules below; technical carry permission does not
-manufacture learner intent.
+eligibility. Technical carry permission does not manufacture learner intent;
+the Agent decides whether an omitted scope should carry and clarifies when that
+choice materially matters.
 
 These rules apply per member. In a multi-Course correction, retained withdrawn
 members may be carried, any member may be removed, and only additions require
 current active-Course proof. Withdrawal or owner-state drift between candidate
-formation and settlement stales a newly bound member, but does not stale an
+preflight and settlement, including a configured permission wait, stales a
+newly bound member, but does not stale an
 exact carried member or removal. Course withdrawal after commit leaves Goal
 history intact and makes only that Course's current scope-availability
 projection unavailable. Restoration of the same Course identity may make it
@@ -619,24 +1088,29 @@ restoration, or model guess.
 
 ### Optional target boundary
 
-The first closed temporal representation has three arms:
+The current V2 temporal intent and normalized value are exactly the closed
+unions defined in the Agent-native contract above. Their three semantic arms
+are:
 
-- **absent:** no target boundary was accepted;
-- **exact instant:** one absolute instant plus the accepted source expression
-  and normalized local/offset representation; or
-- **local date:** one ISO civil date plus its accepted IANA timezone and source
-  expression, without an invented time of day.
+- **absent:** no target boundary;
+- **exact instant:** one civil local date-time plus a source-zone,
+  named-IANA-zone, or fixed-offset selector, resolved by the runtime to one
+  absolute instant and exact zone/offset facts; or
+- **local date:** one ISO civil date plus the same closed zone selector, without
+  an invented time of day.
 
 Relative or local language is interpreted from the exact learner occurrence's
-Gate 15 source temporal context. The model cannot supply trusted current time,
-host timezone, or offset. An explicit unambiguous offset-bearing instant may be
-normalized without a source-timezone fallback. If required temporal authority
-is unavailable or interpretation is materially ambiguous, the candidate does
-not commit until the learner accepts an exact representable meaning or removes
-the target; the runtime never silently drops it.
+source temporal context. The model cannot supply trusted current time, host
+timezone, tzdb release, epoch, or derived offset; it may select an explicit
+fixed offset when that is the intended semantic zone. If required temporal
+authority is unavailable, an IANA civil time is nonexistent/ambiguous, or the
+learner's meaning is materially unresolved, the Agent clarifies until it can
+issue an exact representable meaning or remove the target; the runtime never
+silently drops it. Historical V1 source expressions and normalization bases
+remain versioned replay facts, not V2 input or state.
 
 Reads derive before/on-or-reached/after relations from the stored arm and a
-caller-supplied trusted as-of time. Exact vocabulary may differ by arm, but
+runtime-supplied trusted as-of time. Exact vocabulary may differ by arm, but
 passage creates no Goal revision, lifecycle disposition, evidence, event,
 receipt, timer, or frontier advance. Host-timezone changes cannot reinterpret a
 stored boundary.
@@ -657,15 +1131,15 @@ Each revision carries a complete outcome, conditions, scope, target, and
 lifecycle disposition rather than a patch. That makes every historical state
 independently readable and prevents later defaults from reinterpreting an old
 write. A later wording or threshold change remains the same Goal only because
-the learner authorizes that identity continuity, not because a similarity
-function matches it.
+the Agent interprets the learner-rooted operation that way, not because a
+similarity function matches it.
 
-The producing operation also preserves one bounded basis for every complete
-snapshot field: exact current learner wording, exact accepted-candidate meaning,
-or dependency-valid carry from the named predecessor. This basis map explains
-provenance; the complete revision remains the state authority. Textual equality
-is necessary for carry but is never by itself proof that the field's exact
-meaning survived.
+The producing effect preserves the exact typed semantic intent plus the
+owner-resolved complete before/after snapshots and causal occurrence. That is
+enough to distinguish an explicitly changed field, an omitted carried field,
+and an initial default without a separate current per-field basis map. The
+complete revision remains the state authority; omission is not program proof
+that the field's semantic meaning survived the conversation.
 
 ### Stored lifecycle disposition
 
@@ -680,24 +1154,30 @@ Every revision has exactly one closed disposition arm:
   basis revision accepted for that relation.
 
 Initial ordinary creation is active. Initial achieved or abandoned meaning is
-legal only when explicitly learner-authored or accepted. Initial creation does
-not use the superseded arm; establishing that relation uses `replace` against an
-exact source head. A model may never derive any arm from time passage, Course or
-task completion, evidence, performance, wording similarity, or its confidence.
+legal only when the Agent interprets the learner-rooted operation as making
+that declaration. Initial creation does not use the superseded arm;
+establishing that relation uses `replace` against an exact source head. A model
+may never derive any arm merely from time passage, Course or task completion,
+evidence, performance, wording similarity, or its confidence.
 
 An update may preserve or explicitly change the complete disposition. An exact
 same complete snapshot is a typed no-change. Changing only disposition is a real
 revision. Updating other Goal meaning does not implicitly clear, restore,
 retarget, or create supersession: the resulting revision must preserve the exact
-accepted relation or explicitly leave it under the authorization rules below.
+bound relation or explicitly change it in the Agent-issued patch.
 Earlier revisions and dispositions remain immutable.
 
-The optional learner-authored explanation in the causal source may remain
-inspectable, but Gate 16 neither requires a reason nor invents one. Later
+The causal learner occurrence may remain inspectable, but Gate 16 neither
+requires a separate reason nor invents one. Later
 learner-state authorities may record report, evidence, or inference separately;
 none of those records rewrites this disposition.
 
-### Dependency-complete carry authorization
+### Historical dependency-complete semantic authorization (superseded)
+
+The current runtime still materializes every omitted update field exactly from
+the bound predecessor. It does not require a separate current field-basis row.
+The following prompt-forcing and source-language rules are superseded by the
+current Agent-native contract above.
 
 A direct update is legal only when the current learner presentation authorizes
 the exact resulting Goal identity, complete semantic meaning, and disposition.
@@ -736,32 +1216,32 @@ whose disposition is `superseded`. Its target arm is closed:
   non-superseded revision and use that generated revision as the basis.
 
 The source successor may carry its semantic fields for a pure replacement or
-contain separately authorized corrections, but the supersession meaning is
-explicit. A carried source Course membership does not become a new binding
+apply the explicit source patch in the same command, but the supersession
+meaning is explicit. A carried source Course membership does not become a new binding
 merely because `replace` appends the superseded successor. A generated target
 revision evaluates its own initial scope independently, so each of its scoped
-members is newly bound and needs active proof. An existing target is not
-mutated by the relation. It must still have the exact accepted head when the
-final transaction validates its pre-apply snapshot; an independently authorized
-same-set update may then consume that head as already represented in the
-accepted change set. Later target revisions do not invalidate the relation or
-rewrite its recorded basis. Reads may show the target's current head separately
-but never pretend that later meaning was the accepted basis.
+members is newly bound and needs runtime-captured active Course state. An
+existing target is not mutated by the relation. It must still have the exact
+bound head when the final transaction validates its pre-apply snapshot; another
+operation in the same change set may then consume that head as already
+represented in the materialized command. Later target revisions do not
+invalidate the relation or rewrite its recorded basis. Reads may show the
+target's current head separately but never substitute it for the recorded basis.
 
 At final settlement the complete projected current relations have at most one
 outgoing target per source, at most one incoming supersession per target, and no
 cycle. Historical incoming relations do not block a new current relation. A
 bounded change set may explicitly clear an old relation and establish another
-in one atomic final projection. The target may also receive an independently
-authorized update in that same change set; its pre-change head remains the exact
-accepted relation basis, and the final graph is validated after all operations.
+in one atomic final projection. The target may also receive an explicit update
+operation in that same change set; its pre-change head remains the exact
+relation basis, and the final graph is validated after all operations.
 
 A later source update can preserve the exact target relation while correcting
 outcome, conditions, scope, or target time. It clears supersession only when the
-learner explicitly authorizes a non-superseded disposition, and it changes the
-target only through another `replace`. Current reads report only the direct
-accepted target; they do not infer transitive replacement, merge identities, or
-create decomposition topology. Unsupported one-to-many, many-to-one,
+Agent-issued patch explicitly chooses a non-superseded disposition, and it
+changes the target only through another `replace`. Current reads report only the
+direct recorded target; they do not infer transitive replacement, merge
+identities, or create decomposition topology. Unsupported one-to-many, many-to-one,
 split/decomposition, or cyclic meaning requires clarification rather than a
 fabricated relation.
 
@@ -774,24 +1254,23 @@ one nonempty bounded ordered change set. Its operations form a closed union:
 
 - **create:** generate one new Goal identity and initial complete
   non-superseded revision;
-- **update:** consume one exact existing Goal head/version and append one
-  complete next revision, preserving its exact disposition or explicitly
-  changing it to active/achieved/abandoned, but not introducing or retargeting
-  supersession; or
-- **replace:** consume one exact source Goal head/version, append one complete
+- **update:** name one exact existing Goal head Revision and a semantic patch;
+  the owner consumes that current head and appends one complete next revision,
+  preserving omitted fields and changing only explicit fields; or
+- **replace:** name one exact source Goal head Revision, append one complete
   superseded successor, and bind it either to an exact eligible existing Goal
-  head or to one new Goal generated with a complete initial non-superseded
-  revision inside that operation.
+  head Revision or to one new Goal generated from supplied semantic fields
+  inside that operation.
 
 Runtime-generated Goal, revision, effect, receipt, permission, time, and order
-identities are not model input. Existing Goal updates name exact IDs and
-versions obtained from a trusted owner read or protected context projection.
-An existing replacement target additionally names its exact accepted basis
-head. Every resulting revision contains the complete proposed snapshot, bounded
-field-basis map, per-member Course admission bases, and verbatim source excerpts
-or accepted-candidate basis needed by the dependency policy. A new replacement
-target's identities are internal results of that operation rather than
-cross-operation model labels.
+identities and numeric owner versions are not model input. Existing Goal
+updates name exact Goal/head-Revision identities obtained from an owner read or
+protected context projection. An existing replacement target likewise names
+its exact head Revision. At preflight the owner atomically captures current
+heads and Course descriptors, materializes complete before/after snapshots,
+and records that resolved command through any permission wait; final settlement
+revalidates them. A new replacement target's identities are internal results of
+that operation rather than cross-operation model labels.
 
 The change set has implementation-fixed operation, Course-membership,
 condition-count, per-string, and aggregate-byte limits. Overflow rejects the
@@ -799,7 +1278,7 @@ whole candidate; it never drops, truncates, summarizes, or commits a prefix.
 Within one set, an existing Goal head may be consumed at most once and generated
 identities cannot be cross-referenced by another operation. An exact consumed
 head may additionally serve as a replacement target basis for an independent
-operation in the same accepted set; the relation retains that pre-change basis
+operation in the same admitted set; the relation retains that pre-change basis
 and the final one-to-one acyclic projection is validated after all operations.
 
 ### Why the change set is one effect
@@ -910,7 +1389,12 @@ process-local; accepted Goal state begins only in the atomic final settlement.
 The durable transcript remains available under its existing owner, and a later
 learner occurrence may form a new candidate.
 
-## Command identity, settlement, and acknowledgement
+## Historical authorization and retained command settlement
+
+Semantic replay/conflict, atomic transaction, receipt, recovery, and exact
+post-commit result clauses in this section remain retained. Any separate
+accepted-candidate confirmation or source-language proof is superseded by the
+current Agent-native contract.
 
 ### Replay and conflict precedence
 
@@ -919,39 +1403,45 @@ settlement path. Both phases preserve this order; the final transaction is
 authoritative:
 
 1. Exact terminal physical Part/call replay validates the complete trusted
-   envelope and canonical input, then returns the stored result without a new
-   time, event, permission request, domain read, or Goal effect.
+   envelope, versioned disposition, and canonical input, then returns the
+   stored result without a new time, event, permission request, domain read, or
+   Goal effect. Historical V1 additionally validates its exact recorded
+   authorization/confirmation bytes for physical replay only.
 2. Reusing the Part ID or `(Assistant Message ID, provider call ID)` with a
-   different tool, envelope, authorization arm, or canonical change set is a
-   physical conflict and cannot alter the old result.
-3. A physically new invocation validates only the immutable causal envelope
-   needed to name the semantic slot: frozen Turn/input/message/tool membership,
-   learner-occurrence identity, admitted capability/version membership, and the
-   closed structural shape of the authorization arm and canonical input. This
-   step does **not** evaluate current source availability, effective authority,
-   permission, acceptance, cancellation, Goal/Course heads, or semantic carry.
+   different tool, envelope, command version, or canonical typed change set is
+   a physical conflict and cannot alter the old result.
+3. A physically new V2 invocation validates only the authentic immutable causal
+   envelope needed to name the semantic slot—frozen
+   Turn/input/message/tool-operation membership and learner-occurrence
+   identity—and the closed structural shape of the canonical typed input. This
+   step does **not** evaluate current source availability, Goal-write
+   delegation, policy, permission, cancellation, Goal/Course heads, or
+   materialized carry.
 4. If the occurrence's Goal change-set slot already has the exact same canonical
-   fingerprint and authorization basis, settle `already_applied` with the
-   original effect and a current relation projection. A different change set or
-   basis is a semantic conflict requiring a new learner occurrence.
-5. Only a genuinely new effect enforces the Assistant Message mutation slot,
-   then evaluates effective authority and the applicable ordinary permission or
-   exact accepted-candidate prompt. Its final settlement consumes that outcome
-   before evaluating live source availability, direct-source/dependency rules,
-   boundedness, exact source and existing-target heads, final supersession
-   projection, no-change, target time, Course membership bases, and active-owner
-   proofs only for newly bound Course members.
+   typed-intent fingerprint, settle `semantic_terminal_v2/already_applied` with
+   immutable existing-effect/address evidence. A different typed intent is
+   `semantic_terminal_v2/semantic_conflict`. Root/child issuance and capability
+   state do not participate in this equality.
+5. Only a free address checks exact Goal-write membership, enforces the
+   Assistant Message mutation slot, and reserves `candidate_v2` with truthful
+   Agent issuance and runtime-bound state. It then evaluates ordinary
+   capability policy/permission. Final settlement repeats semantic identity
+   before live source, boundedness, source/target heads, supersession,
+   no-change, target normalization, Course membership, and frontier checks.
 
-This is one total order. Immutable envelope/basis-shape validation precedes the
-semantic address, while committed replay/duplicate/conflict precedes current
-permission, acceptance, cancellation, source availability, newly bound Course
-admission state, Goal-head checks, or carry validity. Later live state therefore
-cannot rewrite history. Effective authority still precedes any live no-change
-or current Goal projection for a genuinely new invocation.
+This is one total order. Authentic immutable envelope/input validation precedes
+the semantic address, while committed duplicate/conflict precedes Goal-write
+membership, policy, permission, cancellation, source availability, newly bound
+Course admission state, Goal-head checks, or carry validity. Historical V1
+authorization remains part of exact V1 replay but never participates in V2
+semantic identity. Later live state therefore cannot rewrite history.
 
-### Reservation, permission, and final transaction
+### Historical V1 reservation/confirmation and retained atomicity
 
-The common short-transaction pattern remains:
+The following pseudocode is V1 provenance. Its once-only acceptance, field
+bases, confirmation snapshot, and acceptance vocabulary do not govern V2.
+Current V2 uses the disposition and total order defined above; only the
+short-transaction/no-open-transaction atomicity remains shared.
 
 ```text
 register the physical call in the Session/Turn FIFO lane
@@ -968,15 +1458,15 @@ register the physical call in the Session/Turn FIFO lane
 -> commit and return the stored exact result
 ```
 
-No SQLite transaction remains open while the learner considers a candidate.
+No SQLite transaction remains open while configured capability `ask` waits.
 The final transaction does not trust reservation-time Goal state or a newly
 bound Course-owner snapshot. A concurrent Goal writer, changed head, or
-withdrawal/owner drift of a newly bound Course after confirmation yields typed
-stale/no-effect rather than applying a candidate the learner did not see.
+withdrawal/owner drift of a newly bound Course after permission issue yields
+typed stale/no-effect rather than applying a command against changed state.
 Withdrawal or restoration of an exact carried or removed Course member does
 not stale the Goal operation because availability was not its admission basis.
-Target-time passage alone is not stale because it does not change the accepted
-boundary.
+Target-time passage alone is not stale because it does not change the exact
+stored target value.
 
 For an applied change set, these values commit or roll back together:
 
@@ -984,7 +1474,10 @@ For an applied change set, these values commit or roll back together:
 - condition and Course-scope memberships with their sealed admission bases;
 - exact head consumption, lifecycle dispositions, and supersession memberships;
 - Goal change-set effect and operation results;
-- Gate 8 invocation, receipt, authorization and confirmation arm;
+- Gate 8 invocation, receipt, and closed Goal disposition: current candidates
+  carry `agent_action` issuance and capability settlement, current semantic
+  terminals carry neither, and V1 replay retains its exact historical
+  authorization/confirmation projection;
 - the Assistant Message's applied-learning-mutation ownership;
 - Turn consumed/resulting tool frontier;
 - deterministic terminal acknowledgement, ToolPart, and Event projection; and
@@ -1001,7 +1494,9 @@ anything.
 An applied or already-applied result contains at least:
 
 - exact receipt and Goal change-set effect IDs;
-- authorization basis and confirmation request ID when present;
+- versioned Goal disposition and, only when the invocation was an admitted
+  candidate, exact Agent-issuance provenance plus the ordinary capability
+  permission-request ID when configured `ask` durably issued one;
 - ordered per-operation outcome with generated/existing Goal and revision IDs,
   resulting lineage versions, complete lifecycle disposition, normalized
   scope and target summary, and no-change status where applicable; and
@@ -1018,25 +1513,26 @@ Once the terminal Part is durably settled, later provider hooks, truncation,
 assistant prose, or provider failure cannot rewrite it. Post-commit observers
 may observe but have no authority to turn committed success into an error.
 
-## Goal owner reads
+## Retained Goal owner reads and current Agent exposure
 
 The Goal authority exposes bounded stable-snapshot reads for:
 
 - one Goal identity's exact current head, lineage version, complete semantic
   snapshot, lifecycle disposition and exact supersession basis when present, scope
-  availability, target relation at a caller-supplied trusted as-of time, and
+  availability, target relation at a runtime-supplied trusted as-of time, and
   source receipt;
 - stable cursor-bounded revision history for one Goal, including historical
-  dispositions, supersession targets/bases, field-basis provenance, and exact
-  source availability;
+  dispositions, supersession targets/bases, V2 effect typed-intent and
+  versioned before/after provenance plus candidate Agent issuance when present,
+  or V1 historical field bases, and exact source availability;
 - stable cursor-bounded discovery of Goal identities and current heads with
   optional exact disposition and Course-ID filters; and
 - exact change-set effect/receipt inspection by effect or Goal revision identity.
 
 Current status is a closed projection of `active`, `achieved`, `abandoned`, or
 `superseded` from the exact current revision's stored disposition. A superseded
-read returns its accepted target Goal/basis revision and may separately show the
-target's current head; it never substitutes the later head for the accepted
+read returns its bound target Goal/basis revision and may separately show the
+target's current head; it never substitutes the later head for the recorded
 basis or follows wording similarity. Target-time relation and Course
 availability are separately reported and cannot overwrite disposition.
 
@@ -1057,14 +1553,13 @@ owner state without importing an old transcript.
 
 ## Failure, cancellation, restart, and destructive lifecycle
 
-- **Invalid or semantically widened direct request:** changed source text,
-  model paraphrase, invented condition, equality-only carry, incomplete
-  dependency authorization, hidden scope/identity/disposition/relation change,
-  ambiguous target normalization, unsupported mixed intent, or over-limit input
-  settles with no Goal effect and requests only consequential clarification.
-- **Unaccepted model candidate:** deny, reject, correction, disposal,
-  cancellation, or owner loss leaves no Goal identity, revision, disposition/
-  supersession membership, field basis, effect, receipt arm, mutation-slot use,
+- **Invalid current command:** malformed or over-limit input, non-current owner
+  identity/head Revision, illegal patch or clear, unrepresentable target arm,
+  or illegal lifecycle/supersession projection settles with no Goal effect. The
+  runtime does not reject or approve based on source-language interpretation.
+- **Unresolved learner-owned ambiguity:** the Agent asks before issuing a
+  command. Until a command exists, there is no Goal identity, revision,
+  disposition/supersession membership, effect, receipt arm, mutation-slot use,
   or frontier advance.
 - **Stale Goal head:** update or replace after another revision/replacement
   commits fails the whole change set. One exact head has one atomic winner and
@@ -1074,7 +1569,7 @@ owner state without importing an old transcript.
   final projection rejects the whole change set; later target revisions after a
   successful commit do not rewrite the accepted relation basis.
 - **Stale newly bound Course membership:** withdrawal or changed owner state of
-  an added Course before final commit rejects the whole candidate. Current
+  an added Course before final commit rejects the whole admitted command. Current
   unavailability of an exact carried or removed predecessor membership does
   not reject correction, lifecycle change, or replacement. Later withdrawal
   changes only read availability.
@@ -1082,7 +1577,7 @@ owner state without importing an old transcript.
   effect and exact duplicate results. A different interpretation for the same
   semantic slot conflicts rather than partially coexisting.
 - **Transaction failure:** injected failure at every Goal identity, revision,
-  condition, scope, disposition/supersession membership, field-basis, effect,
+  condition, scope, disposition/supersession membership, resolved intent/effect,
   receipt, frontier, ToolPart, or event boundary rolls the complete change set
   back.
 - **Cancellation before commit:** no effect unless the uninterruptible final
@@ -1104,8 +1599,9 @@ owner state without importing an old transcript.
   a target-fork Goal write. The genuine fork-start learner input receives a new
   Turn/input/occurrence and may create one new change-set effect.
 - **Whole-Session deletion:** applied Goals, revisions, dispositions,
-  supersession memberships, field bases, effects, receipts, confirmation
-  snapshots, acknowledgements, and bounded semantic content remain. The origin
+  supersession memberships, current typed intents/before-after snapshots,
+  historical field bases and confirmation snapshots when present, effects,
+  receipts, acknowledgements, and bounded semantic content remain. The origin
   becomes truthfully unavailable through the existing occurrence tombstone;
   failed/no-effect invocation rows are removed under Gate 8 ownership.
 - **Revert:** a cleanup set containing an applied Goal Part or its Assistant
@@ -1113,7 +1609,7 @@ owner state without importing an old transcript.
   not change Goal state or invent source loss.
 - **Course withdrawal and target passage:** neither creates a Goal transition,
   auto-achievement, abandonment, failure, retarget, or replacement. Withdrawal
-  also cannot prevent a later learner-authorized correction, disposition
+  also cannot prevent a later learner-rooted Agent correction, disposition
   change, or replacement that carries or removes the exact existing membership.
 - **Invariant corruption:** writes and reads fail closed. No prompt, model, or
   terminal projection may synthesize a head, condition, scope, target, effect,
@@ -1124,9 +1620,10 @@ owner state without importing an old transcript.
 The production owner is a separate learner-Goal Core authority. It owns Goal
 identity, immutable revision semantics, complete snapshots, lifecycle
 dispositions, supersession relation, bounded change sets, semantic
-duplicate/conflict, exact Course-scope relation, target interpretation,
-acknowledgement data, and bounded reads. It is not a Goal manager, generic
-Agenda service, learner-state store, planner, graph, or Agent memory.
+duplicate/conflict, exact Course-scope relation, target representation and
+calendar validity, acknowledgement data, and bounded reads. Open target-language
+interpretation belongs to the Agent. Goal is not a Goal manager, generic Agenda
+service, learner-state store, planner, graph, or Agent memory.
 
 Dependencies remain one-directional:
 
@@ -1134,24 +1631,25 @@ Dependencies remain one-directional:
   context, current input membership, presentation availability, and fork/
   compaction identity;
 - learning command owns physical invocation, trusted envelope, effective
-  permission, once-only confirmation request, receipt union, mutation slot,
+  permission and ordinary configured prompt, receipt union, mutation slot,
   terminal ToolPart/event settlement, reconciliation, and startup recovery;
 - Goal owns semantic address/effect, identities, revisions, conditions, scope,
   target, lifecycle/replacement legality, acknowledgement content, and reads;
 - Course exposes an exact active-Course descriptor and transaction revalidator
   for scope targets without giving Goal its mutable service or View semantics;
-- trusted clock/source temporal context supplies time facts without accepting
-  model-supplied current time or host fallback;
+- trusted clock/source temporal context supplies time facts and calendar
+  arithmetic without treating the Agent's interpretation of learner wording as
+  trusted time;
 - later Context, planning, and terminal owners receive read-only Goal
   projections or exact commands, never the mutable authority; and
 - the released-v1 application layer composes the reserved tool with the shared
   runtime and cannot move Goal meaning into the generic Agent runner.
 
 The reserved capability identity cannot be replaced by custom or MCP tools.
-Default Agent composition may expose it under effective permission; delegated
-Turns require explicit non-escalating Goal capability and the exact causal
-learner occurrence. Internal title, compaction, project-copy, recovery, and
-other noninteractive model operations receive no Goal writer.
+Default Tutor Agent composition exposes it under effective permission;
+delegated Turns require explicit non-escalating Goal capability and the exact
+causal learner occurrence. Internal title, compaction, project-copy, recovery,
+and other noninteractive model operations receive no Goal writer.
 
 No HTTP mutation route, background worker, daemon, provider-specific Goal path,
 preview-v2 runner, slash-command-only executor, universal command bus, or
@@ -1159,7 +1657,7 @@ compatibility adapter is added. Existing generic slash expansion is only
 interaction-mechanism evidence; Gate 16 neither requires nor forbids a later
 direct terminal syntax that obeys the same authority.
 
-## Migration and compatibility boundary
+## Historical first implementation migration and compatibility boundary
 
 Gate 16 adds one Repa-owned forward migration after the accepted Gate 15 schema
 and keeps the generated current schema equivalent to a fresh database.
@@ -1484,7 +1982,7 @@ oracles, or release builds are required only if the exact implementation changes
 their carrier or leaves a cross-package claim unresolved. Documentation-only
 contract work uses diff, link, formatting, and worktree checks.
 
-## Design evidence provenance
+## Historical design evidence provenance
 
 This contract was derived against the accepted product and
 architecture documents, Roadmap 09, and the closed Gate 8, Gate 12, Gate 14, and
@@ -1505,7 +2003,7 @@ computational settlement and lineage problems; the new derivation is limited to
 Goal meaning, bounded multi-Goal atomicity, and direct-versus-accepted semantic
 authorization.
 
-## Independent review state
+## Historical 2026-07-21 independent review state
 
 Fresh top-level reviewer task `019f80b5-58a4-74a1-8530-1405a1e57a25` opened
 whole-Gate run `gate16-whole-20260721-01`. It did not dispute `G16-MD-001`
@@ -1609,12 +2107,18 @@ DDL and predecessor fixtures are governed by the cross-Gate migration repair.
 
 The corrective shared presenter now displays every supported create, update, and
 replace operation from the exact owner-produced Goal meaning, Course titles and
-availability, field bases, lifecycle, conditions, target, and relations.
+availability, lifecycle, conditions, target, and relations.
 Opaque Goal and Revision identities remain binding data rather than learner
 copy. The result is generated from the committed Goal revision and settlement
 operations inside the transaction, stored once, and remains visible in TUI and
 direct-run after later provider failure. The maximum legal Goal proposal is
 scrollable without hiding the once-only permission controls.
+
+That sentence describes the historical V1 proposal carrier. The current path
+retains complete semantic display, ID opacity, scrolling, generic configured
+`ask`, committed readback, and durable results. V1 field-basis presentation and
+once-only Goal confirmation are historical projections, not current V2 input or
+controls; an effective `allow` has no Goal-specific prompt.
 
 The original TUI reviewer independently accepted the envelope, semantic
 completeness, ID-opacity, scrolling, committed-readback, replay, and
@@ -1629,6 +2133,10 @@ separate top-level corrective review task
 authority at that historical point. The 2026-07-30 maintainer correction now
 supersedes its exhaustive resolution-proof boundary. SQL and application phrase
 forensics, missing model-visible owner reads, natural-reference handling, and
-the model-facing mutation surface must be rederived together. Gate 16 is
-therefore reopened at contract/theory rather than merely implementation
-evidence, and Gate 17 remains paused.
+the model-facing mutation surface were rederived together in the current
+Agent-native candidate above. Fresh reviewer
+`019fb2a3-c902-7882-8134-1bf33f1eb04d` returned `Revise` with
+`G16-AN-001..003`; the current text repairs the Goal disposition/semantic-
+identity boundary, exact V2 target/carry projection, and causal closing
+evidence. It remains an unaccepted exact-diff candidate until that same
+reviewer closes it. Gate 17 remains paused.

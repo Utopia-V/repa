@@ -1,112 +1,24 @@
 # OpenCode fork Gate 14: learner navigation continuity
 
-Status: Contract/theory reopened only at the Agent-native default-Course
-reference and admission boundary. The 2026-07-30 maintainer correction rejects
-complete Course-candidate coverage as a program proof that the Agent understood
-natural language. A model-visible Course owner read plus the ordinary Agent and
-one typed set/clear command must be rederived; no implementation authority
-exists for this seam.
+Status: Agent-native default-Course contract accepted by fresh reviewer
+`019fb27f-4416-7c42-bcad-97d473803750`. `G14-AN-001..003` and residual
+`G14-AN-002-R1` are closed against the exact semantic candidate bound in the
+fork ledger. Scoped implementation authority is available for the current
+contract below. A deterministic implementation/evidence candidate is present
+in the unstaged working tree. Its bounded ChatGPT Plus/Pro OAuth
+released-Agent qualification now passes after repairing three real composition
+failures in tool preparation and durable Turn/Session ownership. Independent
+implementation/evidence review remains outstanding; no current implementation
+or evidence has yet been accepted.
 
-Corrective implementation/evidence integrated at
-`80fde20121c4b98ef9c7514ad7e33cae71c7e6b0` remains historical evidence and
-retained implementation for default identity/history, exact locators,
-migration, capability settlement, replay/recovery, and all route-anchor
-behavior. Original reviewer task
-`019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned final exact-diff `Accept` for
-that candidate. Corrective integration
-`9e91d43c629b66d65c8741e342bca7cf05de5667` also remains valid for the earlier
-typed/default-visible settlement, route-anchor locator, and trigger-versioning
-repairs. The
-later product-flow audit also falsified the claim that every low-consequence
-default change needs a Gate-specific second approval under effective `allow`;
-configured capability `ask` remains separate. That owning product/architecture
-correction revokes the conflicting historical product constraint without
-promoting a replacement Gate contract by itself. Fresh separate top-level
-reviewer task `019fad21-ff78-7920-bec4-9d06b2ff7b2c` first returned `Revise`
-with three P1 contract blockers—a closed durable authorization union, immutable
-symmetric stable locators, and the V1-to-V2 migration/replay boundary—and one
-historical-prose P3 strengthening. After the executor repaired all four, the
-same reviewer returned `Accept` on the exact-diff closure. Its direct-request
-versus exact source-bound proposal distinction, semantic/capability separation,
-current-state-free replay choice, and unchanged route-anchor behavior retain
-their historical acceptance; the 2026-07-30 correction reopens only whether
-the direct/proposal resolution machinery belongs in the model-facing path.
-Subsequent implementation mapping exposed three previously unspecified V2
-crash windows around capability evaluation, durable prompt
-issuance, durable learner reply, and final effect settlement. The narrow
-capability-lifecycle/recovery amendment at the end of this record was therefore
-reviewed by the same reviewer. Its first closure pass returned `Revise`
-for `G14-CAP-001`: a durable effective-`ask` decision could exist before prompt
-issue without a truthful recovery outcome. The repaired candidate now makes
-effective-`ask` evaluation and issue one atomic durable transition. The same
-reviewer then returned exact-diff `Accept`, closed `G14-CAP-001`, and found no
-new blocker.
-
-A deeper code/data mapping then falsified five assumptions in that accepted
-candidate without reopening its retained product choices. V12 default commands
-do not all contain a confirmation or a truthfully issued request; historical
-`from` Course versions and working selections were not recorded; the proposal
-arm lacked a real host-bound producer; physical admission and final settlement
-both appeared to create authorization; and one V12 no-effect trigger is shared
-with route anchors, so its DDL cannot remain literally unchanged while admitting
-default V2. The correction below now classifies legacy facts without invention,
-uses a real non-mutating completed Tool Part for proposals, reserves V2
-candidate authorization atomically with physical admission, separates exact V2 locators
-from explicitly partial legacy presentation, and preserves the route-owned
-trigger branch and behavior while permitting the shared trigger to be replaced.
-The original reviewer returned second narrow exact-diff `Accept` with no
-blocker, bound to Gate 14 diff
-`47679d327716ccc7394b2e77393faee76ad20576` and related seven-document diff
-`ebf8daa9047595ce5c2eac5eca77580caef0aa88` with Gate-12-only bookkeeping
-excluded.
-
-The later top-level recovery executor then found one remaining contradiction:
-the accepted text required committed semantic duplicate/conflict to win before
-current-owner and capability checks, while also requiring every new V2
-physical invocation to reserve a complete current-owner authorization snapshot
-and capability outcome. A same-address conflict whose requested target has
-since been withdrawn cannot satisfy both requirements truthfully. The
-correction below preserves universal Gate 8 physical admission, makes an
-already-committed semantic duplicate/conflict a pre-authorization terminal
-disposition, and limits the complete V2 authorization/capability lifecycle to
-genuinely new candidates. The original reviewer returned third narrow
-exact-diff `Accept`, closed `G14-RC-IE-SEM-001`, and restored scoped
-implementation authority for this amended contract. The recovered
-implementation/evidence line then entered review. Its first
-implementation/evidence review returned `Revise` with
-`G14-IE-STO-001`, `G14-IE-STO-002`, `G14-IE-RT-001`, and
-`G14-CAR-001`, plus nonblocking `G14-IE-RT-002`. The second exact-diff review
-closed all of those findings but returned `Revise` solely for
-`G14-IE-RT-003`: live permission abort and startup recovery preserved
-capability history but skipped the final semantic duplicate/conflict recheck.
-The second repaired candidate and fresh evidence bound at the end of this
-record superseded both rejected byte sets and received final exact-diff
-`Accept` before integration at `80fde2012`.
-The historical independent review run
-`gate14-whole-20260719-01` accepted contract/theory after closing `G14-CT-001`
-through `G14-CT-005` and both nonblocking strengthenings. At that historical
-closure point, the contract was implementation authority; after the scoped
-reopen, only its unaffected boundaries retain that authority. The maintainer
-authorized implementation and the whole-Gate review loop. The first
-implementation/evidence review returned
-`Revise` with `G14-IE-001` and `G14-IE-002`. The retained reviewer closed both
-repairs, then returned `Revise` with the new `G14-IE-003` SQLite replacement
-counterexample. It closed that repair, then returned `Revise` with
-`G14-IE-004`: an incoming navigation receipt could replace a legacy receipt
-identity. It closed that repair, then returned `Revise` with `G14-IE-005`: the
-three Gate-14 append-only authorities still exposed SQLite's hidden `rowid`
-replacement key, and the two transition owners did not reject every explicit
-conflict-replacement entry. The local storage/constraint boundary is repaired
-with fresh focused evidence. That reviewer's final closure turn ended in an
-external `systemError` and returned no verdict. Independent replacement review
-run `gate14-replacement-20260720-01` then reviewed the complete current
-implementation/evidence candidate, independently confirmed `G14-IE-001`
-through `G14-IE-005` resolved, and returned `Accept` with no
-acceptance-changing finding. Implementation/evidence is accepted. The accepted
-implementation is fixed by maintainer-authorized commit
-`a6b542d59879f0a4b1111eaef4ad23e446b473d0`. At that closure point, Gate 15
-had not begun; current disposition is owned by
-[the documentation index](../README.md).
+Integration `80fde20121c4b98ef9c7514ad7e33cae71c7e6b0` remains accepted for
+default identity/history, exact locators, migration, semantic replay,
+capability settlement and recovery, terminal results, and every route-anchor
+behavior. Integration `9e91d43c629b66d65c8741e342bca7cf05de5667` remains accepted for its
+earlier shared presenter and trigger-versioning repairs. The prior Gate 14
+review chains and byte bindings remain exact historical provenance in the
+[fork ledger](../fork-ledger.md) and dated sections below; none authorizes the
+new Agent-native seam.
 
 Date: 2026-07-19
 
@@ -135,8 +47,8 @@ decision was revoked there on 2026-07-29; the 2026-07-30 correction also
 revokes exhaustive candidate coverage as semantic authorization. The
 route-anchor decision and the unaffected default identity, transition,
 history, correction, replay, and migration boundaries remain authority.
-Command/query shape and replacement evidence must be rederived and reviewed
-before another implementation change.
+The current command/query and replacement evidence contract is derived below
+and must receive fresh separate review before implementation.
 
 ## 2026-07-30 Agent-native navigation correction
 
@@ -170,10 +82,240 @@ Gate 14 does not presume a second natural-language interpreter, special
 proposal lifecycle, or durable candidate universe.
 
 This correction does not reopen route anchors, default-Course identity/history,
-CAS, migration, current-state-free replay, capability recovery, stable
-locators, or terminal visibility. A fresh contract must determine the simplest
-Course query/write surface and retire only the semantic-proof machinery before
-implementation resumes.
+CAS, current-state-free replay, capability recovery, stable locators, or
+terminal visibility. It reopens migration only as needed to make the new
+current-write shape structural while retaining truthful V1/V2 history.
+
+## Current Agent-native default-Course contract candidate
+
+This section is the only current contract for the reopened seam. Later sections
+labelled historical or superseded remain provenance. If an unlabeled older
+default-Course clause requires a resolution scope, proposal Tool Part,
+confirmation snapshot, learner-visible internal ID, or host proof of linguistic
+uniqueness, this section supersedes it. Route-anchor clauses remain current
+unless expressly described otherwise.
+
+### Learner behavior and model-visible reads
+
+The primary path remains ordinary natural-language TUI interaction:
+
+```text
+learner request or ordinary conversational acceptance
+-> Agent reads exact current owner state when useful
+-> Agent selects one target or clarifies a material learner-owned ambiguity
+-> Agent issues one set/clear command
+-> configured capability policy and atomic settlement
+-> exact visible, correctable result
+```
+
+Gate 14 exposes thin read-only Agent tools over existing owners rather than a
+new resolver:
+
+- a Course query lists bounded pages and reads one exact Course;
+- a navigation query returns the exact current default head and projection;
+- Course items carry stable Course identity, title, active/withdrawn state,
+  current owner versions, and the exact working-selection Revision or null; and
+- every bounded page has an opaque scope-bound continuation cursor when more
+  owner rows remain. Absence of a cursor means only that this exact query is
+  complete; pagination is not a frozen multi-page snapshot.
+
+The default Tutor Agent can call these reads. A restricted or delegated Agent
+sees them only through the authoritative capability/permission intersection;
+read authority never implies default-Course write authority. Their built-in
+identifiers are reserved against custom, plugin, and MCP collision. A read
+creates no capability-policy, permission-request, or settlement row merely
+because it was model-visible.
+
+Reads create no learning-command admission, Agent-issuance provenance,
+capability settlement, proposal, frontier movement, or durable query snapshot.
+Cursor presence and omission are tool facts for the Agent. They are never
+persisted or revalidated as evidence that one language interpretation was
+unique. The Agent may page, read an exact identity, use a clear reversible
+choice, or ask in ordinary conversation. The learner never has to type an
+opaque ID; a user-facing clarification uses readable locators and shows an ID
+only when readable state still collides.
+
+### One current write shape
+
+Gate 14 retains one default-Course capability with a closed set/clear command.
+The entire model-visible input is exactly:
+
+```text
+{ action: "set", courseID }
+| { action: "clear" }
+```
+
+The runtime supplies the admitted occurrence, Session/Turn/model-operation,
+Assistant/tool-call identity, trusted time, capability version, physical
+invocation identity, generated effect/receipt identities, current preference
+head/version, and, for a set, the exact current Course/working-selection/View/
+Revision locator. It captures that owner state atomically with candidate
+admission and revalidates the captured state after any capability wait. The
+model does not echo internal versions, selection plumbing, or source excerpts
+back into the command.
+
+The same command is used after an ordinary conversational clarification or
+acceptance. A genuinely new candidate has one versioned Agent
+issuance/admission provenance arm, `agent_action_v3`. This arm means only that
+the runtime admitted the canonical command from an actual released interactive
+Agent operation. It is not capability authorization, learner assent, or proof
+that source language entailed the structured command, and it remains truthful
+when effective policy later denies the candidate.
+
+The closed V3 projection contains or immutably references the canonical
+command; exact issuing root-or-child Session, Turn, Assistant model operation,
+Tool Part/call, and physical invocation; the exact causal learner occurrence;
+runtime-captured expected owner state; immutable from/to locators; and command
+fingerprint. For a delegated child it additionally records the exact parent
+Turn/task chain and effective delegated-capability identity/version required by
+Gate 12. A root operation has no parent chain. A child with invalid lineage or
+without the required delegated capability cannot admit the candidate. The arm
+contains no resolution scope, candidate list, proposal reference, proposal
+fingerprint, proposal selection, source excerpt, or Gate-specific confirmation
+request.
+
+The global learning-command `agent_action` basis has the same
+issuance/admission meaning. It does not create a second semantic-authorization
+protocol or assert that the learner utterance literally requested the
+structured command. Capability authorization is recorded only by the separate
+policy/permission lifecycle below; no current semantic-authorization arm
+exists.
+
+The nonmutating `propose_default_course_preference` tool is not part of the
+current Agent or built-in producer surface, but its identifier remains reserved
+against custom, plugin, or MCP reuse while historical V2 replay recognizes that
+namespace. An Agent suggestion is ordinary Assistant language. If the learner's
+answer is needed, the Agent waits for it and then issues the same set/clear
+command from that new occurrence.
+
+### Admission, capability, and settlement
+
+The retained semantic address is
+`(occurrenceID, default-course-preference-slot)`. Exact physical replay and a
+committed same-address `already_applied` or `semantic_conflict` settle before
+current owner, source availability, cancellation, or capability checks. A
+new V3 same-address duplicate/conflict is recorded as
+`semantic_terminal_v3`; it creates no V3 Agent-issuance provenance or
+capability lifecycle and never fabricates a current conflicting-target locator.
+
+A genuinely new candidate atomically records its physical admission and
+`agent_action_v3` issuance/admission provenance before capability evaluation.
+Configured capability policy is independent:
+
+- effective `deny` or missing delegation settles denied with no effect;
+- effective `allow` adds no Gate-specific prompt;
+- effective `ask` atomically issues the ordinary permission request and the
+  retained primary-TUI projection shows the exact operation and stable from/to
+  locators; and
+- correction, rejection, cancellation, or lost prompt settlement remains a
+  truthful no-effect capability outcome.
+
+After an allow or approving reply, settlement first rechecks semantic
+duplicate/conflict, then validates the one-mutation slot, source availability,
+exact current preference head/version, exact target owner tuple, and Turn/tool
+frontier in one transaction. A same-value command returns typed no-change and
+creates no domain effect, receipt effect arm, mutation-slot use, version, or
+frontier advance. A real change atomically commits the transition, receipt,
+immutable acknowledgement, physical Tool settlement, and exact visible result.
+A candidate that loses the semantic address after capability evaluation keeps
+its truthful issuance/capability history and creates no effect.
+
+Recovery derives or replays the durable capability outcome and then performs
+the same semantic-first final check. It never applies an uncommitted allow.
+With no competing effect, an interrupted candidate remains interrupted and
+effect-free. Existing ask-issue, reply, abort, restart, and no-fabricated-request
+invariants remain unchanged.
+
+### Persistence, migration, and historical truth
+
+The implementation requires one V13-to-V14 forward migration from a frozen
+exact current fixture and matching fresh-schema generation. It must:
+
+- admit the one closed `agent_action_v3` Agent-issuance/admission provenance
+  arm, including the actual root-or-child operation and exact delegated lineage
+  above, and require all resolution/proposal/confirmation-only fields to be
+  null for that arm;
+- admit a distinct `semantic_terminal_v3` disposition for physically new V3
+  duplicate/conflict settlement, with no Agent-issuance, capability, or proposal
+  fields; preserve `semantic_terminal_v2` as an exact historical V2 shape
+  rather than relabelling it;
+- preserve every V1 and V2 disposition, effect, receipt, locator,
+  acknowledgement, capability outcome, raw command, and source classification
+  without reinterpreting or fabricating facts;
+- keep legacy V1 partial locators explicitly partial and V2 locators exact,
+  symmetric, immutable, and current-state-free on replay;
+- make the V2 proposal relation immutable historical storage only when old rows
+  require it, with no current producer, tool registration, authorization path,
+  or new row creation;
+- prevent current public command input from admitting V1/V2 shapes while
+  retaining typed historical read/replay projections; and
+- extend the shared learning-command basis with the honest current
+  `agent_action` issuance/admission discriminator while preserving historical
+  `learner_request`/`learner_acceptance` bytes and projections; and
+- replace every affected trigger/check through the versioned migration while
+  preserving route-owned branches and all route-anchor behavior byte-for-byte
+  in meaning.
+
+SQLite checks only the closed row shapes, references, fingerprints, version
+relations, and legal settlement combinations. It does not inspect source
+language or query coverage. Unknown, mixed, or incomplete issuance, capability,
+or historical-authorization shapes fail closed.
+
+### Closing evidence for this correction
+
+Implementation/evidence may close only if fresh causal checks establish:
+
+- paginated Course and current-default reads expose exact identities/versions,
+  scope-bound continuation, collision-safe readable locators, and zero writes;
+- the read tools are registered on the default Tutor surface; default,
+  restricted, and delegated discovery all follow the authoritative
+  permission/delegation intersection; and every new read-tool ID plus the
+  historical proposal ID rejects custom, plugin, and MCP collision;
+- `propose_default_course_preference` is absent from the built-in producer and
+  registry while its identifier remains reserved, historical V2 proposal rows
+  remain readable/replayable, and no current entry point can create a new
+  proposal row;
+- root and delegated candidates persist the exact issuing operation projection
+  defined above. Effective deny retains truthful issuance provenance with no
+  effect, while an invalid/missing child lineage or delegated capability admits
+  neither a candidate nor fabricated learner provenance;
+- a natural direct request and an ordinary later acceptance both reach the same
+  V3 set/clear command without learner-entered IDs or a Gate-specific prompt
+  under effective `allow`;
+- in a constructed materially ambiguous case with no distinguishing
+  conversational or owner facts, the Agent clarifies and writes nothing; with
+  sufficient distinguishing context it may select even when titles collide or
+  the first page has a cursor, because page completeness is never a permission
+  or command-admission proof;
+- effective allow/ask/deny, no-change, correction, cancellation, stale target,
+  withdrawn-target clear, duplicate/conflict, capability-wait races, abort, and
+  startup recovery retain their exact no-fabrication behavior;
+- fault-injected V3 oracles cover admission before capability evaluation,
+  atomic ask-selection plus durable issue, durable issue before reply, durable
+  approving reply before final settlement, and a capability-wait semantic
+  loser. Without a competing effect, every pre-final crash recovers the exact
+  Agent-issuance/capability facts to its truthful no-effect outcome and never
+  applies an otherwise uncommitted allow. With a competing effect,
+  table-driven same-target and different-target cases return
+  `already_applied` or `semantic_conflict` before stale/current-owner checks,
+  preserve the losing candidate's issuance/capability history, and create no
+  losing effect;
+- frozen-current upgrade and fresh installation agree, legacy V1/V2 rows replay
+  truthfully, new writes cannot use legacy/proposal shapes, and no route-anchor
+  schema, row, admission, CAS, history, correction, replay, or presentation
+  behavior changes;
+- the primary TUI and retained carriers show the exact configured permission
+  and final result, including collision-aware identity only where readable
+  locators require it; and
+- one bounded released-Agent qualification demonstrates tool use for clear
+  natural wording, real ambiguity, and later conversational acceptance. It
+  qualifies Agent usability only. Deterministic suites test registry,
+  permission/delegation, storage, transaction, replay, and recovery; they do not
+  prove or reject natural-language interpretations by phrase matching.
+
+This candidate does not authorize Gate 16, Gate 17, automatic context
+injection, a learner-facing Course browser, a generic semantic resolver, or a
+new Agent runtime.
 
 ## Terminology
 
@@ -230,12 +372,12 @@ Its current owned invariant is:
 > Learner navigation contains exactly two distinct correctable meanings: one
 > optional LearnerHome-wide default Course preference and one optional exact
 > route anchor per Course. Every real change is a linear versioned transition
-> bound to one exact admitted learner occurrence and semantic learner
-> authorization. Capability permission remains a separate control. The
-> historical rule forcing an additional Gate-specific confirmation under
-> effective `allow` is revoked; the exact reviewed direct-request and
-> source-bound accepted-proposal arms remain pending. Direct or multi-Course
-> targeting never mutates the preference. A route anchor never retargets
+> bound to one exact admitted learner occurrence and one typed Agent-issued
+> command. Open-language interpretation belongs to the ordinary Agent;
+> capability permission and exact state admission remain separate program
+> controls. Historical Gate-specific confirmation, exhaustive resolution
+> scope, and source-bound proposal arms are not current write authority. Direct
+> or multi-Course targeting never mutates the preference. A route anchor never retargets
 > across Course View Revisions and never implies focus, completion, evidence,
 > understanding, or mastery. Missing or inactive targets remain inspectable
 > and fail closed for fallback use; Session deletion may make the source
@@ -306,7 +448,7 @@ The maintainer also authorized the whole-Gate independent review and
 implementation loop. That is workflow authority, not durable product meaning;
 it does not expand Gate 14, authorize a commit, or pre-accept this draft.
 
-## Current evidence and falsification pressure
+## Historical 2026-07-19 evidence and falsification pressure
 
 ### Accepted project authority
 
@@ -357,10 +499,10 @@ supersedes that number while retaining Gate 8's settlement invariant.
   that closed union; it must not introduce a universal effect registry or a
   second tool runner.
 
-Production currently has no default-Course or route-anchor state, schema,
-query, or command. The migration sequence ends after Gate 13 Material Map
-alignment. Gate 14 is a new bounded learner-record authority, not completion of
-an inherited partial implementation.
+At the time, production had no default-Course or route-anchor state, schema,
+query, or command, and the migration sequence ended after Gate 13 Material Map
+alignment. This explains the original derivation; it is not a statement about
+the integrated current tree.
 
 ### Historical counterexample
 
@@ -436,8 +578,8 @@ capability settles denied before returning the live projection, and effective
 effect, consume the Assistant Message's applied-mutation slot, advance the
 frontier, or increment a version.
 
-The persisted target is only `CourseID`. A non-null commit must nevertheless
-bind and revalidate the learner-visible proposal against:
+The persisted target is only `CourseID`. For a V3 non-null command, admission
+must atomically capture and later revalidate:
 
 - exact current preference head and version;
 - exact target Course identity, active state, and Course state version;
@@ -448,12 +590,12 @@ bind and revalidate the learner-visible proposal against:
   reservation identity scoped to the physical invocation. Its presence does
   not prove that a live permission request was issued or presented.
 
-These additional facts are the historical confirmation/commit snapshot and the
-current V2 authorization/owner snapshot, not the meaning of the stored
-preference. A later working-View change therefore does not mutate or stale the
-Course preference. A later Course withdrawal makes it unusable for fallback;
-restoration of that same Course may make it usable again. Neither event chooses
-another Course or changes the preference version.
+These additional facts are runtime-owned admission state for V3 and historical
+confirmation/authorization state for V1/V2, not model input and not the meaning
+of the stored preference. A later working-View change therefore does not mutate
+or stale the Course preference. A later Course withdrawal makes it unusable for
+fallback; restoration of that same Course may make it usable again. Neither
+event chooses another Course or changes the preference version.
 
 Clearing is bound to the exact current preference head/version. It remains
 legal when the preferred Course is inactive or has no working View. A clear
@@ -518,10 +660,15 @@ without an anchor.
 
 ## Version, correction, and relational invariants
 
-The proposed physical authority uses one strict tagged append-only navigation
-transition relation. A row's kind is either `default_course_preference` or
-`course_route_anchor`; closed checks make every target arm, scope arm,
-versioned authorization arm, and previous-value arm exact for that kind.
+The physical authority uses one strict tagged append-only navigation transition
+relation. A row's kind is either `default_course_preference` or
+`course_route_anchor`; closed checks make every target arm, scope arm, and
+previous-value arm exact for that kind. Any linked command provenance is a
+closed versioned union: current V3 default candidates reference
+Agent-issuance/admission provenance, historical V1/V2 default rows retain only
+their originally recorded authorization shape for replay, and route rows retain
+their separate route-owned basis. None converts V3 issuance into semantic or
+capability authorization.
 
 The following invariants are database-enforced, not prompt conventions:
 
@@ -584,14 +731,13 @@ identity classes:
 
 - every cloned historical Message/Part remains a read-only presentation of its
   source occurrence, model operation, tool, and Turn identity, belongs to no
-  target Turn, and creates no target budget, replay key, direct learner request,
-  or new proposal. It may expose the original completed proposal for a later
-  genuine learner acceptance only through Gate 12's exact generic historical
-  Tool-presentation lineage; the clone itself mints no authority; and
+  target Turn, and creates no target budget, replay key, current Agent request,
+  or proposal authority. It may display an original completed proposal only as
+  historical Tool-presentation lineage; neither the original nor clone can
+  enter a new V3 write path; and
 - the genuine fork-start learner input is admitted as a new root Turn/input
   with a new occurrence. A model operation whose frozen current membership is
-  that input may therefore form a genuinely new direct navigation semantic
-  address or accept one exact still-valid source proposal.
+  that input may therefore form a genuinely new V3 navigation semantic address.
 
 Navigation admission resolves occurrence provenance only through Gate 12's
 exact current model-operation membership. A clone, later-current input, prompt
@@ -605,17 +751,22 @@ navigation Part or its Assistant Message, it rejects before transcript
 mutation. An otherwise eligible revert of unrelated or no-effect work leaves
 navigation and its source availability unchanged.
 
-## Model command and confirmation settlement
+## Historical model command/confirmation and retained replay settlement
 
 The shared command/replay ordering and route-anchor parts of this historical
 section remain accepted. Its default-preference confirmation subsection is
-superseded by the 2026-07-29 authorization union below.
+superseded first by the 2026-07-29 authorization union and now by the current
+Agent-native contract above.
 
 Gate 14 adds two reserved released-v1 learning capabilities: one for the
 default Course preference and one for a Course route anchor. Exact tool names
-and input field spelling are implementation details, but their canonical
-commands must carry the target or explicit clear plus all caller-visible
-expected versions described above.
+and input field spelling are implementation details. This historical sentence
+is retained only for the route anchor, whose canonical command carries the
+target or explicit clear plus all caller-visible expected versions described
+above. Historical V1/V2 default-preference rows retain their originally
+recorded command bytes for replay, but the current V3 default-preference command
+is exactly the model-visible set/clear shape under **One current write shape**,
+and every expected owner version is runtime-captured.
 
 Both commands reuse one shared learning-command admission, FIFO/serialization,
 Turn registration, permission, settlement, recovery, and ToolPart path. The
@@ -802,12 +953,13 @@ rows as well as nested source/history detail. Current reads never synthesize a
 latest View, map old item IDs through revision mappings, or import transcript
 text.
 
-Gate 14 registers no model-visible navigation inspection tool and injects no
-automatic model context. Its two write tools can be exercised with exact
-arguments through the released-v1 tool path; Gate 18 later decides which
-bounded navigation projection enters a sample, and Gate 22 later provides
-ordinary terminal inspection/correction. This prevents a write Gate from
-quietly absorbing either successor.
+Gate 14 exposes the thin Course/navigation owner reads described by the current
+contract to the default Tutor Agent; it injects no automatic model context.
+The existing default-preference and route-anchor writes remain ordinary
+released-v1 typed tools. Gate 18 later decides which bounded navigation
+projection enters a sample automatically, and Gate 22 later provides ordinary
+terminal inspection/correction. Model-visible query access is neither of those
+successor surfaces.
 
 ## Implementation ownership
 
@@ -830,24 +982,23 @@ Dependencies remain narrow:
 - Later Context and terminal consumers receive read-only navigation
   capabilities, never the mutable service.
 
-The released-v1 tool registry reserves both capability IDs against custom or
-MCP replacement. Tool discovery continues to obey effective permission
-visibility. Default Repa Agent composition may expose the capabilities, but
-the current production default-preference runtime still forces the now-revoked
-exact confirmation and a denied
-delegation layer still removes or rejects authority. A delegated Turn cannot
-invent a new learner occurrence or exceed its frozen parent capability.
+The released-v1 tool registry reserves the read and write capability IDs,
+including the retired historical proposal ID, against custom or MCP
+replacement. Tool discovery continues to obey effective permission visibility.
+The default Tutor Agent sees the current owner reads and writes; a restricted
+or delegated Agent receives only their explicit intersection. A delegated Turn
+cannot invent a new learner occurrence or exceed its frozen parent capability.
 
 No HTTP mutation route, MCP command, background worker, provider special case,
 preview-v2 path, generic preference service, or compatibility adapter is added.
 
 ## Failure and recovery contract
 
-- **Stale default authorization:** any change to the bound preference head,
+- **Stale default command:** any change to the runtime-bound preference head,
   Course state, selection target/version, View state, or Revision state before
-  commit fails with no effect. A direct request requires a new current
-  invocation; an accepted proposal requires a freshly presented and accepted
-  source-bound proposal. A capability reply never refreshes semantic authority.
+  commit fails with no effect. The Agent may reread and issue a new invocation
+  if the learner's intent still applies. A capability reply never refreshes
+  captured owner state.
 - **Stale anchor command:** any change to the bound anchor head or non-null
   Course target proof before commit fails with no effect. A stale anchor may
   still be cleared using only its exact head/version.
@@ -917,14 +1068,15 @@ Gate 14 does not add:
   confidence, or learner-model hypothesis;
 - automatic ordinal advancement, successor mapping, fuzzy item reattachment,
   or anchor retargeting across View Revisions;
-- natural-language Course identification, Course/View creation, provisional
-  route bootstrap, or Material Map mutation;
+- a deterministic host-side natural-language Course parser/resolver,
+  Course/View creation, provisional route bootstrap, or Material Map mutation;
 - automatic context construction, transcript import, selection budgets,
   compaction policy, or Session continuation;
 - a general learner ontology, activity table, fact graph, event store,
   preference framework, or policy framework;
-- terminal history browsing/correction UI beyond the exact pre-commit
-  authorization/ordinary-permission projection and typed tool result;
+- terminal history browsing/correction UI beyond the configured
+  capability-`ask` projection when applicable plus the typed Tool and final
+  durable result;
 - background work, reminders, daemon behavior, HTTP/MCP mutation surfaces,
   preview-v2 execution, or a second learning-command runtime; or
 - Gate 15 retained steering, Gate 17 bootstrap, Gate 18 context, Gate 19
@@ -957,7 +1109,7 @@ the exact candidate.
 
 The following bullets are the historical 2026-07-19 closing oracle. Its
 all-real-changes confirmation requirements are suspended; the current
-replacement oracle is owned by the 2026-07-29 candidate below.
+replacement oracle is owned by the Agent-native candidate above.
 
 - an active Course with and without a working View can be preferred;
 - the exact current occurrence is retained as the semantic basis for an
@@ -1229,7 +1381,7 @@ post-commit counterexamples. Commit
 `9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
 shared-tree snapshot and closes this scoped reopen.
 
-## 2026-07-29 default-Course authorization correction candidate
+## Superseded 2026-07-29 default-Course authorization correction candidate
 
 The current production path still requires two learner-controlled acts for
 every real default-Course set, change, or clear: an admitted occurrence must
@@ -1248,7 +1400,7 @@ requires a third affirmative act because that answer cannot also satisfy the
 forced permission prompt. Neither extra act resolves ambiguity, reversibility,
 external effect, or a learner-owned value.
 
-### Current replacement contract candidate
+### Historical replacement contract candidate
 
 Every real preference change still requires semantic learner authorization and
 one exact admitted occurrence. Directory state, discovery, planning pressure,
@@ -1274,7 +1426,7 @@ incomplete, unauthorized-narrowed, or materially ambiguous view cannot
 authorize a direct write; the Tutor must widen, clarify without writing, or
 surface one exact proposal for later acceptance.
 
-### Default-Course admission and candidate authorization are closed unions
+### Historical V2 admission and candidate authorization unions
 
 Every default-Course physical invocation has exactly one durable domain
 disposition. Migration classifies an existing V12 invocation as `legacy_v1`.
@@ -1359,7 +1511,7 @@ recorded physical value without promoting it into V2 semantic proof. Reusing a
 physical identity with a different arm, proposal Part/ordinal, command
 projection, or fingerprint is a conflict.
 
-### Capability settlement is separate and request IDs remain truthful
+### Historical V2 capability settlement and truthful request IDs
 
 Physical invocation admission, immutable candidate semantic-authorization
 reservation, pending candidate recovery, durable capability-policy settlement,
@@ -1441,7 +1593,7 @@ preserves its exact prompted outcome. A durable `policy_allow` or
 effect: the physical invocation recovers as interrupted/no-effect unless the
 atomic effect settlement already exists.
 
-### Immutable acknowledgement uses symmetric stable locators
+### Historical V2 immutable acknowledgement and stable locators
 
 The contract chooses immutable settlement-derived stable locators rather than
 recomputing an old acknowledgement from current Course state. A V2 locator
@@ -1492,7 +1644,7 @@ row/effect bytes and availability markers. It does not rewrite the raw
 historical Tool Part or settlement, consult current Course state, or claim that
 unavailable fields were once shown.
 
-### V12-to-V13 forward migration and recovery
+### Historical V12-to-V13 forward migration and recovery
 
 The correction uses one new versioned default-Course authorization projection;
 it does not merely make old permission/confirmation columns nullable. A
@@ -1648,7 +1800,7 @@ Gate-12 bookkeeping excluded. Scoped implementation authority was restored only
 for this amended Gate 14 contract; at that point, the recovered
 implementation/evidence candidate below had not yet been reviewed or accepted.
 
-## 2026-07-30 recovered implementation/evidence candidate
+## Historical 2026-07-30 recovered implementation/evidence candidate
 
 This is an executor-produced candidate for the original independent Gate 14
 implementation/evidence reviewer. It is not acceptance evidence by itself.
@@ -1798,7 +1950,7 @@ nothing was staged or committed. The executor sent this exact candidate to the
 original Gate 14 implementation/evidence reviewer. The resulting acceptance
 and integration are recorded below.
 
-## 2026-07-30 corrective implementation/evidence acceptance and integration
+## Historical 2026-07-30 corrective implementation/evidence acceptance and integration
 
 Original reviewer task `019fad21-ff78-7920-bec4-9d06b2ff7b2c` returned final
 exact-diff `Accept` with no blocker. It closed `G14-IE-RT-003` while retaining
@@ -1824,3 +1976,318 @@ OpenCode diagnostics are confined to the unchanged TUI-smoke fixture.
 Scoped Gate 14 implementation/evidence is integrated at
 `80fde20121c4b98ef9c7514ad7e33cae71c7e6b0`. This closure grants no Gate 16
 or Gate 17 authority.
+
+## 2026-07-30 Agent-native implementation/evidence candidate
+
+This section is current working-tree status, not acceptance. Under the accepted
+Agent-native contract bound by
+`52909e932fa7602d1c29f30886ddd644592c5220711146cd1a641fb237614a67`,
+the top-level executor has assembled one unstaged candidate that:
+
+- exposes bounded `course_query` and `learning_navigation_query` reads through
+  the authoritative default/restricted/delegated capability intersection and
+  reserves their built-in identifiers against custom/plugin/MCP collision;
+- accepts only the current `{action:"set", courseID}|{action:"clear"}` write,
+  records exact root/delegated Agent issuance separately from capability
+  settlement, and binds owner versions and locators inside the runtime;
+- retires the historical proposal producer and registry entry while keeping its
+  identifier reserved and rejecting provider execution of that retired tool;
+- migrates frozen V13 state forward to the V14
+  `legacy_v1 | legacy_v2 | semantic_terminal_v3 | candidate_v3` disposition,
+  with semantic-first replay/recovery and unchanged route-anchor behavior; and
+- preserves one typed semantic permission/result projection across the
+  retained carriers.
+
+Fresh deterministic evidence against the current candidate is:
+
+| Boundary | Result |
+| --- | --- |
+| Core migration / generated schema | `database-migration.test.ts`: 38 pass / 333 assertions; `migration --check` and Core typecheck pass |
+| Default-Course runtime | 44 pass / 781 assertions |
+| Registry / processor / hooks | 28 / 97, 30 / 158, and 3 / 8 respectively |
+| Presentation / permission | 6 / 55 presentation; 97 / 188 generic permission; 3 / 10 learning-command permission |
+| Schema / SDK / TUI | focused schema tests and schema typecheck pass; SDK typecheck passes; TUI permission test 1 / 12 and TUI typecheck pass |
+| Real-run Session ownership corrections | Session 31 / 217, Prompt 13 / 106, and snapshot/tool-diff race 1 / 6 |
+
+OpenCode package typechecking reaches only the unchanged
+`specs/fixtures/tui-plugins/tui-smoke.tsx` implicit-`any` and obsolete workspace
+fixture diagnostics; no classified Gate 14 path diagnostic remains.
+
+The bounded real-provider script
+`packages/opencode/script/gate14-real-model.ts` covers a clear unique Course
+selection, same-title clarification with zero write, and later acceptance of an
+Agent suggestion through the same V3 command. After the maintainer completed
+the restored released-v1 ChatGPT Plus/Pro login into Repa's own credential
+store, the isolated `gate14-openai-oauth-real-model-01` run used
+`openai/gpt-5.5` for three Sessions and four Turns:
+
+- the unique `Distributed Systems` request used `course_query` and exactly one
+  V3 `set_default_course_preference`, then committed the intended Course;
+- the two same-title `Algorithms` Courses caused one conversational
+  clarification, no write, and no state change;
+- the `Linear Algebra` suggestion read owner state and did not write; and
+- the learner's later “可以” in that same Session issued exactly one V3 write
+  and committed the suggested Course.
+
+All four Turns durably completed with reason `normal`. The two writes record
+`command_version=3`, `authorization_basis=agent_action`, applied settlement,
+and root Agent-issuance provenance. The run emitted zero permission requests
+under effective `allow`, created zero historical proposal rows, and serialized
+neither isolated auth nor config input. The script file SHA-256 is
+`ae2f771494f5e8a5d3c91cff7e9997158499ae02b6bd9a66899c139e89699e74`.
+The 17,098-byte log contains no warning/error line and hashes to
+`f2ad6640477dab3ad1c107ca8e3e558ab1d95bd05c49fff9359369742e590569`;
+the 2,785,280-byte isolated database hashes to
+`74b5de865f228b67e970cfb287a2219549a3e2ab2d0eff96abb69bc56e48389a`.
+
+The first real attempts falsified three implementation assumptions that the
+deterministic default-Course suites did not exercise:
+
+- `ToolRegistry.tools()` publishes host preparation as `prepareToolCall`, while
+  the adapter read only the internal `prepareLearningCommand` spelling, so the
+  real provider call was aborted before the domain runtime;
+- terminal CAS could complete before exact owner handoff cleanup, so a
+  same-Session learner follow-up observed `Busy`; and
+- inherited fire-and-forget title, summary, prune, and step-summary work could
+  retain Repa's Session lock after its durable Turn, while summary also tried
+  to mutate frozen occurrence-linked User Message bytes.
+
+The candidate now accepts either internal/published preparation field, keeps
+all internal jobs inside the exact Turn handoff, makes terminal `awaitTurn`
+join that handoff, and stores derived diffs on the Session summary with
+historical per-message computation on demand. These are scoped Gate 8/12
+implementation corrections to already accepted invariants, not new Gate 14
+domain semantics. Until the OAuth, lifecycle, and exact Gate 14 candidate
+receive fresh independent implementation/evidence acceptance, this working
+tree is neither integrated nor a Gate 14 closure.
+
+The current package candidate is bound against base/HEAD
+`0d7ca3987ea69445d23f30ee8386706c0bbc86c9`. Excluding the separately
+classified ten-path Gate 5 OAuth restoration, the Agent-native Gate 14 plus
+overlapping Gate 8/12 correction candidate contains 37 tracked and seven
+untracked paths. Its 433,920-byte raw binary tracked diff has SHA-256
+`b6e27af5355ea46bc78528d1f484635f6008ab6a6c3a0f237a64707c5ce0b2dc`;
+its 3,998-byte ordinal content manifest has SHA-256
+`86f7033277e1d1ac0f82539264fc2bec8597a20f3b8adf1e2c26e6eaac625fb3`.
+The complete 47-tracked/seven-untracked package composition, including OAuth,
+is bound by raw diff
+`cc3d143d922f0eeced3fc96232e08f5c44086831eb11e621bb40c42b2a08ecd0`
+and ordinal manifest
+`7580923865cee6c07d4a2d3c2bc883aa3b00d5a7aab8e79fb4545d3b7428d333`.
+The fork ledger defines the reproducible manifest convention and the
+overlapping lifecycle projection. No package path is unmatched; staged path
+count is zero and no commit exists.
+
+## 2026-07-31 Agent-native implementation exact-diff repair
+
+This section supersedes only the package bindings and review disposition in the
+preceding working-tree candidate section. It does not revise the accepted
+Agent-native contract or alter the historical V1/V2 and route-anchor
+boundaries.
+
+Original reviewer task `019fb27f-4416-7c42-bcad-97d473803750` inspected the
+pre-repair candidate read-only and carried forward three implementation
+findings plus two missing positive oracles:
+
+- `G14-STO-001`: V14 selected individual Agent-action JSON fields but did not
+  reject unknown, mixed, incomplete, internally inconsistent, or
+  operation-inconsistent V3 issuance shapes.
+- `G14-STO-002`: the historical proposal registry entry was gone and V14
+  rejected new rows, but Core still exported callable preparation/recording
+  producer functions.
+- `G14-IN-001`: the public V3 Tool schema and runtime decoder stripped hybrid
+  legacy/authorization fields instead of enforcing the exact two-arm
+  `{action:"set",courseID}|{action:"clear"}` model input.
+- the deterministic suite lacked a direct positive V3
+  `allow` plus same-value `no_change` case and a V3 clear after the retained
+  target Course was withdrawn.
+
+The top-level executor repaired those exact seams:
+
+- the versioned V14 disposition trigger now owns a closed root/delegated
+  `agent_action_v3` structural union, exact nested lineage/capability rule
+  shapes, causal-chain continuity, effective-capability fingerprint agreement,
+  invocation identity, and the operation implied by exact from/to locators;
+- the V3 Tool alone publishes `additionalProperties:false`, while its Effect
+  decoder rejects excess fields. The generic inherited Tool-schema path remains
+  open by default, so this does not silently narrow mature custom/plugin/MCP
+  tools;
+- current proposal preparation/recording exports and their producer-only code
+  are removed. Historical proposal reads, presentation/replay, the retired
+  capability identifier, and the V14 no-new-row rule remain; and
+- focused runtime cases prove typed positive no-change and clear of a retained
+  default after Course withdrawal, while preserving deny-first ordering.
+
+Fresh causal evidence, run independently where the process-scoped LearnerHome
+precludes combining suites in one Bun process, is:
+
+| Boundary | Result |
+| --- | --- |
+| V14 migration and structural fail-closed storage | `packages/core`: `bun test test/database-migration.test.ts` — 39 pass / 341 assertions |
+| Generated/current schema parity | `packages/core`: `bun run migration --check` — pass |
+| Core type surface | `packages/core`: `bun run typecheck` — pass |
+| Agent-native settlement, replay, recovery, no-change, withdrawal, and retired producer | `packages/opencode`: `bun test test/learning-command/runtime.test.ts` — 45 pass / 791 assertions |
+| Closed Tool input, discovery/authority intersection, collision and producer retirement | `packages/opencode`: `bun test test/tool/registry.test.ts` — 28 pass / 102 assertions |
+| Hand-maintained Gate 14 TypeScript formatting | direct Prettier check — pass |
+
+OpenCode typechecking reaches only unchanged
+`specs/fixtures/tui-plugins/tui-smoke.tsx` diagnostics at lines 713, 745, 765,
+769, 777, 786, 794, and 804; no classified Gate 14 path diagnostic appears.
+Running the runtime and registry files together is intentionally excluded
+because their independent process-scoped LearnerHome fixtures contend for one
+database owner; each owning suite passes separately.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`,
+the exact Gate 14 package candidate contains 30 tracked and seven untracked
+paths. The 422,498-byte raw binary tracked diff has SHA-256
+`a7d7ffdfc0d21f0dbce59f15984900141f556df07db71829f3ce0b03aa50be30`;
+the 3,372-byte ordinal content manifest has SHA-256
+`a9233d6a74f2a204be06da0c50dda0a0d87c90ff97a04154147cd7ab78c04c55`.
+The manifest uses JavaScript default/ordinal ordering and one UTF-8/LF line per
+path:
+`<40-hex git hash-object --no-filters output><two spaces><path>`, with one
+final LF.
+
+The ten tracked Gate 5 OAuth paths, eight accepted Gate 12 owner-handoff paths,
+and one Gate 8 presentation oracle are excluded from this Gate 14 binding and
+remain byte-for-byte preserved. No package path is unmatched. The candidate is
+unstaged, uncommitted, and not accepted until the same original reviewer closes
+this superseding exact diff. No Gate 16 or Gate 17 implementation authority is
+inferred from this candidate.
+
+## `G14-STO-001-R1` locator-shape closure candidate
+
+The original reviewer returned the preceding exact candidate as `Revise` with
+one acceptance blocker. `G14-STO-002`, `G14-IN-001`, and both positive evidence
+gaps closed. Residual `G14-STO-001-R1` showed that
+`defaultCourseEndpointV2Shape` checked only endpoint kind, Course ID, and three
+availability markers. A genuine V3 invocation against an active Course could
+therefore persist unknown endpoint/locator keys while omitting title,
+Course-version, and working-selection values; SQLite retained the malformed
+JSON unchanged.
+
+The superseding implementation makes the shared exact V2/V3 endpoint predicate
+total and structurally closed:
+
+- an absent endpoint is exactly `{kind:"absent"}`;
+- a Course endpoint has exactly `kind` and `locator`, and the locator has
+  exactly `courseID`, `title`, `courseVersion`, and `workingSelection`;
+- each `recorded_v2` located value has exactly `availability` and `value`, with
+  string title, nonnegative integer Course version, and an object working
+  selection; and
+- the working-selection value contains every required nullable/non-null field,
+  rejects unknown or missing fields, and enforces the recorded scalar types and
+  nonnegative versions.
+
+`COALESCE(..., 0)` makes missing JSON paths fail the SQLite `CHECK` instead of
+escaping through SQL's null-valued check semantics. The stricter predicate is
+owned by the still-unaccepted V14 schema: current fresh-schema artifacts were
+regenerated, and the same acknowledgement, disposition, and historical
+proposal table rebuilds were folded into V13→V14. No V15 migration was created
+or consumed, preserving Gate 16's accepted V14→V15 predecessor boundary.
+
+Red-first evidence reproduced the reviewer counterexample: the fresh-V14
+focused test initially accepted `{kind:"absent",unexpected:"accepted"}` and
+failed its first rejection assertion. The final deterministic matrix now
+proves:
+
+- fresh V14 accepts complete root, delegated, and exact Course endpoints while
+  rejecting unknown absent keys, unknown nested Course keys, absent recorded
+  values, malformed provenance/rules, and locator/operation contradictions;
+- V13→V14 preserves exact V1/V2 bytes and proposal history, produces the same
+  table/trigger structures as fresh V14, accepts a complete V3 Course endpoint,
+  and rejects the same unknown/incomplete endpoint after upgrade; and
+- the complete OpenCode runtime still writes, settles, replays, and recovers
+  valid exact locators without weakening semantic-first or route behavior.
+
+Fresh results are Core migration 39 pass / 346 assertions, migration
+`--check`, Core typecheck, and OpenCode runtime 45 / 791, all passing. The
+previous registry 28 / 102 result remains causally retained because this repair
+does not change Tool input, registration, discovery, or producer reachability.
+The reviewer's nonblocking unknowns—a direct populated historical
+`accepted_proposal_v2` replay fixture and an explicit LearningFrontier query in
+the positive no-change oracle—remain disclosed rather than promoted into this
+locator repair.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the exact
+Gate 14 package projection remains 30 tracked and seven untracked paths. Its
+superseding 515,118-byte raw binary tracked diff has SHA-256
+`5680e638cf6e0d65ae8b0e4178f68f2b4c8c789f6195ba4d8d2c6c9183e67cf0`;
+the 3,372-byte ordinal content manifest has SHA-256
+`69c43283c0a8582f6ff34613c978424ae42725cb1ad515b0ba336833d92271a2`.
+These supersede the rejected `a7d7ffdf...` / `a9233d6a...` implementation
+bindings. The manifest convention and Gate 5/Gate 12/Gate 8 exclusions are
+unchanged. The same reviewer returned this R1 binding as `Revise` with the R2
+residual below; it grants no Gate 16/17 authority.
+
+## `G14-STO-001-R2` working-selection identity closure candidate
+
+The R1 closure confirmed the exact endpoint, locator, wrapper, required-value,
+and scalar-type repairs. It nevertheless found one remaining structural
+counterexample: the five nullable working-selection identity members were
+checked independently, so SQLite accepted a tuple combining absent
+`revisionID` with recorded View identity. The converse combination was also
+representable. Both contradict the already-accepted semantic-presentation
+union, where `revisionID`, `viewID`, `viewName`, `viewVersion`, and
+`revisionVersion` are either all null or all recorded. `selectionVersion`
+remains a required nonnegative integer in either arm.
+
+The shared exact V2/V3 endpoint predicate now includes that all-null or
+all-recorded relational clause after the closed scalar checks. Because the
+predicate is shared, acknowledgement, disposition, and replay-only proposal
+rows receive the same structural rule. Current schema artifacts were
+regenerated, and the rule was folded into the same unaccepted V13→V14 table
+rebuilds. The temporary generator output and registry entry were removed; no
+V15 migration exists or is consumed.
+
+Fresh and upgraded red-first oracles both accepted the mixed tuple before the
+repair. The final matrix uses real Course, View, Revision-state, and working
+selection owner rows and proves on both fresh V14 and V13→V14 that:
+
+- a wholly absent identity with selection version zero remains valid;
+- a wholly recorded identity with exact owner versions remains valid;
+- null `revisionID` plus recorded View members is rejected; and
+- recorded `revisionID` plus null View members is rejected.
+
+The focused fresh/upgrade run is 2 pass / 25 assertions. Full Core migration
+is 39 / 352, `bun run migration --check` passes with no ungenerated change,
+Core typecheck passes, and the complete OpenCode Default-Course runtime remains
+45 / 791. Direct formatting and the scoped diff check pass. Registry 28 / 102
+is retained because no Tool, registry, discovery, or producer path changed.
+The earlier nonblocking unknowns concerning one populated historical
+`accepted_proposal_v2` replay fixture and an explicit LearningFrontier query in
+the positive no-change oracle remain disclosed and unchanged.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the exact
+Gate 14 package projection remains 30 tracked plus seven untracked paths. Its
+superseding 557,013-byte raw binary tracked diff has SHA-256
+`ff7b654f4c0a6372b717e3d16c5de0ead4c3d8b63ff7c410a9ed8e723e741ad6`;
+the 3,372-byte JavaScript-default/ordinal UTF-8/LF content manifest has
+SHA-256
+`bedd4b47da66a2cec28ca3d1221213ba00f1c89aa4e55ba7004eae7c8f22aef7`.
+These supersede rejected R1 bindings `5680e638...` / `69c43283...`; earlier
+rejected bindings remain provenance only. The ten Gate 5 OAuth, eight accepted
+Gate 12, and one Gate 8 paths remain excluded byte-for-byte. All package paths
+are classified, staged path count is zero, and no commit was created. This
+candidate remains unaccepted pending exact-diff closure by the original
+reviewer and grants no Gate 16/17 authority.
+
+### Final Agent-native implementation/evidence closure and integration
+
+Original reviewer task `019fb27f-4416-7c42-bcad-97d473803750`
+independently reproduced the R2 package, record, aggregate, and exclusion
+bindings and returned `Accept` with no blocker. `G14-STO-001-R2` is closed; all
+previously closed Gate 14 findings remain retained. The reviewer reproduced
+the owner-backed fresh/upgrade matrix at 2 pass / 25 assertions, migration
+`--check`, the absence of any V15 artifact, zero staged paths, and clean diff
+structure. The two disclosed evidence unknowns remain explicitly nonblocking.
+
+Scoped Gate 14 implementation/evidence integration authority covered only the
+exact 30-tracked/seven-untracked projection bound above. That projection is
+locally integrated at
+`ff0ef1fd7e0cbf048642fcb3ed1a8e32ba7f78db`. Accepted Gate 12 owner handoff
+landed separately at `29f5a140ffd9595a5de60d5bee517bba1b029cf2`.
+The ten-path OAuth candidate and one-path Gate 8 oracle were excluded and
+remain unintegrated under their own review obligations. This closure does not
+authorize Gate 17; it only satisfies Gate 16's accepted V14 predecessor
+dependency.

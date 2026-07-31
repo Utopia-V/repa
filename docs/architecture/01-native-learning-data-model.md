@@ -447,10 +447,33 @@ Goal identity and learner state remain separate even when they interact.
 Elapsed time, abandonment, prior achievement, forgetting, shallow understanding,
 later evidence, or a raised standard does not by itself decide whether later
 intent revises or resumes one Goal or creates another. The program preserves
-the legal choices and their provenance; a model may clarify the semantic case,
-and the learner accepts any consequential interpretation. This does not
-pre-authorize a universal learning-history taxonomy or durable pursuit-episode
-record.
+the legal choices, exact revisions, and causal provenance; the ordinary Agent
+interprets the semantic case and clarifies in conversation only when an
+unresolved choice would materially change durable history. Program code does
+not prove the language or require a separate candidate/acceptance protocol.
+This does not pre-authorize a universal learning-history taxonomy or durable
+pursuit-episode record.
+
+Current Goal commands use one versioned disposition boundary. Historical V1
+keeps its exact direct/accepted authorization and confirmation bytes for
+replay. A physically new V2 call at an occupied semantic address records only a
+semantic terminal with immutable existing-effect/address evidence; it has no
+current Agent-issuance, capability, or fabricated owner snapshot. A free
+address may admit a V2 candidate only after exact root/delegated Goal-write
+membership is valid, then records Agent issuance separately from capability
+policy. A candidate that later loses the semantic race retains that truthful
+history but creates no effect. V2 semantic identity is the canonical typed Goal
+intent, never the root/child Agent lineage or permission result.
+
+The current optional Goal target is a closed absent, civil instant, or local
+date intent. For the latter two the Agent supplies the exact civil value and a
+source-zone, named-IANA-zone, or fixed-offset selector; the runtime binds the
+trusted source zone or tzdb release and derives canonical epoch/offset facts.
+V2 revisions store only normalized target values, while the effect preserves
+the typed intent and exact versioned before/after snapshots. Carrying a V1
+target into a V2 successor projects only its immutable value; the V1
+source-expression, normalization basis, raw bytes, and field provenance remain
+historical and are neither copied nor promoted into current semantic proof.
 
 The source-linked future-attention loop remains the first experimentally
 settled future-attention topology: eligible does not mean mandatory, begun, served,

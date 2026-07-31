@@ -1550,8 +1550,10 @@ provenance is visible; and every actual untracked file belongs to a recorded
 causal group.
 
 This closes the audit record. The later corrective integration
-`9e91d43c629b66d65c8741e342bca7cf05de5667` also closes the accepted
-Gate 5/6/8/10/11/14/15 scoped repairs and Gate 16's TUI repair. Gate 16's
+`9e91d43c629b66d65c8741e342bca7cf05de5667` also closes the then-accepted
+Gate 5/6/8/10/11/14/15 scoped repairs and Gate 16's TUI repair. The Gate 5
+closure is later scoped-reopened only for the retained OAuth regression
+recorded below; its unaffected repairs remain closed. Gate 16's
 natural-language contract amendment later passed fresh separate top-level
 review, while its implementation/evidence and Gate 17 authorization remain
 open. Neither the audit verdict, integration, nor contract acceptance claims
@@ -1634,6 +1636,530 @@ implementation authority. No production file, migration, test, or staging area
 was changed by this documentation correction. Fresh separate contract/theory
 review is required after the simplified Gate 14 and Gate 16 contracts are
 derived; Gate 17 implementation remains unauthorized.
+
+### Agent-native Gate 14/16 contract derivation
+
+The follow-on derivation completed the documentation boundary without changing
+production code:
+
+- Gate 14 now exposes thin default-Tutor Course/navigation reads and one
+  model-visible `{set courseID}|{clear}` command. Runtime atomically binds the
+  current default head and exact Course/working-selection/View/Revision locator.
+  New writes use honest `agent_action_v3` and `semantic_terminal_v3` shapes;
+  historical V1/V2 resolution/proposal/confirmation records remain exact
+  read/replay-only state. The forward boundary is V13→V14.
+- Gate 16 now exposes thin Goal reads plus the Gate 14 Course reads and accepts
+  one bounded `create/update/replace` semantic-intent change set. The model
+  supplies an exact existing head Revision and only the fields to change; the
+  Goal owner captures current versions, materializes exact before/after
+  snapshots, and owns CAS, permission, recovery, and complete revision
+  persistence. Current writes contain no phrase proof, internal-ID-in-source
+  rule, exhaustive candidate set, source excerpt, model-selected field basis,
+  or Gate-specific confirmation. The forward boundary is V14→V15.
+- The system architecture's former current V2 direct/source-bound proposal
+  protocol and the native data model's Goal acceptance wording were corrected
+  at their owning layers. Historical Gate prose remains explicitly labelled as
+  provenance rather than current authority.
+
+Two bounded read-only contract audits independently challenged the drafts. They
+caused the model-visible payloads to lose echoed owner versions, source
+excerpts, complete revision copies, and per-field proof labels; they also
+identified the need for V3 semantic terminals, reserved historical tool IDs,
+honest cursor semantics, frozen legacy recovery, and ordered Gate 14→Gate 16
+migrations. No maintainer-owned product choice remained unresolved.
+
+This is a derived contract candidate, not implementation authority. Gate 14
+must first receive fresh separate top-level contract/theory review. Gate 16
+depends on the accepted Gate 14 `agent_action`/V14 boundary and then receives a
+different fresh top-level review. No code, migration, product test, staging, or
+commit was performed by this derivation, and Gate 17 remains unauthorized.
+
+Against base HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the raw
+binary Git diff for the Gate 14 authority bundle
+(`architecture/00` + Gate 14 record) is 41,824 bytes with SHA-256
+`c31971b9511f5963c89ca3723c41309890afd520fefb2abcdd13ca1ed3a31f2a`.
+The Gate 16 authority bundle (`architecture/01` + Roadmap 09 + Gate 16
+record) is 77,664 bytes with SHA-256
+`f36b9ee2e3487f148193b1813a6ca7d65b42fc872a2c966569d95e3ef936e6cb`.
+Status-map, audit-disposition, and this provenance bookkeeping are excluded from
+those contract hashes.
+
+Fresh Gate 14 reviewer task `019fb27f-4416-7c42-bcad-97d473803750`
+independently reproduced the original 41,824-byte
+`c31971b9511f5963c89ca3723c41309890afd520fefb2abcdd13ca1ed3a31f2a`
+candidate and returned `Revise` with `G14-AN-001..003`. It found one live
+historical expected-version/proposal contradiction, an ambiguous use of
+`agent_action_v3` as “authorization” rather than Agent issuance/admission
+provenance, and evidence too broad to disprove retained proposal registration
+or the new V3 crash windows. The reviewer retained the thin owner reads, exact
+set/clear model input, runtime-bound state, semantic-first ordering, capability
+lifecycle, V1/V2 replay, V13→V14 migration, stable locators, and every
+route-anchor boundary. It made no repository mutation.
+
+The top-level executor repaired only those seams. The historical command clause
+now leaves caller-supplied versions current only for route anchors, the audit's
+accepted-proposal rule is explicitly V2 provenance, and the non-goal excludes a
+host parser rather than ordinary Agent interpretation. `agent_action_v3` and
+the shared `agent_action` basis now name the exact root-or-child Agent
+issuance/admission lineage and are separate from capability authorization,
+learner assent, and semantic proof. Closing evidence now requires read
+visibility/intersection and collision tests, built-in proposal-producer
+retirement with permanent ID reservation, and fault-injected V3 recovery at
+every admission/ask/issue/reply/final-settlement boundary.
+
+Against the same base HEAD, the superseding Gate 14 authority bundle is 47,228
+bytes with SHA-256
+`5b94956c19724d43a908733c1e364e708502328b48ddcc6d85afd6bcb04be92a`.
+The dependent Gate 16 bundle is now 77,888 bytes with SHA-256
+`ea36c00cb5eca5cc87d8541cfe3a187f96bcbebe354b151dbb06b71a07de9cd6`
+because its shared `agent_action` wording now carries the same root/delegated
+issuance semantics. Exact-diff closure by the Gate 14 reviewer remains pending;
+there is still no Gate 14/16 implementation authority.
+
+The same reviewer's first closure pass independently reproduced that binding,
+closed `G14-AN-001` and `G14-AN-003`, and returned `Revise` only for
+`G14-AN-002-R1`: two unqualified current Gate clauses and one architecture
+sentence still named a versioned/pre-commit/candidate “authorization” surface.
+The top-level executor replaced those residual names with a closed
+current-V3-Agent-issuance versus historical-V1/V2-authorization union, the
+configured capability-`ask` plus typed Tool/final-result surfaces, and an
+Agent-issuance/capability split in architecture. The second superseding Gate 14
+authority bundle is 48,920 bytes with SHA-256
+`52909e932fa7602d1c29f30886ddd644592c5220711146cd1a641fb237614a67`.
+Second exact-diff closure remains pending; implementation authority is still
+unavailable.
+
+The same reviewer then returned second exact-diff `Accept`, closed
+`G14-AN-002-R1`, and confirmed that no acceptance-changing finding remained.
+Scoped implementation authority is available only for the accepted Agent-native
+Gate 14 default-Course seam and its focused evidence contract; no implementation
+or implementation evidence was accepted, and Gate 16/17 remain unauthorized.
+The accepted semantic candidate is exactly the 48,920-byte `52909e932...`
+binding above. The subsequent mechanical Gate-status promotion changes the
+current two-file aggregate to 48,900 bytes with SHA-256
+`425df25f18880cb3ac89da8062c35c83b6eb2940c419c3e8e9250e0f39c77b62`
+without changing a contract clause. Gate 16's now-reviewable candidate bundle
+is 77,857 bytes with SHA-256
+`e185493de374748252dd160627135b4d34ed194ca3665798c6bc13e336f27cd2`.
+
+The top-level executor then assembled the scoped Agent-native Gate 14
+implementation/evidence candidate in the unstaged working tree. Fresh focused
+checks pass across V13→V14 migration and generated schema (38 tests / 333
+assertions), default-Course runtime (44 / 781), registry (28 / 97), processor
+(30 / 158), presentation (6 / 55), permission, schema, SDK, and TUI. The
+historical proposal producer is unreachable while its identifier remains
+reserved, and provider execution of that retired identifier fails closed.
+The remaining bounded released-Agent qualification is implemented as
+`packages/opencode/script/gate14-real-model.ts`. Corrective integration
+`9e91d43c6` had disconnected Repa's inherited ChatGPT Plus/Pro OAuth
+registrations and exposed only an API-key path; the working tree restores login
+into Repa's own credential store without borrowing Codex Desktop's local
+credential. The later 2026-07-31 qualification and the composition corrections
+it forced are recorded below. No current Gate 14 implementation/evidence
+acceptance is claimed.
+
+Fresh Gate 16 reviewer task
+`019fb2a3-c902-7882-8134-1bf33f1eb04d` independently reproduced the exact
+77,857-byte
+`e185493de374748252dd160627135b4d34ed194ca3665798c6bc13e336f27cd2`
+three-file authority bundle and returned `Revise`. `G16-AN-001` requires a
+closed historical-V1/current-semantic-terminal/current-candidate Goal
+projection whose semantic identity excludes Agent issuance and whose
+pre-admission lineage failures cannot fabricate candidate provenance.
+`G16-AN-002` requires the exact V2 target intent, normalized stored/read shape,
+runtime temporal facts, and truthful V1→V2 omitted-target carry.
+`G16-AN-003` requires deterministic read-discovery/collision, provenance,
+semantic-race/crash, and legacy-producer-retirement evidence. The reviewer
+retained the ordinary-Agent query/write boundary and every unaffected Goal
+identity, revision, lifecycle, transaction, migration, TUI, and provider-
+qualification decision. No Gate 16 implementation authority is available
+until the repaired exact diff is accepted by that same reviewer.
+
+The top-level executor repaired only those three findings. The current Goal
+projection is now the closed
+`legacy_v1 | semantic_terminal_v2 | candidate_v2` union: semantic terminals
+carry no Agent/capability/live-target facts, genuine candidates carry exact
+root/delegated issuance separately from capability, and final race losers keep
+truthful admitted history without an effect. V2 semantic equality uses only the
+canonical typed Goal intent. The exact V2 target input is absent, civil instant,
+or local date plus a source/IANA/fixed-offset zone selector; the runtime binds
+tzdb/epoch/offset facts, V2 revisions store normalized values, and V1→V2 carry
+projects only immutable value while preserving V1 proof bytes on the
+predecessor. Closing evidence now explicitly covers read policy/collisions,
+root/delegated/missing-capability provenance, semantic-terminal/final-race
+distinctions, every capability crash window, the target/carry matrix, and
+retirement of V1 proof/confirmation producers and controls.
+
+Against base HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the repaired
+three-file Gate 16 authority bundle (`architecture/01` + Roadmap 09 + Gate 16
+record) is 98,955 raw binary Git-diff bytes with SHA-256
+`614569047251989fc7eb6ee90b53fd8991f704370517a8e311f2f28a2e3bede4`.
+`git diff --check` passes with only checkout line-ending warnings. This is an
+exact-diff closure candidate for the same reviewer, not implementation
+authority.
+
+The same reviewer independently reproduced that exact 98,955-byte binding and
+returned `Accept`. `G16-AN-001..003` are closed with no new blocker or
+maintainer-owned choice. Accepted scope is the ordinary-Agent Goal/Course read
+and typed create/update/replace path, closed V1/semantic-terminal/candidate
+projection, canonical-intent semantic identity, exact V2 target/carry
+projection, runtime-bound owners and temporal facts, V14→V15 migration, and
+the strengthened deterministic/provider evidence split. Historical V1 truth,
+Goal identity/revision/lifecycle/supersession, atomic multi-Goal settlement,
+replay/recovery/correction, and durable TUI results remain retained.
+
+Scoped Gate 16 implementation authority is therefore available at the
+contract/theory layer. The reviewer explicitly requires implementation to
+consume an accepted Gate 14 V14 implementation/evidence predecessor, not the
+still-unaccepted Gate 14 candidate currently present in the shared tree. No
+Gate 16 implementation or Gate 17 authority follows until that ordering
+condition is met. Later Gate 14 closure and integration at `ff0ef1fd7`
+satisfies that predecessor condition; Gate 16 implementation still has not
+begun. The mechanical Gate 16 status promotion changes the
+three-file aggregate, without changing an accepted contract clause, to 98,839
+bytes with SHA-256
+`c2204a546e6fe7e4e414c2c0a92cfe2fa31c54b4c7468d26622e180b0e3de7fd`.
+
+## 2026-07-30 Gate 5 inherited OAuth regression correction
+
+Maintainer correction reopened only the retained OpenAI provider-authentication
+slice of Gate 5. Commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667` had removed the released-v1
+`CodexAuthPlugin` registration and Core browser/headless methods even though
+Gate 5 explicitly retained ordinary OAuth and Gate 11, Gate 15, and Gate 16 had
+already used that path for bounded real-model evidence.
+
+The top-level executor owns the unstaged correction. Its precise package scope
+restores the two registrations and CLI/TUI discovery, and updates the concurrent
+token-refresh test to the current `{ providerID, auth }` SDK request shape.
+Red-first focused tests reproduced the missing Core methods, absent released-v1
+OpenAI auth methods, and API-key-only CLI/TUI presentation before the
+production restoration. Fresh exact-source evidence then passed 44 tests / 68
+assertions across Core registration, released-v1 auth projection, CLI/TUI
+discovery, and concurrent token refresh. Core and TUI typechecks pass.
+OpenCode's package typecheck reports only the pre-existing TUI fixture
+diagnostics and the separate unaccepted Gate 14 candidate, with no OAuth-path
+diagnostic. No migration, schema, SDK generation, credential copy, or new
+authentication abstraction is part of the repair.
+
+Read-only audits found no second same-level mature runtime deletion in the
+responsible commit. Terminal-only composition, `.opencode` control-plane
+cleanup, dangerous release/install isolation, preview-v2
+`customize-opencode` default retirement, and restricted-Agent default-deny
+remain retained. Provider-specific header/referrer edits were then checked
+against current official service documentation. GitHub/Cloudflare User-Agent
+changes truthfully identify the caller; OpenRouter, Vercel, ZenMux, and Kilo do
+not require the removed OpenCode referer for inference; and
+LLMGateway/Cerebras/NVIDIA use the remaining values as attribution rather than
+authentication. xAI's browser-OAuth `referrer=repa` remains unverified because
+xAI publishes no compatibility contract for that inherited client; no xAI
+browser-login support claim is made from construction tests alone.
+
+The first real headless attempt reached OpenAI's device flow and emitted a user
+code, then expired without authorization and wrote no credential. A later
+maintainer-completed attempt wrote exactly one `openai:oauth` credential into
+Repa's own credential store. No API-key credential was introduced and no Codex
+Desktop credential was copied.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`,
+the exact ten-path OAuth package diff is 11,834 raw binary Git-diff bytes with
+SHA-256
+`456ddd6f9b31e092823b9e8142148198584ead1169ae2a0697aff6d201b5fe34`.
+The ordinal ten-path content manifest has SHA-256
+`02d2b37d5036ee866e5df671d776d29294edfcd5ebce1d30bd650dcd81a96dab`;
+each line is the 40-hex output of `git hash-object --no-filters`, two spaces,
+the path, and one LF. The five authority files are already a mixed Gate 14/16
+working bundle, so their aggregate diff is not mislabeled as an OAuth-only
+binding. Staged path count remains zero.
+
+The real login and Gate 14 qualification described below close the runtime
+unknown. Independent implementation/evidence closure remains outstanding, so
+the OAuth correction is still unstaged, unintegrated, and not reclosed.
+
+## 2026-07-31 Gate 14 real-provider qualification and lifecycle corrections
+
+The top-level executor ran
+`packages/opencode/script/gate14-real-model.ts` only after the maintainer
+completed Repa's restored ChatGPT Plus/Pro login. The qualification used an
+isolated configuration, credential projection, database, data directory, and
+cache; it did not print or persist the credential as evidence. The released
+model was `openai/gpt-5.5`.
+
+Run `gate14-openai-oauth-real-model-01` completed three Sessions and four Turns:
+
+- unique `Distributed Systems` selection used `course_query` followed by one
+  V3 default-Course write;
+- two same-title `Algorithms` Courses produced one clarification and no write;
+- a `Linear Algebra` suggestion read owner state and did not write; and
+- the learner's later acceptance in the same Session issued one V3 write.
+
+All four durable Turns are `completed/normal`. Both physical writes are
+`command_version=3`, `authorization_basis=agent_action`, and `applied`; both
+retain root Agent-issuance provenance. No permission request was emitted under
+effective `allow`, and the V14 database contains zero historical proposal rows.
+The script SHA-256 is
+`ae2f771494f5e8a5d3c91cff7e9997158499ae02b6bd9a66899c139e89699e74`.
+The 17,098-byte zero-warning/error log hashes to
+`f2ad6640477dab3ad1c107ca8e3e558ab1d95bd05c49fff9359369742e590569`;
+the 2,785,280-byte isolated database hashes to
+`74b5de865f228b67e970cfb287a2219549a3e2ab2d0eff96abb69bc56e48389a`.
+
+The real path first failed at three cross-boundary seams that local
+default-Course mocks had not exercised:
+
+1. `ToolRegistry.tools()` published `prepareToolCall`, while the adapter read
+   only its internal `prepareLearningCommand` field; real learning Tool calls
+   were aborted before their host preparation.
+2. A terminal Turn row could become visible before its exact owner handoff
+   finished. `awaitTurn` returned the row, then the learner's same-Session
+   follow-up encountered `Busy`.
+3. Inherited detached title, summary, prune, and per-step summary tasks could
+   retain Repa's durable Session lock after the Turn. Summary additionally
+   tried to write derived diffs into an occurrence-linked User Message whose
+   exact presentation Gate 8 had already frozen.
+
+The working tree now preserves host preparation across registry publication,
+keeps the exact Turn owner until handoff finalization, joins that owner from
+terminal `awaitTurn`, and contains title/summary/prune work inside the causing
+Turn. The first Gate 12 review returned `Revise` because promotion-ready idle
+was still published before the lifecycle admission released the exact terminal
+owner, and because awaited prune failure was silently ignored. The repaired
+candidate makes that exact terminal owner replaceable only at its post-lifecycle
+idle publication, proves a listener can directly admit distinct Turn B without
+queue/retry/retarget, and logs the non-fatal prune cause. Derived diffs live on
+the Session summary or are computed for a historical Message on demand;
+admitted User Message bytes remain immutable.
+
+The same reviewer returned a first closure `Revise`: `G12-OH-002` closed, but
+residual `G12-OH-001-R1` showed that A entered `releasing` before its idle
+publication. B could therefore replace A and publish busy before A's
+unconditional idle write, leaving the owner map correct but the observable
+Session status stale. The superseding repair gives status writes a per-Session
+revision, makes A's idle publication conditional at every yielding boundary on
+A still being the exact owner, and allows only distinct `startTurn(B)` to
+replace A during release. `assertNotBusy` and shell admission stay closed until
+the owner is removed or replaced. A deterministic oracle pauses A before idle,
+admits and runs B through busy, resumes A, and proves that A emits no later idle
+or deletion and that neither Turn is retried. Fresh causal results are:
+
+- Session 33 pass / 234 assertions;
+- Prompt 14 / 111;
+- Processor 30 / 158;
+- snapshot/tool-diff race 1 / 6;
+- learning-command runtime 44 / 781;
+- registry 28 / 97; and
+- semantic presentation 6 / 55.
+
+OpenCode typechecking now reports only the unchanged
+`specs/fixtures/tui-plugins/tui-smoke.tsx` diagnostics; no current candidate
+path error remains. These repairs preserve the accepted Gate 8 immutable
+source and Gate 12 finite-owner meanings; they do not introduce new product
+semantics. Gate 12's original reviewer has now accepted the owner-handoff
+correction; Gate 5 OAuth, Gate 8 presentation, and the whole Agent-native Gate
+14 implementation/evidence candidate retained separate independent review
+obligations at this checkpoint and remained unstaged. Later sections record
+Gate 12 and Gate 14 acceptance/integration; OAuth and Gate 8 remain pending,
+and Gate 17 remains unauthorized.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, all current
+package work is classified with no unmatched package path:
+
+- the complete combined candidate contains 47 tracked and seven untracked
+  package paths; its 445,754-byte raw binary tracked diff hashes to
+  `cc3d143d922f0eeced3fc96232e08f5c44086831eb11e621bb40c42b2a08ecd0`,
+  and its 4,891-byte ordinal content manifest hashes to
+  `7580923865cee6c07d4a2d3c2bc883aa3b00d5a7aab8e79fb4545d3b7428d333`;
+- the Gate 5 OAuth slice remains exactly ten tracked paths with 11,834-byte
+  raw diff
+  `456ddd6f9b31e092823b9e8142148198584ead1169ae2a0697aff6d201b5fe34`
+  and current 893-byte content manifest
+  `02d2b37d5036ee866e5df671d776d29294edfcd5ebce1d30bd650dcd81a96dab`;
+- excluding those ten OAuth paths, the combined Agent-native Gate 14 plus
+  Gate 8/12 correction candidate contains 37 tracked and seven untracked paths;
+  its 433,920-byte raw diff hashes to
+  `b6e27af5355ea46bc78528d1f484635f6008ab6a6c3a0f237a64707c5ce0b2dc`
+  and its 3,998-byte content manifest hashes to
+  `86f7033277e1d1ac0f82539264fc2bec8597a20f3b8adf1e2c26e6eaac625fb3`;
+  and
+- the superseding eight tracked Session lifecycle paths form an overlapping
+  review projection, not a separately applicable patch. Their 72,811-byte raw
+  diff hashes to
+  `2825cc15c73260ac46dd43fe0721a97e9312e469ea7d2dc3cedd130dc3e51247`
+  and their 692-byte content manifest hashes to
+  `97f8ae086c64ed859232c13f5cd0f9289a47123d4934ee326da47ae3a6936db2`.
+  These supersede the rejected `d2ae8bde...` / `86cf94a9...` closure
+  candidate and the earlier `19f5e292...` / `09a950ed...` reviewed bindings.
+
+Each manifest uses JavaScript default/ordinal path ordering and one UTF-8/LF
+line per path:
+`<40-hex git hash-object --no-filters output><two spaces><path>`, including one
+final LF. The OAuth README formatting changed its no-filter working blob but
+not the normalized raw Git diff; the current manifest above supersedes the
+earlier `7a50cbd4...` content binding. The complete combined and non-OAuth
+bindings above describe the now-superseded pre-review candidate and will be
+rebound after the outstanding Gate 14 review repairs; they are not current
+acceptance bindings. Staged path count is zero and no commit was created.
+
+### Gate 12 final closure and Gate 14 superseding repair
+
+Original Gate 12 reviewer task
+`019fad21-8a6a-7450-af90-505c0bce53f8` returned final exact-diff `Accept`.
+`G12-OH-001-R1` and `G12-OH-002` are closed. The accepted eight-path
+owner-handoff projection remains 72,811 raw binary diff bytes with SHA-256
+`2825cc15c73260ac46dd43fe0721a97e9312e469ea7d2dc3cedd130dc3e51247`;
+its 692-byte ordinal manifest hashes to
+`97f8ae086c64ed859232c13f5cd0f9289a47123d4934ee326da47ae3a6936db2`.
+The reviewer reproduced the two idle-race cases / 17 assertions and prune
+failure / 5 assertions; Session 33 / 234, Prompt 14 / 111, and Processor 30 /
+158 remain the accepted executor evidence. The exact correction is integrated
+at `29f5a140ffd9595a5de60d5bee517bba1b029cf2`; it contains no Gate 8
+semantic hunk and no Gate 14/16/17 work.
+
+The original Agent-native Gate 14 reviewer task
+`019fb27f-4416-7c42-bcad-97d473803750` then carried forward three
+implementation findings from the pre-repair candidate:
+
+- `G14-STO-001`: V14 did not fail closed over the whole root/delegated
+  `agent_action_v3` shape or the operation implied by its locators;
+- `G14-STO-002`: current proposal preparation/recording functions remained
+  exported even though the registry and durable producer were retired; and
+- `G14-IN-001`: public V3 Tool input stripped hybrid legacy/authorization
+  fields instead of accepting exactly set/clear.
+
+The top-level executor repaired those boundaries without changing the accepted
+contract. The versioned V14 trigger now validates the exact nested provenance,
+lineage, delegated-capability rules, causal chain, effective fingerprint,
+invocation binding, and operation. The V3 Tool uses a closed JSON schema and
+runtime excess-property rejection while the generic inherited Tool path stays
+open by default. Current proposal producer exports/code are gone; historical
+read/replay and the reserved identifier remain. Positive V3 allow/no-change
+and clear-after-withdrawal oracles close the two evidence gaps.
+
+Fresh causal results are Core migration 39 / 341, migration `--check`, Core
+typecheck, OpenCode runtime 45 / 791, registry 28 / 102, and direct Gate 14
+Prettier check, all passing. OpenCode typechecking reports only unchanged
+TUI-smoke fixture diagnostics; no Gate 14 path diagnostic remains. Runtime and
+registry are run independently because combining their process-scoped
+LearnerHome fixtures creates a non-causal database-owner collision.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the
+superseding Gate 14 package projection contains 30 tracked and seven untracked
+paths. Its 422,498-byte raw binary tracked diff hashes to
+`a7d7ffdfc0d21f0dbce59f15984900141f556df07db71829f3ce0b03aa50be30`;
+its 3,372-byte ordinal content manifest hashes to
+`a9233d6a74f2a204be06da0c50dda0a0d87c90ff97a04154147cd7ab78c04c55`.
+The complete shared package tree now contains 49 tracked and seven untracked
+paths, with 509,588-byte raw tracked diff
+`16994af7f57713b920ff2d29a717f0ad29e4a419de930d0d3cc43d61e97bcd16`
+and 5,057-byte ordinal manifest
+`799481363166e4463b7f6d6cad9bb35eb397cd96e828974e9fc9d88d43bd2199`.
+Every path is classified as Gate 5 OAuth (10 tracked), Gate 8 presentation
+(one tracked), accepted Gate 12 owner handoff (eight tracked), or Gate 14
+(30 tracked plus seven untracked). The manifest convention remains one
+JavaScript-default/ordinal UTF-8/LF line per path containing the 40-hex
+`git hash-object --no-filters` result, two spaces, and the path, including one
+final LF.
+
+At that checkpoint the Gate 14 candidate remained unaccepted pending
+exact-diff closure by its original reviewer. Staged path count was zero and no
+commit had been created; later residuals and final integration are recorded
+below.
+
+### Gate 14 locator-shape residual repair
+
+Original reviewer task `019fb27f-4416-7c42-bcad-97d473803750` returned the
+preceding candidate as `Revise`. It closed `G14-STO-002`, `G14-IN-001`, and the
+two positive evidence gaps, but opened `G14-STO-001-R1`: the shared V2/V3
+endpoint predicate did not close endpoint/locator objects or require and type
+the recorded title, Course-version, and working-selection values. A valid V3
+physical invocation against a real Course could therefore persist unknown keys
+and missing values.
+
+The superseding V14 candidate closes absent and Course endpoints, exact locator
+keys, every `recorded_v2` value wrapper, and the complete working-selection
+snapshot. Its SQL predicate is totalized so a missing JSON path cannot pass a
+`CHECK` as SQL null. Current schema artifacts were regenerated, and the same
+acknowledgement, disposition, and historical-proposal table shapes were folded
+into the unaccepted V13→V14 migration rather than creating a V15 migration.
+Historical bytes are preserved only when they satisfy their already-accepted
+exact V2 contract; proposal production remains retired.
+
+Red-first fresh-V14 evidence accepted the reviewer's malformed absent endpoint
+before the repair. Final fresh and V13→V14 cases accept complete Course
+locators and reject unknown or incomplete endpoint, locator, located-value, and
+working-selection forms. Full Core migration is 39 / 346; migration `--check`,
+Core typecheck, and OpenCode runtime 45 / 791 pass. Registry 28 / 102 remains
+causally retained because no Tool/registry path changed. The two reviewer-noted
+nonblocking evidence unknowns remain disclosed and outside this exact locator
+repair.
+
+The Gate 14 projection remains 30 tracked plus seven untracked package paths.
+Against HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, its superseding
+515,118-byte raw tracked diff hashes to
+`5680e638cf6e0d65ae8b0e4178f68f2b4c8c789f6195ba4d8d2c6c9183e67cf0`;
+the 3,372-byte ordinal manifest hashes to
+`69c43283c0a8582f6ff34613c978424ae42725cb1ad515b0ba336833d92271a2`.
+The rejected `a7d7ffdf...` / `a9233d6a...` binding remains provenance only.
+OAuth, accepted Gate 12, and Gate 8 exclusions are unchanged. The candidate is
+unstaged and unaccepted. The original reviewer returned this R1 binding as
+`Revise`; the residual and superseding binding are recorded next. No Gate
+16/17 authority follows.
+
+### Gate 14 working-selection identity residual repair
+
+Original reviewer task `019fb27f-4416-7c42-bcad-97d473803750` confirmed that
+`G14-STO-001-R1` closed unknown keys, missing values, wrapper types, and
+fresh/upgrade parity, but opened `G14-STO-001-R2`. The closed scalar checks
+still allowed a working-selection snapshot whose `revisionID`, `viewID`,
+`viewName`, `viewVersion`, and `revisionVersion` mixed null and recorded
+members. That shape is impossible in the accepted semantic presentation,
+which requires the identity tuple to be wholly absent or wholly recorded.
+
+The shared exact V2/V3 endpoint predicate now owns that relational union in
+addition to the already-closed object and scalar shapes. Red-first fresh-V14
+and V13→V14 cases both accepted a null `revisionID` with recorded View members;
+the upgraded path also accepted the converse recorded `revisionID` with null
+View members. Final cases retain real owner rows and prove all-null and
+all-recorded positives plus rejection of both mixed directions on both schema
+paths. Current schema artifacts were regenerated and the change was folded
+into the same unaccepted V14 migration; no V15 migration or registry entry was
+created.
+
+Focused fresh/upgrade evidence is 2 pass / 25 assertions. Full Core migration
+is 39 / 352; migration `--check`, Core typecheck, OpenCode runtime 45 / 791,
+direct formatting, and scoped diff check pass. Registry 28 / 102 remains
+causally retained because this residual changes no Tool or discovery path. The
+two previously disclosed nonblocking evidence unknowns remain unchanged.
+
+Against HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the Gate 14
+projection remains 30 tracked plus seven untracked package paths. Its
+superseding 557,013-byte raw tracked diff hashes to
+`ff7b654f4c0a6372b717e3d16c5de0ead4c3d8b63ff7c410a9ed8e723e741ad6`;
+the 3,372-byte ordinal manifest hashes to
+`bedd4b47da66a2cec28ca3d1221213ba00f1c89aa4e55ba7004eae7c8f22aef7`.
+The rejected R1 `5680e638...` / `69c43283...` binding is provenance only.
+OAuth, accepted Gate 12, and Gate 8 exclusions remain byte-for-byte unchanged;
+all 49 tracked plus seven untracked package paths are classified with no
+unmatched path. At submission the candidate remained unstaged, uncommitted,
+and unaccepted pending closure by the same reviewer.
+
+### Gate 14 final Agent-native closure and integration
+
+Original reviewer task `019fb27f-4416-7c42-bcad-97d473803750`
+independently reproduced the R2 package, record, aggregate, and exclusion
+bindings and returned final `Accept` with no blocker. `G14-STO-001-R2` is
+closed, every prior Gate 14 finding remains closed, and the reviewer reproduced
+the 2 / 25 owner-backed fresh/upgrade matrix, migration `--check`, absence of a
+V15 artifact, clean diff structure, exact HEAD, and zero staged paths. The two
+previously disclosed evidence unknowns remain nonblocking.
+
+The accepted Gate 14 projection is locally integrated at
+`ff0ef1fd7e0cbf048642fcb3ed1a8e32ba7f78db`. Its companion Gate 12
+owner-handoff correction landed separately at
+`29f5a140ffd9595a5de60d5bee517bba1b029cf2`. The ten OAuth paths and the
+one Gate 8 oracle were excluded from both commits and remain dirty under their
+own review obligations. This integration satisfies Gate 16's accepted V14
+predecessor dependency but grants no Gate 17 authority.
 
 ## Historical evidence locators
 

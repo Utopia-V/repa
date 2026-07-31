@@ -1,9 +1,11 @@
 # Pre-Gate-17 global hazard audit
 
-Status: Open at `P17-F19`, the 2026-07-30 Agent-native semantic ownership
-correction. Gate 14's default-Course Agent query/admission and Gate 16's Goal
-Agent query/write are contract-reopened; Gate 17 remains paused. The
-2026-07-28 close remains valid for authority
+Status: Open at `P17-F20`, the 2026-07-30 retained-provider-capability
+regression discovered while completing the Agent-native semantic ownership
+correction. Gate 14's Agent-native implementation is integrated, Gate 16's
+accepted contract is implementation-unblocked, and Gate 17 remains paused. The
+separate OAuth and Gate 8 correction candidates remain pending. The 2026-07-28 close
+remains valid for authority
 reconstruction, inherited-pollution, working-tree classification, and the
 distinct ownership of Course/Session/context/later-draft/exact-Turn meanings.
 Three fresh read-only product, architecture, and roadmap passes then confirmed
@@ -64,10 +66,11 @@ The accepted corrective snapshot
 `9e91d43c629b66d65c8741e342bca7cf05de5667` remains valid for its bounded
 repairs. Gate 12's correction and the structural/TUI/settlement portions of
 Gate 14 and Gate 16 remain retained. Gate 17 grill, contract derivation, and
-implementation remain paused while the simpler Gate 14/16 Agent-native
-contracts are derived and reviewed. This record owns audit method, findings,
-and repair disposition; it does not replace product foundations, revise an ADR
-by itself, or make a Gate contract authoritative.
+implementation remain paused while the accepted Gate 16 implementation follows
+the now-integrated Agent-native Gate 14 predecessor. This record
+owns audit method, findings, and repair disposition; it does not replace
+product foundations, revise an ADR by itself, or make a Gate contract
+authoritative.
 
 Date: 2026-07-27
 
@@ -1030,9 +1033,10 @@ merely makes the learner compensate for withholding normal Agent retrieval.
 The causally sufficient correction establishes the ordinary interactive Agent
 as the default for open-language intent, contextual reference, comparison, and
 local Tutor choice. Domain-owner queries return exact IDs, versions, semantic
-snapshots, stable cursors, and explicit truncation. The Agent decides whether to
-read more, make a transparent reversible local choice, or ask one
-learning-level clarification. Typed commands then bind exact current state;
+snapshots, owner-defined opaque continuations, and explicit truncation. The
+Agent decides whether to read more, make a transparent reversible local choice,
+or clarify at the learning level only as needed. Typed commands then bind exact
+current state;
 program code still validates capability, permission, CAS, legal transition,
 transaction, replay/recovery, and visible correction. Model fallibility is
 contained by those boundaries rather than answered with a shadow semantic
@@ -1040,14 +1044,19 @@ implementation.
 
 Consequences:
 
-- Gate 14 is contract-reopened only for its model-visible Course query and
-  default-preference semantic admission surface; identity/history, route
-  anchors, migration, capability lifecycle, locators, replay, and TUI result
-  truth remain retained.
-- Gate 16 is contract-reopened rather than merely implementation-reopened. Its
-  Goal query/write surface must be simplified together; structural Goal
-  identity/revision/lifecycle work and the accepted TUI presenter remain
-  retained inputs.
+- Gate 14's current Agent-native contract candidate now supplies thin
+  Course/navigation reads, one `{set courseID}|{clear}` write, runtime-bound
+  owner state, and V13→V14 `agent_action_v3`/`semantic_terminal_v3`; retained
+  identity/history and every route-anchor boundary remain unchanged. Fresh
+  reviewer `019fb27f-4416-7c42-bcad-97d473803750` closed `G14-AN-001..003` and
+  accepted the exact repaired contract. Its implementation/evidence is accepted
+  and integrated at `ff0ef1fd7`.
+- Gate 16's current candidate now supplies bounded Goal/Course reads and one
+  semantic-intent patch command whose complete revision is materialized by the
+  Goal owner. Historical Goal identity/revision/lifecycle work and the accepted
+  durable TUI result remain retained. Its Gate 14 `agent_action`/V14 dependency
+  is integrated. Gate 16's fresh review closed `G16-AN-001..003`; scoped
+  implementation is authorized but has not begun.
 - Gate 17 owns durable Course/View/material bootstrap effects through the
   ordinary Agent, not another language interpreter. `/learn` is optional
   discoverability only.
@@ -1057,11 +1066,63 @@ Consequences:
   tests the ordinary Agent first. Another controller is considered only after a
   causal failure survives repair of that simpler boundary.
 
-No Gate 14/16 semantic-path implementation or Gate 17 implementation is
-authorized until the revised Gate contracts receive their required fresh
-review. This correction does not reopen deterministic arithmetic, storage
-identity, transaction, permission, migration, or failure invariants merely
-because they are program-owned.
+Gate 14's reviewed semantic-path implementation is integrated and Gate 16 has
+scoped implementation authority after its fresh review. Gate 17 implementation
+remains unauthorized. This correction does not reopen deterministic arithmetic, storage
+identity, transaction, permission, or failure invariants merely because they
+are program-owned; only the forward migrations required to retire the false
+current write shapes are reopened.
+
+### `P17-F20`: the audit silently deleted retained provider authentication
+
+**Violated criteria:** authority continuity, independently useful inherited
+capability, immediate user reachability, and evidence before deletion.
+
+Maintainer correction exposed that the 2026-07-28 corrective integration had
+conflated OpenCode's excluded Console/account product surface with local OpenAI
+provider authentication. Commit `9e91d43c6` disconnected both the released-v1
+`CodexAuthPlugin` used by the primary TUI and CLI and Core's browser/headless
+OpenAI integration methods. It then reversed the discoverability tests and
+propagated the inference that only API-key use was current.
+
+That disposition directly contradicts Gate 5's accepted clauses retaining
+ordinary API-key and OAuth flows and its historical evidence that provider
+connect/auth hydration remained. Gate 11, Gate 15, and Gate 16 had also already
+used the inherited OpenAI OAuth path for bounded real-model evidence. The
+claimed absence of an owned or verified compatible client registration was
+therefore neither a maintainer decision nor a failed technical check.
+
+The user-visible consequence is material: TUI `/connect` and CLI
+`providers login` no longer offered ChatGPT Plus/Pro, and saved OAuth
+credentials lost their built-in loader, refresh, Codex endpoint, and model
+projection. It also falsely blocked Gate 14's released-Agent qualification on
+an OpenAI API key the learner does not need.
+
+The causally sufficient correction restores the two inherited registrations,
+the ChatGPT-Plus/Pro-or-API-key discovery text, and the token-refresh oracle
+against the current SDK request shape. Repa authenticates the learner's
+ChatGPT account into Repa's own credential store; it does not silently copy
+Codex Desktop credentials. This does not restore OpenCode Console,
+organization, sharing, cloud, Web/Desktop, update, install, publish, release,
+or upstream help/schema identity.
+
+A read-only classification of the responsible commit found no second
+same-level deletion of Session/Turn, model execution, ordinary tools, MCP,
+plugins, subagents, compaction, or generic skill mechanisms. The terminal-only
+composition, external `.opencode` control-plane cleanup, dangerous
+release/install isolation, preview-v2 `customize-opencode` default retirement,
+and restricted-Agent default-deny changes remain retained. A subsequent
+provider-by-provider compatibility check classified the changed
+User-Agent/integration/billing fields as truthful product attribution and the
+removed OpenRouter/Vercel/ZenMux/Kilo referers as optional attribution rather
+than authentication. The only remaining provider-specific unknown is xAI's
+browser-OAuth `referrer`: it has no public compatibility contract and therefore
+requires a real browser login before support is claimed; its device/API paths
+do not use that value.
+
+The OAuth correction remains an unstaged working-tree candidate until focused
+checks, a real login, and independent implementation/evidence closure succeed.
+Gate 14 qualification and review resume only after that user path is verified.
 
 ## Current audit disposition
 
@@ -1084,8 +1145,10 @@ the shared semantic-ownership mistake beneath Gate 14's resolution scope, Gate
 16's parser and candidate-proof repair, Gate 17's admission framing, and Gate
 21A's mechanism tournament. Gate 14 and Gate 16 are therefore contract-reopened
 only at their Agent-semantic surfaces despite the retained integrations
-described above. The audit remains open until those contracts are rederived,
-reviewed, and their implementation disposition is truthful.
+described above. Their replacement contracts are accepted; Gate 14 is
+integrated and Gate 16 is implementation-unblocked. The audit remains open for
+the separate retained-provider/Gate 8 corrections and the still-unimplemented
+Gate 16 boundary.
 
 The renewed audit returned to the parent symptom rather than treating residue
 cleanup as the objective. Discussion had repeatedly collapsed six distinct
@@ -1190,36 +1253,42 @@ still blocks any future release-readiness claim until separately disposed.
    revision so a finished competitor cannot disappear. The original reviewer
    returned second implementation/evidence exact-diff `Accept`, closed both
    findings, and made scoped integration authority available.
-- Architecture, Roadmap 09, the Gate 14 record, and the status/provenance map
-  now remove the Gate-specific duplicate prompt under effective `allow` while
-  preserving capability `ask`, require Tutor-supplied meaning to cite an exact
-  accepted proposal, and require immutable replay to stay exact after later
-  name collisions. The formal-review repair chooses a closed versioned
-  authorization/capability union, receipt-derived symmetric stable locators,
-  and frozen-V12-to-V13 migration; the original reviewer returned exact-diff
-   `Accept` for that core. Later implementation mapping exposed three omitted V2
-   capability crash windows; the lifecycle/recovery amendment's first closure
-   pass then exposed `G14-CAP-001`. Its repaired atomic ask-plus-issue transition
-   received exact-diff `Accept`. Deeper mapping then exposed row-dependent V12
-   confirmation/request/locator availability, the missing proposal producer,
-   contradictory authorization timing, and the shared route/default trigger.
-   The original reviewer accepted the five-seam amendment with no blocker.
-   Top-level recovery then exposed `G14-RC-IE-SEM-001`, so the final design
-   separates pre-authorization semantic terminals from genuinely new candidate
-   authorization/capability. The original reviewer accepted that amendment;
-   after two implementation/evidence repair passes, it accepted the exact
-   implementation and integration is fixed at `80fde2012`.
+- Historical Gate 14 V2 repair provenance, superseded for the current
+  default-Course semantic path: Architecture, Roadmap 09, the Gate 14 record,
+  and the status/provenance map removed the Gate-specific duplicate prompt under
+  effective `allow` while preserving capability `ask`, required Tutor-supplied
+  meaning to cite an exact accepted proposal, and required immutable replay to
+  stay exact after later name collisions. The formal-review repair chose a
+  closed versioned authorization/capability union, receipt-derived symmetric
+  stable locators, and frozen-V12-to-V13 migration; the original reviewer
+  returned exact-diff `Accept` for that core. Later implementation mapping
+  exposed three omitted V2 capability crash windows; the lifecycle/recovery
+  amendment's first closure pass then exposed `G14-CAP-001`. Its repaired atomic
+  ask-plus-issue transition received exact-diff `Accept`. Deeper mapping then
+  exposed row-dependent V12 confirmation/request/locator availability, the
+  missing proposal producer, contradictory authorization timing, and the shared
+  route/default trigger. The original reviewer accepted the five-seam amendment
+  with no blocker. Top-level recovery then exposed `G14-RC-IE-SEM-001`, so the
+  final V2 design separated pre-authorization semantic terminals from genuinely
+  new candidate authorization/capability. The original reviewer accepted that
+  amendment; after two implementation/evidence repair passes, it accepted the
+  exact implementation and integration is fixed at `80fde2012`. `P17-F19` and
+  the next bullet supersede the proposal requirement and semantic-authorization
+  protocol for all new default-Course writes while retaining this V2 history for
+  exact replay.
 - Product origin, ADR-0008/0012/0013, architecture, Roadmap 09, repository
   guidance, Gate 14/16/17 records, and `docs/README.md` now carry the `P17-F19`
-  Agent-native correction. Gate 14 and Gate 16 are the scoped contract
-  boundaries before Gate 17; their unaffected integrated mechanics remain
-  accepted rather than being discarded wholesale.
+  Agent-native correction. Gate 14 is integrated at `ff0ef1fd7`; Gate 16's
+  accepted contract is implementation-unblocked. Both remain scoped boundaries
+  before Gate 17, and their unaffected mechanics remain accepted rather than
+  being discarded wholesale.
 - `AGENTS.md` now distinguishes revision ownership from technical correctness,
   so a later agent cannot use authority order to conceal a falsified decision.
 - Gate 16's volatile status and Gate record preserve its historical close and
   integrated TUI correction while superseding both fixed-language parsing and
-  the later exhaustive candidate-proof amendment. The current reopen is
-  contract/theory, not merely implementation/evidence.
+  the later exhaustive candidate-proof amendment. Its Agent-native replacement
+  contract passed fresh review and its Gate 14 dependency is integrated; its
+  implementation remains outstanding.
 - Gate 5, Gate 8, Gate 10, Gate 11, Gate 14, and Gate 15 records preserve their
   historical reviews and the common corrective integration. It closes the
   affected build, outward-identity, permission, physical, and generic/hidden
@@ -1252,12 +1321,14 @@ resulting work completed on 2026-07-28:
 
 - Gate 5's corrective snapshot makes terminal-only the ordinary build, keeps Web
   behind an explicit research-only flag, removes reachable upstream
-  help/schema/network identity, hibernates unqualified ChatGPT OAuth while
-  retaining OpenAI API-key use, removes default production registration of the
+  help/schema/network identity, removes default production registration of the
   inherited preview-v2 `customize-opencode` skill while retaining generic v2
   and released-v1 skill mechanisms, and closes the custom-Agent and permission
-  counterexamples described above. A separate fresh reviewer accepted that
-  skill-surface slice with focused Core and released-v1 evidence.
+  counterexamples described above. Its simultaneous hibernation of inherited
+  ChatGPT OAuth was an unauthorized retained-capability regression, now
+  superseded by `P17-F20`; the other listed repairs remain retained. A separate
+  fresh reviewer accepted the skill-surface slice with focused Core and
+  released-v1 evidence.
 - Gate 6/8's corrective snapshot separates a domain-neutral physical ledger from
   domain-owned reservation, effect, seal, and recursive terminal validation;
   freezes v11 trigger/schema evidence; installs an explicit v12 migration and

@@ -2215,3 +2215,219 @@ Scoped Gate 12 implementation/evidence is accepted and integrated at
 `c5ea10b8ab0f573fef03b5066bbcb117a9e0a502`. This acceptance does not reopen or replace the retained strict
 start/exact-target steer, Turn/race/budget/tool/child/cancellation/recovery,
 HTTP/SDK, or historical core evidence.
+
+## 2026-07-31 exact owner-handoff correction candidate
+
+Gate 14's first real OAuth/model qualification exposed a narrower Gate 12
+implementation counterexample without changing the accepted Turn contract. A
+Turn could win terminal CAS and become readable as terminal while its exact
+same-process owner was still publishing idle and finishing internal Session
+work. `awaitTurn` returned immediately for any non-running durable row, and
+owner removal occurred on several earlier terminal paths. A learner's next
+message in the same Session could therefore receive `Busy` after the previous
+Turn had apparently completed.
+
+The inherited released-v1 prompt path made that window materially larger:
+title generation, first-step summary, per-step summary, and post-loop
+compaction pruning were forked into a Session-wide Scope. Repa's later durable
+Session/Turn locking made those formerly detached jobs retain the Session
+outside the Turn that caused them. The fork preserved both pieces of code, but
+their new composition no longer preserved OpenCode's original lifecycle
+assumption.
+
+The unstaged correction keeps one owner through the whole handoff:
+
+- owner removal is the finalizer of the exact handoff fiber rather than an
+  earlier consequence of terminal settlement or recovery;
+- `awaitTurn` joins that exact handoff when the matching owner is still present,
+  even if the durable Turn has already terminalized;
+- title work remains concurrent with the model loop but is joined before the
+  handoff ends; first-step and per-step summary plus post-loop prune are awaited
+  inside the same handoff and log their own non-fatal failures; and
+- no new Turn state, queue, retry, provider replay, or durable recovery meaning
+  is added.
+
+The Session summary correction triggered by the same run is owned by Gate 8:
+derived file diffs no longer mutate the frozen User Message that admits a
+learning occurrence. Gate 12 owns only the fact that this work completes or
+fails inside its causing Turn handoff.
+
+Fresh causal evidence from `packages/opencode`:
+
+```text
+bun test --timeout 20000 test/session/session.test.ts
+31 pass, 0 fail, 217 assertions
+
+bun test --timeout 20000 test/session/prompt.test.ts
+13 pass, 0 fail, 106 assertions
+
+bun test --timeout 20000 test/session/processor-effect.test.ts
+30 pass, 0 fail, 158 assertions
+```
+
+The focused oracles cover terminal-before-await owner cleanup, later strict
+start exclusion while title/summary/prune is still active, exact steer
+promotion after a real completed model sample, fork source lifecycle, whole
+Session deletion, and existing recovery races. Several historical tests were
+also repaired to use legal current fixtures: physical invocations now admit
+before terminal settlement, steer promotion includes its required model
+operation, and fork exclusion pauses the actual source lifecycle guard rather
+than an obsolete post-commit event callback.
+
+This is a scoped implementation/evidence candidate, not a contract revision or
+an integration. The accepted primary-TUI correction at `c5ea10b8a` and every
+unaffected strict start/steer, budget, child, cancellation, recovery, HTTP, and
+SDK boundary remain retained. Independent implementation/evidence closure is
+required before this correction is integrated.
+
+### Owner-handoff exact-diff review and repair
+
+The original Gate 12 reviewer returned `Revise` on the first seven-path
+candidate with two blockers:
+
+- `G12-OH-001`: the Turn runner published promotion-ready `idle` while its
+  lifecycle admission and exact terminal owner were still held. A distinct
+  Turn B started directly by that idle listener therefore received
+  `AlreadyRunning`/`Busy`.
+- `G12-OH-002`: post-loop pruning was awaited but wrapped in `Effect.ignore`,
+  so its promised non-fatal failure logging did not exist.
+
+The superseding candidate moves the Turn-specific idle publication out of the
+inner runner. Only after the guarded admission and work owner have fully
+unwound does the exact terminal owner enter a process-local `releasing` phase
+and publish idle. During that publication, a distinct direct `startTurn(B)` may
+replace A's exact terminal owner synchronously. A's conditional finalizer does
+not remove B, exact `awaitTurn(A)` can still join A's handoff while A remains
+the owner, and no queue, automatic retry, steer, or retarget is introduced.
+Admission failures and terminal replays that never installed a runner do not
+mint a new idle event.
+
+Post-loop pruning now catches its cause and emits
+`session pruning skipped` with the exact Session and error, while preserving
+the Turn's already-derived outcome. The red-first idle-listener oracle failed
+with `AlreadyRunning` on the reviewed candidate and now proves a real completed
+A followed by a directly admitted, independently completed B. The red-first
+prune oracle proved that the old path emitted no warning and now checks both
+the unchanged terminal outcome and the structured warning.
+
+Fresh affected-file evidence is:
+
+```text
+bun test test/session/session.test.ts
+32 pass, 0 fail, 222 assertions
+
+bun test test/session/prompt.test.ts
+14 pass, 0 fail, 111 assertions
+```
+
+`G12-OH-001` and `G12-OH-002` are repaired in the working tree but remain
+open until the original reviewer closes the superseding exact diff. No
+integration authority is claimed.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the
+superseding seven tracked Session-lifecycle paths have a 62,324-byte raw binary
+Git diff with SHA-256
+`d2ae8bdefe146c6f9bd8240ee5cf122bc4125ad9bf843bfc1ce3b1cf541c4f7f`.
+Their 610-byte ordinal content manifest has SHA-256
+`86cf94a98840e1b4a7460d00ac538ad01762787ca0e7388090601aea4d0c8789`.
+The manifest uses JavaScript default/ordinal ordering and one UTF-8/LF line per
+path:
+`<40-hex git hash-object --no-filters output><two spaces><path>`, with one
+final LF. The rejected reviewed binding
+`19f5e2925475e810a41fd0745289cd1e5811542825a7f9c5df5bdf91f0deed07`
+remains provenance only. Staged path count is zero and no commit was created.
+
+### Residual idle-publication closure repair
+
+The original reviewer returned first closure `Revise`. `G12-OH-002` closed,
+but `G12-OH-001` remained open as `G12-OH-001-R1`: A entered process-local
+`releasing` before calling the unguarded Session-status writer. A distinct B
+could replace A, run, and publish `busy` in that pre-publication window; A's
+later unconditional `idle` then deleted or overwrote B's observable status.
+The conditional owner-map finalizer did not protect status/event order, and
+the idle-listener oracle exercised only the later reentrant window after A had
+already entered its `Status(idle)` listener.
+
+The superseding implementation gives Session-status writes a monotonically
+ordered per-Session revision. An older status write stops after any nested
+newer write instead of publishing a later idle event or mutating the current
+map. Terminal owner A uses a guarded idle operation that rechecks, before and
+after every yielding publication boundary and at the final deletion, that A
+is still the exact owner. A distinct `startTurn(B)` may replace A during
+release; the exact B owner therefore invalidates A's pending idle. In contrast,
+`assertNotBusy` and shell admission continue to report busy while any Turn
+owner remains. This preserves the required direct next-Turn behavior without
+adding a queue, retry, steer, or retarget path.
+
+The new deterministic oracle replaces Session status with a controlled
+implementation, pauses A before idle publication, admits B exactly once,
+enters B work and publishes `busy`, then resumes A. It proves A publishes no
+stale idle and deletes no B status, B remains the exact durable active Turn,
+ordinary busy checks still reject competing work, and A/B each execute once.
+B's own completion then publishes the only final idle. The earlier reentrant
+idle-listener oracle remains and proves a distinct B can also start directly
+from the observed idle boundary.
+
+Fresh affected evidence is:
+
+```text
+bun test test/session/session.test.ts
+33 pass, 0 fail, 234 assertions
+
+bun test test/session/prompt.test.ts
+14 pass, 0 fail, 111 assertions
+
+bun test test/session/processor-effect.test.ts
+30 pass, 0 fail, 158 assertions
+
+bun run typecheck
+candidate-path diagnostics: none
+excluded unchanged diagnostics: specs/fixtures/tui-plugins/tui-smoke.tsx
+```
+
+At this intermediate candidate point, `G12-OH-002` remained closed and
+`G12-OH-001-R1` was repaired but still awaited original-reviewer closure. The
+final closure below supersedes that disposition.
+
+Against base/HEAD `0d7ca3987ea69445d23f30ee8386706c0bbc86c9`, the eight
+tracked Session-lifecycle paths have a 72,811-byte raw binary Git diff with
+SHA-256
+`2825cc15c73260ac46dd43fe0721a97e9312e469ea7d2dc3cedd130dc3e51247`.
+Their 692-byte ordinal content manifest has SHA-256
+`97f8ae086c64ed859232c13f5cd0f9289a47123d4934ee326da47ae3a6936db2`.
+The manifest uses JavaScript default/ordinal ordering and one UTF-8/LF line per
+path:
+`<40-hex git hash-object --no-filters output><two spaces><path>`, with one
+final LF. The rejected `d2ae8bde...` / `86cf94a9...` closure candidate and
+the earlier `19f5e292...` / `09a950ed...` binding remain provenance only.
+Staged path count is zero and no commit was created.
+
+### Final owner-handoff closure
+
+Original reviewer task `019fad21-8a6a-7450-af90-505c0bce53f8`
+independently reproduced the superseding candidate and returned exact-diff
+`Accept`. `G12-OH-001-R1` is closed: exact-owner-guarded `setIdleIf` plus
+per-Session status revisions prevent A's older idle publication from
+overwriting or deleting B's newer busy state, while only a distinct
+`startTurn(B)` may replace a releasing owner. The real idle-listener oracle and
+the paused-pre-publication B-busy oracle cover both replacement windows without
+queue, retry, steer, or retarget. `G12-OH-002` remains closed because prune
+failure is caught, logged with Session/cause context, and cannot change the
+already-derived Turn outcome.
+
+The accepted implementation binding remains the eight tracked paths above:
+72,811 raw binary Git-diff bytes with SHA-256
+`2825cc15c73260ac46dd43fe0721a97e9312e469ea7d2dc3cedd130dc3e51247`;
+the 692-byte ordinal content manifest has SHA-256
+`97f8ae086c64ed859232c13f5cd0f9289a47123d4934ee326da47ae3a6936db2`.
+The reviewer reproduced the two focused idle-race cases / 17 assertions and
+the prune case / 5 assertions; executor-bound Session 33 / 234, Prompt 14 /
+111, and Processor 30 / 158 remain the accepted affected evidence. Scoped
+Gate 12 integration authority is available for this correction only. Gate 8
+semantic changes, Gate 14 content, and Gate 16/17 authority remain outside this
+closure.
+
+The exact accepted eight-path correction is locally integrated at
+`29f5a140ffd9595a5de60d5bee517bba1b029cf2`. The commit contains no Gate 8,
+Gate 14, OAuth, or future-Gate path; those retain their separate owners and
+dispositions.

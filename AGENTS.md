@@ -324,6 +324,11 @@ learning tools.
   preferably read-only investigation will produce much more raw material than
   the conclusion needed by the main agent, or when genuinely independent work
   benefits from parallelism. Keep tightly coupled reasoning in one context.
+- Subagents are read-only investigators and discussion partners. They may
+  inspect repository state, run non-mutating checks, derive counterexamples,
+  and return recommendations, but they may never create, edit, delete, stage,
+  commit, or otherwise mutate project files or code. All repository mutation is
+  owned by one top-level executor task.
 - A Gate-scale implementation, recovery, or integration that spans durable
   ownership boundaries, migrations, runtime, carriers, or several turns is
   top-level task work with one durable executor and one owner for the integrated

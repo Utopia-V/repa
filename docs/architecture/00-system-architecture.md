@@ -255,65 +255,36 @@ directory, folder layout, discovered material, Goal/Assignment/planning
 pressure, future attention, and model
 judgment may surface information or a proposed target, but none may change that
 preference.
-Changing it requires semantic learner authorization, not Tutor initiative. A
-sufficiently explicit current request may supply that authorization; meaning
-supplied by a Tutor proposal requires acceptance bound to that exact proposal.
-The navigation owner does not add another mandatory confirmation under
-effective `allow` merely because the preference is durable. Capability
-permission remains a separate control plane: effective `ask` may still prompt,
-but that reply neither creates semantic acceptance nor replaces the exact
-learner request or source-bound proposal acceptance. Every genuinely new V2
-candidate authorization arm binds and revalidates the exact current preference
-revision and target Course/working-selection snapshot. Its immutable
-acknowledgement retains symmetric stable `from`/`to` identity so later same-name Courses cannot make it
-ambiguous or cause replay to consult today's Course state. Migrated V1 rows
-preserve only recorded identity, version, selection, confirmation, and effect
-facts; unavailable history is explicit and never filled from current state or a
-predecessor transition. A separately labelled current inspection may report
-current availability without rewriting history. The learner may see a stable
-internal identity as secondary disambiguation but never has to type it.
+Changing it is an ordinary Agent-issued learning command. The Agent may read
+bounded Course and navigation-owner state, interpret the learner's current
+language and conversation, and clarify a materially unresolved choice before
+issuing one typed set/clear command. The learner never has to type an internal
+identity, and cursor completeness, candidate enumeration, keyword matching, or
+a host-sealed proposal is not semantic authorization. A clear routine request
+does not acquire another Gate-specific prompt under effective `allow`;
+configured capability `ask` remains a separate control.
 
-“Sufficiently explicit” is a semantic condition, not a fixed phrase list or a
-requirement that learner text contain internal IDs. A model may interpret the
-current utterance and conversation; the program binds the candidate scope,
-identity, revision, completeness/truncation, permission, and correction
-semantics. Incomplete or genuinely ambiguous resolution widens, clarifies, or
-uses a source-bound acceptance or clarification instead of pretending code
-proved the language. A source-bound proposal is not plain Assistant prose: the
-host seals one exact non-mutating completed proposal Tool Part and immutable
-projection before a later learner occurrence can accept it. Provider-executed,
-unsealed, or copied-without-lineage proposal calls are not authority. Gate 14's
-corrective boundary keeps a closed legacy/direct/source-bound candidate
-authorization union and separate capability settlement. After Gate 8 physical
-identity validation, an already-committed semantic duplicate/conflict settles
-atomically before current-owner or capability-policy checks and creates no
-candidate authorization/capability record. Only a genuinely new V2 candidate
-atomically reserves its authorization with physical admission before permission
-evaluation; final settlement only revalidates and seals the effect link. The
-frozen V12 migration classifies missing confirmation/locator facts without
-invention. Route-anchor meaning, owned
-tables, constraints, trigger branch, and behavior remain unchanged, although a
-physically shared validation trigger may be replaced solely to admit default
-V2. The Gate 14 record owns the exact reviewed representation and review
-disposition; `docs/README.md` owns current Gate status.
+The model supplies only the semantic choice to set one Course identity or clear
+the preference. At atomic admission the runtime binds the trusted causal
+occurrence, current preference head/version, and exact target
+Course/working-selection/View/Revision locator, then revalidates that captured
+state after any capability wait. The immutable acknowledgement retains
+symmetric stable `from`/`to` identity so later same-name Courses cannot make it
+ambiguous or cause replay to consult today's Course state. Migrated historical
+rows preserve only facts their original version recorded; unavailable history
+is explicit and never filled from current state.
 
-Reliable candidate capability recovery additionally keeps candidate physical
-admission/authorization, a durable policy outcome, a durably issued prompt, a
-durable learner reply, and the final atomic domain settlement distinct. A
-permission-request identity exists exactly when issue is durable. Effective
-`allow`/`deny` becomes a
-terminal policy outcome when evaluated; effective-`ask` evaluation and issue
-commit atomically, so no durable unissued-ask gap exists. Issue commits before
-live publication and reply commits before releasing the waiting invocation.
-Recovery does not re-prompt or apply an uncommitted preference effect: for a
-candidate, absence of any durable terminal policy outcome or issue is
-`not_evaluated`, issue without reply is `prompted_abort`, and a durable reply preserves its exact
-prompted outcome even when the later physical invocation settles
-interrupted/no-effect. A pre-authorization semantic terminal is already
-complete and never receives `not_evaluated`. “Issued” does not claim that a
-terminal carrier acknowledged rendering. The Gate 14 record owns the concrete versioned
-representation, migration evidence, and current review disposition for this
-lifecycle.
+After Gate 8 physical identity validation, an already-committed semantic
+duplicate/conflict settles before live owner or capability checks and creates
+no candidate Agent-issuance provenance or capability record. A genuinely new
+candidate records its physical admission, Agent-issuance provenance, and
+runtime-bound command state before permission evaluation. Durable policy,
+prompt issue, learner reply, and final domain settlement remain distinct;
+recovery never re-prompts or applies an uncommitted effect and runs the same
+semantic-first settlement check. Route anchor ownership and behavior remain
+unchanged. The Gate 14 record owns the exact versioned representation, migration
+evidence, and current review disposition; `docs/README.md` owns current Gate
+status.
 
 The default Course preference is only a retrieval prior for underspecified
 future requests. When the current request mentions or semantically requires
@@ -1247,6 +1218,16 @@ validates the selected exact state and legal transition; it does not require
 the learner to utter an internal ID or persist a complete candidate universe as
 proof that the Agent understood the language. Automatic context projection,
 model-visible retrieval, and a learner-facing browser remain separate surfaces.
+
+An `agent_action` basis records Agent issuance/admission provenance, not
+capability authorization, learner assent, or proof that source language entailed
+the structured command. It binds the actual issuing root or child Agent
+operation. For a delegated child it also binds the exact parent Turn/task chain,
+effective delegated-capability projection/version, and causal learner
+occurrence at the root only when Gate 12 validates every lineage link.
+Capability `allow`/`ask`/`deny` and its durable outcome remain a separate
+runtime-owned projection. A denied candidate may therefore retain truthful
+Agent issuance provenance while creating no domain effect.
 
 A learning command is not generic CRUD. It names a meaningful transition and
 owns:
