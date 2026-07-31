@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "d2129af1-3e9a-4b2f-9fe4-6e0743b9b728",
+  "id": "2d807ae3-3519-403a-863c-d8a01e3663c6",
   "prevIds": [
-    "dee00c19-0cd4-447b-a9c4-e568b00e080b"
+    "d2129af1-3e9a-4b2f-9fe4-6e0743b9b728"
   ],
   "ddl": [
     {
@@ -9113,6 +9113,16 @@
       "default": null,
       "generated": null,
       "name": "data",
+      "entityType": "columns",
+      "table": "message"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "summary_diffs",
       "entityType": "columns",
       "table": "message"
     },

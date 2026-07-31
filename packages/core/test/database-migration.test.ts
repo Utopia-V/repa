@@ -32,6 +32,7 @@ import learnerGoalsMigration from "@opencode-ai/core/database/migration/repa/202
 import domainNeutralLearningCommandLedgerMigration from "@opencode-ai/core/database/migration/repa/20260727121200_domain_neutral_learning_command_ledger"
 import defaultCourseV2Migration from "@opencode-ai/core/database/migration/repa/20260729144139_gate14_default_course_v2"
 import agentNativeDefaultCourseMigration from "@opencode-ai/core/database/migration/repa/20260730115237_gate14_agent_native_default_course"
+import messageDiffProjectionMigration from "@opencode-ai/core/database/migration/repa/20260731120541_gate08_message_diff_projection"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -39,7 +40,7 @@ import { ProjectV2 } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
-import { SessionTable } from "@opencode-ai/core/session/sql"
+import { MessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
 import { Database } from "@opencode-ai/core/database/database"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
@@ -1293,8 +1294,16 @@ function restoreV12DefaultCourseTransition(db: TestDatabase) {
   })
 }
 
+function removeMessageDiffProjection(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql`ALTER TABLE message DROP COLUMN summary_diffs`)
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 14}`)
+  })
+}
+
 function dropGate16(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* removeMessageDiffProjection(db)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
     yield* db.run(sql`DROP VIEW IF EXISTS learning_command_invocation_constraint_v12`)
     yield* db.run(sql`DROP VIEW IF EXISTS learning_command_receipt_constraint_v12`)
@@ -1697,6 +1706,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
           { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
           { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
+          { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -1732,6 +1742,96 @@ describe("DatabaseMigration", () => {
         ])
       }),
     )
+  })
+
+  test("adds the per-message diff projection and backfills historical User summaries", async () => {
+    const result = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* db.transaction((tx) => databaseV13Schema.up(tx))
+        yield* db.transaction((tx) => installSchemaExtrasV13(tx))
+        yield* db.run("PRAGMA foreign_keys = OFF")
+        yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
+        yield* db.run("PRAGMA foreign_keys = ON")
+
+        const sessionID = SessionSchema.ID.make("ses_gate08_message_diff_upgrade")
+        const messageID = SessionV1.MessageID.ascending("msg_gate08_message_diff_upgrade")
+        const diffs = [
+          {
+            file: "lesson.ts",
+            patch: "@@ -0,0 +1 @@\n+practice\n",
+            additions: 1,
+            deletions: 0,
+            status: "added" as const,
+          },
+        ]
+        yield* db
+          .insert(ProjectTable)
+          .values({
+            id: ProjectV2.ID.make("project_gate08_message_diff_upgrade"),
+            worktree: AbsolutePath.make("C:\\gate08-message-diff"),
+            sandboxes: [],
+            time_created: 0,
+            time_updated: 0,
+          })
+          .run()
+        yield* db
+          .insert(SessionTable)
+          .values({
+            id: sessionID,
+            project_id: ProjectV2.ID.make("project_gate08_message_diff_upgrade"),
+            slug: sessionID,
+            directory: "C:\\gate08-message-diff",
+            title: "Gate 8 message diff upgrade",
+            version: "test",
+            time_created: 0,
+            time_updated: 0,
+          })
+          .run()
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES (
+            ${messageID},
+            ${sessionID},
+            0,
+            0,
+            ${JSON.stringify({
+              role: "user",
+              time: { created: 0 },
+              agent: "repa",
+              model: { providerID: "test", modelID: "test" },
+              summary: { additions: 1, deletions: 0, files: 1, diffs },
+            })}
+          )
+        `)
+
+        yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
+        return {
+          columns: yield* db.all<{ name: string }>(sql`PRAGMA table_info('message')`),
+          row: yield* db
+            .select({ diffs: MessageTable.summary_diffs, data: MessageTable.data })
+            .from(MessageTable)
+            .where(eq(MessageTable.id, messageID))
+            .get(),
+        }
+      }),
+    )
+
+    expect(result.columns.some((column) => column.name === "summary_diffs")).toBe(true)
+    if (!result.row || result.row.data.role !== "user") throw new Error("Expected migrated User Message")
+    const summary = result.row.data.summary
+    if (!summary || typeof summary !== "object") throw new Error("Expected migrated legacy summary")
+    if (!result.row.diffs) throw new Error("Expected migrated per-message diff projection")
+    expect(result.row.diffs).toEqual([
+      {
+        file: "lesson.ts",
+        patch: "@@ -0,0 +1 @@\n+practice\n",
+        additions: 1,
+        deletions: 0,
+        status: "added",
+      },
+    ])
+    expect(summary.diffs).toEqual(result.row.diffs)
   })
 
   test("rejects mixed or incomplete Agent-native Default-Course disposition shapes", async () => {
@@ -5977,6 +6077,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 11, id: domainNeutralLearningCommandLedgerMigration.id },
           { version: BASELINE_VERSION + 12, id: defaultCourseV2Migration.id },
           { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
+          { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
         ])
       }),
     )

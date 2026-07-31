@@ -116,6 +116,7 @@ const layer = Layer.effect(
       const diffs = (yield* config.get()).snapshot === false ? [] : yield* computeDiff({ messages })
       yield* sessions.setSummary({
         sessionID: input.sessionID,
+        messageID: input.messageID,
         summary: {
           additions: diffs.reduce((total, diff) => total + diff.additions, 0),
           deletions: diffs.reduce((total, diff) => total + diff.deletions, 0),
@@ -133,10 +134,12 @@ const layer = Layer.effect(
         const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
         return session.summary?.diffs ?? []
       }
+      const recorded = yield* sessions.messageDiff({ sessionID: input.sessionID, messageID: input.messageID })
       const all = yield* sessions.messages({ sessionID: input.sessionID }).pipe(Effect.orDie)
       const message = all.find((item) => item.info.id === input.messageID)
       if (!message || message.info.role !== "user") return []
       const diffs =
+        recorded ??
         message.info.summary?.diffs ??
         (yield* computeDiff({
           messages: all.filter(

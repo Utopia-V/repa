@@ -1898,6 +1898,60 @@ describe("Session", () => {
     }),
   )
 
+  it.instance("fork copies the durable per-message diff projection", () =>
+    Effect.gen(function* () {
+      const session = yield* SessionNs.Service
+      const database = yield* Database.Service
+      const source = yield* Effect.acquireRelease(materializeTestSessionInfo({ title: "diff source" }), (info) =>
+        session.remove(info.id).pipe(Effect.ignore),
+      )
+      const user = yield* session.updateMessage({
+        id: MessageID.ascending(),
+        role: "user",
+        sessionID: source.id,
+        agent: "repa",
+        model: { providerID: ProviderV2.ID.make("test"), modelID: ModelV2.ID.make("test") },
+        time: { created: Date.now() },
+      })
+      yield* session.updatePart({
+        id: PartID.ascending(),
+        messageID: user.id,
+        sessionID: source.id,
+        type: "text",
+        text: "preserve my derived diff",
+      })
+      const diffs = [
+        {
+          file: "lesson.ts",
+          patch: "@@ -0,0 +1 @@\n+practice\n",
+          additions: 1,
+          deletions: 0,
+          status: "added" as const,
+        },
+      ]
+      yield* database.db
+        .update(MessageTable)
+        .set({ summary_diffs: diffs })
+        .where(and(eq(MessageTable.id, user.id), eq(MessageTable.session_id, source.id)))
+        .run()
+        .pipe(Effect.orDie)
+
+      const fork = yield* Effect.acquireRelease(
+        materializeTestSessionInfo({ fork: { sourceSessionID: source.id } }),
+        (info) => session.remove(info.id).pipe(Effect.ignore),
+      )
+      const clone = (yield* session.messages({ sessionID: fork.id })).find((message) =>
+        message.parts.some((part) => part.type === "text" && part.text === "preserve my derived diff"),
+      )
+      expect(clone?.info.role).toBe("user")
+      if (!clone || clone.info.role !== "user") return
+      expect(yield* session.messageDiff({ sessionID: fork.id, messageID: clone.info.id })).toEqual(diffs)
+
+      yield* session.remove(source.id)
+      expect(yield* session.messageDiff({ sessionID: fork.id, messageID: clone.info.id })).toEqual(diffs)
+    }),
+  )
+
   it.instance("fork holds the source lifecycle before publishing its destination", () =>
     Effect.gen(function* () {
       const session = yield* SessionNs.Service

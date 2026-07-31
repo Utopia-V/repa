@@ -12,7 +12,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
-import { TurnChildLineageTable } from "@opencode-ai/core/turn/sql"
+import { TurnChildLineageTable, TurnInputTable, TurnTable } from "@opencode-ai/core/turn/sql"
 import { Turn } from "@opencode-ai/schema/turn"
 import { locationServiceMapLayer } from "@opencode-ai/core/location-services"
 
@@ -459,7 +459,15 @@ export interface Interface {
     summary: Info["summary"]
   }) => Effect.Effect<void, BusyError>
   readonly clearRevert: (sessionID: SessionID) => Effect.Effect<void, BusyError>
-  readonly setSummary: (input: { sessionID: SessionID; summary: Info["summary"] }) => Effect.Effect<void, BusyError>
+  readonly setSummary: (input: {
+    sessionID: SessionID
+    messageID: MessageID
+    summary: NonNullable<Info["summary"]>
+  }) => Effect.Effect<void, BusyError>
+  readonly messageDiff: (input: {
+    sessionID: SessionID
+    messageID: MessageID
+  }) => Effect.Effect<Snapshot.FileDiff[] | undefined>
   readonly setShare: (input: { sessionID: SessionID; share: Info["share"] }) => Effect.Effect<void, BusyError>
   readonly setWorkspace: (input: {
     sessionID: SessionID
@@ -1238,6 +1246,15 @@ const layer: Layer.Layer<
                 { discard: true },
               )
               if (sourceMessage.role === "user") {
+                const diffs = row.summary_diffs ?? sourceMessage.summary?.diffs
+                if (diffs !== undefined) {
+                  yield* tx
+                    .update(MessageTable)
+                    .set({ summary_diffs: diffs })
+                    .where(and(eq(MessageTable.id, messageID), eq(MessageTable.session_id, session.id)))
+                    .run()
+                    .pipe(Effect.orDie)
+                }
                 if (occurrenceMessages.has(sourceMessage.id)) {
                   yield* Occurrence.copyPresentation(tx, {
                     sourceMessageID: sourceMessage.id,
@@ -1582,11 +1599,76 @@ const layer: Layer.Layer<
       yield* patch(sessionID, { time: { updated: Date.now() }, revert: null })
     })
 
-    const setSummary = Effect.fn("Session.setSummary")(function* (input: {
-      sessionID: SessionID
-      summary: Info["summary"]
-    }) {
-      yield* patch(input.sessionID, { time: { updated: Date.now() }, summary: input.summary })
+    const setSummary: Interface["setSummary"] = (input) =>
+      patchLocks.withLock(input.sessionID)(
+        runState.shared(
+          input.sessionID,
+          Effect.gen(function* () {
+            const current = yield* get(input.sessionID).pipe(Effect.orDie)
+            const next = {
+              ...current,
+              summary: input.summary,
+              time: { ...current.time, updated: Date.now() },
+            }
+            yield* events
+              .transaction((tx) =>
+                Effect.gen(function* () {
+                  const message = yield* tx
+                    .select({ data: MessageTable.data })
+                    .from(MessageTable)
+                    .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
+                    .get()
+                    .pipe(Effect.orDie)
+                  if (!message || message.data.role !== "user") {
+                    return yield* Effect.die(`Cannot record Session diff for missing User Message ${input.messageID}`)
+                  }
+                  const diffs = input.summary.diffs ?? []
+                  const turn = yield* tx
+                    .select({ state: TurnTable.state })
+                    .from(TurnInputTable)
+                    .innerJoin(TurnTable, eq(TurnTable.id, TurnInputTable.turn_id))
+                    .where(
+                      and(
+                        eq(TurnInputTable.message_id, input.messageID),
+                        eq(TurnInputTable.session_id, input.sessionID),
+                      ),
+                    )
+                    .get()
+                    .pipe(Effect.orDie)
+                  if (turn?.state !== "running") return { result: undefined }
+                  return {
+                    result: undefined,
+                    event: {
+                      definition: SessionV1.Event.Updated,
+                      data: { sessionID: input.sessionID, info: next },
+                      options: {
+                        commit: () =>
+                          tx
+                            .update(MessageTable)
+                            .set({ summary_diffs: diffs })
+                            .where(
+                              and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)),
+                            )
+                            .run()
+                            .pipe(Effect.orDie),
+                      },
+                    },
+                  }
+                }),
+              )
+              .pipe(Effect.asVoid)
+          }).pipe(Effect.orDie),
+        ),
+      )
+
+    const messageDiff: Interface["messageDiff"] = Effect.fn("Session.messageDiff")(function* (input) {
+      const row = yield* db
+        .select({ diffs: MessageTable.summary_diffs })
+        .from(MessageTable)
+        .where(and(eq(MessageTable.id, input.messageID), eq(MessageTable.session_id, input.sessionID)))
+        .get()
+        .pipe(Effect.orDie)
+      return row?.diffs ?? undefined
     })
 
     const setShare = Effect.fn("Session.setShare")(function* (input: { sessionID: SessionID; share: Info["share"] }) {
@@ -1852,6 +1934,7 @@ const layer: Layer.Layer<
       setRevert,
       clearRevert,
       setSummary,
+      messageDiff,
       setShare,
       setWorkspace,
       diff,

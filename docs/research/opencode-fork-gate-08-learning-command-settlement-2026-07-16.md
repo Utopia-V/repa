@@ -1,7 +1,9 @@
 # OpenCode fork Gate 8: learning-command settlement
 
-Status: Closed again at corrective integration commit
-`9e91d43c629b66d65c8741e342bca7cf05de5667`. The 2026-07-27
+Status: Accepted boundary retained at corrective integration commit
+`9e91d43c629b66d65c8741e342bca7cf05de5667`; one scoped immutable-occurrence
+presentation correction is pending independent implementation/evidence
+closure. The 2026-07-27
 first-principles audit had scoped-reopened the current physical
 shared-substrate dependency and primary-TUI settlement-presentation
 boundaries. The original Course-command proof at implementation commit
@@ -874,3 +876,76 @@ affected package typechecks, and `git diff --check`.
 Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` durably fixes the
 independently accepted shared-tree snapshot and closes this scoped reopen. The
 original Course settlement proof remains historical acceptance.
+
+## 2026-07-31 immutable occurrence-presentation correction candidate
+
+Gate 14's real OAuth/model qualification found one implementation violation of
+the already accepted Gate 8 immutability boundary. Inherited
+`SessionSummary.summarize` computed file diffs after tool execution and wrote
+them into `UserMessage.summary.diffs`. Once that User Message has admitted a
+learning occurrence, Gate 8 freezes its exact presentation bytes. The derived
+summary update therefore failed with `InvalidCausalSourceError` after the
+default-Course effect itself had correctly committed, turning an otherwise
+successful real Turn into owner failure.
+
+The first correction moved the derived view to the mutable current Session
+summary and recomputed an older message's view from its anonymous Snapshot
+trees. Independent review rejected that candidate as `G8-IMM-001`: a later
+Turn replaces the current Session summary, and Snapshot cleanup may prune the
+unreferenced Git trees. The same older message could therefore return a real
+non-empty diff before cleanup and the false empty array afterward.
+
+The superseding candidate gives the derived fact a durable owner without
+rewriting the immutable presentation:
+
+- `message.summary_diffs` is a Session/Interaction-owned projection beside,
+  not inside, the legacy Message `data` bytes. Updating the current Session
+  summary commits the exact per-message projection in the same EventV2
+  transaction while the owning Turn is still running. A terminal old Turn
+  cannot overwrite a successor's current Session summary.
+- A message-specific diff request reads that durable projection first, then a
+  historical `UserMessage.summary.diffs` projection, and only then uses
+  Snapshot recomputation as a best-effort fallback. A request without a
+  Message ID still returns the current Session summary.
+- Forward migration `20260731120541_gate08_message_diff_projection` advances
+  the native database from V14 to V15, adds the nullable projection, and
+  backfills exact historical diff arrays without deleting or rewriting the
+  legacy Message bytes. Fresh and all historical upgrade paths converge on the
+  same current schema and migration lineage.
+- Fork materialization copies the exact per-message projection to the cloned
+  User Message. It remains available after the source Session is deleted; an
+  ordinary Message deletion still removes the projection with its owning row.
+- Existing Prompt and Processor summary timing is unchanged. The correction
+  neither adds a queue/retry path nor reopens Gate 12 owner handoff.
+
+The causal regression uses two real tool Turns. It proves that U1 and U2 have
+distinct non-empty diffs, U2 becomes the current Session summary and emitted
+`Session.Diff`, U1's exact backing Snapshot objects then become unavailable,
+and the U1 API still returns its preserved value. U1's Message presentation
+remains byte-stable and `Occurrence.requireAvailableSource` still validates it.
+A separate fork oracle proves that the same projection survives source-Session
+deletion.
+
+Fresh candidate evidence:
+
+```text
+Core database migration                         40 pass / 355 assertions
+Core typecheck                                  pass
+Core migration --check                         pass / no drift
+OpenCode Session lifecycle                      34 pass / 237 assertions
+OpenCode Prompt lifecycle                       14 pass / 111 assertions
+OpenCode Processor lifecycle                    30 pass / 158 assertions
+message diff + real U1/U2 Snapshot regression    3 pass / 22 assertions
+```
+
+The OpenCode package typecheck has no candidate-path diagnostic; it still
+reports only the unchanged `specs/fixtures/tui-plugins/tui-smoke.tsx`
+implicit-any and obsolete workspace-property diagnostics. The physical ledger,
+domain settlements, replay, deletion, typed terminal projection, and accepted
+Gate 12 timing remain unchanged.
+
+This is a scoped, unstaged implementation/evidence candidate. `G8-IMM-001`
+must close in the original independent reviewer task before integration or a
+Gate 8 closure claim. The new V15 predecessor will also require the accepted
+Gate 16 contract's migration numbering to be rebased before any Gate 16
+implementation; it does not authorize that implementation here.

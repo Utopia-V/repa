@@ -76,6 +76,7 @@ export const MessageTable = sqliteTable(
       .references(() => SessionTable.id, { onDelete: "cascade" }),
     ...Timestamps,
     data: text({ mode: "json" }).notNull().$type<V1MessageData>(),
+    summary_diffs: text({ mode: "json" }).$type<Snapshot.LegacyFileDiff[]>(),
   },
   (table) => [index("message_session_time_created_id_idx").on(table.session_id, table.time_created, table.id)],
 )
