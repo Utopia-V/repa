@@ -10,13 +10,13 @@ plugin to a temporary Repa config such as `.repa/repa.jsonc`:
   "plugin": ["../packages/opencode/src/control-plane/dev/debug-workspace-plugin.ts"],
 ```
 
-The inherited workflow then ran a separate OpenCode server in another terminal. It acts as a local stand-in for a remote server while the local instance proxies requests to it:
+The inherited workflow then ran a separate Repa server in another terminal. It acts as a local stand-in for a remote server while the local instance proxies requests to it:
 
 ```
 ./packages/opencode/script/run-workspace-server
 ```
 
-When intentionally exercising this harness, OpenCode can create a `debug` workspace type that talks to the second workspace server started above.
+When intentionally exercising this harness, Repa can create a `debug` workspace type that talks to the second workspace server started above.
 
 How this works:
 

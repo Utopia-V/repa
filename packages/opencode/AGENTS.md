@@ -69,7 +69,7 @@ import { SessionStatus } from "@/session/status"
 Barrels in multi-sibling directories force every import through the barrel to
 evaluate every sibling, which defeats tree-shaking and slows module load.
 
-# opencode Effect rules
+# Repa Effect rules
 
 Use these rules when writing or migrating Effect code.
 

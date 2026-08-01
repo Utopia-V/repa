@@ -50,9 +50,9 @@ Start with the [documentation map](docs/README.md),
 [system architecture](docs/architecture/00-system-architecture.md), and
 [fork decision](docs/decisions/0014-one-time-opencode-fork.md).
 
-The [inherited-material index](docs/inherited/README.md) classifies preview-v2,
-deferred-surface, archived upstream, and oracle documents that remain useful
-without owning current Repa behavior.
+The [inherited-material index](docs/inherited/README.md) distinguishes retained
+contracts and provenance from upstream material removed from the current tree
+but recoverable through Git history.
 
 The pre-fork implementation, research logs, and labs remain historical oracles;
 they are not migration targets or compatibility requirements.
@@ -74,6 +74,7 @@ changed claim; consult [AGENTS.md](AGENTS.md) before modifying the fork.
 
 ## Provenance
 
-The fork preserves OpenCode's full upstream history and MIT license. Exact
-source pins, Gate commits, and the immutable pre-fork oracle locator are
-recorded in the [fork ledger](docs/fork-ledger.md).
+The fork preserves OpenCode's full upstream history and MIT license. The
+[fork notice](FORK-NOTICE.md) records distribution attribution; exact source
+pins, Gate commits, and the immutable pre-fork oracle locator are recorded in
+the [fork ledger](docs/fork-ledger.md).

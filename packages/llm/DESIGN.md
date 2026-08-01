@@ -16,7 +16,7 @@
 - Release posture: pre-1.0, with a stable-core intent
 - Migration posture: clean break; do not preserve compatibility aliases
 - Primary audience: general-purpose TypeScript developers using Effect
-- Secondary audience: OpenCode and other durable agent runtimes
+- Secondary audience: Repa and other durable agent runtimes
 
 The package name leaves room for future domains such as embeddings, images, and
 speech. Those domains are not part of this design and should not be forced into
@@ -452,7 +452,7 @@ only tool experience.
 
 ## One Provider Turn
 
-OpenCode and other durable runtimes need to own persistence, tool settlement,
+Repa and other durable runtimes need to own persistence, tool settlement,
 and continuation. They use the explicit turn API:
 
 ```ts

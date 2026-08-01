@@ -236,6 +236,7 @@ for (const item of targets) {
 
   packagePDFJS(path.resolve(`dist/${name}/bin`))
   packageDOMMatrix(path.resolve(`dist/${name}/bin`))
+  packageLegalMaterial(path.resolve(`dist/${name}/bin`))
 
   if (item.os === "win32") packageKoffi(item.arch, path.resolve(`dist/${name}/bin`))
 
@@ -245,10 +246,7 @@ for (const item of targets) {
     const smokeBin = path.join(smokeRoot, "bin")
     fs.cpSync(path.resolve(`dist/${name}/bin`), smokeBin, { recursive: true })
     const binaryPath = path.join(smokeBin, item.os === "win32" ? "repa.exe" : "repa")
-    const workerPath = path.join(
-      smokeBin,
-      item.os === "win32" ? "repa-pdf-worker.exe" : "repa-pdf-worker",
-    )
+    const workerPath = path.join(smokeBin, item.os === "win32" ? "repa-pdf-worker.exe" : "repa-pdf-worker")
     console.log(`Running packaged smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await invokePackagedText(binaryPath, ["--version"], smokeRoot, smokeRoot)
@@ -353,8 +351,16 @@ function packageDOMMatrix(output: string) {
   fs.copyFileSync(path.join(packageRoot, "package.json"), path.join(target, "package.json"))
 }
 
+function packageLegalMaterial(output: string) {
+  for (const file of ["LICENSE", "FORK-NOTICE.md"]) {
+    fs.copyFileSync(path.resolve(dir, "../..", file), path.join(output, file))
+  }
+}
+
 async function smokePDFWorker(workerPath: string, output: string) {
   const required = [
+    "LICENSE",
+    "FORK-NOTICE.md",
     "pdfjs-dist/LICENSE",
     "pdfjs-dist/package.json",
     "pdfjs-dist/legacy/build/pdf.worker.mjs",
@@ -372,7 +378,7 @@ async function smokePDFWorker(workerPath: string, output: string) {
     "third-party/thednp-dommatrix/package.json",
   ]
   if (required.some((file) => !fs.existsSync(path.join(output, file)))) {
-    throw new Error(`Packaged PDF worker is missing required PDF.js runtime or license material`)
+    throw new Error(`Packaged Repa distribution is missing required runtime or license material`)
   }
 
   const base = fs.mkdtempSync(path.join(tmpdir(), "repa-pdf-worker-smoke-"))

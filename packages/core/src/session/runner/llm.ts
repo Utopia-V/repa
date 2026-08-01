@@ -56,9 +56,6 @@ import { llmClient } from "../../effect/app-node-platform"
  *   - [x] Honor optional agent step limits.
  *   - [ ] Bound provider retries and repeated identical tool calls.
  *
- * - Runtime context assembly
- *   - Track V1 runtime-context parity canonically in `specs/v2/session.md`.
- *
  * - One provider turn
  *   - [x] Translate every projected V2 Session message variant into canonical
  *     `@opencode-ai/llm` messages.

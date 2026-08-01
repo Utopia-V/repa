@@ -313,7 +313,7 @@ exports[`Repa CLI help-text snapshots every documented command emits stable help
 database tools
 
 Commands:
-  repa db [query]     open an interactive sqlite3 shell or run a query                     [default]
+  repa db [query]     run a query against the owned Repa database                          [default]
   repa db path        print the database path
 
 Positionals:
