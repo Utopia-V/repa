@@ -7144,7 +7144,7 @@ test("carries each historical V1 target into a V2 update without copying retired
     })
     expect(carried.fieldBases).toEqual([])
   }
-})
+}, 15_000)
 
 test("reopens stored success and recovers admitted work without re-execution", async () => {
   await using tmp = await tmpdir()

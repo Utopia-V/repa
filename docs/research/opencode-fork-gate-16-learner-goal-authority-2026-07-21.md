@@ -2311,12 +2311,29 @@ reproduced every superseding package, record, aggregate, and full-tree binding,
 reran Core Goal 6/43 and registry/package reachability 29/142, and returned
 `Accept` with no blocker. `G16-AN-IMP-001..003` are closed; all retained
 contract, migration, replay/recovery, carrier, provider, and earlier-Gate
-boundaries remain accepted. The reviewer noted only that running the temporal
-matrix concurrently with the unrelated registry suite can approach Bun's
-default five-second timeout; the exact Core command passed alone in about four
-seconds, so this is a nonblocking evidence-maintenance note rather than a
-semantic or isolation defect.
+boundaries remain accepted. At review time, the reviewer noted only that
+running the temporal matrix concurrently with the unrelated registry suite can
+approach Bun's default five-second timeout; the exact Core command passed alone
+in about four seconds, so this is a nonblocking evidence-maintenance note rather
+than a semantic or isolation defect.
 
 The exact accepted candidate was integrated without content drift at
 `2baba9eeabeb9f163cfe380009dbb07673e3a669`. Gate 16 is closed at this
 boundary. No Gate 17 authority follows.
+
+## 2026-08-01 post-close evidence maintenance
+
+Fresh sequential verification on Windows with Bun `1.3.14` showed that the
+complete Core invalid-temporal matrix and OpenCode historical V1-to-V2 target
+carry matrix can cross Bun's default five-second per-test timeout while their
+assertions continue to pass. Both matrix oracles now declare a 15-second
+test-local budget; no production timeout, transaction, temporal, migration, or
+replay behavior changed. The direct Core command passes 6 tests / 43 assertions,
+and the direct OpenCode runtime command passes 46 tests / 881 assertions with 13
+intentional historical-V1 producer skips.
+
+The retained `tui-smoke.tsx` fixture also used removed workspace props and
+lacked the current slot-plugin contextual type. It now targets the current TUI
+plugin API, and the OpenCode package typecheck passes. These are post-close test
+and fixture maintenance corrections, not new Gate 16 product meaning or Gate 17
+implementation authority.

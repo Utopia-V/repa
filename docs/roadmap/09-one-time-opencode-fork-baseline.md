@@ -348,7 +348,7 @@ of these existing-owner prerequisites is false:
 - generic learning-command storage stops enumerating domain effects;
 - behavioral trigger DDL is frozen and migrated from real historical fixtures;
   SQLite owns structural invariants rather than natural-language forensics; and
-- Gate 16's open Goal interpretation works without fixed command phrases or
+- Gate 16's open-language Goal interpretation works without fixed command phrases or
   learner-visible internal IDs.
 
 These prerequisites repair existing owners and evidence. They are not another
@@ -363,10 +363,11 @@ answers, but this roadmap does not pre-accept them:
   command surfaces, request-bound creation/effect slots, atomic-versus-staged
   composition, cross-authority partial truth, provisional route construction,
   same-Turn teaching, and correction while preserving separate domain
-  ownership. Whether `/learn` is mandatory, an optional shortcut, or
-  unnecessary remains a Gate-local design question; any retained envelope must preserve verifiable
-  admission provenance and be discoverable in the primary TUI, but syntax does
-  not decide new/continue, macro activity, or whether a domain write is legal.
+  ownership. `/learn` is neither mandatory nor authoritative. Whether to retain
+  it as an optional discoverability shortcut or omit it remains a Gate-local
+  design question; any retained envelope must preserve verifiable admission
+  provenance and be discoverable in the primary TUI, but syntax does not decide
+  new/continue, macro activity, or whether a domain write is legal.
   Goal and LearningSpace remain optional. Transient web research without an
   admitted exact remote Artifact/snapshot does not make route assertions
   source-grounded.

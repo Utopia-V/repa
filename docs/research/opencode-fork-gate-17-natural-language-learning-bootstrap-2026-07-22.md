@@ -1,13 +1,11 @@
 # OpenCode fork Gate 17: natural-language learning bootstrap
 
-Status: Maintainer grill paused behind the 2026-07-30 Agent-native semantic
-correction. The ordinary interactive Agent now owns open-language bootstrap
-intent; `/learn` may remain an optional discoverability shortcut but is not a
-required admission envelope or a second interpreter. Gate 14's default-Course
-query/admission seam and Gate 16's Goal query/write seam are contract-reopened
-because both attempted to replace Agent judgment with candidate-proof
-protocols. Their previously accepted structural, TUI, settlement, and replay
-work remains scoped as recorded by their owners.
+Status: Maintainer-decision draft. Gate 14's Agent-native default-Course
+implementation is integrated at `ff0ef1fd7`, and Gate 16's Agent-native Goal
+implementation is integrated at `2baba9eea`; neither predecessor now blocks
+design review. The ordinary interactive Agent owns open-language bootstrap
+intent. `/learn` may be retained only as an optional discoverability shortcut,
+not a required admission envelope, domain authority, or second interpreter.
 
 The local Gate 17 engineering contract remains incomplete, has not entered
 independent contract/theory review, and is not implementation authority. Gate
@@ -205,7 +203,7 @@ natural-language admission boundary, domain-command composition, truthful
 partial failure, same-Turn teaching, or correction behavior. Before that grill,
 the contract derivation must include:
 
-- whether `/learn` is mandatory, an optional discoverable shortcut, or absent;
+- whether to retain `/learn` as an optional discoverable shortcut or omit it;
   if retained, exact cross-carrier admission/provenance before command
   expansion and same-name conflict failure;
 - a request-bound semantic slot for Course creation and exact replay/conflict,

@@ -1,10 +1,13 @@
 # Pre-Gate-17 global hazard audit
 
-Status: Open at `P17-F20`, the 2026-07-30 retained-provider-capability
-regression discovered while completing the Agent-native semantic ownership
-correction. Gate 14's Agent-native implementation is integrated, Gate 16's
-accepted contract is implementation-unblocked, and Gate 17 remains paused. The
-separate OAuth and Gate 8 correction candidates remain pending. The 2026-07-28 close
+Status: Current corrections through `P17-F20` are closed and integrated. Gate
+14's Agent-native implementation is fixed at `ff0ef1fd7`, Gate 16's
+Agent-native implementation is fixed at `2baba9eea`, retained OAuth is restored
+at `16b5589c1`, and Gate 8's immutable message-diff correction is fixed at
+`19d0fe933`. Gate 17 is no longer paused by those corrections; its maintainer
+grill has not begun and its implementation remains unauthorized. This document
+remains falsifiable hazard and correction provenance rather than the current
+disposition owner or a permanent project-health verdict. The 2026-07-28 close
 remains valid for authority
 reconstruction, inherited-pollution, working-tree classification, and the
 distinct ownership of Course/Session/context/later-draft/exact-Turn meanings.
@@ -65,9 +68,10 @@ Gate 12 implementation/evidence is accepted and integrated at `c5ea10b8a`.
 The accepted corrective snapshot
 `9e91d43c629b66d65c8741e342bca7cf05de5667` remains valid for its bounded
 repairs. Gate 12's correction and the structural/TUI/settlement portions of
-Gate 14 and Gate 16 remain retained. Gate 17 grill, contract derivation, and
-implementation remain paused while the accepted Gate 16 implementation follows
-the now-integrated Agent-native Gate 14 predecessor. This record
+Gate 14 and Gate 16 remain retained. Their later Agent-native implementations
+are integrated at `ff0ef1fd7` and `2baba9eea`. Gate 17's maintainer grill,
+contract derivation, and implementation remain unbegun and unauthorized rather
+than blocked by either predecessor. This record
 owns audit method, findings, and repair disposition; it does not replace
 product foundations, revise an ADR by itself, or make a Gate contract
 authoritative.
@@ -1146,9 +1150,9 @@ the shared semantic-ownership mistake beneath Gate 14's resolution scope, Gate
 21A's mechanism tournament. Gate 14 and Gate 16 are therefore contract-reopened
 only at their Agent-semantic surfaces despite the retained integrations
 described above. Their replacement contracts are accepted; Gate 14 is
-integrated and Gate 16 is implementation-unblocked. The audit remains open for
-the separate retained-provider/Gate 8 corrections and the still-unimplemented
-Gate 16 boundary.
+integrated and Gate 16 was implementation-unblocked at that point. The later
+accepted integrations at `16b5589c1`, `19d0fe933`, and `2baba9eea` close the
+retained-provider, Gate 8, and Gate 16 boundaries without authorizing Gate 17.
 
 The renewed audit returned to the parent symptom rather than treating residue
 cleanup as the objective. Discussion had repeatedly collapsed six distinct
@@ -1278,8 +1282,8 @@ still blocks any future release-readiness claim until separately disposed.
   exact replay.
 - Product origin, ADR-0008/0012/0013, architecture, Roadmap 09, repository
   guidance, Gate 14/16/17 records, and `docs/README.md` now carry the `P17-F19`
-  Agent-native correction. Gate 14 is integrated at `ff0ef1fd7`; Gate 16's
-  accepted contract is implementation-unblocked. Both remain scoped boundaries
+  Agent-native correction. Gate 14 is integrated at `ff0ef1fd7`; Gate 16 is
+  integrated at `2baba9eea`. Both remain scoped boundaries
   before Gate 17, and their unaffected mechanics remain accepted rather than
   being discarded wholesale.
 - `AGENTS.md` now distinguishes revision ownership from technical correctness,
@@ -1287,8 +1291,8 @@ still blocks any future release-readiness claim until separately disposed.
 - Gate 16's volatile status and Gate record preserve its historical close and
   integrated TUI correction while superseding both fixed-language parsing and
   the later exhaustive candidate-proof amendment. Its Agent-native replacement
-  contract passed fresh review and its Gate 14 dependency is integrated; its
-  implementation remains outstanding.
+  contract passed fresh review and its Gate 14 dependency is integrated; the
+  accepted implementation is fixed at `2baba9eea`.
 - Gate 5, Gate 8, Gate 10, Gate 11, Gate 14, and Gate 15 records preserve their
   historical reviews and the common corrective integration. It closes the
   affected build, outward-identity, permission, physical, and generic/hidden
@@ -1360,12 +1364,12 @@ Commit `9e91d43c629b66d65c8741e342bca7cf05de5667` fixes that exact
 independently accepted shared-tree snapshot and durably integrates the scoped
 Gate repairs. `docs/README.md` remains the sole current-disposition owner.
 
-Gate 16's natural-language admission repair is deliberately not included in
-that implementation acceptance. A later fresh separate top-level review
-accepted its corrective contract after closing `G16-RC-001`; only its TUI
-presentation defect is implemented by the corrective integration. The
-natural-language implementation/evidence boundary remains open, and Gate 17
-grill, derivation, and implementation remain paused.
+Gate 16's natural-language admission repair was deliberately not included in
+that 2026-07-28 implementation acceptance. A later fresh separate top-level
+review accepted its corrective contract after closing `G16-RC-001`; the
+subsequent Agent-native correction superseded the candidate-proof surface, and
+the final accepted implementation is fixed at `2baba9eea`. Gate 17's grill,
+derivation, and implementation remain unbegun and unauthorized.
 
 ## Superseded independent falsification close
 

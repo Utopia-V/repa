@@ -409,145 +409,148 @@ describe("Agent-native learner Goal authority", () => {
     }),
   )
 
-  it.effect("settles unrepresentable V2 temporal intents before any Goal candidate exists", () =>
-    Effect.gen(function* () {
-      const db = (yield* Database.Service).db
-      const cases: readonly Readonly<{
-        name: string
-        target: LearnerGoal.TargetIntentV2
-        sourceTimeZone?: string | null
-        code: "validation_error" | "temporal_context_unavailable"
-      }>[] = [
-        {
-          name: "nonexistent-iana-local-time",
-          target: {
-            type: "instant",
-            localDateTime: "2026-03-08T02:30:00",
-            timeZone: { type: "iana", name: "America/New_York" },
-          },
-          code: "validation_error",
-        },
-        {
-          name: "ambiguous-iana-local-time",
-          target: {
-            type: "instant",
-            localDateTime: "2026-11-01T01:30:00",
-            timeZone: { type: "iana", name: "America/New_York" },
-          },
-          code: "validation_error",
-        },
-        {
-          name: "missing-source-zone",
-          target: { type: "instant", localDateTime: "2030-08-05T10:30:00", timeZone: { type: "source" } },
-          sourceTimeZone: null,
-          code: "temporal_context_unavailable",
-        },
-        {
-          name: "unknown-iana-zone",
-          target: {
-            type: "instant",
-            localDateTime: "2030-08-05T10:30:00",
-            timeZone: { type: "iana", name: "Mars/Olympus" },
-          },
-          code: "validation_error",
-        },
-        {
-          name: "invalid-calendar-date",
-          target: {
-            type: "local_date",
-            date: "2030-02-30",
-            timeZone: { type: "iana", name: "Asia/Shanghai" },
-          },
-          code: "validation_error",
-        },
-        {
-          name: "pre-epoch-fixed-offset",
-          target: {
-            type: "instant",
-            localDateTime: "1969-12-31T23:59:59",
-            timeZone: { type: "fixed_offset", offsetMinutes: 0 },
-          },
-          code: "validation_error",
-        },
-        {
-          name: "pre-epoch-iana",
-          target: {
-            type: "instant",
-            localDateTime: "1969-12-31T23:59:59",
-            timeZone: { type: "iana", name: "Asia/Shanghai" },
-          },
-          code: "validation_error",
-        },
-      ]
-
-      const rejected = yield* Effect.forEach(cases, (item, index) =>
-        Effect.gen(function* () {
-          const command = {
-            operations: [{ type: "create", outcome: `Reject ${item.name}`, target: item.target }],
-          } as const satisfies LearnerGoal.CommandV2
-          const invocation = yield* seedAgentInvocation(
-            db,
-            `invalid-target-${item.name}`,
-            command,
-            6_000 + index * 100,
-            {
-              timeZone: item.sourceTimeZone,
+  it.effect(
+    "settles unrepresentable V2 temporal intents before any Goal candidate exists",
+    () =>
+      Effect.gen(function* () {
+        const db = (yield* Database.Service).db
+        const cases: readonly Readonly<{
+          name: string
+          target: LearnerGoal.TargetIntentV2
+          sourceTimeZone?: string | null
+          code: "validation_error" | "temporal_context_unavailable"
+        }>[] = [
+          {
+            name: "nonexistent-iana-local-time",
+            target: {
+              type: "instant",
+              localDateTime: "2026-03-08T02:30:00",
+              timeZone: { type: "iana", name: "America/New_York" },
             },
-          )
-          const reserved = yield* db.transaction((tx) =>
-            LearningCommand.reserveLearnerGoalsV2(tx, {
-              ...invocation,
-              settlement: { time: 6_001 + index * 100, order: index + 1 },
-            }),
-          )
-          return {
-            reserved,
-            state: yield* db.transaction((tx) =>
-              LearningCommand.readLearnerGoalInvocationVersion(tx, {
-                partID: invocation.envelope.partID,
-                assistantMessageID: invocation.envelope.assistantMessageID,
-                providerCallID: invocation.envelope.providerCallID,
-              }),
-            ),
-            disposition: yield* db
-              .select()
-              .from(LearnerGoalDispositionV2Table)
-              .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, invocation.envelope.partID))
-              .get(),
-          }
-        }),
-      )
+            code: "validation_error",
+          },
+          {
+            name: "ambiguous-iana-local-time",
+            target: {
+              type: "instant",
+              localDateTime: "2026-11-01T01:30:00",
+              timeZone: { type: "iana", name: "America/New_York" },
+            },
+            code: "validation_error",
+          },
+          {
+            name: "missing-source-zone",
+            target: { type: "instant", localDateTime: "2030-08-05T10:30:00", timeZone: { type: "source" } },
+            sourceTimeZone: null,
+            code: "temporal_context_unavailable",
+          },
+          {
+            name: "unknown-iana-zone",
+            target: {
+              type: "instant",
+              localDateTime: "2030-08-05T10:30:00",
+              timeZone: { type: "iana", name: "Mars/Olympus" },
+            },
+            code: "validation_error",
+          },
+          {
+            name: "invalid-calendar-date",
+            target: {
+              type: "local_date",
+              date: "2030-02-30",
+              timeZone: { type: "iana", name: "Asia/Shanghai" },
+            },
+            code: "validation_error",
+          },
+          {
+            name: "pre-epoch-fixed-offset",
+            target: {
+              type: "instant",
+              localDateTime: "1969-12-31T23:59:59",
+              timeZone: { type: "fixed_offset", offsetMinutes: 0 },
+            },
+            code: "validation_error",
+          },
+          {
+            name: "pre-epoch-iana",
+            target: {
+              type: "instant",
+              localDateTime: "1969-12-31T23:59:59",
+              timeZone: { type: "iana", name: "Asia/Shanghai" },
+            },
+            code: "validation_error",
+          },
+        ]
 
-      cases.forEach((item, index) => {
-        expect(rejected[index]!.reserved).toMatchObject({
-          type: "settled",
-          settlement: { outcome: "error", code: item.code },
-        })
-        expect(rejected[index]!.state).toMatchObject({
-          version: 2,
-          status: "error",
-          disposition: "physical_no_effect",
-          settlement: { outcome: "error", code: item.code },
-        })
-        expect(rejected[index]!.disposition).toBeUndefined()
-      })
-      expect(() =>
-        LearningCommand.canonicalizeCommandV2({
-          operations: [
-            {
-              type: "create",
-              outcome: "Reject an out-of-range offset",
-              target: {
-                type: "instant",
-                localDateTime: "2030-08-05T10:30:00",
-                timeZone: { type: "fixed_offset", offsetMinutes: 841 },
+        const rejected = yield* Effect.forEach(cases, (item, index) =>
+          Effect.gen(function* () {
+            const command = {
+              operations: [{ type: "create", outcome: `Reject ${item.name}`, target: item.target }],
+            } as const satisfies LearnerGoal.CommandV2
+            const invocation = yield* seedAgentInvocation(
+              db,
+              `invalid-target-${item.name}`,
+              command,
+              6_000 + index * 100,
+              {
+                timeZone: item.sourceTimeZone,
               },
-            },
-          ],
-        }),
-      ).toThrow()
-      expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
-    }),
+            )
+            const reserved = yield* db.transaction((tx) =>
+              LearningCommand.reserveLearnerGoalsV2(tx, {
+                ...invocation,
+                settlement: { time: 6_001 + index * 100, order: index + 1 },
+              }),
+            )
+            return {
+              reserved,
+              state: yield* db.transaction((tx) =>
+                LearningCommand.readLearnerGoalInvocationVersion(tx, {
+                  partID: invocation.envelope.partID,
+                  assistantMessageID: invocation.envelope.assistantMessageID,
+                  providerCallID: invocation.envelope.providerCallID,
+                }),
+              ),
+              disposition: yield* db
+                .select()
+                .from(LearnerGoalDispositionV2Table)
+                .where(eq(LearnerGoalDispositionV2Table.invocation_part_id, invocation.envelope.partID))
+                .get(),
+            }
+          }),
+        )
+
+        cases.forEach((item, index) => {
+          expect(rejected[index]!.reserved).toMatchObject({
+            type: "settled",
+            settlement: { outcome: "error", code: item.code },
+          })
+          expect(rejected[index]!.state).toMatchObject({
+            version: 2,
+            status: "error",
+            disposition: "physical_no_effect",
+            settlement: { outcome: "error", code: item.code },
+          })
+          expect(rejected[index]!.disposition).toBeUndefined()
+        })
+        expect(() =>
+          LearningCommand.canonicalizeCommandV2({
+            operations: [
+              {
+                type: "create",
+                outcome: "Reject an out-of-range offset",
+                target: {
+                  type: "instant",
+                  localDateTime: "2030-08-05T10:30:00",
+                  timeZone: { type: "fixed_offset", offsetMinutes: 841 },
+                },
+              },
+            ],
+          }),
+        ).toThrow()
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM learner_goal_effect`)).toEqual({ count: 0 })
+      }),
+    15_000,
   )
 
   it.effect("rejects malformed canonical, temporal, and Agent-issuance candidate rows", () =>

@@ -2311,13 +2311,32 @@ its 3,550-byte 40-path ordinal manifest hashes to
 The first reviewer bindings are rejected provenance only. The same reviewer
 independently reproduced every superseding binding, reran Core Goal 6/43 and
 registry/package reachability 29/142, and returned `Accept` with no blocker.
-`G16-AN-IMP-001..003` are closed. Its only nonblocking note is that the temporal
-matrix approaches Bun's default five-second timeout when run concurrently with
-the unrelated registry suite; the exact Core command passes alone.
+`G16-AN-IMP-001..003` are closed. At review time, its only nonblocking note was
+that the temporal matrix approaches Bun's default five-second timeout when run
+concurrently with the unrelated registry suite; the exact Core command passes
+alone.
 
 The accepted 43-path candidate was integrated without content drift at
 `2baba9eeabeb9f163cfe380009dbb07673e3a669`. Gate 16 is closed at its
 Agent-native Goal boundary. Gate 17 remains unstarted and unauthorized.
+
+## 2026-08-01 post-Gate-16 status and evidence maintenance
+
+The status owner, Roadmap 09, Gate 17 draft, and pre-Gate-17 hazard audit now
+agree that Gate 16 is closed, Gate 17 is unbegun and unauthorized, and `/learn`
+is never a mandatory or authoritative bootstrap envelope. Retaining it as an
+optional discoverability shortcut or omitting it remains the only local Gate 17
+design choice.
+
+Fresh sequential Windows/Bun `1.3.14` verification showed that the complete
+Core invalid-temporal matrix and OpenCode historical V1-to-V2 target-carry
+matrix can exceed Bun's default five-second per-test timeout without an
+assertion failure. Their maintained test-local budgets are now 15 seconds. The
+direct Core Goal command passes 6 / 43 and the direct OpenCode runtime command
+passes 46 / 881 with 13 intentional historical-V1 producer skips. The retained
+TUI smoke fixture now targets the current plugin slot and Prompt APIs; OpenCode
+package typechecking passes. No production path, accepted Gate contract, or
+Gate 17 authority changed.
 
 ## Historical evidence locators
 

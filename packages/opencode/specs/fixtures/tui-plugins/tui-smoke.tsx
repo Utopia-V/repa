@@ -708,7 +708,7 @@ const Modal = (props: {
   )
 }
 
-const home = (api: TuiPluginApi, input: Cfg) => ({
+const home = (api: TuiPluginApi, input: Cfg): TuiSlotPlugin<{ smoke_prompt_right: { label: string } }> => ({
   slots: {
     home_logo(ctx) {
       const map = ctx.theme.current
@@ -742,7 +742,7 @@ const home = (api: TuiPluginApi, input: Cfg) => ({
         </box>
       )
     },
-    home_prompt(ctx, value) {
+    home_prompt(ctx) {
       const skin = look(ctx.theme.current)
       const Prompt = api.ui.Prompt
       const Slot = api.ui.Slot
@@ -762,24 +762,22 @@ const home = (api: TuiPluginApi, input: Cfg) => ({
 
       return (
         <Prompt
-          workspaceID={value.workspace_id}
           hint={hint}
           right={
             <box flexDirection="row" gap={1}>
-              <Slot name="home_prompt_right" workspace_id={value.workspace_id} />
-              <Slot name="smoke_prompt_right" workspace_id={value.workspace_id} label={input.label} />
+              <Slot name="home_prompt_right" />
+              <Slot name="smoke_prompt_right" label={input.label} />
             </box>
           }
           placeholders={{ normal, shell }}
         />
       )
     },
-    home_prompt_right(ctx, value) {
+    home_prompt_right(ctx) {
       const skin = look(ctx.theme.current)
-      const id = value.workspace_id?.slice(0, 8) ?? "none"
       return (
         <text fg={skin.muted}>
-          <span style={{ fg: skin.accent }}>{input.label}</span> home:{id}
+          <span style={{ fg: skin.accent }}>{input.label}</span> home
         </text>
       )
     },
@@ -793,11 +791,9 @@ const home = (api: TuiPluginApi, input: Cfg) => ({
     },
     smoke_prompt_right(ctx, value) {
       const skin = look(ctx.theme.current)
-      const id = typeof value.workspace_id === "string" ? value.workspace_id.slice(0, 8) : "none"
-      const label = typeof value.label === "string" ? value.label : input.label
       return (
         <text fg={skin.muted}>
-          <span style={{ fg: skin.accent }}>{label}</span> custom:{id}
+          <span style={{ fg: skin.accent }}>{value.label}</span> custom
         </text>
       )
     },
