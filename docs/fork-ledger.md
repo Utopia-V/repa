@@ -2338,6 +2338,61 @@ TUI smoke fixture now targets the current plugin slot and Prompt APIs; OpenCode
 package typechecking passes. No production path, accepted Gate contract, or
 Gate 17 authority changed.
 
+## 2026-08-01 pre-Gate-17 identity and inherited-corpus cleanup
+
+Maintenance commit
+`bc9c870b3dff5ab7f161f97f618379d5b0c22ab1` removes the current-tree
+upstream product/documentation corpus without rewriting the accepted fork
+history. Its exact Git projection is 916 changed files, 171 insertions, and
+238,151 deletions. The removed material includes all 704 tracked
+`packages/web` paths, all 58 inactive upstream workflow/support paths, 21 root
+localized READMEs plus `STATS.md`, old root plans and preview-v2 prose,
+source-local READMEs for excluded product surfaces, retired upstream
+Nix/release packaging, the App translation corpus, and the unreachable
+OpenCode-configuration skill. The exact pre-cleanup tree remains recoverable at
+`022c8cb21aaf24dad254b654464f59b771acaee8`; ignored generated Web build and
+dependency artifacts were removed locally, are rebuildable, and were never
+part of Git history.
+
+The cleanup also removes upstream Schema URLs from the active TUI themes and
+fixtures, renames the built-in theme and Gate 17 draft to Repa-owned paths,
+removes the stale editor-autocomplete claim, stops the retained Console sitemap
+from reading the deleted Web package, updates current repository metadata, and
+shrinks the Bun workspace lock. Deleting the Web workspace exposed an old CLI
+test-harness dependency on React: subprocesses launched from an isolated
+learner directory could not discover the package's Solid JSX setting. The
+fixture now passes Bun's Solid JSX import source explicitly across spawn, run,
+serve, and ACP paths; no production CLI behavior changed.
+
+The root, HTTP-recorder, and UI MIT texts remain byte-identical at SHA-256
+`b5c625d157735f04e1b2b7ceccee849130b554bdb23cd58db55a38a257efbbdd`.
+The new root fork notice records the upstream pin and current repository, and
+the release build copies both `LICENSE` and `FORK-NOTICE.md` into each binary
+distribution. Internal `@opencode-ai/*` package names, `packages/opencode`,
+provider/protocol literals, compatibility keys, test fixtures, and historical
+Gate/provenance names remain only where they carry a legal, package, wire, or
+evidence contract; they are not current Repa product identity.
+
+Fresh causal evidence passes: frozen Bun lock installation; TUI theme/config
+19 tests and typecheck; Console App, Core, and OpenCode package typechecks;
+focused Core configuration-skill absence; OpenCode TUI config 37, run-theme 7,
+skill 21, help 2 with 28 snapshots, and one each of subprocess run, serve, and
+ACP coverage; 35 JSON parses; 19 changed-document relative-link checks; scoped
+Prettier and Git diff checks. A single-platform packaged build using the
+repository's frozen model-catalog fixture passes executable, ContentRoot, local
+PDF, worker-cancellation, and exact legal-file checks. The live models.dev fetch
+was unavailable, so this is build-composition evidence rather than a current
+release artifact. Nix is unavailable in this environment and no Nix evaluation
+is claimed; the flake now exposes only the retained development shell.
+
+A complete root Turbo typecheck is also not claimed green on this Windows
+checkout: the retained hibernated Enterprise package's tracked mode-`120000`
+`src/custom-elements.d.ts` link is materialized by this checkout as its
+33-byte target-path text, which TypeScript rejects. Its content and Git mode
+predate this maintenance commit, and directly affected package typechecks pass.
+This cleanup changes no accepted Gate contract or product loop. Gate 17 remains
+unbegun and implementation remains unauthorized.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

@@ -14,6 +14,15 @@ correction; it does not replace Agent judgment with phrase lists, internal-ID
 interaction rules, exhaustive-candidate proofs, or a preliminary selector by
 default.
 
+Pre-Gate-17 repository identity and inherited-corpus cleanup is integrated at
+`bc9c870b3`. The current tree no longer carries a parallel upstream product
+manual, localized README/statistics corpus, Web documentation package,
+inactive upstream workflow bundle, preview-v2 prose corpus, or retired
+Nix/release/translation machinery. Exact recovery, legal-attribution, retained
+contract-identifier, and verification boundaries are recorded in the
+[fork ledger](fork-ledger.md). This maintenance changes no Gate contract:
+Gate 17 remains unbegun and implementation remains unauthorized.
+
 The Gate 14 default-Course query/admission and Gate 16 Goal query/write
 contracts have now been rederived as ordinary Agent tool paths. Gate 14 uses
 thin Course/navigation reads plus `{set courseID}|{clear}`; Gate 16 uses thin
