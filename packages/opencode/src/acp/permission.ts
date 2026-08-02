@@ -6,6 +6,7 @@ import type {
   ToolCallLocation,
   ToolCallUpdate,
 } from "@agentclientprotocol/sdk"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { Event, OpencodeClient } from "@opencode-ai/sdk/v2"
 import { applyPatch } from "diff"
@@ -18,11 +19,9 @@ type PermissionEvent = Extract<Event, { type: "permission.asked" }>
 type Reply = "once" | "always" | "reject" | "cancel"
 type Connection = Partial<Pick<AgentSideConnection, "requestPermission" | "writeTextFile">>
 
-const permissionOptions: PermissionOption[] = [
-  { optionId: "once", kind: "allow_once", name: "Allow once" },
-  { optionId: "always", kind: "allow_always", name: "Always allow" },
-  { optionId: "reject", kind: "reject_once", name: "Reject" },
-]
+const allowOnceOption = { optionId: "once", kind: "allow_once", name: "Allow once" } as const
+const allowAlwaysOption = { optionId: "always", kind: "allow_always", name: "Always allow" } as const
+const rejectOption = { optionId: "reject", kind: "reject_once", name: "Reject" } as const
 
 export class Handler {
   private readonly queues = new Map<string, Promise<void>>()
@@ -54,6 +53,7 @@ export class Handler {
     const session = await Effect.runPromise(this.input.session.tryGet(permission.sessionID))
     if (!session) return
     const exactReply = PermissionV1.exactReplyRequired(permission)
+    const constraint = permissionConstraint(permission)
 
     if (!this.input.connection.requestPermission) {
       if (!exactReply) await this.reply(permission.id, "reject", session.cwd)
@@ -66,9 +66,9 @@ export class Handler {
         toolCall: await permissionToolCall({
           toolCallId: permission.tool?.callID ?? permission.id,
           toolName: permission.permission,
-          input: permission.metadata,
+          request: permission,
         }),
-        options: permissionOptions,
+        options: permissionOptions(permission),
       })
       .catch(async () => {
         if (!exactReply) await this.reply(permission.id, "reject", session.cwd)
@@ -77,7 +77,7 @@ export class Handler {
 
     if (!result) return
 
-    const reply = selectedReply(result, exactReply)
+    const reply = selectedReply(result, exactReply, constraint)
     if (reply !== "once" && reply !== "always") {
       await this.reply(permission.id, reply, session.cwd)
       return
@@ -117,25 +117,76 @@ export class Handler {
   }
 }
 
-async function permissionToolCall(input: {
+export async function permissionToolCall(input: {
   readonly toolCallId: string
   readonly toolName: string
-  readonly input: ToolInput
+  readonly request: PermissionEvent["properties"]
 }): Promise<ToolCallUpdate> {
+  const semantic = SemanticPresentation.readProposal(input.request)
+  const requestInput =
+    semantic.type === "valid"
+      ? {
+          capability: semantic.value.capability,
+          approval: semantic.value.approval,
+          summary: semantic.value.summary,
+          facts: semantic.value.facts,
+        }
+      : semantic.type === "invalid"
+        ? { scope: "unavailable", requiredAction: "reject" }
+        : input.request.metadata
   const toolCall = pendingToolCall({
     toolCallId: input.toolCallId,
     toolName: input.toolName,
     state: {
-      input: input.input,
-      title: permissionTitle(input.toolName, input.input),
+      input: requestInput,
+      title:
+        semantic.type === "valid"
+          ? semantic.value.title
+          : semantic.type === "invalid"
+            ? "Permission scope unavailable"
+            : permissionTitle(input.toolName, input.request.metadata),
     },
   })
-  const content = await permissionContent(input.toolName, input.input)
+  const content =
+    semantic.type === "valid"
+      ? [
+          semanticContent([
+            semantic.value.summary,
+            ...semantic.value.facts.map((item) => `${item.label}: ${item.value}`),
+          ]),
+        ]
+      : semantic.type === "invalid"
+        ? [semanticContent(["Repa could not verify the exact consequential scope. Reject this request."])]
+        : await permissionContent(input.toolName, input.request.metadata)
   return {
     ...toolCall,
-    locations: permissionLocations(input.toolName, input.input),
+    locations: semantic.type === "absent" ? permissionLocations(input.toolName, input.request.metadata) : [],
     ...(content.length ? { content } : {}),
   }
+}
+
+export function permissionOptions(request: PermissionEvent["properties"]): PermissionOption[] {
+  const constraint = permissionConstraint(request)
+  if (constraint.rejectOnly) return [rejectOption]
+  if (constraint.onceOnly) return [allowOnceOption, rejectOption]
+  return [allowOnceOption, allowAlwaysOption, rejectOption]
+}
+
+function permissionConstraint(request: PermissionEvent["properties"]) {
+  const semantic = SemanticPresentation.readProposal(request)
+  if (semantic.type === "invalid") return { onceOnly: true, rejectOnly: true }
+  if (
+    PermissionV1.promptRequired(request) ||
+    request.metadata.onceOnly === true ||
+    (semantic.type === "valid" && semantic.value.approval === "once_only")
+  ) {
+    return { onceOnly: true, rejectOnly: false }
+  }
+  return { onceOnly: false, rejectOnly: false }
+}
+
+function semanticContent(lines: readonly string[]): ToolCallContent {
+  return { type: "content", content: { type: "text", text: lines.join("\n") } }
 }
 
 function permissionTitle(toolName: string, input: ToolInput) {
@@ -218,9 +269,16 @@ async function diffContentForPatch(filepath: string, diff: string, displayPath =
   }
 }
 
-function selectedReply(result: RequestPermissionResponse, exactReply: boolean): Reply {
+function selectedReply(
+  result: RequestPermissionResponse,
+  exactReply: boolean,
+  constraint: { readonly onceOnly: boolean; readonly rejectOnly: boolean },
+): Reply {
   if (result.outcome.outcome !== "selected") return exactReply ? "cancel" : "reject"
-  if (result.outcome.optionId === "once" || result.outcome.optionId === "always") return result.outcome.optionId
+  if (result.outcome.optionId === "once") return constraint.rejectOnly ? (exactReply ? "cancel" : "reject") : "once"
+  if (result.outcome.optionId === "always") {
+    return constraint.onceOnly || constraint.rejectOnly ? (exactReply ? "cancel" : "reject") : "always"
+  }
   if (result.outcome.optionId === "reject") return "reject"
   if (exactReply) return "cancel"
   return "reject"

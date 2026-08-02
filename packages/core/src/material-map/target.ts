@@ -8,7 +8,7 @@ import { Representation } from "../representation"
 import { Effect, Scope } from "effect"
 import { MaterialSelector } from "./selector"
 import { MapID, PreparationError, SelectorID } from "./schema"
-import type { ArtifactTargetReceipt, MapProposal, MapTarget, SelectorInfo } from "./types"
+import type { ArtifactTargetReceipt, ExactArtifactTargetReceipt, MapProposal, MapTarget, SelectorInfo } from "./types"
 
 export const limits = {
   artifactBytes: 64 * 1024 * 1024,
@@ -62,7 +62,7 @@ type MapExpectation = {
   readonly mapID: MapID
   readonly canonicalInput: string
   readonly receipt:
-    | ArtifactTargetReceipt
+    | ExactArtifactTargetReceipt
     | { readonly type: "representation"; readonly representationRevisionID: Representation.RevisionID }
   readonly witnesses: ReadonlyMap<SelectorID, MaterialSelector.Witness>
   readonly selections: ReadonlyMap<SelectorID, MaterialSelector.Selected>
@@ -532,7 +532,7 @@ function readArtifact(
         relativePath,
         descriptor: read.observation.descriptor,
         timeObserved: read.observation.timeObserved,
-      } satisfies ArtifactTargetReceipt,
+      } satisfies ExactArtifactTargetReceipt,
     }
   })
 }

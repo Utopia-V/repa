@@ -229,6 +229,9 @@ export default {
       yield* tx.run(`ALTER TABLE \`material_map_artifact_target\` ADD \`workspace_identity\` text;`)
       yield* tx.run(`ALTER TABLE \`material_map_artifact_target\` ADD \`operation_identity\` text;`)
       yield* tx.run(`ALTER TABLE \`material_map_artifact_target\` ADD \`operation_approval_basis\` text;`)
+      yield* tx.run(
+        `ALTER TABLE \`material_map_artifact_target\` ADD \`root_object_descriptor_state\` text DEFAULT 'historical_v16_partial' NOT NULL;`,
+      )
       yield* tx.run(`ALTER TABLE \`material_map_artifact_target\` ADD \`root_object_platform\` text;`)
       yield* tx.run(`ALTER TABLE \`material_map_artifact_target\` ADD \`root_object_verifier_version\` integer;`)
       yield* tx.run(`ALTER TABLE \`material_map_artifact_target\` ADD \`root_object_canonical_path\` text;`)
@@ -270,6 +273,7 @@ export default {
           \`operation_identity\` text,
           \`operation_approval_basis\` text,
           \`normalized_relative_path\` text NOT NULL,
+          \`root_object_descriptor_state\` text DEFAULT 'exact_v1' NOT NULL,
           \`root_object_platform\` text,
           \`root_object_verifier_version\` integer,
           \`root_object_canonical_path\` text,
@@ -343,7 +347,11 @@ export default {
                 AND length("root_object_canonical_path") > 0 AND length("root_object_canonical_path_key") > 0
                 AND length("root_object_volume_serial") > 0 AND length("root_object_id") = 32
                 AND length("root_object_creation_time") > 0 AND length("root_object_change_time") > 0
-                AND length("root_object_last_write_time") > 0 AND "root_object_size" >= 0
+                AND (("root_object_descriptor_state" = 'exact_v1'
+                    AND length("root_object_last_write_time") > 0 AND "root_object_size" >= 0)
+                  OR ("root_object_descriptor_state" = 'historical_v16_partial'
+                    AND "authority_kind" = 'content_root'
+                    AND "root_object_last_write_time" IS NULL AND "root_object_size" IS NULL))
                 AND "source_object_platform" = 'windows_ntfs' AND "source_object_verifier_version" >= 1
                 AND length("source_object_canonical_path") > 0 AND length("source_object_canonical_path_key") > 0
                 AND "source_object_canonical_path" = "active_location"
@@ -354,8 +362,8 @@ export default {
         );
       `)
       // Gate 16 Map rows contain the exact ContentRoot binding identity but predate the
-      // duplicated root-object projection. Rebuild that projection only from the frozen
-      // binding row; do not inspect the live filesystem while migrating historical truth.
+      // duplicated root-object projection. Rebuild only the fields persisted by that frozen
+      // binding row and preserve last-write time and size as explicit historical unknowns.
       yield* tx.run(`
         INSERT INTO \`__new_material_map_artifact_target\`(
           \`map_id\`, \`artifact_id\`, \`artifact_revision_id\`, \`attribution_type\`,
@@ -366,7 +374,7 @@ export default {
           \`content_root_id\`, \`content_root_binding_id\`, \`content_root_binding_episode_id\`,
           \`content_root_binding_episode_ordinal\`, \`content_root_grant_episode_id\`,
           \`content_root_grant_episode_ordinal\`, \`content_root_grant_version\`,
-          \`normalized_relative_path\`, \`root_object_platform\`,
+          \`normalized_relative_path\`, \`root_object_descriptor_state\`, \`root_object_platform\`,
           \`root_object_verifier_version\`, \`root_object_canonical_path\`,
           \`root_object_canonical_path_key\`, \`root_object_volume_serial\`, \`root_object_id\`,
           \`root_object_creation_time\`, \`root_object_change_time\`,
@@ -387,10 +395,10 @@ export default {
           target.\`content_root_binding_id\`, target.\`content_root_binding_episode_id\`,
           target.\`content_root_binding_episode_ordinal\`, target.\`content_root_grant_episode_id\`,
           target.\`content_root_grant_episode_ordinal\`, target.\`content_root_grant_version\`,
-          target.\`normalized_relative_path\`, binding.\`platform\`, binding.\`verifier_version\`,
+          target.\`normalized_relative_path\`, 'historical_v16_partial', binding.\`platform\`, binding.\`verifier_version\`,
           binding.\`canonical_path\`, binding.\`canonical_path_key\`, binding.\`volume_serial\`,
           binding.\`object_id\`, binding.\`creation_time\`, binding.\`initial_change_time\`,
-          binding.\`initial_change_time\`, 0, target.\`source_object_platform\`,
+          NULL, NULL, target.\`source_object_platform\`,
           target.\`source_object_verifier_version\`, target.\`source_object_canonical_path\`,
           target.\`source_object_canonical_path_key\`, target.\`source_object_volume_serial\`,
           target.\`source_object_id\`, target.\`source_object_creation_time\`,

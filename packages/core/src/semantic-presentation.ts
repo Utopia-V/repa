@@ -2,6 +2,7 @@ export * as SemanticPresentation from "./semantic-presentation"
 
 import { SemanticPresentationV1 } from "@opencode-ai/schema/semantic-presentation-v1"
 import { Option, Schema } from "effect"
+import { LearningBootstrap } from "./learning-bootstrap"
 import { PermissionV1 } from "./v1/permission"
 
 export { SemanticPresentationV1 }
@@ -65,6 +66,10 @@ type LearningBootstrapResult = Extract<
 type LearningBootstrapAcknowledgement = NonNullable<LearningBootstrapResult["acknowledgement"]>
 type LearningBootstrapChild = LearningBootstrapAcknowledgement["children"][number]
 type LearningBootstrapMaterialTarget = NonNullable<LearningBootstrapChild["materialTarget"]>
+type LearningBootstrapScope = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "learning_bootstrap_capability" }
+>["scope"]
 
 export type ProposalProjection = Readonly<{
   phase: "proposal"
@@ -194,6 +199,28 @@ export function requiresPermission(capability: string) {
 
 export function requiresResult(tool: string) {
   return consequentialResultTools.has(tool)
+}
+
+export function learningBootstrapPermissionConstraint(scope: LearningBootstrapScope) {
+  const oneOperationPath = scope.command.materials
+    .flatMap((material) => {
+      if (material.type === "local" && material.authority.type === "one_operation") return [material.path]
+      if (material.type === "artifact" && material.read?.authority.type === "one_operation") return [material.read.path]
+      return []
+    })
+    .at(0)
+  return oneOperationPath
+    ? ({
+        oneOperationPath,
+        always: [] as const,
+        promptRequired: true as const,
+        approval: "once_only" as const,
+      } as const)
+    : ({
+        always: [LearningBootstrap.PERMISSION_PATTERN] as const,
+        promptRequired: false as const,
+        approval: "policy" as const,
+      } as const)
 }
 
 export function projectResultBasis(basis: SemanticPresentationV1.ResultBasis) {
@@ -366,12 +393,21 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
     })
   }
   if (basis.kind === "learning_bootstrap_capability") {
+    const command = canonicalLearningBootstrapCommand(basis.scope)
+    if (
+      !command ||
+      !same(command, basis.scope.command) ||
+      LearningBootstrap.commandFingerprint(command) !== basis.commandFingerprint
+    ) {
+      return undefined
+    }
+    const constraint = learningBootstrapPermissionConstraint(basis.scope)
     return expected(value, {
       capability: "update_learning_course",
       patterns: ["learning_course"],
-      always: ["learning_course"],
-      promptRequired: false,
-      approval: "policy",
+      always: constraint.always,
+      promptRequired: constraint.promptRequired,
+      approval: constraint.approval,
       domain: {
         bootstrapKind: "learning_bootstrap",
         commandFingerprint: basis.commandFingerprint,
@@ -457,6 +493,22 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       confirmation,
     },
   })
+}
+
+function canonicalLearningBootstrapCommand(scope: LearningBootstrapScope) {
+  try {
+    return LearningBootstrap.canonicalizeCommand({
+      course: scope.command.course,
+      ...(scope.command.route ? { route: scope.command.route } : {}),
+      selection: scope.command.selection,
+      materials: scope.command.materials,
+      maps: scope.command.maps,
+      alignments: scope.command.alignments,
+      anchor: scope.command.anchor,
+    } as unknown as LearningBootstrap.Command)
+  } catch {
+    return undefined
+  }
 }
 
 function expected(
@@ -793,10 +845,7 @@ function projectProposal(
     )
   }
   if (basis.kind === "learning_bootstrap_capability") {
-    const course =
-      basis.scope.course.action === "create"
-        ? `create \"${basis.scope.course.title}\"`
-        : `${basis.scope.course.action} \"${basis.scope.course.title}\" (${basis.scope.course.courseID})`
+    const command = basis.scope.command
     return proposalProjection(
       basis,
       approval,
@@ -805,28 +854,25 @@ function projectProposal(
       "This configured capability approval is bound to one exact Agent-issued Course bootstrap and its closed local consequence set.",
       [
         fact("Issuance", basis.issuance),
-        fact("Course", course),
+        fact("Command fingerprint", basis.commandFingerprint),
         fact(
-          "Route",
-          basis.scope.route.action === "none"
-            ? "none"
-            : `${basis.scope.route.action}; ${basis.scope.route.itemCount} item(s)`,
+          "Course",
+          command.course.type === "new"
+            ? `create \"${command.course.title}\"`
+            : command.course.title === undefined
+              ? `use existing ${command.course.courseID}`
+              : `correct ${command.course.courseID} title to \"${command.course.title}\"`,
         ),
-        fact("Selection", basis.scope.selection),
-        ...basis.scope.materials.map((material) =>
-          fact(
-            `Material ${material.key}`,
-            `${material.type}: ${material.identity}${material.localAuthority ? `; ${material.localAuthority}` : ""}`,
-          ),
+        ...learningBootstrapRouteFacts(command.route),
+        fact("Selection", learningBootstrapSelectionText(command.selection)),
+        ...command.materials.map((material) =>
+          fact(`Material ${material.key}`, learningBootstrapProposalMaterialText(material)),
         ),
-        ...basis.scope.maps.map((map) =>
-          fact(
-            `Map ${map.key}`,
-            `${map.materialKey}; ${map.outlineNodeCount} node(s); ${map.selectorCount} selector(s)`,
-          ),
+        ...command.maps.flatMap(learningBootstrapMapFacts),
+        ...command.alignments.map((alignment) =>
+          fact(`Alignment ${alignment.key}`, learningBootstrapAlignmentText(alignment)),
         ),
-        fact("Alignments", basis.scope.alignmentKeys.length),
-        fact("Anchor", basis.scope.anchor),
+        fact("Anchor", learningBootstrapProposalAnchorText(command.anchor)),
       ],
     )
   }
@@ -908,6 +954,109 @@ function projectProposal(
       ...basis.operations.map((operation, index) => fact(`Goal change ${index + 1}`, goalProposalText(operation))),
     ],
   )
+}
+
+function learningBootstrapRouteFacts(route: LearningBootstrapScope["command"]["route"]): readonly Fact[] {
+  if (!route) return [fact("Route", "none")]
+  const routeIdentity =
+    route.type === "successor_revision"
+      ? `${route.type}; key ${route.key}; View ${route.viewID}; predecessor Revision ${route.predecessorRevisionID}`
+      : `${route.type}; key ${route.key}; name \"${route.name}\"`
+  return [
+    fact("Route", `${routeIdentity}; authorship ${route.authorship}`),
+    ...route.revision.items.map((item) =>
+      fact(
+        `Route item ${item.key}`,
+        `title \"${item.title}\"; parent ${item.parentKey ?? "none"}; ${
+          item.reuse ? `reuse ${item.reuse.sourceRevisionID}/${item.reuse.itemID}` : "new identity"
+        }`,
+      ),
+    ),
+    ...(route.revision.mappings ?? []).map((mapping, index) =>
+      fact(
+        `Route mapping ${index + 1}`,
+        `${mapping.kind}; source item(s) [${mapping.sourceItemIDs.join(", ")}]; target key(s) [${mapping.targetKeys.join(", ")}]`,
+      ),
+    ),
+  ]
+}
+
+function learningBootstrapSelectionText(selection: LearningBootstrapScope["command"]["selection"]) {
+  if (selection.type !== "set") return selection.type
+  return selection.target.type === "route"
+    ? "set to the proposed route"
+    : `set to existing Revision ${selection.target.revisionID}`
+}
+
+function learningBootstrapProposalMaterialText(material: LearningBootstrapScope["command"]["materials"][number]) {
+  if (material.type === "representation") return `Representation Revision ${material.representationRevisionID}`
+  if (material.type === "local") {
+    return `new local Artifact from ${learningBootstrapReadText(material)}`
+  }
+  const attribution =
+    material.attribution.type === "recorded"
+      ? "recorded attribution"
+      : `lineage correction member ${material.attribution.memberID}`
+  return `Artifact ${material.artifactID}; Revision ${material.revisionID}; ${attribution}; ${
+    material.read ? `read ${learningBootstrapReadText(material.read)}` : "no local read"
+  }`
+}
+
+function learningBootstrapReadText(read: {
+  readonly path: string
+  readonly authority:
+    | { readonly type: "content_root"; readonly contentRootID: string }
+    | { readonly type: "active_workspace" }
+    | { readonly type: "one_operation" }
+}) {
+  return `path \"${read.path}\"; authority ${
+    read.authority.type === "content_root" ? `content_root ${read.authority.contentRootID}` : read.authority.type
+  }`
+}
+
+function learningBootstrapMapFacts(map: LearningBootstrapScope["command"]["maps"][number]): readonly Fact[] {
+  return [
+    fact(
+      `Map ${map.key}`,
+      `material ${map.materialKey}; authorship ${map.authorship}; supersedes ${map.supersedesMapID ?? "none"}`,
+    ),
+    ...map.outline.flatMap((node) => [
+      fact(`Map ${map.key} node ${node.key}`, `title \"${node.title}\"; parent ${node.parentKey ?? "none"}`),
+      ...node.selectors.map((selector) =>
+        fact(
+          `Map ${map.key} selector ${selector.key}`,
+          `node ${node.key}; ${learningBootstrapCoordinateText(selector.coordinate)}`,
+        ),
+      ),
+    ]),
+  ]
+}
+
+function learningBootstrapCoordinateText(
+  coordinate: LearningBootstrapScope["command"]["maps"][number]["outline"][number]["selectors"][number]["coordinate"],
+) {
+  if (coordinate.kind === "whole_target.v1") return "whole target"
+  if (coordinate.kind === "artifact_byte_range.v1")
+    return `artifact bytes ${coordinate.startByte}..${coordinate.endByte}`
+  if (coordinate.kind === "pdf_page_range.v1") return `PDF pages ${coordinate.startPage}..${coordinate.endPage}`
+  if (coordinate.kind === "model_text_range.v1")
+    return `model scalars ${coordinate.startScalar}..${coordinate.endScalar}`
+  return `PDF text ${coordinate.start.page}/${coordinate.start.item}/${coordinate.start.scalar}..${coordinate.end.page}/${coordinate.end.item}/${coordinate.end.scalar}`
+}
+
+function learningBootstrapAlignmentText(alignment: LearningBootstrapScope["command"]["alignments"][number]) {
+  const course =
+    alignment.course.type === "route_item"
+      ? `route item ${alignment.course.itemKey}`
+      : `existing ${alignment.course.viewID}/${alignment.course.revisionID}/${alignment.course.itemID}; selection ${alignment.course.selection}`
+  return `Map ${alignment.mapKey}; selector ${alignment.selectorKey}; authorship ${alignment.authorship}; Course ${course}; reason \"${alignment.reason}\"; supersedes ${alignment.supersedesAlignmentID ?? "none"}`
+}
+
+function learningBootstrapProposalAnchorText(anchor: LearningBootstrapScope["command"]["anchor"]) {
+  if (anchor.type !== "set") return anchor.type
+  return anchor.target.type === "route_item"
+    ? `set to route item ${anchor.target.itemKey}`
+    : `set to existing ${anchor.target.viewID}/${anchor.target.revisionID}/${anchor.target.itemID}`
 }
 
 function proposalProjection(

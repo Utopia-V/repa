@@ -217,63 +217,17 @@ export function learningBootstrapSettlementResult(
 
 export function learningBootstrapScope(candidate: LearningBootstrap.Candidate) {
   const command = candidate.canonicalCommand
-  const snapshot =
-    candidate.materialized.course.type === "existing" ? candidate.materialized.course.snapshot : undefined
-  const course =
-    command.course.type === "new"
-      ? ({ action: "create", title: command.course.title } as const)
-      : ({
-          action: command.course.title !== undefined && command.course.title !== snapshot?.title ? "correct" : "use",
-          courseID: command.course.courseID,
-          title: command.course.title ?? snapshot?.title ?? "",
-        } as const)
-  const route = command.route
-    ? {
-        action: command.route.type,
-        key: command.route.key,
-        ...(command.route.type === "successor_revision"
-          ? { viewID: command.route.viewID }
-          : { name: command.route.name }),
-        authorship: command.route.authorship,
-        itemCount: command.route.revision.items.length,
-      }
-    : ({ action: "none" } as const)
-  const selection =
-    command.selection?.type === "set"
-      ? command.selection.target.type === "route"
-        ? ("set_route" as const)
-        : ("set_existing" as const)
-      : (command.selection?.type ?? "preserve")
   return {
-    canonicalCommand: JSON.stringify(command),
-    course,
-    route,
-    selection,
-    materials: (command.materials ?? []).map((material) => ({
-      key: material.key,
-      type: material.type,
-      identity:
-        material.type === "local"
-          ? material.path
-          : material.type === "representation"
-            ? material.representationRevisionID
-            : `${material.artifactID}/${material.revisionID}/${material.attribution.type}${
-                material.attribution.type === "lineage_correction" ? `/${material.attribution.memberID}` : ""
-              }`,
-      ...(material.type === "local"
-        ? { localAuthority: material.authority.type }
-        : material.type === "artifact" && material.read
-          ? { localAuthority: material.read.authority.type }
-          : {}),
-    })),
-    maps: (command.maps ?? []).map((map) => ({
-      key: map.key,
-      materialKey: map.materialKey,
-      outlineNodeCount: map.outline.length,
-      selectorCount: map.outline.reduce((count, node) => count + node.selectors.length, 0),
-    })),
-    alignmentKeys: (command.alignments ?? []).map((alignment) => alignment.key),
-    anchor: command.anchor?.type ?? "preserve",
+    command: structuredClone({
+      schemaVersion: 1 as const,
+      course: command.course,
+      ...(command.route ? { route: command.route } : {}),
+      selection: command.selection ?? { type: "preserve" as const },
+      materials: command.materials ?? [],
+      maps: command.maps ?? [],
+      alignments: command.alignments ?? [],
+      anchor: command.anchor ?? { type: "preserve" as const },
+    }),
   }
 }
 

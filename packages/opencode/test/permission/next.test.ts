@@ -1,5 +1,7 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import type { Course } from "@opencode-ai/core/course"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import { test, expect } from "bun:test"
@@ -16,6 +18,14 @@ import { MessageID, SessionID } from "../../src/session/schema"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { toolPermissionInfo } from "@/cli/cmd/run/tool"
+import { permissionConstraint } from "@/cli/cmd/run/permission.shared"
+import { ACPPermission } from "@/acp/permission"
+import { LearningCommandPresentation } from "@/learning-command/presentation"
+import {
+  isOnceOnlyPermission,
+  permissionPresentation,
+  presentationLines,
+} from "../../../tui/src/util/semantic-presentation"
 
 const noopBootstrap = Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))
 const env = AppNodeBuilder.build(
@@ -1329,6 +1339,283 @@ it.instance(
         PermissionV1.ID.make("per_gate16_goal_confirmation_one"),
         PermissionV1.ID.make("per_gate16_goal_confirmation_two"),
       ])
+    }),
+  { git: true },
+)
+
+it.instance(
+  "Gate17 one-operation bootstrap uses one exact typed projection across actual TUI, run, and ACP permission carriers",
+  () =>
+    Effect.gen(function* () {
+      const command = LearningBootstrap.canonicalizeCommand({
+        course: { type: "new", title: "Carrier-complete course" },
+        route: {
+          type: "new_view",
+          key: "route",
+          name: "Primary route",
+          authorship: "learner_requested",
+          revision: {
+            items: [
+              { key: "concept", title: "Conceptual explanation" },
+              { key: "worked", title: "Worked demonstration", parentKey: "concept" },
+            ],
+            mappings: [
+              {
+                kind: "split",
+                sourceItemIDs: ["itm_source" as Course.ItemID],
+                targetKeys: ["concept", "worked"],
+              },
+            ],
+          },
+        },
+        selection: { type: "set", target: { type: "route" } },
+        materials: [
+          {
+            type: "local",
+            key: "notes",
+            path: "C:\\Learning\\carrier-notes.txt",
+            authority: { type: "one_operation" },
+          },
+        ],
+        maps: [
+          {
+            key: "notes-map",
+            materialKey: "notes",
+            authorship: "learner_requested",
+            outline: [
+              {
+                key: "whole-notes",
+                title: "Complete notes",
+                selectors: [{ key: "whole", coordinate: { kind: "whole_target.v1" } }],
+              },
+            ],
+          },
+        ],
+        alignments: [
+          {
+            key: "notes-concept",
+            mapKey: "notes-map",
+            selectorKey: "whole",
+            authorship: "learner_requested",
+            course: { type: "route_item", itemKey: "concept" },
+            reason: "The notes introduce the concept before the demonstration.",
+          },
+        ],
+        anchor: { type: "set", target: { type: "route_item", itemKey: "worked" } },
+      })
+      const candidate = {
+        commandFingerprint: LearningBootstrap.commandFingerprint(command),
+        canonicalCommand: command,
+        agentAction: { kind: "root" },
+        materialized: { course: { type: "new" } },
+      } as unknown as LearningBootstrap.Candidate
+      const sessionID = SessionID.make("ses_gate17_permission_carriers")
+      const messageID = MessageID.ascending()
+      const callID = "call_gate17_permission_carriers"
+      const partID = "prt_gate17_permission_carriers"
+      const requestID = PermissionV1.ID.make("per_gate17_permission_carriers")
+      const scope = LearningCommandPresentation.learningBootstrapScope(candidate)
+      const presentation = LearningCommandPresentation.learningBootstrapCapability(candidate, {
+        sessionID,
+        assistantMessageID: messageID,
+        providerCallID: callID,
+        partID,
+      })
+      const constraint = SemanticPresentation.learningBootstrapPermissionConstraint(scope)
+      const permission = yield* Permission.Service
+      const events = yield* EventV2Bridge.Service
+      let observed = false
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== Permission.Event.Asked.type) return Effect.void
+        const request = event.data as PermissionV1.Request
+        if (request.id !== requestID) return Effect.void
+        return Effect.gen(function* () {
+          observed = true
+          expect(request).toMatchObject({
+            permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+            patterns: [LearningBootstrap.PERMISSION_PATTERN],
+            always: [],
+            metadata: {
+              bootstrapKind: "learning_bootstrap",
+              commandFingerprint: candidate.commandFingerprint,
+              scope: { command },
+              permissionPromptRequired: true,
+              permissionExactReply: true,
+            },
+          })
+          const carrierRequest = {
+            id: request.id,
+            sessionID: request.sessionID,
+            permission: request.permission,
+            patterns: [...request.patterns],
+            metadata: { ...request.metadata },
+            always: [...request.always],
+            ...(request.tool ? { tool: { ...request.tool } } : {}),
+          }
+
+          const tui = permissionPresentation(carrierRequest)
+          expect(tui.type).toBe("valid")
+          if (tui.type !== "valid") throw new Error("Expected a valid TUI proposal projection")
+          expect(isOnceOnlyPermission(carrierRequest)).toBeTrue()
+          expect(presentationLines(tui.value).join("\n")).toContain("Conceptual explanation")
+          expect(presentationLines(tui.value).join("\n")).toContain("Worked demonstration")
+          expect(presentationLines(tui.value).join("\n")).toContain("whole target")
+
+          expect(permissionConstraint(carrierRequest)).toEqual({ onceOnly: true, rejectOnly: false, exactReply: true })
+          const run = toolPermissionInfo(carrierRequest, { ...request.metadata })
+          expect(run?.title).toBe("Apply this learning bootstrap")
+          expect(run?.lines.join("\n")).toContain("The notes introduce the concept before the demonstration.")
+
+          expect(ACPPermission.permissionOptions(carrierRequest)).toEqual([
+            { optionId: "once", kind: "allow_once", name: "Allow once" },
+            { optionId: "reject", kind: "reject_once", name: "Reject" },
+          ])
+          const acp = yield* Effect.promise(() =>
+            ACPPermission.permissionToolCall({
+              toolCallId: callID,
+              toolName: request.permission,
+              request: carrierRequest,
+            }),
+          )
+          expect(acp).toMatchObject({
+            title: "Apply this learning bootstrap",
+            rawInput: {
+              capability: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+              approval: "once_only",
+              facts: expect.arrayContaining([
+                { label: "Route item concept", value: expect.stringContaining("Conceptual explanation") },
+                { label: "Route item worked", value: expect.stringContaining("Worked demonstration") },
+              ]),
+            },
+          })
+          expect(JSON.stringify(acp.rawInput)).not.toContain("semanticPresentationBasis")
+
+          if (!scope.command.route) throw new Error("Expected the exact proposed route")
+          const differentCommand = LearningBootstrap.canonicalizeCommand({
+            course: scope.command.course,
+            route: {
+              ...scope.command.route,
+              revision: {
+                ...scope.command.route.revision,
+                items: scope.command.route.revision.items.map((item) =>
+                  item.key === "worked" ? { ...item, title: "A different valid committed operation" } : item,
+                ),
+              },
+            },
+            selection: scope.command.selection,
+            materials: scope.command.materials,
+            maps: scope.command.maps,
+            alignments: scope.command.alignments,
+            anchor: scope.command.anchor,
+          })
+          const differentCandidate = {
+            ...candidate,
+            commandFingerprint: LearningBootstrap.commandFingerprint(differentCommand),
+            canonicalCommand: differentCommand,
+          } as unknown as LearningBootstrap.Candidate
+          const differentScope = LearningCommandPresentation.learningBootstrapScope(differentCandidate)
+          const differentPresentation = LearningCommandPresentation.learningBootstrapCapability(
+            differentCandidate,
+            { sessionID, assistantMessageID: messageID, providerCallID: callID, partID },
+          )
+          const differentRequest = {
+            ...carrierRequest,
+            metadata: {
+              bootstrapKind: "learning_bootstrap",
+              commandFingerprint: differentCandidate.commandFingerprint,
+              issuance: "root",
+              scope: differentScope,
+              ...SemanticPresentation.metadata(differentPresentation),
+              [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true,
+              [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
+            },
+          }
+          const different = permissionPresentation(differentRequest)
+          expect(different.type).toBe("valid")
+          if (different.type !== "valid") throw new Error("Expected the distinct valid command to project")
+          expect(presentationLines(different.value)).not.toEqual(presentationLines(tui.value))
+          expect(presentationLines(different.value).join("\n")).toContain("A different valid committed operation")
+
+          const tamperedCommand = {
+            ...scope.command,
+            route: {
+              ...scope.command.route,
+              revision: {
+                ...scope.command.route.revision,
+                items: scope.command.route.revision.items.map((item) =>
+                  item.key === "worked" ? { ...item, title: "A different committed operation" } : item,
+                ),
+              },
+            },
+          }
+          const tamperedScope = { command: tamperedCommand }
+          const tamperedPresentation = SemanticPresentation.proposal({
+            kind: "learning_bootstrap_capability",
+            binding: { sessionID, messageID, callID, partID },
+            commandFingerprint: candidate.commandFingerprint,
+            issuance: "root",
+            scope: tamperedScope,
+          })
+          const invalid = {
+            ...carrierRequest,
+            metadata: {
+              bootstrapKind: "learning_bootstrap",
+              commandFingerprint: candidate.commandFingerprint,
+              issuance: "root",
+              scope: tamperedScope,
+              ...SemanticPresentation.metadata(tamperedPresentation),
+              [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true,
+              [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
+            },
+          }
+          expect(SemanticPresentation.readProposal(invalid).type).toBe("invalid")
+          expect(permissionPresentation(invalid).type).toBe("invalid")
+          expect(permissionConstraint(invalid)).toEqual({ onceOnly: true, rejectOnly: true, exactReply: true })
+          expect(toolPermissionInfo(invalid, { ...invalid.metadata })).toEqual({
+            icon: "!",
+            title: "Permission scope unavailable",
+            lines: ["Repa could not verify the exact consequential scope. Reject this request."],
+          })
+          expect(ACPPermission.permissionOptions(invalid)).toEqual([
+            { optionId: "reject", kind: "reject_once", name: "Reject" },
+          ])
+          expect(
+            yield* Effect.promise(() =>
+              ACPPermission.permissionToolCall({
+                toolCallId: callID,
+                toolName: request.permission,
+                request: invalid,
+              }),
+            ),
+          ).toMatchObject({
+            title: "Permission scope unavailable",
+            rawInput: { scope: "unavailable", requiredAction: "reject" },
+          })
+          yield* permission.reply({ requestID, reply: "once" }).pipe(Effect.orDie)
+        })
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      yield* permission.ask({
+        id: requestID,
+        sessionID,
+        permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        patterns: [LearningBootstrap.PERMISSION_PATTERN],
+        always: constraint.always,
+        requirePrompt: constraint.promptRequired,
+        metadata: {
+          bootstrapKind: "learning_bootstrap",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: "root",
+          scope,
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: { messageID, callID },
+        ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+        lifecycle: exactLifecycle(),
+      })
+      expect(observed).toBeTrue()
+      expect(yield* permission.list()).toEqual([])
     }),
   { git: true },
 )

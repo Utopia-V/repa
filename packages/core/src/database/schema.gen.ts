@@ -3069,6 +3069,7 @@ export default {
           \`operation_identity\` text,
           \`operation_approval_basis\` text,
           \`normalized_relative_path\` text NOT NULL,
+          \`root_object_descriptor_state\` text DEFAULT 'exact_v1' NOT NULL,
           \`root_object_platform\` text,
           \`root_object_verifier_version\` integer,
           \`root_object_canonical_path\` text,
@@ -3142,7 +3143,11 @@ export default {
                 AND length("root_object_canonical_path") > 0 AND length("root_object_canonical_path_key") > 0
                 AND length("root_object_volume_serial") > 0 AND length("root_object_id") = 32
                 AND length("root_object_creation_time") > 0 AND length("root_object_change_time") > 0
-                AND length("root_object_last_write_time") > 0 AND "root_object_size" >= 0
+                AND (("root_object_descriptor_state" = 'exact_v1'
+                    AND length("root_object_last_write_time") > 0 AND "root_object_size" >= 0)
+                  OR ("root_object_descriptor_state" = 'historical_v16_partial'
+                    AND "authority_kind" = 'content_root'
+                    AND "root_object_last_write_time" IS NULL AND "root_object_size" IS NULL))
                 AND "source_object_platform" = 'windows_ntfs' AND "source_object_verifier_version" >= 1
                 AND length("source_object_canonical_path") > 0 AND length("source_object_canonical_path_key") > 0
                 AND "source_object_canonical_path" = "active_location"

@@ -4,7 +4,7 @@ import { fileURLToPath } from "url"
 import path from "path"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
-import { Effect, Exit, Layer } from "effect"
+import { Effect, Exit, Layer, ManagedRuntime } from "effect"
 import { eq, inArray, sql } from "drizzle-orm"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { APPLICATION_ID, BASELINE_ID, BASELINE_VERSION } from "@opencode-ai/core/database/admission"
@@ -45,6 +45,11 @@ import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
 import { Database } from "@opencode-ai/core/database/database"
+import { Artifact } from "@opencode-ai/core/artifact"
+import { ContentRoot } from "@opencode-ai/core/content-root"
+import { Course } from "@opencode-ai/core/course"
+import { MaterialMap } from "@opencode-ai/core/material-map"
+import { Representation } from "@opencode-ai/core/representation"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
@@ -58,10 +63,24 @@ import databaseV13Schema from "./fixture/database-v13-schema"
 
 setDefaultTimeout(20_000)
 
-const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
-  Effect.runPromise(
-    effect.pipe(Effect.provide(SqliteClient.layer({ filename: ":memory:", disableWAL: true })), Effect.scoped),
+const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>, filename = ":memory:") =>
+  Effect.runPromise(effect.pipe(Effect.provide(SqliteClient.layer({ filename, disableWAL: true })), Effect.scoped))
+
+function materialMapLayer(filename: string) {
+  return LayerNode.compile(
+    LayerNode.group([
+      MaterialMap.node,
+      MaterialMap.currentUseReaderNode,
+      Course.node,
+      Representation.node,
+      Representation.currentUseReaderNode,
+      Artifact.node,
+      ContentRoot.node,
+      Database.node,
+    ]),
+    [[Database.node, Database.layerFromPath(filename).pipe(Layer.orDie)]],
   )
+}
 
 const makeDb = EffectDrizzleSqlite.makeWithDefaults()
 type TestDatabase = Effect.Success<typeof makeDb>
@@ -2633,6 +2652,8 @@ describe("DatabaseMigration", () => {
   })
 
   test("upgrades a frozen Gate 16 database to exact fresh Gate 17 parity without fabricating bootstrap state", async () => {
+    await using tmp = await tmpdir()
+    const filename = path.join(tmp.path, "frozen-gate16.db")
     const fresh = await run(
       Effect.gen(function* () {
         const db = yield* makeDb
@@ -2656,13 +2677,14 @@ describe("DatabaseMigration", () => {
           `),
         ).toBeUndefined()
 
-        yield* DatabaseMigration.apply(db, { path: "frozen-gate16.db" })
+        yield* DatabaseMigration.apply(db, { path: filename })
 
         return {
           manifest: yield* completeSchemaManifest(db),
           journal: yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version DESC LIMIT 1`),
           target: yield* db.get(sql`
             SELECT authority_kind, content_root_id, normalized_relative_path,
+              root_object_descriptor_state,
               root_object_platform, root_object_verifier_version, root_object_canonical_path,
               root_object_canonical_path_key, root_object_volume_serial, root_object_id,
               root_object_creation_time, root_object_change_time, root_object_last_write_time,
@@ -2682,7 +2704,13 @@ describe("DatabaseMigration", () => {
           `),
         }
       }),
+      filename,
     )
+    const runtime = ManagedRuntime.make(materialMapLayer(filename))
+    const ownerMap = await runtime.runPromise(
+      Effect.flatMap(MaterialMap.Service, (maps) => maps.getMap("map_gate17_fixture" as MaterialMap.MapID)),
+    )
+    await runtime.dispose()
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
@@ -2692,6 +2720,7 @@ describe("DatabaseMigration", () => {
       authority_kind: "content_root",
       content_root_id: "root_gate17_fixture",
       normalized_relative_path: "fixture.txt",
+      root_object_descriptor_state: "historical_v16_partial",
       root_object_platform: "windows_ntfs",
       root_object_verifier_version: 1,
       root_object_canonical_path: "C:\\gate17",
@@ -2700,10 +2729,31 @@ describe("DatabaseMigration", () => {
       root_object_id: "1".repeat(32),
       root_object_creation_time: "root-created",
       root_object_change_time: "root-changed",
-      root_object_last_write_time: "root-changed",
-      root_object_size: 0,
+      root_object_last_write_time: null,
+      root_object_size: null,
       source_object_size: 4,
     })
+    expect(ownerMap.target).toMatchObject({
+      type: "artifact",
+      authorization: {
+        kind: "content_root_historical_v16",
+        root: {
+          schemaVersion: 1,
+          completeness: "historical_v16_partial",
+          known: {
+            canonicalPath: "C:\\gate17",
+            changeTime: "root-changed",
+            kind: "directory",
+          },
+          unknown: ["lastWriteTime", "size"],
+        },
+      },
+    })
+    if (ownerMap.target.type !== "artifact" || ownerMap.target.authorization.kind !== "content_root_historical_v16") {
+      throw new Error("Expected the frozen Gate 16 target to expose an explicit partial historical root")
+    }
+    expect("lastWriteTime" in ownerMap.target.authorization.root.known).toBeFalse()
+    expect("size" in ownerMap.target.authorization.root.known).toBeFalse()
     expect(upgraded.map).toEqual({
       id: "map_gate17_fixture",
       canonical_input: JSON.stringify({ fixture: "frozen_gate16" }),

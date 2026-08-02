@@ -8,14 +8,20 @@ integration.
 
 - implementation base:
   `822f8a3df4baa5b51002e7ffd8118a01d567c2a0`;
+- initial implementation/evidence candidate:
+  `3c37f043ea50b855d9f752c50bb83249435488f2`;
+- fresh implementation/evidence review disposition: **Revise**, with local
+  findings `G17-IE-001` through `G17-IE-004` repaired by the descendant that
+  contains this record and provider-run finding `G17-IE-005` sequenced to a
+  later separately authorized task after original-reviewer closure of those
+  local findings;
 - accepted contract:
   `cf0cfbd032273cf7360fe7747ef0809abda6181f`;
 - implementation branch: `codex/gate17-implementation`;
 - containing commit: the commit that contains this record, supplied exactly in
   the executor handoff because a commit cannot contain its own hash; and
-- disposition: ready for coordinator inspection and fresh independent
-  implementation/evidence review, not accepted, integrated, pushed, or
-  authorized as Gate 18 input.
+- disposition: ready for coordinator inspection and original-reviewer finding
+  closure, not accepted, integrated, pushed, or authorized as Gate 18 input.
 
 The candidate implements only the accepted Gate 17 bootstrap boundary. It does
 not add a built-in `/learn`, a privileged learning envelope, a parser or
@@ -40,9 +46,14 @@ the receipt is bound to the new invocation's exact Part.
 The generated migration registry, generated schema, full `schema.json`, and
 fresh-schema extras are checked in. The frozen Gate 16 upgrade test asserts
 exact fresh-schema parity, an empty Gate 17 state after migration, foreign-key
-integrity, and the V17 trigger manifest. Recovery reads the durable Gate 17
-disposition and capability history and settles admitted, waiting, or allowed
-but uncommitted work without inventing an effect.
+integrity, and the V17 trigger manifest. Gate 16 did not persist the
+ContentRoot object's last-write time or size. Migrated rows therefore store
+`historical_v16_partial`, keep those two columns `NULL`, and expose an explicit
+versioned owner-read projection whose `known` descriptor omits them and whose
+`unknown` tuple names them. Fresh V17 writes remain `exact_v1` and the database
+continues to require their exact last-write time and size. Recovery reads the
+durable Gate 17 disposition and capability history and settles admitted,
+waiting, or allowed but uncommitted work without inventing an effect.
 
 ### Owner-private local composition
 
@@ -102,13 +113,16 @@ collision. Neither `learn` nor `/learn` is registered.
 
 The local path preserves Gate 10's complete union. All three arms produce an
 exact NTFS root-object descriptor, relative path, canonical target path, and
-arm-specific authority identity. The one-operation arm forces the ordinary
-permission prompt for that exact path and invocation even when the bootstrap
-write itself is otherwise configured `allow`. The canonical command rejects a
-second potentially mutating new local target and rejects transient `read`,
-`search`, `attachment`, or `web` values as durable material adoption. Such
-transient context can inform the ordinary Agent, but it creates no Artifact,
-Map, alignment, or Course relation.
+arm-specific authority identity for current V17 observations. The
+one-operation arm is derived once from the same typed normalized command used
+for the proposal, forces the ordinary permission prompt for that exact path
+and invocation even when the bootstrap write itself is otherwise configured
+`allow`, and supplies no durable `always` pattern. TUI and direct-run therefore
+remain once-only, while ACP offers only **Allow once** and **Reject** for this
+request. The canonical command rejects a second potentially mutating new local
+target and rejects transient `read`, `search`, `attachment`, or `web` values as
+durable material adoption. Such transient context can inform the ordinary
+Agent, but it creates no Artifact, Map, alignment, or Course relation.
 
 ### Gate 8 ordering and truthful terminal carriers
 
@@ -122,26 +136,31 @@ capability membership, configured allow/ask/deny behavior, permission
 correction and cancellation, owner CAS, commit seal, terminal ToolPart, and
 startup recovery.
 
-The versioned semantic-presentation schema carries the exact proposal scope and
-terminal facts. Core projects only verified Course/View/Revision identity,
-child outcomes, exact material targets and source authority, working selection,
-anchor head/target/usability, stage truth, and the correction route. The
-primary TUI, direct-run carrier, and ACP all consume that same typed basis. ACP
-preserves raw output for protocol clients but fails closed instead of displaying
-an unverified consequential result as committed truth.
+The versioned semantic-presentation schema carries the complete normalized
+bounded command as its typed proposal scope rather than a summary plus raw JSON.
+Course intent, route identity, every route item and mapping, selection target,
+material identity/read authority, every Map node/selector/coordinate,
+alignment endpoint and reason, and anchor target are independently visible.
+Core recomputes the command fingerprint from this scope and rejects malformed,
+contradictory, or semantically changed metadata. It projects only verified
+Course/View/Revision identity, child outcomes, exact material targets and source
+authority, working selection, anchor head/target/usability, stage truth, and the
+correction route. The primary TUI, direct-run carrier, and ACP all consume that
+same typed basis; ACP sends a bounded human-readable projection and fails closed
+instead of dumping or trusting unverified consequential metadata.
 
 ## `G17-BS-001..008` evidence mapping
 
-| Contract claim | Causally decisive implementation/evidence                                                                                                                                                                                                                                                                                                                                                                                       |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `G17-BS-001`   | Registry and collision tests show the ordinary default Agent receives the read/write tools while `learn` and `/learn` are absent. Runtime evidence starts from an ordinary user message and existing Agent ToolPart; there is no alternate entry or interpreter.                                                                                                                                                                |
-| `G17-BS-002`   | Strict input normalization rejects caller-owned administrative facts and unknown/transient material types. Course/navigation and material query tests prove bounded exact reads and zero writes. The only write is the closed V1 `update_learning_course` payload.                                                                                                                                                              |
-| `G17-BS-003`   | Owner-issued transaction seams and the composite settlement test prove all-or-none Course/View/Artifact/Map/alignment/selection/anchor settlement. Source mutation, an injected child-publication fault, and stale Course ownership roll every local child back. Separately committed Representation preparation remains visible after later bootstrap failure.                                                                 |
-| `G17-BS-004`   | Course-only creation leaves zero Views. Successor revision, materially distinct View, split/merge mappings, Tutor-proposed unselected View, exact selection, authorship, and stale owner cases run through the Course owner tests and bootstrap tests.                                                                                                                                                                          |
-| `G17-BS-005`   | The three Gate 10 arms each adopt exactly one local source with exact object/path provenance. Existing current and historical Artifact Revisions plus accepted Representation Revisions are referenced without fresh admission. A second potentially mutating target and transient read/search/attachment/web inputs are rejected; pure material reads leave every admission/current-use table and the frontier unchanged.      |
-| `G17-BS-006`   | Preserve/set/clear selection and anchor cases, usable and absent anchor truth, route correction, and owner CAS are covered. Assertions keep default-Course, Goal, retained-steering, progress/mastery, and unrelated Session/project state unchanged.                                                                                                                                                                           |
-| `G17-BS-007`   | Core and runtime evidence covers physical replay, semantic duplicate/conflict ordering, one semantic slot, exact root/delegated issuance, missing delegated membership, configured policy/prompt outcomes, permission correction/cancel/abort, CAS loss, commit seal, durable ToolPart, and recovery.                                                                                                                           |
-| `G17-BS-008`   | Schema, presenter, TUI, direct-run, and ACP tests require one typed proposal/result basis and reject contradictory or missing consequential bindings. Applied, already-applied, no-change, staged partial, and error outcomes report only durable effects. The deterministic ordinary-Agent fixture proves same-Turn tool availability and settlement mechanics; provider language behavior remains separately qualified below. |
+| Contract claim | Causally decisive implementation/evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `G17-BS-001`   | Registry and collision tests show the ordinary default Agent receives the read/write tools while `learn` and `/learn` are absent. Runtime evidence starts from an ordinary user message and existing Agent ToolPart; there is no alternate entry or interpreter.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `G17-BS-002`   | Strict input normalization rejects caller-owned administrative facts and unknown/transient material types. Course/navigation and material query tests prove bounded exact reads and zero writes. The only write is the closed V1 `update_learning_course` payload.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `G17-BS-003`   | Owner-issued transaction seams and the composite settlement tests prove all-or-none Course/View/Artifact/Map/alignment/selection/anchor settlement. A table-driven production-runtime matrix injects faults at Course, route, selection, Artifact, Material Map, alignment, anchor transition, physical receipt, bootstrap effect, bootstrap seal, anchor seal, and physical invocation settlement. Every case proves exact rollback and frontier preservation, then startup recovery to one durable failed ToolPart with no effect or seal. Source mutation and stale Course ownership remain separately covered; independently committed Representation preparation remains visible after later bootstrap failure. |
+| `G17-BS-004`   | Course-only creation leaves zero Views. Successor revision, materially distinct View, split/merge mappings, Tutor-proposed unselected View, exact selection, authorship, and stale owner cases run through the Course owner tests and bootstrap tests.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `G17-BS-005`   | The three Gate 10 arms each adopt exactly one local source with exact object/path provenance. Existing current and historical Artifact Revisions plus accepted Representation Revisions are referenced without fresh admission. A second potentially mutating target and transient read/search/attachment/web inputs are rejected; pure material reads leave every admission/current-use table and the frontier unchanged.                                                                                                                                                                                                                                                                                           |
+| `G17-BS-006`   | Preserve/set/clear selection and anchor cases, usable and absent anchor truth, route correction, and owner CAS are covered. Assertions keep default-Course, Goal, retained-steering, progress/mastery, and unrelated Session/project state unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `G17-BS-007`   | Core and runtime evidence covers physical replay, semantic duplicate/conflict ordering, one semantic slot, exact root/delegated issuance, missing delegated membership, configured policy/prompt outcomes, permission correction/cancel/abort, CAS loss, commit seal, durable ToolPart, and recovery. The child-boundary matrix proves that every injected local failure leaves the invocation admitted and the Part pending until startup recovery durably closes it as interrupted; repeated recovery is exact and effect-free.                                                                                                                                                                                    |
+| `G17-BS-008`   | Schema, presenter, an actual Permission-produced request, TUI, direct-run, and ACP tests require one complete typed proposal/result basis and reject contradictory, malformed, semantically changed, or missing consequential bindings. The one-operation case proves `permissionPromptRequired`, exact-reply lifetime, no `Always` choice, and a valid allow-once path on all three carriers. Applied, already-applied, no-change, staged partial, and error outcomes report only durable effects. The deterministic ordinary-Agent fixture proves same-Turn tool availability and settlement mechanics; provider language behavior remains separately qualified below.                                             |
 
 ## Closing-evidence groups
 
@@ -162,8 +181,10 @@ intersection for default/restricted/delegated Agents, omission as deny, strict
 payloads, bounded Course/material reads, cursor and omission truth, and zero
 writes. Runtime/Core evidence covers root/delegated/missing capability,
 allow/ask/deny, correction, cancellation, physical replay, semantic
-duplicate/conflict, exact one-operation prompting, source mutation, child
-fault, stale owner snapshot, recovery, and no invented frontier/effect.
+duplicate/conflict, exact one-operation prompting without durable `always`
+authority, source mutation, the complete local child/receipt/effect/seal/
+physical-settlement fault matrix, live prompt abort, stale owner snapshot,
+restart, repeat recovery, and no invented frontier/effect.
 
 ### 3. Course, material, navigation, and composition
 
@@ -186,32 +207,79 @@ projection. It proves that the released-v1 execution path can expose and settle
 the exact reads/write without `/learn`, an internal-ID management turn, a
 special parser, or a second model call.
 
-No paid provider call, credential use, or external write was authorized or
-used. Therefore this executor does **not** claim the contract's bounded
-released-v1 real-model language traces: fresh requests with and without local
-material, create versus continue, same-route revision versus distinct View,
-teach-only, transparent reversible choice, material ambiguity, same-Turn
-teaching after each stage class, and pre/post-commit learner correction remain
-for authorized independent qualification. The deterministic evidence does not
-claim exhaustive language coverage, interpretation correctness, educational
-efficacy, or Gate 23 product-loop closure.
+No provider call, credential use, paid call, or other external write was
+performed for this candidate. The maintainer has separately authorized the
+minimum released-v1 trace set using only already-configured credentials, but
+that later task remains sequenced after original-reviewer closure of
+`G17-IE-001..004` and is outside this recovery diff. Therefore this executor
+does **not** claim the contract's bounded released-v1 real-model language
+traces: fresh requests with and without local material, create versus
+continue, same-route revision versus distinct View, teach-only, transparent
+reversible choice, material ambiguity, same-Turn teaching after each stage
+class, and pre/post-commit learner correction remain for the later authorized
+qualification. The deterministic evidence does not claim exhaustive language
+coverage, interpretation correctness, educational efficacy, or Gate 23
+product-loop closure.
 
-## Fresh verification results
+## Fresh review repair and verification results
+
+The descendant repair closes only the four locally repairable findings from
+the fresh review:
+
+| Finding      | Repair and decisive evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `G17-IE-001` | One typed scope derives the exact one-operation path, `requirePrompt: true`, empty `always`, and `once_only` approval. A real `Permission.Service.ask` request carries `permissionPromptRequired` and `permissionExactReply`; TUI, direct-run, and ACP consume that exact request, ACP exposes **Allow once** plus **Reject**, and a tampered request becomes reject-only.                                                                                                                                                                                  |
+| `G17-IE-002` | The versioned scope now contains the normalized complete bounded command. Its shared projection distinguishes every committed Course, route item/mapping, selection, material/read authority, Map node/selector/coordinate, alignment/reason, and anchor fact. Two independently valid commands that differ only in one route-item title produce different readable projections, fingerprint recomputation rejects mismatched semantic metadata, and ACP sends the same bounded human-readable facts instead of unbounded raw metadata.                                                                                  |
+| `G17-IE-003` | V16 migration no longer copies `initial_change_time` into last-write time or invents size zero. The frozen V16 fixture migrates to `historical_v16_partial` with both values `NULL`; a real Material Map owner read exposes only proven descriptor fields and the explicit `unknown: ["lastWriteTime", "size"]` tuple. Fresh V17 exactness remains enforced.                                                                                                                                                                                                |
+| `G17-IE-004` | The production runtime fault matrix injects a database abort at Course, route, selection, Artifact, Material Map, alignment, anchor, receipt, effect, bootstrap seal, anchor seal, and physical settlement. Each boundary proves transaction and frontier rollback, no receipt/effect/seal, unchanged pending Part before restart, durable interrupted ToolPart after startup recovery, exact repeat recovery, and no late child effect; a full-command live permission abort independently proves prompted-abort settlement without entering the children. |
+
+`G17-IE-005` remains open by evidence and sequencing rather than absent
+authorization. No released-v1 provider trace, credential, or paid call was run
+in this recovery task, and the local repair makes no language-behavior
+qualification claim.
+
+Environment for the repair checks: Windows, Bun `1.3.14` (`0d9b296a`). Each
+command ran from the named affected package.
+
+| Package / exact command                                                                                   | Exact result                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema: `bun test test/semantic-presentation-v1.test.ts`                                                  | 4 passed, 0 failed, 11 assertions.                                                                                                              |
+| Schema: `bun run typecheck`                                                                               | Passed.                                                                                                                                         |
+| Core: `bun test test/database-migration.test.ts --test-name-pattern "upgrades a frozen Gate 16 database"` | 1 passed, 41 filtered, 0 failed, 13 assertions.                                                                                                 |
+| Core: `bun test test/learning-bootstrap.test.ts`                                                          | 7 passed, 0 failed, 96 assertions.                                                                                                              |
+| Core: `bun run migration --check`                                                                         | Passed; the incremental projection had no ungenerated schema change and the full current schema regenerated in an isolated temporary directory. |
+| Core: `bun run typecheck`                                                                                 | Passed.                                                                                                                                         |
+| OpenCode: `bun test test/permission/next.test.ts --test-name-pattern "Gate17 one-operation bootstrap"`    | 1 passed, 97 filtered, 0 failed, 23 assertions against an actual Permission-produced request.                                                   |
+| OpenCode: `bun test test/learning-command/presentation.test.ts`                                           | 8 passed, 0 failed, 66 assertions.                                                                                                              |
+| OpenCode: `bun test test/acp/permission.test.ts`                                                          | 11 passed, 0 failed, 14 assertions.                                                                                                             |
+| OpenCode: `bun test test/learning-command/runtime.test.ts --test-name-pattern "bootstrap"`                | 4 passed, 59 filtered, 0 failed, 159 assertions, including 139 assertions in the twelve-boundary fault/restart plus live-abort case.            |
+| OpenCode: `bun run typecheck`                                                                             | Passed.                                                                                                                                         |
+| TUI: `bun test test/util/semantic-presentation.test.ts`                                                   | 5 passed, 0 failed, 18 assertions.                                                                                                              |
+| TUI: `bun run typecheck`                                                                                  | Passed.                                                                                                                                         |
+
+These are focused causal checks, not a release-wide suite. The dependency reach
+was broadened through all four affected package typechecks, the migration
+regenerator/checker, all Core bootstrap cases, the full semantic-presentation
+and ACP permission files, and all runtime tests whose names contain
+`bootstrap`; unrelated package suites and the separately unauthorized provider
+qualification were not run.
+
+## Initial candidate verification results (retained provenance)
 
 Environment: Windows, Bun `1.3.14` (`0d9b296a`). Commands were run from the
 affected package, as required by repository guidance.
 
-| Package / command                                                                                                                                                 | Exact result                                                                                                                                                                                                                                          |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core: `bun test --timeout 30000 ./test/learning-bootstrap.test.ts ./test/database-migration.test.ts`                                                              | 49 passed, 0 failed, 476 assertions.                                                                                                                                                                                                                  |
-| Core owner aggregate: Course, Artifact, ContentRoot, Representation authority/ownership/settlement, Material Map authority/ownership, and Gate 8 settlement files | 72 passed, 0 failed, 675 assertions.                                                                                                                                                                                                                  |
-| OpenCode runtime: `bun test --timeout 30000 ./test/learning-command/runtime.test.ts -t bootstrap`                                                                 | 3 passed, 59 filtered, 0 failed, 20 assertions.                                                                                                                                                                                                       |
-| OpenCode registry/presentation/ACP/direct-run affected files                                                                                                      | 74 passed, 0 failed, 322 assertions.                                                                                                                                                                                                                  |
-| OpenCode historical Goal carry-forward regression                                                                                                                 | 1 passed, 61 filtered, 0 failed, 15 assertions after raising only its stale 15-second local budget to 30 seconds; behavior/assertions are unchanged.                                                                                                  |
-| Schema: `bun test --timeout 30000 ./test/semantic-presentation-v1.test.ts`                                                                                        | 4 passed, 0 failed, 11 assertions.                                                                                                                                                                                                                    |
-| TUI: `bun test --timeout 30000 ./test/util/semantic-presentation.test.ts`                                                                                         | 5 passed, 0 failed, 18 assertions.                                                                                                                                                                                                                    |
-| Core: `bun run migration --check`                                                                                                                                 | Passed; incremental schema had no ungenerated change and the full current schema regenerated successfully in an isolated temporary directory.                                                                                                         |
-| Core, Schema, OpenCode, and TUI: `bun run typecheck`                                                                                                              | All four package typechecks passed.                                                                                                                                                                                                                   |
+| Package / command                                                                                                                                                 | Exact result                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Core: `bun test --timeout 30000 ./test/learning-bootstrap.test.ts ./test/database-migration.test.ts`                                                              | 49 passed, 0 failed, 476 assertions.                                                                                                                 |
+| Core owner aggregate: Course, Artifact, ContentRoot, Representation authority/ownership/settlement, Material Map authority/ownership, and Gate 8 settlement files | 72 passed, 0 failed, 675 assertions.                                                                                                                 |
+| OpenCode runtime: `bun test --timeout 30000 ./test/learning-command/runtime.test.ts -t bootstrap`                                                                 | 3 passed, 59 filtered, 0 failed, 20 assertions.                                                                                                      |
+| OpenCode registry/presentation/ACP/direct-run affected files                                                                                                      | 74 passed, 0 failed, 322 assertions.                                                                                                                 |
+| OpenCode historical Goal carry-forward regression                                                                                                                 | 1 passed, 61 filtered, 0 failed, 15 assertions after raising only its stale 15-second local budget to 30 seconds; behavior/assertions are unchanged. |
+| Schema: `bun test --timeout 30000 ./test/semantic-presentation-v1.test.ts`                                                                                        | 4 passed, 0 failed, 11 assertions.                                                                                                                   |
+| TUI: `bun test --timeout 30000 ./test/util/semantic-presentation.test.ts`                                                                                         | 5 passed, 0 failed, 18 assertions.                                                                                                                   |
+| Core: `bun run migration --check`                                                                                                                                 | Passed; incremental schema had no ungenerated change and the full current schema regenerated successfully in an isolated temporary directory.        |
+| Core, Schema, OpenCode, and TUI: `bun run typecheck`                                                                                                              | All four package typechecks passed.                                                                                                                  |
 
 During verification, an intentionally broad five-file OpenCode aggregate first
 reported 122 passes, 13 intentional historical-V1 skips, and one timeout in the
@@ -227,9 +295,11 @@ API consumers while continuing to reject private table/SQL access.
 ## Review handoff
 
 This is an executor self-review and does not satisfy independent acceptance.
-A fresh reviewer must bind the containing commit, reproduce or otherwise
-evaluate the causal evidence, inspect the exact diff against
-`822f8a3df4baa5b51002e7ffd8118a01d567c2a0`, decide whether the external
-released-model qualification is required before acceptance, and return an
-explicit Gate 17 implementation/evidence disposition. No integration or Gate
-18 work follows from this record alone.
+The original fresh reviewer that raised `G17-IE-001..005` must bind the
+containing commit, reproduce or otherwise evaluate the causal evidence,
+inspect the repair diff against
+`3c37f043ea50b855d9f752c50bb83249435488f2` and the complete candidate against
+`822f8a3df4baa5b51002e7ffd8118a01d567c2a0`, independently close or retain each
+finding, and decide whether the external released-model qualification is
+required before acceptance. No integration or Gate 18 work follows from this
+record alone.

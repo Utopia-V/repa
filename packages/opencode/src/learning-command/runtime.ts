@@ -1096,6 +1096,7 @@ function executeLearningBootstrapOnce(
     const authority = requirePermissionContext(context)
     const candidate = prepared.result.candidate
     const scope = LearningCommandPresentation.learningBootstrapScope(candidate)
+    const permissionConstraint = SemanticPresentation.learningBootstrapPermissionConstraint(scope)
     const presentation = LearningCommandPresentation.learningBootstrapCapability(candidate, {
       sessionID: registration.sessionID,
       assistantMessageID: registration.assistantMessageID,
@@ -1114,8 +1115,8 @@ function executeLearningBootstrapOnce(
         sessionID: registration.sessionID,
         permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
         patterns: [LearningBootstrap.PERMISSION_PATTERN],
-        always: [LearningBootstrap.PERMISSION_PATTERN],
-        requirePrompt: learningBootstrapOneOperationPath(candidate) !== undefined,
+        always: permissionConstraint.always,
+        requirePrompt: permissionConstraint.promptRequired,
         metadata: {
           bootstrapKind: "learning_bootstrap",
           commandFingerprint: candidate.commandFingerprint,
@@ -1156,7 +1157,8 @@ function executeLearningBootstrapOnce(
       )
     }
     const instance = yield* InstanceRef
-    const oneOperationPath = learningBootstrapOneOperationPath(current.candidate)
+    const oneOperationPath =
+      "oneOperationPath" in permissionConstraint ? permissionConstraint.oneOperationPath : undefined
     const execution = yield* Effect.scoped(
       LearningBootstrap.prepareExecution(
         current.candidate,
@@ -1526,18 +1528,6 @@ function loadCommittedLearningBootstrapResult(
       }).pipe(Effect.orDie),
     )
     .pipe(Effect.map((result) => result.result))
-}
-
-function learningBootstrapOneOperationPath(candidate: LearningBootstrap.Candidate) {
-  return (candidate.canonicalCommand.materials ?? [])
-    .flatMap((material) => {
-      if (material.type === "local" && material.authority.type === "one_operation") return [material.path]
-      if (material.type === "artifact" && material.read?.authority.type === "one_operation") {
-        return [material.read.path]
-      }
-      return []
-    })
-    .at(0)
 }
 
 function prepareDefaultCourse(events: EventV2.Interface, modelInput: unknown, registration: Registration) {

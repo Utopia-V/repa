@@ -45,7 +45,7 @@ export type AuthorshipReceipt = {
   readonly capabilityVersion: number
 }
 
-export type ArtifactTargetReceipt = {
+type ArtifactTargetReceiptCommon = {
   readonly type: "artifact"
   readonly effectiveArtifactID: Artifact.ArtifactID
   readonly revisionID: Artifact.RevisionID
@@ -59,10 +59,33 @@ export type ArtifactTargetReceipt = {
   readonly descriptorCorrectionID?: Artifact.ObservationCorrectionID
   readonly fingerprint: Artifact.Fingerprint
   readonly mediaType: string
-  readonly authorization: ContentRoot.LocalReadAuthorizationReceipt
   readonly relativePath: string
   readonly descriptor: ContentRootNTFS.Descriptor
   readonly timeObserved: number
+}
+
+export type ExactArtifactTargetReceipt = ArtifactTargetReceiptCommon & {
+  readonly authorization: ContentRoot.LocalReadAuthorizationReceipt
+}
+
+export type HistoricalArtifactTargetReceipt = ArtifactTargetReceiptCommon & {
+  readonly authorization: {
+    readonly kind: "content_root_historical_v16"
+    readonly root: {
+      readonly schemaVersion: 1
+      readonly completeness: "historical_v16_partial"
+      readonly known: Omit<ContentRootNTFS.Descriptor, "lastWriteTime" | "size">
+      readonly unknown: readonly ["lastWriteTime", "size"]
+    }
+    readonly relativePath: string
+    readonly canonicalPath: string
+    readonly contentRoot: ContentRoot.ReadAuthorizationReceipt
+    readonly grantEpisodeOrdinal: number
+  }
+}
+
+export type ArtifactTargetReceipt = ArtifactTargetReceiptCommon & {
+  readonly authorization: ExactArtifactTargetReceipt["authorization"] | HistoricalArtifactTargetReceipt["authorization"]
 }
 
 export type RepresentationTargetReceipt = {

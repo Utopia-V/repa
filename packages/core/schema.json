@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "62000f4c-6dac-4f48-b0c1-2c668fa1e735",
+  "id": "294654eb-874e-412f-ba3d-f9dbf92db3b0",
   "prevIds": [
-    "8cabe0eb-836f-4148-82f7-db586c0091a1"
+    "62000f4c-6dac-4f48-b0c1-2c668fa1e735"
   ],
   "ddl": [
     {
@@ -8167,6 +8167,16 @@
       "default": null,
       "generated": null,
       "name": "normalized_relative_path",
+      "entityType": "columns",
+      "table": "material_map_artifact_target"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'exact_v1'",
+      "generated": null,
+      "name": "root_object_descriptor_state",
       "entityType": "columns",
       "table": "material_map_artifact_target"
     },
@@ -23171,7 +23181,7 @@
       "table": "material_map_artifact_target"
     },
     {
-      "value": "length(\"active_location\") > 0 AND length(\"normalized_relative_path\") > 0\n        AND \"root_object_platform\" = 'windows_ntfs' AND \"root_object_verifier_version\" >= 1\n        AND length(\"root_object_canonical_path\") > 0 AND length(\"root_object_canonical_path_key\") > 0\n        AND length(\"root_object_volume_serial\") > 0 AND length(\"root_object_id\") = 32\n        AND length(\"root_object_creation_time\") > 0 AND length(\"root_object_change_time\") > 0\n        AND length(\"root_object_last_write_time\") > 0 AND \"root_object_size\" >= 0\n        AND \"source_object_platform\" = 'windows_ntfs' AND \"source_object_verifier_version\" >= 1\n        AND length(\"source_object_canonical_path\") > 0 AND length(\"source_object_canonical_path_key\") > 0\n        AND \"source_object_canonical_path\" = \"active_location\"\n        AND length(\"source_object_volume_serial\") > 0 AND length(\"source_object_id\") = 32\n        AND length(\"source_object_creation_time\") > 0 AND length(\"source_object_change_time\") > 0\n        AND length(\"source_object_last_write_time\") > 0 AND \"source_object_size\" = \"byte_length\"\n        AND \"source_observed_time\" >= 0",
+      "value": "length(\"active_location\") > 0 AND length(\"normalized_relative_path\") > 0\n        AND \"root_object_platform\" = 'windows_ntfs' AND \"root_object_verifier_version\" >= 1\n        AND length(\"root_object_canonical_path\") > 0 AND length(\"root_object_canonical_path_key\") > 0\n        AND length(\"root_object_volume_serial\") > 0 AND length(\"root_object_id\") = 32\n        AND length(\"root_object_creation_time\") > 0 AND length(\"root_object_change_time\") > 0\n        AND ((\"root_object_descriptor_state\" = 'exact_v1'\n            AND length(\"root_object_last_write_time\") > 0 AND \"root_object_size\" >= 0)\n          OR (\"root_object_descriptor_state\" = 'historical_v16_partial'\n            AND \"authority_kind\" = 'content_root'\n            AND \"root_object_last_write_time\" IS NULL AND \"root_object_size\" IS NULL))\n        AND \"source_object_platform\" = 'windows_ntfs' AND \"source_object_verifier_version\" >= 1\n        AND length(\"source_object_canonical_path\") > 0 AND length(\"source_object_canonical_path_key\") > 0\n        AND \"source_object_canonical_path\" = \"active_location\"\n        AND length(\"source_object_volume_serial\") > 0 AND length(\"source_object_id\") = 32\n        AND length(\"source_object_creation_time\") > 0 AND length(\"source_object_change_time\") > 0\n        AND length(\"source_object_last_write_time\") > 0 AND \"source_object_size\" = \"byte_length\"\n        AND \"source_observed_time\" >= 0",
       "name": "material_map_artifact_target_source",
       "entityType": "checks",
       "table": "material_map_artifact_target"

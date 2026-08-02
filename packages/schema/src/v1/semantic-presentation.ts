@@ -690,46 +690,174 @@ const LearnerGoalV2CapabilityProposal = Schema.Struct({
   operations: Schema.Array(GoalV2MaterializedOperation),
 })
 
+const BootstrapText = Schema.String.check(Schema.isMaxLength(8 * 1024))
+const BootstrapPath = Schema.String.check(Schema.isMaxLength(4 * 1024))
+const BootstrapKey = Schema.String.check(Schema.isMaxLength(256))
+const BootstrapID = Schema.String.check(Schema.isMaxLength(8 * 1024))
+const BootstrapAuthorship = Schema.Literals(["learner_supplied", "learner_requested", "tutor_initiated"])
+const BootstrapCoordinateEndpoint = Schema.Struct({
+  page: PositiveVersion,
+  item: PositiveVersion,
+  scalar: PositiveVersion,
+})
+const BootstrapCoordinate = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("whole_target.v1") }),
+  Schema.Struct({
+    kind: Schema.Literal("artifact_byte_range.v1"),
+    startByte: PositiveVersion,
+    endByte: PositiveVersion,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("pdf_page_range.v1"),
+    startPage: PositiveVersion,
+    endPage: PositiveVersion,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("pdf_text_range.v1"),
+    start: BootstrapCoordinateEndpoint,
+    end: BootstrapCoordinateEndpoint,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("model_text_range.v1"),
+    startScalar: PositiveVersion,
+    endScalar: PositiveVersion,
+  }),
+])
+const BootstrapLocalAuthority = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("content_root"), contentRootID: BootstrapID }),
+  Schema.Struct({ type: Schema.Literal("active_workspace") }),
+  Schema.Struct({ type: Schema.Literal("one_operation") }),
+])
+const BootstrapLocalRead = Schema.Struct({ path: BootstrapPath, authority: BootstrapLocalAuthority })
+const BootstrapRevision = Schema.Struct({
+  items: Schema.Array(
+    Schema.Struct({
+      key: BootstrapKey,
+      title: BootstrapText,
+      parentKey: optional(BootstrapKey),
+      reuse: optional(Schema.Struct({ sourceRevisionID: BootstrapID, itemID: BootstrapID })),
+    }),
+  ).check(Schema.isMaxLength(500)),
+  mappings: optional(
+    Schema.Array(
+      Schema.Struct({
+        kind: Schema.Literals(["preserve", "split", "merge"]),
+        sourceItemIDs: Schema.Array(BootstrapID).check(Schema.isMaxLength(500)),
+        targetKeys: Schema.Array(BootstrapKey).check(Schema.isMaxLength(500)),
+      }),
+    ).check(Schema.isMaxLength(500)),
+  ),
+})
+const BootstrapRoute = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literals(["new_view", "distinct_view"]),
+    key: BootstrapKey,
+    name: BootstrapText,
+    authorship: BootstrapAuthorship,
+    revision: BootstrapRevision,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("successor_revision"),
+    key: BootstrapKey,
+    viewID: BootstrapID,
+    predecessorRevisionID: BootstrapID,
+    authorship: BootstrapAuthorship,
+    revision: BootstrapRevision,
+  }),
+])
+const BootstrapSelection = Schema.Union([
+  Schema.Struct({ type: Schema.Literals(["preserve", "clear"]) }),
+  Schema.Struct({
+    type: Schema.Literal("set"),
+    target: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("route") }),
+      Schema.Struct({ type: Schema.Literal("existing"), revisionID: BootstrapID }),
+    ]),
+  }),
+])
+const BootstrapMaterial = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("artifact"),
+    key: BootstrapKey,
+    artifactID: BootstrapID,
+    revisionID: BootstrapID,
+    attribution: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("recorded") }),
+      Schema.Struct({ type: Schema.Literal("lineage_correction"), memberID: BootstrapID }),
+    ]),
+    read: optional(BootstrapLocalRead),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("representation"),
+    key: BootstrapKey,
+    representationRevisionID: BootstrapID,
+  }),
+  Schema.Struct({ type: Schema.Literal("local"), key: BootstrapKey, ...BootstrapLocalRead.fields }),
+])
+const BootstrapMap = Schema.Struct({
+  key: BootstrapKey,
+  materialKey: BootstrapKey,
+  authorship: BootstrapAuthorship,
+  supersedesMapID: optional(BootstrapID),
+  outline: Schema.Array(
+    Schema.Struct({
+      key: BootstrapKey,
+      parentKey: optional(BootstrapKey),
+      title: BootstrapText,
+      selectors: Schema.Array(Schema.Struct({ key: BootstrapKey, coordinate: BootstrapCoordinate })).check(
+        Schema.isMaxLength(2_000),
+      ),
+    }),
+  ).check(Schema.isMaxLength(500)),
+})
+const BootstrapAlignmentCourse = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("route_item"), itemKey: BootstrapKey }),
+  Schema.Struct({
+    type: Schema.Literal("existing"),
+    viewID: BootstrapID,
+    revisionID: BootstrapID,
+    itemID: BootstrapID,
+    selection: Schema.Literals(["explicit_exact", "observed_working"]),
+  }),
+])
+const BootstrapAlignment = Schema.Struct({
+  key: BootstrapKey,
+  mapKey: BootstrapKey,
+  selectorKey: BootstrapKey,
+  authorship: BootstrapAuthorship,
+  course: BootstrapAlignmentCourse,
+  reason: BootstrapText,
+  supersedesAlignmentID: optional(BootstrapID),
+})
+const BootstrapAnchor = Schema.Union([
+  Schema.Struct({ type: Schema.Literals(["preserve", "clear"]) }),
+  Schema.Struct({
+    type: Schema.Literal("set"),
+    target: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("route_item"), itemKey: BootstrapKey }),
+      Schema.Struct({
+        type: Schema.Literal("existing"),
+        viewID: BootstrapID,
+        revisionID: BootstrapID,
+        itemID: BootstrapID,
+      }),
+    ]),
+  }),
+])
 const LearningBootstrapScope = Schema.Struct({
-  canonicalCommand: StringValue,
-  course: Schema.Union([
-    Schema.Struct({ action: Schema.Literal("create"), title: StringValue }),
-    Schema.Struct({
-      action: Schema.Literals(["use", "correct"]),
-      courseID: StringValue,
-      title: StringValue,
-    }),
-  ]),
-  route: Schema.Union([
-    Schema.Struct({ action: Schema.Literal("none") }),
-    Schema.Struct({
-      action: Schema.Literals(["new_view", "distinct_view", "successor_revision"]),
-      key: StringValue,
-      name: optional(StringValue),
-      viewID: optional(StringValue),
-      authorship: Schema.Literals(["learner_supplied", "learner_requested", "tutor_initiated"]),
-      itemCount: PositiveVersion,
-    }),
-  ]),
-  selection: Schema.Literals(["preserve", "clear", "set_route", "set_existing"]),
-  materials: Schema.Array(
-    Schema.Struct({
-      key: StringValue,
-      type: Schema.Literals(["artifact", "representation", "local"]),
-      identity: StringValue,
-      localAuthority: optional(Schema.Literals(["content_root", "active_workspace", "one_operation"])),
-    }),
-  ),
-  maps: Schema.Array(
-    Schema.Struct({
-      key: StringValue,
-      materialKey: StringValue,
-      outlineNodeCount: PositiveVersion,
-      selectorCount: PositiveVersion,
-    }),
-  ),
-  alignmentKeys: Schema.Array(StringValue),
-  anchor: Schema.Literals(["preserve", "clear", "set"]),
+  command: Schema.Struct({
+    schemaVersion: Schema.Literal(1),
+    course: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("new"), title: BootstrapText }),
+      Schema.Struct({ type: Schema.Literal("existing"), courseID: BootstrapID, title: optional(BootstrapText) }),
+    ]),
+    route: optional(BootstrapRoute),
+    selection: BootstrapSelection,
+    materials: Schema.Array(BootstrapMaterial).check(Schema.isMaxLength(32)),
+    maps: Schema.Array(BootstrapMap).check(Schema.isMaxLength(16)),
+    alignments: Schema.Array(BootstrapAlignment).check(Schema.isMaxLength(64)),
+    anchor: BootstrapAnchor,
+  }),
 })
 
 const LearningBootstrapCapabilityProposal = Schema.Struct({

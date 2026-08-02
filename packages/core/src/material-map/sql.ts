@@ -109,6 +109,7 @@ export const MaterialMapArtifactTargetTable = sqliteTable(
     operation_identity: text(),
     operation_approval_basis: text(),
     normalized_relative_path: text().notNull(),
+    root_object_descriptor_state: text().$type<"exact_v1" | "historical_v16_partial">().notNull().default("exact_v1"),
     root_object_platform: text().$type<"windows_ntfs">(),
     root_object_verifier_version: integer(),
     root_object_canonical_path: text(),
@@ -243,7 +244,11 @@ export const MaterialMapArtifactTargetTable = sqliteTable(
         AND length(${table.root_object_canonical_path}) > 0 AND length(${table.root_object_canonical_path_key}) > 0
         AND length(${table.root_object_volume_serial}) > 0 AND length(${table.root_object_id}) = 32
         AND length(${table.root_object_creation_time}) > 0 AND length(${table.root_object_change_time}) > 0
-        AND length(${table.root_object_last_write_time}) > 0 AND ${table.root_object_size} >= 0
+        AND ((${table.root_object_descriptor_state} = 'exact_v1'
+            AND length(${table.root_object_last_write_time}) > 0 AND ${table.root_object_size} >= 0)
+          OR (${table.root_object_descriptor_state} = 'historical_v16_partial'
+            AND ${table.authority_kind} = 'content_root'
+            AND ${table.root_object_last_write_time} IS NULL AND ${table.root_object_size} IS NULL))
         AND ${table.source_object_platform} = 'windows_ntfs' AND ${table.source_object_verifier_version} >= 1
         AND length(${table.source_object_canonical_path}) > 0 AND length(${table.source_object_canonical_path_key}) > 0
         AND ${table.source_object_canonical_path} = ${table.active_location}

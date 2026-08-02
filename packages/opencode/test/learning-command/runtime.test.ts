@@ -7835,7 +7835,7 @@ it.effect(
           bootstrapKind: "learning_bootstrap",
           issuance: "root",
           scope: {
-            canonicalCommand: JSON.stringify({
+            command: {
               schemaVersion: 1,
               course: { type: "new", title: "Natural-language linear algebra" },
               selection: { type: "preserve" },
@@ -7843,10 +7843,7 @@ it.effect(
               maps: [],
               alignments: [],
               anchor: { type: "preserve" },
-            }),
-            course: { action: "create", title: "Natural-language linear algebra" },
-            route: { action: "none" },
-            materials: [],
+            },
           },
         },
       })
@@ -8057,17 +8054,13 @@ it.effect("forces an exact common permission grant for a one-operation local boo
     expect(permissionRequests[0]).toMatchObject({
       permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
       patterns: [LearningCommand.LEARNING_BOOTSTRAP_PERMISSION_PATTERN],
+      always: [],
       requirePrompt: true,
       metadata: {
         scope: {
-          materials: [
-            {
-              key: "source",
-              type: "local",
-              identity: sourcePath,
-              localAuthority: "one_operation",
-            },
-          ],
+          command: {
+            materials: [{ key: "source", type: "local", path: sourcePath, authority: { type: "one_operation" } }],
+          },
         },
       },
     })
@@ -8099,6 +8092,269 @@ it.effect("forces an exact common permission grant for a one-operation local boo
       },
     })
   }),
+)
+
+it.effect(
+  "rolls back and recovers every learning-bootstrap child, seal, and physical settlement boundary",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      permissionWaits.length = 0
+      const temporary = yield* Effect.acquireRelease(
+        Effect.promise(() => tmpdir()),
+        (directory) => Effect.promise(() => directory[Symbol.asyncDispose]()).pipe(Effect.ignore),
+      )
+      const sourcePath = join(temporary.path, "bootstrap-boundary.txt")
+      yield* Effect.promise(() => Bun.write(sourcePath, "Exact material for the Gate 17 child-boundary matrix"))
+      const db = (yield* Database.Service).db
+      const events = yield* EventV2Bridge.Service
+      const runtime = yield* LearningCommandRuntime.Service
+      const durable = () =>
+        Effect.all({
+          children: db.get(sql`SELECT
+            (SELECT count(*) FROM course) AS courses,
+            (SELECT count(*) FROM course_view) AS routes,
+            (SELECT count(*) FROM course_view_revision) AS revisions,
+            (SELECT count(*) FROM course_working_selection WHERE revision_id IS NOT NULL) AS selections,
+            (SELECT count(*) FROM artifact) AS artifacts,
+            (SELECT count(*) FROM artifact_revision) AS artifact_revisions,
+            (SELECT count(*) FROM material_map) AS maps,
+            (SELECT count(*) FROM material_outline_node) AS map_nodes,
+            (SELECT count(*) FROM material_selector) AS selectors,
+            (SELECT count(*) FROM material_course_alignment) AS alignments,
+            (SELECT count(*) FROM learner_course_route_anchor_transition) AS anchors,
+            (SELECT count(*) FROM learning_course_material_adoption) AS adoptions,
+            (SELECT count(*) FROM learning_bootstrap_effect) AS effects,
+            (SELECT count(*) FROM learning_command_receipt) AS receipts,
+            (SELECT count(*) FROM learning_bootstrap_commit_seal) AS bootstrap_seals,
+            (SELECT count(*) FROM learner_course_route_anchor_commit_seal) AS anchor_seals`),
+          frontier: db.transaction((tx) => LearningFrontier.read(tx)),
+        })
+      const pending = (registration: LearningCommandRuntime.Registration) =>
+        Effect.all({
+          durable: durable(),
+          part: db.select().from(PartTable).where(eq(PartTable.id, registration.partID)).get(),
+          tool: db.get(sql`SELECT
+            state,
+            consumed_shared_frontier_sequence AS consumedSequence,
+            consumed_shared_frontier_time AS consumedTime,
+            resulting_shared_frontier_sequence AS resultingSequence,
+            resulting_shared_frontier_time AS resultingTime,
+            time_settled AS timeSettled
+          FROM turn_tool_invocation
+          WHERE part_id = ${registration.partID}`),
+        })
+      const input = (index: number) =>
+        ({
+          course: { type: "new", title: `Boundary Course ${index}` },
+          route: {
+            type: "new_view",
+            key: "route",
+            name: "Request-bound route",
+            authorship: "learner_requested",
+            revision: {
+              items: [
+                { key: "concept", title: "Understand the exact source" },
+                { key: "worked", title: "Work through the source", parentKey: "concept" },
+              ],
+            },
+          },
+          selection: { type: "set", target: { type: "route" } },
+          materials: [
+            {
+              type: "local",
+              key: "source",
+              path: sourcePath,
+              authority: { type: "one_operation" },
+            },
+          ],
+          maps: [
+            {
+              key: "map",
+              materialKey: "source",
+              authorship: "learner_requested",
+              outline: [
+                {
+                  key: "whole",
+                  title: "Whole exact source",
+                  selectors: [{ key: "all", coordinate: { kind: "whole_target.v1" } }],
+                },
+              ],
+            },
+          ],
+          alignments: [
+            {
+              key: "alignment",
+              mapKey: "map",
+              selectorKey: "all",
+              authorship: "learner_requested",
+              course: { type: "route_item", itemKey: "worked" },
+              reason: "The learner explicitly bound the exact source to this requested route item",
+            },
+          ],
+          anchor: { type: "set", target: { type: "route_item", itemKey: "worked" } },
+        }) as const
+      const boundaries = [
+        { name: "course", clause: "BEFORE INSERT ON course" },
+        { name: "route", clause: "BEFORE INSERT ON course_view" },
+        { name: "selection", clause: "BEFORE UPDATE OF revision_id ON course_working_selection" },
+        { name: "artifact", clause: "BEFORE INSERT ON artifact" },
+        { name: "material_map", clause: "BEFORE INSERT ON material_map" },
+        { name: "alignment", clause: "BEFORE INSERT ON material_course_alignment" },
+        { name: "anchor", clause: "BEFORE INSERT ON learner_course_route_anchor_transition" },
+        { name: "receipt", clause: "BEFORE INSERT ON learning_command_receipt" },
+        { name: "effect", clause: "BEFORE INSERT ON learning_bootstrap_effect" },
+        { name: "bootstrap_seal", clause: "BEFORE INSERT ON learning_bootstrap_commit_seal" },
+        { name: "anchor_seal", clause: "BEFORE INSERT ON learner_course_route_anchor_commit_seal" },
+        {
+          name: "physical_settlement",
+          clause: "BEFORE UPDATE OF settlement ON learning_command_invocation WHEN NEW.status = 'applied'",
+        },
+      ] as const
+
+      yield* Effect.forEach(
+        boundaries,
+        (boundary, index) =>
+          Effect.gen(function* () {
+            const command = input(index)
+            const interaction = yield* seedInteraction(
+              db,
+              `bootstrap-boundary-${boundary.name}`,
+              command,
+              LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+              { text: `Create the complete request-bound learning setup for boundary ${boundary.name}.` },
+            )
+            yield* runtime.prepareCommand(
+              LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+              command,
+              interaction.registration,
+            )
+            const before = yield* pending(interaction.registration)
+            const trigger = `gate17_bootstrap_boundary_${index}`
+            yield* db.run(
+              sql.raw(
+                `CREATE TEMP TRIGGER ${trigger} ${boundary.clause} BEGIN SELECT RAISE(ABORT, 'gate17 ${boundary.name} boundary fault'); END`,
+              ),
+            )
+            const failed = yield* runtime
+              .executeCommand(
+                LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+                command,
+                context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+              )
+              .pipe(
+                Effect.exit,
+                Effect.ensuring(db.run(sql.raw(`DROP TRIGGER IF EXISTS ${trigger}`)).pipe(Effect.orDie)),
+              )
+            expect(Exit.isFailure(failed)).toBe(true)
+            expect(yield* pending(interaction.registration)).toEqual(before)
+
+            yield* LearningCommandRuntime.recoverAdmitted(events)
+            const terminal = yield* exactPartResult(db, interaction.registration.partID)
+            expect(terminal).toMatchObject({
+              title: "Learning bootstrap settlement",
+              metadata: { outcome: "error", code: "interrupted", durablySettled: true },
+            })
+            expect(JSON.parse(terminal.output)).toMatchObject({
+              disposition: "candidate_v1",
+              capabilityOutcome: "prompted_allow",
+              settlement: { outcome: "error", code: "interrupted" },
+            })
+            expect(yield* durable()).toEqual(before.durable)
+            expect(
+              yield* db.get(sql`SELECT
+                status,
+                json_extract(settlement, '$.outcome') AS outcome,
+                json_extract(settlement, '$.code') AS code
+              FROM learning_command_invocation
+              WHERE part_id = ${interaction.registration.partID}`),
+            ).toEqual({ status: "error", outcome: "error", code: "interrupted" })
+            expect(
+              yield* db.get(sql`SELECT resulting_shared_frontier_sequence AS resultingSequence
+                FROM turn_tool_invocation WHERE part_id = ${interaction.registration.partID}`),
+            ).toEqual({ resultingSequence: null })
+            const row = yield* db
+              .select()
+              .from(PartTable)
+              .where(eq(PartTable.id, interaction.registration.partID))
+              .get()
+            expect(row).toBeDefined()
+            expect(
+              SemanticPresentation.readResult(
+                decodeToolPart({
+                  ...row!.data,
+                  id: row!.id,
+                  messageID: row!.message_id,
+                  sessionID: row!.session_id,
+                }),
+                true,
+              ),
+            ).toMatchObject({ type: "valid", value: { outcome: "failed", durablySettled: true } })
+
+            yield* LearningCommandRuntime.recoverAdmitted(events)
+            expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(terminal)
+            expect(yield* durable()).toEqual(before.durable)
+          }),
+        { discard: true },
+      )
+
+      const command = input(boundaries.length)
+      const interaction = yield* seedInteraction(
+        db,
+        "bootstrap-boundary-live-abort",
+        command,
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        { text: "Create this complete setup only if the exact one-operation prompt completes." },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        command,
+        interaction.registration,
+      )
+      const beforeAbort = yield* durable()
+      const entered = yield* Deferred.make<void>()
+      const release = yield* Deferred.make<void>()
+      permissionWaits.push({ entered, release })
+      const controller = new AbortController()
+      const execution = yield* runtime
+        .executeCommand(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, command, {
+          ...context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+          abort: controller.signal,
+        })
+        .pipe(Effect.forkChild)
+      yield* Deferred.await(entered)
+      controller.abort()
+      const aborted = yield* Fiber.join(execution)
+      yield* Deferred.succeed(release, undefined)
+      expect(aborted.metadata).toMatchObject({ outcome: "error", code: "interrupted", durablySettled: true })
+      expect(JSON.parse(aborted.output)).toMatchObject({
+        disposition: "candidate_v1",
+        capabilityOutcome: "prompted_abort",
+        settlement: { outcome: "error", code: "interrupted" },
+      })
+      expect(yield* durable()).toEqual(beforeAbort)
+      expect(
+        yield* db.get(sql`SELECT outcome FROM learning_bootstrap_capability_settlement
+          WHERE invocation_part_id = ${interaction.registration.partID}`),
+      ).toEqual({ outcome: "prompted_abort" })
+      expect(
+        SemanticPresentation.readResult(
+          {
+            id: interaction.registration.partID,
+            sessionID: interaction.registration.sessionID,
+            messageID: interaction.registration.assistantMessageID,
+            tool: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+            callID: interaction.registration.callID,
+            state: { status: "completed", title: aborted.title, metadata: aborted.metadata },
+          },
+          true,
+        ),
+      ).toMatchObject({ type: "valid", value: { outcome: "failed", durablySettled: true } })
+      yield* LearningCommandRuntime.recoverAdmitted(events)
+      expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(aborted)
+      expect(yield* durable()).toEqual(beforeAbort)
+    }),
+  60_000,
 )
 
 function defaultCourseDirectInput(

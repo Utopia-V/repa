@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Course } from "@opencode-ai/core/course"
-import type { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
+import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import type { DefaultCourseV2Authorization } from "@opencode-ai/core/learner-navigation/default-course-v2"
@@ -1037,25 +1037,25 @@ describe("learning command semantic basis and projection", () => {
       providerCallID: envelope.providerCallID,
       partID: envelope.partID,
     }
+    const command = LearningBootstrap.canonicalizeCommand({
+      course: { type: "new", title: "Linear algebra" },
+      selection: { type: "preserve" },
+      materials: [
+        {
+          type: "local",
+          key: "notes",
+          path: "C:\\Learning\\linear.txt",
+          authority: { type: "one_operation" },
+        },
+      ],
+      maps: [],
+      alignments: [],
+      anchor: { type: "preserve" },
+    })
     const candidate = {
-      commandFingerprint: "bootstrap_fingerprint",
+      commandFingerprint: LearningBootstrap.commandFingerprint(command),
       agentAction: { kind: "root" },
-      canonicalCommand: {
-        schemaVersion: 1,
-        course: { type: "new", title: "Linear algebra" },
-        selection: { type: "preserve" },
-        materials: [
-          {
-            type: "local",
-            key: "notes",
-            path: "C:\\Learning\\linear.txt",
-            authority: { type: "one_operation" },
-          },
-        ],
-        maps: [],
-        alignments: [],
-        anchor: { type: "preserve" },
-      },
+      canonicalCommand: command,
       materialized: { course: { type: "new" } },
     } as unknown as LearningBootstrap.Candidate
     const proposal = LearningCommandPresentation.learningBootstrapCapability(candidate, bootstrapEnvelope)
@@ -1064,12 +1064,13 @@ describe("learning command semantic basis and projection", () => {
       request({
         permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
         patterns: ["learning_course"],
-        always: ["learning_course"],
+        always: [],
         metadata: {
           bootstrapKind: "learning_bootstrap",
           commandFingerprint: candidate.commandFingerprint,
           issuance: "root",
           scope,
+          [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true,
           ...SemanticPresentation.metadata(proposal),
         },
       }),
@@ -1078,13 +1079,16 @@ describe("learning command semantic basis and projection", () => {
       type: "valid",
       value: {
         capability: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
-        approval: "policy",
+        approval: "once_only",
         facts: expect.arrayContaining([
           { label: "Issuance", value: "root" },
           { label: "Course", value: 'create "Linear algebra"' },
           { label: "Route", value: "none" },
           { label: "Selection", value: "preserve" },
-          { label: "Material notes", value: "local: C:\\Learning\\linear.txt; one_operation" },
+          {
+            label: "Material notes",
+            value: 'new local Artifact from path "C:\\Learning\\linear.txt"; authority one_operation',
+          },
         ]),
       },
     })

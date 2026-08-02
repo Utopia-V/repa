@@ -56,6 +56,7 @@ import type {
   ArtifactTargetReceipt,
   AuthorshipReceipt,
   DispositionEvent,
+  ExactArtifactTargetReceipt,
   MapInfo,
   MapProposal,
   MapTarget,
@@ -94,6 +95,8 @@ export type {
   ArtifactTargetReceipt,
   AuthorshipReceipt,
   DispositionEvent,
+  ExactArtifactTargetReceipt,
+  HistoricalArtifactTargetReceipt,
   MapInfo,
   MapProposal,
   MapTarget,
@@ -499,7 +502,7 @@ const layer = Layer.effect(
       const outline = yield* normalizeMapOutline("artifact", input.proposal.outline)
       const selections = yield* selectLocalArtifactOutline(outline, input.read.observation)
       const witnesses = new Map(Array.from(selections, ([id, selected]) => [id, selected.witness] as const))
-      const committed = new WeakMap<object, ArtifactTargetReceipt>()
+      const committed = new WeakMap<object, ExactArtifactTargetReceipt>()
       const times = new WeakMap<object, number>()
       const resolve = (tx: Transaction, time: number) => {
         const cached = committed.get(tx)
@@ -544,7 +547,7 @@ const layer = Layer.effect(
             relativePath: input.read.authorization.relativePath,
             descriptor: input.read.observation.descriptor,
             timeObserved: input.read.observation.timeObserved,
-          } satisfies ArtifactTargetReceipt
+          } satisfies ExactArtifactTargetReceipt
           committed.set(tx, receipt)
           return receipt
         })
@@ -665,7 +668,7 @@ const layer = Layer.effect(
         relativePath: input.read.authorization.relativePath,
         descriptor: input.read.observation.descriptor,
         timeObserved: input.read.observation.timeObserved,
-      } satisfies ArtifactTargetReceipt
+      } satisfies ExactArtifactTargetReceipt
       return new PreparedMapWrite(
         preparedMapWriteToken,
         input.mapID,
@@ -1388,7 +1391,7 @@ function publishMap(
     readonly time: number
     readonly advanceFrontier: boolean
   },
-  receipt: TargetReceipt,
+  receipt: ExactArtifactTargetReceipt | RepresentationTargetReceipt,
   witnesses: ReadonlyMap<SelectorID, MaterialSelector.Witness>,
 ) {
   return Effect.gen(function* () {
@@ -1607,7 +1610,7 @@ function receiptMatchesTarget(receipt: TargetReceipt, target: MapTarget) {
   )
 }
 
-function artifactTargetValues(mapID: MapID, receipt: ArtifactTargetReceipt) {
+function artifactTargetValues(mapID: MapID, receipt: ExactArtifactTargetReceipt) {
   const contentRoot = receipt.authorization.kind === "content_root" ? receipt.authorization : undefined
   const workspace = receipt.authorization.kind === "active_workspace" ? receipt.authorization : undefined
   const operation = receipt.authorization.kind === "one_operation" ? receipt.authorization : undefined
@@ -1629,6 +1632,7 @@ function artifactTargetValues(mapID: MapID, receipt: ArtifactTargetReceipt) {
     byte_length: receipt.fingerprint.byteLength,
     media_type: receipt.mediaType,
     authority_kind: receipt.authorization.kind,
+    root_object_descriptor_state: "exact_v1",
     content_root_id: contentRoot?.contentRoot.contentRootID,
     content_root_binding_id: contentRoot?.contentRoot.bindingID,
     content_root_binding_episode_id: contentRoot?.contentRoot.bindingEpisodeID,
@@ -1704,6 +1708,9 @@ function selectorValues(
 }
 
 function sourceRootDescriptor(row: typeof MaterialMapArtifactTargetTable.$inferSelect) {
+  if (row.root_object_descriptor_state !== "exact_v1") {
+    throw new Error("Historical partial ContentRoot descriptors cannot be read as exact descriptors")
+  }
   return {
     platform: row.root_object_platform!,
     verifierVersion: row.root_object_verifier_version!,
@@ -1716,6 +1723,25 @@ function sourceRootDescriptor(row: typeof MaterialMapArtifactTargetTable.$inferS
     lastWriteTime: row.root_object_last_write_time!,
     size: row.root_object_size!,
     kind: "directory" as const,
+  }
+}
+
+function historicalSourceRootDescriptor(row: typeof MaterialMapArtifactTargetTable.$inferSelect) {
+  return {
+    schemaVersion: 1 as const,
+    completeness: "historical_v16_partial" as const,
+    known: {
+      platform: row.root_object_platform!,
+      verifierVersion: row.root_object_verifier_version!,
+      canonicalPath: row.root_object_canonical_path!,
+      canonicalPathKey: row.root_object_canonical_path_key!,
+      volumeSerial: row.root_object_volume_serial!,
+      objectID: row.root_object_id!,
+      creationTime: row.root_object_creation_time!,
+      changeTime: row.root_object_change_time!,
+      kind: "directory" as const,
+    },
+    unknown: ["lastWriteTime", "size"] as const,
   }
 }
 
@@ -1889,6 +1915,55 @@ function requireArtifactTarget(source: Queryable, mapID: MapID) {
     if (!row) {
       return yield* new InvalidTransitionError({ detail: `Artifact target receipt is missing for Map ${mapID}` })
     }
+    const authorization: ArtifactTargetReceipt["authorization"] =
+      row.authority_kind === "content_root"
+        ? row.root_object_descriptor_state === "historical_v16_partial"
+          ? {
+              kind: "content_root_historical_v16",
+              root: historicalSourceRootDescriptor(row),
+              relativePath: row.normalized_relative_path,
+              canonicalPath: row.source_object_canonical_path,
+              contentRoot: {
+                contentRootID: row.content_root_id!,
+                bindingID: row.content_root_binding_id!,
+                bindingEpisodeID: row.content_root_binding_episode_id!,
+                bindingEpisodeOrdinal: row.content_root_binding_episode_ordinal!,
+                grantEpisodeID: row.content_root_grant_episode_id!,
+                grantVersion: row.content_root_grant_version!,
+              },
+              grantEpisodeOrdinal: row.content_root_grant_episode_ordinal!,
+            }
+          : {
+              kind: "content_root",
+              root: sourceRootDescriptor(row),
+              relativePath: row.normalized_relative_path,
+              canonicalPath: row.source_object_canonical_path,
+              contentRoot: {
+                contentRootID: row.content_root_id!,
+                bindingID: row.content_root_binding_id!,
+                bindingEpisodeID: row.content_root_binding_episode_id!,
+                bindingEpisodeOrdinal: row.content_root_binding_episode_ordinal!,
+                grantEpisodeID: row.content_root_grant_episode_id!,
+                grantVersion: row.content_root_grant_version!,
+              },
+              grantEpisodeOrdinal: row.content_root_grant_episode_ordinal!,
+            }
+        : row.authority_kind === "active_workspace"
+          ? {
+              kind: "active_workspace",
+              root: sourceRootDescriptor(row),
+              relativePath: row.normalized_relative_path,
+              canonicalPath: row.source_object_canonical_path,
+              workspaceIdentity: row.workspace_identity!,
+            }
+          : {
+              kind: "one_operation",
+              root: sourceRootDescriptor(row),
+              relativePath: row.normalized_relative_path,
+              canonicalPath: row.source_object_canonical_path,
+              operationIdentity: row.operation_identity!,
+              approvalBasis: row.operation_approval_basis!,
+            }
     return {
       type: "artifact",
       effectiveArtifactID: row.artifact_id,
@@ -1910,39 +1985,7 @@ function requireArtifactTarget(source: Queryable, mapID: MapID) {
         byteLength: row.byte_length,
       },
       mediaType: row.media_type,
-      authorization:
-        row.authority_kind === "content_root"
-          ? {
-              kind: "content_root",
-              root: sourceRootDescriptor(row),
-              relativePath: row.normalized_relative_path,
-              canonicalPath: row.source_object_canonical_path,
-              contentRoot: {
-                contentRootID: row.content_root_id!,
-                bindingID: row.content_root_binding_id!,
-                bindingEpisodeID: row.content_root_binding_episode_id!,
-                bindingEpisodeOrdinal: row.content_root_binding_episode_ordinal!,
-                grantEpisodeID: row.content_root_grant_episode_id!,
-                grantVersion: row.content_root_grant_version!,
-              },
-              grantEpisodeOrdinal: row.content_root_grant_episode_ordinal!,
-            }
-          : row.authority_kind === "active_workspace"
-            ? {
-                kind: "active_workspace",
-                root: sourceRootDescriptor(row),
-                relativePath: row.normalized_relative_path,
-                canonicalPath: row.source_object_canonical_path,
-                workspaceIdentity: row.workspace_identity!,
-              }
-            : {
-                kind: "one_operation",
-                root: sourceRootDescriptor(row),
-                relativePath: row.normalized_relative_path,
-                canonicalPath: row.source_object_canonical_path,
-                operationIdentity: row.operation_identity!,
-                approvalBasis: row.operation_approval_basis!,
-              },
+      authorization,
       relativePath: row.normalized_relative_path,
       descriptor: sourceDescriptor(row),
       timeObserved: row.source_observed_time,
