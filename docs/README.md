@@ -3,9 +3,12 @@
 Status: Gate 16 is closed at the Agent-native Goal boundary integrated at
 `2baba9eea`. The Gate 17 maintainer grill is closed: the 2026-08-02 decision
 omits `/learn` from the baseline, and the resulting natural-language bootstrap
-contract candidate received two accepted Gate 10 inheritance findings in fresh
-separate top-level contract/theory review. The repaired candidate now awaits
-closure by that original reviewer; its implementation remains unauthorized.
+contract received two accepted Gate 10 inheritance findings in fresh separate
+top-level contract/theory review. The original reviewer has now accepted exact
+contract commit `cf0cfbd0` with no remaining finding, so scoped Gate 17
+implementation authority is available. No Gate 17 implementation,
+implementation evidence, or integration is yet accepted; the next control
+point is the Gate 17 implementation/evidence candidate, not Gate 18.
 The accepted Agent-native Gate 14/16, retained OAuth, and Gate 8 corrections are
 integrated. The pre-Gate-17 audit remains falsifiable hazard provenance rather
 than the current control point or a permanent project-health verdict. The
@@ -25,9 +28,10 @@ Nix/release/translation machinery. Exact recovery, legal-attribution, retained
 contract-identifier, and verification boundaries are recorded in the
 [fork ledger](fork-ledger.md). That maintenance changed no Gate contract. The
 initial separate Gate 17 contract review returned F1/F2; those semantic
-findings are closed on repair commit `2d890df5`. The exact repaired candidate
-still awaits final closure by the original reviewer, so implementation remains
-unauthorized.
+findings are closed on repair commit `2d890df5`, and the original reviewer
+accepted the exact status-corrected contract at `cf0cfbd0`. That acceptance
+authorizes scoped implementation only; it accepts no implementation,
+implementation evidence, or integration.
 
 The Gate 14 default-Course query/admission and Gate 16 Goal query/write
 contracts have now been rederived as ordinary Agent tool paths. Gate 14 uses
@@ -82,7 +86,8 @@ accepted the mechanical V15-predecessor/V16-migration correction required by
 Gate 8. That exact correction is integrated at `93e2412d3`. The scoped Gate 16
 Agent-native implementation/evidence was then accepted by the original
 reviewer after closing `G16-AN-IMP-001..003` and is integrated at
-`2baba9eea`. Gate 16 is closed at that boundary. Gate 17 remains unauthorized.
+`2baba9eea`. Gate 16 is closed at that boundary. Gate 17's separate contract is
+accepted at `cf0cfbd0`; its implementation/evidence candidate remains open.
 
 On 2026-07-29, a follow-up product-flow audit reopened and reclosed one
 different bounded question: the future route could satisfy its existing traces
@@ -174,12 +179,14 @@ blocker after reproducing 19 focused passes / 58 assertions.
 `G12-RC-IE-001/002` are closed, the scoped implementation/evidence is accepted,
 and integration is fixed at `c5ea10b8a`.
 
-Gate 17 now has a repaired engineering contract candidate after the maintainer
+Gate 17 now has an accepted engineering contract after the maintainer
 omitted `/learn` from the baseline and the independent reviewer identified two
 accepted Gate 10 conflicts. The repair preserves Gate 10's complete local-read
 authority union and its ceiling of one new Artifact mutation per admitted model
-operation. The original reviewer has not closed those findings, and the
-candidate authorizes no implementation. On 2026-07-28,
+operation. The original reviewer closed those findings and accepted exact
+contract commit `cf0cfbd0` with no remaining finding. Scoped Gate 17
+implementation authority is therefore available, but no Gate 17 implementation,
+implementation evidence, or integration is yet accepted. On 2026-07-28,
 corrective implementation candidates for
 Gate 5 identity, build, and permission behavior; Gate 6/8 database and
 settlement ownership; and Gate 8/10/11/14/15/16 primary-TUI presentation were
@@ -197,10 +204,9 @@ OAuth, and Gate 8 durable message-diff correction are integrated at
 `29f5a140f`, `ff0ef1fd7`, `16b5589c1`, and `19d0fe933`. Gate 16's mechanical
 V15-predecessor/V16-migration correction is accepted and integrated at
 `93e2412d3`; its exact Agent-native implementation/evidence is accepted and
-integrated at `2baba9eea`. The next control point is fresh separate top-level
-reviewer closure of the exact repaired Gate 17 contract candidate. No Gate 17
-implementation authority is claimed, and the unaffected audit reconciliation
-is not reopened.
+integrated at `2baba9eea`. The next control point is the exact Gate 17
+implementation/evidence candidate, not Gate 18. The unaffected audit
+reconciliation is not reopened.
 Documentation reconciliation and inherited-material classification are
 current evidence, not proof against future counterexample. “Accepted” records
 a decision and its provenance; it is not a correctness axiom.
@@ -239,8 +245,8 @@ in the [inherited-material index](inherited/README.md).
 | 13. [Material Map and Course alignment](research/opencode-fork-gate-13-material-map-alignment-2026-07-19.md)               | Adds immutable revision-bound material outlines/selectors and optional neutral alignment to exact Course membership.                                                                          | Closed at the domain-authority boundary at implementation commit `5e762f833`. Hostile arbitrary-SQL evidence is reclassified and the cross-Gate trigger-migration correction is integrated at `9e91d43c6`; Gate 18 still must not use the observation-writing current-use resolver as a pure context read.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)            | Adds a learner-controlled default Course preference and independent exact per-Course route anchors.                                                                                           | **Agent-native implementation integrated at `ff0ef1fd7`.** Fresh reviewer `019fb27f-4416-7c42-bcad-97d473803750` accepted the contract binding `52909e932fa7602d1c29f30886ddd644592c5220711146cd1a641fb237614a67` and the final 30-tracked/seven-untracked implementation projection after closing `G14-STO-001-R2`. Current writes use bounded Course/navigation reads, an exact `set` or `clear` input, runtime-bound identity/version/locator, root/delegated Agent-issuance provenance, semantic-first V3 settlement, and configured capability policy; proposal production is retired while V1/V2 replay and route anchors remain exact. Core migration 39/352, runtime 45/791, and registry 28/102 pass. Gate 12 landed separately at `29f5a140f`; OAuth and Gate 8 were excluded. Historical V2/route integration `80fde2012` remains retained. |
 | 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)                      | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, correctable policy state.                                                                    | Closed again at corrective integration `9e91d43c6`. The shared presenter preserves committed create/replace/retract instruction, scope, normalized expiry/timezone, state/version, relation, and correction guidance across TUI, direct-run, replay, and later provider failure. Commit `03ea74ec4` remains historical provenance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)                          | Preserves learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning.                                               | **Closed at Agent-native implementation commit `2baba9eea`.** Original reviewer `019fb2a3-c902-7882-8134-1bf33f1eb04d` accepted the V15→V16 contract and exact implementation after closing `G16-AN-001..003` and `G16-AN-IMP-001..003`. Current behavior uses bounded Goal/Course reads, one typed semantic-intent write, runtime-owned identity/version/temporal facts, exact root/delegated Agent issuance, configured capability policy, semantic-first replay/recovery, historical V1 replay-only truth, and durable terminal presentation. Mixed changed/no-change settlement, retired-producer package reachability, and pre-epoch validation are causally covered. Gate 17 remains separate and unauthorized.                                                                                                                                  |
-| 17. [Natural-language learning bootstrap candidate](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md) | Candidate boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn.                                                        | **Maintainer grill closed; independent-review repair awaits original reviewer closure.** The baseline omits built-in `/learn` and uses the ordinary Agent as its sole open-language entry. The repaired candidate preserves Gate 10's exact local-read union (an approved ContentRoot, the active execution workspace, or an exact one-operation learner grant), binds exact root-object/path scope before Gate 9 preparation, and permits at most one new Artifact mutation per admitted model operation. It may still atomically compose one request-bound Course/View/Map/alignment/selection/anchor set around a bounded set of already admitted exact Artifact/Representation Revisions and that at-most-one new local target; additional potentially mutating new sources stage through fresh Gate 9 model operations. Default Course, Goal, steering, Session topology, queue/steer, macro continuation, detour/rejoin, and later product-loop behavior remain separately owned. Implementation is unauthorized until the original reviewer closes the findings and accepts the exact repair. |
+| 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)                          | Preserves learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning.                                               | **Closed at Agent-native implementation commit `2baba9eea`.** Original reviewer `019fb2a3-c902-7882-8134-1bf33f1eb04d` accepted the V15→V16 contract and exact implementation after closing `G16-AN-001..003` and `G16-AN-IMP-001..003`. Current behavior uses bounded Goal/Course reads, one typed semantic-intent write, runtime-owned identity/version/temporal facts, exact root/delegated Agent issuance, configured capability policy, semantic-first replay/recovery, historical V1 replay-only truth, and durable terminal presentation. Mixed changed/no-change settlement, retired-producer package reachability, and pre-epoch validation are causally covered. Gate 17 remains a separate contract and implementation/evidence boundary.                                                                                                                          |
+| 17. [Natural-language learning bootstrap](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)           | Accepted contract boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn.                                                | **Contract accepted at `cf0cfbd0`; scoped implementation authority is available.** The baseline omits built-in `/learn` and uses the ordinary Agent as its sole open-language entry. The accepted contract preserves Gate 10's exact local-read union (an approved ContentRoot, the active execution workspace, or an exact one-operation learner grant), binds exact root-object/path scope before Gate 9 preparation, and permits at most one new Artifact mutation per admitted model operation. It may still atomically compose one request-bound Course/View/Map/alignment/selection/anchor set around a bounded set of already admitted exact Artifact/Representation Revisions and that at-most-one new local target; additional potentially mutating new sources stage through fresh Gate 9 model operations. Default Course, Goal, steering, Session topology, queue/steer, macro continuation, detour/rejoin, and later product-loop behavior remain separately owned. No Gate 17 implementation, implementation evidence, or integration is yet accepted; the next control point is the Gate 17 implementation/evidence candidate, not Gate 18. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,
@@ -270,7 +276,7 @@ reopen chains, and evidence qualifications live in the
 - [Gate 14 learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)
 - [Gate 15 retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)
 - [Gate 16 learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)
-- [Gate 17 natural-language learning bootstrap draft](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)
+- [Gate 17 natural-language learning bootstrap contract](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

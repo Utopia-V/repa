@@ -2393,7 +2393,7 @@ predate this maintenance commit, and directly affected package typechecks pass.
 This cleanup changes no accepted Gate contract or product loop. Gate 17 remains
 unbegun and implementation remains unauthorized.
 
-## 2026-08-02 Gate 17 maintainer decision and contract candidate
+## 2026-08-02 Gate 17 maintainer decision and contract acceptance
 
 The maintainer closed Gate 17's only remaining product choice: the baseline
 omits built-in `/learn` and uses the ordinary interactive Agent as its sole
@@ -2417,31 +2417,42 @@ root-object/path preparation, and one admitted model operation may commit at
 most one new Artifact mutation. Default Course, Goal, steering, Session/macro
 activity, Context, and later product-loop behavior remain separately owned.
 
-Fresh independent review of exact candidate
-`2c2b1be0cb37d6196efe9c9e63313a47214f6263` returned two accepted conflicts.
-F1 found that the candidate had narrowed Gate 10 local-read authority to an
-approved ContentRoot instead of preserving the complete accepted union. F2
-found that a bounded local material set could admit multiple potentially
+Fresh independent reviewer Dispatch `ctx_c8328a7778c0` reviewed exact candidate
+`2c2b1be0cb37d6196efe9c9e63313a47214f6263` and returned two accepted
+conflicts. F1 found that the candidate had narrowed Gate 10 local-read authority
+to an approved ContentRoot instead of preserving the complete accepted union.
+F2 found that a bounded local material set could admit multiple potentially
 mutating new Artifact targets in one provider-visible operation despite Gate
-10's one-new-Artifact ceiling. The repaired candidate restores the full exact
-union, limits a bootstrap to one potentially mutating new local target, and
-requires additional new sources to settle through fresh admitted Gate 9 model
-operations before a later bootstrap references their exact Artifact Revisions
-or separately accepted Gate 11 Representation Revisions. Its
+10's one-new-Artifact ceiling. Semantic repair commit
+`2d890df54a342590d36172c80c8aab1e56da85e3` restores the full exact union,
+limits a bootstrap to one potentially mutating new local target, and requires
+additional new sources to settle through fresh admitted Gate 9 model operations
+before a later bootstrap references their exact Artifact Revisions or
+separately accepted Gate 11 Representation Revisions. Its
 Course/View/Map/alignment/selection/anchor atomicity and every separate owner
-boundary remain unchanged. The original reviewer has not yet closed F1 or F2.
+boundary remain unchanged.
 
-The candidate reconciles the status owner, Roadmap 09, Gate 17 record, and the
-current-disposition projection in the pre-Gate-17 audit. Historical audit and
-decision statements remain provenance for the state that existed when they
-were written. No production source, schema, migration, package test, provider
-run, staging area, or integration branch changed.
+Original-reviewer closure Dispatch `ctx_b5ec7c6d7169` confirmed F1/F2 were
+semantically repaired but required the current status projections to stop
+claiming that the candidate had not entered review. Status repair commit
+`cf0cfbd032273cf7360fe7747ef0809abda6181f` corrected `docs/README.md` and the
+Gate 17 record without changing a contract clause. The same original reviewer
+then returned final exact-binding `Accept` in Dispatch `ctx_475d85cda99f`,
+explicitly accepting contract commit
+`cf0cfbd032273cf7360fe7747ef0809abda6181f` with no remaining finding.
 
-This derivation and repair are not implementation authority. The original fresh
-separate top-level reviewer must bind the exact repaired Git candidate, may
-reject any engineering derivation, and must close all findings before
-implementation begins. Same-context preflight or clean documentation checks do
-not satisfy that review.
+The accepted contract reconciles the status owner, Gate 17 record, and only the
+stale current-disposition projections in the pre-Gate-17 audit. Roadmap 09's
+stable topology and evidence boundary already agree and remain unchanged.
+Historical audit and decision statements remain provenance for the state that
+existed when they were written. No production source, schema, migration,
+package test, provider run, staging area, or integration branch changed.
+
+Scoped Gate 17 implementation authority is available only against exact
+contract commit `cf0cfbd032273cf7360fe7747ef0809abda6181f`. No Gate 17
+implementation, implementation evidence, or integration is yet accepted. The
+next control point is the exact Gate 17 implementation/evidence candidate, not
+Gate 18.
 
 ## Historical evidence locators
 

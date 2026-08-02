@@ -1,22 +1,29 @@
 # Repa Gate 17: natural-language learning bootstrap
 
-Status: Contract candidate derived on 2026-08-02 after the maintainer closed
-the remaining product choice by omitting `/learn` from the Gate 17 baseline.
+Status: Engineering contract accepted on 2026-08-02. Original fresh separate
+top-level reviewer Dispatch `ctx_475d85cda99f` accepted exact Git commit
+`cf0cfbd032273cf7360fe7747ef0809abda6181f` with no remaining finding, so
+scoped Gate 17 implementation authority is available. No Gate 17
+implementation, implementation evidence, or integration is yet accepted; the
+next control point is the Gate 17 implementation/evidence candidate, not Gate
+18. The maintainer's baseline decision continues to omit built-in `/learn`.
 Gate 14's Agent-native default-Course implementation is integrated at
 `ff0ef1fd7`, and Gate 16's Agent-native Goal implementation is integrated at
 `2baba9eea`. The ordinary interactive Agent is the sole baseline
 open-language bootstrap entry.
 
 Initial fresh separate top-level contract/theory review returned F1/F2. Those
-semantic findings are closed on repair commit `2d890df5`, but the exact
-repaired candidate still awaits final closure by the original reviewer and is
-not implementation authority. It derives only the missing durable
+semantic findings are closed on repair commit `2d890df5`; first closure by the
+original reviewer required the review status to be made truthful, and status
+repair commit `cf0cfbd0` supplied that correction without changing the
+contract semantics. Final closure accepted that exact commit. The contract
+derives only the missing durable
 Course/View/material composition reached through the ordinary Agent, not
 another natural-language subsystem. Downstream Gate 21A retains
 representative move-selection and failure-re-entry evidence while beginning
 with the ordinary Agent rather than a preselected mechanism comparison.
 
-Date: 2026-07-22; current candidate derived 2026-08-02
+Date: 2026-07-22; accepted contract derived 2026-08-02
 
 Authority:
 [product origin](../foundation/00-product-origin.md),
@@ -196,18 +203,19 @@ uses that expansion as authority nor adds a trusted slash-envelope field to the
 contain unrelated configured, skill, or MCP names; no spelling can bypass the
 ordinary Agent, capability, owner-state, and settlement boundaries below.
 
-## Current Gate 17 contract candidate
+## Accepted Gate 17 contract
 
-This section is the complete current candidate derived after the maintainer
+This section is the complete accepted contract derived after the maintainer
 grill. `G17-BS-001` above is an accepted maintainer decision. The remaining
 `G17-BS-*` clauses are engineering derivations from current product,
 architecture, and predecessor authority. Fresh separate top-level review
 returned two accepted Gate 10 conflicts: the candidate had narrowed local-read
 authority to ContentRoot and allowed more than one potentially mutating new
-local Artifact target in one admitted model operation. This repair awaits
-closure by that original reviewer. Until the reviewer accepts the exact
-repaired candidate and closes every finding, no production implementation,
-migration, evidence run, or integration is authorized.
+local Artifact target in one admitted model operation. The repaired,
+status-corrected contract is accepted at exact Git commit
+`cf0cfbd032273cf7360fe7747ef0809abda6181f`. Scoped implementation may proceed
+against that binding; no implementation, migration, implementation evidence,
+or integration is accepted by this contract review.
 
 ### Contract checksum
 
@@ -779,18 +787,25 @@ representative language situations. They do not prove exhaustive language
 coverage, objective interpretation, educational efficacy, or the later
 integrated product loop.
 
-## Independent contract-review handoff
+## Independent contract-review closure
 
-The original fresh separate top-level reviewer must receive the current
-product/architecture authority, this exact repaired candidate, the accepted F1
-and F2 Gate 10 corrections, the 2026-08-02 `/learn` omission, and the
-predecessor Gate contracts. Only that reviewer may close the findings. The
-reviewer may still reject the one-bundle composition, closed operation set,
-settlement identity, owner dependency direction, material-adoption
-interpretation, anchor behavior, or evidence boundary.
+Initial fresh separate top-level reviewer Dispatch `ctx_c8328a7778c0` reviewed
+exact candidate `2c2b1be0cb37d6196efe9c9e63313a47214f6263` and returned F1/F2.
+F1 identified the narrowed Gate 10 local-read authority; F2 identified the
+breach of Gate 10's one-new-Artifact-mutation ceiling. Semantic repair commit
+`2d890df54a342590d36172c80c8aab1e56da85e3` restored the full exact local-read
+union and limited each admitted model operation to at most one new Artifact
+mutation without changing the accepted composition or owner boundaries.
 
-The executor repairs valid findings in this contract context; the original
-reviewer closes them against an exact Git binding. Same-context preflight,
-executor completion, a child-agent opinion, or clean documentation checks do
-not satisfy that obligation. Gate 17 implementation remains forbidden until
-the original reviewer returns exact acceptance.
+Original-reviewer closure Dispatch `ctx_b5ec7c6d7169` confirmed the semantic
+repair but required the current review status to stop claiming that the
+candidate had not entered review. Status repair commit
+`cf0cfbd032273cf7360fe7747ef0809abda6181f` made that provenance truthful
+without changing any contract clause. The same original reviewer then returned
+final exact-binding `Accept` in Dispatch `ctx_475d85cda99f`, explicitly
+accepting `cf0cfbd032273cf7360fe7747ef0809abda6181f` with no remaining finding.
+
+That exact acceptance makes scoped Gate 17 implementation authority available.
+It accepts no Gate 17 implementation, implementation evidence, or integration.
+The next control point is an exact Gate 17 implementation/evidence candidate,
+not Gate 18.

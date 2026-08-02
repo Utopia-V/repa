@@ -7,9 +7,12 @@ at `16b5589c1`, and Gate 8's immutable message-diff correction is fixed at
 `19d0fe933`. Gate 17 is no longer paused by those corrections; its 2026-08-02
 maintainer grill is closed, built-in `/learn` is omitted, and the derived
 contract candidate received two accepted Gate 10 inheritance findings in fresh
-separate top-level review. The repaired candidate awaits closure by the
-original reviewer, and its implementation remains unauthorized. This document
-remains falsifiable hazard and correction provenance rather than the current
+separate top-level review. The original reviewer accepted exact contract commit
+`cf0cfbd0` with no remaining finding, so scoped Gate 17 implementation
+authority is available. No Gate 17 implementation, implementation evidence, or
+integration is yet accepted; the next control point is the Gate 17
+implementation/evidence candidate, not Gate 18. This document remains
+falsifiable hazard and correction provenance rather than the current
 disposition owner or a permanent project-health verdict. The 2026-07-28 close
 remains valid for authority
 reconstruction, inherited-pollution, working-tree classification, and the
@@ -74,9 +77,10 @@ repairs. Gate 12's correction and the structural/TUI/settlement portions of
 Gate 14 and Gate 16 remain retained. Their later Agent-native implementations
 are integrated at `ff0ef1fd7` and `2baba9eea`. Gate 17's maintainer grill and
 contract derivation are complete; the independent reviewer returned two
-accepted Gate 10 conflicts, the repaired candidate awaits that original
-reviewer's closure, and implementation remains unauthorized rather than
-blocked by either predecessor. This record
+accepted Gate 10 conflicts and then accepted their exact repaired contract at
+`cf0cfbd0` with no remaining finding. Scoped implementation authority is
+available, but no implementation, implementation evidence, or integration is
+accepted. This record
 owns audit method, findings, and repair disposition; it does not replace
 product foundations, revise an ADR by itself, or make a Gate contract
 authoritative.
@@ -1077,12 +1081,13 @@ Consequences:
   causal failure survives repair of that simpler boundary.
 
 Gate 14 and Gate 16's reviewed Agent-native implementations are integrated.
-Gate 17 has a repaired contract candidate awaiting closure of two accepted Gate
-10 findings by the original separate top-level reviewer, and implementation
-remains unauthorized. This correction does not reopen deterministic arithmetic,
-storage identity, transaction, permission, or failure invariants merely because
-they are program-owned; only the forward migrations required to retire the
-false current write shapes are reopened.
+Gate 17's original separate top-level reviewer accepted exact contract commit
+`cf0cfbd0` after closure of the two Gate 10 findings. Scoped implementation
+authority is available, while no implementation, implementation evidence, or
+integration is accepted. This correction does not reopen deterministic
+arithmetic, storage identity, transaction, permission, or failure invariants
+merely because they are program-owned; only the forward migrations required to
+retire the false current write shapes are reopened.
 
 ### `P17-F20`: the audit silently deleted retained provider authentication
 
@@ -1319,8 +1324,8 @@ still blocks any future release-readiness claim until separately disposed.
   also preserves Gate 10's full local-read authority union (an approved
   ContentRoot, the active execution workspace, or an exact one-operation
   learner grant) and the limit of at most one new Artifact mutation per
-  admitted model operation; the original reviewer still owns closure of those
-  two findings.
+  admitted model operation; the original reviewer accepted exact contract
+  commit `cf0cfbd0` after closing both findings.
 - Tracked `.opencode` control trees no longer create an executable external
   OpenCode authority inside the Repa workspace. Explicitly useful fixtures and
   source-maintenance data have owners outside auto-discovery paths.
