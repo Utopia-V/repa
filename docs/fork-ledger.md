@@ -2393,6 +2393,39 @@ predate this maintenance commit, and directly affected package typechecks pass.
 This cleanup changes no accepted Gate contract or product loop. Gate 17 remains
 unbegun and implementation remains unauthorized.
 
+## 2026-08-02 Gate 17 maintainer decision and contract candidate
+
+The maintainer closed Gate 17's only remaining product choice: the baseline
+omits built-in `/learn` and uses the ordinary interactive Agent as its sole
+open-language bootstrap entry. This decision does not permanently prohibit a
+future shortcut; one would require new evidence and a separately accepted
+boundary. A configured, plugin, skill, or MCP command spelling supplies no
+bootstrap authority merely by expanding to prompt text.
+
+Against clean base
+`d104789dfd601e55ef1f5d281b4349670f5c3c93`, the executor derived the
+`G17-BS-001..008` contract candidate. It defines bounded zero-write owner
+reads, one request-bound closed Course/View/material bootstrap set,
+semantic-first Gate 8 replay/conflict and capability settlement, atomic local
+composition only for jointly knowable and authorizable consequences, truthful
+staging for external or result-dependent work, explicit exact material
+adoption, optional working-selection/route-anchor consequences, durable typed
+receipts, recovery, and same-Turn teaching. Default Course, Goal, steering,
+Session/macro activity, Context, and later product-loop behavior remain
+separately owned.
+
+The candidate reconciles the status owner, Roadmap 09, Gate 17 record, and the
+current-disposition projection in the pre-Gate-17 audit. Historical audit and
+decision statements remain provenance for the state that existed when they
+were written. No production source, schema, migration, package test, provider
+run, staging area, or integration branch changed.
+
+This derivation is not implementation authority. A fresh separate top-level
+reviewer must bind the exact Git candidate, may reject any engineering
+derivation, and must close all findings before implementation begins.
+Same-context preflight or clean documentation checks do not satisfy that
+review.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

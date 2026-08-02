@@ -4,9 +4,11 @@ Status: Current corrections through `P17-F20` are closed and integrated. Gate
 14's Agent-native implementation is fixed at `ff0ef1fd7`, Gate 16's
 Agent-native implementation is fixed at `2baba9eea`, retained OAuth is restored
 at `16b5589c1`, and Gate 8's immutable message-diff correction is fixed at
-`19d0fe933`. Gate 17 is no longer paused by those corrections; its maintainer
-grill has not begun and its implementation remains unauthorized. This document
-remains falsifiable hazard and correction provenance rather than the current
+`19d0fe933`. Gate 17 is no longer paused by those corrections; its 2026-08-02
+maintainer grill is closed, built-in `/learn` is omitted, and the derived
+contract candidate awaits fresh separate top-level review. Its implementation
+remains unauthorized. This document remains falsifiable hazard and correction
+provenance rather than the current
 disposition owner or a permanent project-health verdict. The 2026-07-28 close
 remains valid for authority
 reconstruction, inherited-pollution, working-tree classification, and the
@@ -69,9 +71,10 @@ The accepted corrective snapshot
 `9e91d43c629b66d65c8741e342bca7cf05de5667` remains valid for its bounded
 repairs. Gate 12's correction and the structural/TUI/settlement portions of
 Gate 14 and Gate 16 remain retained. Their later Agent-native implementations
-are integrated at `ff0ef1fd7` and `2baba9eea`. Gate 17's maintainer grill,
-contract derivation, and implementation remain unbegun and unauthorized rather
-than blocked by either predecessor. This record
+are integrated at `ff0ef1fd7` and `2baba9eea`. Gate 17's maintainer grill and
+contract derivation are complete; fresh separate top-level contract/theory
+review is pending, and implementation remains unauthorized rather than blocked
+by either predecessor. This record
 owns audit method, findings, and repair disposition; it does not replace
 product foundations, revise an ADR by itself, or make a Gate contract
 authoritative.
@@ -1055,24 +1058,26 @@ Consequences:
   reviewer `019fb27f-4416-7c42-bcad-97d473803750` closed `G14-AN-001..003` and
   accepted the exact repaired contract. Its implementation/evidence is accepted
   and integrated at `ff0ef1fd7`.
-- Gate 16's current candidate now supplies bounded Goal/Course reads and one
-  semantic-intent patch command whose complete revision is materialized by the
-  Goal owner. Historical Goal identity/revision/lifecycle work and the accepted
-  durable TUI result remain retained. Its Gate 14 `agent_action`/V14 dependency
-  is integrated. Gate 16's fresh review closed `G16-AN-001..003`; scoped
-  implementation is authorized but has not begun.
+- Gate 16 supplies bounded Goal/Course reads and one semantic-intent patch
+  command whose complete revision is materialized by the Goal owner. Historical
+  Goal identity/revision/lifecycle work and the accepted durable TUI result
+  remain retained. Its Gate 14 `agent_action`/V14 dependency is integrated.
+  Gate 16's fresh review closed `G16-AN-001..003`, and its implementation and
+  evidence are accepted and integrated at `2baba9eea`.
 - Gate 17 owns durable Course/View/material bootstrap effects through the
-  ordinary Agent, not another language interpreter. `/learn` is optional
-  discoverability only.
+  ordinary Agent, not another language interpreter. The 2026-08-02 maintainer
+  decision omitted built-in `/learn` from the baseline without permanently
+  prohibiting a future evidence-earned shortcut.
 - Gate 18 distinguishes automatic context projection from lazy model-visible
   owner reads.
 - Gate 21A retains representative low-management product-flow evidence but
   tests the ordinary Agent first. Another controller is considered only after a
   causal failure survives repair of that simpler boundary.
 
-Gate 14's reviewed semantic-path implementation is integrated and Gate 16 has
-scoped implementation authority after its fresh review. Gate 17 implementation
-remains unauthorized. This correction does not reopen deterministic arithmetic, storage
+Gate 14 and Gate 16's reviewed Agent-native implementations are integrated.
+Gate 17 has a derived contract candidate awaiting fresh separate top-level
+review, and implementation remains unauthorized. This correction does not
+reopen deterministic arithmetic, storage
 identity, transaction, permission, or failure invariants merely because they
 are program-owned; only the forward migrations required to retire the false
 current write shapes are reopened.
