@@ -23,8 +23,10 @@ manual, localized README/statistics corpus, Web documentation package,
 inactive upstream workflow bundle, preview-v2 prose corpus, or retired
 Nix/release/translation machinery. Exact recovery, legal-attribution, retained
 contract-identifier, and verification boundaries are recorded in the
-[fork ledger](fork-ledger.md). That maintenance changed no Gate contract. Gate
-17 has since reached an unreviewed contract candidate; implementation remains
+[fork ledger](fork-ledger.md). That maintenance changed no Gate contract. The
+initial separate Gate 17 contract review returned F1/F2; those semantic
+findings are closed on repair commit `2d890df5`. The exact repaired candidate
+still awaits final closure by the original reviewer, so implementation remains
 unauthorized.
 
 The Gate 14 default-Course query/admission and Gate 16 Goal query/write

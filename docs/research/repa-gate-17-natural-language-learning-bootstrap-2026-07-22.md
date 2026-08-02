@@ -7,8 +7,10 @@ Gate 14's Agent-native default-Course implementation is integrated at
 `2baba9eea`. The ordinary interactive Agent is the sole baseline
 open-language bootstrap entry.
 
-This candidate has not entered fresh separate top-level contract/theory review
-and is not implementation authority. It derives only the missing durable
+Initial fresh separate top-level contract/theory review returned F1/F2. Those
+semantic findings are closed on repair commit `2d890df5`, but the exact
+repaired candidate still awaits final closure by the original reviewer and is
+not implementation authority. It derives only the missing durable
 Course/View/material composition reached through the ordinary Agent, not
 another natural-language subsystem. Downstream Gate 21A retains
 representative move-selection and failure-re-entry evidence while beginning
