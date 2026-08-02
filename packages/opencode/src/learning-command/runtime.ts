@@ -1,11 +1,15 @@
+import { Artifact } from "@opencode-ai/core/artifact"
+import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
+import { MaterialMap } from "@opencode-ai/core/material-map"
 import {
   SET_DEFAULT_COURSE_PREFERENCE_V2_VERSION,
   SET_DEFAULT_COURSE_PREFERENCE_V3_VERSION,
@@ -39,6 +43,7 @@ import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import { InstanceRef } from "@/effect/instance-ref"
 import { Permission } from "@/permission"
 import { eq } from "drizzle-orm"
 import { Cause, Context, Deferred, Effect, Exit, Layer, Schema } from "effect"
@@ -56,6 +61,7 @@ import {
   normalizeDefaultV3,
   normalizeGoalsV2,
   normalizeLegacyGoals,
+  normalizeLearningBootstrap,
   normalizeSteering,
   retainedSteeringCommand,
   type AcceptCourseViewRevisionInput,
@@ -65,6 +71,7 @@ import {
   type SetDefaultCoursePreferenceV3Input,
   type LegacyUpdateLearnerGoalsInput,
   type UpdateLearnerGoalsInput,
+  type UpdateLearningCourseInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
 import { LearningCommandPermission } from "./permission"
@@ -108,6 +115,7 @@ export type PrimaryCapability =
   | typeof LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY
   | typeof LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
+  | typeof LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
 
 type Canonical =
   | Readonly<{
@@ -207,6 +215,21 @@ type GoalV2ExecutionPreparation =
   | Readonly<{ type: "candidate"; candidate: LearnerGoal.CandidateV2 }>
   | Readonly<{ type: "settled"; exact: ExactResult }>
 
+type BootstrapCanonical = Readonly<{
+  toolID: typeof LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
+  input: UpdateLearningCourseInput
+}>
+
+type BootstrapActive = Readonly<{
+  canonical: BootstrapCanonical
+  registration: Registration
+  deferred: Deferred.Deferred<ExactResult, unknown>
+}>
+
+type BootstrapExecutionPreparation =
+  | Readonly<{ type: "candidate"; candidate: LearningBootstrap.Candidate }>
+  | Readonly<{ type: "settled"; exact: ExactResult }>
+
 export interface Interface {
   readonly prepare: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly execute: (input: unknown, context: ExecuteContext) => Effect.Effect<ExactResult, unknown>
@@ -232,10 +255,16 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const events = yield* EventV2Bridge.Service
     const permission = yield* Permission.Service
+    const database = yield* Database.Service
+    const courses = yield* Course.Service
+    const artifacts = yield* Artifact.Service
+    const contentRoots = yield* ContentRoot.Service
+    const maps = yield* MaterialMap.Service
     const inflight = new Map<SessionV1.PartID, Active>()
     const defaultV2Inflight = new Map<SessionV1.PartID, DefaultV2Active>()
     const defaultV3Inflight = new Map<SessionV1.PartID, DefaultV3Active>()
     const goalV2Inflight = new Map<SessionV1.PartID, GoalV2Active>()
+    const bootstrapInflight = new Map<SessionV1.PartID, BootstrapActive>()
 
     yield* recoverAdmitted(events)
 
@@ -249,6 +278,9 @@ const layer = Layer.effect(
       }
       if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
         return yield* prepareLearnerGoalsV2(events, modelInput, registration)
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
+        return yield* prepareLearningBootstrap(events, modelInput, registration)
       }
       const canonical = canonicalInput(toolID, modelInput)
       const transaction = events.transaction((tx) =>
@@ -325,6 +357,16 @@ const layer = Layer.effect(
       }
       if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) {
         return yield* executeLearnerGoalsV2(events, permission, goalV2Inflight, modelInput, context)
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
+        return yield* executeLearningBootstrap(
+          events,
+          permission,
+          bootstrapInflight,
+          { database, courses, artifacts, contentRoots, maps },
+          modelInput,
+          context,
+        )
       }
       const registration = requireRegistration(context)
       const canonical = canonicalInput(toolID, modelInput)
@@ -904,6 +946,598 @@ function learnerGoalV2TerminalPart(
     throw new Error(`Constructed terminal learner Goal V2 Part ${registration.partID} is invalid`)
   }
   return part
+}
+
+type BootstrapRuntimeOwners = Readonly<{
+  database: Database.Interface
+  courses: Course.Interface
+  artifacts: Artifact.Interface
+  contentRoots: ContentRoot.Interface
+  maps: MaterialMap.Interface
+}>
+
+function prepareLearningBootstrap(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const canonical = {
+          toolID: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+          input: normalizeLearningBootstrap(modelInput),
+        } satisfies BootstrapCanonical
+        const existing = yield* readLearningBootstrapState(tx, registration)
+        if (existing) {
+          const state = yield* requireLearningBootstrapState(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state)
+          }
+          return noEvent(undefined)
+        }
+
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const row = yield* readPartRow(tx, registration.partID)
+        if (!row) {
+          return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+        }
+        const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+          turnID: registration.turnID,
+          inputID: registration.inputID,
+          causalOccurrenceID: registration.causalOccurrenceID,
+          partID: registration.partID,
+          callID: registration.callID,
+          emissionOrdinal: registration.emissionOrdinal,
+          sessionID: registration.sessionID,
+          assistantMessageID: registration.assistantMessageID,
+          capabilityIdentity: canonical.toolID,
+        })
+        const timeAdmitted = Math.max(
+          row.time_created,
+          trusted.modelTimeAdmitted,
+          trusted.candidateTimeRegistered,
+          trusted.toolTimeAdmitted,
+        )
+        yield* assertLearningBootstrapAdmittedPart(tx, canonical, registration)
+        const reserved = yield* LearningBootstrap.reserve(tx, {
+          envelope: learningBootstrapEnvelope(registration, timeAdmitted),
+          command: canonical.input,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, timeAdmitted),
+        })
+        if (reserved.type === "admitted") return noEvent(undefined)
+        if (reserved.type === "replay") {
+          return yield* Effect.die("New learning-bootstrap admission unexpectedly replayed")
+        }
+        const state = yield* requireLearningBootstrapState(tx, canonical, registration)
+        const part = learningBootstrapTerminalPart(canonical, registration, state)
+        return withPartEvent(undefined, part, requirePhysicalSettlement(state.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function executeLearningBootstrap(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  inflight: Map<SessionV1.PartID, BootstrapActive>,
+  owners: BootstrapRuntimeOwners,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      input: normalizeLearningBootstrap(modelInput),
+    } satisfies BootstrapCanonical
+    const active = inflight.get(registration.partID)
+    if (active) {
+      if (!isDeepStrictEqual(active.registration, registration) || !isDeepStrictEqual(active.canonical, canonical)) {
+        return yield* invocationConflict(registration)
+      }
+      return yield* Deferred.await(active.deferred)
+    }
+
+    const deferred = Deferred.makeUnsafe<ExactResult, unknown>()
+    const token = { canonical, registration, deferred } satisfies BootstrapActive
+    inflight.set(registration.partID, token)
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const exit = yield* restore(
+          executeLearningBootstrapOnce(events, permission, canonical, registration, owners, context),
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(exit)) {
+          const reconciled = yield* loadCommittedLearningBootstrapResult(events, canonical, registration).pipe(
+            Effect.exit,
+          )
+          if (Exit.isSuccess(reconciled) && reconciled.value) {
+            yield* Deferred.succeed(deferred, reconciled.value).pipe(Effect.ignore)
+            if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+            return reconciled.value
+          }
+          const cause = Exit.isFailure(reconciled) ? reconciled.cause : exit.cause
+          yield* Deferred.failCause(deferred, cause).pipe(Effect.ignore)
+          if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+          return yield* Effect.failCause(cause)
+        }
+        yield* Deferred.succeed(deferred, exit.value).pipe(Effect.ignore)
+        if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+        return exit.value
+      }),
+    )
+  })
+}
+
+function executeLearningBootstrapOnce(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: BootstrapCanonical,
+  registration: Registration,
+  owners: BootstrapRuntimeOwners,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* events.transaction<BootstrapExecutionPreparation, typeof SessionV1.Event.PartUpdated>(
+      (tx) =>
+        Effect.gen(function* () {
+          const state = yield* requireLearningBootstrapState(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            return noEvent({
+              type: "settled" as const,
+              exact: exactFromPart(yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state)),
+            })
+          }
+          if (state.disposition !== "candidate_v1" || !state.candidate) {
+            return yield* Effect.die("Admitted learning-bootstrap invocation is not a complete candidate")
+          }
+          return noEvent({ type: "candidate" as const, candidate: state.candidate })
+        }).pipe(Effect.orDie),
+    )
+    if (prepared.result.type === "settled") return prepared.result.exact
+
+    const authority = requirePermissionContext(context)
+    const candidate = prepared.result.candidate
+    const scope = LearningCommandPresentation.learningBootstrapScope(candidate)
+    const presentation = LearningCommandPresentation.learningBootstrapCapability(candidate, {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    })
+    const shownScope = {
+      patterns: [LearningBootstrap.PERMISSION_PATTERN],
+      agentAction: candidate.agentAction,
+      scope,
+      semanticPresentation: presentation,
+    }
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        sessionID: registration.sessionID,
+        permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        patterns: [LearningBootstrap.PERMISSION_PATTERN],
+        always: [LearningBootstrap.PERMISSION_PATTERN],
+        requirePrompt: learningBootstrapOneOperationPath(candidate) !== undefined,
+        metadata: {
+          bootstrapKind: "learning_bootstrap",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: candidate.agentAction.kind,
+          scope,
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: { messageID: registration.assistantMessageID, callID: registration.callID },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+        lifecycle: {
+          resolution: "request_exact",
+          selected: (selection) => persistLearningBootstrapSelection(events, registration, selection, shownScope),
+          replied: (input) => persistLearningBootstrapReply(events, registration, input),
+        },
+      },
+      context.abort,
+    )
+    if (permissionOutcome.type !== "allow" || context.abort.aborted) {
+      return yield* completeLearningBootstrap(events, canonical, registration, owners)
+    }
+
+    const current = yield* events
+      .transaction((tx) =>
+        requireLearningBootstrapState(tx, canonical, registration).pipe(Effect.map(noEvent), Effect.orDie),
+      )
+      .pipe(Effect.map((result) => result.result))
+    if (current.status !== "admitted" || current.disposition !== "candidate_v1" || !current.candidate) {
+      return exactFromPart(
+        yield* events
+          .transaction((tx) =>
+            assertLearningBootstrapTerminalPart(tx, canonical, registration, current).pipe(
+              Effect.map((part) => noEvent(part)),
+              Effect.orDie,
+            ),
+          )
+          .pipe(Effect.map((result) => result.result)),
+      )
+    }
+    const instance = yield* InstanceRef
+    const oneOperationPath = learningBootstrapOneOperationPath(current.candidate)
+    const execution = yield* Effect.scoped(
+      LearningBootstrap.prepareExecution(
+        current.candidate,
+        {
+          database: owners.database.db,
+          contentRoots: owners.contentRoots,
+          artifacts: owners.artifacts,
+          maps: owners.maps,
+          ...(instance
+            ? {
+                activeWorkspace: ContentRoot.ActiveWorkspaceRead.trusted(
+                  instance.directory,
+                  JSON.stringify({
+                    projectID: instance.project.id,
+                    directory: instance.directory,
+                    worktree: instance.worktree,
+                  }),
+                ),
+              }
+            : {}),
+          ...(oneOperationPath && current.capabilityOutcome === "prompted_allow" && current.permissionRequestID
+            ? {
+                oneOperation: ContentRoot.OneOperationRead.trusted(
+                  oneOperationPath,
+                  `${registration.partID}:${registration.callID}`,
+                  JSON.stringify({
+                    permissionRequestID: current.permissionRequestID,
+                    commandFingerprint: current.candidate.commandFingerprint,
+                  }),
+                ),
+              }
+            : {}),
+        },
+        { abort: context.abort },
+      ),
+    ).pipe(Effect.exit)
+    if (Exit.isFailure(execution)) {
+      return yield* failLearningBootstrap(events, canonical, registration, Cause.squash(execution.cause))
+    }
+    return yield* completeLearningBootstrap(events, canonical, registration, owners, execution.value)
+  })
+}
+
+function persistLearningBootstrapSelection(
+  events: EventV2.Interface,
+  registration: Registration,
+  selection: Permission.Selection,
+  shownScope: Readonly<Record<string, unknown>>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        if (selection.action === "ask") {
+          yield* LearningBootstrap.issueCapabilityPrompt(tx, {
+            partID: registration.partID,
+            requestID: selection.request.id,
+            policyBasis: { ...selection.basis },
+            shownScope,
+            time: metadata.time,
+            order: metadata.order,
+          })
+          return noEvent(undefined)
+        }
+        yield* LearningBootstrap.settlePolicy(tx, {
+          partID: registration.partID,
+          outcome: selection.action === "allow" ? "policy_allow" : "policy_deny",
+          policyBasis: { ...selection.basis },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function persistLearningBootstrapReply(
+  events: EventV2.Interface,
+  registration: Registration,
+  input: Readonly<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        yield* LearningBootstrap.settlePrompt(tx, {
+          partID: registration.partID,
+          requestID: input.request.id,
+          outcome:
+            input.reply.reply === "once" || input.reply.reply === "always"
+              ? "prompted_allow"
+              : input.reply.reply === "cancel"
+                ? "prompted_cancel"
+                : input.reply.message
+                  ? "prompted_correct"
+                  : "prompted_deny",
+          reply: { ...input.reply },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function completeLearningBootstrap(
+  events: EventV2.Interface,
+  canonical: BootstrapCanonical,
+  registration: Registration,
+  owners: BootstrapRuntimeOwners,
+  prepared?: LearningBootstrap.PreparedExecution,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearningBootstrapState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(exactFromPart(yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state)))
+        }
+        const settlement = prepared
+          ? yield* Effect.gen(function* () {
+              const consumed = yield* LearningFrontier.read(tx)
+              yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+              return yield* LearningBootstrap.settle(tx, {
+                partID: registration.partID,
+                prepared,
+                owners: { courses: owners.courses, maps: owners.maps },
+                settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+              })
+            })
+          : yield* LearningBootstrap.recover(tx, {
+              partID: registration.partID,
+              settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+            })
+        if (settlement.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: registration.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        const terminal = yield* requireLearningBootstrapState(tx, canonical, registration)
+        const part = learningBootstrapTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function failLearningBootstrap(
+  events: EventV2.Interface,
+  canonical: BootstrapCanonical,
+  registration: Registration,
+  error: unknown,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearningBootstrapState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(exactFromPart(yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state)))
+        }
+        yield* LearningBootstrap.settleFailure(tx, {
+          partID: registration.partID,
+          error,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        const terminal = yield* requireLearningBootstrapState(tx, canonical, registration)
+        const part = learningBootstrapTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function readLearningBootstrapState(tx: EventV2.Transaction, registration: Registration) {
+  return LearningBootstrap.readInvocationVersion(tx, {
+    partID: registration.partID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+  })
+}
+
+function requireLearningBootstrapState(
+  tx: EventV2.Transaction,
+  canonical: BootstrapCanonical,
+  registration: Registration,
+) {
+  return Effect.gen(function* () {
+    const state = yield* readLearningBootstrapState(tx, registration)
+    if (!state) return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    const storedCommand =
+      state.disposition === "candidate_v1"
+        ? state.candidate?.canonicalCommand
+        : state.disposition === "semantic_terminal_v1"
+          ? state.semanticTerminal?.canonicalCommand
+          : undefined
+    if (storedCommand && !isDeepStrictEqual(storedCommand, LearningBootstrap.canonicalizeCommand(canonical.input))) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted" && (state.disposition !== "candidate_v1" || !state.candidate)) {
+      return yield* Effect.die("Admitted learning-bootstrap invocation is not a complete candidate")
+    }
+    const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!physical || !physical.turn_id || !physical.input_id) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const envelope = learningBootstrapEnvelope(registration, physical.time_admitted)
+    if (
+      physical.turn_id !== envelope.turnID ||
+      physical.input_id !== envelope.inputID ||
+      physical.occurrence_id !== envelope.occurrenceID ||
+      physical.session_id !== envelope.sessionID ||
+      physical.parent_user_message_id !== envelope.parentUserMessageID ||
+      physical.assistant_message_id !== envelope.assistantMessageID ||
+      physical.emission_ordinal !== envelope.emissionOrdinal ||
+      physical.capability_identity !== envelope.capabilityIdentity ||
+      physical.capability_version !== envelope.capabilityVersion ||
+      physical.authorization_basis !== envelope.authorizationBasis
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted") yield* assertLearningBootstrapAdmittedPart(tx, canonical, registration)
+    return state
+  })
+}
+
+function learningBootstrapEnvelope(
+  registration: Registration,
+  timeAdmitted: number,
+): LearningCommand.InvocationEnvelope & Readonly<{ authorizationBasis: "agent_action"; capabilityVersion: 1 }> {
+  return {
+    occurrenceID: registration.causalOccurrenceID!,
+    turnID: registration.turnID,
+    inputID: registration.inputID,
+    sessionID: registration.sessionID,
+    parentUserMessageID: registration.parentUserMessageID,
+    assistantMessageID: registration.assistantMessageID,
+    partID: registration.partID,
+    providerCallID: registration.callID,
+    emissionOrdinal: registration.emissionOrdinal,
+    capabilityIdentity: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+    capabilityVersion: 1,
+    authorizationBasis: "agent_action",
+    timeAdmitted,
+  }
+}
+
+function assertLearningBootstrapAdmittedPart(
+  tx: EventV2.Transaction,
+  canonical: BootstrapCanonical,
+  registration: Registration,
+) {
+  return readPart(tx, registration.partID).pipe(
+    Effect.flatMap((part) =>
+      part.id === registration.partID &&
+      part.messageID === registration.assistantMessageID &&
+      part.sessionID === registration.sessionID &&
+      part.type === "tool" &&
+      part.tool === canonical.toolID &&
+      part.callID === registration.callID &&
+      part.state.status === "pending" &&
+      isDeepStrictEqual(part.state.input, canonical.input)
+        ? Effect.void
+        : invocationConflict(registration),
+    ),
+  )
+}
+
+function assertLearningBootstrapTerminalPart(
+  tx: EventV2.Transaction,
+  canonical: BootstrapCanonical,
+  registration: Registration,
+  state: LearningBootstrap.InvocationVersion,
+) {
+  return Effect.gen(function* () {
+    const expected = learningBootstrapTerminalPart(canonical, registration, state)
+    const part = yield* readPart(tx, registration.partID)
+    if (
+      !isDeepStrictEqual(invocationPart(part), invocationPart(expected)) ||
+      SemanticPresentation.readResult(part, true).type !== "valid"
+    ) {
+      return yield* Effect.die(`Terminal learning-bootstrap Part ${registration.partID} diverged from its settlement`)
+    }
+    return part
+  })
+}
+
+function learningBootstrapTerminalPart(
+  canonical: BootstrapCanonical,
+  registration: Registration,
+  state: LearningBootstrap.InvocationVersion,
+) {
+  const settlement = requirePhysicalSettlement(state.settlement)
+  const presentation = LearningCommandPresentation.learningBootstrapSettlementResult(settlement, state, {
+    sessionID: registration.sessionID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+    partID: registration.partID,
+  })
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Learning-bootstrap settlement has no valid semantic projection")
+  const exact = {
+    title: projected.title,
+    metadata: {
+      command: canonical.toolID,
+      commandVersion: 1,
+      outcome: settlement.outcome,
+      ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+      durablySettled: projected.durablySettled,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    },
+    output: JSON.stringify({
+      settlement,
+      disposition: state.disposition,
+      ...(state.disposition === "candidate_v1" && state.candidate
+        ? {
+            agentAction: state.candidate.agentAction,
+            ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+            ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+          }
+        : {}),
+      ...(state.disposition === "semantic_terminal_v1" && state.semanticTerminal
+        ? { semanticTerminal: state.semanticTerminal }
+        : {}),
+    }),
+  }
+  const part = {
+    id: registration.partID,
+    messageID: registration.assistantMessageID,
+    sessionID: registration.sessionID,
+    type: "tool",
+    tool: canonical.toolID,
+    callID: registration.callID,
+    state: {
+      status: "completed",
+      input: canonical.input,
+      output: exact.output,
+      title: exact.title,
+      metadata: exact.metadata,
+      time: { start: state.timeAdmitted, end: settlement.settlementTime },
+    },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal learning-bootstrap Part ${registration.partID} is invalid`)
+  }
+  return part
+}
+
+function loadCommittedLearningBootstrapResult(
+  events: EventV2.Interface,
+  canonical: BootstrapCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* readLearningBootstrapState(tx, registration)
+        if (!state || state.status === "admitted") return noEvent(undefined)
+        return noEvent(exactFromPart(yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state)))
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function learningBootstrapOneOperationPath(candidate: LearningBootstrap.Candidate) {
+  return (candidate.canonicalCommand.materials ?? [])
+    .flatMap((material) => {
+      if (material.type === "local" && material.authority.type === "one_operation") return [material.path]
+      if (material.type === "artifact" && material.read?.authority.type === "one_operation") {
+        return [material.read.path]
+      }
+      return []
+    })
+    .at(0)
 }
 
 function prepareDefaultCourse(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
@@ -2272,6 +2906,27 @@ function loadCommittedExactResult(
             return exactFromPart(yield* assertLearnerGoalV2TerminalPart(tx, canonical, registration, state))
           }
         }
+        if (physical?.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
+          const state = yield* readLearningBootstrapState(tx, registration)
+          if (state) {
+            if (state.status === "admitted") return undefined
+            const row = yield* readPartRow(tx, registration.partID)
+            if (!row) {
+              return yield* new LearningCommand.InvocationTranscriptUnavailableError({
+                partID: registration.partID,
+              })
+            }
+            const part = partFromRow(row)
+            if (part.tool !== LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
+              return yield* Effect.die(`Learning-bootstrap Part ${registration.partID} changed tool identity`)
+            }
+            const canonical = {
+              toolID: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+              input: normalizeLearningBootstrap(part.state.input),
+            } satisfies BootstrapCanonical
+            return exactFromPart(yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state))
+          }
+        }
         const canonical = attemptedCanonical ?? (yield* canonicalFromStoredPart(tx, registration.partID))
         if (!canonical) return undefined
         const prepared = yield* loadPhysicalPrepared(tx, canonical, registration)
@@ -2851,7 +3506,15 @@ export function recoverAdmitted(events: EventV2.Interface) {
   return Effect.gen(function* () {
     const admitted = yield* events.transaction((tx) =>
       LearningCommand.listAdmitted(tx).pipe(
-        Effect.map((rows) => noEvent(rows.filter((row) => isPrimaryCapability(row.command_name)))),
+        Effect.map((rows) =>
+          noEvent(
+            rows.filter(
+              (row) =>
+                isPrimaryCapability(row.command_name) ||
+                row.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+            ),
+          ),
+        ),
         Effect.orDie,
       ),
     )
@@ -2950,6 +3613,9 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
       const state = yield* readLearnerGoalV2State(tx, registration)
       if (state?.version === 2) return yield* interruptLearnerGoalV2Transaction(tx, registration)
     }
+    if (physical.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
+      return yield* interruptLearningBootstrapTransaction(tx, registration)
+    }
     const row = yield* readPartRow(tx, registration.partID)
     if (!row) {
       return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
@@ -3015,6 +3681,35 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
     const interrupted = requireInterruptedSettlement(settlement.settlement)
     const terminal = yield* terminalPart(tx, canonical, prepared.invocation.envelope, interrupted)
     return withPartEvent(true, terminal, interrupted.settlementTime)
+  })
+}
+
+function interruptLearningBootstrapTransaction(tx: EventV2.Transaction, registration: Registration) {
+  return Effect.gen(function* () {
+    const row = yield* readPartRow(tx, registration.partID)
+    if (!row) {
+      return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+    }
+    const part = partFromRow(row)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      input: normalizeLearningBootstrap(part.state.input),
+    } satisfies BootstrapCanonical
+    const state = yield* requireLearningBootstrapState(tx, canonical, registration)
+    if (state.status !== "admitted") {
+      yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state)
+      return noEvent(true)
+    }
+    yield* LearningBootstrap.recover(tx, {
+      partID: registration.partID,
+      settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+    })
+    const terminal = yield* requireLearningBootstrapState(tx, canonical, registration)
+    if (terminal.status === "admitted") {
+      return yield* Effect.die(`Recovered learning-bootstrap invocation ${registration.partID} remained admitted`)
+    }
+    const completed = learningBootstrapTerminalPart(canonical, registration, terminal)
+    return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
   })
 }
 
@@ -3610,6 +4305,9 @@ function isRegistration(value: unknown): value is Registration {
 }
 
 function canonicalInput(toolID: PrimaryCapability, input: unknown): Canonical {
+  if (toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
+    throw new Error("Learning bootstrap uses its dedicated Agent-action admission path")
+  }
   if (toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
     return { toolID, input: normalize(input) }
   }
@@ -3829,7 +4527,16 @@ function invocationConflict(registration: Registration) {
 export const node = LayerNode.make({
   service: Service,
   layer,
-  deps: [EventV2Bridge.node, Permission.node, Database.node, SessionProjector.node],
+  deps: [
+    EventV2Bridge.node,
+    Permission.node,
+    Database.node,
+    SessionProjector.node,
+    Course.node,
+    Artifact.node,
+    ContentRoot.node,
+    MaterialMap.node,
+  ],
 })
 
 export * as LearningCommandRuntime from "./runtime"

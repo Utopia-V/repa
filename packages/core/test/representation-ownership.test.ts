@@ -34,8 +34,11 @@ describe("Gate 11 ownership boundary", () => {
   })
 
   test("keeps Artifact and Representation schemas distinct and adds no adjacent conversion subsystem", async () => {
-    const artifactSQL = await readFile(path.join(coreSource, "artifact/sql.ts"), "utf8")
-    const representationSQL = await readFile(path.join(coreSource, "representation/sql.ts"), "utf8")
+    const artifactSQL = (await readFile(path.join(coreSource, "artifact/sql.ts"), "utf8")).replaceAll("\r\n", "\n")
+    const representationSQL = (await readFile(path.join(coreSource, "representation/sql.ts"), "utf8")).replaceAll(
+      "\r\n",
+      "\n",
+    )
     expect(artifactSQL).toContain('sqliteTable(\n  "artifact"')
     expect(artifactSQL).toContain('sqliteTable(\n  "artifact_revision"')
     expect(artifactSQL).not.toContain('"representation_revision"')

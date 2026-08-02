@@ -65,6 +65,7 @@ type MapExpectation = {
     | ArtifactTargetReceipt
     | { readonly type: "representation"; readonly representationRevisionID: Representation.RevisionID }
   readonly witnesses: ReadonlyMap<SelectorID, MaterialSelector.Witness>
+  readonly selections: ReadonlyMap<SelectorID, MaterialSelector.Selected>
   readonly admission: MapAdmission
 }
 
@@ -198,12 +199,14 @@ export function prepareMap(
         bytes: observed.bytes,
         fingerprint: observed.snapshot.fingerprint,
       }
-      const witnesses = yield* selectAll(input.proposal, target)
+      const selections = yield* selectAll(input.proposal, target)
+      const witnesses = new Map(Array.from(selections, ([id, selected]) => [id, selected.witness] as const))
       return new PreparedMapTarget(targetProofToken, {
         mapID: input.mapID,
         canonicalInput: input.canonicalInput,
         receipt: observed.receipt,
         witnesses,
+        selections,
         admission: {
           type: "artifact",
           expected: { source: observed.expected, revision: observed.snapshot },
@@ -220,7 +223,8 @@ export function prepareMap(
       budgets: input.budgets.representation,
       abort: input.abort,
     })
-    const witnesses = yield* selectAll(input.proposal, observed.content)
+    const selections = yield* selectAll(input.proposal, observed.content)
+    const witnesses = new Map(Array.from(selections, ([id, selected]) => [id, selected.witness] as const))
     return new PreparedMapTarget(targetProofToken, {
       mapID: input.mapID,
       canonicalInput: input.canonicalInput,
@@ -229,6 +233,7 @@ export function prepareMap(
         representationRevisionID: observed.read.representation.id,
       },
       witnesses,
+      selections,
       admission: { type: "representation", proof: observed.read.proof },
     })
   })
@@ -316,6 +321,29 @@ export function requirePreparedMap(
     }
     return expected
   })
+}
+
+export function preparedSelectorFromMap(
+  proof: PreparedMapTarget,
+  input: { readonly mapID: MapID; readonly selectorID: SelectorID; readonly mapDispositionVersion: number },
+): Effect.Effect<PreparedSelectorTarget, PreparationError> {
+  const expected = proof instanceof PreparedMapTarget ? proof.expectation(targetProofToken) : undefined
+  const selected = expected?.selections.get(input.selectorID)
+  if (!expected || expected.mapID !== input.mapID || !selected) {
+    return Effect.fail(new PreparationError({ code: "stale_target", detail: "Prepared Map omitted the selector" }))
+  }
+  return Effect.succeed(
+    new PreparedSelectorTarget(targetProofToken, {
+      mapID: input.mapID,
+      selectorID: input.selectorID,
+      mapDispositionVersion: input.mapDispositionVersion,
+      selected,
+      admission:
+        expected.admission.type === "artifact"
+          ? { type: "artifact", expected: Artifact.ordinaryUseByteSnapshot(expected.admission.expected.revision) }
+          : { type: "representation", proof: expected.admission.proof },
+    }),
+  )
 }
 
 export function requirePreparedSelector(
@@ -493,8 +521,14 @@ function readArtifact(
         descriptorCorrectionID: expected.descriptorCorrectionID,
         fingerprint: snapshot.fingerprint,
         mediaType: snapshot.mediaType,
-        authorization: read.authorization,
-        grantEpisodeOrdinal: selection.grantEpisodeOrdinal,
+        authorization: {
+          kind: "content_root",
+          root: root.binding.descriptor,
+          relativePath,
+          canonicalPath: read.observation.descriptor.canonicalPath,
+          contentRoot: read.authorization,
+          grantEpisodeOrdinal: selection.grantEpisodeOrdinal,
+        },
         relativePath,
         descriptor: read.observation.descriptor,
         timeObserved: read.observation.timeObserved,
@@ -570,12 +604,12 @@ function readRepresentation(
 
 function selectAll(proposal: MapProposal, target: MaterialSelector.TargetContent) {
   return Effect.gen(function* () {
-    const selected: readonly (readonly [SelectorID, MaterialSelector.Witness])[] = yield* Effect.forEach(
+    const selected: readonly (readonly [SelectorID, MaterialSelector.Selected])[] = yield* Effect.forEach(
       proposal.outline.flatMap((node) => node.selectors),
       (selector) =>
         Effect.gen(function* () {
           const result = yield* selectCoordinate(target, selector.coordinate)
-          return [selector.id, result.witness] as const
+          return [selector.id, result] as const
         }),
     )
     return new Map(selected)

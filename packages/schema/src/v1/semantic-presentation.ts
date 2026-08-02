@@ -690,6 +690,56 @@ const LearnerGoalV2CapabilityProposal = Schema.Struct({
   operations: Schema.Array(GoalV2MaterializedOperation),
 })
 
+const LearningBootstrapScope = Schema.Struct({
+  canonicalCommand: StringValue,
+  course: Schema.Union([
+    Schema.Struct({ action: Schema.Literal("create"), title: StringValue }),
+    Schema.Struct({
+      action: Schema.Literals(["use", "correct"]),
+      courseID: StringValue,
+      title: StringValue,
+    }),
+  ]),
+  route: Schema.Union([
+    Schema.Struct({ action: Schema.Literal("none") }),
+    Schema.Struct({
+      action: Schema.Literals(["new_view", "distinct_view", "successor_revision"]),
+      key: StringValue,
+      name: optional(StringValue),
+      viewID: optional(StringValue),
+      authorship: Schema.Literals(["learner_supplied", "learner_requested", "tutor_initiated"]),
+      itemCount: PositiveVersion,
+    }),
+  ]),
+  selection: Schema.Literals(["preserve", "clear", "set_route", "set_existing"]),
+  materials: Schema.Array(
+    Schema.Struct({
+      key: StringValue,
+      type: Schema.Literals(["artifact", "representation", "local"]),
+      identity: StringValue,
+      localAuthority: optional(Schema.Literals(["content_root", "active_workspace", "one_operation"])),
+    }),
+  ),
+  maps: Schema.Array(
+    Schema.Struct({
+      key: StringValue,
+      materialKey: StringValue,
+      outlineNodeCount: PositiveVersion,
+      selectorCount: PositiveVersion,
+    }),
+  ),
+  alignmentKeys: Schema.Array(StringValue),
+  anchor: Schema.Literals(["preserve", "clear", "set"]),
+})
+
+const LearningBootstrapCapabilityProposal = Schema.Struct({
+  kind: Schema.Literal("learning_bootstrap_capability"),
+  ...ProposalBinding,
+  commandFingerprint: StringValue,
+  issuance: Schema.Literals(["root", "delegated"]),
+  scope: LearningBootstrapScope,
+})
+
 export const ProposalBasis = Schema.Union([
   AcceptCourseProposal,
   RepresentationProposal,
@@ -702,6 +752,7 @@ export const ProposalBasis = Schema.Union([
   RetainedSteeringProposal,
   LearnerGoalProposal,
   LearnerGoalV2CapabilityProposal,
+  LearningBootstrapCapabilityProposal,
 ]).annotate({
   discriminator: "kind",
   identifier: "SemanticProposalBasisV1",
@@ -918,6 +969,139 @@ const LearnerGoalV2Result = Schema.Struct({
   operations: Schema.Array(GoalV2ResultOperation),
 })
 
+const LearningBootstrapObjectDescriptor = Schema.Struct({
+  platform: Schema.Literal("windows_ntfs"),
+  verifierVersion: PositiveVersion,
+  canonicalPath: StringValue,
+  canonicalPathKey: StringValue,
+  volumeSerial: StringValue,
+  objectID: StringValue,
+  creationTime: StringValue,
+  changeTime: StringValue,
+  lastWriteTime: StringValue,
+  size: PositiveVersion,
+  kind: Schema.Literals(["directory", "file"]),
+})
+
+const LearningBootstrapSourceAuthority = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literal("content_root"),
+    root: LearningBootstrapObjectDescriptor,
+    relativePath: StringValue,
+    canonicalPath: StringValue,
+    contentRoot: Schema.Struct({
+      contentRootID: StringValue,
+      bindingID: StringValue,
+      bindingEpisodeID: StringValue,
+      bindingEpisodeOrdinal: PositiveVersion,
+      grantEpisodeID: StringValue,
+      grantVersion: PositiveVersion,
+    }),
+    grantEpisodeOrdinal: PositiveVersion,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("active_workspace"),
+    root: LearningBootstrapObjectDescriptor,
+    relativePath: StringValue,
+    canonicalPath: StringValue,
+    workspaceIdentity: StringValue,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("one_operation"),
+    root: LearningBootstrapObjectDescriptor,
+    relativePath: StringValue,
+    canonicalPath: StringValue,
+    operationIdentity: StringValue,
+    approvalBasis: StringValue,
+  }),
+])
+
+const LearningBootstrapMaterialTarget = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("artifact"),
+    artifactID: StringValue,
+    revisionID: StringValue,
+    attribution: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("recorded") }),
+      Schema.Struct({ type: Schema.Literal("lineage_correction"), memberID: StringValue }),
+    ]),
+    sourceAuthority: optional(LearningBootstrapSourceAuthority),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("representation"),
+    representationRevisionID: StringValue,
+  }),
+])
+
+const LearningBootstrapAcknowledgement = Schema.Struct({
+  schemaVersion: Schema.Literal(1),
+  outcome: Schema.Literals(["applied", "already_applied", "no_change", "error"]),
+  course: optional(Schema.Struct({ id: StringValue, title: StringValue })),
+  view: optional(
+    Schema.Struct({
+      id: StringValue,
+      name: StringValue,
+      revisionID: StringValue,
+      authorship: Schema.Literals(["learner_supplied", "learner_requested", "tutor_initiated"]),
+    }),
+  ),
+  children: Schema.Array(
+    Schema.Struct({
+      kind: Schema.Literals(["course", "route", "selection", "material", "map", "alignment", "anchor"]),
+      key: optional(StringValue),
+      outcome: Schema.Literals(["changed", "no_change"]),
+      id: optional(StringValue),
+      detail: StringValue,
+      viewID: optional(StringValue),
+      revisionID: optional(StringValue),
+      authorship: optional(Schema.Literals(["learner_supplied", "learner_requested", "tutor_initiated"])),
+      selectedRevisionID: optional(Schema.NullOr(StringValue)),
+      materialTarget: optional(LearningBootstrapMaterialTarget),
+    }),
+  ),
+  selectedRevisionID: optional(Schema.NullOr(StringValue)),
+  anchor: optional(
+    Schema.Struct({
+      headID: Schema.NullOr(StringValue),
+      target: Schema.NullOr(
+        Schema.Struct({
+          courseID: StringValue,
+          viewID: StringValue,
+          revisionID: StringValue,
+          itemID: StringValue,
+        }),
+      ),
+      usability: Schema.Union([
+        Schema.Struct({ usable: Schema.Literal(true) }),
+        Schema.Struct({ usable: Schema.Literal(false), cause: StringValue }),
+      ]),
+    }),
+  ),
+  correction: StringValue,
+})
+
+const LearningBootstrapResult = Schema.Struct({
+  kind: Schema.Literal("learning_bootstrap_result"),
+  ...ResultCommon,
+  disposition: Schema.Literals(["candidate_v1", "semantic_terminal_v1", "physical_no_effect"]),
+  semanticOutcome: optional(Schema.Literals(["already_applied", "semantic_conflict"])),
+  issuance: optional(Schema.Literals(["root", "delegated"])),
+  capabilityOutcome: optional(
+    Schema.Literals([
+      "not_evaluated",
+      "policy_allow",
+      "policy_deny",
+      "prompted_abort",
+      "prompted_allow",
+      "prompted_deny",
+      "prompted_correct",
+      "prompted_cancel",
+    ]),
+  ),
+  permissionRequestID: optional(StringValue),
+  acknowledgement: optional(LearningBootstrapAcknowledgement),
+})
+
 const ContentWriteResult = Schema.Struct({
   kind: Schema.Literal("content_write_result"),
   ...ResultCommon,
@@ -945,6 +1129,7 @@ export const ResultBasis = Schema.Union([
   RetainedSteeringResult,
   LearnerGoalResult,
   LearnerGoalV2Result,
+  LearningBootstrapResult,
   ContentWriteResult,
 ]).annotate({
   discriminator: "kind",

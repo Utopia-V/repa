@@ -25,7 +25,7 @@ describe("Gate 13 ownership boundary", () => {
     expect(sources.join("\n")).not.toMatch(/\b(?:embedding|vector|rag)\b|full[- ]?text|preferred[_ -]?map/iu)
   })
 
-  test("wires only the trusted application service and adds no model-visible Material command", async () => {
+  test("limits model-visible Material access to the Gate 17 read and owner-private bootstrap boundaries", async () => {
     const files = await sourceFiles(opencodeSource)
     const importers = await Promise.all(
       files.map(async (filename) => ({
@@ -34,14 +34,23 @@ describe("Gate 13 ownership boundary", () => {
       })),
     )
     expect(
-      importers.filter((file) => file.source.includes("@opencode-ai/core/material-map")).map((file) => file.filename),
-    ).toEqual(["effect/app-runtime.ts"])
-    expect(
       importers
-        .filter((file) => /tool|learning-command|prompt|system-context/u.test(file.filename))
-        .filter((file) => /MaterialMap|material[_-]map|material[_-]alignment/u.test(file.source))
-        .map((file) => file.filename),
+        .filter((file) => file.source.includes("@opencode-ai/core/material-map"))
+        .map((file) => file.filename)
+        .sort(),
+    ).toEqual([
+      "effect/app-runtime.ts",
+      "learning-command/input.ts",
+      "learning-command/runtime.ts",
+      "tool/learning-material-query.ts",
+      "tool/registry.ts",
+    ])
+    expect(
+      importers.filter((file) => file.source.includes("@opencode-ai/core/material-map/")).map((file) => file.filename),
     ).toEqual([])
+    expect(importers.map((file) => file.source).join("\n")).not.toMatch(
+      /\b(?:MaterialMap|MaterialMapRevision|MaterialOutlineNode|MaterialSelector|MaterialAlignment)Table\b|update_material_map|material_map_command/u,
+    )
   })
 })
 

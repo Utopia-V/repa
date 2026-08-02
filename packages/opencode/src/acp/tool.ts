@@ -1,5 +1,6 @@
 import { isAbsolute, resolve } from "path"
 import type { ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate, ToolKind } from "@agentclientprotocol/sdk"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 
 export type ToolInput = Record<string, unknown>
 
@@ -100,9 +101,23 @@ export function toLocations(toolName: string, input: ToolInput, cwd?: string): T
   }
 }
 
-export function completedToolContent(toolName: string, state: CompletedToolState): ToolCallContent[] {
+export function completedToolContent(
+  toolName: string,
+  state: CompletedToolState,
+  semantic?: SemanticPresentation.Read<SemanticPresentation.ResultProjection>,
+): ToolCallContent[] {
   const text =
-    toolName.toLocaleLowerCase() === "read" ? (readDisplayText(state.metadata) ?? state.output) : state.output
+    semantic?.type === "invalid"
+      ? "Consequential result unavailable: Repa could not verify this result, so no success is inferred."
+      : semantic?.type === "valid"
+        ? [
+            semantic.value.summary,
+            ...semantic.value.facts.map((item) => `${item.label}: ${item.value}`),
+            `Durable settlement: ${semantic.value.durablySettled ? "yes" : "no"}`,
+          ].join("\n")
+        : toolName.toLocaleLowerCase() === "read"
+          ? (readDisplayText(state.metadata) ?? state.output)
+          : state.output
   const content: ToolCallContent[] = [
     {
       type: "content",
@@ -187,15 +202,30 @@ export function completedToolUpdate(input: {
   readonly toolCallId: string
   readonly toolName: string
   readonly state: CompletedToolState & { readonly title?: string }
+  readonly semantic?: SemanticPresentation.Read<SemanticPresentation.ResultProjection>
   readonly cwd?: string
 }): ToolCallUpdate {
   return {
     toolCallId: input.toolCallId,
     status: "completed",
-    ...(input.state.title ? { title: input.state.title } : {}),
-    content: completedToolContent(input.toolName, input.state),
+    ...(input.semantic?.type === "invalid"
+      ? { title: "Consequential result unavailable" }
+      : input.semantic?.type === "valid"
+        ? { title: `${input.semantic.value.title} — ${semanticResultStatus(input.semantic.value.outcome)}` }
+        : input.state.title
+          ? { title: input.state.title }
+          : {}),
+    content: completedToolContent(input.toolName, input.state, input.semantic),
     rawOutput: completedToolRawOutput(input.state),
   }
+}
+
+function semanticResultStatus(outcome: SemanticPresentation.ResultProjection["outcome"]) {
+  if (outcome === "committed") return "Committed"
+  if (outcome === "already_applied") return "Already applied"
+  if (outcome === "no_effect") return "No effect"
+  if (outcome === "outcome_unknown") return "Outcome unknown"
+  return "Failed"
 }
 
 export function errorToolUpdate(input: {

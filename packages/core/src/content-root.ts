@@ -53,7 +53,7 @@ export {
 export type { Error, MutationRight, MutationScope } from "./content-root/schema"
 
 type DatabaseShape = EffectDrizzleSqlite.EffectSQLiteDatabase
-type Transaction = Parameters<Parameters<DatabaseShape["transaction"]>[0]>[0]
+export type Transaction = Parameters<Parameters<DatabaseShape["transaction"]>[0]>[0]
 type Queryable = DatabaseShape | Transaction
 type BindingRow = typeof ContentRootBindingTable.$inferSelect
 type BindingEpisodeRow = typeof ContentRootBindingEpisodeTable.$inferSelect
@@ -251,6 +251,93 @@ export type ReadResult = {
   readonly observation: ContentRootNTFS.PreparedFile | ContentRootNTFS.PreparedMissing
 }
 
+export type LocalReadAuthorizationReceipt =
+  | Readonly<{
+      kind: "content_root"
+      root: ContentRootNTFS.Descriptor
+      relativePath: string
+      canonicalPath: string
+      contentRoot: ReadAuthorizationReceipt
+      grantEpisodeOrdinal: number
+    }>
+  | Readonly<{
+      kind: "active_workspace"
+      root: ContentRootNTFS.Descriptor
+      relativePath: string
+      canonicalPath: string
+      workspaceIdentity: string
+    }>
+  | Readonly<{
+      kind: "one_operation"
+      root: ContentRootNTFS.Descriptor
+      relativePath: string
+      canonicalPath: string
+      operationIdentity: string
+      approvalBasis: string
+    }>
+
+const workspaceReadToken = Symbol("ContentRoot.ActiveWorkspaceRead")
+const operationReadToken = Symbol("ContentRoot.OneOperationRead")
+const preparedLocalReadToken = Symbol("ContentRoot.PreparedLocalRead")
+
+/** Trusted active execution-workspace scope; it never becomes a durable ContentRoot. */
+export class ActiveWorkspaceRead {
+  private constructor(
+    readonly directory: string,
+    readonly workspaceIdentity: string,
+  ) {}
+
+  static trusted(directory: string, workspaceIdentity: string) {
+    return new ActiveWorkspaceRead(directory, workspaceIdentity)
+  }
+
+  expectation(token: symbol) {
+    if (token !== workspaceReadToken) return undefined
+    return { directory: this.directory, workspaceIdentity: this.workspaceIdentity }
+  }
+}
+
+/** Trusted exact permission result for one local-read operation; it is never persisted as a root. */
+export class OneOperationRead {
+  private constructor(
+    readonly path: string,
+    readonly operationIdentity: string,
+    readonly approvalBasis: string,
+  ) {}
+
+  static trusted(path: string, operationIdentity: string, approvalBasis: string) {
+    return new OneOperationRead(path, operationIdentity, approvalBasis)
+  }
+
+  expectation(token: symbol) {
+    if (token !== operationReadToken) return undefined
+    return { path: this.path, operationIdentity: this.operationIdentity, approvalBasis: this.approvalBasis }
+  }
+}
+
+/** Race-safe bytes and exact authority provenance for one Gate 10 local read. */
+export class PreparedLocalRead {
+  readonly authorization: LocalReadAuthorizationReceipt
+  readonly observation: ContentRootNTFS.PreparedFile
+  #require: (tx: Transaction) => Effect.Effect<LocalReadAuthorizationReceipt, Error>
+
+  constructor(
+    token: symbol,
+    authorization: LocalReadAuthorizationReceipt,
+    observation: ContentRootNTFS.PreparedFile,
+    require: (tx: Transaction) => Effect.Effect<LocalReadAuthorizationReceipt, Error>,
+  ) {
+    if (token !== preparedLocalReadToken) throw new Error("Local-read proofs are owner-issued")
+    this.authorization = Object.freeze({ ...authorization, root: Object.freeze({ ...authorization.root }) })
+    this.observation = Object.freeze({ ...observation, bytes: observation.bytes.slice() })
+    this.#require = require
+  }
+
+  require(tx: Transaction) {
+    return this.#require(tx)
+  }
+}
+
 export type MutationGrantInfo = {
   readonly id: MutationGrantID
   readonly anchor: ContentRootNTFS.Descriptor
@@ -375,6 +462,25 @@ export interface Interface {
     readonly relativePath: string
     readonly maxBytes?: number
   }) => Effect.Effect<ReadResult, Error>
+  /** Prepare one exact Gate 10 local read without admitting Artifact state. */
+  readonly prepareLocalRead: (
+    input:
+      | Readonly<{
+          authority: { readonly type: "content_root"; readonly contentRootID: ContentRootID }
+          path: string
+          maxBytes?: number
+        }>
+      | Readonly<{
+          authority: { readonly type: "active_workspace"; readonly scope: ActiveWorkspaceRead }
+          path: string
+          maxBytes?: number
+        }>
+      | Readonly<{
+          authority: { readonly type: "one_operation"; readonly grant: OneOperationRead }
+          path: string
+          maxBytes?: number
+        }>,
+  ) => Effect.Effect<PreparedLocalRead, Error>
   readonly subscribeInvalidation: (contentRootID: ContentRootID) => Effect.Effect<AbortSignal, never, Scope.Scope>
   readonly proposeMutationGrant: (input: {
     readonly anchorPath: string
@@ -615,6 +721,142 @@ const layer = Layer.effect(
         observation,
       }
     })
+
+    const prepareLocalRead: Interface["prepareLocalRead"] = Effect.fn("ContentRoot.prepareLocalRead")(
+      function* (input) {
+        if (input.authority.type === "content_root") {
+          const authorized = yield* authorize(input.authority.contentRootID)
+          const relativePath = yield* localRelativePath(authorized.stored.binding.descriptor, input.path)
+          const observation = yield* native(() =>
+            ContentRootNTFS.prepareFile(
+              authorized.stored.binding.descriptor,
+              relativePath,
+              input.maxBytes ?? DEFAULT_BUDGETS.maxFileBytes,
+            ),
+          )
+          if (observation.result === "missing") {
+            return yield* new PathError({
+              path: input.path,
+              reason: "not_found",
+              detail: "The exact authorized local source is missing",
+            })
+          }
+          const authorization = {
+            kind: "content_root" as const,
+            root: authorized.stored.binding.descriptor,
+            relativePath,
+            canonicalPath: observation.descriptor.canonicalPath,
+            contentRoot: {
+              contentRootID: authorized.stored.id,
+              bindingID: authorized.stored.binding.id,
+              bindingEpisodeID: authorized.stored.bindingEpisode.id,
+              bindingEpisodeOrdinal: authorized.stored.bindingEpisode.ordinal,
+              grantEpisodeID: authorized.grant.id,
+              grantVersion: authorized.stored.grantVersion,
+            },
+            grantEpisodeOrdinal: authorized.grant.ordinal,
+          } satisfies LocalReadAuthorizationReceipt
+          return new PreparedLocalRead(preparedLocalReadToken, authorization, observation, (tx) =>
+            Effect.gen(function* () {
+              const current = yield* requireStoredRoot(tx, authorization.contentRoot.contentRootID)
+              if (
+                current.disposition !== "active" ||
+                !current.grant ||
+                current.binding.id !== authorization.contentRoot.bindingID ||
+                current.bindingEpisode.id !== authorization.contentRoot.bindingEpisodeID ||
+                current.bindingEpisode.ordinal !== authorization.contentRoot.bindingEpisodeOrdinal ||
+                current.grant.id !== authorization.contentRoot.grantEpisodeID ||
+                current.grant.ordinal !== authorization.grantEpisodeOrdinal ||
+                current.grantVersion !== authorization.contentRoot.grantVersion ||
+                !ContentRootNTFS.sameObject(current.binding.descriptor, authorization.root)
+              ) {
+                return yield* new ConflictError({
+                  entity: "grant_episode",
+                  id: authorization.contentRoot.grantEpisodeID,
+                  detail: "The exact ContentRoot read authority changed before local composition",
+                })
+              }
+              yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
+              yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
+              return authorization
+            }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+          )
+        }
+
+        if (input.authority.type === "active_workspace") {
+          const scope = input.authority.scope.expectation(workspaceReadToken)
+          if (!scope || !scope.directory || !scope.workspaceIdentity) {
+            return yield* new InvalidTransitionError({ detail: "Active workspace read scope is invalid" })
+          }
+          const root = yield* native(() => ContentRootNTFS.inspectDirectory(scope.directory))
+          const relativePath = yield* localRelativePath(root, input.path)
+          const observation = yield* native(() =>
+            ContentRootNTFS.prepareFile(root, relativePath, input.maxBytes ?? DEFAULT_BUDGETS.maxFileBytes),
+          )
+          if (observation.result === "missing") {
+            return yield* new PathError({
+              path: input.path,
+              reason: "not_found",
+              detail: "The exact active-workspace source is missing",
+            })
+          }
+          const authorization = {
+            kind: "active_workspace" as const,
+            root,
+            relativePath,
+            canonicalPath: observation.descriptor.canonicalPath,
+            workspaceIdentity: scope.workspaceIdentity,
+          } satisfies LocalReadAuthorizationReceipt
+          return new PreparedLocalRead(preparedLocalReadToken, authorization, observation, () =>
+            Effect.gen(function* () {
+              yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
+              yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
+              return authorization
+            }),
+          )
+        }
+
+        const grant = input.authority.grant.expectation(operationReadToken)
+        if (!grant || !grant.path || !grant.operationIdentity || !grant.approvalBasis.trim()) {
+          return yield* new InvalidTransitionError({ detail: "One-operation local read grant is invalid" })
+        }
+        const requested = win32.resolve(input.path)
+        if (requested.toLocaleLowerCase("und") !== win32.resolve(grant.path).toLocaleLowerCase("und")) {
+          return yield* new PathError({
+            path: input.path,
+            reason: "identity_mismatch",
+            detail: "The local path does not match the exact one-operation learner grant",
+          })
+        }
+        const root = yield* native(() => ContentRootNTFS.inspectDirectory(win32.dirname(requested)))
+        const relativePath = yield* localRelativePath(root, requested)
+        const observation = yield* native(() =>
+          ContentRootNTFS.prepareFile(root, relativePath, input.maxBytes ?? DEFAULT_BUDGETS.maxFileBytes),
+        )
+        if (observation.result === "missing") {
+          return yield* new PathError({
+            path: input.path,
+            reason: "not_found",
+            detail: "The exact one-operation source is missing",
+          })
+        }
+        const authorization = {
+          kind: "one_operation" as const,
+          root,
+          relativePath,
+          canonicalPath: observation.descriptor.canonicalPath,
+          operationIdentity: grant.operationIdentity,
+          approvalBasis: grant.approvalBasis,
+        } satisfies LocalReadAuthorizationReceipt
+        return new PreparedLocalRead(preparedLocalReadToken, authorization, observation, () =>
+          Effect.gen(function* () {
+            yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
+            yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
+            return authorization
+          }),
+        )
+      },
+    )
 
     const search: Interface["search"] = Effect.fn("ContentRoot.search")(function* (input) {
       if (!input.query) return yield* new InvalidTransitionError({ detail: "Search query must not be empty" })
@@ -955,6 +1197,7 @@ const layer = Layer.effect(
       inventory,
       search,
       read,
+      prepareLocalRead,
       subscribeInvalidation,
       proposeMutationGrant,
       approveMutationGrant,
@@ -1131,6 +1374,34 @@ function materialize(stored: StoredRoot) {
   return native(() => ContentRootNTFS.verifyDirectory(stored.binding.descriptor)).pipe(
     Effect.map((verification) => ({ ...stored, verification })),
   )
+}
+
+function localRelativePath(root: ContentRootNTFS.Descriptor, requested: string) {
+  return Effect.gen(function* () {
+    const target = win32.isAbsolute(requested)
+      ? (yield* native(() => ContentRootNTFS.inspectExisting(requested))).canonicalPath
+      : undefined
+    return yield* Effect.try({
+      try: () => {
+        const relative = target ? win32.relative(root.canonicalPath, target) : requested
+        const normalized = ContentRootNTFS.normalizeRelativePath(relative)
+        const resolved = ContentRootNTFS.containsPath(root, normalized)
+        if (
+          win32.relative(root.canonicalPath, resolved).startsWith("..") ||
+          (target && resolved.toLocaleLowerCase("und") !== target.toLocaleLowerCase("und"))
+        ) {
+          throw new Error("The requested path escapes its exact local-read root")
+        }
+        return normalized
+      },
+      catch: (cause) =>
+        new PathError({
+          path: requested,
+          reason: "outside_scope",
+          detail: cause instanceof Error ? cause.message : "The requested path is outside its exact local-read root",
+        }),
+    })
+  })
 }
 
 const approveStored = Effect.fn("ContentRoot.approveStored")(function* (

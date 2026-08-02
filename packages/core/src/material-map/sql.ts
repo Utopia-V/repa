@@ -94,14 +94,31 @@ export const MaterialMapArtifactTargetTable = sqliteTable(
     fingerprint_digest: text().notNull(),
     byte_length: integer().notNull(),
     media_type: text().notNull(),
-    content_root_id: text().$type<ContentRootID>().notNull(),
-    content_root_binding_id: text().$type<ContentRootBindingID>().notNull(),
-    content_root_binding_episode_id: text().$type<BindingEpisodeID>().notNull(),
-    content_root_binding_episode_ordinal: integer().notNull(),
-    content_root_grant_episode_id: text().$type<GrantEpisodeID>().notNull(),
-    content_root_grant_episode_ordinal: integer().notNull(),
-    content_root_grant_version: integer().notNull(),
+    authority_kind: text()
+      .$type<"content_root" | "active_workspace" | "one_operation">()
+      .notNull()
+      .default("content_root"),
+    content_root_id: text().$type<ContentRootID>(),
+    content_root_binding_id: text().$type<ContentRootBindingID>(),
+    content_root_binding_episode_id: text().$type<BindingEpisodeID>(),
+    content_root_binding_episode_ordinal: integer(),
+    content_root_grant_episode_id: text().$type<GrantEpisodeID>(),
+    content_root_grant_episode_ordinal: integer(),
+    content_root_grant_version: integer(),
+    workspace_identity: text(),
+    operation_identity: text(),
+    operation_approval_basis: text(),
     normalized_relative_path: text().notNull(),
+    root_object_platform: text().$type<"windows_ntfs">(),
+    root_object_verifier_version: integer(),
+    root_object_canonical_path: text(),
+    root_object_canonical_path_key: text(),
+    root_object_volume_serial: text(),
+    root_object_id: text(),
+    root_object_creation_time: text(),
+    root_object_change_time: text(),
+    root_object_last_write_time: text(),
+    root_object_size: integer(),
     source_object_platform: text().$type<"windows_ntfs">().notNull(),
     source_object_verifier_version: integer().notNull(),
     source_object_canonical_path: text().notNull(),
@@ -176,7 +193,43 @@ export const MaterialMapArtifactTargetTable = sqliteTable(
     ),
     check(
       "material_map_artifact_target_versions",
-      sql`${table.disposition_version} >= 0 AND ${table.lineage_version} >= 0 AND ${table.source_version} >= 0 AND ${table.content_root_binding_episode_ordinal} >= 1 AND ${table.content_root_grant_episode_ordinal} >= 1 AND ${table.content_root_grant_version} >= 1`,
+      sql`${table.disposition_version} >= 0 AND ${table.lineage_version} >= 0 AND ${table.source_version} >= 0`,
+    ),
+    check(
+      "material_map_artifact_target_authority",
+      sql`(${table.authority_kind} = 'content_root'
+          AND ${table.content_root_id} IS NOT NULL
+          AND ${table.content_root_binding_id} IS NOT NULL
+          AND ${table.content_root_binding_episode_id} IS NOT NULL
+          AND ${table.content_root_binding_episode_ordinal} >= 1
+          AND ${table.content_root_grant_episode_id} IS NOT NULL
+          AND ${table.content_root_grant_episode_ordinal} >= 1
+          AND ${table.content_root_grant_version} >= 1
+          AND ${table.workspace_identity} IS NULL
+          AND ${table.operation_identity} IS NULL
+          AND ${table.operation_approval_basis} IS NULL)
+        OR (${table.authority_kind} = 'active_workspace'
+          AND ${table.content_root_id} IS NULL
+          AND ${table.content_root_binding_id} IS NULL
+          AND ${table.content_root_binding_episode_id} IS NULL
+          AND ${table.content_root_binding_episode_ordinal} IS NULL
+          AND ${table.content_root_grant_episode_id} IS NULL
+          AND ${table.content_root_grant_episode_ordinal} IS NULL
+          AND ${table.content_root_grant_version} IS NULL
+          AND length(${table.workspace_identity}) > 0
+          AND ${table.operation_identity} IS NULL
+          AND ${table.operation_approval_basis} IS NULL)
+        OR (${table.authority_kind} = 'one_operation'
+          AND ${table.content_root_id} IS NULL
+          AND ${table.content_root_binding_id} IS NULL
+          AND ${table.content_root_binding_episode_id} IS NULL
+          AND ${table.content_root_binding_episode_ordinal} IS NULL
+          AND ${table.content_root_grant_episode_id} IS NULL
+          AND ${table.content_root_grant_episode_ordinal} IS NULL
+          AND ${table.content_root_grant_version} IS NULL
+          AND ${table.workspace_identity} IS NULL
+          AND length(${table.operation_identity}) > 0
+          AND length(${table.operation_approval_basis}) > 0)`,
     ),
     check(
       "material_map_artifact_target_content",
@@ -185,7 +238,19 @@ export const MaterialMapArtifactTargetTable = sqliteTable(
     // Gate 10 issues the Unicode-aware key; SQLite lower() is ASCII-only and cannot reproduce that invariant.
     check(
       "material_map_artifact_target_source",
-      sql`length(${table.active_location}) > 0 AND length(${table.normalized_relative_path}) > 0 AND ${table.source_object_platform} = 'windows_ntfs' AND ${table.source_object_verifier_version} >= 1 AND length(${table.source_object_canonical_path}) > 0 AND length(${table.source_object_canonical_path_key}) > 0 AND ${table.source_object_canonical_path} = ${table.active_location} AND length(${table.source_object_volume_serial}) > 0 AND length(${table.source_object_id}) = 32 AND length(${table.source_object_creation_time}) > 0 AND length(${table.source_object_change_time}) > 0 AND length(${table.source_object_last_write_time}) > 0 AND ${table.source_object_size} = ${table.byte_length} AND ${table.source_observed_time} >= 0`,
+      sql`length(${table.active_location}) > 0 AND length(${table.normalized_relative_path}) > 0
+        AND ${table.root_object_platform} = 'windows_ntfs' AND ${table.root_object_verifier_version} >= 1
+        AND length(${table.root_object_canonical_path}) > 0 AND length(${table.root_object_canonical_path_key}) > 0
+        AND length(${table.root_object_volume_serial}) > 0 AND length(${table.root_object_id}) = 32
+        AND length(${table.root_object_creation_time}) > 0 AND length(${table.root_object_change_time}) > 0
+        AND length(${table.root_object_last_write_time}) > 0 AND ${table.root_object_size} >= 0
+        AND ${table.source_object_platform} = 'windows_ntfs' AND ${table.source_object_verifier_version} >= 1
+        AND length(${table.source_object_canonical_path}) > 0 AND length(${table.source_object_canonical_path_key}) > 0
+        AND ${table.source_object_canonical_path} = ${table.active_location}
+        AND length(${table.source_object_volume_serial}) > 0 AND length(${table.source_object_id}) = 32
+        AND length(${table.source_object_creation_time}) > 0 AND length(${table.source_object_change_time}) > 0
+        AND length(${table.source_object_last_write_time}) > 0 AND ${table.source_object_size} = ${table.byte_length}
+        AND ${table.source_observed_time} >= 0`,
     ),
     index("material_map_artifact_target_idx").on(
       table.artifact_id,

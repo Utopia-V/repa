@@ -2699,6 +2699,222 @@ export default {
         ) WITHOUT ROWID;
       `)
       yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_alignment_result\` (
+          \`effect_id\` text NOT NULL,
+          \`local_key\` text NOT NULL,
+          \`alignment_id\` text NOT NULL CONSTRAINT \`learning_bootstrap_alignment_identity_unique\` UNIQUE,
+          CONSTRAINT \`learning_bootstrap_alignment_result_pk\` PRIMARY KEY(\`effect_id\`, \`local_key\`),
+          CONSTRAINT \`fk_learning_bootstrap_alignment_result_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_alignment_result_alignment_id_material_course_alignment_id_fk\` FOREIGN KEY (\`alignment_id\`) REFERENCES \`material_course_alignment\`(\`id\`) ON DELETE RESTRICT
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_anchor_result\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`outcome\` text NOT NULL,
+          \`anchor_effect_id\` text,
+          CONSTRAINT \`fk_learning_bootstrap_anchor_result_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_anchor_result_anchor_effect_id_learner_course_route_anchor_transition_id_fk\` FOREIGN KEY (\`anchor_effect_id\`) REFERENCES \`learner_course_route_anchor_transition\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT "learning_bootstrap_anchor_result_closed" CHECK(("outcome" = 'changed' AND "anchor_effect_id" IS NOT NULL)
+                OR ("outcome" = 'no_change' AND "anchor_effect_id" IS NULL))
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_capability_issue\` (
+          \`invocation_part_id\` text PRIMARY KEY,
+          \`permission_request_id\` text NOT NULL UNIQUE,
+          \`agent_action_fingerprint\` text NOT NULL,
+          \`policy_basis\` text NOT NULL,
+          \`policy_fingerprint\` text NOT NULL,
+          \`shown_scope\` text NOT NULL,
+          \`shown_scope_fingerprint\` text NOT NULL,
+          \`time_issued\` integer NOT NULL,
+          \`issue_order\` integer NOT NULL,
+          CONSTRAINT \`fk_learning_bootstrap_capability_issue_invocation_part_id_learning_bootstrap_disposition_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_bootstrap_disposition\`(\`invocation_part_id\`) ON DELETE CASCADE,
+          CONSTRAINT \`learning_bootstrap_capability_issue_exact\` UNIQUE(\`invocation_part_id\`,\`permission_request_id\`),
+          CONSTRAINT "learning_bootstrap_capability_issue_shape" CHECK(length("agent_action_fingerprint") = 64 AND length("policy_fingerprint") = 64
+                AND length("shown_scope_fingerprint") = 64 AND json_valid("policy_basis")
+                AND json_valid("shown_scope") AND "time_issued" >= 0 AND "issue_order" >= 0)
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_capability_settlement\` (
+          \`invocation_part_id\` text PRIMARY KEY,
+          \`outcome\` text NOT NULL,
+          \`permission_request_id\` text,
+          \`agent_action_fingerprint\` text NOT NULL,
+          \`basis\` text,
+          \`basis_fingerprint\` text,
+          \`time_settled\` integer NOT NULL,
+          \`settlement_order\` integer NOT NULL,
+          CONSTRAINT \`fk_learning_bootstrap_capability_settlement_invocation_part_id_learning_bootstrap_disposition_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_bootstrap_disposition\`(\`invocation_part_id\`) ON DELETE CASCADE,
+          CONSTRAINT \`fk_learning_bootstrap_capability_settlement_invocation_part_id_permission_request_id_learning_bootstrap_capability_issue_invocation_part_id_permission_request_id_fk\` FOREIGN KEY (\`invocation_part_id\`,\`permission_request_id\`) REFERENCES \`learning_bootstrap_capability_issue\`(\`invocation_part_id\`,\`permission_request_id\`) ON DELETE CASCADE,
+          CONSTRAINT "learning_bootstrap_capability_settlement_shape" CHECK(length("agent_action_fingerprint") = 64
+                AND ("basis_fingerprint" IS NULL OR length("basis_fingerprint") = 64)
+                AND "time_settled" >= 0 AND "settlement_order" >= 0
+                AND (("outcome" = 'not_evaluated' AND "permission_request_id" IS NULL AND "basis" IS NULL)
+                  OR ("outcome" IN ('policy_allow', 'policy_deny') AND "permission_request_id" IS NULL AND json_valid("basis"))
+                  OR ("outcome" = 'prompted_abort' AND "permission_request_id" IS NOT NULL AND "basis" IS NULL)
+                  OR ("outcome" IN ('prompted_allow', 'prompted_deny', 'prompted_correct', 'prompted_cancel') AND "permission_request_id" IS NOT NULL AND json_valid("basis"))))
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_commit_seal\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`receipt_id\` text NOT NULL UNIQUE,
+          \`invocation_part_id\` text NOT NULL UNIQUE,
+          CONSTRAINT \`fk_learning_bootstrap_commit_seal_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_commit_seal_receipt_id_learning_command_receipt_id_fk\` FOREIGN KEY (\`receipt_id\`) REFERENCES \`learning_command_receipt\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_course_result\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`course_id\` text NOT NULL,
+          \`outcome\` text NOT NULL,
+          CONSTRAINT \`fk_learning_bootstrap_course_result_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_course_result_course_id_course_id_fk\` FOREIGN KEY (\`course_id\`) REFERENCES \`course\`(\`id\`) ON DELETE RESTRICT
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_disposition\` (
+          \`invocation_part_id\` text PRIMARY KEY,
+          \`disposition\` text NOT NULL,
+          \`command_fingerprint\` text NOT NULL,
+          \`canonical_command\` text NOT NULL,
+          \`semantic_address_fingerprint\` text NOT NULL,
+          \`semantic_outcome\` text,
+          \`existing_effect_id\` text,
+          \`existing_intent_fingerprint\` text,
+          \`agent_action_fingerprint\` text,
+          \`agent_action\` text,
+          \`materialized_candidate\` text,
+          \`time_disposed\` integer NOT NULL,
+          CONSTRAINT \`fk_learning_bootstrap_disposition_existing_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`existing_effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_disposition_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE CASCADE,
+          CONSTRAINT "learning_bootstrap_disposition_fingerprints" CHECK(length("command_fingerprint") = 64 AND "command_fingerprint" NOT GLOB '*[^0-9a-f]*'
+                AND length("semantic_address_fingerprint") = 64 AND "semantic_address_fingerprint" NOT GLOB '*[^0-9a-f]*'
+                AND ("existing_intent_fingerprint" IS NULL OR (length("existing_intent_fingerprint") = 64 AND "existing_intent_fingerprint" NOT GLOB '*[^0-9a-f]*'))
+                AND ("agent_action_fingerprint" IS NULL OR (length("agent_action_fingerprint") = 64 AND "agent_action_fingerprint" NOT GLOB '*[^0-9a-f]*'))),
+          CONSTRAINT "learning_bootstrap_disposition_closed" CHECK(("disposition" = 'candidate_v1'
+                  AND "semantic_outcome" IS NULL AND "existing_effect_id" IS NULL
+                  AND "existing_intent_fingerprint" IS NULL
+                  AND "agent_action_fingerprint" IS NOT NULL
+                  AND json_valid("agent_action") AND json_valid("materialized_candidate"))
+                OR ("disposition" = 'semantic_terminal_v1'
+                  AND "semantic_outcome" IN ('already_applied', 'semantic_conflict')
+                  AND "existing_effect_id" IS NOT NULL AND "existing_intent_fingerprint" IS NOT NULL
+                  AND "agent_action_fingerprint" IS NULL AND "agent_action" IS NULL
+                  AND "materialized_candidate" IS NULL)),
+          CONSTRAINT "learning_bootstrap_disposition_shape" CHECK(json_valid("canonical_command") AND json_extract("canonical_command", '$.schemaVersion') = 1 AND "time_disposed" >= 0)
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_effect\` (
+          \`id\` text PRIMARY KEY,
+          \`commit_seal_id\` text NOT NULL,
+          \`occurrence_id\` text NOT NULL UNIQUE,
+          \`invocation_part_id\` text NOT NULL UNIQUE,
+          \`semantic_fingerprint\` text NOT NULL,
+          \`command\` text NOT NULL,
+          \`materialized_candidate\` text NOT NULL,
+          \`course_id\` text NOT NULL,
+          \`child_results\` text NOT NULL,
+          \`acknowledgement\` text NOT NULL,
+          \`time_committed\` integer NOT NULL,
+          \`commit_order\` integer NOT NULL,
+          \`frontier_sequence\` integer NOT NULL UNIQUE,
+          \`frontier_time\` integer NOT NULL,
+          CONSTRAINT \`fk_learning_bootstrap_effect_commit_seal_id_learning_bootstrap_commit_seal_effect_id_fk\` FOREIGN KEY (\`commit_seal_id\`) REFERENCES \`learning_bootstrap_commit_seal\`(\`effect_id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_effect_occurrence_id_learning_admitted_occurrence_id_fk\` FOREIGN KEY (\`occurrence_id\`) REFERENCES \`learning_admitted_occurrence\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_effect_invocation_part_id_learning_command_invocation_part_id_fk\` FOREIGN KEY (\`invocation_part_id\`) REFERENCES \`learning_command_invocation\`(\`part_id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_effect_course_id_course_id_fk\` FOREIGN KEY (\`course_id\`) REFERENCES \`course\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT "learning_bootstrap_effect_seal" CHECK("commit_seal_id" = "id"),
+          CONSTRAINT "learning_bootstrap_effect_shape" CHECK(length("id") = 30 AND substr("id", 1, 4) = 'lbe_'
+                AND length("semantic_fingerprint") = 64 AND json_valid("command")
+                AND json_valid("materialized_candidate") AND json_valid("child_results")
+                AND json_array_length("child_results") BETWEEN 1 AND 128 AND json_valid("acknowledgement")
+                AND "time_committed" >= 0 AND "commit_order" >= 0
+                AND "frontier_sequence" >= 1 AND "frontier_time" = "time_committed")
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_map_result\` (
+          \`effect_id\` text NOT NULL,
+          \`local_key\` text NOT NULL,
+          \`map_id\` text NOT NULL CONSTRAINT \`learning_bootstrap_map_identity_unique\` UNIQUE,
+          CONSTRAINT \`learning_bootstrap_map_result_pk\` PRIMARY KEY(\`effect_id\`, \`local_key\`),
+          CONSTRAINT \`fk_learning_bootstrap_map_result_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_map_result_map_id_material_map_id_fk\` FOREIGN KEY (\`map_id\`) REFERENCES \`material_map\`(\`id\`) ON DELETE RESTRICT
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_material_result\` (
+          \`effect_id\` text NOT NULL,
+          \`ordinal\` integer NOT NULL,
+          \`local_key\` text NOT NULL,
+          \`adoption_id\` text NOT NULL,
+          \`outcome\` text NOT NULL,
+          CONSTRAINT \`learning_bootstrap_material_result_pk\` PRIMARY KEY(\`effect_id\`, \`ordinal\`),
+          CONSTRAINT \`fk_learning_bootstrap_material_result_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_material_result_adoption_id_learning_course_material_adoption_id_fk\` FOREIGN KEY (\`adoption_id\`) REFERENCES \`learning_course_material_adoption\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`learning_bootstrap_material_key_unique\` UNIQUE(\`effect_id\`,\`local_key\`)
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_route_result\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`view_id\` text NOT NULL,
+          \`revision_id\` text NOT NULL,
+          CONSTRAINT \`fk_learning_bootstrap_route_result_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_route_result_view_id_course_view_id_fk\` FOREIGN KEY (\`view_id\`) REFERENCES \`course_view\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_route_result_revision_id_course_view_revision_id_fk\` FOREIGN KEY (\`revision_id\`) REFERENCES \`course_view_revision\`(\`id\`) ON DELETE RESTRICT
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_bootstrap_selection_result\` (
+          \`effect_id\` text PRIMARY KEY,
+          \`outcome\` text NOT NULL,
+          \`selected_revision_id\` text,
+          \`selection_version\` integer NOT NULL,
+          CONSTRAINT \`fk_learning_bootstrap_selection_result_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_bootstrap_selection_result_selected_revision_id_course_view_revision_id_fk\` FOREIGN KEY (\`selected_revision_id\`) REFERENCES \`course_view_revision\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT "learning_bootstrap_selection_result_version" CHECK("selection_version" >= 0)
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`learning_course_material_adoption\` (
+          \`id\` text PRIMARY KEY,
+          \`course_id\` text NOT NULL,
+          \`target_kind\` text NOT NULL,
+          \`artifact_id\` text,
+          \`artifact_revision_id\` text,
+          \`attribution_type\` text,
+          \`attribution_member_id\` text,
+          \`representation_revision_id\` text,
+          \`creation_effect_id\` text NOT NULL,
+          \`time_created\` integer NOT NULL,
+          CONSTRAINT \`fk_learning_course_material_adoption_course_id_course_id_fk\` FOREIGN KEY (\`course_id\`) REFERENCES \`course\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_course_material_adoption_artifact_id_artifact_id_fk\` FOREIGN KEY (\`artifact_id\`) REFERENCES \`artifact\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_course_material_adoption_artifact_revision_id_artifact_revision_id_fk\` FOREIGN KEY (\`artifact_revision_id\`) REFERENCES \`artifact_revision\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_course_material_adoption_attribution_member_id_artifact_lineage_correction_member_id_fk\` FOREIGN KEY (\`attribution_member_id\`) REFERENCES \`artifact_lineage_correction_member\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_course_material_adoption_representation_revision_id_representation_revision_id_fk\` FOREIGN KEY (\`representation_revision_id\`) REFERENCES \`representation_revision\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`fk_learning_course_material_adoption_creation_effect_id_learning_bootstrap_effect_id_fk\` FOREIGN KEY (\`creation_effect_id\`) REFERENCES \`learning_bootstrap_effect\`(\`id\`) ON DELETE RESTRICT,
+          CONSTRAINT \`learning_course_material_artifact_unique\` UNIQUE(\`course_id\`,\`artifact_id\`,\`artifact_revision_id\`,\`attribution_type\`,\`attribution_member_id\`),
+          CONSTRAINT \`learning_course_material_representation_unique\` UNIQUE(\`course_id\`,\`representation_revision_id\`),
+          CONSTRAINT "learning_course_material_adoption_closed" CHECK(("target_kind" = 'artifact' AND "artifact_id" IS NOT NULL
+                  AND "artifact_revision_id" IS NOT NULL AND "attribution_type" IN ('recorded', 'lineage_correction')
+                  AND (("attribution_type" = 'recorded' AND "attribution_member_id" IS NULL)
+                    OR ("attribution_type" = 'lineage_correction' AND "attribution_member_id" IS NOT NULL))
+                  AND "representation_revision_id" IS NULL)
+                OR ("target_kind" = 'representation' AND "artifact_id" IS NULL
+                  AND "artifact_revision_id" IS NULL AND "attribution_type" IS NULL
+                  AND "attribution_member_id" IS NULL AND "representation_revision_id" IS NOT NULL)),
+          CONSTRAINT "learning_course_material_adoption_identity" CHECK(length("id") = 30 AND substr("id", 1, 4) = 'lba_' AND "time_created" >= 0)
+        ) WITHOUT ROWID;
+      `)
+      yield* tx.run(`
         CREATE TABLE \`learning_command_invocation\` (
           \`part_id\` text PRIMARY KEY,
           \`session_id\` text NOT NULL,
@@ -2841,14 +3057,28 @@ export default {
           \`fingerprint_digest\` text NOT NULL,
           \`byte_length\` integer NOT NULL,
           \`media_type\` text NOT NULL,
-          \`content_root_id\` text NOT NULL,
-          \`content_root_binding_id\` text NOT NULL,
-          \`content_root_binding_episode_id\` text NOT NULL,
-          \`content_root_binding_episode_ordinal\` integer NOT NULL,
-          \`content_root_grant_episode_id\` text NOT NULL,
-          \`content_root_grant_episode_ordinal\` integer NOT NULL,
-          \`content_root_grant_version\` integer NOT NULL,
+          \`authority_kind\` text DEFAULT 'content_root' NOT NULL,
+          \`content_root_id\` text,
+          \`content_root_binding_id\` text,
+          \`content_root_binding_episode_id\` text,
+          \`content_root_binding_episode_ordinal\` integer,
+          \`content_root_grant_episode_id\` text,
+          \`content_root_grant_episode_ordinal\` integer,
+          \`content_root_grant_version\` integer,
+          \`workspace_identity\` text,
+          \`operation_identity\` text,
+          \`operation_approval_basis\` text,
           \`normalized_relative_path\` text NOT NULL,
+          \`root_object_platform\` text,
+          \`root_object_verifier_version\` integer,
+          \`root_object_canonical_path\` text,
+          \`root_object_canonical_path_key\` text,
+          \`root_object_volume_serial\` text,
+          \`root_object_id\` text,
+          \`root_object_creation_time\` text,
+          \`root_object_change_time\` text,
+          \`root_object_last_write_time\` text,
+          \`root_object_size\` integer,
           \`source_object_platform\` text NOT NULL,
           \`source_object_verifier_version\` integer NOT NULL,
           \`source_object_canonical_path\` text NOT NULL,
@@ -2872,9 +3102,54 @@ export default {
           CONSTRAINT \`fk_material_map_artifact_target_content_root_id_content_root_binding_episode_id_content_root_binding_id_content_root_binding_episode_ordinal_content_root_binding_episode_content_root_id_id_binding_id_ordinal_fk\` FOREIGN KEY (\`content_root_id\`,\`content_root_binding_episode_id\`,\`content_root_binding_id\`,\`content_root_binding_episode_ordinal\`) REFERENCES \`content_root_binding_episode\`(\`content_root_id\`,\`id\`,\`binding_id\`,\`ordinal\`) ON DELETE RESTRICT,
           CONSTRAINT \`fk_material_map_artifact_target_content_root_id_content_root_grant_episode_id_content_root_binding_id_content_root_binding_episode_id_content_root_grant_episode_ordinal_content_root_grant_episode_content_root_id_id_binding_id_binding_episode_id_ordinal_fk\` FOREIGN KEY (\`content_root_id\`,\`content_root_grant_episode_id\`,\`content_root_binding_id\`,\`content_root_binding_episode_id\`,\`content_root_grant_episode_ordinal\`) REFERENCES \`content_root_grant_episode\`(\`content_root_id\`,\`id\`,\`binding_id\`,\`binding_episode_id\`,\`ordinal\`) ON DELETE RESTRICT,
           CONSTRAINT "material_map_artifact_target_attribution" CHECK(("attribution_type" = 'recorded' AND "attribution_member_id" IS NULL) OR ("attribution_type" = 'lineage_correction' AND "attribution_member_id" IS NOT NULL)),
-          CONSTRAINT "material_map_artifact_target_versions" CHECK("disposition_version" >= 0 AND "lineage_version" >= 0 AND "source_version" >= 0 AND "content_root_binding_episode_ordinal" >= 1 AND "content_root_grant_episode_ordinal" >= 1 AND "content_root_grant_version" >= 1),
+          CONSTRAINT "material_map_artifact_target_versions" CHECK("disposition_version" >= 0 AND "lineage_version" >= 0 AND "source_version" >= 0),
+          CONSTRAINT "material_map_artifact_target_authority" CHECK(("authority_kind" = 'content_root'
+                  AND "content_root_id" IS NOT NULL
+                  AND "content_root_binding_id" IS NOT NULL
+                  AND "content_root_binding_episode_id" IS NOT NULL
+                  AND "content_root_binding_episode_ordinal" >= 1
+                  AND "content_root_grant_episode_id" IS NOT NULL
+                  AND "content_root_grant_episode_ordinal" >= 1
+                  AND "content_root_grant_version" >= 1
+                  AND "workspace_identity" IS NULL
+                  AND "operation_identity" IS NULL
+                  AND "operation_approval_basis" IS NULL)
+                OR ("authority_kind" = 'active_workspace'
+                  AND "content_root_id" IS NULL
+                  AND "content_root_binding_id" IS NULL
+                  AND "content_root_binding_episode_id" IS NULL
+                  AND "content_root_binding_episode_ordinal" IS NULL
+                  AND "content_root_grant_episode_id" IS NULL
+                  AND "content_root_grant_episode_ordinal" IS NULL
+                  AND "content_root_grant_version" IS NULL
+                  AND length("workspace_identity") > 0
+                  AND "operation_identity" IS NULL
+                  AND "operation_approval_basis" IS NULL)
+                OR ("authority_kind" = 'one_operation'
+                  AND "content_root_id" IS NULL
+                  AND "content_root_binding_id" IS NULL
+                  AND "content_root_binding_episode_id" IS NULL
+                  AND "content_root_binding_episode_ordinal" IS NULL
+                  AND "content_root_grant_episode_id" IS NULL
+                  AND "content_root_grant_episode_ordinal" IS NULL
+                  AND "content_root_grant_version" IS NULL
+                  AND "workspace_identity" IS NULL
+                  AND length("operation_identity") > 0
+                  AND length("operation_approval_basis") > 0)),
           CONSTRAINT "material_map_artifact_target_content" CHECK("fingerprint_algorithm" = 'sha256' AND length("fingerprint_digest") = 64 AND "fingerprint_digest" NOT GLOB '*[^0-9a-f]*' AND "byte_length" > 0 AND length("media_type") > 0),
-          CONSTRAINT "material_map_artifact_target_source" CHECK(length("active_location") > 0 AND length("normalized_relative_path") > 0 AND "source_object_platform" = 'windows_ntfs' AND "source_object_verifier_version" >= 1 AND length("source_object_canonical_path") > 0 AND length("source_object_canonical_path_key") > 0 AND "source_object_canonical_path" = "active_location" AND length("source_object_volume_serial") > 0 AND length("source_object_id") = 32 AND length("source_object_creation_time") > 0 AND length("source_object_change_time") > 0 AND length("source_object_last_write_time") > 0 AND "source_object_size" = "byte_length" AND "source_observed_time" >= 0)
+          CONSTRAINT "material_map_artifact_target_source" CHECK(length("active_location") > 0 AND length("normalized_relative_path") > 0
+                AND "root_object_platform" = 'windows_ntfs' AND "root_object_verifier_version" >= 1
+                AND length("root_object_canonical_path") > 0 AND length("root_object_canonical_path_key") > 0
+                AND length("root_object_volume_serial") > 0 AND length("root_object_id") = 32
+                AND length("root_object_creation_time") > 0 AND length("root_object_change_time") > 0
+                AND length("root_object_last_write_time") > 0 AND "root_object_size" >= 0
+                AND "source_object_platform" = 'windows_ntfs' AND "source_object_verifier_version" >= 1
+                AND length("source_object_canonical_path") > 0 AND length("source_object_canonical_path_key") > 0
+                AND "source_object_canonical_path" = "active_location"
+                AND length("source_object_volume_serial") > 0 AND length("source_object_id") = 32
+                AND length("source_object_creation_time") > 0 AND length("source_object_change_time") > 0
+                AND length("source_object_last_write_time") > 0 AND "source_object_size" = "byte_length"
+                AND "source_observed_time" >= 0)
         );
       `)
       yield* tx.run(`
@@ -3867,6 +4142,9 @@ export default {
       )
       yield* tx.run(
         `CREATE INDEX \`learner_default_course_acknowledgement_effect_idx\` ON \`learner_default_course_acknowledgement\` (\`effect_id\`,\`invocation_part_id\`);`,
+      )
+      yield* tx.run(
+        `CREATE INDEX \`learning_course_material_course_idx\` ON \`learning_course_material_adoption\` (\`course_id\`,\`time_created\`,\`id\`);`,
       )
       yield* tx.run(
         `CREATE UNIQUE INDEX \`learning_command_invocation_one_mutation_idx\` ON \`learning_command_invocation\` (\`assistant_message_id\`) WHERE "learning_command_invocation"."status" = 'applied';`,

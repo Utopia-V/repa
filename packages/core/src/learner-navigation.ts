@@ -453,15 +453,35 @@ export function applyAnchor(
   },
 ) {
   return Effect.gen(function* () {
+    const consumed = yield* LearningFrontier.read(tx)
+    if (input.trustedTime < consumed.time) return yield* staleAnchor(input.command.courseID)
+    const frontier = yield* LearningFrontier.advance(tx, { time: input.trustedTime, consumed: [consumed] })
+    return yield* applyAnchorAtFrontier(tx, { ...input, frontier })
+  })
+}
+
+/** Owner-private anchor transition that shares a caller's one local frontier advance. */
+export function applyAnchorAtFrontier(
+  tx: Transaction,
+  input: {
+    readonly occurrenceID: OccurrenceID
+    readonly command: RouteAnchorCommand
+    readonly proof?: Course.MembershipProof
+    readonly trustedTime: number
+    readonly commitOrder: number
+    readonly frontier: LearningFrontier.Snapshot
+  },
+) {
+  return Effect.gen(function* () {
     const head = yield* anchorHead(tx, input.command.courseID)
     yield* requireAnchorHead(input.command, head)
     const previous = anchorTarget(head)
     const target = commandTarget(input.command)
     if (sameEndpoint(previous, target)) return yield* staleAnchor(input.command.courseID)
     const proof = input.command.target ? yield* requireAnchorProof(tx, input.command, input.proof) : undefined
-    const consumed = yield* LearningFrontier.read(tx)
-    if (input.trustedTime < consumed.time) return yield* staleAnchor(input.command.courseID)
-    const frontier = yield* LearningFrontier.advance(tx, { time: input.trustedTime, consumed: [consumed] })
+    if (input.frontier.time !== input.trustedTime || input.frontier.sequence < 1) {
+      return yield* staleAnchor(input.command.courseID)
+    }
     const id = createAnchorEffectID()
     yield* tx
       .insert(CourseRouteAnchorTransitionTable)
@@ -484,8 +504,8 @@ export function applyAnchor(
         target_revision_version: proof?.receipt.revisionVersion ?? null,
         time_committed: input.trustedTime,
         commit_order: input.commitOrder,
-        frontier_sequence: frontier.sequence,
-        frontier_time: frontier.time,
+        frontier_sequence: input.frontier.sequence,
+        frontier_time: input.frontier.time,
       })
       .run()
       .pipe(Effect.orDie)
@@ -499,7 +519,7 @@ export function applyAnchor(
       version: (head?.version ?? 0) + 1,
       timeCommitted: input.trustedTime,
       commitOrder: input.commitOrder,
-      frontierSequence: frontier.sequence,
+      frontierSequence: input.frontier.sequence,
     } satisfies AnchorEffect
   })
 }
@@ -510,6 +530,22 @@ export function readCurrentDefault(tx: Transaction) {
 
 export function readCurrentAnchor(tx: Transaction, courseID: Course.CourseID) {
   return anchorHead(tx, courseID).pipe(Effect.flatMap((head) => anchorProjection(tx, courseID, head)))
+}
+
+/** Seal an anchor transition to the exact physical receipt that committed it. */
+export function sealAnchor(
+  tx: Transaction,
+  input: Readonly<{
+    effectID: AnchorEffectID
+    receiptID: (typeof LearningCommandReceiptTable.$inferSelect)["id"]
+    invocationPartID: PartID
+  }>,
+) {
+  return tx
+    .insert(LearnerCourseRouteAnchorCommitSealTable)
+    .values({ effect_id: input.effectID, receipt_id: input.receiptID, invocation_part_id: input.invocationPartID })
+    .run()
+    .pipe(Effect.orDie)
 }
 
 function readDefaultHistory(tx: Transaction, input?: PageOptions) {

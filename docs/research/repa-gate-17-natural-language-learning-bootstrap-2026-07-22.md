@@ -3,10 +3,12 @@
 Status: Engineering contract accepted on 2026-08-02. Original fresh separate
 top-level reviewer Dispatch `ctx_475d85cda99f` accepted exact Git commit
 `cf0cfbd032273cf7360fe7747ef0809abda6181f` with no remaining finding, so
-scoped Gate 17 implementation authority is available. No Gate 17
-implementation, implementation evidence, or integration is yet accepted; the
-next control point is the Gate 17 implementation/evidence candidate, not Gate
-18. The maintainer's baseline decision continues to omit built-in `/learn`.
+scoped Gate 17 implementation authority is available. An executor-produced
+[implementation/evidence candidate](repa-gate-17-natural-language-learning-bootstrap-implementation-evidence-2026-08-02.md)
+is now prepared against exact base `822f8a3df4baa5b51002e7ffd8118a01d567c2a0`.
+It is not independently reviewed, accepted, or integrated; the next control
+point is exact implementation/evidence review, not Gate 18. The maintainer's
+baseline decision continues to omit built-in `/learn`.
 Gate 14's Agent-native default-Course implementation is integrated at
 `ff0ef1fd7`, and Gate 16's Agent-native Goal implementation is integrated at
 `2baba9eea`. The ordinary interactive Agent is the sole baseline
@@ -805,7 +807,15 @@ without changing any contract clause. The same original reviewer then returned
 final exact-binding `Accept` in Dispatch `ctx_475d85cda99f`, explicitly
 accepting `cf0cfbd032273cf7360fe7747ef0809abda6181f` with no remaining finding.
 
-That exact acceptance makes scoped Gate 17 implementation authority available.
-It accepts no Gate 17 implementation, implementation evidence, or integration.
-The next control point is an exact Gate 17 implementation/evidence candidate,
-not Gate 18.
+That exact acceptance made scoped Gate 17 implementation authority available.
+It accepted no Gate 17 implementation, implementation evidence, or integration.
+
+## Implementation/evidence candidate locator
+
+The 2026-08-02 top-level executor prepared the scoped candidate recorded in
+[the Gate 17 implementation/evidence record](repa-gate-17-natural-language-learning-bootstrap-implementation-evidence-2026-08-02.md)
+against exact base `822f8a3df4baa5b51002e7ffd8118a01d567c2a0` and this exact
+accepted contract. The containing commit is supplied in the executor handoff.
+This locator changes no accepted contract clause and claims neither independent
+implementation/evidence acceptance nor integration. Exact candidate review is
+the next control point, not Gate 18.

@@ -2454,6 +2454,42 @@ implementation, implementation evidence, or integration is yet accepted. The
 next control point is the exact Gate 17 implementation/evidence candidate, not
 Gate 18.
 
+## 2026-08-02 Gate 17 implementation/evidence candidate
+
+The single top-level executor consumed exact base
+`822f8a3df4baa5b51002e7ffd8118a01d567c2a0` and exact accepted contract
+`cf0cfbd032273cf7360fe7747ef0809abda6181f`. The containing commit, supplied
+exactly in the executor callback, implements the V16-to-V17 generated migration
+and fresh-schema parity; bounded Course/navigation and material owner reads;
+one closed V1 `update_learning_course` write; the three-arm Gate 10 local-read
+union and one-new-Artifact ceiling; owner-private Course, Artifact, Material
+Map, alignment, selection, and route-anchor composition; Gate 8 physical and
+semantic ordering, root/delegated issuance, capability settlement, commit
+seal, and recovery; and one typed TUI/direct-run/ACP terminal projection.
+
+The candidate adds no `/learn`, privileged learn envelope, parser/classifier,
+second model call, controller/workflow framework, default-Course mutation,
+Goal, steering, progress/mastery, Session topology, queue/steer, macro
+activity, Context, Tutor selector, or product-loop behavior. A Course without a
+View and a zero-write teaching Turn remain legal. Additional external,
+long-running, separately authorized, result-dependent, or potentially mutating
+new material work remains independently staged and receipted.
+
+The exact implementation and evidence mapping are recorded in
+`docs/research/repa-gate-17-natural-language-learning-bootstrap-implementation-evidence-2026-08-02.md`.
+Fresh Windows/Bun `1.3.14` evidence includes Core bootstrap/migration 49/476, a
+post-repair owner aggregate of 72/675, OpenCode Gate 17 runtime 3/20, affected
+registry/presentation/ACP/direct-run 74/322, Schema semantic wire 4/11, TUI
+semantic projection 5/18, migration drift, and Core/Schema/OpenCode/TUI
+typechecks.
+
+No provider credential, paid call, or external write was used. Deterministic
+ordinary-Agent fixtures qualify the production admission, permission,
+transaction, replay, carrier, and recovery mechanics; the bounded released-v1
+real-model language/product traces remain for authorized independent review.
+This record is an executor candidate, not independent acceptance or
+integration, and grants no Gate 18 authority.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

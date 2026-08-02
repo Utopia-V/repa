@@ -77,6 +77,71 @@ describe("semantic presentation v1", () => {
     ).toThrow()
   })
 
+  test("decodes the closed Gate 17 capability and truthful terminal result", () => {
+    expect(
+      decode({
+        version: 1,
+        phase: "proposal",
+        basis: {
+          kind: "learning_bootstrap_capability",
+          binding,
+          commandFingerprint: "bootstrap-fingerprint",
+          issuance: "root",
+          scope: {
+            canonicalCommand: '{"schemaVersion":1}',
+            course: { action: "create", title: "Linear algebra" },
+            route: { action: "none" },
+            selection: "preserve",
+            materials: [],
+            maps: [],
+            alignmentKeys: [],
+            anchor: "preserve",
+          },
+        },
+      }),
+    ).toMatchObject({ phase: "proposal", basis: { kind: "learning_bootstrap_capability", issuance: "root" } })
+
+    expect(
+      decode({
+        version: 1,
+        phase: "result",
+        basis: {
+          kind: "learning_bootstrap_result",
+          binding,
+          settlement: { outcome: "applied" },
+          disposition: "candidate_v1",
+          issuance: "root",
+          capabilityOutcome: "policy_allow",
+          acknowledgement: {
+            schemaVersion: 1,
+            outcome: "applied",
+            course: { id: "cou_linear", title: "Linear algebra" },
+            children: [
+              { kind: "course", outcome: "changed", id: "cou_linear", detail: "created" },
+              {
+                kind: "selection",
+                outcome: "no_change",
+                selectedRevisionID: null,
+                detail: "selection preserved",
+              },
+              { kind: "anchor", outcome: "no_change", detail: "route anchor preserved" },
+            ],
+            selectedRevisionID: null,
+            anchor: { headID: null, target: null, usability: { usable: false, cause: "absent" } },
+            correction: "Continue in ordinary language; a correction creates a new learner occurrence.",
+          },
+        },
+      }),
+    ).toMatchObject({
+      phase: "result",
+      basis: {
+        kind: "learning_bootstrap_result",
+        settlement: { outcome: "applied" },
+        acknowledgement: { course: { title: "Linear algebra" }, selectedRevisionID: null },
+      },
+    })
+  })
+
   test("keeps V2 Default-Course endpoints exact while preserving partial V1 history", () => {
     const endpoint = {
       kind: "course",

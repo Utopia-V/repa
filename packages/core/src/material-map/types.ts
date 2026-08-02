@@ -59,8 +59,7 @@ export type ArtifactTargetReceipt = {
   readonly descriptorCorrectionID?: Artifact.ObservationCorrectionID
   readonly fingerprint: Artifact.Fingerprint
   readonly mediaType: string
-  readonly authorization: ContentRoot.ReadAuthorizationReceipt
-  readonly grantEpisodeOrdinal: number
+  readonly authorization: ContentRoot.LocalReadAuthorizationReceipt
   readonly relativePath: string
   readonly descriptor: ContentRootNTFS.Descriptor
   readonly timeObserved: number

@@ -63,6 +63,7 @@ import { RepresentationCommandRuntime } from "@/learning-command/representation-
 import { RepresentationConvertTool } from "./representation-convert"
 import { UpdateRetainedLearningSteeringTool } from "./retained-learning-steering"
 import { UpdateLearnerGoalsTool } from "./learner-goal"
+import { UpdateLearningCourseTool } from "./update-learning-course"
 import {
   ContentInventoryTool,
   ContentReadTool,
@@ -77,6 +78,10 @@ import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { CourseQueryTool, LearningNavigationQueryTool } from "./course-navigation-query"
 import { LearnerGoalQueryTool } from "./learner-goal-query"
+import { LearningMaterialQueryTool } from "./learning-material-query"
+import { Artifact } from "@opencode-ai/core/artifact"
+import { MaterialMap } from "@opencode-ai/core/material-map"
+import { Representation } from "@opencode-ai/core/representation"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -140,9 +145,11 @@ const layer = Layer.effect(
     const courseQuery = yield* CourseQueryTool
     const learningNavigationQuery = yield* LearningNavigationQueryTool
     const learnerGoalQuery = yield* LearnerGoalQueryTool
+    const learningMaterialQuery = yield* LearningMaterialQueryTool
     const representationConvert = yield* RepresentationConvertTool
     const updateRetainedLearningSteering = yield* UpdateRetainedLearningSteeringTool
     const updateLearnerGoals = yield* UpdateLearnerGoalsTool
+    const updateLearningCourse = yield* UpdateLearningCourseTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
     const contentSearch = yield* ContentSearchTool
@@ -268,9 +275,11 @@ const layer = Layer.effect(
           courseQuery: Tool.init(courseQuery),
           learningNavigationQuery: Tool.init(learningNavigationQuery),
           learnerGoalQuery: Tool.init(learnerGoalQuery),
+          learningMaterialQuery: Tool.init(learningMaterialQuery),
           representationConvert: Tool.init(representationConvert),
           updateRetainedLearningSteering: Tool.init(updateRetainedLearningSteering),
           updateLearnerGoals: Tool.init(updateLearnerGoals),
+          updateLearningCourse: Tool.init(updateLearningCourse),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
           contentSearch: Tool.init(contentSearch),
@@ -290,9 +299,11 @@ const layer = Layer.effect(
             tool.courseQuery,
             tool.learningNavigationQuery,
             tool.learnerGoalQuery,
+            tool.learningMaterialQuery,
             tool.representationConvert,
             tool.updateRetainedLearningSteering,
             tool.updateLearnerGoals,
+            tool.updateLearningCourse,
             tool.contentRoots,
             tool.contentInventory,
             tool.contentSearch,
@@ -542,6 +553,9 @@ export const node = LayerNode.make({
     Course.node,
     LearnerGoal.readNode,
     LearnerNavigation.readNode,
+    Artifact.node,
+    MaterialMap.node,
+    Representation.node,
   ],
 })
 

@@ -191,6 +191,88 @@ describe("run entry body", () => {
     expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
   })
 
+  test("renders the learning-bootstrap typed acknowledgement instead of raw settlement JSON", () => {
+    const presentation = SemanticPresentation.result({
+      kind: "learning_bootstrap_result",
+      binding: {
+        sessionID: "session-1",
+        messageID: "msg-update_learning_course",
+        callID: "call-update_learning_course-1",
+        partID: "update_learning_course-1",
+      },
+      settlement: { outcome: "applied" },
+      disposition: "candidate_v1",
+      issuance: "root",
+      capabilityOutcome: "policy_allow",
+      acknowledgement: {
+        schemaVersion: 1,
+        outcome: "applied",
+        course: { id: "cou_linear", title: "Linear algebra" },
+        children: [
+          { kind: "course", outcome: "changed", id: "cou_linear", detail: "created" },
+          {
+            kind: "material",
+            key: "notes",
+            outcome: "changed",
+            id: "lca_notes",
+            detail: "explicit material adoption committed",
+            materialTarget: { type: "representation", representationRevisionID: "rrv_notes" },
+          },
+          { kind: "anchor", outcome: "no_change", detail: "route anchor preserved" },
+        ],
+        selectedRevisionID: null,
+        anchor: { headID: null, target: null, usability: { usable: false, cause: "absent" } },
+        correction: "Continue in ordinary language to correct this Course.",
+      },
+    })
+    const projection = SemanticPresentation.projectResultBasis(presentation.basis)
+    if (!projection) throw new Error("Expected a valid learning-bootstrap projection")
+    const part = toolPart(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, {
+      status: "completed",
+      input: { course: { type: "new", title: "Linear algebra" } },
+      output: JSON.stringify({ settlement: { outcome: "applied", effectID: "lbe_linear" } }),
+      title: projection.title,
+      metadata: {
+        command: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        commandVersion: 1,
+        outcome: "applied",
+        durablySettled: true,
+        truncated: false,
+        ...SemanticPresentation.metadata(presentation),
+      },
+      time: { start: 1, end: 2 },
+    })
+    const final = entryBody(
+      commit({
+        kind: "tool",
+        text: "",
+        phase: "final",
+        source: "tool",
+        tool: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        toolState: "completed",
+        part,
+      }),
+    )
+
+    expect(toolInlineInfo(part)).toMatchObject({
+      icon: "◇",
+      title: "Learning bootstrap settlement — Committed",
+      body: expect.stringContaining(
+        "Material 2: changed: explicit material adoption committed; Representation Revision rrv_notes; effect lca_notes",
+      ),
+    })
+    expect(final).toEqual({
+      type: "text",
+      content: [
+        projection.summary,
+        ...projection.facts.map((fact) => `${fact.label}: ${fact.value}`),
+        "Durable settlement: yes",
+      ].join("\n"),
+    })
+    expect(JSON.stringify(final)).not.toContain("lbe_linear")
+    expect(JSON.stringify(final)).not.toContain('"outcome":"applied"')
+  })
+
   test("renders retained steering acknowledgement title and body instead of the generic tool fallback", () => {
     const presentation = SemanticPresentation.result({
       kind: "retained_learning_steering_result",

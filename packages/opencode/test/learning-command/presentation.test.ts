@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Course } from "@opencode-ai/core/course"
+import type { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import type { DefaultCourseV2Authorization } from "@opencode-ai/core/learner-navigation/default-course-v2"
@@ -1027,6 +1028,172 @@ describe("learning command semantic basis and projection", () => {
         },
       }),
     ).toBeUndefined()
+  })
+
+  test("binds the closed learning bootstrap scope and projects exact material, selection, and anchor truth", () => {
+    const bootstrapEnvelope = {
+      sessionID: envelope.sessionID,
+      assistantMessageID: envelope.assistantMessageID,
+      providerCallID: envelope.providerCallID,
+      partID: envelope.partID,
+    }
+    const candidate = {
+      commandFingerprint: "bootstrap_fingerprint",
+      agentAction: { kind: "root" },
+      canonicalCommand: {
+        schemaVersion: 1,
+        course: { type: "new", title: "Linear algebra" },
+        selection: { type: "preserve" },
+        materials: [
+          {
+            type: "local",
+            key: "notes",
+            path: "C:\\Learning\\linear.txt",
+            authority: { type: "one_operation" },
+          },
+        ],
+        maps: [],
+        alignments: [],
+        anchor: { type: "preserve" },
+      },
+      materialized: { course: { type: "new" } },
+    } as unknown as LearningBootstrap.Candidate
+    const proposal = LearningCommandPresentation.learningBootstrapCapability(candidate, bootstrapEnvelope)
+    const scope = LearningCommandPresentation.learningBootstrapScope(candidate)
+    const proposalRead = SemanticPresentation.readProposal(
+      request({
+        permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        patterns: ["learning_course"],
+        always: ["learning_course"],
+        metadata: {
+          bootstrapKind: "learning_bootstrap",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: "root",
+          scope,
+          ...SemanticPresentation.metadata(proposal),
+        },
+      }),
+    )
+    expect(proposalRead).toMatchObject({
+      type: "valid",
+      value: {
+        capability: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        approval: "policy",
+        facts: expect.arrayContaining([
+          { label: "Issuance", value: "root" },
+          { label: "Course", value: 'create "Linear algebra"' },
+          { label: "Route", value: "none" },
+          { label: "Selection", value: "preserve" },
+          { label: "Material notes", value: "local: C:\\Learning\\linear.txt; one_operation" },
+        ]),
+      },
+    })
+
+    const acknowledgement = {
+      schemaVersion: 1 as const,
+      outcome: "applied" as const,
+      course: { id: "cou_linear", title: "Linear algebra" },
+      children: [
+        { kind: "course" as const, outcome: "changed" as const, id: "cou_linear", detail: "created" },
+        {
+          kind: "material" as const,
+          key: "notes",
+          outcome: "changed" as const,
+          id: "lca_linear",
+          detail: "explicit material adoption committed",
+          materialTarget: {
+            type: "artifact" as const,
+            artifactID: "art_linear",
+            revisionID: "arv_linear",
+            attribution: { type: "recorded" as const },
+            sourceAuthority: {
+              kind: "one_operation" as const,
+              root: {
+                platform: "windows_ntfs" as const,
+                verifierVersion: 1,
+                canonicalPath: "C:\\Learning",
+                canonicalPathKey: "c:\\learning",
+                volumeSerial: "volume",
+                objectID: "root-object",
+                creationTime: "1",
+                changeTime: "2",
+                lastWriteTime: "3",
+                size: 1,
+                kind: "directory" as const,
+              },
+              relativePath: "linear.txt",
+              canonicalPath: "C:\\Learning\\linear.txt",
+              operationIdentity: `${envelope.partID}:${envelope.providerCallID}`,
+              approvalBasis: '{"permissionRequestID":"per_bootstrap"}',
+            },
+          },
+        },
+        {
+          kind: "selection" as const,
+          outcome: "no_change" as const,
+          selectedRevisionID: null,
+          detail: "selection clear or preserved",
+        },
+        { kind: "anchor" as const, outcome: "no_change" as const, detail: "route anchor preserved" },
+      ],
+      selectedRevisionID: null,
+      anchor: { headID: null, target: null, usability: { usable: false as const, cause: "absent" } },
+      correction: "Continue in ordinary language; Repa will bind any correction to a new learner occurrence.",
+    }
+    const result = LearningCommandPresentation.learningBootstrapSettlementResult(
+      { outcome: "applied", acknowledgement } as unknown as LearningCommand.PhysicalSettlement,
+      {
+        disposition: "candidate_v1",
+        candidate,
+        capabilityOutcome: "prompted_allow",
+        permissionRequestID: "per_bootstrap",
+      } as unknown as LearningBootstrap.InvocationVersion,
+      bootstrapEnvelope,
+    )
+    const projection = SemanticPresentation.projectResultBasis(result.basis)
+    expect(projection).toMatchObject({
+      capability: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      outcome: "committed",
+      durablySettled: true,
+      facts: expect.arrayContaining([
+        { label: "Course", value: '"Linear algebra" (cou_linear)' },
+        {
+          label: "Material 2",
+          value: expect.stringContaining(
+            "Artifact art_linear; Revision arv_linear; recorded attribution; one-operation grant",
+          ),
+        },
+        { label: "Working selection", value: "none" },
+        { label: "Route anchor", value: "none; unusable: absent; head none" },
+      ]),
+    })
+    const part = {
+      id: bootstrapEnvelope.partID,
+      sessionID: bootstrapEnvelope.sessionID,
+      messageID: bootstrapEnvelope.assistantMessageID,
+      type: "tool",
+      tool: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      callID: bootstrapEnvelope.providerCallID,
+      state: {
+        status: "completed",
+        input: candidate.canonicalCommand,
+        output: "{}",
+        title: projection!.title,
+        metadata: {
+          command: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+          commandVersion: 1,
+          outcome: "applied",
+          durablySettled: true,
+          truncated: false,
+          ...SemanticPresentation.metadata(result),
+        },
+        time: { start: 1, end: 2 },
+      },
+    } as SessionV1.ToolPart
+    expect(SemanticPresentation.readResult(part)).toMatchObject({
+      type: "valid",
+      value: { outcome: "committed", capability: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY },
+    })
   })
 
   test("projects every current learner Goal terminal class through the typed carrier", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import type { Event, Message, OpencodeClient, Part, SessionMessageResponse, ToolPart } from "@opencode-ai/sdk/v2"
 import { Effect, ManagedRuntime } from "effect"
 import { ACPEvent } from "@/acp/event"
@@ -256,6 +257,7 @@ function completedTool(
     readonly tool?: string
     readonly input?: Record<string, unknown>
     readonly metadata?: Record<string, unknown>
+    readonly title?: string
   } = {},
 ) {
   return {
@@ -269,7 +271,7 @@ function completedTool(
       status: "completed",
       input: options.input ?? { cmd: "printf done" },
       output,
-      title: "bash",
+      title: options.title ?? "bash",
       metadata: options.metadata ?? { exit: 0 },
       time: { start: Date.now() - 1, end: Date.now() },
       ...(attachments.length ? { attachments } : {}),
@@ -647,6 +649,114 @@ describe("acp event routing", () => {
       status: "completed",
       content: [{ type: "content", content: { type: "text", text: "finished" } }],
       rawOutput: { output: "finished", metadata: { exit: 0 } },
+    })
+  })
+
+  it("projects a verified learning-bootstrap result and fails closed on an invalid consequential basis", async () => {
+    const harness = createHarness()
+    await Effect.runPromise(harness.session.create({ id: "ses_bootstrap", cwd: "/workspace" }))
+    const presentation = SemanticPresentation.result({
+      kind: "learning_bootstrap_result",
+      binding: {
+        sessionID: "ses_bootstrap",
+        messageID: "msg_call_bootstrap",
+        callID: "call_bootstrap",
+        partID: "part_call_bootstrap",
+      },
+      settlement: { outcome: "applied" },
+      disposition: "candidate_v1",
+      issuance: "root",
+      capabilityOutcome: "policy_allow",
+      acknowledgement: {
+        schemaVersion: 1,
+        outcome: "applied",
+        course: { id: "cou_linear", title: "Linear algebra" },
+        children: [
+          { kind: "course", outcome: "changed", id: "cou_linear", detail: "created" },
+          {
+            kind: "material",
+            key: "notes",
+            outcome: "changed",
+            id: "lca_notes",
+            detail: "explicit material adoption committed",
+            materialTarget: {
+              type: "representation",
+              representationRevisionID: "rrv_linear_notes",
+            },
+          },
+          { kind: "anchor", outcome: "no_change", detail: "route anchor preserved" },
+        ],
+        selectedRevisionID: null,
+        anchor: { headID: null, target: null, usability: { usable: false, cause: "absent" } },
+        correction: "Continue in ordinary language to correct this Course.",
+      },
+    })
+    const projection = SemanticPresentation.projectResultBasis(presentation.basis)
+    if (!projection) throw new Error("Expected a valid learning-bootstrap projection")
+    const metadata = {
+      command: "update_learning_course",
+      commandVersion: 1,
+      outcome: "applied",
+      durablySettled: true,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    }
+    const raw = JSON.stringify({ settlement: { outcome: "applied", effectID: "lbe_linear" } })
+
+    await harness.subscription.handle(
+      toolUpdated(
+        completedTool("ses_bootstrap", "call_bootstrap", raw, [], {
+          tool: "update_learning_course",
+          input: { course: { type: "new", title: "Linear algebra" } },
+          title: projection.title,
+          metadata,
+        }),
+      ),
+    )
+
+    expect(harness.updates.at(-1)?.update).toMatchObject({
+      sessionUpdate: "tool_call_update",
+      toolCallId: "call_bootstrap",
+      status: "completed",
+      title: "Learning bootstrap settlement — Committed",
+      content: [
+        {
+          type: "content",
+          content: {
+            type: "text",
+            text: expect.stringContaining(
+              "Material 2: changed: explicit material adoption committed; Representation Revision rrv_linear_notes",
+            ),
+          },
+        },
+      ],
+      rawOutput: { output: raw, metadata },
+    })
+
+    await Effect.runPromise(harness.session.create({ id: "ses_invalid_bootstrap", cwd: "/workspace" }))
+    await harness.subscription.handle(
+      toolUpdated(
+        completedTool("ses_invalid_bootstrap", "call_invalid_bootstrap", raw, [], {
+          tool: "update_learning_course",
+          input: {},
+          title: "Learning bootstrap settlement",
+          metadata: { semanticPresentationRequired: true },
+        }),
+      ),
+    )
+    expect(harness.updates.at(-1)?.update).toMatchObject({
+      sessionUpdate: "tool_call_update",
+      status: "completed",
+      title: "Consequential result unavailable",
+      content: [
+        {
+          type: "content",
+          content: {
+            type: "text",
+            text: "Consequential result unavailable: Repa could not verify this result, so no success is inferred.",
+          },
+        },
+      ],
     })
   })
 

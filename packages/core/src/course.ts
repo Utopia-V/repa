@@ -368,7 +368,90 @@ export type RevisionTransition = {
   readonly predecessorRevisionID?: RevisionID
 }
 
+export type PublishedRevision = Readonly<{
+  view: ViewInfo
+  revision: RevisionSummary
+  items: Readonly<Record<string, ItemID>>
+}>
+
+export type RevisionOwnerReceipt = Readonly<{
+  courseID: CourseID
+  courseVersion: number
+  viewID: ViewID
+  viewVersion: number
+  revisionID: RevisionID
+  revisionVersion: number
+  revisionNumber: number
+}>
+
+const revisionOwnerProofToken = Symbol("Course.RevisionOwnerProof")
+
+export class RevisionOwnerProof {
+  readonly receipt: RevisionOwnerReceipt
+  #receipt: RevisionOwnerReceipt
+
+  constructor(token: symbol, receipt: RevisionOwnerReceipt) {
+    if (token !== revisionOwnerProofToken) throw new Error("Course Revision-owner proofs are owner-issued")
+    this.receipt = Object.freeze({ ...receipt })
+    this.#receipt = this.receipt
+  }
+
+  expectation(token: symbol) {
+    if (token !== revisionOwnerProofToken) return
+    return this.#receipt
+  }
+}
+
+export type TransactionSelectionInput = Readonly<{
+  courseID: CourseID
+  revisionID?: RevisionID
+  expectedCourseVersion: number
+  expectedSelectionRevisionID?: RevisionID
+  expectedSelectionVersion: number
+  expectedViewVersion?: number
+  expectedRevisionVersion?: number
+  time: number
+}>
+
 export interface Interface {
+  /** Owner-private transaction seam used by one local application composition. */
+  readonly createCourseInTransaction: (
+    tx: Transaction,
+    input: Readonly<{ title: string; time: number }>,
+  ) => Effect.Effect<CourseInfo, Error>
+  /** Owner-private transaction seam used by one local application composition. */
+  readonly correctCourseInTransaction: (
+    tx: Transaction,
+    input: Readonly<{ courseID: CourseID; title: string; expectedCourseVersion: number; time: number }>,
+  ) => Effect.Effect<CourseInfo, Error>
+  /** Owner-private transaction seam used by one local application composition. */
+  readonly createViewInTransaction: (
+    tx: Transaction,
+    input: Readonly<{
+      courseID: CourseID
+      name: string
+      expectedCourseVersion: number
+      authorship: Authorship
+      revision: RevisionProposal
+      time: number
+    }>,
+  ) => Effect.Effect<PublishedRevision, Error>
+  /** Owner-private transaction seam used by one local application composition. */
+  readonly addRevisionInTransaction: (
+    tx: Transaction,
+    input: Readonly<{
+      courseID: CourseID
+      viewID: ViewID
+      predecessorRevisionID: RevisionID
+      expectedCourseVersion: number
+      expectedViewVersion: number
+      authorship: Authorship
+      revision: RevisionProposal
+      time: number
+    }>,
+  ) => Effect.Effect<PublishedRevision, Error>
+  /** Owner-private transaction seam used by one local application composition. */
+  readonly selectInTransaction: (tx: Transaction, input: TransactionSelectionInput) => Effect.Effect<Selection, Error>
   readonly createCourse: (input: { readonly title: string }) => Effect.Effect<CourseInfo, Error>
   readonly correctCourse: (input: {
     readonly courseID: CourseID
@@ -751,107 +834,196 @@ const layer = Layer.effect(
         })
       })
 
-    const createCourse: Interface["createCourse"] = Effect.fn("Course.createCourse")(function* (input) {
+    const createCourseInTransaction: Interface["createCourseInTransaction"] = Effect.fn(
+      "Course.createCourseInTransaction",
+    )(function* (tx, input) {
       const title = yield* titleValue(input.title, "Course")
       const courseID = createCourseID()
+      yield* tx
+        .insert(CourseTable)
+        .values({
+          id: courseID,
+          title,
+          state_version: 0,
+          time_created: input.time,
+          time_updated: input.time,
+        })
+        .run()
+        .pipe(Effect.orDie)
+      yield* tx
+        .insert(CourseWorkingSelectionTable)
+        .values({ course_id: courseID, version: 0, time_updated: input.time })
+        .run()
+        .pipe(Effect.orDie)
+      return yield* getCourseInfo(tx, courseID)
+    })
+
+    const correctCourseInTransaction: Interface["correctCourseInTransaction"] = Effect.fn(
+      "Course.correctCourseInTransaction",
+    )(function* (tx, input) {
+      const title = yield* titleValue(input.title, "Course")
+      yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
+      const updated = yield* tx
+        .update(CourseTable)
+        .set({ title, state_version: sql`${CourseTable.state_version} + 1`, time_updated: input.time })
+        .where(
+          and(
+            eq(CourseTable.id, input.courseID),
+            eq(CourseTable.state_version, input.expectedCourseVersion),
+            isNull(CourseTable.withdrawal_reason),
+          ),
+        )
+        .returning({ id: CourseTable.id })
+        .get()
+        .pipe(Effect.orDie)
+      if (!updated) return yield* conflict("course", input.courseID)
+      return yield* getCourseInfo(tx, input.courseID)
+    })
+
+    const createViewInTransaction: Interface["createViewInTransaction"] = Effect.fn("Course.createViewInTransaction")(
+      function* (tx, input) {
+        const name = yield* titleValue(input.name, "View")
+        yield* requireAuthorship(input.authorship)
+        yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
+        const prepared = yield* prepareRevision(tx, input.courseID, input.revision)
+        const viewID = createViewID()
+        const revisionID = createRevisionID()
+        yield* tx
+          .insert(CourseViewTable)
+          .values({
+            id: viewID,
+            course_id: input.courseID,
+            name,
+            state_version: 0,
+            time_created: input.time,
+            time_updated: input.time,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        yield* publishRevision({
+          tx,
+          courseID: input.courseID,
+          viewID,
+          revisionID,
+          revisionNumber: 1,
+          authorshipBasis: input.authorship.basis,
+          prepared,
+          time: input.time,
+        })
+        return {
+          view: yield* getViewInfo(tx, input.courseID, viewID),
+          revision: yield* getRevisionSummary(tx, input.courseID, viewID, revisionID),
+          items: Object.fromEntries(prepared.items.map((item) => [item.key, item.itemID])),
+        }
+      },
+    )
+
+    const addRevisionInTransaction: Interface["addRevisionInTransaction"] = Effect.fn(
+      "Course.addRevisionInTransaction",
+    )(function* (tx, input) {
+      yield* requireAuthorship(input.authorship)
+      yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
+      const view = yield* requireView(tx, input.courseID, input.viewID, input.expectedViewVersion, true)
+      const latest = yield* tx
+        .select({ id: CourseViewRevisionTable.id, revisionNumber: CourseViewRevisionTable.revision_number })
+        .from(CourseViewRevisionTable)
+        .where(
+          and(eq(CourseViewRevisionTable.course_id, input.courseID), eq(CourseViewRevisionTable.view_id, input.viewID)),
+        )
+        .orderBy(sql`${CourseViewRevisionTable.revision_number} DESC`)
+        .limit(1)
+        .get()
+        .pipe(Effect.orDie)
+      if (!latest || latest.id !== input.predecessorRevisionID) {
+        return yield* conflict("revision", input.predecessorRevisionID)
+      }
+      const prepared = yield* prepareRevision(tx, input.courseID, input.revision, input.predecessorRevisionID)
+      const revisionID = createRevisionID()
+      yield* publishRevision({
+        tx,
+        courseID: input.courseID,
+        viewID: input.viewID,
+        revisionID,
+        revisionNumber: latest.revisionNumber + 1,
+        predecessorRevisionID: input.predecessorRevisionID,
+        authorshipBasis: input.authorship.basis,
+        prepared,
+        time: input.time,
+      })
+      return {
+        view: viewInfo(yield* requireCourse(tx, input.courseID), view),
+        revision: yield* getRevisionSummary(tx, input.courseID, input.viewID, revisionID),
+        items: Object.fromEntries(prepared.items.map((item) => [item.key, item.itemID])),
+      }
+    })
+
+    const selectInTransaction: Interface["selectInTransaction"] = Effect.fn("Course.selectInTransaction")(
+      function* (tx, input) {
+        yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
+        yield* requireSelection(tx, input.courseID, input.expectedSelectionRevisionID, input.expectedSelectionVersion)
+        if (input.revisionID) {
+          if (input.expectedViewVersion === undefined || input.expectedRevisionVersion === undefined) {
+            return yield* new InvalidTransitionError({
+              detail: "Selecting a Revision requires exact View and Revision state versions",
+            })
+          }
+          yield* requireEligibleTarget(
+            tx,
+            input.courseID,
+            input.revisionID,
+            input.expectedViewVersion,
+            input.expectedRevisionVersion,
+          )
+        }
+        return yield* updateSelection(
+          tx,
+          input.courseID,
+          input.expectedSelectionRevisionID,
+          input.expectedSelectionVersion,
+          input.revisionID,
+          input.time,
+        )
+      },
+    )
+
+    const createCourse: Interface["createCourse"] = Effect.fn("Course.createCourse")(function* (input) {
       const time = Date.now()
-      yield* db
+      return yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
-            yield* tx
-              .insert(CourseTable)
-              .values({
-                id: courseID,
-                title,
-                state_version: 0,
-                time_created: time,
-                time_updated: time,
-              })
-              .run()
-              .pipe(Effect.orDie)
-            yield* tx
-              .insert(CourseWorkingSelectionTable)
-              .values({ course_id: courseID, version: 0, time_updated: time })
-              .run()
-              .pipe(Effect.orDie)
+            const course = yield* createCourseInTransaction(tx, { title: input.title, time })
             yield* LearningFrontier.advance(tx, { time })
+            return course
           }),
         )
         .pipe(Effect.orDie)
-      return yield* readCourseInfo(courseID)
     })
 
     const correctCourse: Interface["correctCourse"] = Effect.fn("Course.correctCourse")(function* (input) {
-      const title = yield* titleValue(input.title, "Course")
       const time = Date.now()
-      yield* db
+      return yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
-            yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
-            const updated = yield* tx
-              .update(CourseTable)
-              .set({ title, state_version: sql`${CourseTable.state_version} + 1`, time_updated: time })
-              .where(
-                and(
-                  eq(CourseTable.id, input.courseID),
-                  eq(CourseTable.state_version, input.expectedCourseVersion),
-                  isNull(CourseTable.withdrawal_reason),
-                ),
-              )
-              .returning({ id: CourseTable.id })
-              .get()
-              .pipe(Effect.orDie)
-            if (!updated) return yield* conflict("course", input.courseID)
+            const course = yield* correctCourseInTransaction(tx, { ...input, time })
             yield* LearningFrontier.advance(tx, { time })
+            return course
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
-      return yield* readCourseInfo(input.courseID)
     })
 
     const createView: Interface["createView"] = Effect.fn("Course.createView")(function* (input) {
-      const name = yield* titleValue(input.name, "View")
-      yield* requireAuthorship(input.authorship)
-      const viewID = createViewID()
-      const revisionID = createRevisionID()
       const time = Date.now()
-      yield* db
+      const published = yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
-            yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
-            const prepared = yield* prepareRevision(tx, input.courseID, input.revision)
-            yield* tx
-              .insert(CourseViewTable)
-              .values({
-                id: viewID,
-                course_id: input.courseID,
-                name,
-                state_version: 0,
-                time_created: time,
-                time_updated: time,
-              })
-              .run()
-              .pipe(Effect.orDie)
-            yield* publishRevision({
-              tx,
-              courseID: input.courseID,
-              viewID,
-              revisionID,
-              revisionNumber: 1,
-              authorshipBasis: input.authorship.basis,
-              prepared,
-              time,
-            })
+            const result = yield* createViewInTransaction(tx, { ...input, time })
             yield* LearningFrontier.advance(tx, { time })
+            return result
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
-      return yield* snapshot(db, (tx) =>
-        Effect.all({
-          view: getViewInfo(tx, input.courseID, viewID),
-          revision: getRevisionSummary(tx, input.courseID, viewID, revisionID),
-        }),
-      )
+      return { view: published.view, revision: published.revision }
     })
 
     const correctView: Interface["correctView"] = Effect.fn("Course.correctView")(function* (input) {
@@ -885,83 +1057,25 @@ const layer = Layer.effect(
     })
 
     const addRevision: Interface["addRevision"] = Effect.fn("Course.addRevision")(function* (input) {
-      yield* requireAuthorship(input.authorship)
-      const revisionID = createRevisionID()
-      yield* db
+      const time = Date.now()
+      const published = yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
-            yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
-            yield* requireView(tx, input.courseID, input.viewID, input.expectedViewVersion, true)
-            const latest = yield* tx
-              .select({ id: CourseViewRevisionTable.id, revisionNumber: CourseViewRevisionTable.revision_number })
-              .from(CourseViewRevisionTable)
-              .where(
-                and(
-                  eq(CourseViewRevisionTable.course_id, input.courseID),
-                  eq(CourseViewRevisionTable.view_id, input.viewID),
-                ),
-              )
-              .orderBy(sql`${CourseViewRevisionTable.revision_number} DESC`)
-              .limit(1)
-              .get()
-              .pipe(Effect.orDie)
-            if (!latest || latest.id !== input.predecessorRevisionID) {
-              return yield* conflict("revision", input.predecessorRevisionID)
-            }
-            const prepared = yield* prepareRevision(tx, input.courseID, input.revision, input.predecessorRevisionID)
-            const time = Date.now()
-            yield* publishRevision({
-              tx,
-              courseID: input.courseID,
-              viewID: input.viewID,
-              revisionID,
-              revisionNumber: latest.revisionNumber + 1,
-              predecessorRevisionID: input.predecessorRevisionID,
-              authorshipBasis: input.authorship.basis,
-              prepared,
-              time,
-            })
+            const result = yield* addRevisionInTransaction(tx, { ...input, time })
             yield* LearningFrontier.advance(tx, { time })
+            return result
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
-      return yield* readRevisionSummary(input.courseID, input.viewID, revisionID)
+      return published.revision
     })
 
     const select: Interface["select"] = Effect.fn("Course.select")(function* (input) {
+      const time = Date.now()
       return yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
-            yield* requireCourse(tx, input.courseID, input.expectedCourseVersion, true)
-            yield* requireSelection(
-              tx,
-              input.courseID,
-              input.expectedSelectionRevisionID,
-              input.expectedSelectionVersion,
-            )
-            if (input.revisionID) {
-              if (input.expectedViewVersion === undefined || input.expectedRevisionVersion === undefined) {
-                return yield* new InvalidTransitionError({
-                  detail: "Selecting a Revision requires exact View and Revision state versions",
-                })
-              }
-              yield* requireEligibleTarget(
-                tx,
-                input.courseID,
-                input.revisionID,
-                input.expectedViewVersion,
-                input.expectedRevisionVersion,
-              )
-            }
-            const time = Date.now()
-            const selection = yield* updateSelection(
-              tx,
-              input.courseID,
-              input.expectedSelectionRevisionID,
-              input.expectedSelectionVersion,
-              input.revisionID,
-              time,
-            )
+            const selection = yield* selectInTransaction(tx, { ...input, time })
             yield* LearningFrontier.advance(tx, { time })
             return selection
           }),
@@ -1686,6 +1800,11 @@ const layer = Layer.effect(
     })
 
     return Service.of({
+      createCourseInTransaction,
+      correctCourseInTransaction,
+      createViewInTransaction,
+      addRevisionInTransaction,
+      selectInTransaction,
       createCourse,
       correctCourse,
       createView,
@@ -1776,6 +1895,66 @@ export function requireActiveOwnerProof(tx: Transaction, proof: ActiveOwnerProof
     }
     yield* requireCourse(tx, expected.courseID, expected.courseVersion, true)
     return proof
+  })
+}
+
+export function prepareRevisionOwnerProof(
+  tx: Transaction,
+  input: { readonly courseID: CourseID; readonly viewID: ViewID; readonly revisionID: RevisionID },
+) {
+  return Effect.gen(function* () {
+    const course = yield* requireCourse(tx, input.courseID, undefined, true)
+    const view = yield* requireView(tx, input.courseID, input.viewID, undefined, true)
+    const revision = yield* requireRevision(tx, input.courseID, input.viewID, input.revisionID, undefined, true)
+    return new RevisionOwnerProof(revisionOwnerProofToken, {
+      courseID: course.id,
+      courseVersion: course.state_version,
+      viewID: view.id,
+      viewVersion: view.state_version,
+      revisionID: revision.id,
+      revisionVersion: revision.state_version,
+      revisionNumber: revision.revision_number,
+    })
+  })
+}
+
+export function prepareSelectionTargetProof(
+  tx: Transaction,
+  input: { readonly courseID: CourseID; readonly revisionID: RevisionID },
+) {
+  return Effect.gen(function* () {
+    const revision = yield* tx
+      .select({ viewID: CourseViewRevisionTable.view_id })
+      .from(CourseViewRevisionTable)
+      .where(
+        and(eq(CourseViewRevisionTable.course_id, input.courseID), eq(CourseViewRevisionTable.id, input.revisionID)),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!revision) return yield* new NotFoundError({ entity: "revision", id: input.revisionID })
+    return yield* prepareRevisionOwnerProof(tx, {
+      courseID: input.courseID,
+      viewID: revision.viewID,
+      revisionID: input.revisionID,
+    })
+  })
+}
+
+export function requireRevisionOwnerProof(tx: Transaction, proof: RevisionOwnerProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof RevisionOwnerProof ? proof.expectation(revisionOwnerProofToken) : undefined
+    if (!expected)
+      return yield* new InvalidTransitionError({ detail: "Course Revision-owner proof is not owner-issued" })
+    const current = yield* prepareRevisionOwnerProof(tx, expected)
+    if (
+      current.receipt.courseVersion !== expected.courseVersion ||
+      current.receipt.viewVersion !== expected.viewVersion ||
+      current.receipt.revisionVersion !== expected.revisionVersion ||
+      current.receipt.revisionNumber !== expected.revisionNumber
+    ) {
+      return yield* conflict("revision", expected.revisionID)
+    }
+    return current
   })
 }
 

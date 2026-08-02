@@ -4,6 +4,8 @@ import { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
+import { MaterialMap } from "@opencode-ai/core/material-map"
+import { Representation } from "@opencode-ai/core/representation"
 import { NonNegativeInt } from "@opencode-ai/core/schema"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
@@ -396,6 +398,182 @@ export const UpdateLearnerGoalsInput = Schema.Struct({
 
 export type UpdateLearnerGoalsInput = typeof UpdateLearnerGoalsInput.Type
 
+const BootstrapText = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(8_192))
+const BootstrapKey = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(128))
+const BootstrapAuthorship = Schema.Literals(["learner_supplied", "learner_requested", "tutor_initiated"])
+
+const BootstrapRevisionItem = Schema.Struct({
+  key: BootstrapKey,
+  title: BootstrapText,
+  parentKey: Schema.optional(BootstrapKey),
+  reuse: Schema.optional(Schema.Struct({ sourceRevisionID: Course.RevisionID, itemID: Course.ItemID })),
+})
+
+const BootstrapRevision = Schema.Struct({
+  items: Schema.Array(BootstrapRevisionItem).check(Schema.isLengthBetween(1, 500)),
+  mappings: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        kind: Schema.Literals(["preserve", "split", "merge"]),
+        sourceItemIDs: Schema.Array(Course.ItemID).check(Schema.isMaxLength(500)),
+        targetKeys: Schema.Array(BootstrapKey).check(Schema.isMaxLength(500)),
+      }),
+    ).check(Schema.isMaxLength(500)),
+  ),
+})
+
+const BootstrapRoute = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literals(["new_view", "distinct_view"]),
+    key: BootstrapKey,
+    name: BootstrapText,
+    authorship: BootstrapAuthorship,
+    revision: BootstrapRevision,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("successor_revision"),
+    key: BootstrapKey,
+    viewID: Course.ViewID,
+    predecessorRevisionID: Course.RevisionID,
+    authorship: BootstrapAuthorship,
+    revision: BootstrapRevision,
+  }),
+])
+
+const BootstrapSelection = Schema.Union([
+  Schema.Struct({ type: Schema.Literals(["preserve", "clear"]) }),
+  Schema.Struct({
+    type: Schema.Literal("set"),
+    target: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("route") }),
+      Schema.Struct({ type: Schema.Literal("existing"), revisionID: Course.RevisionID }),
+    ]),
+  }),
+])
+
+const BootstrapReadAuthority = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("content_root"), contentRootID: ContentRoot.ContentRootID }),
+  Schema.Struct({ type: Schema.Literal("active_workspace") }),
+  Schema.Struct({ type: Schema.Literal("one_operation") }),
+])
+
+const BootstrapRead = Schema.Struct({
+  path: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4_096)),
+  authority: BootstrapReadAuthority,
+})
+
+const BootstrapMaterial = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("artifact"),
+    key: BootstrapKey,
+    artifactID: ArtifactSchema.ArtifactID,
+    revisionID: ArtifactSchema.RevisionID,
+    attribution: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("recorded") }),
+      Schema.Struct({ type: Schema.Literal("lineage_correction"), memberID: ArtifactSchema.LineageCorrectionMemberID }),
+    ]),
+    read: Schema.optional(BootstrapRead),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("representation"),
+    key: BootstrapKey,
+    representationRevisionID: Representation.RevisionID,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("local"),
+    key: BootstrapKey,
+    path: BootstrapRead.fields.path,
+    authority: BootstrapReadAuthority,
+  }),
+])
+
+const BootstrapSelectorCoordinate = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("whole_target.v1") }),
+  Schema.Struct({ kind: Schema.Literal("artifact_byte_range.v1"), startByte: NonNegativeInt, endByte: NonNegativeInt }),
+  Schema.Struct({ kind: Schema.Literal("pdf_page_range.v1"), startPage: NonNegativeInt, endPage: NonNegativeInt }),
+  Schema.Struct({
+    kind: Schema.Literal("pdf_text_range.v1"),
+    start: Schema.Struct({ page: NonNegativeInt, item: NonNegativeInt, scalar: NonNegativeInt }),
+    end: Schema.Struct({ page: NonNegativeInt, item: NonNegativeInt, scalar: NonNegativeInt }),
+  }),
+  Schema.Struct({
+    kind: Schema.Literal("model_text_range.v1"),
+    startScalar: NonNegativeInt,
+    endScalar: NonNegativeInt,
+  }),
+])
+
+const BootstrapMap = Schema.Struct({
+  key: BootstrapKey,
+  materialKey: BootstrapKey,
+  authorship: BootstrapAuthorship,
+  supersedesMapID: Schema.optional(MaterialMap.MapID),
+  outline: Schema.Array(
+    Schema.Struct({
+      key: BootstrapKey,
+      parentKey: Schema.optional(BootstrapKey),
+      title: BootstrapText,
+      selectors: Schema.Array(Schema.Struct({ key: BootstrapKey, coordinate: BootstrapSelectorCoordinate })).check(
+        Schema.isMaxLength(2_000),
+      ),
+    }),
+  ).check(Schema.isLengthBetween(1, 500)),
+})
+
+const BootstrapAlignment = Schema.Struct({
+  key: BootstrapKey,
+  mapKey: BootstrapKey,
+  selectorKey: BootstrapKey,
+  authorship: BootstrapAuthorship,
+  course: Schema.Union([
+    Schema.Struct({ type: Schema.Literal("route_item"), itemKey: BootstrapKey }),
+    Schema.Struct({
+      type: Schema.Literal("existing"),
+      viewID: Course.ViewID,
+      revisionID: Course.RevisionID,
+      itemID: Course.ItemID,
+      selection: Schema.Literals(["explicit_exact", "observed_working"]),
+    }),
+  ]),
+  reason: BootstrapText,
+  supersedesAlignmentID: Schema.optional(MaterialMap.AlignmentID),
+})
+
+const BootstrapAnchor = Schema.Union([
+  Schema.Struct({ type: Schema.Literals(["preserve", "clear"]) }),
+  Schema.Struct({
+    type: Schema.Literal("set"),
+    target: Schema.Union([
+      Schema.Struct({ type: Schema.Literal("route_item"), itemKey: BootstrapKey }),
+      Schema.Struct({
+        type: Schema.Literal("existing"),
+        viewID: Course.ViewID,
+        revisionID: Course.RevisionID,
+        itemID: Course.ItemID,
+      }),
+    ]),
+  }),
+])
+
+export const UpdateLearningCourseInput = Schema.Struct({
+  course: Schema.Union([
+    Schema.Struct({ type: Schema.Literal("new"), title: BootstrapText }),
+    Schema.Struct({
+      type: Schema.Literal("existing"),
+      courseID: Course.CourseID,
+      title: Schema.optional(BootstrapText),
+    }),
+  ]),
+  route: Schema.optional(BootstrapRoute),
+  selection: Schema.optional(BootstrapSelection),
+  materials: Schema.optional(Schema.Array(BootstrapMaterial).check(Schema.isMaxLength(32))),
+  maps: Schema.optional(Schema.Array(BootstrapMap).check(Schema.isMaxLength(16))),
+  alignments: Schema.optional(Schema.Array(BootstrapAlignment).check(Schema.isMaxLength(64))),
+  anchor: Schema.optional(BootstrapAnchor),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export type UpdateLearningCourseInput = typeof UpdateLearningCourseInput.Type
+
 const decode = Schema.decodeUnknownSync(AcceptCourseViewRevisionInput)
 const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput)
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
@@ -406,6 +584,7 @@ const decodeAnchor = Schema.decodeUnknownSync(SetCourseRouteAnchorInput)
 const decodeSteering = Schema.decodeUnknownSync(UpdateRetainedLearningSteeringInput)
 const decodeLegacyGoals = Schema.decodeUnknownSync(LegacyUpdateLearnerGoalsInput)
 const decodeGoalsV2 = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
+const decodeLearningBootstrap = Schema.decodeUnknownSync(UpdateLearningCourseInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
   const value = decode(input)
@@ -501,6 +680,12 @@ export function normalizeGoalsV2(input: unknown): UpdateLearnerGoalsInput {
   return decodeGoalsV2(input)
 }
 
+export function normalizeLearningBootstrap(input: unknown): UpdateLearningCourseInput {
+  const value = decodeLearningBootstrap(input)
+  LearningCommand.canonicalizeLearningBootstrap(value)
+  return value
+}
+
 function normalizeBoundary(input: string) {
   const value = input.trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(value)
@@ -517,6 +702,7 @@ export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY) return normalizeAnchor(input)
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) return normalizeSteering(input)
   if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return normalizeGoalsV2(input)
+  if (toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) return normalizeLearningBootstrap(input)
   throw new Error(`Unknown reserved learning command ${toolID}`)
 }
 

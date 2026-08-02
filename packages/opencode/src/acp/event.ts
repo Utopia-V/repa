@@ -1,4 +1,5 @@
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
+import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
 import type {
   Event,
   EventMessagePartDelta,
@@ -254,6 +255,7 @@ export class Subscription {
               toolCallId: part.callID,
               toolName: part.tool,
               state: part.state,
+              semantic: SemanticPresentation.readResult(part),
               cwd,
             }),
           },

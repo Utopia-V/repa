@@ -69,7 +69,7 @@ type StandardInfo = {
 }
 
 type Bindings = {
-  readonly koffi: typeof import("koffi")["default"]
+  readonly koffi: (typeof import("koffi"))["default"]
   readonly fileIDInfo: TypeObject
   readonly attributeTagInfo: TypeObject
   readonly basicInfo: TypeObject
@@ -125,6 +125,32 @@ export async function inspectDirectory(input: string): Promise<Descriptor> {
   }
 }
 
+export async function inspectExisting(input: string): Promise<Descriptor> {
+  requireWindows(input)
+  const chain = await openAbsolute(input, false)
+  try {
+    return chain.current.descriptor
+  } finally {
+    await close(chain)
+  }
+}
+
+export async function requireSameObject(expected: Descriptor): Promise<Descriptor> {
+  const current = await inspectExisting(expected.canonicalPath)
+  if (!sameObject(expected, current)) {
+    throw pathError(expected.canonicalPath, "identity_mismatch", "The exact authorized filesystem object changed")
+  }
+  return current
+}
+
+export async function requireUnchangedFile(expected: Descriptor): Promise<Descriptor> {
+  const current = await requireSameObject(expected)
+  if (expected.kind !== "file" || current.kind !== "file" || !sameStableMetadata(expected, current)) {
+    throw pathError(expected.canonicalPath, "mutated", "The exact prepared local source changed before commit")
+  }
+  return current
+}
+
 export async function readAbsoluteFile(input: string, maxBytes: number): Promise<Uint8Array> {
   requireWindows(input)
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
@@ -134,7 +160,8 @@ export async function readAbsoluteFile(input: string, maxBytes: number): Promise
   try {
     const before = chain.current.descriptor
     if (before.kind !== "file") throw pathError(input, "not_file", "The bootstrap config candidate is not a file")
-    if (before.size > maxBytes) throw pathError(input, "budget_exceeded", `The config candidate exceeds ${maxBytes} bytes`)
+    if (before.size > maxBytes)
+      throw pathError(input, "budget_exceeded", `The config candidate exceeds ${maxBytes} bytes`)
     const bytes = await readOpened(chain.current, maxBytes)
     const after = await descriptor(await native(), chain.current.handle)
     if (!sameStableMetadata(before, after) || bytes.byteLength !== before.size) {
@@ -551,7 +578,10 @@ async function openAbsolute(input: string, readFinal: boolean): Promise<Chain> {
         throw pathError(target, "not_directory", "An absolute path component is not a directory")
       }
       const parent = opened.at(-2)
-      if (parent && win32.dirname(current.descriptor.canonicalPath).toLowerCase() !== parent.descriptor.canonicalPathKey) {
+      if (
+        parent &&
+        win32.dirname(current.descriptor.canonicalPath).toLowerCase() !== parent.descriptor.canonicalPathKey
+      ) {
         throw pathError(target, "outside_scope", "A path component did not remain under its opened parent")
       }
     }
@@ -575,7 +605,11 @@ async function openRelative(expected: Descriptor, parts: string[], readFinal: bo
   const absolute = await openAbsolute(expected.canonicalPath, false)
   if (!sameObject(expected, absolute.current.descriptor)) {
     await close(absolute)
-    throw pathError(expected.canonicalPath, "identity_mismatch", "The current path does not name the approved directory object")
+    throw pathError(
+      expected.canonicalPath,
+      "identity_mismatch",
+      "The current path does not name the approved directory object",
+    )
   }
   const opened = [...absolute.opened]
   const root = absolute.current
@@ -611,7 +645,11 @@ async function openChild(chain: Chain, name: string, read: boolean, allowMissing
     }
     return opened
   } catch (error) {
-    if (allowMissing && error instanceof NativeOpenError && [ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND].includes(error.code)) {
+    if (
+      allowMissing &&
+      error instanceof NativeOpenError &&
+      [ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND].includes(error.code)
+    ) {
       return undefined
     }
     throw mapOpenError(target, error)
@@ -651,7 +689,11 @@ async function descriptor(api: Bindings, handle: Handle): Promise<Descriptor> {
     throw pathError("<opened handle>", "unreadable", `Win32 could not read file size metadata (${api.lastError()})`)
   }
   if ((tag.FileAttributes ?? 0) & FILE_ATTRIBUTE_REPARSE_POINT) {
-    throw pathError("<opened handle>", "reparse_point", `Reparse tag 0x${(tag.ReparseTag ?? 0).toString(16)} is unsupported`)
+    throw pathError(
+      "<opened handle>",
+      "reparse_point",
+      `Reparse tag 0x${(tag.ReparseTag ?? 0).toString(16)} is unsupported`,
+    )
   }
   if (standard.DeletePending) {
     throw pathError("<opened handle>", "stale", "The opened object is pending deletion")

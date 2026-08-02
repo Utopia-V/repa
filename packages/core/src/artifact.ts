@@ -338,12 +338,105 @@ export type ObservationTransition = {
   readonly artifact: ArtifactInfo
 }
 
+export type PreparedMutationResult = Readonly<{
+  result: "admitted" | "observed" | "no_change"
+  artifact: ArtifactInfo
+  revisionID: RevisionID
+  observationID?: ObservationID
+}>
+
+export type RevisionReferenceReceipt = Readonly<{
+  revision: RevisionInfo
+  dispositionVersion: number
+  lineageVersion: number
+  sourceVersion: number
+  availability: Availability
+  activeBindingID?: BindingID
+  activeLocation?: string
+  currentRevisionID?: RevisionID
+  currentAttribution?: AttributionBasis
+  descriptorObservationID?: ObservationID
+  descriptorCorrectionID?: ObservationCorrectionID
+  mediaType?: string
+}>
+
+const revisionReferenceToken = Symbol("Artifact.RevisionReferenceProof")
+
+/** Exact eligible Artifact Revision reference prepared for a later local transaction. */
+export class RevisionReferenceProof {
+  readonly receipt: RevisionReferenceReceipt
+  #receipt: RevisionReferenceReceipt
+
+  constructor(token: symbol, receipt: RevisionReferenceReceipt) {
+    if (token !== revisionReferenceToken) throw new Error("Artifact Revision references are owner-issued")
+    this.receipt = Object.freeze({ ...receipt, revision: Object.freeze({ ...receipt.revision }) })
+    this.#receipt = this.receipt
+  }
+
+  expectation(token: symbol) {
+    if (token !== revisionReferenceToken) return
+    return this.#receipt
+  }
+}
+
+const preparedMutationToken = Symbol("Artifact.PreparedMutation")
+
+/** One exact owner-issued local-source mutation that may join a caller transaction. */
+export class PreparedMutation {
+  readonly location: CanonicalLocation
+  #apply: (tx: Transaction, time: number) => Effect.Effect<PreparedMutationResult, Error>
+  #results = new WeakMap<object, PreparedMutationResult>()
+
+  constructor(
+    token: symbol,
+    location: CanonicalLocation,
+    apply: (tx: Transaction, time: number) => Effect.Effect<PreparedMutationResult, Error>,
+  ) {
+    if (token !== preparedMutationToken) throw new Error("Artifact mutations are owner-issued")
+    this.location = location
+    this.#apply = apply
+  }
+
+  commit(tx: Transaction, time: number) {
+    const cached = this.#results.get(tx)
+    if (cached) return Effect.succeed(cached)
+    return this.#apply(tx, time).pipe(Effect.tap((result) => Effect.sync(() => this.#results.set(tx, result))))
+  }
+}
+
 export type ActiveLocationOwner = {
   readonly artifact: ArtifactInfo
   readonly binding: BindingInfo
 }
 
 export interface Interface {
+  /** Owner-private transaction seam shared by standalone admission and local composition. */
+  readonly admitInTransaction: (
+    tx: Transaction,
+    input: Readonly<{
+      location: CanonicalLocation
+      observation: PresentObservation
+      authority: Admission
+      time: number
+    }>,
+  ) => Effect.Effect<ArtifactInfo, Error>
+  /** Owner-private transaction seam shared by standalone observation and local composition. */
+  readonly observeInTransaction: (
+    tx: Transaction,
+    input: Readonly<{ expected: ExpectedSource; observation: SourceObservation; time: number }>,
+  ) => Effect.Effect<ObservationTransition, Error>
+  /** Resolve one exact local target to admission or observation without mutating it. */
+  readonly prepareLocalMutation: (input: {
+    readonly location: CanonicalLocation
+    readonly observation: PresentObservation
+    readonly authority: Admission
+  }) => Effect.Effect<PreparedMutation, Error>
+  /** Prepare an exact admitted Revision without observing or mutating Artifact state. */
+  readonly prepareRevisionReference: (
+    artifactID: ArtifactID,
+    revisionID: RevisionID,
+    attribution: AttributionBasis,
+  ) => Effect.Effect<RevisionReferenceProof, Error>
   readonly admit: (input: {
     readonly location: CanonicalLocation
     readonly observation: PresentObservation
@@ -434,6 +527,63 @@ export function expectedSource(info: ArtifactInfo): ExpectedSource {
     mediaType: info.source.descriptor?.mediaType,
     availability: info.source.availability,
   }
+}
+
+export function prepareRevisionReferenceInTransaction(
+  tx: Transaction,
+  artifactID: ArtifactID,
+  revisionID: RevisionID,
+  attribution: AttributionBasis,
+) {
+  return Effect.gen(function* () {
+    const artifact = yield* getArtifactInfo(tx, artifactID)
+    if (artifact.withdrawalReason) return yield* new InactiveError({ artifactID, reason: "removed" })
+    if (artifact.correctionHidden) return yield* new InactiveError({ artifactID, reason: "lineage_correction" })
+    if (artifact.source.availability !== "available") {
+      return yield* new ConflictError({
+        entity: "source",
+        id: artifactID,
+        currentDispositionVersion: artifact.dispositionVersion,
+        currentSourceVersion: artifact.source.sourceVersion,
+        currentLineageVersion: artifact.lineageVersion,
+        currentAvailability: artifact.source.availability,
+      })
+    }
+    const revision = yield* exactRevision(tx, artifactID, revisionID, attribution)
+    return new RevisionReferenceProof(revisionReferenceToken, {
+      revision,
+      dispositionVersion: artifact.dispositionVersion,
+      lineageVersion: artifact.lineageVersion,
+      sourceVersion: artifact.source.sourceVersion,
+      availability: artifact.source.availability,
+      activeBindingID: artifact.source.activeBinding?.id,
+      activeLocation: artifact.source.activeBinding?.location,
+      currentRevisionID: artifact.source.currentRevisionID,
+      currentAttribution: artifact.source.revisionAttribution,
+      descriptorObservationID: artifact.source.descriptor?.observationID,
+      descriptorCorrectionID: artifact.source.descriptor?.correctionID,
+      mediaType: artifact.source.descriptor?.mediaType,
+    })
+  })
+}
+
+export function requireRevisionReference(tx: Transaction, proof: RevisionReferenceProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof RevisionReferenceProof ? proof.expectation(revisionReferenceToken) : undefined
+    if (!expected) {
+      return yield* new InvalidTransitionError({ detail: "Artifact Revision reference is not owner-issued" })
+    }
+    const current = yield* prepareRevisionReferenceInTransaction(
+      tx,
+      expected.revision.effectiveArtifactID,
+      expected.revision.id,
+      expected.revision.attribution,
+    )
+    if (!equalRevisionReference(expected, current.receipt)) {
+      return yield* new ConflictError({ entity: "source", id: expected.revision.effectiveArtifactID })
+    }
+    return current.receipt
+  })
 }
 
 export function readOrdinaryUseSnapshot(tx: Transaction, artifactID: ArtifactID) {
@@ -535,201 +685,211 @@ const layer = Layer.effect(
     const database = yield* Database.Service
     const db = database.db
 
-    const admit: Interface["admit"] = Effect.fn("Artifact.admit")(function* (input) {
-      const location = yield* requireLocation(input.location)
-      const observation = yield* requirePresentObservation(input.observation)
-      const authority = yield* requireAdmission(input.authority)
-      const artifactID = createArtifactID()
-      const revisionID = createRevisionID()
-      const bindingID = createBindingID()
-      const observationID = createObservationID()
-      const time = Date.now()
+    const admitInTransaction: Interface["admitInTransaction"] = Effect.fn("Artifact.admitInTransaction")(
+      function* (tx, input) {
+        const location = yield* requireLocation(input.location)
+        const observation = yield* requirePresentObservation(input.observation)
+        const authority = yield* requireAdmission(input.authority)
+        const artifactID = createArtifactID()
+        const revisionID = createRevisionID()
+        const bindingID = createBindingID()
+        const observationID = createObservationID()
+        yield* requireLocationAvailable(tx, location)
+        yield* tx
+          .insert(ArtifactTable)
+          .values({
+            id: artifactID,
+            admission_root_artifact_id: artifactID,
+            creation_basis: authority.basis,
+            creation_capability_identity: authority.capabilityIdentity,
+            creation_capability_version: authority.capabilityVersion,
+            disposition_version: 0,
+            lineage_version: 0,
+            correction_hidden: false,
+            time_created: input.time,
+            time_updated: input.time,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        yield* tx
+          .insert(ArtifactRevisionTable)
+          .values({
+            id: revisionID,
+            recorded_artifact_id: artifactID,
+            fingerprint_algorithm: observation.fingerprint.algorithm,
+            fingerprint_digest: observation.fingerprint.digest,
+            byte_length: observation.fingerprint.byteLength,
+            time_first_observed: observation.timeObserved,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        yield* tx
+          .insert(ArtifactSourceBindingTable)
+          .values({
+            id: bindingID,
+            recorded_artifact_id: artifactID,
+            binding_ordinal: 1,
+            canonical_location: location,
+            basis_kind: "admission",
+            basis_capability_identity: authority.capabilityIdentity,
+            basis_capability_version: authority.capabilityVersion,
+            time_started: input.time,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        yield* tx
+          .insert(ArtifactSourceObservationTable)
+          .values({
+            id: observationID,
+            recorded_artifact_id: artifactID,
+            binding_id: bindingID,
+            occurrence_ordinal: 1,
+            result: "present",
+            revision_id: revisionID,
+            media_type: observation.mediaType,
+            observer_capability_identity: observation.observer.capabilityIdentity,
+            observer_capability_version: observation.observer.capabilityVersion,
+            time_observed: observation.timeObserved,
+            time_committed: input.time,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        yield* tx
+          .insert(ArtifactCurrentSourceTable)
+          .values({
+            artifact_id: artifactID,
+            source_version: 0,
+            active_binding_id: bindingID,
+            current_revision_id: revisionID,
+            source_state_observation_id: observationID,
+            descriptor_observation_id: observationID,
+            effective_media_type: observation.mediaType,
+            availability: "available",
+            time_updated: input.time,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        return yield* getArtifactInfo(tx, artifactID)
+      },
+    )
 
+    const observeInTransaction: Interface["observeInTransaction"] = Effect.fn("Artifact.observeInTransaction")(
+      function* (tx, input) {
+        const observation = yield* requireObservation(input.observation)
+        const current = yield* requireExpectedSource(tx, input.expected, true)
+        const binding = current.source.activeBinding
+        if (!binding) return yield* new InvalidTransitionError({ detail: "An active binding is required" })
+
+        if (observation.result === "missing") {
+          if (current.source.availability === "missing") return { changed: false, artifact: current }
+          const observationID = createObservationID()
+          yield* tx
+            .insert(ArtifactSourceObservationTable)
+            .values({
+              id: observationID,
+              recorded_artifact_id: current.id,
+              binding_id: binding.id,
+              occurrence_ordinal: yield* nextObservationOrdinal(tx, current.id),
+              result: "missing",
+              observer_capability_identity: observation.observer.capabilityIdentity,
+              observer_capability_version: observation.observer.capabilityVersion,
+              time_observed: observation.timeObserved,
+              time_committed: input.time,
+            })
+            .run()
+            .pipe(Effect.orDie)
+          yield* updateCurrentSource(tx, current, {
+            source_state_observation_id: observationID,
+            source_state_member_id: null,
+            availability: "missing",
+            time_updated: input.time,
+          })
+          return {
+            changed: true,
+            observationID,
+            artifact: yield* getArtifactInfo(tx, current.id),
+          }
+        }
+
+        const currentRevision = current.source.currentRevisionID
+          ? yield* requireRevisionRow(tx, current.source.currentRevisionID)
+          : undefined
+        const same = currentRevision ? sameFingerprint(currentRevision, observation.fingerprint) : false
+        if (same && current.source.availability === "available") {
+          if (current.source.descriptor?.mediaType !== observation.mediaType) {
+            return yield* new InvalidTransitionError({
+              detail: "A changed media determination requires an Observation correction",
+            })
+          }
+          return { changed: false, artifact: current }
+        }
+
+        const resolved = yield* resolveRevision(tx, current.id, observation)
+        const observationID = createObservationID()
+        yield* tx
+          .insert(ArtifactSourceObservationTable)
+          .values({
+            id: observationID,
+            recorded_artifact_id: current.id,
+            binding_id: binding.id,
+            occurrence_ordinal: yield* nextObservationOrdinal(tx, current.id),
+            result: "present",
+            revision_id: resolved.revision.id,
+            revision_attribution_member_id:
+              resolved.attribution.type === "lineage_correction" ? resolved.attribution.memberID : undefined,
+            media_type: observation.mediaType,
+            observer_capability_identity: observation.observer.capabilityIdentity,
+            observer_capability_version: observation.observer.capabilityVersion,
+            time_observed: observation.timeObserved,
+            time_committed: input.time,
+          })
+          .run()
+          .pipe(Effect.orDie)
+        yield* updateCurrentSource(tx, current, {
+          current_revision_id: resolved.revision.id,
+          revision_attribution_member_id:
+            resolved.attribution.type === "lineage_correction" ? resolved.attribution.memberID : null,
+          source_state_observation_id: observationID,
+          source_state_member_id: null,
+          descriptor_observation_id: observationID,
+          descriptor_correction_id: null,
+          effective_media_type: observation.mediaType,
+          availability: "available",
+          time_updated: input.time,
+        })
+        return {
+          changed: true,
+          observationID,
+          artifact: yield* getArtifactInfo(tx, current.id),
+        }
+      },
+    )
+
+    const admit: Interface["admit"] = Effect.fn("Artifact.admit")(function* (input) {
+      const time = Date.now()
       return yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
-            yield* requireLocationAvailable(tx, location)
-            yield* tx
-              .insert(ArtifactTable)
-              .values({
-                id: artifactID,
-                admission_root_artifact_id: artifactID,
-                creation_basis: authority.basis,
-                creation_capability_identity: authority.capabilityIdentity,
-                creation_capability_version: authority.capabilityVersion,
-                disposition_version: 0,
-                lineage_version: 0,
-                correction_hidden: false,
-                time_created: time,
-                time_updated: time,
-              })
-              .run()
-              .pipe(Effect.orDie)
-            yield* tx
-              .insert(ArtifactRevisionTable)
-              .values({
-                id: revisionID,
-                recorded_artifact_id: artifactID,
-                fingerprint_algorithm: observation.fingerprint.algorithm,
-                fingerprint_digest: observation.fingerprint.digest,
-                byte_length: observation.fingerprint.byteLength,
-                time_first_observed: observation.timeObserved,
-              })
-              .run()
-              .pipe(Effect.orDie)
-            yield* tx
-              .insert(ArtifactSourceBindingTable)
-              .values({
-                id: bindingID,
-                recorded_artifact_id: artifactID,
-                binding_ordinal: 1,
-                canonical_location: location,
-                basis_kind: "admission",
-                basis_capability_identity: authority.capabilityIdentity,
-                basis_capability_version: authority.capabilityVersion,
-                time_started: time,
-              })
-              .run()
-              .pipe(Effect.orDie)
-            yield* tx
-              .insert(ArtifactSourceObservationTable)
-              .values({
-                id: observationID,
-                recorded_artifact_id: artifactID,
-                binding_id: bindingID,
-                occurrence_ordinal: 1,
-                result: "present",
-                revision_id: revisionID,
-                media_type: observation.mediaType,
-                observer_capability_identity: observation.observer.capabilityIdentity,
-                observer_capability_version: observation.observer.capabilityVersion,
-                time_observed: observation.timeObserved,
-                time_committed: time,
-              })
-              .run()
-              .pipe(Effect.orDie)
-            yield* tx
-              .insert(ArtifactCurrentSourceTable)
-              .values({
-                artifact_id: artifactID,
-                source_version: 0,
-                active_binding_id: bindingID,
-                current_revision_id: revisionID,
-                source_state_observation_id: observationID,
-                descriptor_observation_id: observationID,
-                effective_media_type: observation.mediaType,
-                availability: "available",
-                time_updated: time,
-              })
-              .run()
-              .pipe(Effect.orDie)
+            const artifact = yield* admitInTransaction(tx, { ...input, time })
             yield* LearningFrontier.advance(tx, { time })
-            return yield* getArtifactInfo(tx, artifactID)
+            return artifact
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
     })
 
     const observe: Interface["observe"] = Effect.fn("Artifact.observe")(function* (input) {
-      const observation = yield* requireObservation(input.observation)
+      const time = Date.now()
       return yield* db
         .transaction((tx) =>
           Effect.gen(function* () {
-            const current = yield* requireExpectedSource(tx, input.expected, true)
-            const binding = current.source.activeBinding
-            if (!binding) return yield* new InvalidTransitionError({ detail: "An active binding is required" })
-
-            if (observation.result === "missing") {
-              if (current.source.availability === "missing") return { changed: false, artifact: current }
-              const observationID = createObservationID()
-              const time = Date.now()
-              yield* tx
-                .insert(ArtifactSourceObservationTable)
-                .values({
-                  id: observationID,
-                  recorded_artifact_id: current.id,
-                  binding_id: binding.id,
-                  occurrence_ordinal: yield* nextObservationOrdinal(tx, current.id),
-                  result: "missing",
-                  observer_capability_identity: observation.observer.capabilityIdentity,
-                  observer_capability_version: observation.observer.capabilityVersion,
-                  time_observed: observation.timeObserved,
-                  time_committed: time,
-                })
-                .run()
-                .pipe(Effect.orDie)
-              yield* updateCurrentSource(tx, current, {
-                source_state_observation_id: observationID,
-                source_state_member_id: null,
-                availability: "missing",
-                time_updated: time,
-              })
-              yield* LearningFrontier.advance(tx, { time })
-              return {
-                changed: true,
-                observationID,
-                artifact: yield* getArtifactInfo(tx, current.id),
-              }
-            }
-
-            const currentRevision = current.source.currentRevisionID
-              ? yield* requireRevisionRow(tx, current.source.currentRevisionID)
-              : undefined
-            const same = currentRevision ? sameFingerprint(currentRevision, observation.fingerprint) : false
-            if (same && current.source.availability === "available") {
-              if (current.source.descriptor?.mediaType !== observation.mediaType) {
-                return yield* new InvalidTransitionError({
-                  detail: "A changed media determination requires an Observation correction",
-                })
-              }
-              return { changed: false, artifact: current }
-            }
-
-            const resolved = yield* resolveRevision(tx, current.id, observation)
-            const observationID = createObservationID()
-            const time = Date.now()
-            yield* tx
-              .insert(ArtifactSourceObservationTable)
-              .values({
-                id: observationID,
-                recorded_artifact_id: current.id,
-                binding_id: binding.id,
-                occurrence_ordinal: yield* nextObservationOrdinal(tx, current.id),
-                result: "present",
-                revision_id: resolved.revision.id,
-                revision_attribution_member_id:
-                  resolved.attribution.type === "lineage_correction" ? resolved.attribution.memberID : undefined,
-                media_type: observation.mediaType,
-                observer_capability_identity: observation.observer.capabilityIdentity,
-                observer_capability_version: observation.observer.capabilityVersion,
-                time_observed: observation.timeObserved,
-                time_committed: time,
-              })
-              .run()
-              .pipe(Effect.orDie)
-            yield* updateCurrentSource(tx, current, {
-              current_revision_id: resolved.revision.id,
-              revision_attribution_member_id:
-                resolved.attribution.type === "lineage_correction" ? resolved.attribution.memberID : null,
-              source_state_observation_id: observationID,
-              source_state_member_id: null,
-              descriptor_observation_id: observationID,
-              descriptor_correction_id: null,
-              effective_media_type: observation.mediaType,
-              availability: "available",
-              time_updated: time,
-            })
-            yield* LearningFrontier.advance(tx, { time })
-            return {
-              changed: true,
-              observationID,
-              artifact: yield* getArtifactInfo(tx, current.id),
-            }
+            const transition = yield* observeInTransaction(tx, { ...input, time })
+            if (transition.changed) yield* LearningFrontier.advance(tx, { time })
+            return transition
           }),
         )
         .pipe(Effect.catchTag("SqlError", Effect.die))
     })
-
     const rebind: Interface["rebind"] = Effect.fn("Artifact.rebind")(function* (input) {
       const destination = yield* requireLocation(input.destination)
       const observation = yield* requirePresentObservation(input.observation)
@@ -1051,6 +1211,54 @@ const layer = Layer.effect(
       },
     )
 
+    const prepareLocalMutation: Interface["prepareLocalMutation"] = Effect.fn("Artifact.prepareLocalMutation")(
+      function* (input) {
+        yield* requireLocation(input.location)
+        const location = input.location
+        const observation = yield* requirePresentObservation(input.observation)
+        yield* requireAdmission(input.authority)
+        const authority = input.authority
+        const current = yield* lookupActiveLocation(location)
+        if (!current) {
+          return new PreparedMutation(preparedMutationToken, location, (tx, time) =>
+            Effect.gen(function* () {
+              const artifact = yield* admitInTransaction(tx, { location, observation, authority, time })
+              if (!artifact.source.currentRevisionID) {
+                return yield* new InvalidTransitionError({ detail: "Admitted Artifact has no current Revision" })
+              }
+              return {
+                result: "admitted",
+                artifact,
+                revisionID: artifact.source.currentRevisionID,
+                observationID: artifact.source.descriptor?.observationID,
+              }
+            }),
+          )
+        }
+        const expected = expectedSource(current.artifact)
+        return new PreparedMutation(preparedMutationToken, location, (tx, time) =>
+          Effect.gen(function* () {
+            const transition = yield* observeInTransaction(tx, { expected, observation, time })
+            if (!transition.artifact.source.currentRevisionID) {
+              return yield* new InvalidTransitionError({ detail: "Observed Artifact has no current Revision" })
+            }
+            return {
+              result: transition.changed ? "observed" : "no_change",
+              artifact: transition.artifact,
+              revisionID: transition.artifact.source.currentRevisionID,
+              observationID: transition.observationID,
+            }
+          }),
+        )
+      },
+    )
+
+    const prepareRevisionReference: Interface["prepareRevisionReference"] = Effect.fn(
+      "Artifact.prepareRevisionReference",
+    )(function* (artifactID, revisionID, attribution) {
+      return yield* snapshot(db, (tx) => prepareRevisionReferenceInTransaction(tx, artifactID, revisionID, attribution))
+    })
+
     const listRevisions: Interface["listRevisions"] = Effect.fn("Artifact.listRevisions")(
       function* (artifactID, input) {
         const view = input?.view ?? "effective"
@@ -1079,27 +1287,7 @@ const layer = Layer.effect(
 
     const getRevision: Interface["getRevision"] = Effect.fn("Artifact.getRevision")(
       function* (artifactID, revisionID, attribution) {
-        return yield* snapshot(db, (tx) =>
-          Effect.gen(function* () {
-            yield* requireArtifactRow(tx, artifactID)
-            if (attribution.type === "lineage_correction") {
-              return yield* exactCorrectedRevision(tx, artifactID, revisionID, attribution.memberID)
-            }
-            const revision = yield* tx
-              .select()
-              .from(ArtifactRevisionTable)
-              .where(
-                and(
-                  eq(ArtifactRevisionTable.id, revisionID),
-                  eq(ArtifactRevisionTable.recorded_artifact_id, artifactID),
-                ),
-              )
-              .get()
-              .pipe(Effect.orDie)
-            if (!revision) return yield* new NotFoundError({ entity: "revision", id: revisionID })
-            return revisionInfo({ ...revision, attribution_member_id: null }, artifactID)
-          }),
-        )
+        return yield* snapshot(db, (tx) => exactRevision(tx, artifactID, revisionID, attribution))
       },
     )
 
@@ -1320,6 +1508,10 @@ const layer = Layer.effect(
     })
 
     return Service.of({
+      admitInTransaction,
+      observeInTransaction,
+      prepareLocalMutation,
+      prepareRevisionReference,
       admit,
       observe,
       correctObservation,
@@ -1473,6 +1665,55 @@ function revisionInfo(row: RevisionQueryRow, effectiveArtifactID: ArtifactID): R
       : { type: "recorded" },
     timeFirstObserved: row.time_first_observed,
   }
+}
+
+function exactRevision(
+  source: Queryable,
+  artifactID: ArtifactID,
+  revisionID: RevisionID,
+  attribution: AttributionBasis,
+) {
+  return Effect.gen(function* () {
+    yield* requireArtifactRow(source, artifactID)
+    if (attribution.type === "lineage_correction") {
+      return yield* exactCorrectedRevision(source, artifactID, revisionID, attribution.memberID)
+    }
+    const revision = yield* source
+      .select()
+      .from(ArtifactRevisionTable)
+      .where(and(eq(ArtifactRevisionTable.id, revisionID), eq(ArtifactRevisionTable.recorded_artifact_id, artifactID)))
+      .get()
+      .pipe(Effect.orDie)
+    if (!revision) return yield* new NotFoundError({ entity: "revision", id: revisionID })
+    return revisionInfo({ ...revision, attribution_member_id: null }, artifactID)
+  })
+}
+
+function equalRevisionReference(left: RevisionReferenceReceipt, right: RevisionReferenceReceipt) {
+  return (
+    left.dispositionVersion === right.dispositionVersion &&
+    left.lineageVersion === right.lineageVersion &&
+    left.sourceVersion === right.sourceVersion &&
+    left.availability === right.availability &&
+    left.activeBindingID === right.activeBindingID &&
+    left.activeLocation === right.activeLocation &&
+    left.currentRevisionID === right.currentRevisionID &&
+    ((left.currentAttribution === undefined && right.currentAttribution === undefined) ||
+      (left.currentAttribution !== undefined &&
+        right.currentAttribution !== undefined &&
+        equalAttribution(left.currentAttribution, right.currentAttribution))) &&
+    left.descriptorObservationID === right.descriptorObservationID &&
+    left.descriptorCorrectionID === right.descriptorCorrectionID &&
+    left.mediaType === right.mediaType &&
+    left.revision.id === right.revision.id &&
+    left.revision.recordedArtifactID === right.revision.recordedArtifactID &&
+    left.revision.effectiveArtifactID === right.revision.effectiveArtifactID &&
+    left.revision.fingerprint.algorithm === right.revision.fingerprint.algorithm &&
+    left.revision.fingerprint.digest === right.revision.fingerprint.digest &&
+    left.revision.fingerprint.byteLength === right.revision.fingerprint.byteLength &&
+    equalAttribution(left.revision.attribution, right.revision.attribution) &&
+    left.revision.timeFirstObserved === right.revision.timeFirstObserved
+  )
 }
 
 function exactCorrectedRevision(

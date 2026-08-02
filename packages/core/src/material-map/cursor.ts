@@ -7,6 +7,8 @@ import { InvalidCursorError, type PageOptions } from "./schema"
 export const Endpoint = Schema.Literals([
   "maps",
   "outline",
+  "outline_nodes",
+  "selectors",
   "map_successors",
   "map_alignments",
   "selector_alignments",

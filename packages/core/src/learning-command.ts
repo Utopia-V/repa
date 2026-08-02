@@ -82,6 +82,34 @@ export type {
 } from "./learner-goal/agent-command-v2"
 
 export {
+  PERMISSION_PATTERN as LEARNING_BOOTSTRAP_PERMISSION_PATTERN,
+  UPDATE_LEARNING_COURSE_CAPABILITY,
+  UPDATE_LEARNING_COURSE_VERSION,
+  canonicalizeCommand as canonicalizeLearningBootstrap,
+  commandFingerprint as learningBootstrapFingerprint,
+  issueCapabilityPrompt as issueLearningBootstrapCapabilityPrompt,
+  prepareExecution as prepareLearningBootstrapExecution,
+  readInvocationVersion as readLearningBootstrapInvocationVersion,
+  recover as recoverLearningBootstrap,
+  recoverCapability as recoverLearningBootstrapCapability,
+  reserve as reserveLearningBootstrap,
+  settle as settleLearningBootstrap,
+  settleFailure as settleLearningBootstrapFailure,
+  settlePolicy as settleLearningBootstrapPolicy,
+  settlePrompt as settleLearningBootstrapPrompt,
+} from "./learning-bootstrap"
+export type {
+  Invocation as LearningBootstrapInvocation,
+  InvocationVersion as LearningBootstrapInvocationVersion,
+  PolicyInput as LearningBootstrapPolicyInput,
+  PreparationOwners as LearningBootstrapPreparationOwners,
+  PreparedExecution as LearningBootstrapPreparedExecution,
+  PromptIssueInput as LearningBootstrapPromptIssueInput,
+  PromptSettlementInput as LearningBootstrapPromptSettlementInput,
+  SettlementOwners as LearningBootstrapSettlementOwners,
+} from "./learning-bootstrap"
+
+export {
   assertAssistantDeletable,
   assertPartDeletable,
   exactSettlement,

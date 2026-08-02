@@ -1,7 +1,7 @@
 export * as Representation from "./representation"
 
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm"
+import { and, asc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { Context, Effect, Exit, Layer, Scope, Semaphore } from "effect"
 import { Artifact } from "./artifact"
 import { ContentRoot } from "./content-root"
@@ -291,17 +291,43 @@ export type CurrentUseDescriptor = {
 
 type CurrentUseExpectation = CurrentAdmission & { readonly availabilityVersion: number }
 
+export type CurrentUseReferenceReceipt = Readonly<{
+  representationRevisionID: RevisionID
+  effectiveArtifactID: Artifact.ArtifactID
+  sourceRevisionID: Artifact.RevisionID
+  acceptedLineageVersion: number
+  attribution: Artifact.AttributionBasis
+  availabilityVersion: number
+  availability: Availability
+  artifact: Artifact.OrdinaryUseRevisionSnapshot
+  continuedUseGrant?: Readonly<{ id: ContinuedUseGrantID; version: number }>
+}>
+
 const currentUseProofToken = Symbol("Representation.CurrentUseProof")
 
 export class CurrentUseProof {
   readonly representationRevisionID: RevisionID
   readonly effectiveArtifactID: Artifact.ArtifactID
+  readonly receipt: CurrentUseReferenceReceipt
   #expectation: CurrentUseExpectation
 
   constructor(token: symbol, expectation: CurrentUseExpectation) {
     if (token !== currentUseProofToken) throw new Error("Representation current-use proofs are owner-issued")
     this.representationRevisionID = expectation.row.id
     this.effectiveArtifactID = expectation.row.effective_artifact_id
+    this.receipt = Object.freeze({
+      representationRevisionID: expectation.row.id,
+      effectiveArtifactID: expectation.row.effective_artifact_id,
+      sourceRevisionID: expectation.row.source_revision_id,
+      acceptedLineageVersion: expectation.row.accepted_lineage_version,
+      attribution: attribution(expectation.row.attribution_type, expectation.row.attribution_member_id),
+      availabilityVersion: expectation.availabilityVersion,
+      availability: expectation.availability.disposition,
+      artifact: expectation.artifact,
+      ...(expectation.grant
+        ? { continuedUseGrant: { id: expectation.grant.id, version: expectation.grant.version } }
+        : {}),
+    })
     this.#expectation = expectation
   }
 
@@ -992,6 +1018,28 @@ export function requireCurrentUseProof(tx: Transaction, proof: CurrentUseProof) 
   })
 }
 
+/** Prepare an accepted Representation reference without reading or converting its bytes. */
+export function prepareCurrentUseProof(tx: Transaction, representationRevisionID: RevisionID) {
+  return Effect.gen(function* () {
+    const row = yield* requireRepresentationRow(tx, representationRevisionID)
+    const admission = yield* admitCurrentUse(tx, {
+      revisionID: representationRevisionID,
+      effectiveArtifactID: row.effective_artifact_id,
+    })
+    if (admission.availability.disposition !== "available") {
+      return yield* new UnavailableError({
+        revisionID: representationRevisionID,
+        disposition: admission.availability.disposition,
+        detail: "The exact Representation Revision is not currently available",
+      })
+    }
+    return new CurrentUseProof(currentUseProofToken, {
+      ...admission,
+      availabilityVersion: admission.availability.version,
+    })
+  })
+}
+
 export function inspectCurrentUseStatus(tx: Transaction, representationRevisionID: RevisionID) {
   return Effect.gen(function* () {
     const row = yield* tx
@@ -1046,11 +1094,20 @@ function resolveConversionTx(
     const existing = yield* tx
       .select()
       .from(RepresentationEffectTable)
-      .innerJoin(
+      .innerJoin(RepresentationRevisionTable, eq(RepresentationRevisionTable.effect_id, RepresentationEffectTable.id))
+      .leftJoin(
         RepresentationCommandCommitSealTable,
         eq(RepresentationCommandCommitSealTable.effect_id, RepresentationEffectTable.id),
       )
-      .where(eq(RepresentationEffectTable.operation_identity, input.authority.operationIdentity))
+      .where(
+        and(
+          eq(RepresentationEffectTable.operation_identity, input.authority.operationIdentity),
+          or(
+            eq(RepresentationRevisionTable.creation_basis, "deterministic_operation"),
+            isNotNull(RepresentationCommandCommitSealTable.effect_id),
+          ),
+        ),
+      )
       .get()
       .pipe(Effect.orDie)
     if (!existing) return { type: "new", semanticFingerprint: input.semanticFingerprint }
@@ -1061,16 +1118,9 @@ function resolveConversionTx(
         detail: "The conversion operation identity was reused with different semantics",
       })
     }
-    const revision = yield* tx
-      .select({ id: RepresentationRevisionTable.id })
-      .from(RepresentationRevisionTable)
-      .where(eq(RepresentationRevisionTable.effect_id, existing.representation_effect.id))
-      .get()
-      .pipe(Effect.orDie)
-    if (!revision) return yield* Effect.die("Committed Representation effect has no immutable Revision")
     return {
       type: "already_accepted",
-      representation: yield* requireRepresentationInfo(tx, revision.id).pipe(Effect.orDie),
+      representation: yield* requireRepresentationInfo(tx, existing.representation_revision.id).pipe(Effect.orDie),
     }
   })
 }

@@ -2,10 +2,11 @@ export * as MaterialMap from "./material-map"
 
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors"
-import { and, asc, eq, gt, inArray, isNull, or, sql, type SQL } from "drizzle-orm"
+import { and, asc, count, eq, gt, inArray, isNull, or, sql, type SQL } from "drizzle-orm"
 import { Cause, Context, Effect, Layer, Scope } from "effect"
 import { Artifact } from "./artifact"
 import { ContentRoot } from "./content-root"
+import { ContentRootNTFS } from "./content-root/ntfs"
 import { Course } from "./course"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
@@ -22,6 +23,7 @@ import {
   InvalidTransitionError,
   MapID,
   NotFoundError,
+  OutlineNodeID,
   OutcomeUnknownError,
   PersistenceError,
   PreparationError,
@@ -75,6 +77,7 @@ export {
   InvalidTransitionError,
   MapID,
   NotFoundError,
+  OutlineNodeID,
   OutcomeUnknownError,
   PersistenceError,
   PreparationError,
@@ -129,6 +132,63 @@ export type AlignmentListOptions = PageOptions & {
   readonly includeSuperseded?: boolean
 }
 
+export type LocalArtifactMapProposal = Readonly<{
+  supersedesMapID?: MapID
+  outline: MapProposal["outline"]
+}>
+
+export type MapOwnerReceipt = Readonly<{
+  mapID: MapID
+  canonicalInput: string
+  dispositionVersion: number
+  disposition: MapInfo["disposition"]["disposition"]
+  superseded: boolean
+}>
+
+export type AlignmentOwnerReceipt = Readonly<{
+  alignmentID: AlignmentID
+  canonicalInput: string
+  dispositionVersion: number
+  disposition: AlignmentInfo["disposition"]["disposition"]
+  superseded: boolean
+}>
+
+export type OutlineNodeSummary = Omit<OutlineNodeInfo, "selectors"> & Readonly<{ selectorCount: number }>
+
+const ownerProofToken = Symbol("MaterialMap.OwnerProof")
+
+export class MapOwnerProof {
+  readonly receipt: MapOwnerReceipt
+  #receipt: MapOwnerReceipt
+
+  constructor(token: symbol, receipt: MapOwnerReceipt) {
+    if (token !== ownerProofToken) throw new Error("Map-owner proofs are owner-issued")
+    this.receipt = Object.freeze({ ...receipt })
+    this.#receipt = this.receipt
+  }
+
+  expectation(token: symbol) {
+    if (token !== ownerProofToken) return
+    return this.#receipt
+  }
+}
+
+export class AlignmentOwnerProof {
+  readonly receipt: AlignmentOwnerReceipt
+  #receipt: AlignmentOwnerReceipt
+
+  constructor(token: symbol, receipt: AlignmentOwnerReceipt) {
+    if (token !== ownerProofToken) throw new Error("Alignment-owner proofs are owner-issued")
+    this.receipt = Object.freeze({ ...receipt })
+    this.#receipt = this.receipt
+  }
+
+  expectation(token: symbol) {
+    if (token !== ownerProofToken) return
+    return this.#receipt
+  }
+}
+
 export type SelectorResolution = {
   readonly map: MapInfo
   readonly selector: SelectorInfo
@@ -141,7 +201,7 @@ type CurrentReceiptExpectation = {
   readonly mapID: MapID
   readonly selectorID: SelectorID
   readonly mapDispositionVersion: number
-  readonly proof: MaterialTarget.PreparedSelectorTarget
+  readonly require: (tx: Transaction) => Effect.Effect<void, Error>
 }
 
 const currentReceiptToken = Symbol("MaterialMap.CurrentUseReceipt")
@@ -173,6 +233,48 @@ export interface CurrentUseReaderInterface {
 }
 
 export interface Interface {
+  /** Prepare a Map through the same owner invariant used by standalone publication. */
+  readonly prepareMapWrite: (input: {
+    readonly mapID: MapID
+    readonly proposal: MapProposal
+    readonly authorship: Authorship
+    readonly access: MaterialTarget.TargetAccess
+    readonly budgets: MaterialTarget.ReadBudgets
+    readonly abort?: AbortSignal
+  }) => Effect.Effect<PreparedMapWrite, Error, Scope.Scope>
+  /** Prepare a Map over the exact bytes of the sole local Artifact mutation arm. */
+  readonly prepareLocalArtifactMapWrite: (input: {
+    readonly mapID: MapID
+    readonly proposal: LocalArtifactMapProposal
+    readonly authorship: Authorship
+    readonly mutation: Artifact.PreparedMutation
+    readonly read: ContentRoot.PreparedLocalRead
+  }) => Effect.Effect<PreparedMapWrite, Error>
+  /** Prepare a Map over an exact already-admitted Artifact Revision through Gate 10's local-read union. */
+  readonly prepareReferencedArtifactMapWrite: (input: {
+    readonly mapID: MapID
+    readonly proposal: LocalArtifactMapProposal
+    readonly authorship: Authorship
+    readonly reference: Artifact.RevisionReferenceProof
+    readonly read: ContentRoot.PreparedLocalRead
+  }) => Effect.Effect<PreparedMapWrite, Error>
+  /** Publish one already prepared Map inside a caller-owned local transaction. */
+  readonly commitMapInTransaction: (
+    tx: Transaction,
+    input: Readonly<{ prepared: PreparedMapWrite; time: number }>,
+  ) => Effect.Effect<MapInfo, Error>
+  /** Publish a neutral alignment to a Map created in the same caller transaction. */
+  readonly alignPreparedMapInTransaction: (
+    tx: Transaction,
+    input: Readonly<{
+      alignmentID: AlignmentID
+      proposal: AlignmentProposal
+      authorship: Authorship
+      preparedMap: PreparedMapWrite
+      membership: Course.MembershipProof
+      time: number
+    }>,
+  ) => Effect.Effect<AlignmentInfo, Error>
   readonly createMap: (input: {
     readonly mapID: MapID
     readonly proposal: MapProposal
@@ -184,6 +286,12 @@ export interface Interface {
   readonly getMap: (mapID: MapID) => Effect.Effect<MapInfo, Error>
   readonly listMaps: (options: MapListOptions) => Effect.Effect<Page<MapInfo>, Error>
   readonly listOutline: (mapID: MapID, options?: PageOptions) => Effect.Effect<Page<OutlineNodeInfo>, Error>
+  readonly listOutlineNodes: (mapID: MapID, options?: PageOptions) => Effect.Effect<Page<OutlineNodeSummary>, Error>
+  readonly listSelectors: (
+    mapID: MapID,
+    nodeID: OutlineNodeID,
+    options?: PageOptions,
+  ) => Effect.Effect<Page<SelectorInfo>, Error>
   readonly getSelector: (mapID: MapID, selectorID: SelectorID) => Effect.Effect<SelectorInfo, Error>
   readonly listMapSuccessors: (mapID: MapID, options?: PageOptions) => Effect.Effect<Page<MapInfo>, Error>
   readonly listMapDispositions: (mapID: MapID, options?: PageOptions) => Effect.Effect<Page<DispositionEvent>, Error>
@@ -299,7 +407,12 @@ const currentUseLayer = Layer.effect(
             mapID: finalized.map.id,
             selectorID: finalized.selector.id,
             mapDispositionVersion: finalized.map.disposition.version,
-            proof: prepared.proof,
+            require: (tx) =>
+              MaterialTarget.requirePreparedSelector(tx, prepared.proof, {
+                mapID: finalized.map.id,
+                selectorID: finalized.selector.id,
+                mapDispositionVersion: finalized.map.disposition.version,
+              }).pipe(Effect.asVoid),
           }),
         }
       },
@@ -316,6 +429,328 @@ const layer = Layer.effect(
     const courses = yield* Course.Service
     const currentReader = yield* CurrentUseReader
     const db = database.db
+
+    const prepareMapWrite: Interface["prepareMapWrite"] = Effect.fn("MaterialMap.prepareMapWrite")(function* (input) {
+      const normalized = yield* normalizeMap(input.mapID, input.proposal, input.authorship)
+      const proof = yield* MaterialTarget.prepareMap(dependencies, {
+        mapID: input.mapID,
+        canonicalInput: normalized.canonicalInput,
+        proposal: normalized.proposal,
+        access: input.access,
+        budgets: input.budgets,
+        abort: input.abort,
+      })
+      return new PreparedMapWrite(
+        preparedMapWriteToken,
+        input.mapID,
+        (tx, time, advanceFrontier) =>
+          commitMap(tx, {
+            mapID: input.mapID,
+            proposal: normalized.proposal,
+            authorship: normalized.authorship,
+            canonicalInput: normalized.canonicalInput,
+            proof,
+            time,
+            advanceFrontier,
+          }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+        (selectorID) =>
+          MaterialTarget.preparedSelectorFromMap(proof, {
+            mapID: input.mapID,
+            selectorID,
+            mapDispositionVersion: 0,
+          }).pipe(
+            Effect.map(
+              (selectorProof) =>
+                new CurrentUseReceipt(currentReceiptToken, {
+                  mapID: input.mapID,
+                  selectorID,
+                  mapDispositionVersion: 0,
+                  require: (tx) =>
+                    MaterialTarget.requirePreparedSelector(tx, selectorProof, {
+                      mapID: input.mapID,
+                      selectorID,
+                      mapDispositionVersion: 0,
+                    }).pipe(Effect.asVoid),
+                }),
+            ),
+          ),
+      )
+    })
+
+    const prepareLocalArtifactMapWrite: Interface["prepareLocalArtifactMapWrite"] = Effect.fn(
+      "MaterialMap.prepareLocalArtifactMapWrite",
+    )(function* (input) {
+      if (
+        !(input.mutation instanceof Artifact.PreparedMutation) ||
+        !(input.read instanceof ContentRoot.PreparedLocalRead)
+      ) {
+        return yield* new InvalidTransitionError({ detail: "Local Map preparation requires exact owner proofs" })
+      }
+      if (input.mutation.location.value !== input.read.observation.descriptor.canonicalPath) {
+        return yield* new PreparationError({
+          code: "source_provenance",
+          detail: "Artifact mutation and Gate 10 read name different canonical locations",
+        })
+      }
+      if (input.proposal.supersedesMapID === input.mapID) {
+        return yield* new InvalidTransitionError({ detail: "A Map cannot supersede itself" })
+      }
+      const authorship = yield* requireAuthorship(input.authorship)
+      const outline = yield* normalizeMapOutline("artifact", input.proposal.outline)
+      const selections = yield* selectLocalArtifactOutline(outline, input.read.observation)
+      const witnesses = new Map(Array.from(selections, ([id, selected]) => [id, selected.witness] as const))
+      const committed = new WeakMap<object, ArtifactTargetReceipt>()
+      const times = new WeakMap<object, number>()
+      const resolve = (tx: Transaction, time: number) => {
+        const cached = committed.get(tx)
+        if (cached) return Effect.succeed(cached)
+        return Effect.gen(function* () {
+          yield* input.read.require(tx)
+          const result = yield* input.mutation.commit(tx, time)
+          const artifact = result.artifact
+          const binding = artifact.source.activeBinding
+          const attribution = artifact.source.revisionAttribution
+          const descriptor = artifact.source.descriptor
+          if (
+            artifact.withdrawalReason ||
+            artifact.correctionHidden ||
+            artifact.source.availability !== "available" ||
+            artifact.source.currentRevisionID !== result.revisionID ||
+            !binding ||
+            binding.location !== input.read.observation.descriptor.canonicalPath ||
+            !attribution ||
+            !descriptor
+          ) {
+            return yield* new PreparationError({
+              code: "stale_target",
+              detail: "The local Artifact result is not an exact eligible Map target",
+            })
+          }
+          const receipt = {
+            type: "artifact" as const,
+            effectiveArtifactID: artifact.id,
+            revisionID: result.revisionID,
+            attribution,
+            dispositionVersion: artifact.dispositionVersion,
+            lineageVersion: artifact.lineageVersion,
+            sourceVersion: artifact.source.sourceVersion,
+            artifactBindingID: binding.id,
+            activeLocation: binding.location,
+            descriptorObservationID: descriptor.observationID,
+            descriptorCorrectionID: descriptor.correctionID,
+            fingerprint: input.read.observation.fingerprint,
+            mediaType: input.read.observation.mediaType,
+            authorization: input.read.authorization,
+            relativePath: input.read.authorization.relativePath,
+            descriptor: input.read.observation.descriptor,
+            timeObserved: input.read.observation.timeObserved,
+          } satisfies ArtifactTargetReceipt
+          committed.set(tx, receipt)
+          return receipt
+        })
+      }
+      return new PreparedMapWrite(
+        preparedMapWriteToken,
+        input.mapID,
+        (tx, time, advanceFrontier) =>
+          Effect.gen(function* () {
+            const receipt = yield* resolve(tx, time)
+            const proposal = {
+              target: {
+                type: "artifact" as const,
+                effectiveArtifactID: receipt.effectiveArtifactID,
+                revisionID: receipt.revisionID,
+                attribution: receipt.attribution,
+              },
+              ...(input.proposal.supersedesMapID ? { supersedesMapID: input.proposal.supersedesMapID } : {}),
+              outline,
+            } satisfies MapProposal
+            const canonicalInput = canonicalJSON({ version: 1, proposal, authorship })
+            if (new TextEncoder().encode(canonicalInput).byteLength > limits.canonicalInputBytes) {
+              return yield* invalidPreparation("invalid_outline", "The canonical Map proposal exceeds its byte limit")
+            }
+            times.set(tx, time)
+            return yield* publishMap(
+              tx,
+              { mapID: input.mapID, proposal, authorship, canonicalInput, time, advanceFrontier },
+              receipt,
+              witnesses,
+            )
+          }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+        (selectorID) => {
+          const selected = selections.get(selectorID)
+          if (!selected) {
+            return Effect.fail(
+              new PreparationError({ code: "stale_target", detail: "Prepared local Map omitted the selector" }),
+            )
+          }
+          return Effect.succeed(
+            new CurrentUseReceipt(currentReceiptToken, {
+              mapID: input.mapID,
+              selectorID,
+              mapDispositionVersion: 0,
+              require: (tx) =>
+                Effect.gen(function* () {
+                  const time = times.get(tx)
+                  if (time === undefined) {
+                    return yield* new PreparationError({
+                      code: "stale_target",
+                      detail: "The local Map is not committed in this transaction",
+                    })
+                  }
+                  yield* resolve(tx, time)
+                  const current = yield* requireCurrentMapSelector(tx, input.mapID, selectorID)
+                  if (
+                    current.map.disposition.version !== 0 ||
+                    !sameWitness(current.selector.witness, selected.witness)
+                  ) {
+                    return yield* new PreparationError({
+                      code: "witness_mismatch",
+                      detail: "The committed local Map selector diverged from its prepared bytes",
+                    })
+                  }
+                }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+            }),
+          )
+        },
+      )
+    })
+
+    const prepareReferencedArtifactMapWrite: Interface["prepareReferencedArtifactMapWrite"] = Effect.fn(
+      "MaterialMap.prepareReferencedArtifactMapWrite",
+    )(function* (input) {
+      if (
+        !(input.reference instanceof Artifact.RevisionReferenceProof) ||
+        !(input.read instanceof ContentRoot.PreparedLocalRead)
+      ) {
+        return yield* new InvalidTransitionError({ detail: "Referenced Map preparation requires exact owner proofs" })
+      }
+      const reference = input.reference.receipt
+      if (
+        reference.currentRevisionID !== reference.revision.id ||
+        !reference.currentAttribution ||
+        !sameAttribution(reference.currentAttribution, reference.revision.attribution) ||
+        reference.activeLocation !== input.read.observation.descriptor.canonicalPath ||
+        reference.revision.fingerprint.algorithm !== input.read.observation.fingerprint.algorithm ||
+        reference.revision.fingerprint.digest !== input.read.observation.fingerprint.digest ||
+        reference.revision.fingerprint.byteLength !== input.read.observation.fingerprint.byteLength
+      ) {
+        return yield* new PreparationError({
+          code: "source_provenance",
+          detail: "The exact Artifact Revision does not match the authorized stable local bytes",
+        })
+      }
+      if (input.proposal.supersedesMapID === input.mapID) {
+        return yield* new InvalidTransitionError({ detail: "A Map cannot supersede itself" })
+      }
+      const authorship = yield* requireAuthorship(input.authorship)
+      const outline = yield* normalizeMapOutline("artifact", input.proposal.outline)
+      const selections = yield* selectLocalArtifactOutline(outline, input.read.observation)
+      const witnesses = new Map(Array.from(selections, ([id, selected]) => [id, selected.witness] as const))
+      const receipt = {
+        type: "artifact" as const,
+        effectiveArtifactID: reference.revision.effectiveArtifactID,
+        revisionID: reference.revision.id,
+        attribution: reference.revision.attribution,
+        dispositionVersion: reference.dispositionVersion,
+        lineageVersion: reference.lineageVersion,
+        sourceVersion: reference.sourceVersion,
+        artifactBindingID: reference.activeBindingID!,
+        activeLocation: reference.activeLocation,
+        descriptorObservationID: reference.descriptorObservationID!,
+        descriptorCorrectionID: reference.descriptorCorrectionID,
+        fingerprint: reference.revision.fingerprint,
+        mediaType: reference.mediaType!,
+        authorization: input.read.authorization,
+        relativePath: input.read.authorization.relativePath,
+        descriptor: input.read.observation.descriptor,
+        timeObserved: input.read.observation.timeObserved,
+      } satisfies ArtifactTargetReceipt
+      return new PreparedMapWrite(
+        preparedMapWriteToken,
+        input.mapID,
+        (tx, time, advanceFrontier) =>
+          Effect.gen(function* () {
+            yield* input.read.require(tx)
+            yield* Artifact.requireRevisionReference(tx, input.reference)
+            const proposal = {
+              target: {
+                type: "artifact" as const,
+                effectiveArtifactID: receipt.effectiveArtifactID,
+                revisionID: receipt.revisionID,
+                attribution: receipt.attribution,
+              },
+              ...(input.proposal.supersedesMapID ? { supersedesMapID: input.proposal.supersedesMapID } : {}),
+              outline,
+            } satisfies MapProposal
+            const canonicalInput = canonicalJSON({ version: 1, proposal, authorship })
+            return yield* publishMap(
+              tx,
+              { mapID: input.mapID, proposal, authorship, canonicalInput, time, advanceFrontier },
+              receipt,
+              witnesses,
+            )
+          }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+        (selectorID) => {
+          const selected = selections.get(selectorID)
+          if (!selected) {
+            return Effect.fail(
+              new PreparationError({ code: "stale_target", detail: "Prepared referenced Map omitted the selector" }),
+            )
+          }
+          return Effect.succeed(
+            new CurrentUseReceipt(currentReceiptToken, {
+              mapID: input.mapID,
+              selectorID,
+              mapDispositionVersion: 0,
+              require: (tx) =>
+                Effect.gen(function* () {
+                  yield* input.read.require(tx)
+                  yield* Artifact.requireRevisionReference(tx, input.reference)
+                  const current = yield* requireCurrentMapSelector(tx, input.mapID, selectorID)
+                  if (
+                    current.map.disposition.version !== 0 ||
+                    !sameWitness(current.selector.witness, selected.witness)
+                  ) {
+                    return yield* new PreparationError({
+                      code: "witness_mismatch",
+                      detail: "The committed referenced Map selector diverged from its prepared bytes",
+                    })
+                  }
+                }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+            }),
+          )
+        },
+      )
+    })
+
+    const commitMapInTransaction: Interface["commitMapInTransaction"] = Effect.fn("MaterialMap.commitMapInTransaction")(
+      function* (tx, input) {
+        if (!(input.prepared instanceof PreparedMapWrite)) {
+          return yield* new InvalidTransitionError({ detail: "Map composition requires an owner-issued preparation" })
+        }
+        return yield* input.prepared.commit(tx, input.time)
+      },
+    )
+
+    const alignPreparedMapInTransaction: Interface["alignPreparedMapInTransaction"] = Effect.fn(
+      "MaterialMap.alignPreparedMapInTransaction",
+    )(function* (tx, input) {
+      if (!(input.preparedMap instanceof PreparedMapWrite) || input.preparedMap.mapID !== input.proposal.mapID) {
+        return yield* new InvalidTransitionError({ detail: "Alignment Map preparation does not match its target" })
+      }
+      const normalized = yield* normalizeAlignment(input.alignmentID, input.proposal, input.authorship)
+      return yield* commitAlignment(tx, {
+        alignmentID: input.alignmentID,
+        proposal: normalized.proposal,
+        authorship: normalized.authorship,
+        canonicalInput: normalized.canonicalInput,
+        material: yield* input.preparedMap.selectorReceipt(normalized.proposal.selectorID),
+        membership: input.membership,
+        time: input.time,
+        advanceFrontier: false,
+      }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die))
+    })
 
     const createMap: Interface["createMap"] = Effect.fn("MaterialMap.createMap")(function* (input) {
       const normalized = yield* normalizeMap(input.mapID, input.proposal, input.authorship)
@@ -340,6 +775,8 @@ const layer = Layer.effect(
                 authorship: normalized.authorship,
                 canonicalInput: normalized.canonicalInput,
                 proof,
+                time: Date.now(),
+                advanceFrontier: true,
               }),
             )
             .pipe(
@@ -387,6 +824,24 @@ const layer = Layer.effect(
     const getSelector: Interface["getSelector"] = Effect.fn("MaterialMap.getSelector")(function* (mapID, selectorID) {
       return yield* snapshot(db, (tx) => requireSelectorInfo(tx, mapID, selectorID))
     })
+
+    const listOutlineNodes: Interface["listOutlineNodes"] = Effect.fn("MaterialMap.listOutlineNodes")(
+      function* (mapID, options) {
+        const scope = { endpoint: "outline_nodes" as const, parent: mapID, filter: "exact" }
+        const page = yield* MaterialMapCursor.options(options, scope)
+        const after = yield* numberIDKey(page.key)
+        return yield* snapshot(db, (tx) => listOutlineNodesPage(tx, mapID, page.limit, after, scope))
+      },
+    )
+
+    const listSelectors: Interface["listSelectors"] = Effect.fn("MaterialMap.listSelectors")(
+      function* (mapID, nodeID, options) {
+        const scope = { endpoint: "selectors" as const, parent: `${mapID}/${nodeID}`, filter: "exact" }
+        const page = yield* MaterialMapCursor.options(options, scope)
+        const after = yield* numberIDKey(page.key)
+        return yield* snapshot(db, (tx) => listSelectorsPage(tx, mapID, nodeID, page.limit, after, scope))
+      },
+    )
 
     const listMapSuccessors: Interface["listMapSuccessors"] = Effect.fn("MaterialMap.listMapSuccessors")(
       function* (mapID, options) {
@@ -437,6 +892,8 @@ const layer = Layer.effect(
               canonicalInput: normalized.canonicalInput,
               material: material.receipt,
               membership,
+              time: Date.now(),
+              advanceFrontier: true,
             }),
           )
           .pipe(
@@ -536,10 +993,17 @@ const layer = Layer.effect(
     )
 
     return Service.of({
+      prepareMapWrite,
+      prepareLocalArtifactMapWrite,
+      prepareReferencedArtifactMapWrite,
+      commitMapInTransaction,
+      alignPreparedMapInTransaction,
       createMap,
       getMap,
       listMaps,
       listOutline,
+      listOutlineNodes,
+      listSelectors,
       getSelector,
       listMapSuccessors,
       listMapDispositions,
@@ -597,16 +1061,32 @@ function snapshot<A, E, R>(
 function normalizeMap(mapID: MapID, proposal: MapProposal, authorship: Authorship) {
   return Effect.gen(function* () {
     const receipt = yield* requireAuthorship(authorship)
-    if (!Array.isArray(proposal.outline) || proposal.outline.length < 1 || proposal.outline.length > limits.nodes) {
-      return yield* invalidPreparation("invalid_outline", `A Map must contain 1-${limits.nodes} outline nodes`)
-    }
+    const outline = yield* normalizeMapOutline(proposal.target.type, proposal.outline)
     if (proposal.supersedesMapID === mapID) {
       return yield* new InvalidTransitionError({ detail: "A Map cannot supersede itself" })
+    }
+    const normalized = {
+      target: normalizeTarget(proposal.target),
+      ...(proposal.supersedesMapID ? { supersedesMapID: proposal.supersedesMapID } : {}),
+      outline,
+    } satisfies MapProposal
+    const canonicalInput = canonicalJSON({ version: 1, proposal: normalized, authorship: receipt })
+    if (new TextEncoder().encode(canonicalInput).byteLength > limits.canonicalInputBytes) {
+      return yield* invalidPreparation("invalid_outline", "The canonical Map proposal exceeds its byte limit")
+    }
+    return { proposal: normalized, authorship: receipt, canonicalInput }
+  })
+}
+
+function normalizeMapOutline(target: MapTarget["type"], proposed: MapProposal["outline"]) {
+  return Effect.gen(function* () {
+    if (!Array.isArray(proposed) || proposed.length < 1 || proposed.length > limits.nodes) {
+      return yield* invalidPreparation("invalid_outline", `A Map must contain 1-${limits.nodes} outline nodes`)
     }
     const nodeIDs = new Set<string>()
     const selectorIDs = new Set<string>()
     const stack: { readonly id: string; readonly depth: number }[] = []
-    const outline = yield* Effect.forEach(proposal.outline, (node, index) =>
+    const outline = yield* Effect.forEach(proposed, (node, index) =>
       Effect.gen(function* () {
         if (nodeIDs.has(node.id)) return yield* invalidPreparation("invalid_outline", "Outline node IDs must be unique")
         nodeIDs.add(node.id)
@@ -644,7 +1124,7 @@ function normalizeMap(mapID: MapID, proposal: MapProposal, authorship: Authorshi
               if (selector.position !== position) {
                 return yield* invalidPreparation("invalid_outline", "Selector positions must be contiguous per node")
               }
-              yield* requireCoordinate(proposal.target, selector.coordinate)
+              yield* requireCoordinateKind(target, selector.coordinate)
               return { ...selector, position, coordinate: normalizeCoordinate(selector.coordinate) }
             }),
         )
@@ -663,16 +1143,30 @@ function normalizeMap(mapID: MapID, proposal: MapProposal, authorship: Authorshi
         return yield* invalidPreparation("invalid_outline", "Every outline leaf must own at least one selector")
       }
     }
-    const normalized = {
-      target: normalizeTarget(proposal.target),
-      ...(proposal.supersedesMapID ? { supersedesMapID: proposal.supersedesMapID } : {}),
-      outline,
-    } satisfies MapProposal
-    const canonicalInput = canonicalJSON({ version: 1, proposal: normalized, authorship: receipt })
-    if (new TextEncoder().encode(canonicalInput).byteLength > limits.canonicalInputBytes) {
-      return yield* invalidPreparation("invalid_outline", "The canonical Map proposal exceeds its byte limit")
-    }
-    return { proposal: normalized, authorship: receipt, canonicalInput }
+    return outline
+  })
+}
+
+function selectLocalArtifactOutline(outline: MapProposal["outline"], observation: ContentRootNTFS.PreparedFile) {
+  return Effect.gen(function* () {
+    const selected = yield* Effect.forEach(
+      outline.flatMap((node) => node.selectors),
+      (selector) =>
+        Effect.gen(function* () {
+          const result = MaterialSelector.select(
+            { type: "artifact", bytes: observation.bytes, fingerprint: observation.fingerprint },
+            selector.coordinate,
+          )
+          if (!result.ok) {
+            return yield* invalidPreparation(
+              result.error === "profile_mismatch" ? "unsupported_selector" : "invalid_selector",
+              `Selector validation failed: ${result.error}`,
+            )
+          }
+          return [selector.id, result.value] as const
+        }),
+    )
+    return new Map(selected)
   })
 }
 
@@ -731,14 +1225,18 @@ function requireAuthorship(authorship: Authorship) {
 }
 
 function requireCoordinate(target: MapTarget, coordinate: MaterialSelector.Coordinate) {
-  if (coordinate.kind === "artifact_byte_range.v1" && target.type !== "artifact") {
+  return requireCoordinateKind(target.type, coordinate)
+}
+
+function requireCoordinateKind(target: MapTarget["type"], coordinate: MaterialSelector.Coordinate) {
+  if (coordinate.kind === "artifact_byte_range.v1" && target !== "artifact") {
     return invalidPreparation("unsupported_selector", "Artifact byte ranges require an Artifact target")
   }
   if (
     (coordinate.kind === "pdf_page_range.v1" ||
       coordinate.kind === "pdf_text_range.v1" ||
       coordinate.kind === "model_text_range.v1") &&
-    target.type !== "representation"
+    target !== "representation"
   ) {
     return invalidPreparation("unsupported_selector", "Profile selectors require a Representation target")
   }
@@ -867,7 +1365,31 @@ function commitMap(
     readonly authorship: AuthorshipReceipt
     readonly canonicalInput: string
     readonly proof: MaterialTarget.PreparedMapTarget
+    readonly time: number
+    readonly advanceFrontier: boolean
   },
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* MaterialTarget.requirePreparedMap(tx, input.proof, {
+      mapID: input.mapID,
+      canonicalInput: input.canonicalInput,
+    })
+    return yield* publishMap(tx, input, prepared.receipt, prepared.witnesses)
+  })
+}
+
+function publishMap(
+  tx: Transaction,
+  input: {
+    readonly mapID: MapID
+    readonly proposal: MapProposal
+    readonly authorship: AuthorshipReceipt
+    readonly canonicalInput: string
+    readonly time: number
+    readonly advanceFrontier: boolean
+  },
+  receipt: TargetReceipt,
+  witnesses: ReadonlyMap<SelectorID, MaterialSelector.Witness>,
 ) {
   return Effect.gen(function* () {
     const replay = yield* findMapInfo(tx, input.mapID)
@@ -901,28 +1423,21 @@ function commitMap(
     if (reusedSelector) {
       return yield* new InvalidTransitionError({ detail: `Selector identity ${reusedSelector.id} is already owned` })
     }
-    const prepared = yield* MaterialTarget.requirePreparedMap(tx, input.proof, {
-      mapID: input.mapID,
-      canonicalInput: input.canonicalInput,
-    })
     if (input.proposal.supersedesMapID) yield* requireMapInfo(tx, input.proposal.supersedesMapID)
-    if (
-      prepared.receipt.type !== input.proposal.target.type ||
-      !receiptMatchesTarget(prepared.receipt, input.proposal.target)
-    ) {
+    if (receipt.type !== input.proposal.target.type || !receiptMatchesTarget(receipt, input.proposal.target)) {
       return yield* new PreparationError({
         code: "stale_target",
         detail: "Prepared receipt does not match the Map target",
       })
     }
-    const time = Date.now()
+    const time = input.time
     yield* tx.run("PRAGMA defer_foreign_keys = ON")
-    if (prepared.receipt.type === "artifact") {
-      yield* tx.insert(MaterialMapArtifactTargetTable).values(artifactTargetValues(input.mapID, prepared.receipt))
+    if (receipt.type === "artifact") {
+      yield* tx.insert(MaterialMapArtifactTargetTable).values(artifactTargetValues(input.mapID, receipt))
     } else {
       yield* tx.insert(MaterialMapRepresentationTargetTable).values({
         map_id: input.mapID,
-        representation_revision_id: prepared.receipt.representationRevisionID,
+        representation_revision_id: receipt.representationRevisionID,
       })
     }
     yield* tx.insert(MaterialOutlineNodeTable).values(
@@ -937,7 +1452,7 @@ function commitMap(
     )
     const selectors = input.proposal.outline.flatMap((node) =>
       node.selectors.map((selector) => {
-        const witness = prepared.witnesses.get(selector.id)
+        const witness = witnesses.get(selector.id)
         if (!witness) throw new Error(`Prepared target omitted selector ${selector.id}`)
         return selectorValues(input.mapID, node.id, selector, witness)
       }),
@@ -966,11 +1481,13 @@ function commitMap(
       authorship_capability_version: input.authorship.capabilityVersion,
       time_created: time,
     })
-    yield* LearningFrontier.advance(tx, { time }).pipe(
-      Effect.catchCause(() =>
-        Effect.fail(new PersistenceError({ entity: "map", id: input.mapID, operation: "create" })),
-      ),
-    )
+    if (input.advanceFrontier) {
+      yield* LearningFrontier.advance(tx, { time }).pipe(
+        Effect.catchCause(() =>
+          Effect.fail(new PersistenceError({ entity: "map", id: input.mapID, operation: "create" })),
+        ),
+      )
+    }
     return yield* requireMapInfo(tx, input.mapID)
   })
 }
@@ -984,6 +1501,8 @@ function commitAlignment(
     readonly canonicalInput: string
     readonly material: CurrentUseReceipt
     readonly membership: Course.MembershipProof
+    readonly time: number
+    readonly advanceFrontier: boolean
   },
 ) {
   return Effect.gen(function* () {
@@ -1014,11 +1533,7 @@ function commitAlignment(
         detail: "Map disposition changed after selector preparation",
       })
     }
-    yield* MaterialTarget.requirePreparedSelector(tx, material.proof, {
-      mapID: material.mapID,
-      selectorID: material.selectorID,
-      mapDispositionVersion: material.mapDispositionVersion,
-    })
+    yield* material.require(tx)
     if (
       canonicalJSON(input.membership.endpoint) !== canonicalJSON(input.proposal.course) ||
       canonicalJSON(input.membership.selection) !== canonicalJSON(input.proposal.selection)
@@ -1029,7 +1544,7 @@ function commitAlignment(
     if (input.proposal.supersedesAlignmentID) {
       yield* requireAlignmentInfo(tx, input.proposal.supersedesAlignmentID)
     }
-    const time = Date.now()
+    const time = input.time
     yield* tx.run("PRAGMA defer_foreign_keys = ON")
     yield* tx.insert(MaterialCourseAlignmentStateTable).values({
       alignment_id: input.alignmentID,
@@ -1068,11 +1583,13 @@ function commitAlignment(
       authorship_capability_version: input.authorship.capabilityVersion,
       time_created: time,
     })
-    yield* LearningFrontier.advance(tx, { time }).pipe(
-      Effect.catchCause(() =>
-        Effect.fail(new PersistenceError({ entity: "alignment", id: input.alignmentID, operation: "create" })),
-      ),
-    )
+    if (input.advanceFrontier) {
+      yield* LearningFrontier.advance(tx, { time }).pipe(
+        Effect.catchCause(() =>
+          Effect.fail(new PersistenceError({ entity: "alignment", id: input.alignmentID, operation: "create" })),
+        ),
+      )
+    }
     return yield* requireAlignmentInfo(tx, input.alignmentID)
   })
 }
@@ -1091,6 +1608,9 @@ function receiptMatchesTarget(receipt: TargetReceipt, target: MapTarget) {
 }
 
 function artifactTargetValues(mapID: MapID, receipt: ArtifactTargetReceipt) {
+  const contentRoot = receipt.authorization.kind === "content_root" ? receipt.authorization : undefined
+  const workspace = receipt.authorization.kind === "active_workspace" ? receipt.authorization : undefined
+  const operation = receipt.authorization.kind === "one_operation" ? receipt.authorization : undefined
   return {
     map_id: mapID,
     artifact_id: receipt.effectiveArtifactID,
@@ -1108,14 +1628,28 @@ function artifactTargetValues(mapID: MapID, receipt: ArtifactTargetReceipt) {
     fingerprint_digest: receipt.fingerprint.digest,
     byte_length: receipt.fingerprint.byteLength,
     media_type: receipt.mediaType,
-    content_root_id: receipt.authorization.contentRootID,
-    content_root_binding_id: receipt.authorization.bindingID,
-    content_root_binding_episode_id: receipt.authorization.bindingEpisodeID,
-    content_root_binding_episode_ordinal: receipt.authorization.bindingEpisodeOrdinal,
-    content_root_grant_episode_id: receipt.authorization.grantEpisodeID,
-    content_root_grant_episode_ordinal: receipt.grantEpisodeOrdinal,
-    content_root_grant_version: receipt.authorization.grantVersion,
+    authority_kind: receipt.authorization.kind,
+    content_root_id: contentRoot?.contentRoot.contentRootID,
+    content_root_binding_id: contentRoot?.contentRoot.bindingID,
+    content_root_binding_episode_id: contentRoot?.contentRoot.bindingEpisodeID,
+    content_root_binding_episode_ordinal: contentRoot?.contentRoot.bindingEpisodeOrdinal,
+    content_root_grant_episode_id: contentRoot?.contentRoot.grantEpisodeID,
+    content_root_grant_episode_ordinal: contentRoot?.grantEpisodeOrdinal,
+    content_root_grant_version: contentRoot?.contentRoot.grantVersion,
+    workspace_identity: workspace?.workspaceIdentity,
+    operation_identity: operation?.operationIdentity,
+    operation_approval_basis: operation?.approvalBasis,
     normalized_relative_path: receipt.relativePath,
+    root_object_platform: receipt.authorization.root.platform,
+    root_object_verifier_version: receipt.authorization.root.verifierVersion,
+    root_object_canonical_path: receipt.authorization.root.canonicalPath,
+    root_object_canonical_path_key: receipt.authorization.root.canonicalPathKey,
+    root_object_volume_serial: receipt.authorization.root.volumeSerial,
+    root_object_id: receipt.authorization.root.objectID,
+    root_object_creation_time: receipt.authorization.root.creationTime,
+    root_object_change_time: receipt.authorization.root.changeTime,
+    root_object_last_write_time: receipt.authorization.root.lastWriteTime,
+    root_object_size: receipt.authorization.root.size,
     source_object_platform: receipt.descriptor.platform,
     source_object_verifier_version: receipt.descriptor.verifierVersion,
     source_object_canonical_path: receipt.descriptor.canonicalPath,
@@ -1167,6 +1701,133 @@ function selectorValues(
     witness_digest: witness.digest,
     witness_byte_length: witness.byteLength,
   } satisfies typeof MaterialSelectorTable.$inferInsert
+}
+
+function sourceRootDescriptor(row: typeof MaterialMapArtifactTargetTable.$inferSelect) {
+  return {
+    platform: row.root_object_platform!,
+    verifierVersion: row.root_object_verifier_version!,
+    canonicalPath: row.root_object_canonical_path!,
+    canonicalPathKey: row.root_object_canonical_path_key!,
+    volumeSerial: row.root_object_volume_serial!,
+    objectID: row.root_object_id!,
+    creationTime: row.root_object_creation_time!,
+    changeTime: row.root_object_change_time!,
+    lastWriteTime: row.root_object_last_write_time!,
+    size: row.root_object_size!,
+    kind: "directory" as const,
+  }
+}
+
+const preparedMapWriteToken = Symbol("MaterialMap.PreparedMapWrite")
+
+/** Owner-issued Map publication whose stable target preparation may join another local transaction. */
+export class PreparedMapWrite {
+  readonly mapID: MapID
+  #commit: (tx: Transaction, time: number, advanceFrontier: boolean) => Effect.Effect<MapInfo, Error>
+  #selector: (selectorID: SelectorID) => Effect.Effect<CurrentUseReceipt, Error>
+
+  constructor(
+    token: symbol,
+    mapID: MapID,
+    commit: (tx: Transaction, time: number, advanceFrontier: boolean) => Effect.Effect<MapInfo, Error>,
+    selector: (selectorID: SelectorID) => Effect.Effect<CurrentUseReceipt, Error>,
+  ) {
+    if (token !== preparedMapWriteToken) throw new Error("Prepared Map writes are owner-issued")
+    this.mapID = mapID
+    this.#commit = commit
+    this.#selector = selector
+  }
+
+  commit(tx: Transaction, time: number, advanceFrontier = false) {
+    return this.#commit(tx, time, advanceFrontier)
+  }
+
+  selectorReceipt(selectorID: SelectorID) {
+    return this.#selector(selectorID)
+  }
+}
+
+export function prepareMapOwnerProof(tx: Transaction, mapID: MapID) {
+  return Effect.map(
+    requireMapInfo(tx, mapID),
+    (map) =>
+      new MapOwnerProof(ownerProofToken, {
+        mapID: map.id,
+        canonicalInput: map.canonicalInput,
+        dispositionVersion: map.disposition.version,
+        disposition: map.disposition.disposition,
+        superseded: map.superseded,
+      }),
+  )
+}
+
+export function requireMapOwnerProof(tx: Transaction, proof: MapOwnerProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof MapOwnerProof ? proof.expectation(ownerProofToken) : undefined
+    if (!expected) return yield* new InvalidTransitionError({ detail: "Map-owner proof is not owner-issued" })
+    const current = yield* prepareMapOwnerProof(tx, expected.mapID)
+    if (
+      current.receipt.canonicalInput !== expected.canonicalInput ||
+      current.receipt.dispositionVersion !== expected.dispositionVersion ||
+      current.receipt.disposition !== expected.disposition ||
+      current.receipt.superseded !== expected.superseded
+    ) {
+      return yield* new ConflictError({ entity: "map_state", id: expected.mapID, detail: "Map state changed" })
+    }
+    return current
+  })
+}
+
+export function prepareAlignmentOwnerProof(tx: Transaction, alignmentID: AlignmentID) {
+  return Effect.map(
+    requireAlignmentInfo(tx, alignmentID),
+    (alignment) =>
+      new AlignmentOwnerProof(ownerProofToken, {
+        alignmentID: alignment.id,
+        canonicalInput: alignment.canonicalInput,
+        dispositionVersion: alignment.disposition.version,
+        disposition: alignment.disposition.disposition,
+        superseded: alignment.superseded,
+      }),
+  )
+}
+
+export function requireAlignmentOwnerProof(tx: Transaction, proof: AlignmentOwnerProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof AlignmentOwnerProof ? proof.expectation(ownerProofToken) : undefined
+    if (!expected) return yield* new InvalidTransitionError({ detail: "Alignment-owner proof is not owner-issued" })
+    const current = yield* prepareAlignmentOwnerProof(tx, expected.alignmentID)
+    if (
+      current.receipt.canonicalInput !== expected.canonicalInput ||
+      current.receipt.dispositionVersion !== expected.dispositionVersion ||
+      current.receipt.disposition !== expected.disposition ||
+      current.receipt.superseded !== expected.superseded
+    ) {
+      return yield* new ConflictError({
+        entity: "alignment_state",
+        id: expected.alignmentID,
+        detail: "Alignment state changed",
+      })
+    }
+    return current
+  })
+}
+
+function sourceDescriptor(row: typeof MaterialMapArtifactTargetTable.$inferSelect) {
+  return {
+    platform: row.source_object_platform,
+    verifierVersion: row.source_object_verifier_version,
+    canonicalPath: row.source_object_canonical_path,
+    canonicalPathKey: row.source_object_canonical_path_key,
+    volumeSerial: row.source_object_volume_serial,
+    objectID: row.source_object_id,
+    creationTime: row.source_object_creation_time,
+    changeTime: row.source_object_change_time,
+    lastWriteTime: row.source_object_last_write_time,
+    size: row.source_object_size,
+    kind: "file" as const,
+  }
 }
 
 function findMapInfo(source: Queryable, mapID: MapID) {
@@ -1249,29 +1910,41 @@ function requireArtifactTarget(source: Queryable, mapID: MapID) {
         byteLength: row.byte_length,
       },
       mediaType: row.media_type,
-      authorization: {
-        contentRootID: row.content_root_id,
-        bindingID: row.content_root_binding_id,
-        bindingEpisodeID: row.content_root_binding_episode_id,
-        bindingEpisodeOrdinal: row.content_root_binding_episode_ordinal,
-        grantEpisodeID: row.content_root_grant_episode_id,
-        grantVersion: row.content_root_grant_version,
-      },
-      grantEpisodeOrdinal: row.content_root_grant_episode_ordinal,
+      authorization:
+        row.authority_kind === "content_root"
+          ? {
+              kind: "content_root",
+              root: sourceRootDescriptor(row),
+              relativePath: row.normalized_relative_path,
+              canonicalPath: row.source_object_canonical_path,
+              contentRoot: {
+                contentRootID: row.content_root_id!,
+                bindingID: row.content_root_binding_id!,
+                bindingEpisodeID: row.content_root_binding_episode_id!,
+                bindingEpisodeOrdinal: row.content_root_binding_episode_ordinal!,
+                grantEpisodeID: row.content_root_grant_episode_id!,
+                grantVersion: row.content_root_grant_version!,
+              },
+              grantEpisodeOrdinal: row.content_root_grant_episode_ordinal!,
+            }
+          : row.authority_kind === "active_workspace"
+            ? {
+                kind: "active_workspace",
+                root: sourceRootDescriptor(row),
+                relativePath: row.normalized_relative_path,
+                canonicalPath: row.source_object_canonical_path,
+                workspaceIdentity: row.workspace_identity!,
+              }
+            : {
+                kind: "one_operation",
+                root: sourceRootDescriptor(row),
+                relativePath: row.normalized_relative_path,
+                canonicalPath: row.source_object_canonical_path,
+                operationIdentity: row.operation_identity!,
+                approvalBasis: row.operation_approval_basis!,
+              },
       relativePath: row.normalized_relative_path,
-      descriptor: {
-        platform: row.source_object_platform,
-        verifierVersion: row.source_object_verifier_version,
-        canonicalPath: row.source_object_canonical_path,
-        canonicalPathKey: row.source_object_canonical_path_key,
-        volumeSerial: row.source_object_volume_serial,
-        objectID: row.source_object_id,
-        creationTime: row.source_object_creation_time,
-        changeTime: row.source_object_change_time,
-        lastWriteTime: row.source_object_last_write_time,
-        size: row.source_object_size,
-        kind: "file",
-      },
+      descriptor: sourceDescriptor(row),
       timeObserved: row.source_observed_time,
     } satisfies ArtifactTargetReceipt
   })
@@ -1578,6 +2251,106 @@ function listOutlinePage(
           selectors: selectors.map(selectorInfo),
         } satisfies OutlineNodeInfo
       }),
+    )
+    const keys = new Map(selected.map((row) => [row.id, [row.preorder_position, row.id] as const]))
+    return pageResult(items, rows.length > limit, scope, (item) => keys.get(item.id)!)
+  })
+}
+
+function listSelectorsPage(
+  source: Queryable,
+  mapID: MapID,
+  nodeID: OutlineNodeID,
+  limit: number,
+  after: readonly [number, string] | undefined,
+  scope: MaterialMapCursor.Scope,
+) {
+  return Effect.gen(function* () {
+    yield* requireMapInfo(source, mapID)
+    const node = yield* source
+      .select({ id: MaterialOutlineNodeTable.id })
+      .from(MaterialOutlineNodeTable)
+      .where(and(eq(MaterialOutlineNodeTable.map_id, mapID), eq(MaterialOutlineNodeTable.id, nodeID)))
+      .get()
+    if (!node) return yield* new NotFoundError({ entity: "outline_node", id: nodeID })
+    const rows = yield* source
+      .select()
+      .from(MaterialSelectorTable)
+      .where(
+        and(
+          eq(MaterialSelectorTable.map_id, mapID),
+          eq(MaterialSelectorTable.node_id, nodeID),
+          after
+            ? or(
+                gt(MaterialSelectorTable.selector_position, after[0]),
+                and(
+                  eq(MaterialSelectorTable.selector_position, after[0]),
+                  gt(MaterialSelectorTable.id, after[1] as SelectorID),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(asc(MaterialSelectorTable.selector_position), asc(MaterialSelectorTable.id))
+      .limit(limit + 1)
+      .all()
+    const selected = rows.slice(0, limit)
+    const items = selected.map(selectorInfo)
+    const keys = new Map(selected.map((row) => [row.id, [row.selector_position, row.id] as const]))
+    return pageResult(items, rows.length > limit, scope, (item) => keys.get(item.id)!)
+  })
+}
+
+function listOutlineNodesPage(
+  source: Queryable,
+  mapID: MapID,
+  limit: number,
+  after: readonly [number, string] | undefined,
+  scope: MaterialMapCursor.Scope,
+) {
+  return Effect.gen(function* () {
+    yield* requireMapInfo(source, mapID)
+    const rows = yield* source
+      .select()
+      .from(MaterialOutlineNodeTable)
+      .where(
+        and(
+          eq(MaterialOutlineNodeTable.map_id, mapID),
+          after
+            ? or(
+                gt(MaterialOutlineNodeTable.preorder_position, after[0]),
+                and(
+                  eq(MaterialOutlineNodeTable.preorder_position, after[0]),
+                  gt(MaterialOutlineNodeTable.id, after[1] as OutlineNodeID),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(asc(MaterialOutlineNodeTable.preorder_position), asc(MaterialOutlineNodeTable.id))
+      .limit(limit + 1)
+      .all()
+    const selected = rows.slice(0, limit)
+    const items = yield* Effect.forEach(selected, (row) =>
+      source
+        .select({ count: count() })
+        .from(MaterialSelectorTable)
+        .where(and(eq(MaterialSelectorTable.map_id, mapID), eq(MaterialSelectorTable.node_id, row.id)))
+        .get()
+        .pipe(
+          Effect.map(
+            (selectors) =>
+              ({
+                id: row.id,
+                mapID: row.map_id,
+                parentNodeID: row.parent_node_id ?? undefined,
+                title: row.title,
+                preorderPosition: row.preorder_position,
+                depth: row.depth,
+                selectorCount: selectors?.count ?? 0,
+              }) satisfies OutlineNodeSummary,
+          ),
+        ),
     )
     const keys = new Map(selected.map((row) => [row.id, [row.preorder_position, row.id] as const]))
     return pageResult(items, rows.length > limit, scope, (item) => keys.get(item.id)!)

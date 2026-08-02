@@ -703,6 +703,7 @@ describe("Representation authority", () => {
           ),
         ).toMatchObject({ use: "historical", content: { truncated: false } })
 
+        const deletionTime = Date.now() + 10_000
         const deleted = await second.runPromise(
           fixture.representations.explicitlyDelete({
             representationRevisionID: accepted.id,
@@ -712,7 +713,7 @@ describe("Representation authority", () => {
               "terminal:delete:one",
               "learner explicitly deleted exact representation",
             ),
-            timeDeleted: accepted.timeAccepted + 100,
+            timeDeleted: deletionTime,
           }),
         )
         expect(deleted.availability).toMatchObject({ disposition: "explicitly_deleted", version: 4 })
@@ -726,7 +727,7 @@ describe("Representation authority", () => {
                 "terminal:delete:one",
                 "learner explicitly deleted exact representation",
               ),
-              timeDeleted: accepted.timeAccepted + 101,
+              timeDeleted: deletionTime + 1,
             }),
           ),
         ).toEqual(deleted)
@@ -740,7 +741,7 @@ describe("Representation authority", () => {
                 "terminal:delete:one",
                 "learner explicitly deleted exact representation",
               ),
-              timeDeleted: accepted.timeAccepted + 101,
+              timeDeleted: deletionTime + 1,
             }),
           ),
         ).rejects.toMatchObject({ _tag: "Representation.ConflictError", entity: "deletion" })

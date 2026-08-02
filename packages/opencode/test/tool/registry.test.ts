@@ -28,7 +28,7 @@ import { Database } from "@opencode-ai/core/database/database"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { sql } from "drizzle-orm"
-import { normalizeDefaultV3, normalizeGoalsV2 } from "@/learning-command/input"
+import { normalizeDefaultV3, normalizeGoalsV2, normalizeLearningBootstrap } from "@/learning-command/input"
 
 const configLayer = TestConfig.layer({
   directories: () => InstanceState.directory.pipe(Effect.map((dir) => [path.join(dir, ".repa")])),
@@ -295,6 +295,18 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("update_learner_goals", "mcp")).toThrow(
         "mcp tool ID update_learner_goals is reserved by the learning-command runtime",
       )
+      expect(() => assertExternalToolID("update_learning_course", "custom")).toThrow(
+        "custom tool ID update_learning_course is reserved by the learning-command runtime",
+      )
+      expect(() => assertExternalToolID("update_learning_course", "mcp")).toThrow(
+        "mcp tool ID update_learning_course is reserved by the learning-command runtime",
+      )
+      expect(() => assertExternalToolID("learning_material_query", "custom")).toThrow(
+        "custom tool ID learning_material_query is reserved by Repa's learning-material read authorities",
+      )
+      expect(() => assertExternalToolID("learning_material_query", "mcp")).toThrow(
+        "mcp tool ID learning_material_query is reserved by Repa's learning-material read authorities",
+      )
     }),
   )
 
@@ -306,6 +318,7 @@ describe("tool.registry", () => {
       const proposal = tools.find((tool) => tool.id === "propose_default_course_preference")
       const preference = tools.find((tool) => tool.id === "set_default_course_preference")
       const goalCommand = tools.find((tool) => tool.id === "update_learner_goals")
+      const bootstrapCommand = tools.find((tool) => tool.id === "update_learning_course")
 
       expect(ids).toContain("accept_course_view_revision")
       expect(ids).toContain("representation.convert")
@@ -317,9 +330,14 @@ describe("tool.registry", () => {
       expect(ids).toContain("course_query")
       expect(ids).toContain("learning_navigation_query")
       expect(ids).toContain("learner_goal_query")
+      expect(ids).toContain("learning_material_query")
+      expect(ids).toContain("update_learning_course")
+      expect(ids).not.toContain("learn")
+      expect(ids).not.toContain("/learn")
       expect(proposal).toBeUndefined()
       expect(preference).toBeDefined()
       expect(goalCommand).toBeDefined()
+      expect(bootstrapCommand).toBeDefined()
       expect(LearningCommand.UPDATE_LEARNER_GOALS_VERSION).toBe(2)
       expect(LearningCommand.HISTORICAL_UPDATE_LEARNER_GOALS_VERSION).toBe(1)
       expect(LearningCommand).not.toHaveProperty("HistoricalLearnerGoalV1")
@@ -430,6 +448,15 @@ describe("tool.registry", () => {
       ]) {
         expect(() => normalizeGoalsV2(shadow)).toThrow()
       }
+      for (const shadow of [
+        { course: { type: "new", title: "Reject generated schema version" }, schemaVersion: 1 },
+        { course: { type: "new", title: "Reject generated Course ID", courseID: `crs_${"a".repeat(26)}` } },
+        { course: { type: "new", title: "Reject generated time" }, time: 1 },
+        { course: { type: "new", title: "Reject permission" }, permission: "allow" },
+        { course: { type: "new", title: "Reject frontier" }, frontierSequence: 1 },
+      ]) {
+        expect(() => normalizeLearningBootstrap(shadow)).toThrow()
+      }
 
       const agents = yield* Agent.Service
       const invalid = yield* preference!
@@ -495,6 +522,7 @@ describe("tool.registry", () => {
         "set_course_route_anchor",
         "update_retained_learning_steering",
         "update_learner_goals",
+        "update_learning_course",
       ]) {
         const tool = tools.find((item) => item.id === id)
         expect(tool, `${id} should be published`).toBeDefined()
@@ -513,6 +541,8 @@ describe("tool.registry", () => {
       expect(defaults).toContain("course_query")
       expect(defaults).toContain("learning_navigation_query")
       expect(defaults).toContain("learner_goal_query")
+      expect(defaults).toContain("learning_material_query")
+      expect(defaults).toContain("update_learning_course")
 
       const restricted = (yield* registry.tools({
         ...model,
@@ -525,6 +555,8 @@ describe("tool.registry", () => {
       expect(restricted).not.toContain("learning_navigation_query")
       expect(restricted).not.toContain("set_default_course_preference")
       expect(restricted).not.toContain("learner_goal_query")
+      expect(restricted).not.toContain("learning_material_query")
+      expect(restricted).not.toContain("update_learning_course")
 
       const goalReader = (yield* registry.tools({
         ...model,
@@ -535,6 +567,29 @@ describe("tool.registry", () => {
       })).map((tool) => tool.id)
       expect(goalReader).toContain("learner_goal_query")
       expect(goalReader).not.toContain("update_learner_goals")
+      expect(goalReader).not.toContain("learning_material_query")
+      expect(goalReader).not.toContain("update_learning_course")
+
+      const bootstrapOnly = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", update_learning_course: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(bootstrapOnly).toContain("update_learning_course")
+      expect(bootstrapOnly).not.toContain("learning_material_query")
+      expect(bootstrapOnly).not.toContain("course_query")
+
+      const materialReader = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", learning_material_query: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(materialReader).toContain("learning_material_query")
+      expect(materialReader).not.toContain("update_learning_course")
 
       const delegated = (yield* registry.tools({
         ...model,
@@ -549,6 +604,8 @@ describe("tool.registry", () => {
       expect(delegated).not.toContain("learning_navigation_query")
       expect(delegated).not.toContain("set_default_course_preference")
       expect(delegated).not.toContain("learner_goal_query")
+      expect(delegated).not.toContain("learning_material_query")
+      expect(delegated).not.toContain("update_learning_course")
 
       const delegatedGoalReader = (yield* registry.tools({
         ...model,
@@ -561,6 +618,22 @@ describe("tool.registry", () => {
       })).map((tool) => tool.id)
       expect(delegatedGoalReader).toContain("learner_goal_query")
       expect(delegatedGoalReader).not.toContain("update_learner_goals")
+
+      const delegatedBootstrap = (yield* registry.tools({
+        ...model,
+        authority: [
+          {
+            ruleset: Permission.fromConfig({
+              learning_material_query: "allow",
+              update_learning_course: "allow",
+            }),
+            absence: "deny",
+          },
+        ],
+      })).map((tool) => tool.id)
+      expect(delegatedBootstrap).toContain("learning_material_query")
+      expect(delegatedBootstrap).toContain("update_learning_course")
+      expect(delegatedBootstrap).not.toContain("course_query")
     }),
   )
 
@@ -580,7 +653,12 @@ describe("tool.registry", () => {
         name: "Selected path",
         expectedCourseVersion: 0,
         authorship: Course.Authorship.learnerAuthored(),
-        revision: { items: [{ key: "root", title: "Selected path" }] },
+        revision: {
+          items: [
+            { key: "root", title: "Selected path" },
+            { key: "detail", title: "Selected detail", parentKey: "root" },
+          ],
+        },
       })
       yield* courses.select({
         courseID: selected.id,
@@ -667,6 +745,58 @@ describe("tool.registry", () => {
           },
         },
       )
+      expect(
+        JSON.parse(
+          (yield* courseQuery.execute({ action: "list_views", courseID: selected.id, limit: 1 }, context)).output,
+        ),
+      ).toMatchObject({
+        items: [{ id: view.view.id, name: "Selected path" }],
+        omitted: false,
+      })
+      expect(
+        JSON.parse(
+          (yield* courseQuery.execute(
+            { action: "get_revision", courseID: selected.id, viewID: view.view.id, revisionID: view.revision.id },
+            context,
+          )).output,
+        ),
+      ).toMatchObject({ value: { id: view.revision.id, viewID: view.view.id } })
+      const firstItems = JSON.parse(
+        (yield* courseQuery.execute(
+          {
+            action: "list_revision_items",
+            courseID: selected.id,
+            viewID: view.view.id,
+            revisionID: view.revision.id,
+            limit: 1,
+          },
+          context,
+        )).output,
+      ) as { items: Array<{ itemID: string; title: string }>; cursor?: string; omitted: boolean }
+      expect(firstItems).toMatchObject({ items: [{ title: "Selected path" }], omitted: true })
+      expect(firstItems.cursor).toBeString()
+      expect(
+        JSON.parse(
+          (yield* courseQuery.execute(
+            {
+              action: "list_revision_items",
+              courseID: selected.id,
+              viewID: view.view.id,
+              revisionID: view.revision.id,
+              limit: 1,
+              cursor: firstItems.cursor,
+            },
+            context,
+          )).output,
+        ),
+      ).toMatchObject({ items: [{ title: "Selected detail" }], omitted: false })
+      expect(
+        JSON.parse(
+          (yield* navigationQuery.execute({ action: "current_anchor", courseID: selected.id }, context)).output,
+        ),
+      ).toMatchObject({
+        current: { headID: null, version: 0, target: null, usability: { usable: false, cause: "absent" } },
+      })
       expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(changesBefore)
       expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontierBefore)
       expect(
@@ -679,6 +809,66 @@ describe("tool.registry", () => {
             (SELECT count(*) FROM learner_default_course_transition) AS effects
         `),
       ).toEqual({ invocations: 0, dispositions: 0, issues: 0, settlements: 0, effects: 0 })
+    }),
+  )
+
+  it.instance("returns bounded omission-truthful material owner reads without admission or observation writes", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const db = (yield* Database.Service).db
+      const agent = yield* agents.defaultInfo()
+      const query = (yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })).find((tool) => tool.id === "learning_material_query")
+      if (!query) return yield* Effect.die("Learning-material read tool is unavailable")
+      expect(
+        (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.every(
+          (branch) => branch.additionalProperties === false,
+        ),
+      ).toBe(true)
+      const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+      const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+      const context = {
+        sessionID: SessionID.descending(),
+        messageID: MessageID.ascending(),
+        agent: agent.name,
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => Effect.void,
+        ask: () => Effect.void,
+      } satisfies Tool.Context
+      const artifacts = JSON.parse((yield* query.execute({ action: "list_artifacts", limit: 1 }, context)).output)
+      expect(artifacts).toEqual({ items: [], omitted: false })
+      const maps = JSON.parse(
+        (yield* query.execute(
+          {
+            action: "list_maps",
+            target: {
+              type: "artifact",
+              effectiveArtifactID: `art_${"a".repeat(26)}`,
+              revisionID: `arv_${"b".repeat(26)}`,
+              attribution: { type: "recorded" },
+            },
+            limit: 1,
+          },
+          context,
+        )).output,
+      )
+      expect(maps).toEqual({ items: [], omitted: false })
+      expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(before)
+      expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontier)
+      expect(
+        yield* db.get(sql`SELECT
+          (SELECT count(*) FROM artifact) AS artifacts,
+          (SELECT count(*) FROM representation_revision) AS representations,
+          (SELECT count(*) FROM material_map) AS maps,
+          (SELECT count(*) FROM material_course_alignment) AS alignments,
+          (SELECT count(*) FROM learning_course_material_adoption) AS adoptions,
+          (SELECT count(*) FROM learning_command_invocation) AS invocations`),
+      ).toEqual({ artifacts: 0, representations: 0, maps: 0, alignments: 0, adoptions: 0, invocations: 0 })
     }),
   )
 

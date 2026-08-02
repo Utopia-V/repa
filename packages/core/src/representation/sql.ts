@@ -31,7 +31,8 @@ import type {
 } from "./schema"
 import type { ReceiptID } from "../learning-command/physical-schema"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "../learning-command/sql"
-import type { PartID } from "../v1/session"
+
+type InvocationPartID = (typeof LearningCommandInvocationTable.$inferSelect)["part_id"]
 
 export const RepresentationEffectTable = sqliteTable(
   "representation_effect",
@@ -57,7 +58,7 @@ export const RepresentationCommandCommitSealTable = sqliteTable(
   {
     effect_id: text().$type<EffectID>().primaryKey(),
     receipt_id: text().$type<ReceiptID>().notNull(),
-    invocation_part_id: text().$type<PartID>().notNull(),
+    invocation_part_id: text().$type<InvocationPartID>().notNull(),
   },
   (table) => [
     foreignKey({ columns: [table.effect_id], foreignColumns: [RepresentationEffectTable.id] }).onDelete("restrict"),

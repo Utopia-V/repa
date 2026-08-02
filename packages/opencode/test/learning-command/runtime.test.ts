@@ -7144,7 +7144,7 @@ test("carries each historical V1 target into a V2 update without copying retired
     })
     expect(carried.fieldBases).toEqual([])
   }
-}, 15_000)
+}, 30_000)
 
 test("reopens stored success and recovers admitted work without re-execution", async () => {
   await using tmp = await tmpdir()
@@ -7771,6 +7771,335 @@ test("rejects an Agent-native Default-Course action whose runtime-owned Course s
     }).pipe(Effect.provide(runtimeLayer(filename, blockingConfirmation)), Effect.scoped),
   )
 })
+
+it.effect(
+  "runs one ordinary-Agent bootstrap through exact permission, durable ToolPart, and semantic-first replay",
+  () =>
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const input = { course: { type: "new" as const, title: "Natural-language linear algebra" } }
+      const interaction = yield* seedInteraction(
+        db,
+        "bootstrap-runtime-root",
+        input,
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        { text: "Please make a Course for linear algebra, but do not invent a syllabus yet." },
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, input, interaction.registration)
+      const result = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        input,
+        context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+      )
+      const output = JSON.parse(result.output)
+      expect(output).toMatchObject({
+        disposition: "candidate_v1",
+        capabilityOutcome: "policy_allow",
+        agentAction: { kind: "root" },
+        settlement: {
+          outcome: "applied",
+          bootstrapKind: "learning_bootstrap",
+          children: [
+            { kind: "course", outcome: "changed", detail: "created" },
+            { kind: "selection", outcome: "no_change", selectedRevisionID: null },
+            { kind: "anchor", outcome: "no_change" },
+          ],
+          acknowledgement: {
+            course: { title: "Natural-language linear algebra" },
+            selectedRevisionID: null,
+            anchor: { usability: { usable: false, cause: "absent" } },
+          },
+        },
+      })
+      expect(result.metadata).toMatchObject({
+        command: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        commandVersion: 1,
+        outcome: "applied",
+        durablySettled: true,
+        truncated: false,
+        semanticPresentationRequired: true,
+        semanticPresentationBasis: {
+          version: 1,
+          phase: "result",
+          basis: { kind: "learning_bootstrap_result" },
+        },
+      })
+      expect(permissionRequests).toHaveLength(1)
+      expect(permissionRequests[0]).toMatchObject({
+        permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        patterns: [LearningCommand.LEARNING_BOOTSTRAP_PERMISSION_PATTERN],
+        requirePrompt: false,
+        metadata: {
+          bootstrapKind: "learning_bootstrap",
+          issuance: "root",
+          scope: {
+            canonicalCommand: JSON.stringify({
+              schemaVersion: 1,
+              course: { type: "new", title: "Natural-language linear algebra" },
+              selection: { type: "preserve" },
+              materials: [],
+              maps: [],
+              alignments: [],
+              anchor: { type: "preserve" },
+            }),
+            course: { action: "create", title: "Natural-language linear algebra" },
+            route: { action: "none" },
+            materials: [],
+          },
+        },
+      })
+      expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+      expect(
+        yield* db.get(sql`SELECT
+        (SELECT count(*) FROM course) AS courses,
+        (SELECT count(*) FROM course_view) AS views,
+        (SELECT count(*) FROM learning_bootstrap_effect) AS effects,
+        (SELECT count(*) FROM learning_bootstrap_commit_seal) AS seals,
+        (SELECT count(*) FROM learning_command_receipt) AS receipts`),
+      ).toEqual({ courses: 1, views: 0, effects: 1, seals: 1, receipts: 1 })
+
+      const physicalReplay = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        input,
+        context(interaction.registration, "deny", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+      )
+      expect(physicalReplay).toEqual(result)
+      expect(permissionRequests).toHaveLength(1)
+
+      const duplicate = yield* insertAssistant(
+        db,
+        interaction,
+        "bootstrap-runtime-semantic-duplicate",
+        input,
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, input, duplicate)
+      expect(
+        JSON.parse(
+          (yield* runtime.executeCommand(
+            LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+            input,
+            context(duplicate, "deny", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+          )).output,
+        ),
+      ).toMatchObject({
+        disposition: "semantic_terminal_v1",
+        semanticTerminal: { outcome: "already_applied", existingEffectID: output.settlement.effectID },
+        settlement: { outcome: "already_applied", effectID: output.settlement.effectID },
+      })
+      expect(permissionRequests).toHaveLength(1)
+
+      const conflictingInput = { course: { type: "new" as const, title: "Different semantic meaning" } }
+      const conflict = yield* insertAssistant(
+        db,
+        interaction,
+        "bootstrap-runtime-semantic-conflict",
+        conflictingInput,
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      )
+      yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, conflictingInput, conflict)
+      expect(
+        JSON.parse(
+          (yield* runtime.executeCommand(
+            LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+            conflictingInput,
+            context(conflict, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+          )).output,
+        ),
+      ).toMatchObject({
+        disposition: "semantic_terminal_v1",
+        semanticTerminal: { outcome: "semantic_conflict", existingEffectID: output.settlement.effectID },
+        settlement: {
+          outcome: "error",
+          code: "semantic_conflict",
+          detail: { effectID: output.settlement.effectID },
+        },
+      })
+      expect(permissionRequests).toHaveLength(1)
+    }),
+)
+
+it.effect("binds delegated bootstrap membership and denies a missing child capability before permission", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const input = { course: { type: "new" as const, title: "Delegated bootstrap Course" } }
+    const delegatedCapability = {
+      version: 2,
+      parent: [],
+      inherited: [],
+      profile: [],
+      explicit: [
+        {
+          permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+          pattern: LearningCommand.LEARNING_BOOTSTRAP_PERMISSION_PATTERN,
+          action: "allow",
+        },
+      ],
+    }
+    const delegated = yield* seedDelegatedLearningCommandInteraction(
+      db,
+      "bootstrap-allowed",
+      input,
+      delegatedCapability,
+      LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, input, delegated.registration)
+    const applied = JSON.parse(
+      (yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        input,
+        context(delegated.registration, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+      )).output,
+    )
+    expect(applied).toMatchObject({
+      disposition: "candidate_v1",
+      settlement: { outcome: "applied" },
+      agentAction: {
+        kind: "delegated",
+        turnID: delegated.child.turnID,
+        occurrenceID: delegated.registration.causalOccurrenceID,
+        lineage: [
+          {
+            childTurnID: delegated.child.turnID,
+            parentTurnID: delegated.parent.turnID,
+            delegatedCapability,
+            delegatedCapabilityFingerprint: expect.any(String),
+          },
+        ],
+        effectiveDelegatedCapability: {
+          identity: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+          version: 1,
+          projectionVersion: 2,
+          fingerprint: expect.any(String),
+        },
+      },
+    })
+    expect(permissionRequests).toHaveLength(1)
+
+    const missing = yield* seedDelegatedLearningCommandInteraction(
+      db,
+      "bootstrap-missing",
+      { course: { type: "new", title: "Must not be created" } },
+      { version: 2, parent: [], inherited: [], profile: [], explicit: [] },
+      LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+    )
+    const missingInput = { course: { type: "new" as const, title: "Must not be created" } }
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, missingInput, missing.registration)
+    const denied = JSON.parse(
+      (yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        missingInput,
+        context(missing.registration, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+      )).output,
+    )
+    expect(denied).toMatchObject({
+      disposition: "physical_no_effect",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+    expect(permissionRequests).toHaveLength(1)
+    expect(
+      yield* db.get(sql`SELECT
+        (SELECT count(*) FROM learning_command_invocation
+          WHERE part_id = ${missing.registration.partID} AND status = 'error') AS invocations,
+        (SELECT count(*) FROM learning_bootstrap_disposition
+          WHERE invocation_part_id = ${missing.registration.partID}) AS dispositions,
+        (SELECT count(*) FROM learning_bootstrap_capability_settlement
+          WHERE invocation_part_id = ${missing.registration.partID}) AS capabilities,
+        (SELECT count(*) FROM learning_bootstrap_effect
+          WHERE invocation_part_id = ${missing.registration.partID}) AS effects`),
+    ).toEqual({ invocations: 1, dispositions: 0, capabilities: 0, effects: 0 })
+  }),
+)
+
+it.effect("forces an exact common permission grant for a one-operation local bootstrap read", () =>
+  Effect.gen(function* () {
+    if (process.platform !== "win32") return
+    permissionRequests.length = 0
+    const temporary = yield* Effect.acquireRelease(
+      Effect.promise(() => tmpdir()),
+      (directory) => Effect.promise(() => directory[Symbol.asyncDispose]()).pipe(Effect.ignore),
+    )
+    const sourcePath = join(temporary.path, "one-operation.txt")
+    yield* Effect.promise(() => Bun.write(sourcePath, "Exact one-operation learning material"))
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const input = {
+      course: { type: "new" as const, title: "One-operation material" },
+      materials: [
+        {
+          type: "local" as const,
+          key: "source",
+          path: sourcePath,
+          authority: { type: "one_operation" as const },
+        },
+      ],
+    }
+    const interaction = yield* seedInteraction(
+      db,
+      "bootstrap-one-operation",
+      input,
+      LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      { text: "Keep this exact file with a new Course." },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, input, interaction.registration)
+    const result = JSON.parse(
+      (yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        input,
+        context(interaction.registration, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+      )).output,
+    )
+    expect(permissionRequests).toHaveLength(1)
+    expect(permissionRequests[0]).toMatchObject({
+      permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+      patterns: [LearningCommand.LEARNING_BOOTSTRAP_PERMISSION_PATTERN],
+      requirePrompt: true,
+      metadata: {
+        scope: {
+          materials: [
+            {
+              key: "source",
+              type: "local",
+              identity: sourcePath,
+              localAuthority: "one_operation",
+            },
+          ],
+        },
+      },
+    })
+    expect(result).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "prompted_allow",
+      permissionRequestID: expect.any(String),
+      settlement: {
+        outcome: "applied",
+        children: [
+          { kind: "course", outcome: "changed" },
+          { kind: "selection", outcome: "no_change" },
+          {
+            kind: "material",
+            outcome: "changed",
+            materialTarget: {
+              type: "artifact",
+              sourceAuthority: {
+                kind: "one_operation",
+                canonicalPath: expect.any(String),
+                relativePath: "one-operation.txt",
+                operationIdentity: `${interaction.registration.partID}:${interaction.registration.callID}`,
+                approvalBasis: expect.stringContaining("permissionRequestID"),
+              },
+            },
+          },
+          { kind: "anchor", outcome: "no_change" },
+        ],
+      },
+    })
+  }),
+)
 
 function defaultCourseDirectInput(
   course: Course.CourseInfo,

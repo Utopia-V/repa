@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test"
+import { describe, expect, setDefaultTimeout, test } from "bun:test"
 import { $ } from "bun"
 import { fileURLToPath } from "url"
 import path from "path"
@@ -34,6 +34,7 @@ import defaultCourseV2Migration from "@opencode-ai/core/database/migration/repa/
 import agentNativeDefaultCourseMigration from "@opencode-ai/core/database/migration/repa/20260730115237_gate14_agent_native_default_course"
 import messageDiffProjectionMigration from "@opencode-ai/core/database/migration/repa/20260731120541_gate08_message_diff_projection"
 import agentNativeLearnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260731144324_gate16_agent_native_learner_goals"
+import learningBootstrapMigration from "@opencode-ai/core/database/migration/repa/20260802114557_gate17_learning_bootstrap"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -54,6 +55,8 @@ import { tmpdir } from "./fixture/tmpdir"
 import databaseV11Schema from "./fixture/database-v11-schema"
 import databaseV12Schema from "./fixture/database-v12-schema"
 import databaseV13Schema from "./fixture/database-v13-schema"
+
+setDefaultTimeout(20_000)
 
 const run = <A, E>(effect: Effect.Effect<A, E, SqlClientService>) =>
   Effect.runPromise(
@@ -173,6 +176,15 @@ const databaseV11Migrations = [
   learnerNavigationMigration,
   retainedSteeringMigration,
   learnerGoalsMigration,
+] as const
+
+const databaseV16Migrations = [
+  ...databaseV11Migrations,
+  domainNeutralLearningCommandLedgerMigration,
+  defaultCourseV2Migration,
+  agentNativeDefaultCourseMigration,
+  messageDiffProjectionMigration,
+  agentNativeLearnerGoalsMigration,
 ] as const
 
 function schemaManifestDigest(db: TestDatabase) {
@@ -403,6 +415,147 @@ function initializeDatabaseV11(
       )
       yield* tx.run(sql.raw(`PRAGMA application_id = ${APPLICATION_ID}`))
       yield* tx.run(sql.raw(`PRAGMA user_version = ${BASELINE_VERSION + databaseV11Migrations.length}`))
+    }),
+  )
+}
+
+function initializeDatabaseV16(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* initializeDatabaseV11(db)
+    yield* DatabaseMigration.apply(db, {
+      path: "frozen-gate16.db",
+      migrations: databaseV16Migrations,
+    })
+  })
+}
+
+function seedFrozenV16MaterialMap(db: TestDatabase) {
+  return db.transaction((tx) =>
+    Effect.gen(function* () {
+      yield* tx.run(sql.raw("PRAGMA defer_foreign_keys = ON"))
+      yield* tx.run(sql`
+        INSERT INTO content_root (id, time_created)
+        VALUES ('root_gate17_fixture', 100)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO content_root_binding (
+          id, content_root_id, canonical_path, canonical_path_key, platform,
+          volume_serial, object_id, creation_time, initial_change_time,
+          verifier_version, time_created
+        ) VALUES (
+          'root_binding_gate17_fixture', 'root_gate17_fixture', ${"C:\\gate17"}, ${"c:\\gate17"},
+          'windows_ntfs', 'volume-gate17', ${"1".repeat(32)}, 'root-created', 'root-changed', 1, 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO content_root_binding_episode (
+          id, content_root_id, binding_id, ordinal, approval_basis, time_started
+        ) VALUES (
+          'root_binding_episode_gate17_fixture', 'root_gate17_fixture',
+          'root_binding_gate17_fixture', 1, 'frozen Gate 16 fixture', 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO content_root_grant_episode (
+          id, content_root_id, binding_id, binding_episode_id, ordinal,
+          approval_basis, time_approved, time_updated
+        ) VALUES (
+          'root_grant_episode_gate17_fixture', 'root_gate17_fixture',
+          'root_binding_gate17_fixture', 'root_binding_episode_gate17_fixture', 1,
+          'frozen Gate 16 fixture', 100, 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO artifact (
+          id, admission_root_artifact_id, creation_basis, creation_capability_identity,
+          creation_capability_version, disposition_version, lineage_version, time_created, time_updated
+        ) VALUES (
+          'artifact_gate17_fixture', 'artifact_gate17_fixture', 'learner_instruction',
+          'frozen_gate16_fixture', 1, 0, 0, 100, 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO artifact_revision (
+          id, recorded_artifact_id, fingerprint_algorithm, fingerprint_digest,
+          byte_length, time_first_observed
+        ) VALUES (
+          'artifact_revision_gate17_fixture', 'artifact_gate17_fixture', 'sha256',
+          ${"2".repeat(64)}, 4, 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO artifact_source_binding (
+          id, recorded_artifact_id, binding_ordinal, canonical_location, basis_kind,
+          basis_capability_identity, basis_capability_version, time_started
+        ) VALUES (
+          'artifact_binding_gate17_fixture', 'artifact_gate17_fixture', 1,
+          ${"C:\\gate17\\fixture.txt"}, 'admission', 'frozen_gate16_fixture', 1, 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO artifact_source_observation (
+          id, recorded_artifact_id, binding_id, occurrence_ordinal, result, revision_id,
+          media_type, observer_capability_identity, observer_capability_version,
+          time_observed, time_committed
+        ) VALUES (
+          'artifact_observation_gate17_fixture', 'artifact_gate17_fixture',
+          'artifact_binding_gate17_fixture', 1, 'present', 'artifact_revision_gate17_fixture',
+          'text/plain', 'frozen_gate16_fixture', 1, 100, 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO material_map_artifact_target (
+          map_id, artifact_id, artifact_revision_id, attribution_type, attribution_member_id,
+          disposition_version, lineage_version, source_version, artifact_binding_id, active_location,
+          descriptor_observation_id, descriptor_correction_id, fingerprint_algorithm, fingerprint_digest,
+          byte_length, media_type, content_root_id, content_root_binding_id,
+          content_root_binding_episode_id, content_root_binding_episode_ordinal,
+          content_root_grant_episode_id, content_root_grant_episode_ordinal, content_root_grant_version,
+          normalized_relative_path, source_object_platform, source_object_verifier_version,
+          source_object_canonical_path, source_object_canonical_path_key, source_object_volume_serial,
+          source_object_id, source_object_creation_time, source_object_change_time,
+          source_object_last_write_time, source_object_size, source_observed_time
+        ) VALUES (
+          'map_gate17_fixture', 'artifact_gate17_fixture', 'artifact_revision_gate17_fixture',
+          'recorded', NULL, 0, 0, 1, 'artifact_binding_gate17_fixture', ${"C:\\gate17\\fixture.txt"},
+          'artifact_observation_gate17_fixture', NULL, 'sha256', ${"2".repeat(64)},
+          4, 'text/plain', 'root_gate17_fixture', 'root_binding_gate17_fixture',
+          'root_binding_episode_gate17_fixture', 1, 'root_grant_episode_gate17_fixture', 1, 1,
+          'fixture.txt', 'windows_ntfs', 1, ${"C:\\gate17\\fixture.txt"}, ${"c:\\gate17\\fixture.txt"},
+          'volume-gate17', ${"3".repeat(32)}, 'source-created', 'source-changed',
+          'source-written', 4, 100
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO material_map_state (map_id, version, disposition, withdrawal_reason, time_updated)
+        VALUES ('map_gate17_fixture', 0, 'active', NULL, 100)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO material_map_disposition_event (id, map_id, version, disposition, reason, time_committed)
+        VALUES ('map_disposition_gate17_fixture', 'map_gate17_fixture', 0, 'active', NULL, 100)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO material_outline_node (id, map_id, parent_node_id, title, preorder_position, depth)
+        VALUES ('map_node_gate17_fixture', 'map_gate17_fixture', NULL, 'Fixture', 0, 0)
+      `)
+      yield* tx.run(sql`
+        INSERT INTO material_selector (
+          id, map_id, node_id, selector_position, kind, witness_algorithm,
+          witness_digest, witness_byte_length
+        ) VALUES (
+          'map_selector_gate17_fixture', 'map_gate17_fixture', 'map_node_gate17_fixture',
+          0, 'whole_target.v1', 'sha256', ${"2".repeat(64)}, 4
+        )
+      `)
+      yield* tx.run(sql`
+        INSERT INTO material_map (
+          id, canonical_input, target_kind, authorship_basis,
+          authorship_capability_identity, authorship_capability_version, time_created
+        ) VALUES (
+          'map_gate17_fixture', ${JSON.stringify({ fixture: "frozen_gate16" })}, 'artifact',
+          'frozen Gate 16 fixture', 'frozen_gate16_fixture', 1, 100
+        )
+      `)
     }),
   )
 }
@@ -1302,8 +1455,168 @@ function removeMessageDiffProjection(db: TestDatabase) {
   })
 }
 
+function completeSchemaManifest(db: TestDatabase) {
+  return db
+    .all<{ type: string; name: string; tableName: string; definition: string | null }>(
+      sql`
+      SELECT type, name, tbl_name AS tableName, sql AS definition
+      FROM sqlite_schema
+      WHERE name NOT LIKE 'sqlite_%'
+        AND sql IS NOT NULL
+      ORDER BY type, name
+    `,
+    )
+    .pipe(
+      Effect.map((rows) =>
+        rows.map((row) => ({
+          ...row,
+          definition: normalizeSchemaDefinition(row.definition),
+        })),
+      ),
+    )
+}
+
+function dropGate17(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+    const triggers = yield* db.all<{ name: string }>(sql`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger'
+        AND (name LIKE 'learning_bootstrap_%'
+          OR name LIKE 'learning_course_material_%'
+          OR name = 'learner_course_route_anchor_commit_seal_validate_insert_v17'
+          OR name = 'material_map_validate_insert')
+    `)
+    yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
+      discard: true,
+    })
+    for (const table of [
+      "learning_bootstrap_alignment_result",
+      "learning_bootstrap_anchor_result",
+      "learning_bootstrap_capability_settlement",
+      "learning_bootstrap_capability_issue",
+      "learning_bootstrap_map_result",
+      "learning_bootstrap_material_result",
+      "learning_bootstrap_selection_result",
+      "learning_bootstrap_route_result",
+      "learning_bootstrap_course_result",
+      "learning_course_material_adoption",
+      "learning_bootstrap_commit_seal",
+      "learning_bootstrap_disposition",
+      "learning_bootstrap_effect",
+    ]) {
+      yield* db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(table)}`)
+    }
+    yield* db.run(
+      sql.raw(`
+      CREATE TABLE __gate16_material_map_artifact_target (
+        map_id text PRIMARY KEY,
+        artifact_id text NOT NULL,
+        artifact_revision_id text NOT NULL,
+        attribution_type text NOT NULL,
+        attribution_member_id text,
+        disposition_version integer NOT NULL,
+        lineage_version integer NOT NULL,
+        source_version integer NOT NULL,
+        artifact_binding_id text NOT NULL,
+        active_location text NOT NULL,
+        descriptor_observation_id text NOT NULL,
+        descriptor_correction_id text,
+        fingerprint_algorithm text NOT NULL,
+        fingerprint_digest text NOT NULL,
+        byte_length integer NOT NULL,
+        media_type text NOT NULL,
+        content_root_id text NOT NULL,
+        content_root_binding_id text NOT NULL,
+        content_root_binding_episode_id text NOT NULL,
+        content_root_binding_episode_ordinal integer NOT NULL,
+        content_root_grant_episode_id text NOT NULL,
+        content_root_grant_episode_ordinal integer NOT NULL,
+        content_root_grant_version integer NOT NULL,
+        normalized_relative_path text NOT NULL,
+        source_object_platform text NOT NULL,
+        source_object_verifier_version integer NOT NULL,
+        source_object_canonical_path text NOT NULL,
+        source_object_canonical_path_key text NOT NULL,
+        source_object_volume_serial text NOT NULL,
+        source_object_id text NOT NULL,
+        source_object_creation_time text NOT NULL,
+        source_object_change_time text NOT NULL,
+        source_object_last_write_time text NOT NULL,
+        source_object_size integer NOT NULL,
+        source_observed_time integer NOT NULL,
+        FOREIGN KEY (map_id) REFERENCES material_map(id) ON DELETE RESTRICT,
+        FOREIGN KEY (artifact_id) REFERENCES artifact(id) ON DELETE RESTRICT,
+        FOREIGN KEY (artifact_revision_id) REFERENCES artifact_revision(id) ON DELETE RESTRICT,
+        FOREIGN KEY (artifact_binding_id) REFERENCES artifact_source_binding(id) ON DELETE RESTRICT,
+        FOREIGN KEY (descriptor_observation_id) REFERENCES artifact_source_observation(id) ON DELETE RESTRICT,
+        FOREIGN KEY (descriptor_correction_id) REFERENCES artifact_observation_correction(id) ON DELETE RESTRICT,
+        FOREIGN KEY (attribution_member_id) REFERENCES artifact_lineage_correction_member(id) ON DELETE RESTRICT,
+        FOREIGN KEY (content_root_id) REFERENCES content_root(id) ON DELETE RESTRICT,
+        FOREIGN KEY (content_root_id, content_root_binding_id)
+          REFERENCES content_root_binding(content_root_id, id) ON DELETE RESTRICT,
+        FOREIGN KEY (content_root_id, content_root_binding_episode_id, content_root_binding_id, content_root_binding_episode_ordinal)
+          REFERENCES content_root_binding_episode(content_root_id, id, binding_id, ordinal) ON DELETE RESTRICT,
+        FOREIGN KEY (content_root_id, content_root_grant_episode_id, content_root_binding_id, content_root_binding_episode_id, content_root_grant_episode_ordinal)
+          REFERENCES content_root_grant_episode(content_root_id, id, binding_id, binding_episode_id, ordinal) ON DELETE RESTRICT,
+        CHECK((attribution_type = 'recorded' AND attribution_member_id IS NULL)
+          OR (attribution_type = 'lineage_correction' AND attribution_member_id IS NOT NULL)),
+        CHECK(disposition_version >= 0 AND lineage_version >= 0 AND source_version >= 0
+          AND content_root_binding_episode_ordinal >= 1 AND content_root_grant_episode_ordinal >= 1
+          AND content_root_grant_version >= 1),
+        CHECK(fingerprint_algorithm = 'sha256' AND length(fingerprint_digest) = 64
+          AND fingerprint_digest NOT GLOB '*[^0-9a-f]*' AND byte_length > 0 AND length(media_type) > 0),
+        CHECK(length(active_location) > 0 AND length(normalized_relative_path) > 0
+          AND source_object_platform = 'windows_ntfs' AND source_object_verifier_version >= 1
+          AND length(source_object_canonical_path) > 0 AND length(source_object_canonical_path_key) > 0
+          AND source_object_canonical_path = active_location AND length(source_object_volume_serial) > 0
+          AND length(source_object_id) = 32 AND length(source_object_creation_time) > 0
+          AND length(source_object_change_time) > 0 AND length(source_object_last_write_time) > 0
+          AND source_object_size = byte_length AND source_observed_time >= 0)
+      )
+    `),
+    )
+    yield* db.run(
+      sql.raw(`
+      INSERT INTO __gate16_material_map_artifact_target (
+        map_id, artifact_id, artifact_revision_id, attribution_type, attribution_member_id,
+        disposition_version, lineage_version, source_version, artifact_binding_id, active_location,
+        descriptor_observation_id, descriptor_correction_id, fingerprint_algorithm, fingerprint_digest,
+        byte_length, media_type, content_root_id, content_root_binding_id,
+        content_root_binding_episode_id, content_root_binding_episode_ordinal,
+        content_root_grant_episode_id, content_root_grant_episode_ordinal, content_root_grant_version,
+        normalized_relative_path, source_object_platform, source_object_verifier_version,
+        source_object_canonical_path, source_object_canonical_path_key, source_object_volume_serial,
+        source_object_id, source_object_creation_time, source_object_change_time,
+        source_object_last_write_time, source_object_size, source_observed_time
+      )
+      SELECT
+        map_id, artifact_id, artifact_revision_id, attribution_type, attribution_member_id,
+        disposition_version, lineage_version, source_version, artifact_binding_id, active_location,
+        descriptor_observation_id, descriptor_correction_id, fingerprint_algorithm, fingerprint_digest,
+        byte_length, media_type, content_root_id, content_root_binding_id,
+        content_root_binding_episode_id, content_root_binding_episode_ordinal,
+        content_root_grant_episode_id, content_root_grant_episode_ordinal, content_root_grant_version,
+        normalized_relative_path, source_object_platform, source_object_verifier_version,
+        source_object_canonical_path, source_object_canonical_path_key, source_object_volume_serial,
+        source_object_id, source_object_creation_time, source_object_change_time,
+        source_object_last_write_time, source_object_size, source_observed_time
+      FROM material_map_artifact_target
+    `),
+    )
+    yield* db.run(sql`DROP TABLE material_map_artifact_target`)
+    yield* db.run(sql`ALTER TABLE __gate16_material_map_artifact_target RENAME TO material_map_artifact_target`)
+    yield* db.run(
+      sql`CREATE INDEX material_map_artifact_target_idx ON material_map_artifact_target (artifact_id, artifact_revision_id, attribution_type, attribution_member_id, map_id)`,
+    )
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 16}`)
+    yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
+  })
+}
+
 function dropGate16(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* dropGate17(db)
     yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 15}`)
     yield* removeMessageDiffProjection(db)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
@@ -1713,6 +2026,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
           { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
           { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
+          { version: BASELINE_VERSION + 16, id: learningBootstrapMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -2318,6 +2632,88 @@ describe("DatabaseMigration", () => {
     expect(result.mixedMissingView._tag).toBe("Failure")
   })
 
+  test("upgrades a frozen Gate 16 database to exact fresh Gate 17 parity without fabricating bootstrap state", async () => {
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        return yield* completeSchemaManifest(db)
+      }),
+    )
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV16(db)
+        yield* seedFrozenV16MaterialMap(db)
+
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + databaseV16Migrations.length,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND name = 'learning_bootstrap_effect'
+          `),
+        ).toBeUndefined()
+
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate16.db" })
+
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          journal: yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version DESC LIMIT 1`),
+          target: yield* db.get(sql`
+            SELECT authority_kind, content_root_id, normalized_relative_path,
+              root_object_platform, root_object_verifier_version, root_object_canonical_path,
+              root_object_canonical_path_key, root_object_volume_serial, root_object_id,
+              root_object_creation_time, root_object_change_time, root_object_last_write_time,
+              root_object_size, source_object_size
+            FROM material_map_artifact_target
+            WHERE map_id = 'map_gate17_fixture'
+          `),
+          map: yield* db.get(sql`
+            SELECT id, canonical_input FROM material_map WHERE id = 'map_gate17_fixture'
+          `),
+          bootstrapRows: yield* db.all(sql`SELECT id FROM learning_bootstrap_effect`),
+          foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
+          anchorSeal: yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition FROM sqlite_schema
+            WHERE type = 'trigger'
+              AND name = 'learner_course_route_anchor_commit_seal_validate_insert_v17'
+          `),
+        }
+      }),
+    )
+
+    expect(upgraded.manifest).toEqual(fresh)
+    expect(upgraded.journal).toEqual([
+      { version: BASELINE_VERSION + databaseV16Migrations.length + 1, id: learningBootstrapMigration.id },
+    ])
+    expect(upgraded.target).toEqual({
+      authority_kind: "content_root",
+      content_root_id: "root_gate17_fixture",
+      normalized_relative_path: "fixture.txt",
+      root_object_platform: "windows_ntfs",
+      root_object_verifier_version: 1,
+      root_object_canonical_path: "C:\\gate17",
+      root_object_canonical_path_key: "c:\\gate17",
+      root_object_volume_serial: "volume-gate17",
+      root_object_id: "1".repeat(32),
+      root_object_creation_time: "root-created",
+      root_object_change_time: "root-changed",
+      root_object_last_write_time: "root-changed",
+      root_object_size: 0,
+      source_object_size: 4,
+    })
+    expect(upgraded.map).toEqual({
+      id: "map_gate17_fixture",
+      canonical_input: JSON.stringify({ fixture: "frozen_gate16" }),
+    })
+    expect(upgraded.bootstrapRows).toEqual([])
+    expect(upgraded.foreignKeys).toEqual([])
+    expect(upgraded.anchorSeal?.definition).toContain("invocation.command_name = 'update_learning_course'")
+    expect(upgraded.anchorSeal?.definition).toContain("learning_bootstrap_anchor_result")
+  })
+
   test("upgrades the frozen v12 schema through v13 to exact current Default-Course structural parity", async () => {
     const tables = [
       "learner_default_course_acknowledgement",
@@ -2360,6 +2756,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
         yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
         yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
+        yield* db.transaction((tx) => learningBootstrapMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
         return {
           structures: yield* structuralManifest(db),
@@ -2382,7 +2779,17 @@ describe("DatabaseMigration", () => {
     )
     expect(upgraded.structures).toEqual(fresh.structures)
     expect(upgraded.definitions).toEqual(fresh.definitions)
-    expect(upgraded.migratedRoute).toEqual(upgraded.route)
+    const anchorSeal = (item: { name: string }) =>
+      item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12" ||
+      item.name === "learner_course_route_anchor_commit_seal_validate_insert_v17"
+    expect(upgraded.migratedRoute.filter((item) => !anchorSeal(item))).toEqual(
+      upgraded.route.filter((item) => !anchorSeal(item)),
+    )
+    expect(upgraded.route.some((item) => item.name.endsWith("validate_insert_v12"))).toBe(true)
+    expect(
+      upgraded.migratedRoute.find((item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v17")
+        ?.definition,
+    ).toContain("invocation.command_name = 'update_learning_course'")
     expect(upgraded.foreignKeys).toEqual([])
   })
 
@@ -2486,6 +2893,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => agentNativeDefaultCourseMigration.up(tx))
         yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
         yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
+        yield* db.transaction((tx) => learningBootstrapMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
 
         const after = yield* snapshot(db, columns)
@@ -5045,10 +5453,12 @@ describe("DatabaseMigration", () => {
         expect(freshDefaultSealTrigger).toContain("receipt.id = NEW.receipt_id")
         expect(freshDefaultSealTrigger).toContain("receipt.invocation_part_id = NEW.invocation_part_id")
         const freshAnchorSealTrigger = fresh.find(
-          (item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12",
+          (item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v17",
         )?.definition
         expect(freshAnchorSealTrigger).toContain("invocation.capability_identity = 'set_course_route_anchor'")
         expect(freshAnchorSealTrigger).toContain("invocation.capability_version = 1")
+        expect(freshAnchorSealTrigger).toContain("invocation.capability_identity = 'update_learning_course'")
+        expect(freshAnchorSealTrigger).toContain("learning_bootstrap_anchor_result")
         expect(freshAnchorSealTrigger).toContain("receipt.id = NEW.receipt_id")
         expect(freshAnchorSealTrigger).toContain("receipt.invocation_part_id = NEW.invocation_part_id")
 
@@ -5111,7 +5521,7 @@ describe("DatabaseMigration", () => {
             ?.definition,
         ).toBe(freshDefaultSealTrigger)
         expect(
-          upgraded.find((item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v12")
+          upgraded.find((item) => item.name === "learner_course_route_anchor_commit_seal_validate_insert_v17")
             ?.definition,
         ).toBe(freshAnchorSealTrigger)
         expect(yield* db.all(sql`SELECT id FROM learner_default_course_transition`)).toEqual([])
@@ -6213,6 +6623,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 13, id: agentNativeDefaultCourseMigration.id },
           { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
           { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
+          { version: BASELINE_VERSION + 16, id: learningBootstrapMigration.id },
         ])
       }),
     )

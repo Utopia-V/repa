@@ -19,6 +19,7 @@ const consequentialPermissionCapabilities = new Set([
   "set_course_route_anchor",
   "update_retained_learning_steering",
   "update_learner_goals",
+  "update_learning_course",
 ])
 
 const consequentialResultTools = new Set([
@@ -29,6 +30,7 @@ const consequentialResultTools = new Set([
   "set_course_route_anchor",
   "update_retained_learning_steering",
   "update_learner_goals",
+  "update_learning_course",
 ])
 
 export type Fact = Readonly<{ label: string; value: string }>
@@ -56,6 +58,13 @@ type DefaultAcknowledgement =
   | NonNullable<DefaultV2Result["acknowledgement"]>
   | NonNullable<DefaultV3Result["acknowledgement"]>
 type DefaultEndpoint = DefaultV2Endpoint | DefaultAcknowledgement["from"]
+type LearningBootstrapResult = Extract<
+  SemanticPresentationV1.ResultBasis,
+  { readonly kind: "learning_bootstrap_result" }
+>
+type LearningBootstrapAcknowledgement = NonNullable<LearningBootstrapResult["acknowledgement"]>
+type LearningBootstrapChild = LearningBootstrapAcknowledgement["children"][number]
+type LearningBootstrapMaterialTarget = NonNullable<LearningBootstrapChild["materialTarget"]>
 
 export type ProposalProjection = Readonly<{
   phase: "proposal"
@@ -353,6 +362,21 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
         commandFingerprint: basis.commandFingerprint,
         issuance: basis.issuance,
         operations: basis.operations,
+      },
+    })
+  }
+  if (basis.kind === "learning_bootstrap_capability") {
+    return expected(value, {
+      capability: "update_learning_course",
+      patterns: ["learning_course"],
+      always: ["learning_course"],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        bootstrapKind: "learning_bootstrap",
+        commandFingerprint: basis.commandFingerprint,
+        issuance: basis.issuance,
+        scope: basis.scope,
       },
     })
   }
@@ -765,6 +789,44 @@ function projectProposal(
         ...basis.operations.map((operation) =>
           fact(`Goal change ${operation.ordinal + 1}`, goalV2MaterializedText(operation)),
         ),
+      ],
+    )
+  }
+  if (basis.kind === "learning_bootstrap_capability") {
+    const course =
+      basis.scope.course.action === "create"
+        ? `create \"${basis.scope.course.title}\"`
+        : `${basis.scope.course.action} \"${basis.scope.course.title}\" (${basis.scope.course.courseID})`
+    return proposalProjection(
+      basis,
+      approval,
+      "update_learning_course",
+      "Apply this learning bootstrap",
+      "This configured capability approval is bound to one exact Agent-issued Course bootstrap and its closed local consequence set.",
+      [
+        fact("Issuance", basis.issuance),
+        fact("Course", course),
+        fact(
+          "Route",
+          basis.scope.route.action === "none"
+            ? "none"
+            : `${basis.scope.route.action}; ${basis.scope.route.itemCount} item(s)`,
+        ),
+        fact("Selection", basis.scope.selection),
+        ...basis.scope.materials.map((material) =>
+          fact(
+            `Material ${material.key}`,
+            `${material.type}: ${material.identity}${material.localAuthority ? `; ${material.localAuthority}` : ""}`,
+          ),
+        ),
+        ...basis.scope.maps.map((map) =>
+          fact(
+            `Map ${map.key}`,
+            `${map.materialKey}; ${map.outlineNodeCount} node(s); ${map.selectorCount} selector(s)`,
+          ),
+        ),
+        fact("Alignments", basis.scope.alignmentKeys.length),
+        fact("Anchor", basis.scope.anchor),
       ],
     )
   }
@@ -1344,6 +1406,59 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       ],
     )
   }
+  if (basis.kind === "learning_bootstrap_result") {
+    const semanticTerminal = basis.disposition === "semantic_terminal_v1"
+    const candidate = basis.disposition === "candidate_v1"
+    if (
+      semanticTerminal !== (basis.semanticOutcome !== undefined) ||
+      candidate !== (basis.issuance !== undefined) ||
+      (!candidate && basis.capabilityOutcome !== undefined) ||
+      (!candidate && basis.permissionRequestID !== undefined) ||
+      (semanticTerminal &&
+        (basis.semanticOutcome === "already_applied"
+          ? settlement.outcome !== "already_applied"
+          : settlement.outcome !== "error" || settlement.code !== "semantic_conflict")) ||
+      (settlement.outcome === "error" && basis.acknowledgement !== undefined) ||
+      (settlement.outcome !== "error" &&
+        (!basis.acknowledgement || basis.acknowledgement.outcome !== settlement.outcome))
+    ) {
+      return undefined
+    }
+    return resultProjection(
+      basis,
+      "update_learning_course",
+      "Learning bootstrap settlement",
+      resultSummary("Learning bootstrap", outcome),
+      [
+        ...failure,
+        fact("Disposition", basis.disposition),
+        ...(basis.issuance ? [fact("Issuance", basis.issuance)] : []),
+        ...(basis.capabilityOutcome ? [fact("Capability", basis.capabilityOutcome)] : []),
+        ...(basis.permissionRequestID ? [fact("Permission request", basis.permissionRequestID)] : []),
+        ...(basis.acknowledgement?.course
+          ? [fact("Course", `\"${basis.acknowledgement.course.title}\" (${basis.acknowledgement.course.id})`)]
+          : []),
+        ...(basis.acknowledgement?.view
+          ? [
+              fact(
+                "View",
+                `\"${basis.acknowledgement.view.name}\" (${basis.acknowledgement.view.id}); Revision ${basis.acknowledgement.view.revisionID}`,
+              ),
+            ]
+          : []),
+        ...(basis.acknowledgement?.children.map((child, index) =>
+          fact(`${titleCase(child.kind)} ${index + 1}`, learningBootstrapChildText(child)),
+        ) ?? []),
+        ...(basis.acknowledgement?.selectedRevisionID !== undefined
+          ? [fact("Working selection", basis.acknowledgement.selectedRevisionID ?? "none")]
+          : []),
+        ...(basis.acknowledgement?.anchor
+          ? [fact("Route anchor", learningBootstrapAnchorText(basis.acknowledgement.anchor))]
+          : []),
+        ...(basis.acknowledgement ? [fact("Correction", basis.acknowledgement.correction)] : []),
+      ],
+    )
+  }
   if (settlement.outcome !== "applied") return undefined
   return resultProjection(
     basis,
@@ -1363,6 +1478,54 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       ),
     ],
   )
+}
+
+function learningBootstrapChildText(child: LearningBootstrapChild) {
+  const identity = child.id ? `; effect ${child.id}` : ""
+  if (child.kind === "route") {
+    return `${child.outcome}: ${child.detail}; View ${child.viewID ?? "unavailable"}; Revision ${child.revisionID ?? "unavailable"}; authorship ${child.authorship ?? "unavailable"}${identity}`
+  }
+  if (child.kind === "selection") {
+    return `${child.outcome}: ${child.detail}; selected Revision ${child.selectedRevisionID ?? "none"}${identity}`
+  }
+  if (child.kind === "material" && child.materialTarget) {
+    return `${child.outcome}: ${child.detail}; ${learningBootstrapMaterialText(child.materialTarget)}${identity}`
+  }
+  return `${child.outcome}: ${child.detail}${identity}`
+}
+
+function learningBootstrapMaterialText(target: LearningBootstrapMaterialTarget) {
+  if (target.type === "representation") {
+    return `Representation Revision ${target.representationRevisionID}`
+  }
+  const attribution =
+    target.attribution.type === "recorded"
+      ? "recorded attribution"
+      : `lineage correction ${target.attribution.memberID}`
+  return `Artifact ${target.artifactID}; Revision ${target.revisionID}; ${attribution}${
+    target.sourceAuthority ? `; ${learningBootstrapSourceAuthorityText(target.sourceAuthority)}` : ""
+  }`
+}
+
+function learningBootstrapSourceAuthorityText(
+  authority: NonNullable<Extract<LearningBootstrapMaterialTarget, { readonly type: "artifact" }>["sourceAuthority"]>,
+) {
+  const object = `root object ${authority.root.objectID} on volume ${authority.root.volumeSerial}`
+  if (authority.kind === "content_root") {
+    return `ContentRoot ${authority.contentRoot.contentRootID}; grant ${authority.contentRoot.grantEpisodeID} v${authority.contentRoot.grantVersion}; ${authority.canonicalPath}; ${object}`
+  }
+  if (authority.kind === "active_workspace") {
+    return `active workspace ${authority.workspaceIdentity}; ${authority.canonicalPath}; ${object}`
+  }
+  return `one-operation grant ${authority.operationIdentity}; ${authority.canonicalPath}; ${object}`
+}
+
+function learningBootstrapAnchorText(anchor: NonNullable<LearningBootstrapAcknowledgement["anchor"]>) {
+  const target = anchor.target
+    ? `${anchor.target.courseID}/${anchor.target.viewID}/${anchor.target.revisionID}/${anchor.target.itemID}`
+    : "none"
+  const usability = anchor.usability.usable ? "usable" : `unusable: ${anchor.usability.cause}`
+  return `${target}; ${usability}; head ${anchor.headID ?? "none"}`
 }
 
 function resultProjection(

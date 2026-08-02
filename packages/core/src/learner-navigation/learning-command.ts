@@ -280,11 +280,11 @@ function settleAnchor(
       return { type: "settled" as const, settlement }
     }
     const receiptID = yield* insertPhysicalReceipt(tx, input.envelope, input.settlement)
-    yield* tx
-      .insert(LearnerCourseRouteAnchorCommitSealTable)
-      .values({ effect_id: applied.value.id, receipt_id: receiptID, invocation_part_id: partID })
-      .run()
-      .pipe(Effect.orDie)
+    yield* LearnerNavigation.sealAnchor(tx, {
+      effectID: applied.value.id,
+      receiptID,
+      invocationPartID: partID,
+    })
     const current = yield* LearnerNavigation.readCurrentAnchor(tx, input.command.courseID)
     const settlement = {
       outcome: "applied",

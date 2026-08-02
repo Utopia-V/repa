@@ -137,11 +137,7 @@ describe("primary TUI semantic presentation adapter", () => {
       byteLength: 8,
       authority: { type: "one_shot" },
     })
-    const part = completed(
-      "content_write",
-      "File modify committed",
-      contentResultMetadata(presentation),
-    )
+    const part = completed("content_write", "File modify committed", contentResultMetadata(presentation))
 
     expect(resultPresentation(part)).toMatchObject({
       type: "valid",
@@ -152,6 +148,63 @@ describe("primary TUI semantic presentation adapter", () => {
       type: "invalid",
     })
     expect(shouldHideCompletedTool(completed("custom_tool", "custom_tool", {}), false)).toBe(true)
+  })
+
+  test("keeps the exact learning-bootstrap terminal truth visible", () => {
+    const presentation = SemanticPresentation.result({
+      kind: "learning_bootstrap_result",
+      binding,
+      settlement: { outcome: "applied" },
+      disposition: "candidate_v1",
+      issuance: "root",
+      capabilityOutcome: "policy_allow",
+      acknowledgement: {
+        schemaVersion: 1,
+        outcome: "applied",
+        course: { id: "cou_linear", title: "Linear algebra" },
+        children: [
+          { kind: "course", outcome: "changed", id: "cou_linear", detail: "created" },
+          {
+            kind: "material",
+            key: "notes",
+            outcome: "changed",
+            id: "lca_notes",
+            detail: "explicit material adoption committed",
+            materialTarget: { type: "representation", representationRevisionID: "rrv_notes" },
+          },
+          { kind: "anchor", outcome: "no_change", detail: "route anchor preserved" },
+        ],
+        selectedRevisionID: null,
+        anchor: { headID: null, target: null, usability: { usable: false, cause: "absent" } },
+        correction: "Continue in ordinary language to correct this Course.",
+      },
+    })
+    const projection = SemanticPresentation.projectResultBasis(presentation.basis)
+    if (!projection) throw new Error("Expected a valid learning-bootstrap projection")
+    const part = completed("update_learning_course", projection.title, {
+      command: "update_learning_course",
+      commandVersion: 1,
+      outcome: "applied",
+      durablySettled: true,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    })
+
+    expect(resultPresentation(part)).toMatchObject({
+      type: "valid",
+      value: {
+        outcome: "committed",
+        facts: expect.arrayContaining([
+          {
+            label: "Material 2",
+            value: "changed: explicit material adoption committed; Representation Revision rrv_notes; effect lca_notes",
+          },
+          { label: "Working selection", value: "none" },
+          { label: "Route anchor", value: "none; unusable: absent; head none" },
+        ]),
+      },
+    })
+    expect(shouldHideCompletedTool(part, false)).toBe(false)
   })
 
   test("rejects contradictory ToolPart binding and outer settlement claims", () => {
@@ -191,11 +244,7 @@ describe("primary TUI semantic presentation adapter", () => {
     ).toEqual({ type: "invalid" })
 
     const wrongPart = {
-      ...completed(
-        "content_write",
-        "File modify committed",
-        contentResultMetadata(presentation),
-      ),
+      ...completed("content_write", "File modify committed", contentResultMetadata(presentation)),
       id: "prt_other",
     } as ToolPart
     expect(resultPresentation(wrongPart)).toEqual({ type: "invalid" })
