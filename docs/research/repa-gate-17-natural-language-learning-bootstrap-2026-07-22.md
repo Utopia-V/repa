@@ -199,9 +199,12 @@ ordinary Agent, capability, owner-state, and settlement boundaries below.
 This section is the complete current candidate derived after the maintainer
 grill. `G17-BS-001` above is an accepted maintainer decision. The remaining
 `G17-BS-*` clauses are engineering derivations from current product,
-architecture, and predecessor authority. They may be revised by a fresh
-separate top-level contract/theory reviewer. Until that reviewer accepts the
-exact candidate and closes every finding, no production implementation,
+architecture, and predecessor authority. Fresh separate top-level review
+returned two accepted Gate 10 conflicts: the candidate had narrowed local-read
+authority to ContentRoot and allowed more than one potentially mutating new
+local Artifact target in one admitted model operation. This repair awaits
+closure by that original reviewer. Until the reviewer accepts the exact
+repaired candidate and closes every finding, no production implementation,
 migration, evidence run, or integration is authorized.
 
 ### Contract checksum
@@ -212,7 +215,7 @@ migration, evidence run, or integration is authorized.
 | `G17-BS-002` | Thin exact owner reads plus one closed request-bound bootstrap change set expose semantic choices without a second interpreter or internal-ID learner protocol. |
 | `G17-BS-003` | Every jointly knowable and authorizable local consequence in one bootstrap set commits atomically; external, long-running, or result-dependent work settles in separately receipted stages. |
 | `G17-BS-004` | Course/View creation and correction preserve Gate 7 identity, authorship, revision, selection, and provenance semantics; a Course may remain without a View. |
-| `G17-BS-005` | Material becomes durable only through explicit adoption and the applicable exact Gate 9/10/11/13 authority; read, search, attachment, or transient web research remains non-admitting. |
+| `G17-BS-005` | Material becomes durable only through explicit adoption and the applicable exact Gate 9/10/11/13 authority. Gate 17 preserves Gate 10's exact local-read union (an approved ContentRoot, the active execution workspace, or an exact one-operation learner grant), and one admitted model operation may commit at most one new Artifact mutation; read, search, attachment, or transient web research remains non-admitting. |
 | `G17-BS-006` | Working selection and an exact route-anchor consequence may compose locally; default Course, Goal, steering, progress, mastery, and macro activity remain separately owned. |
 | `G17-BS-007` | Gate 8 physical identity, one request-bound semantic slot, Agent issuance, configured capability policy, semantic-first replay, CAS, and crash recovery govern the command. |
 | `G17-BS-008` | Durable typed receipts state only actual effects and stage truth; the ordinary Agent may then teach in the same Turn without turning prose into learning truth. |
@@ -253,9 +256,10 @@ Gate 17 exposes only the read reach needed to form an exact command:
   revision/representation target, disposition, provenance, correction
   branches, and explicit cursor/omission truth needed for adoption or
   correction;
-- existing ContentRoot inventory, search, and read remain the way to inspect
-  approved local content before deciding whether it should become material;
-  and
+- Gate 10 remains the only boundary by which this Gate inspects a raw local path
+  or prepares Gate 9 input: read authority comes only from an approved
+  ContentRoot, the active execution workspace, or an exact one-operation
+  learner grant, and Gate 10 binds the exact root-object/path scope; and
 - exact current working selection and route-anchor state come from their
   existing owners.
 
@@ -288,9 +292,10 @@ bounded composition:
    with its first non-empty Revision, add one successor Revision to an existing
    View, or create one materially distinct View;
 3. preserve, set, or clear that Course's exact working selection;
-4. adopt a bounded explicit set of local material targets, using an exact
-   existing Artifact/Revision or Representation or an exact approved
-   ContentRoot-relative file prepared for Gate 9 admission/observation;
+4. adopt a bounded explicit material set consisting of exact already admitted
+   Artifact Revisions or accepted Representation Revisions plus at most one new
+   local target whose Gate 10 preparation and Gate 9 admission/observation may
+   mutate Artifact state;
 5. optionally create bounded Material Map snapshots and neutral alignments for
    those exact material targets, with explicit predecessor references when a
    correction is claimed; and
@@ -308,8 +313,9 @@ Course/View labels, the current route snapshot and transition mapping,
 selection/anchor intent, explicit material adoption intent, exact material
 targets, Map outline/selectors, neutral alignment reason, and correction
 predecessors. Bounded runtime-local keys may refer among newly proposed View,
-Revision, item, Artifact, Map, and alignment records inside the set. The
-runtime maps those keys to program-generated persistent IDs.
+Revision, item, Map, and alignment records and at most one newly proposed
+Artifact inside the set. The runtime maps those keys to program-generated
+persistent IDs.
 
 The model does not supply persistent IDs for new records, numeric owner
 versions, timestamps, permission decisions, capability versions, Agent
@@ -336,12 +342,20 @@ The composition layer never writes another owner's tables directly.
 
 For a free, allowed candidate, filesystem reads, hashing, media inspection, and
 other source preparation occur outside the database transaction through the
-existing ContentRoot/Artifact boundary. The final short uninterruptible
-transaction rechecks the semantic winner, Turn/tool frontier, one-mutation
-ownership, exact Course/View/selection/navigation heads, ContentRoot and
+existing Gate 10/Gate 9 boundary. The bootstrap may reference a bounded set of
+already admitted exact Artifact or Representation Revisions, but one
+provider-visible admitted bootstrap operation may carry at most one new local
+target whose Gate 9 admission or observation can mutate Artifact state. Gate 10
+derives that target's read authority only from an approved ContentRoot, the
+active execution workspace, or an exact one-operation learner grant and binds
+the exact root-object/path scope while preparing Gate 9 input. The final short
+uninterruptible transaction rechecks the semantic winner, Turn/tool frontier,
+one-mutation model-operation slot, exact Course/View/selection/navigation
+heads, the Gate 10 authorization snapshot and root-object/path binding,
 Artifact state, Representation availability when used, Map/alignment
-preconditions, and every owner proof. It then commits all included local
-domain consequences, Gate 8 effect/receipt, Tool settlement, typed
+preconditions, and every owner proof. It then commits the at-most-one Artifact
+mutation and every included Course/View/Map/alignment/selection/anchor
+consequence with the Gate 8 effect/receipt, Tool settlement, typed
 acknowledgement, commit seal, and learning-frontier advance, or commits none of
 them.
 
@@ -352,6 +366,14 @@ materializing a remote source, a separate permission grant, or any choice whose
 meaning depends on an earlier result must settle first through its existing
 owner. The Agent then refreshes exact context and may issue the bootstrap
 against that committed result.
+
+Multiple local targets whose admission or fresh observation could mutate
+Artifact state never share one provider-visible bootstrap operation. Each must
+first settle through a fresh admitted Gate 9 model operation with its own Gate
+8 result. A later bootstrap may then reference their exact committed Artifact
+Revisions or any separately accepted Gate 11 Representation Revisions while
+preserving atomicity for its own Course/View/Map/alignment/selection/anchor
+consequences.
 
 Staging is truthful rather than compensating. If an earlier Representation or
 other separately owned effect committed and the later bootstrap fails, the
@@ -366,7 +388,7 @@ other real children may commit. If every child is no-change, the command
 creates no domain effect, consumes no applied-mutation slot, and advances no
 learning frontier. Any invalid, stale, unauthorized, over-limit, or
 unavailable child rejects the entire local set; there is no partially created
-Course, View, Map, alignment, selection, or anchor.
+Artifact mutation, Course, View, Map, alignment, selection, or anchor.
 
 ### Course and Course View semantics
 
@@ -411,19 +433,30 @@ retains, maps, or aligns the exact source for the Course. Reading an
 attachment, searching a root, opening a file, quoting a web page, or deciding
 that content looks useful does not supply that adoption.
 
-For a new local source, the semantic target is an exact approved ContentRoot ID
-plus relative path. Trusted source preparation binds the canonical location,
+For the at-most-one new local target, the model supplies one exact path request,
+not authority. Gate 10 may authorize it only through its existing closed union:
+an approved ContentRoot, the active execution workspace, or an exact
+one-operation learner grant. Gate 10 names the applicable ContentRoot or exact
+runtime scope, binds the exact root-object/path scope, and prepares Gate 9's
+input. A raw absolute path, workspace launch, directory marker, or bootstrap
+payload never grants wider access or turns a workspace or one-operation grant
+into a ContentRoot. Trusted source preparation binds the canonical location,
 race-safe exact descriptor, observation time, media determination, and Gate 9
 admission basis. A missing, unreadable, escaped, or incompletely observed file
-publishes no placeholder. When the location is already admitted, the Agent
-must target and, when requested, observe that exact Artifact instead of
-creating a duplicate; a concurrent fresh-admission race fails stale and reloads
-rather than merging identities.
+publishes no placeholder.
 
-The bootstrap may use an exact existing Artifact Revision directly or an exact
-accepted Representation Revision when readable derived bytes are required. It
-does not perform Representation conversion inside the local transaction.
-Conversion and any durable generated bytes settle through Gate 11 first.
+When the location is already admitted, the bootstrap normally references its
+exact existing Artifact Revision instead of creating a duplicate. A requested
+fresh observation that may mutate Artifact state consumes the same sole
+Artifact-mutation arm; additional potentially mutating observations first
+settle through fresh admitted Gate 9 model operations. A concurrent fresh-
+admission race fails stale and reloads rather than merging identities.
+
+The bootstrap may reference a bounded set of exact already admitted Artifact
+Revisions and accepted Representation Revisions when readable derived bytes are
+required. It does not perform Representation conversion inside the local
+transaction. Conversion and any durable generated bytes settle through Gate 11
+first.
 
 A Material Map is optional. An adopted Artifact may remain unaligned, several
 Maps may coexist, and every Map binds one exact Artifact or Representation
@@ -598,8 +631,9 @@ only the receipt needed to avoid hiding or misreporting its own write.
 | Same semantic address and same committed meaning | Already-applied before live-state, I/O, or permission checks; an exact physical replay of a prior no-effect returns that stored no-effect. |
 | Same semantic address and different meaning | Semantic conflict; no candidate effect or fabricated current locator. |
 | Missing/delegated-without capability, deny, rejected ask, or cancellation/correction observed before the final transaction begins | Truthful no-effect; no local child transition. |
-| Stale Course/View/selection/anchor, revoked root, changed Artifact/Representation/Map state, invalid mapping/selector/alignment, or over-limit bundle | Entire local bootstrap rolls back. |
+| Stale Course/View/selection/anchor, revoked or expired Gate 10 authority, changed root-object/path binding, changed Artifact/Representation/Map state, invalid mapping/selector/alignment, or over-limit bundle | Entire local bootstrap rolls back. |
 | Missing/unreadable/escaping local file or source mutation outside Gate 10's exact observation contract | No placeholder Artifact and no bootstrap effect. |
+| More than one new or freshly observed local target could mutate Artifact state | Reject or decompose before effect; each target settles through a fresh admitted Gate 9 model operation, and only a later bootstrap may reference all exact committed Artifact Revisions or separately accepted Representation Revisions. |
 | Representation conversion or another separately owned preparation commits, then bootstrap fails | Preparation remains committed with its own receipt; bootstrap reports no effect. |
 | Mixed changed and no-change local children | Changed children co-commit; no-change children are named without fake versions or effects. |
 | All local children no-change | Visible no-effect; no mutation-slot use or frontier advance. |
@@ -647,6 +681,9 @@ Gate 17 does not establish:
   separately authorized domain effects;
 - hidden admission from attachments, generic file tools, root approval,
   search, web research, or Tutor enthusiasm;
+- an implicit union or widening of Gate 10 local-read authorities, raw-path
+  authority, or more than one new Artifact mutation in one admitted model
+  operation;
 - a remote-source connector, RAG/indexing system, LearningSpace owner,
   Session/macro activity, context projection, or complete product loop; or
 - release readiness, performance qualification, pedagogical efficacy, or
@@ -676,6 +713,10 @@ Gate 17 does not establish:
   privileged `learn` envelope exists;
 - every new read is bounded, cursor-scoped, omission-truthful, and zero-write,
   including no Material Map current-use observation from a pure query;
+- reads authorized by an approved ContentRoot, the active execution workspace,
+  or an exact one-operation learner grant each bind the exact Gate 10
+  root-object/path scope and prepare identical Gate 9 input without implicit
+  authority union or widening;
 - physical replay, same-address duplicate/conflict, root/delegated/missing
   capability, allow/ask/deny, permission correction, cancellation, one-mutation
   races, stale owner snapshots, and semantic-wait losers obey the ordering
@@ -697,10 +738,15 @@ Gate 17 does not establish:
   many-to-many alignment, successor correction, and source/Map/Course races;
 - transient web research, attachment, read, search, and root approval create no
   Artifact, Map, alignment, Course relation, or hidden current-use observation;
-- one jointly knowable local Course/View/material/selection/anchor bundle
-  commits all children or none, while a separately committed conversion
-  followed by bootstrap failure remains visibly partial rather than rolled
-  back or misreported;
+- one jointly knowable local bundle with a bounded set of already admitted
+  exact Artifact/Representation Revisions and at most one potentially mutating
+  new local target commits its Artifact/Course/View/Map/alignment/selection/
+  anchor children or none; attempts with multiple potentially mutating new
+  local targets reject or stage through fresh admitted Gate 9 model operations,
+  after which a later bootstrap may reference every exact committed Revision;
+- a separately committed Artifact admission or conversion followed by
+  bootstrap failure remains visibly partial rather than rolled back or
+  misreported;
 - preserve/set/clear/no-anchor/stale-anchor cases hold without ordinal
   advancement, mapped retarget, progress, mastery, or default-Course mutation;
   and
@@ -733,14 +779,16 @@ integrated product loop.
 
 ## Independent contract-review handoff
 
-A fresh separate top-level reviewer must receive the current product/architecture
-authority, this exact candidate, the 2026-08-02 `/learn` omission, and the
-predecessor Gate contracts. The reviewer may reject the one-bundle composition,
-closed operation set, settlement identity, owner dependency direction,
-material-adoption interpretation, anchor behavior, or evidence boundary.
+The original fresh separate top-level reviewer must receive the current
+product/architecture authority, this exact repaired candidate, the accepted F1
+and F2 Gate 10 corrections, the 2026-08-02 `/learn` omission, and the
+predecessor Gate contracts. Only that reviewer may close the findings. The
+reviewer may still reject the one-bundle composition, closed operation set,
+settlement identity, owner dependency direction, material-adoption
+interpretation, anchor behavior, or evidence boundary.
 
 The executor repairs valid findings in this contract context; the original
 reviewer closes them against an exact Git binding. Same-context preflight,
 executor completion, a child-agent opinion, or clean documentation checks do
 not satisfy that obligation. Gate 17 implementation remains forbidden until
-the fresh review returns exact acceptance.
+the original reviewer returns exact acceptance.
