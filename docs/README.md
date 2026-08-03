@@ -21,6 +21,16 @@ correction; it does not replace Agent judgment with phrase lists, internal-ID
 interaction rules, exhaustive-candidate proofs, or a preliminary selector by
 default.
 
+A non-blocking post-campaign maintainability follow-up is recorded: inspect
+production files whose length may conceal multiple responsibilities and names
+whose role or owner is unclear, then reorganize only where current ownership
+and dependency evidence support it. This observation does not block Gate 18,
+reopen a closed Gate, or pre-authorize mass splitting or renaming by line
+count. The later pass must identify concrete targets, distinguish genuinely
+mixed boundaries from necessarily cohesive files, preserve accepted behavior
+and provenance, and close with focused evidence. Remove this note when the
+maintenance work is integrated or explicitly retired.
+
 Pre-Gate-17 repository identity and inherited-corpus cleanup is integrated at
 `bc9c870b3`. The current tree no longer carries a parallel upstream product
 manual, localized README/statistics corpus, Web documentation package,
