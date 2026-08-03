@@ -10,11 +10,14 @@ integration.
   `822f8a3df4baa5b51002e7ffd8118a01d567c2a0`;
 - initial implementation/evidence candidate:
   `3c37f043ea50b855d9f752c50bb83249435488f2`;
-- fresh implementation/evidence review disposition: **Revise**, with local
-  findings `G17-IE-001` through `G17-IE-004` repaired by the descendant that
-  contains this record and provider-run finding `G17-IE-005` sequenced to a
-  later separately authorized task after original-reviewer closure of those
-  local findings;
+- first local repair and original-reviewer closure base:
+  `bd092577ae103e6a8d3049c65d6436ea6ecf956b`; the original reviewer closed
+  `G17-IE-001`, `G17-IE-003`, and `G17-IE-004` there and retained only
+  `G17-IE-002` from the local findings;
+- current implementation/evidence review disposition: **Revise** pending the
+  same original reviewer's closure of the descendant `G17-IE-002` repair;
+  provider-run finding `G17-IE-005` remains sequenced to its separately
+  authorized later task and is not part of this repair;
 - accepted contract:
   `cf0cfbd032273cf7360fe7747ef0809abda6181f`;
 - implementation branch: `codex/gate17-implementation`;
@@ -223,13 +226,15 @@ product-loop closure.
 
 ## Fresh review repair and verification results
 
-The descendant repair closes only the four locally repairable findings from
-the fresh review:
+The original fresh reviewer closed `G17-IE-001`, `G17-IE-003`, and
+`G17-IE-004` on exact candidate `bd092577`. This descendant changes only the
+remaining `G17-IE-002` boundary; the other rows below retain the already-closed
+evidence and are not reopened.
 
 | Finding      | Repair and decisive evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `G17-IE-001` | One typed scope derives the exact one-operation path, `requirePrompt: true`, empty `always`, and `once_only` approval. A real `Permission.Service.ask` request carries `permissionPromptRequired` and `permissionExactReply`; TUI, direct-run, and ACP consume that exact request, ACP exposes **Allow once** plus **Reject**, and a tampered request becomes reject-only.                                                                                                                                                                                  |
-| `G17-IE-002` | The versioned scope now contains the normalized complete bounded command. Its shared projection distinguishes every committed Course, route item/mapping, selection, material/read authority, Map node/selector/coordinate, alignment/reason, and anchor fact. Two independently valid commands that differ only in one route-item title produce different readable projections, fingerprint recomputation rejects mismatched semantic metadata, and ACP sends the same bounded human-readable facts instead of unbounded raw metadata.                                                                                  |
+| `G17-IE-002` | The shared typed scope now gives each mapping's source and target member arrays and the mapping-group array the Course owner's finite 1024-transition bound while retaining the Gate 17 command's separate 500-target-item limit and every existing owner/command check. Collision-free 500→1, 501→1, and 1024→1 merges pass `CourseRevision.prepare`, canonicalization, schema decoding, and one actual `Permission.Service.ask` request each; TUI, direct-run, and ACP consume the same exact complete mapping fact and expose only **Allow once** plus **Reject**. The schema accepts exactly 1024 members/groups and rejects 1025, `CourseRevision.prepare` rejects both a 1025-item revision and 1025 mapping groups at the owning boundary, and a fabricated owner-over-bound request is invalid/reject-only on all three carriers. The earlier complete-command, fingerprint-mismatch, and distinct-title evidence remains passing. |
 | `G17-IE-003` | V16 migration no longer copies `initial_change_time` into last-write time or invents size zero. The frozen V16 fixture migrates to `historical_v16_partial` with both values `NULL`; a real Material Map owner read exposes only proven descriptor fields and the explicit `unknown: ["lastWriteTime", "size"]` tuple. Fresh V17 exactness remains enforced.                                                                                                                                                                                                |
 | `G17-IE-004` | The production runtime fault matrix injects a database abort at Course, route, selection, Artifact, Material Map, alignment, anchor, receipt, effect, bootstrap seal, anchor seal, and physical settlement. Each boundary proves transaction and frontier rollback, no receipt/effect/seal, unchanged pending Part before restart, durable interrupted ToolPart after startup recovery, exact repeat recovery, and no late child effect; a full-command live permission abort independently proves prompted-abort settlement without entering the children. |
 
@@ -239,17 +244,20 @@ in this recovery task, and the local repair makes no language-behavior
 qualification claim.
 
 Environment for the repair checks: Windows, Bun `1.3.14` (`0d9b296a`). Each
-command ran from the named affected package.
+command ran from the named affected package. The Schema and Gate 17 Permission
+rows plus the Schema/OpenCode typechecks were rerun on this descendant; the
+other rows retain unchanged `bd092577` closure evidence for the three findings
+that this repair does not reopen.
 
 | Package / exact command                                                                                   | Exact result                                                                                                                                    |
 | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Schema: `bun test test/semantic-presentation-v1.test.ts`                                                  | 4 passed, 0 failed, 11 assertions.                                                                                                              |
+| Schema: `bun test test/semantic-presentation-v1.test.ts`                                                  | 5 passed, 0 failed, 17 assertions, including exact 1024 member/group admission and first-over-bound rejection.                                 |
 | Schema: `bun run typecheck`                                                                               | Passed.                                                                                                                                         |
 | Core: `bun test test/database-migration.test.ts --test-name-pattern "upgrades a frozen Gate 16 database"` | 1 passed, 41 filtered, 0 failed, 13 assertions.                                                                                                 |
 | Core: `bun test test/learning-bootstrap.test.ts`                                                          | 7 passed, 0 failed, 96 assertions.                                                                                                              |
 | Core: `bun run migration --check`                                                                         | Passed; the incremental projection had no ungenerated schema change and the full current schema regenerated in an isolated temporary directory. |
 | Core: `bun run typecheck`                                                                                 | Passed.                                                                                                                                         |
-| OpenCode: `bun test test/permission/next.test.ts --test-name-pattern "Gate17 one-operation bootstrap"`    | 1 passed, 97 filtered, 0 failed, 23 assertions against an actual Permission-produced request.                                                   |
+| OpenCode: `bun test test/permission/next.test.ts --test-name-pattern "Gate17"`                            | 2 passed, 97 filtered, 0 failed, 79 assertions; actual Permission-produced 500/501/1024 requests cross TUI, direct-run, and ACP.                 |
 | OpenCode: `bun test test/learning-command/presentation.test.ts`                                           | 8 passed, 0 failed, 66 assertions.                                                                                                              |
 | OpenCode: `bun test test/acp/permission.test.ts`                                                          | 11 passed, 0 failed, 14 assertions.                                                                                                             |
 | OpenCode: `bun test test/learning-command/runtime.test.ts --test-name-pattern "bootstrap"`                | 4 passed, 59 filtered, 0 failed, 159 assertions, including 139 assertions in the twelve-boundary fault/restart plus live-abort case.            |
@@ -257,12 +265,14 @@ command ran from the named affected package.
 | TUI: `bun test test/util/semantic-presentation.test.ts`                                                   | 5 passed, 0 failed, 18 assertions.                                                                                                              |
 | TUI: `bun run typecheck`                                                                                  | Passed.                                                                                                                                         |
 
-These are focused causal checks, not a release-wide suite. The dependency reach
-was broadened through all four affected package typechecks, the migration
-regenerator/checker, all Core bootstrap cases, the full semantic-presentation
-and ACP permission files, and all runtime tests whose names contain
-`bootstrap`; unrelated package suites and the separately unauthorized provider
-qualification were not run.
+These are focused causal checks, not a release-wide suite. This descendant's
+fresh check directly crosses the Course revision owner, typed schema, actual
+Permission request, TUI, direct-run, and ACP boundary and runs the two affected
+package typechecks. The unchanged migration, transaction/recovery, and result
+presentation rows remain bound to `bd092577`; rerunning them would not falsify
+this isolated array-bound repair or change the status of already-closed
+`G17-IE-001`, `G17-IE-003`, or `G17-IE-004`. Unrelated package suites and the
+separately unauthorized provider qualification were not run.
 
 ## Initial candidate verification results (retained provenance)
 
@@ -295,11 +305,10 @@ API consumers while continuing to reject private table/SQL access.
 ## Review handoff
 
 This is an executor self-review and does not satisfy independent acceptance.
-The original fresh reviewer that raised `G17-IE-001..005` must bind the
-containing commit, reproduce or otherwise evaluate the causal evidence,
-inspect the repair diff against
-`3c37f043ea50b855d9f752c50bb83249435488f2` and the complete candidate against
-`822f8a3df4baa5b51002e7ffd8118a01d567c2a0`, independently close or retain each
-finding, and decide whether the external released-model qualification is
-required before acceptance. No integration or Gate 18 work follows from this
-record alone.
+The same original reviewer must bind the containing commit and inspect the
+exact `bd092577ae103e6a8d3049c65d6436ea6ecf956b..HEAD` repair only to close or
+retain `G17-IE-002`; `G17-IE-001`, `G17-IE-003`, and `G17-IE-004` remain closed,
+and separately authorized `G17-IE-005` is not crossed here. The complete
+candidate remains recoverable against
+`822f8a3df4baa5b51002e7ffd8118a01d567c2a0`. No integration or Gate 18 work
+follows from this record alone.

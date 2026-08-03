@@ -1,5 +1,6 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import type { Course } from "@opencode-ai/core/course"
+import { CourseRevision } from "@opencode-ai/core/course/revision"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
@@ -1616,6 +1617,314 @@ it.instance(
       })
       expect(observed).toBeTrue()
       expect(yield* permission.list()).toEqual([])
+    }),
+  { git: true },
+)
+
+it.instance(
+  "Gate17 presents the full Course transition bound and rejects the first owner-over-bound scope",
+  () =>
+    Effect.gen(function* () {
+      const sizes = [500, 501, 1_024] as const
+      const courseID = "cou_gate17_transition_bound" as Course.CourseID
+      const viewID = "view_gate17_transition_bound" as Course.ViewID
+      const predecessorRevisionID = "rev_gate17_transition_bound" as Course.RevisionID
+      const expectedByRequest = new Map<
+        PermissionV1.ID,
+        Readonly<{
+          size: (typeof sizes)[number]
+          command: LearningBootstrap.CanonicalCommand
+          sourceItemIDs: readonly Course.ItemID[]
+        }>
+      >()
+      const selections: Permission.Selection[] = []
+      const replies: Array<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }> = []
+      const observed: number[] = []
+      const permission = yield* Permission.Service
+      const events = yield* EventV2Bridge.Service
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== Permission.Event.Asked.type) return Effect.void
+        const request = event.data as PermissionV1.Request
+        const expected = expectedByRequest.get(request.id)
+        if (!expected) return Effect.void
+        return Effect.gen(function* () {
+          observed.push(expected.size)
+          expect(request).toMatchObject({
+            permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+            patterns: [LearningBootstrap.PERMISSION_PATTERN],
+            always: [],
+            metadata: {
+              bootstrapKind: "learning_bootstrap",
+              scope: { command: expected.command },
+              permissionPromptRequired: true,
+              permissionExactReply: true,
+            },
+          })
+          const carrierRequest = {
+            id: request.id,
+            sessionID: request.sessionID,
+            permission: request.permission,
+            patterns: [...request.patterns],
+            metadata: { ...request.metadata },
+            always: [...request.always],
+            ...(request.tool ? { tool: { ...request.tool } } : {}),
+          }
+          const shared = SemanticPresentation.readProposal(carrierRequest)
+          expect(shared.type).toBe("valid")
+          if (shared.type !== "valid") throw new Error("Expected the complete Course transition projection")
+          expect(shared.value.approval).toBe("once_only")
+          expect(new Set(shared.value.facts.map((fact) => fact.label)).size).toBe(shared.value.facts.length)
+          expect(shared.value.facts.find((fact) => fact.label === "Route mapping 1")).toEqual({
+            label: "Route mapping 1",
+            value: `merge; source item(s) [${expected.sourceItemIDs.join(", ")}]; target key(s) [merged]`,
+          })
+
+          const tui = permissionPresentation(carrierRequest)
+          expect(tui).toEqual(shared)
+          expect(isOnceOnlyPermission(carrierRequest)).toBeTrue()
+          expect(permissionConstraint(carrierRequest)).toEqual({ onceOnly: true, rejectOnly: false, exactReply: true })
+
+          expect(toolPermissionInfo(carrierRequest, { ...request.metadata })).toEqual({
+            icon: "◇",
+            title: shared.value.title,
+            lines: presentationLines(shared.value),
+          })
+
+          expect(ACPPermission.permissionOptions(carrierRequest)).toEqual([
+            { optionId: "once", kind: "allow_once", name: "Allow once" },
+            { optionId: "reject", kind: "reject_once", name: "Reject" },
+          ])
+          const acp = yield* Effect.promise(() =>
+            ACPPermission.permissionToolCall({
+              toolCallId: request.tool?.callID ?? request.id,
+              toolName: request.permission,
+              request: carrierRequest,
+            }),
+          )
+          expect(acp).toMatchObject({
+            title: shared.value.title,
+            rawInput: {
+              capability: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+              approval: "once_only",
+              summary: shared.value.summary,
+              facts: shared.value.facts,
+            },
+          })
+          expect(JSON.stringify(acp.rawInput)).not.toContain("semanticPresentationBasis")
+          yield* permission.reply({ requestID: request.id, reply: "once" }).pipe(Effect.orDie)
+        })
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      yield* Effect.forEach(sizes, (size) =>
+        Effect.gen(function* () {
+          const sourceItemIDs = Array.from({ length: size }, (_, index) =>
+            `itm_${index.toString().padStart(4, "0")}` as Course.ItemID,
+          )
+          const revision = {
+            items: [{ key: "merged", title: `Merged ${size}-item predecessor` }],
+            mappings: [{ kind: "merge" as const, sourceItemIDs, targetKeys: ["merged"] }],
+          }
+          const prepared = yield* CourseRevision.prepare({
+            proposal: revision,
+            predecessor: {
+              revisionID: predecessorRevisionID,
+              items: sourceItemIDs.map((itemID) => ({ viewID, revisionID: predecessorRevisionID, itemID })),
+            },
+            citedMemberships: [],
+          })
+          expect(prepared.mappings).toHaveLength(1)
+          expect(prepared.mappings[0]?.sourceItemIDs).toEqual(sourceItemIDs)
+
+          const command = LearningBootstrap.canonicalizeCommand({
+            course: { type: "existing", courseID },
+            route: {
+              type: "successor_revision",
+              key: `route-${size}`,
+              viewID,
+              predecessorRevisionID,
+              authorship: "learner_requested",
+              revision,
+            },
+            selection: { type: "preserve" },
+            materials: [
+              {
+                type: "local",
+                key: "notes",
+                path: `C:\\Learning\\transition-${size}.txt`,
+                authority: { type: "one_operation" },
+              },
+            ],
+          })
+          const candidate = {
+            commandFingerprint: LearningBootstrap.commandFingerprint(command),
+            canonicalCommand: command,
+            agentAction: { kind: "root" },
+            materialized: { course: { type: "existing" } },
+          } as unknown as LearningBootstrap.Candidate
+          const sessionID = SessionID.make(`ses_gate17_transition_${size}`)
+          const messageID = MessageID.ascending()
+          const callID = `call_gate17_transition_${size}`
+          const partID = `prt_gate17_transition_${size}`
+          const requestID = PermissionV1.ID.make(`per_gate17_transition_${size}`)
+          const scope = LearningCommandPresentation.learningBootstrapScope(candidate)
+          const presentation = LearningCommandPresentation.learningBootstrapCapability(candidate, {
+            sessionID,
+            assistantMessageID: messageID,
+            providerCallID: callID,
+            partID,
+          })
+          const constraint = SemanticPresentation.learningBootstrapPermissionConstraint(scope)
+          expectedByRequest.set(requestID, { size, command, sourceItemIDs })
+          yield* permission.ask({
+            id: requestID,
+            sessionID,
+            permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+            patterns: [LearningBootstrap.PERMISSION_PATTERN],
+            always: constraint.always,
+            requirePrompt: constraint.promptRequired,
+            metadata: {
+              bootstrapKind: "learning_bootstrap",
+              commandFingerprint: candidate.commandFingerprint,
+              issuance: "root",
+              scope,
+              ...SemanticPresentation.metadata(presentation),
+            },
+            tool: { messageID, callID },
+            ruleset: [{ permission: "*", pattern: "*", action: "allow" }],
+            lifecycle: exactLifecycle({
+              selected: (selection) =>
+                Effect.sync(() => {
+                  selections.push(selection)
+                }),
+              replied: (input) =>
+                Effect.sync(() => {
+                  replies.push(input)
+                }),
+            }),
+          })
+        }),
+      )
+
+      expect(observed).toEqual([...sizes])
+      expect(selections).toHaveLength(sizes.length)
+      expect(selections.every((selection) => selection.action === "ask")).toBeTrue()
+      expect(replies).toHaveLength(sizes.length)
+      expect(replies.every((input) => input.reply.reply === "once")).toBeTrue()
+      expect(yield* permission.list()).toEqual([])
+
+      const overBoundSourceItemIDs = Array.from({ length: 1_025 }, (_, index) =>
+        `itm_${index.toString().padStart(4, "0")}` as Course.ItemID,
+      )
+      const hierarchyError = yield* CourseRevision.prepare({
+        proposal: {
+          items: overBoundSourceItemIDs.map((_, index) => ({ key: `item-${index}`, title: `Item ${index}` })),
+        },
+        citedMemberships: [],
+      }).pipe(Effect.flip)
+      expect(hierarchyError).toMatchObject({
+        _tag: "Course.InvalidHierarchyError",
+        detail: "A revision must contain between 1 and 1024 items",
+      })
+
+      const overBoundMappings = Array.from({ length: 1_025 }, () => ({
+        kind: "preserve" as const,
+        sourceItemIDs: ["itm_source" as Course.ItemID],
+        targetKeys: ["target"],
+      }))
+      const ownerError = yield* CourseRevision.prepare({
+        proposal: { items: [{ key: "target", title: "Target" }], mappings: overBoundMappings },
+        predecessor: {
+          revisionID: predecessorRevisionID,
+          items: [{ viewID, revisionID: predecessorRevisionID, itemID: "itm_source" as Course.ItemID }],
+        },
+        citedMemberships: [],
+      }).pipe(Effect.flip)
+      expect(ownerError).toMatchObject({
+        _tag: "Course.InvalidMappingError",
+        detail: "A revision transition cannot contain more than 1024 mapping groups",
+      })
+
+      const overBoundCommand = LearningBootstrap.canonicalizeCommand({
+        course: { type: "existing", courseID },
+        route: {
+          type: "successor_revision",
+          key: "over-bound-route",
+          viewID,
+          predecessorRevisionID,
+          authorship: "learner_requested",
+          revision: {
+            items: [{ key: "target", title: "Target" }],
+            mappings: [{ kind: "merge", sourceItemIDs: overBoundSourceItemIDs, targetKeys: ["target"] }],
+          },
+        },
+        selection: { type: "preserve" },
+        materials: [
+          {
+            type: "local",
+            key: "notes",
+            path: "C:\\Learning\\transition-over-bound.txt",
+            authority: { type: "one_operation" },
+          },
+        ],
+      })
+      const overBoundCandidate = {
+        commandFingerprint: LearningBootstrap.commandFingerprint(overBoundCommand),
+        canonicalCommand: overBoundCommand,
+        agentAction: { kind: "root" },
+        materialized: { course: { type: "existing" } },
+      } as unknown as LearningBootstrap.Candidate
+      const overBoundSessionID = SessionID.make("ses_gate17_transition_over_bound")
+      const overBoundMessageID = MessageID.ascending()
+      const overBoundCallID = "call_gate17_transition_over_bound"
+      const overBoundPartID = "prt_gate17_transition_over_bound"
+      const overBoundScope = LearningCommandPresentation.learningBootstrapScope(overBoundCandidate)
+      const overBoundPresentation = LearningCommandPresentation.learningBootstrapCapability(overBoundCandidate, {
+        sessionID: overBoundSessionID,
+        assistantMessageID: overBoundMessageID,
+        providerCallID: overBoundCallID,
+        partID: overBoundPartID,
+      })
+      const overBoundRequest = {
+        id: PermissionV1.ID.make("per_gate17_transition_over_bound"),
+        sessionID: overBoundSessionID,
+        permission: LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        patterns: [LearningBootstrap.PERMISSION_PATTERN],
+        always: [],
+        metadata: {
+          bootstrapKind: "learning_bootstrap",
+          commandFingerprint: overBoundCandidate.commandFingerprint,
+          issuance: "root",
+          scope: overBoundScope,
+          ...SemanticPresentation.metadata(overBoundPresentation),
+          [PermissionV1.PROMPT_REQUIRED_METADATA_KEY]: true,
+          [PermissionV1.EXACT_REPLY_METADATA_KEY]: true,
+        },
+        tool: { messageID: overBoundMessageID, callID: overBoundCallID },
+      }
+      expect(SemanticPresentation.readProposal(overBoundRequest).type).toBe("invalid")
+      expect(permissionPresentation(overBoundRequest).type).toBe("invalid")
+      expect(permissionConstraint(overBoundRequest)).toEqual({ onceOnly: true, rejectOnly: true, exactReply: true })
+      expect(toolPermissionInfo(overBoundRequest, { ...overBoundRequest.metadata })).toEqual({
+        icon: "!",
+        title: "Permission scope unavailable",
+        lines: ["Repa could not verify the exact consequential scope. Reject this request."],
+      })
+      expect(ACPPermission.permissionOptions(overBoundRequest)).toEqual([
+        { optionId: "reject", kind: "reject_once", name: "Reject" },
+      ])
+      expect(
+        yield* Effect.promise(() =>
+          ACPPermission.permissionToolCall({
+            toolCallId: overBoundCallID,
+            toolName: overBoundRequest.permission,
+            request: overBoundRequest,
+          }),
+        ),
+      ).toMatchObject({
+        title: "Permission scope unavailable",
+        rawInput: { scope: "unavailable", requiredAction: "reject" },
+      })
     }),
   { git: true },
 )

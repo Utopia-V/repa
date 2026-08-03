@@ -694,6 +694,7 @@ const BootstrapText = Schema.String.check(Schema.isMaxLength(8 * 1024))
 const BootstrapPath = Schema.String.check(Schema.isMaxLength(4 * 1024))
 const BootstrapKey = Schema.String.check(Schema.isMaxLength(256))
 const BootstrapID = Schema.String.check(Schema.isMaxLength(8 * 1024))
+const BootstrapCourseRevisionTransitionLimit = 1_024
 const BootstrapAuthorship = Schema.Literals(["learner_supplied", "learner_requested", "tutor_initiated"])
 const BootstrapCoordinateEndpoint = Schema.Struct({
   page: PositiveVersion,
@@ -742,10 +743,14 @@ const BootstrapRevision = Schema.Struct({
     Schema.Array(
       Schema.Struct({
         kind: Schema.Literals(["preserve", "split", "merge"]),
-        sourceItemIDs: Schema.Array(BootstrapID).check(Schema.isMaxLength(500)),
-        targetKeys: Schema.Array(BootstrapKey).check(Schema.isMaxLength(500)),
+        sourceItemIDs: Schema.Array(BootstrapID).check(
+          Schema.isMaxLength(BootstrapCourseRevisionTransitionLimit),
+        ),
+        targetKeys: Schema.Array(BootstrapKey).check(
+          Schema.isMaxLength(BootstrapCourseRevisionTransitionLimit),
+        ),
       }),
-    ).check(Schema.isMaxLength(500)),
+    ).check(Schema.isMaxLength(BootstrapCourseRevisionTransitionLimit)),
   ),
 })
 const BootstrapRoute = Schema.Union([

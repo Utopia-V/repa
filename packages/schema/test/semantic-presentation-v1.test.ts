@@ -10,6 +10,47 @@ const binding = {
   partID: "prt_test",
 }
 
+function bootstrapTransitionPresentation(
+  mappings: readonly Readonly<{
+    kind: "preserve" | "split" | "merge"
+    sourceItemIDs: readonly string[]
+    targetKeys: readonly string[]
+  }>[],
+) {
+  return {
+    version: 1,
+    phase: "proposal",
+    basis: {
+      kind: "learning_bootstrap_capability",
+      binding,
+      commandFingerprint: "bootstrap-transition-fingerprint",
+      issuance: "root",
+      scope: {
+        command: {
+          schemaVersion: 1,
+          course: { type: "existing", courseID: "cou_transition" },
+          route: {
+            type: "successor_revision",
+            key: "route",
+            viewID: "view_transition",
+            predecessorRevisionID: "rev_predecessor",
+            authorship: "learner_requested",
+            revision: {
+              items: [{ key: "target", title: "Merged target" }],
+              mappings,
+            },
+          },
+          selection: { type: "preserve" },
+          materials: [],
+          maps: [],
+          alignments: [],
+          anchor: { type: "preserve" },
+        },
+      },
+    },
+  }
+}
+
 describe("semantic presentation v1", () => {
   test("decodes capability-specific proposal and result bases", () => {
     expect(
@@ -141,6 +182,65 @@ describe("semantic presentation v1", () => {
         acknowledgement: { course: { title: "Linear algebra" }, selectedRevisionID: null },
       },
     })
+  })
+
+  test("keeps the Gate 17 mapping scope at the Course owner's exact transition bound", () => {
+    const sourceItemIDs = Array.from({ length: 1_024 }, (_, index) => `itm_${index.toString().padStart(4, "0")}`)
+    const targetKeys = Array.from({ length: 1_024 }, (_, index) => `target-${index.toString().padStart(4, "0")}`)
+    const mappingGroups = Array.from({ length: 1_024 }, (_, index) => ({
+      kind: "preserve" as const,
+      sourceItemIDs: [`itm_${index.toString().padStart(4, "0")}`],
+      targetKeys: [`target-${index.toString().padStart(4, "0")}`],
+    }))
+
+    const memberBound = decode(
+      bootstrapTransitionPresentation([
+        { kind: "merge", sourceItemIDs, targetKeys: ["target"] },
+        { kind: "split", sourceItemIDs: ["itm_source"], targetKeys },
+      ]),
+    )
+    if (
+      memberBound.phase !== "proposal" ||
+      memberBound.basis.kind !== "learning_bootstrap_capability" ||
+      !memberBound.basis.scope.command.route
+    ) {
+      throw new Error("Expected a decoded Gate 17 transition proposal")
+    }
+    expect(memberBound.basis.scope.command.route.revision.mappings?.[0]?.sourceItemIDs).toHaveLength(1_024)
+    expect(memberBound.basis.scope.command.route.revision.mappings?.[1]?.targetKeys).toHaveLength(1_024)
+
+    const groupBound = decode(bootstrapTransitionPresentation(mappingGroups))
+    if (
+      groupBound.phase !== "proposal" ||
+      groupBound.basis.kind !== "learning_bootstrap_capability" ||
+      !groupBound.basis.scope.command.route
+    ) {
+      throw new Error("Expected a decoded Gate 17 transition proposal")
+    }
+    expect(groupBound.basis.scope.command.route.revision.mappings).toHaveLength(1_024)
+
+    expect(() =>
+      decode(
+        bootstrapTransitionPresentation([
+          { kind: "merge", sourceItemIDs: [...sourceItemIDs, "itm_1024"], targetKeys: ["target"] },
+        ]),
+      ),
+    ).toThrow()
+    expect(() =>
+      decode(
+        bootstrapTransitionPresentation([
+          { kind: "split", sourceItemIDs: ["itm_source"], targetKeys: [...targetKeys, "target-1024"] },
+        ]),
+      ),
+    ).toThrow()
+    expect(() =>
+      decode(
+        bootstrapTransitionPresentation([
+          ...mappingGroups,
+          { kind: "preserve", sourceItemIDs: ["itm_1024"], targetKeys: ["target-1024"] },
+        ]),
+      ),
+    ).toThrow()
   })
 
   test("keeps V2 Default-Course endpoints exact while preserving partial V1 history", () => {
