@@ -1,9 +1,69 @@
 # Repa runtime-package guide
 
+## Scope and authority
+
+The accepted Repa baseline assigns the retained released-v1 Agent harness to
+this package. It also contains inherited implementation whose source may remain
+for maintenance or comparison without being part of ordinary production
+reachability. A path, export, `v2` name, or old OpenCode identifier does not by
+itself settle that distinction or prove that the current composition is sound.
+
+Begin with the repository [authority map](../../docs/README.md), the
+[product origin](../../docs/foundation/00-product-origin.md), and the
+[system architecture](../../docs/architecture/00-system-architecture.md).
+This package owns outer runtime and carrier mechanics; it does not replace the
+learning authorities in `packages/core` or turn Assistant prose into durable
+learning truth.
+
+This guide and its descendants state the composition that accepted documents
+require; they do not certify the current source. Treat registrations, imports,
+call graphs, tests, and running behavior as falsifiable implementation evidence.
+If that evidence conflicts with the product or Gate owner, record and repair
+the implementation discrepancy instead of preserving it as a local convention.
+Git provenance can establish whether Repa added or transformed a path, but not
+whether its design is correct. A concrete counterexample to an accepted owner
+requires repairing that owner and its derived guides before dependent code is
+made to follow a different rule.
+
+Accepted Repa runtime boundaries have local guidance under
+`src/session`, `src/agent`, `src/tool`, `src/permission`, `src/config`,
+`src/cli`, `src/acp`, and `src/server`. The Repa-added adapter subtrees for
+content roots, learning commands, and representations have their own guides as
+well. The accepted Gate 5 implementation records `src/index.ts` as the root CLI
+registration point. Use it to discover actual reachability, then compare that
+reachability with Gate 5: an unregistered implementation is not ordinarily
+reachable, while registration alone cannot authorize an excluded surface.
+
+## Inherited outer capabilities
+
+`src/provider`, `src/plugin`, and `src/mcp` remain domain-independent outer
+capabilities, not Repa learning authorities. Keep their generic provider,
+transport, hook, and connector mechanics reusable while preserving these
+Repa constraints:
+
+- automatically discovered project config cannot activate a provider, model,
+  plugin, MCP server, package install, dynamic import, or network connection;
+  only an admitted machine-owned source may do so;
+- local API-key/OAuth provider authentication is independent of the removed
+  OpenCode Console/account and organization product. Do not restore excluded
+  first-party commercial catalogs, Zen/Go meaning, marketplace, sharing, or
+  hosted control-plane behavior through an authentication or provider branch;
+- plugin prompt/parameter hooks are extensions behind the Session composition
+  boundary. They cannot remove the Repa core prompt, manufacture an internal
+  model purpose, forge trusted learning-command facts, or overwrite a settled
+  semantic result; and
+- plugin and MCP tools remain subject to reserved-ID checks, the live
+  permission catalog, exact runtime identity binding, and the same capability
+  ceiling as local tools. A connector result is observation, not durable
+  learning truth.
+
 ## Database
 
-- **Schema**: Drizzle schema lives in `packages/core/src/**/*.sql.ts`.
-- **Migrations**: database migrations live in `packages/core` and are applied by core.
+- **Schema**: Repa's accepted database ownership places Drizzle learning schema
+  under `packages/core/src/**/*.sql.ts`; other schema presence does not create a
+  second learning owner.
+- **Migrations**: Repa forward migrations belong under `packages/core` and are
+  applied by Core's database composition.
 
 ## Development server
 

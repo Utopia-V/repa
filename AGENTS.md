@@ -87,12 +87,13 @@ learning tools.
   product truth. Gate contracts, plans, implementation slices, tests, and
   reviews derive from them and do not gain authority through detail or
   completion.
-- Decision ownership preserves current meaning and correction provenance; it
-  does not make an accepted decision technically correct. A product-wide audit
-  may falsify an ADR, Gate, architecture boundary, or maintainer interpretation
-  against Repa's intended learning loop, concrete counterexamples, and sound
-  software-design principles. Revise the owning decision and its dependents
-  rather than using authority order to conceal the defect.
+- “Authority” is shorthand for decision/revision ownership and correction
+  routing, not epistemic privilege. Decision ownership preserves current
+  meaning and correction provenance; it does not make an accepted decision
+  technically correct. Logic, first principles, and concrete counterexamples
+  may falsify an ADR, Gate, architecture boundary, or maintainer interpretation.
+  Revise the owning decision and its dependents rather than using document
+  order or accepted status to conceal the defect.
 - For inherited capability disposition, separately decide baseline membership,
   ordinary reachability, startup/build/release participation, and physical
   source removal. Classify independently useful behavior before following the
