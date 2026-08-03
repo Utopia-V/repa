@@ -2543,13 +2543,33 @@ the 4,063,232-byte trace database hashes to
 The archive, negative predecessor, exact bounds, usage, and final-state proof
 are recorded in
 `C:\Users\Discordance\.codex\campaigns\repa-gate17\evidence\reports\repa-g17-ie005-codex-recovery.md`.
-No credential value was read, printed, copied, modified, or newly configured;
-no push, publish, or deploy occurred.
+No credential file or value was manually inspected, printed, copied, modified,
+or newly configured; the ordinary provider path consumed the already configured
+local OAuth authority. No push, publish, or deploy occurred.
 
-This is positive executor evidence for `G17-IE-005`, not independent
-acceptance. The original fresh reviewer must bind the containing evidence
-commit, inspect the archive and diagnostic correction, and close or retain
-`G17-IE-005`. Gate 17 remains unintegrated and Gate 18 remains unauthorized.
+Original fresh reviewer task `019fc311-9714-7eb3-a5f7-045ecf66a1a7` then
+returned explicit **Accept** for exact candidate
+`39a8c2f4f2ad7b2d920c33859258ab4c56d797fa`, closed `G17-IE-005`, and accepted
+the complete Gate 17 implementation/evidence candidate for local integration.
+The reviewer independently matched the archive hashes and queried the raw
+databases rather than accepting the report summary. It confirmed seven normal
+learner Turns, 25 completed real-model operations, 30 completed tools, no
+assistant error or foreign-key violation, four exact receipt/effect/seal chains
+plus one effect-free rejection, correction history, settlement-before-teaching
+ordering, exact once-only permission semantics, carrier agreement, and the
+adopted material's byte hash. The negative trace retained exactly the original
+Course/View/Revision and receipt/effect/seal after the separate correction
+invocation settled `error/interrupted`; its retry was never admitted after the
+qualification-only tool ceiling. The focused diagnostic failure oracle passed
+freshly, and no descendant evidence reopened `G17-IE-001..004`.
+
+The accepted candidate was fast-forward integrated locally at `39a8c2f4`
+without content drift. Gate 17 is closed at that boundary. Gate 18 now has its
+roadmap predecessor and is ready only for its own local design/evidence grill;
+no Gate 18 contract or implementation authority follows automatically. The
+qualification's nonclaims remain explicit: it does not establish exhaustive
+language interpretation, pedagogical efficacy, reliability qualification,
+release readiness, or Gate 23 product-loop closure.
 
 ## Historical evidence locators
 

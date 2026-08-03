@@ -1,9 +1,10 @@
-# Gate 17 natural-language learning bootstrap implementation/evidence candidate
+# Gate 17 natural-language learning bootstrap implementation/evidence record
 
-Status: executor-produced implementation/evidence candidate, prepared on
-2026-08-02 and extended through the authorized released-v1 real-model
-qualification on 2026-08-03. This record claims neither independent review
-acceptance nor integration.
+Status: accepted and locally integrated. The executor candidate was prepared on
+2026-08-02, extended through the authorized released-v1 real-model qualification
+on 2026-08-03, and independently accepted at exact commit
+`39a8c2f4f2ad7b2d920c33859258ab4c56d797fa` by original fresh reviewer task
+`019fc311-9714-7eb3-a5f7-045ecf66a1a7`.
 
 ## Exact authority and candidate binding
 
@@ -24,17 +25,18 @@ acceptance nor integration.
   post-admission learning-tool failure diagnostics after a qualification trace
   proved that the learner-safe `interrupted` settlement discarded the
   low-level cause;
-- current implementation/evidence review disposition: executor evidence for
-  `G17-IE-005` is complete on that exact runtime candidate, but the original
-  fresh reviewer has not yet independently accepted the qualification archive,
-  diagnostic correction, or containing evidence commit;
+- final implementation/evidence review disposition: **Accept**. The original
+  fresh reviewer closed `G17-IE-005` on exact candidate `39a8c2f4` after
+  independently checking the qualification archive, negative trace, database
+  ordering/state, and diagnostic correction; `G17-IE-001..005` are closed;
 - accepted contract:
   `cf0cfbd032273cf7360fe7747ef0809abda6181f`;
 - implementation branch: `codex/gate17-implementation`;
-- containing commit: the commit that contains this record, supplied exactly in
-  the executor handoff because a commit cannot contain its own hash; and
-- disposition: ready for original-reviewer `G17-IE-005` closure, not accepted,
-  integrated, pushed, or authorized as Gate 18 input.
+- acceptance-bearing implementation/evidence commit:
+  `39a8c2f4f2ad7b2d920c33859258ab4c56d797fa`; and
+- disposition: accepted, fast-forward integrated locally without content drift,
+  and not pushed. Gate 18 receives only its roadmap predecessor, not an
+  implementation authority or a widened Gate 17 claim.
 
 The candidate implements only the accepted Gate 17 bootstrap boundary. It does
 not add a built-in `/learn`, a privileged learning envelope, a parser or
@@ -255,9 +257,9 @@ The original fresh reviewer closed `G17-IE-001`, `G17-IE-003`, and
 `G17-IE-004` on exact candidate `bd092577`, then accepted exact closure of
 `G17-IE-002` on direct descendant `23a192c7`. Qualification candidate
 `be6e78d14` preserves those boundaries and adds only internal failure logging
-before the existing exact `interrupted` settlement. The first four rows below
-are closed; `G17-IE-005` has executor evidence pending the same original
-reviewer's independent closure.
+before the existing exact `interrupted` settlement. The same original reviewer
+subsequently accepted the final qualification/evidence commit and closed
+`G17-IE-005`; all five rows below are closed.
 
 | Finding      | Repair and decisive evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -267,10 +269,11 @@ reviewer's independent closure.
 | `G17-IE-004` | The production runtime fault matrix injects a database abort at Course, route, selection, Artifact, Material Map, alignment, anchor, receipt, effect, bootstrap seal, anchor seal, and physical settlement. Each boundary proves transaction and frontier rollback, no receipt/effect/seal, unchanged pending Part before restart, durable interrupted ToolPart after startup recovery, exact repeat recovery, and no late child effect; a full-command live permission abort independently proves prompted-abort settlement without entering the children. |
 | `G17-IE-005` | The final clean released-v1 trace covers the seven representative language/product cases above on exact candidate `be6e78d14`, including same-Turn teaching, correction, reversible distinct-View choice, clarification before ambiguous write, exact teach-only continuation, once-only local material adoption, rejection, and carrier equivalence. An earlier interrupted tool left no partial effect but exposed that its internal exception was lost; `be6e78d14` logs that cause without changing settlement, and focused processor/typecheck evidence passes. |
 
-`G17-IE-005` remains open only for independent review, not for missing executor
-evidence or authorization. No provider credential was opened, printed, copied,
-modified, or newly configured. The only external writes were the explicitly
-authorized model requests; no push, publish, or deploy occurred.
+`G17-IE-005` is independently closed. No credential file or value was manually
+inspected, printed, copied, modified, or newly configured; the ordinary provider
+path consumed the already configured local OAuth authority. The only external
+writes were the explicitly authorized model requests; no push, publish, or
+deploy occurred.
 
 Environment for the repair checks: Windows, Bun `1.3.14` (`0d9b296a`). Each
 command ran from the named affected package. The Schema and Gate 17 Permission
@@ -339,13 +342,22 @@ import allowlist; the final 72/675 aggregate above passed after making the time
 independent of suite latency and admitting only the exact read/runtime owner
 API consumers while continuing to reject private table/SQL access.
 
-## Review handoff
+## Independent review closure
 
-This is an executor self-review and does not satisfy independent acceptance.
-The same original reviewer must bind the containing commit, retain the prior
-`G17-IE-001..004` closures, and independently inspect the exact
-`23a192c72489e3638a6eddeb6925a9efe6da381e..HEAD` diagnostic/evidence
-descendant plus the archived final and negative traces to close or retain
-`G17-IE-005`. The complete candidate remains recoverable against
-`822f8a3df4baa5b51002e7ffd8118a01d567c2a0`. No integration or Gate 18 work
-follows from this record alone.
+Original fresh reviewer task `019fc311-9714-7eb3-a5f7-045ecf66a1a7` returned
+explicit **Accept** for exact candidate
+`39a8c2f4f2ad7b2d920c33859258ab4c56d797fa`, closed `G17-IE-005`, and accepted
+the complete Gate 17 implementation/evidence candidate for local integration.
+It independently matched the final archive hashes; queried the raw positive and
+negative databases; confirmed pre-commit and post-commit correction, same-Turn
+settlement-before-teaching order, exact receipts/effects/seals, once-only
+permission shapes, material-byte identity, carrier agreement, and absence of
+partial mutation after the interrupted invocation; and freshly reproduced the
+focused diagnostic failure oracle. It found no descendant evidence that
+reopened `G17-IE-001..004`.
+
+The accepted qualification remains representative rather than exhaustive. It
+does not claim complete language interpretation, pedagogical efficacy,
+reliability qualification, release readiness, or Gate 23 product-loop closure.
+The accepted candidate was fast-forward integrated locally at `39a8c2f4`
+without content drift and was not pushed.
