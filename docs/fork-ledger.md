@@ -2563,11 +2563,14 @@ invocation settled `error/interrupted`; its retry was never admitted after the
 qualification-only tool ceiling. The focused diagnostic failure oracle passed
 freshly, and no descendant evidence reopened `G17-IE-001..004`.
 
-The accepted candidate was fast-forward integrated locally at `39a8c2f4`
-without content drift. Gate 17 is closed at that boundary. Gate 18 now has its
-roadmap predecessor and is ready only for its own local design/evidence grill;
-no Gate 18 contract or implementation authority follows automatically. The
-qualification's nonclaims remain explicit: it does not establish exhaustive
+The accepted production tree entered `main` when it was fast-forwarded through
+closure/status commit `506b420cf`; all changes after exact accepted candidate
+`39a8c2f4` are documentation-only. This ledger update records that mainline
+integration and changes no implementation. Gate 17 is closed at the accepted
+candidate boundary. Gate 18 now has its roadmap predecessor and is ready only
+for its own local design/evidence grill; no Gate 18 contract or implementation
+authority follows automatically. The qualification's nonclaims remain
+explicit: it does not establish exhaustive
 language interpretation, pedagogical efficacy, reliability qualification,
 release readiness, or Gate 23 product-loop closure.
 

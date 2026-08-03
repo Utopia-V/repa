@@ -7,8 +7,9 @@ existing Gate 8 settlement/recovery path, and teaches in the same Turn. Original
 fresh reviewer task `019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed
 `G17-IE-001..005`, independently accepted the final seven-Turn released-v1
 qualification plus the internal failure-diagnostics correction, and accepted
-the complete candidate for local integration. The candidate was fast-forwarded
-without content drift. Gate 18's local design/evidence grill is now the next
+the complete candidate for mainline integration. `main` was fast-forwarded
+through closure/status commit `506b420cf` without production-code drift from
+the accepted candidate. Gate 18's local design/evidence grill is now the next
 control point; no Gate 18 contract or implementation authority is implied.
 The accepted Agent-native Gate 14/16, retained OAuth, and Gate 8 corrections are
 integrated. The pre-Gate-17 audit remains falsifiable hazard provenance rather
@@ -42,8 +43,9 @@ initial separate Gate 17 contract review returned F1/F2; those semantic
 findings are closed on repair commit `2d890df5`, and the original reviewer
 accepted the exact status-corrected contract at `cf0cfbd0`. That acceptance
 authorized scoped implementation only. The resulting implementation/evidence
-candidate was later independently accepted and locally integrated at
-`39a8c2f4` after all `G17-IE-001..005` findings closed.
+candidate was later independently accepted at `39a8c2f4` after all
+`G17-IE-001..005` findings closed and entered mainline through closure/status
+commit `506b420cf`.
 
 The Gate 14 default-Course query/admission and Gate 16 Goal query/write
 contracts have now been rederived as ordinary Agent tool paths. Gate 14 uses
@@ -100,8 +102,8 @@ Agent-native implementation/evidence was then accepted by the original
 reviewer after closing `G16-AN-IMP-001..003` and is integrated at
 `2baba9eea`. Gate 16 is closed at that boundary. Gate 17's separate contract is
 accepted at `cf0cfbd0`; its complete implementation/evidence candidate is
-independently accepted and locally integrated at `39a8c2f4` after closure of
-`G17-IE-001..005`.
+independently accepted at `39a8c2f4` after closure of `G17-IE-001..005` and is
+included in mainline through closure/status commit `506b420cf`.
 
 On 2026-07-29, a follow-up product-flow audit reopened and reclosed one
 different bounded question: the future route could satisfy its existing traces
@@ -202,10 +204,11 @@ closed `G17-IE-001..005` across the implementation descendants. Its final
 review independently checked the clean Git binding, raw positive and negative
 trace databases, exact once-only permission shapes, carrier equivalence,
 correction history, no-partial-write failure, and internal diagnostic logging
-before accepting exact candidate `39a8c2f4` for local integration. The
-fast-forward integration introduced no content drift. Gate 18's local
-design/evidence grill is the next control point; no Gate 18 implementation
-authority follows merely from Gate 17 closure. On 2026-07-28,
+before accepting exact candidate `39a8c2f4` for integration. `main` was
+fast-forwarded through closure/status commit `506b420cf`; all changes after the
+accepted candidate are documentation-only. Gate 18's local design/evidence
+grill is the next control point; no Gate 18 implementation authority follows
+merely from Gate 17 closure. On 2026-07-28,
 corrective implementation candidates for
 Gate 5 identity, build, and permission behavior; Gate 6/8 database and
 settlement ownership; and Gate 8/10/11/14/15/16 primary-TUI presentation were
@@ -223,9 +226,10 @@ OAuth, and Gate 8 durable message-diff correction are integrated at
 `29f5a140f`, `ff0ef1fd7`, `16b5589c1`, and `19d0fe933`. Gate 16's mechanical
 V15-predecessor/V16-migration correction is accepted and integrated at
 `93e2412d3`; its exact Agent-native implementation/evidence is accepted and
-integrated at `2baba9eea`. Gate 17 is accepted and locally integrated at
-`39a8c2f4`; Gate 18 design/evidence grilling is now the next control point. The
-unaffected audit reconciliation is not reopened.
+integrated at `2baba9eea`. Gate 17 is accepted at `39a8c2f4` and included in
+mainline through closure/status commit `506b420cf`; Gate 18 design/evidence
+grilling is now the next control point. The unaffected audit reconciliation is
+not reopened.
 Documentation reconciliation and inherited-material classification are
 current evidence, not proof against future counterexample. “Accepted” records
 a decision and its provenance; it is not a correctness axiom.
@@ -265,7 +269,7 @@ in the [inherited-material index](inherited/README.md).
 | 14. [Learner navigation continuity](research/opencode-fork-gate-14-learner-navigation-continuity-2026-07-19.md)            | Adds a learner-controlled default Course preference and independent exact per-Course route anchors.                                                                                           | **Agent-native implementation integrated at `ff0ef1fd7`.** Fresh reviewer `019fb27f-4416-7c42-bcad-97d473803750` accepted the contract binding `52909e932fa7602d1c29f30886ddd644592c5220711146cd1a641fb237614a67` and the final 30-tracked/seven-untracked implementation projection after closing `G14-STO-001-R2`. Current writes use bounded Course/navigation reads, an exact `set` or `clear` input, runtime-bound identity/version/locator, root/delegated Agent-issuance provenance, semantic-first V3 settlement, and configured capability policy; proposal production is retired while V1/V2 replay and route anchors remain exact. Core migration 39/352, runtime 45/791, and registry 28/102 pass. Gate 12 landed separately at `29f5a140f`; OAuth and Gate 8 were excluded. Historical V2/route integration `80fde2012` remains retained.                                                                                                     |
 | 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)                      | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, correctable policy state.                                                                    | Closed again at corrective integration `9e91d43c6`. The shared presenter preserves committed create/replace/retract instruction, scope, normalized expiry/timezone, state/version, relation, and correction guidance across TUI, direct-run, replay, and later provider failure. Commit `03ea74ec4` remains historical provenance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)                          | Preserves learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning.                                               | **Closed at Agent-native implementation commit `2baba9eea`.** Original reviewer `019fb2a3-c902-7882-8134-1bf33f1eb04d` accepted the V15→V16 contract and exact implementation after closing `G16-AN-001..003` and `G16-AN-IMP-001..003`. Current behavior uses bounded Goal/Course reads, one typed semantic-intent write, runtime-owned identity/version/temporal facts, exact root/delegated Agent issuance, configured capability policy, semantic-first replay/recovery, historical V1 replay-only truth, and durable terminal presentation. Mixed changed/no-change settlement, retired-producer package reachability, and pre-epoch validation are causally covered. Gate 17 remains a separate contract and implementation/evidence boundary.                                                                                                                                                                                                       |
-| 17. [Natural-language learning bootstrap](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)         | Accepted contract boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn.                                                  | **Closed at exact implementation/evidence commit `39a8c2f4`.** Contract `cf0cfbd0` omits built-in `/learn`; the implementation preserves Gate 10's exact local-read union and one-new-Artifact ceiling, composes one closed request-bound Course/View/material/selection/anchor set through owner-private seams, uses Gate 8 settlement/recovery, and projects one typed TUI/direct-run/ACP truth. Original fresh reviewer `019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed `G17-IE-001..005` and accepted the deterministic evidence, passing seven-Turn released-v1 trace, honest interrupted/no-partial-write negative trace, and internal diagnostics correction. The candidate is locally integrated without content drift. Gate 18 design/evidence grilling is next; this closure does not claim exhaustive interpretation, pedagogical efficacy, reliability, release readiness, or Gate 23 product-loop behavior. |
+| 17. [Natural-language learning bootstrap](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)         | Accepted contract boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn.                                                  | **Closed at exact implementation/evidence commit `39a8c2f4`.** Contract `cf0cfbd0` omits built-in `/learn`; the implementation preserves Gate 10's exact local-read union and one-new-Artifact ceiling, composes one closed request-bound Course/View/material/selection/anchor set through owner-private seams, uses Gate 8 settlement/recovery, and projects one typed TUI/direct-run/ACP truth. Original fresh reviewer `019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed `G17-IE-001..005` and accepted the deterministic evidence, passing seven-Turn released-v1 trace, honest interrupted/no-partial-write negative trace, and internal diagnostics correction. The accepted implementation is in mainline through closure/status commit `506b420cf`; subsequent changes are documentation-only. Gate 18 design/evidence grilling is next; this closure does not claim exhaustive interpretation, pedagogical efficacy, reliability, release readiness, or Gate 23 product-loop behavior. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,

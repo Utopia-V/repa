@@ -1,8 +1,8 @@
 # Gate 17 natural-language learning bootstrap implementation/evidence record
 
-Status: accepted and locally integrated. The executor candidate was prepared on
-2026-08-02, extended through the authorized released-v1 real-model qualification
-on 2026-08-03, and independently accepted at exact commit
+Status: accepted and mainline integrated. The executor candidate was prepared
+on 2026-08-02, extended through the authorized released-v1 real-model
+qualification on 2026-08-03, and independently accepted at exact commit
 `39a8c2f4f2ad7b2d920c33859258ab4c56d797fa` by original fresh reviewer task
 `019fc311-9714-7eb3-a5f7-045ecf66a1a7`.
 
@@ -34,8 +34,10 @@ on 2026-08-03, and independently accepted at exact commit
 - implementation branch: `codex/gate17-implementation`;
 - acceptance-bearing implementation/evidence commit:
   `39a8c2f4f2ad7b2d920c33859258ab4c56d797fa`; and
-- disposition: accepted, fast-forward integrated locally without content drift,
-  and not pushed. Gate 18 receives only its roadmap predecessor, not an
+- disposition: accepted at exact implementation/evidence commit `39a8c2f4`;
+  the accepted production tree entered `main` by fast-forward through
+  closure/status commit `506b420cf`, whose post-acceptance changes are
+  documentation-only. Gate 18 receives only its roadmap predecessor, not an
   implementation authority or a widened Gate 17 claim.
 
 The candidate implements only the accepted Gate 17 bootstrap boundary. It does
@@ -359,5 +361,6 @@ reopened `G17-IE-001..004`.
 The accepted qualification remains representative rather than exhaustive. It
 does not claim complete language interpretation, pedagogical efficacy,
 reliability qualification, release readiness, or Gate 23 product-loop closure.
-The accepted candidate was fast-forward integrated locally at `39a8c2f4`
-without content drift and was not pushed.
+The accepted production tree entered `main` by fast-forward through
+closure/status commit `506b420cf`; all changes after exact accepted candidate
+`39a8c2f4` are documentation-only.
