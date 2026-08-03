@@ -2490,6 +2490,67 @@ real-model language/product traces remain for authorized independent review.
 This record is an executor candidate, not independent acceptance or
 integration, and grants no Gate 18 authority.
 
+### 2026-08-03 Gate 17 finding closure and released-v1 qualification candidate
+
+The original fresh implementation reviewer first closed `G17-IE-001`,
+`G17-IE-003`, and `G17-IE-004` on exact candidate `bd092577`, then accepted
+`G17-IE-002` on direct descendant
+`23a192c72489e3638a6eddeb6925a9efe6da381e`. The latter preserves Gate 17's
+500 proposed-item ceiling while admitting the Course owner's complete legal
+1024-member and 1024-mapping-group transition facts through the typed
+permission/carrier scope. All `G17-IE-001..004` findings are closed.
+
+After that closure, the maintainer authorized the accepted contract's minimum
+released-v1 real-model trace set through the already configured local provider.
+The first provider attempts exposed an environment fact: Bun did not inherit
+the Windows system proxy. Projecting the existing credential-free loopback
+proxy only into the qualification process restored the ordinary provider path;
+no persistent provider, credential, proxy, or repository configuration changed.
+
+One subsequent bounded trace produced an exact `error/interrupted` settlement
+for an admitted correction tool, with no receipt, effect, seal, or partial
+Course mutation. The Agent read the durable state and attempted a retry, but
+the temporary runner's artificial eight-tool ceiling stopped that Turn. A
+separate ambiguity trace proved that ten nonduplicate bounded reads can be
+necessary. The runner ceiling was therefore corrected to twelve. The exact
+low-level exception could not be recovered because the learner-safe failure
+path discarded it, so runtime candidate
+`be6e78d14adb3d59f674320610ae305bd1502140` adds a structured internal error
+log before preserving the existing `interrupted` settlement. OpenCode
+typechecking and the focused admitted-learning-tool failure oracle pass; two
+instrumented full traces and the final clean trace then completed without a
+tool failure.
+
+The final clean `openai/gpt-5.5` trace binds exact candidate `be6e78d14`,
+released-v1 runtime `latest` / `1.17.18`, default HTTP transport, and the
+ordinary Agent path. Seven normal completed Turns across five isolated Sessions
+cover corrected fresh creation and same-Turn teaching, post-commit same-route
+successor correction, a distinct reversible unselected View, clarification
+before ambiguous material adoption, exact teach-only continuation, allowed
+one-operation local material adoption, and rejected adoption with truthful
+continuation. Twenty-five model operations completed with no assistant error.
+Four command invocations applied and one settled `permission_rejected`; the
+database contains four matching receipts/effects/seals, no running tool, and no
+foreign-key violation. Both one-operation prompts preserve an empty `always`
+set, exact-reply lifetime, valid TUI semantics, and ACP choices exactly
+**Allow once** and **Reject**. TUI, direct-run, and ACP terminal projections
+agree for every command.
+
+The secret-free evidence JSON is 519,495 bytes with SHA-256
+`16bf2cc1f4ec23ceb16544418607659a2643c38eafe596a40efd07856dfba089`;
+the 4,063,232-byte trace database hashes to
+`cf7bd173e066ad87b0b704a037d1904f0e7aa1083ec2da71f9911043c8f9f030`.
+The archive, negative predecessor, exact bounds, usage, and final-state proof
+are recorded in
+`C:\Users\Discordance\.codex\campaigns\repa-gate17\evidence\reports\repa-g17-ie005-codex-recovery.md`.
+No credential value was read, printed, copied, modified, or newly configured;
+no push, publish, or deploy occurred.
+
+This is positive executor evidence for `G17-IE-005`, not independent
+acceptance. The original fresh reviewer must bind the containing evidence
+commit, inspect the archive and diagnostic correction, and close or retain
+`G17-IE-005`. Gate 17 remains unintegrated and Gate 18 remains unauthorized.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

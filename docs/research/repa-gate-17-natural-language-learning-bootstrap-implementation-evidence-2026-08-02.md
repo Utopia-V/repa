@@ -1,8 +1,9 @@
 # Gate 17 natural-language learning bootstrap implementation/evidence candidate
 
 Status: executor-produced implementation/evidence candidate, prepared on
-2026-08-02. This record claims neither independent review acceptance nor
-integration.
+2026-08-02 and extended through the authorized released-v1 real-model
+qualification on 2026-08-03. This record claims neither independent review
+acceptance nor integration.
 
 ## Exact authority and candidate binding
 
@@ -14,17 +15,26 @@ integration.
   `bd092577ae103e6a8d3049c65d6436ea6ecf956b`; the original reviewer closed
   `G17-IE-001`, `G17-IE-003`, and `G17-IE-004` there and retained only
   `G17-IE-002` from the local findings;
-- current implementation/evidence review disposition: **Revise** pending the
-  same original reviewer's closure of the descendant `G17-IE-002` repair;
-  provider-run finding `G17-IE-005` remains sequenced to its separately
-  authorized later task and is not part of this repair;
+- bounded transition repair:
+  `23a192c72489e3638a6eddeb6925a9efe6da381e`; the same original reviewer
+  accepted exact closure of `G17-IE-002` there, leaving
+  `G17-IE-001..004` closed;
+- real-model qualification runtime candidate:
+  `be6e78d14adb3d59f674320610ae305bd1502140`; it adds only internal
+  post-admission learning-tool failure diagnostics after a qualification trace
+  proved that the learner-safe `interrupted` settlement discarded the
+  low-level cause;
+- current implementation/evidence review disposition: executor evidence for
+  `G17-IE-005` is complete on that exact runtime candidate, but the original
+  fresh reviewer has not yet independently accepted the qualification archive,
+  diagnostic correction, or containing evidence commit;
 - accepted contract:
   `cf0cfbd032273cf7360fe7747ef0809abda6181f`;
 - implementation branch: `codex/gate17-implementation`;
 - containing commit: the commit that contains this record, supplied exactly in
   the executor handoff because a commit cannot contain its own hash; and
-- disposition: ready for coordinator inspection and original-reviewer finding
-  closure, not accepted, integrated, pushed, or authorized as Gate 18 input.
+- disposition: ready for original-reviewer `G17-IE-005` closure, not accepted,
+  integrated, pushed, or authorized as Gate 18 input.
 
 The candidate implements only the accepted Gate 17 bootstrap boundary. It does
 not add a built-in `/learn`, a privileged learning envelope, a parser or
@@ -210,26 +220,44 @@ projection. It proves that the released-v1 execution path can expose and settle
 the exact reads/write without `/learn`, an internal-ID management turn, a
 special parser, or a second model call.
 
-No provider call, credential use, paid call, or other external write was
-performed for this candidate. The maintainer has separately authorized the
-minimum released-v1 trace set using only already-configured credentials, but
-that later task remains sequenced after original-reviewer closure of
-`G17-IE-001..004` and is outside this recovery diff. Therefore this executor
-does **not** claim the contract's bounded released-v1 real-model language
-traces: fresh requests with and without local material, create versus
-continue, same-route revision versus distinct View, teach-only, transparent
-reversible choice, material ambiguity, same-Turn teaching after each stage
-class, and pre/post-commit learner correction remain for the later authorized
-qualification. The deterministic evidence does not claim exhaustive language
-coverage, interpretation correctness, educational efficacy, or Gate 23
-product-loop closure.
+The maintainer then authorized the minimum released-v1 provider trace set using
+only the already configured local provider. Final clean evidence binds exact
+candidate `be6e78d14adb3d59f674320610ae305bd1502140`, runtime identity
+`latest` / `1.17.18`, the default HTTP production path, and
+`openai/gpt-5.5`. Seven ordinary learner Turns across five isolated Sessions
+all completed normally with no assistant error: corrected fresh creation and
+same-Turn teaching; post-commit same-route successor correction; a distinct
+reversible unselected View; necessary clarification before an ambiguous
+material write; exact teach-only continuation; one-operation material adoption
+after **Allow once**; and rejection with truthful continued teaching.
 
-## Fresh review repair and verification results
+The five write invocations settled as four `applied` and one
+`permission_rejected`. Every applied result has one exact receipt, effect, and
+seal; the rejected request has none. The two one-operation prompts preserve an
+empty `always` set, exact-reply lifetime, valid typed TUI meaning, and ACP
+choices exactly **Allow once** and **Reject**. Independent database checks show
+seven completed Turns, 25 completed model operations, no running tool, two
+Courses, two Views, three View revisions, and zero foreign-key violations.
+TUI, direct-run, and ACP projections agree for all five command results.
+
+The secret-free archive and its decisive negative predecessor are recorded in
+`C:\Users\Discordance\.codex\campaigns\repa-gate17\evidence\reports\repa-g17-ie005-codex-recovery.md`.
+The final 519,495-byte evidence JSON hashes to
+`16bf2cc1f4ec23ceb16544418607659a2643c38eafe596a40efd07856dfba089`;
+its 4,063,232-byte trace database hashes to
+`cf7bd173e066ad87b0b704a037d1904f0e7aa1083ec2da71f9911043c8f9f030`.
+The qualification does not claim exhaustive language coverage, interpretation
+correctness, educational efficacy, or Gate 23 product-loop closure.
+
+## Fresh review repairs and qualification results
 
 The original fresh reviewer closed `G17-IE-001`, `G17-IE-003`, and
-`G17-IE-004` on exact candidate `bd092577`. This descendant changes only the
-remaining `G17-IE-002` boundary; the other rows below retain the already-closed
-evidence and are not reopened.
+`G17-IE-004` on exact candidate `bd092577`, then accepted exact closure of
+`G17-IE-002` on direct descendant `23a192c7`. Qualification candidate
+`be6e78d14` preserves those boundaries and adds only internal failure logging
+before the existing exact `interrupted` settlement. The first four rows below
+are closed; `G17-IE-005` has executor evidence pending the same original
+reviewer's independent closure.
 
 | Finding      | Repair and decisive evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -237,11 +265,12 @@ evidence and are not reopened.
 | `G17-IE-002` | The shared typed scope now gives each mapping's source and target member arrays and the mapping-group array the Course owner's finite 1024-transition bound while retaining the Gate 17 command's separate 500-target-item limit and every existing owner/command check. Collision-free 500→1, 501→1, and 1024→1 merges pass `CourseRevision.prepare`, canonicalization, schema decoding, and one actual `Permission.Service.ask` request each; TUI, direct-run, and ACP consume the same exact complete mapping fact and expose only **Allow once** plus **Reject**. The schema accepts exactly 1024 members/groups and rejects 1025, `CourseRevision.prepare` rejects both a 1025-item revision and 1025 mapping groups at the owning boundary, and a fabricated owner-over-bound request is invalid/reject-only on all three carriers. The earlier complete-command, fingerprint-mismatch, and distinct-title evidence remains passing. |
 | `G17-IE-003` | V16 migration no longer copies `initial_change_time` into last-write time or invents size zero. The frozen V16 fixture migrates to `historical_v16_partial` with both values `NULL`; a real Material Map owner read exposes only proven descriptor fields and the explicit `unknown: ["lastWriteTime", "size"]` tuple. Fresh V17 exactness remains enforced.                                                                                                                                                                                                |
 | `G17-IE-004` | The production runtime fault matrix injects a database abort at Course, route, selection, Artifact, Material Map, alignment, anchor, receipt, effect, bootstrap seal, anchor seal, and physical settlement. Each boundary proves transaction and frontier rollback, no receipt/effect/seal, unchanged pending Part before restart, durable interrupted ToolPart after startup recovery, exact repeat recovery, and no late child effect; a full-command live permission abort independently proves prompted-abort settlement without entering the children. |
+| `G17-IE-005` | The final clean released-v1 trace covers the seven representative language/product cases above on exact candidate `be6e78d14`, including same-Turn teaching, correction, reversible distinct-View choice, clarification before ambiguous write, exact teach-only continuation, once-only local material adoption, rejection, and carrier equivalence. An earlier interrupted tool left no partial effect but exposed that its internal exception was lost; `be6e78d14` logs that cause without changing settlement, and focused processor/typecheck evidence passes. |
 
-`G17-IE-005` remains open by evidence and sequencing rather than absent
-authorization. No released-v1 provider trace, credential, or paid call was run
-in this recovery task, and the local repair makes no language-behavior
-qualification claim.
+`G17-IE-005` remains open only for independent review, not for missing executor
+evidence or authorization. No provider credential was opened, printed, copied,
+modified, or newly configured. The only external writes were the explicitly
+authorized model requests; no push, publish, or deploy occurred.
 
 Environment for the repair checks: Windows, Bun `1.3.14` (`0d9b296a`). Each
 command ran from the named affected package. The Schema and Gate 17 Permission
@@ -271,8 +300,16 @@ Permission request, TUI, direct-run, and ACP boundary and runs the two affected
 package typechecks. The unchanged migration, transaction/recovery, and result
 presentation rows remain bound to `bd092577`; rerunning them would not falsify
 this isolated array-bound repair or change the status of already-closed
-`G17-IE-001`, `G17-IE-003`, or `G17-IE-004`. Unrelated package suites and the
-separately unauthorized provider qualification were not run.
+`G17-IE-001`, `G17-IE-003`, or `G17-IE-004`.
+
+The qualification-discovered diagnostics correction was then checked from
+`packages/opencode`: `bun run typecheck` passed, and
+`bun test test/session/processor-effect.test.ts --test-name-pattern "settle an admitted learning tool failure as interrupted"`
+passed 1 test with 4 assertions (29 filtered). Two subsequent instrumented full
+traces and the final clean trace completed without a tool failure. Only the
+final clean archive is used as positive acceptance-bearing evidence; the first
+interrupted trace remains archived as negative evidence rather than being
+discarded.
 
 ## Initial candidate verification results (retained provenance)
 
@@ -305,10 +342,10 @@ API consumers while continuing to reject private table/SQL access.
 ## Review handoff
 
 This is an executor self-review and does not satisfy independent acceptance.
-The same original reviewer must bind the containing commit and inspect the
-exact `bd092577ae103e6a8d3049c65d6436ea6ecf956b..HEAD` repair only to close or
-retain `G17-IE-002`; `G17-IE-001`, `G17-IE-003`, and `G17-IE-004` remain closed,
-and separately authorized `G17-IE-005` is not crossed here. The complete
-candidate remains recoverable against
+The same original reviewer must bind the containing commit, retain the prior
+`G17-IE-001..004` closures, and independently inspect the exact
+`23a192c72489e3638a6eddeb6925a9efe6da381e..HEAD` diagnostic/evidence
+descendant plus the archived final and negative traces to close or retain
+`G17-IE-005`. The complete candidate remains recoverable against
 `822f8a3df4baa5b51002e7ffd8118a01d567c2a0`. No integration or Gate 18 work
 follows from this record alone.
