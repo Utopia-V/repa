@@ -412,6 +412,15 @@ const layer = Layer.effect(
             return yield* learningInvocationConflict(match.part)
           }
           if (!match.call.registration) return false
+          yield* Effect.logError("learning command tool failed after admission", {
+            "session.id": match.part.sessionID,
+            messageID: match.part.messageID,
+            partID: match.part.id,
+            callID: match.part.callID,
+            tool: match.part.tool,
+            error: errorMessage(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          })
           const interrupted = yield* interruptLearningInvocation(events, match.part.tool, match.call.registration)
           if (!interrupted) return false
           yield* settleToolCall(toolCallID)
