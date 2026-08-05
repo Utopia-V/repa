@@ -1,14 +1,15 @@
 # Repa Gate 17: natural-language learning bootstrap
 
-Status: Engineering contract accepted on 2026-08-02. Original fresh separate
-top-level reviewer Dispatch `ctx_475d85cda99f` accepted exact Git commit
-`cf0cfbd032273cf7360fe7747ef0809abda6181f` with no remaining finding, so
-scoped Gate 17 implementation authority is available. An executor-produced
-[implementation/evidence candidate](repa-gate-17-natural-language-learning-bootstrap-implementation-evidence-2026-08-02.md)
-is now prepared against exact base `822f8a3df4baa5b51002e7ffd8118a01d567c2a0`.
-It is not independently reviewed, accepted, or integrated; the next control
-point is exact implementation/evidence review, not Gate 18. The maintainer's
-baseline decision continues to omit built-in `/learn`.
+Status: Gate 17 is closed at exact accepted implementation/evidence commit
+`39a8c2f4`. Original fresh separate contract reviewer Dispatch
+`ctx_475d85cda99f` accepted exact contract commit
+`cf0cfbd032273cf7360fe7747ef0809abda6181f`; original fresh implementation
+reviewer task `019fc311-9714-7eb3-a5f7-045ecf66a1a7` later closed
+`G17-IE-001..005` and accepted the complete implementation/evidence candidate.
+Mainline includes it through closure/status commit `506b420cf`. The
+maintainer's baseline decision continues to omit built-in `/learn`. Current
+volatile status and the Gate 18 control point are owned by
+[the documentation map](../README.md).
 Gate 14's Agent-native default-Course implementation is integrated at
 `ff0ef1fd7`, and Gate 16's Agent-native Goal implementation is integrated at
 `2baba9eea`. The ordinary interactive Agent is the sole baseline
@@ -810,12 +811,14 @@ accepting `cf0cfbd032273cf7360fe7747ef0809abda6181f` with no remaining finding.
 That exact acceptance made scoped Gate 17 implementation authority available.
 It accepted no Gate 17 implementation, implementation evidence, or integration.
 
-## Implementation/evidence candidate locator
+## Implementation/evidence closure locator
 
 The 2026-08-02 top-level executor prepared the scoped candidate recorded in
 [the Gate 17 implementation/evidence record](repa-gate-17-natural-language-learning-bootstrap-implementation-evidence-2026-08-02.md)
 against exact base `822f8a3df4baa5b51002e7ffd8118a01d567c2a0` and this exact
-accepted contract. The containing commit is supplied in the executor handoff.
-This locator changes no accepted contract clause and claims neither independent
-implementation/evidence acceptance nor integration. Exact candidate review is
-the next control point, not Gate 18.
+accepted contract. Original fresh reviewer task
+`019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed `G17-IE-001..005` and accepted
+exact implementation/evidence commit `39a8c2f4`; mainline includes it through
+closure/status commit `506b420cf`. This status correction changes no Gate 17
+contract clause. The current control point remains owned by
+[the documentation map](../README.md).

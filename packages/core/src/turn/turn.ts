@@ -6,6 +6,7 @@ import { DateTime, Effect } from "effect"
 import { isDeepStrictEqual } from "node:util"
 import type { Database } from "../database/database"
 import { LearningFrontier } from "../learning-frontier"
+import { LearningContext } from "../learning-context"
 import { markSourceUnavailable } from "../learning-command/occurrence"
 import type { OccurrenceID } from "../learning-command/occurrence-schema"
 import { LearnerOccurrencePresentationTable } from "../learning-command/occurrence.sql"
@@ -103,10 +104,18 @@ export type ModelAdmission = {
   readonly contextFingerprint: string
   readonly snapshotFrontier: LearningFrontier.Snapshot
   readonly timeAdmitted: number
+  readonly learningContextBasis: LearningContext.CapabilityBasis
 }
 
 export type ModelAdmissionResult =
-  | { readonly type: "admitted"; readonly operation: Turn.ModelOperation; readonly replay: boolean }
+  | {
+      readonly type: "admitted"
+      readonly operation: Turn.ModelOperation
+      readonly retainedSteeringCut: RetainedSteering.Cut
+      readonly learningContextCut: LearningContext.Cut
+      readonly learningContextRenderedBlock: string
+      readonly replay: boolean
+    }
   | { readonly type: "exhausted"; readonly turn: Turn.Info; readonly replay: boolean }
 
 export type CandidateInput = {
@@ -427,6 +436,7 @@ export function promoteSteer(tx: Transaction, input: SteerInput): Effect.Effect<
 
 export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effect<ModelAdmissionResult, Turn.Error> {
   return Effect.gen(function* () {
+    const learningContextBasis = input.learningContextBasis
     const baseEnvelope = {
       request: input.requestEnvelope,
       contextFingerprint: input.contextFingerprint,
@@ -452,13 +462,30 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
         return yield* integrity(input.turnID, "Model operation has no available retained steering cut")
       }
       const storedCut = stored.cut
+      const learningContext = yield* LearningContext.readCut(tx, input.assistantMessageID).pipe(
+        Effect.mapError(
+          (error) =>
+            new Turn.IntegrityError({
+              turnID: input.turnID,
+              reason: `Stored learning context cut is invalid: ${error.reason}`,
+            }),
+        ),
+      )
+      if (learningContext.type !== "available") {
+        return yield* integrity(input.turnID, "Model operation has no available learning context cut")
+      }
+      const learningCut = learningContext.cut
       const contextFingerprint = envelopeFingerprint({
         baseContextFingerprint: input.contextFingerprint,
         retainedSteeringCutFingerprint: storedCut.fingerprint,
+        learningContextCutFingerprint: learningCut.fingerprint,
+        learningContextRenderedFingerprint: learningCut.renderedFingerprint,
       })
       const fingerprint = envelopeFingerprint({
         ...baseEnvelope,
         retainedSteeringCutFingerprint: storedCut.fingerprint,
+        learningContextCutFingerprint: learningCut.fingerprint,
+        learningContextRenderedFingerprint: learningCut.renderedFingerprint,
       })
       const presentation = yield* tx
         .select({ id: TurnModelPresentationTable.assistant_message_id })
@@ -473,11 +500,27 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
         existing.request_fingerprint !== fingerprint ||
         existing.context_fingerprint !== contextFingerprint ||
         existing.snapshot_frontier_sequence !== input.snapshotFrontier.sequence ||
-        existing.snapshot_frontier_time !== input.snapshotFrontier.time
+        existing.snapshot_frontier_time !== input.snapshotFrontier.time ||
+        learningCut.operation.turnID !== existing.turn_id ||
+        learningCut.operation.sessionID !== existing.session_id ||
+        learningCut.operation.inputID !== existing.input_id ||
+        learningCut.operation.assistantMessageID !== existing.assistant_message_id ||
+        learningCut.operation.ordinal !== existing.ordinal ||
+        learningCut.operation.causalOccurrenceID !== (existing.causal_occurrence_id ?? undefined) ||
+        learningCut.retainedSteering.fingerprint !== storedCut.fingerprint ||
+        learningCut.cutAsOf !== storedCut.cutAsOf ||
+        !isDeepStrictEqual(learningCut.capabilityBasis, learningContextBasis)
       ) {
         return yield* new Turn.AdmissionConflictError({ turnID: input.turnID })
       }
-      return { type: "admitted", operation: modelInfo(existing), replay: true }
+      return {
+        type: "admitted",
+        operation: modelInfo(existing),
+        retainedSteeringCut: storedCut,
+        learningContextCut: learningCut,
+        learningContextRenderedBlock: learningContext.renderedBlock,
+        replay: true,
+      }
     }
 
     const storedTurn = yield* tx.select().from(TurnTable).where(eq(TurnTable.id, input.turnID)).get().pipe(Effect.orDie)
@@ -529,14 +572,38 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
     ) {
       return yield* integrity(input.turnID, "Retained steering cut does not match model admission")
     }
+    const learningContext = yield* LearningContext.prepareCut(tx, {
+      operation: {
+        turnID: input.turnID,
+        sessionID: input.sessionID,
+        inputID: current.id,
+        ...(current.occurrenceID ? { causalOccurrenceID: current.occurrenceID } : {}),
+        assistantMessageID: input.assistantMessageID,
+        ordinal: turn.model_count,
+      },
+      retainedSteering: cut,
+      capabilityBasis: learningContextBasis,
+    }).pipe(
+      Effect.mapError(
+        (error) =>
+          new Turn.IntegrityError({
+            turnID: input.turnID,
+            reason: `Learning context cut preparation failed: ${error instanceof Error ? error.message : "unknown_error"}`,
+          }),
+      ),
+    )
     const normalizedEnvelope = {
       ...baseEnvelope,
       retainedSteeringCutFingerprint: cut.fingerprint,
+      learningContextCutFingerprint: learningContext.cut.fingerprint,
+      learningContextRenderedFingerprint: learningContext.cut.renderedFingerprint,
     } satisfies Json
     const fingerprint = envelopeFingerprint(normalizedEnvelope)
     const contextFingerprint = envelopeFingerprint({
       baseContextFingerprint: input.contextFingerprint,
       retainedSteeringCutFingerprint: cut.fingerprint,
+      learningContextCutFingerprint: learningContext.cut.fingerprint,
+      learningContextRenderedFingerprint: learningContext.cut.renderedFingerprint,
     })
     yield* tx
       .insert(TurnModelOperationTable)
@@ -575,6 +642,15 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
           }),
       ),
     )
+    yield* LearningContext.commitCut(tx, learningContext).pipe(
+      Effect.mapError(
+        (error) =>
+          new Turn.IntegrityError({
+            turnID: input.turnID,
+            reason: `Learning context cut commit failed: ${error instanceof Error ? error.message : "unknown_error"}`,
+          }),
+      ),
+    )
     const operation = yield* tx
       .select()
       .from(TurnModelOperationTable)
@@ -582,7 +658,14 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
       .get()
       .pipe(Effect.orDie)
     if (!operation) return yield* integrity(input.turnID, "Model membership disappeared after admission")
-    return { type: "admitted", operation: modelInfo(operation), replay: false }
+    return {
+      type: "admitted",
+      operation: modelInfo(operation),
+      retainedSteeringCut: cut,
+      learningContextCut: learningContext.cut,
+      learningContextRenderedBlock: learningContext.renderedBlock,
+      replay: false,
+    }
   })
 }
 

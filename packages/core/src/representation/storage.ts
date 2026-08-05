@@ -44,6 +44,20 @@ export type ReadResult =
   | { readonly status: "missing" }
   | { readonly status: "integrity_mismatch"; readonly object?: ObjectIdentity }
 
+export type RetainedReadResult =
+  | {
+      readonly status: "verified"
+      readonly bytes: Uint8Array
+      readonly object: ObjectIdentity
+      readonly source: "canonical" | "deletion_stage"
+    }
+  | { readonly status: "missing"; readonly foreignDeletionStage: boolean }
+  | {
+      readonly status: "integrity_mismatch"
+      readonly object?: ObjectIdentity
+      readonly retainedExactDeletionStage: boolean
+    }
+
 export type DeletionPreparation =
   | {
       readonly status: "moved"
@@ -88,6 +102,7 @@ export type Store = {
   readonly namespaceID: string
   readonly publish: (revisionID: RevisionID, bytes: Uint8Array, digest: string) => Promise<HeldPublication>
   readonly read: (expected: ExpectedObject, integrityCeiling: number) => Promise<ReadResult>
+  readonly readRetained: (expected: ExpectedObject, integrityCeiling: number) => Promise<RetainedReadResult>
   readonly prepareDeletion: (expected: ExpectedObject, integrityCeiling: number) => Promise<DeletionPreparation>
   readonly reconcileDeletion: (expected: ExpectedObject, integrityCeiling: number) => Promise<ReconciliationResult>
   readonly cleanupCommittedDeletion: (
@@ -253,6 +268,7 @@ export async function open(databaseFilename: string): Promise<Store> {
       namespaceID,
       publish: (revisionID, bytes, digest) => publish(directories, revisionID, bytes, digest),
       read: (expected, integrityCeiling) => read(directories, expected, integrityCeiling),
+      readRetained: (expected, integrityCeiling) => readRetained(directories, expected, integrityCeiling),
       prepareDeletion: (expected, integrityCeiling) => prepareDeletion(directories, expected, integrityCeiling),
       reconcileDeletion: (expected, integrityCeiling) => reconcileDeletion(directories, expected, integrityCeiling),
       cleanupCommittedDeletion: (expected, integrityCeiling) =>
@@ -409,6 +425,59 @@ async function read(
     throw mappedError("read", error, "The canonical Representation object could not be read")
   } finally {
     api.closeHandle(directory.handle)
+  }
+}
+
+async function readRetained(
+  directories: Directories,
+  expectedInput: ExpectedObject,
+  integrityCeiling: number,
+): Promise<RetainedReadResult> {
+  const value = requireExpected(expectedInput, "read")
+  requireCeiling(integrityCeiling, "read")
+  if (value.byteLength > integrityCeiling) throw new IntegrityCeilingExceededError(value.byteLength, integrityCeiling)
+  const parsed = parsedKey(value.key, "read")
+  const api = await native()
+  const canonicalDirectory = await reopenDirectory(directories.canonical, "read")
+  let deletionDirectory: Opened | undefined
+  let canonical: Inspection | undefined
+  let stage: Inspection | undefined
+  try {
+    deletionDirectory = await reopenDirectory(directories.deletion, "read")
+    canonical = await inspectChild(api, canonicalDirectory, parsed.filename, value, integrityCeiling, false, "read")
+    stage = await inspectChild(api, deletionDirectory, deletionFilename(parsed), value, integrityCeiling, true, "read")
+    if (canonical.status === "mismatch") {
+      return {
+        status: "integrity_mismatch",
+        object: canonical.object,
+        retainedExactDeletionStage: stage.status === "exact",
+      }
+    }
+    if (canonical.status === "exact") {
+      return {
+        status: "verified",
+        bytes: canonical.bytes,
+        object: canonical.object,
+        source: "canonical",
+      }
+    }
+    if (stage.status === "exact") {
+      return {
+        status: "verified",
+        bytes: stage.bytes,
+        object: stage.object,
+        source: "deletion_stage",
+      }
+    }
+    return { status: "missing", foreignDeletionStage: stage.status === "mismatch" }
+  } catch (error) {
+    if (error instanceof IntegrityCeilingExceededError || error instanceof StorageError) throw error
+    throw mappedError("read", error, "The retained Representation object could not be read")
+  } finally {
+    closeInspection(api, canonical)
+    closeInspection(api, stage)
+    if (deletionDirectory) api.closeHandle(deletionDirectory.handle)
+    api.closeHandle(canonicalDirectory.handle)
   }
 }
 

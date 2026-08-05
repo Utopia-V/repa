@@ -2574,6 +2574,56 @@ explicit: it does not establish exhaustive
 language interpretation, pedagogical efficacy, reliability qualification,
 release readiness, or Gate 23 product-loop closure.
 
+## 2026-08-05 Gate 18 contract and implementation/evidence acceptance
+
+Against detached base `862f6b7a2318f0ccce4e98dd5ea6fab136739628`, the
+executor derived Gate 18's bounded, immutable, operation-exact learning-context
+and Session-continuation contract. Fresh separate top-level reviewer task
+`019fc874-72ee-75b3-92e9-0b923b85efb2` reviewed both Gate layers under
+`G18-WG-20260804-019fc837-01`. Contract corrections separated provenance from
+current read authority, preserved Gate 13 current-use semantics, bound the
+complete final provider-visible surface, and kept full tool-definition bodies
+outside Gate 18's local 32-KiB cut. The reviewer closed `G18-CR-001..004` and
+accepted exact semantic candidate SHA-256
+`2DDAA56396621CA04FBDE320F2B221CFCD8F844797F5C33B9E7AFF81CA46FB26`
+on 2026-08-04.
+
+The same reviewer then inspected the uncommitted implementation and evidence.
+Successive corrective passes closed `G18-IR-001..008`: the final request surface
+and route are exact and nonsecret; pre-admission compilation and verified open
+fail closed; capacity and compaction share one causal history boundary; active
+Turn input/model ordinals own the provider suffix; capacity persistence states
+its two-stage truth; provider tool-name projection cannot retarget an external
+fallback; the inert AI SDK fallback requires exact one-use repair provenance;
+and colliding raw MCP origins fail before catalog admission. No Gate 19–23
+state, Tutor move selection, second runtime, or domain write entered Gate 18.
+
+The maintainer separately authorized one bounded credential/cost-bearing
+qualification against the already configured `openai/gpt-5.6-luna` route. Its
+secret-redacted immutable bundle records 22 scenarios, 57 completed interactive
+model operations and matching Gate 18/capacity rows, 62 captured provider
+attempts, 23 completed Turns, TUI/direct-run/ACP parity, database
+`quick_check=ok`, and zero foreign-key violations. Exact evidence JSON SHA-256
+is `E63A11BD43215DF61010CF9981F7547CE94B9AEBE68CCADFB535FC52E810F0CB`;
+the final trace database SHA-256 is
+`4773B8C17D8198AAE9B77FA80157CC44BC93ACF2165BED30BCAFCC399749A222`;
+and the 41-file evidence manifest SHA-256 is
+`D84C088368E4F982C2CACBCDC89AAE6DA6F0510F82B51512CFB715F97DE8D98D`.
+The exact model was discovered through the ordinary provider catalog; no Luna
+model-name special case entered production.
+
+On 2026-08-05 the same reviewer returned final **Accept** for review-bound
+manifest SHA-256
+`733137B901BD476B59AAF4C48760E1127CF1613D115D581D24B8B935BCE8C078`
+and tracked binary-diff SHA-256
+`FD4854C9AFD74516FB27CA894FDC935910F3515D31EBDABC7E3DD9E24746E61F`.
+Both Gate 18 review layers are accepted with no acceptance-changing finding or
+material unknown remaining. The candidate remains detached, uncommitted,
+unstaged, and unintegrated; this acceptance establishes readiness only for a
+separately authorized integration step and grants no release or later-Gate
+authority. Post-verdict documentation edits record that disposition without
+changing the reviewed production code or tests.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

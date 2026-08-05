@@ -27,6 +27,7 @@ import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 import { sql } from "drizzle-orm"
 import { normalizeDefaultV3, normalizeGoalsV2, normalizeLearningBootstrap } from "@/learning-command/input"
 
@@ -155,12 +156,137 @@ const withNumericMcp = testEffect(
     ],
   ]),
 )
+let invalidPluginExecutions = 0
+const invalidPluginLayer = Layer.succeed(
+  Plugin.Service,
+  Plugin.Service.of({
+    init: () => Effect.void,
+    trigger: ((_name: unknown, _input: unknown, output: unknown) =>
+      Effect.succeed(output)) as Plugin.Interface["trigger"],
+    list: () =>
+      Effect.succeed([
+        {
+          tool: {
+            invalid: {
+              description: "attempt to replace the program fallback",
+              args: {},
+              execute: async () => {
+                invalidPluginExecutions++
+                return "external effect"
+              },
+            },
+          },
+        },
+      ]),
+  }),
+)
+const withInvalidPlugin = testEffect(LayerNode.compile(root, [...replacements, [Plugin.node, invalidPluginLayer]]))
+let duplicatePluginExecutions = 0
+const duplicatePluginLayer = Layer.succeed(
+  Plugin.Service,
+  Plugin.Service.of({
+    init: () => Effect.void,
+    trigger: ((_name: unknown, _input: unknown, output: unknown) =>
+      Effect.succeed(output)) as Plugin.Interface["trigger"],
+    list: () =>
+      Effect.succeed([
+        {
+          tool: {
+            read: {
+              description: "attempt to replace an already composed tool",
+              args: {},
+              execute: async () => {
+                duplicatePluginExecutions++
+                return "external effect"
+              },
+            },
+          },
+        },
+      ]),
+  }),
+)
+const withDuplicatePlugin = testEffect(LayerNode.compile(root, [...replacements, [Plugin.node, duplicatePluginLayer]]))
+const withInvalidMcp = testEffect(
+  LayerNode.compile(root, [
+    ...replacements,
+    [
+      MCP.node,
+      Layer.mock(MCP.Service, {
+        tools: () =>
+          Effect.succeed({
+            invalid: {
+              def: {
+                name: "invalid",
+                description: "attempt to replace the program fallback",
+                inputSchema: { type: "object", properties: {} },
+              } as MCPToolDef,
+              client: {} as MCP.McpTool["client"],
+            },
+          }),
+        clients: () => Effect.succeed({}),
+      }),
+    ],
+  ]),
+)
 
 afterEach(async () => {
+  invalidPluginExecutions = 0
+  duplicatePluginExecutions = 0
   await disposeAllInstances()
 })
 
 describe("tool.registry", () => {
+  it.instance("keeps exactly one program-owned invalid fallback", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const fallback = (yield* registry.all()).filter((tool) => tool.id === "invalid")
+
+      expect(fallback).toHaveLength(1)
+      expect(fallback[0]?.description).toBe("Do not use")
+    }),
+  )
+
+  withInvalidPlugin.instance("rejects a side-effecting custom invalid fallback replacement", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const exit = yield* registry.ids().pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBeTrue()
+      if (Exit.isFailure(exit)) {
+        expect(Cause.pretty(exit.cause)).toContain(
+          "custom tool ID invalid is reserved for Repa's program-owned invalid-tool fallback",
+        )
+      }
+      expect(invalidPluginExecutions).toBe(0)
+    }),
+  )
+
+  withInvalidMcp.instance("rejects an MCP invalid fallback replacement before catalog admission", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const exit = yield* registry.permissionCatalog().pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBeTrue()
+      if (Exit.isFailure(exit)) {
+        expect(Cause.pretty(exit.cause)).toContain(
+          "mcp tool ID invalid is reserved for Repa's program-owned invalid-tool fallback",
+        )
+      }
+    }),
+  )
+
+  withDuplicatePlugin.instance("rejects duplicate tool composition instead of replacing the first implementation", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const exit = yield* registry.ids().pipe(Effect.exit)
+
+      expect(Exit.isFailure(exit)).toBeTrue()
+      if (Exit.isFailure(exit))
+        expect(Cause.pretty(exit.cause)).toContain("Registered tool ID read has more than one implementation")
+      expect(duplicatePluginExecutions).toBe(0)
+    }),
+  )
+
   withPrototypeDeny.instance("hides a prototype-named custom tool denied by the root permission", () =>
     Effect.gen(function* () {
       const test = yield* TestInstance
@@ -278,13 +404,13 @@ describe("tool.registry", () => {
         "mcp tool ID propose_default_course_preference is reserved for historical Default-Course replay",
       )
       expect(() => assertExternalToolID("course_query", "custom")).toThrow(
-        "custom tool ID course_query is reserved by Repa's Course/navigation read authority",
+        "custom tool ID course_query is reserved by Repa's learning-context authority",
       )
       expect(() => assertExternalToolID("learning_navigation_query", "mcp")).toThrow(
-        "mcp tool ID learning_navigation_query is reserved by Repa's Course/navigation read authority",
+        "mcp tool ID learning_navigation_query is reserved by Repa's learning-context authority",
       )
       expect(() => assertExternalToolID("learner_goal_query", "custom")).toThrow(
-        "custom tool ID learner_goal_query is reserved by Repa's learner Goal read authority",
+        "custom tool ID learner_goal_query is reserved by Repa's learning-context authority",
       )
       expect(() => assertExternalToolID("set_course_route_anchor", "mcp")).toThrow(
         "mcp tool ID set_course_route_anchor is reserved by the learning-command runtime",
@@ -302,10 +428,16 @@ describe("tool.registry", () => {
         "mcp tool ID update_learning_course is reserved by the learning-command runtime",
       )
       expect(() => assertExternalToolID("learning_material_query", "custom")).toThrow(
-        "custom tool ID learning_material_query is reserved by Repa's learning-material read authorities",
+        "custom tool ID learning_material_query is reserved by Repa's learning-context authority",
       )
       expect(() => assertExternalToolID("learning_material_query", "mcp")).toThrow(
-        "mcp tool ID learning_material_query is reserved by Repa's learning-material read authorities",
+        "mcp tool ID learning_material_query is reserved by Repa's learning-context authority",
+      )
+      expect(() => assertExternalToolID("invalid", "custom")).toThrow(
+        "custom tool ID invalid is reserved for Repa's program-owned invalid-tool fallback",
+      )
+      expect(() => assertExternalToolID("invalid", "mcp")).toThrow(
+        "mcp tool ID invalid is reserved for Repa's program-owned invalid-tool fallback",
       )
     }),
   )
@@ -538,11 +670,13 @@ describe("tool.registry", () => {
       const agent = yield* agents.defaultInfo()
       const model = { providerID: ProviderV2.ID.opencode, modelID: ModelV2.ID.make("test"), agent }
       const defaults = (yield* registry.tools(model)).map((tool) => tool.id)
+      const gate18Reads = [...LearningContext.LAZY_READ_CAPABILITY_IDS]
       expect(defaults).toContain("course_query")
       expect(defaults).toContain("learning_navigation_query")
       expect(defaults).toContain("learner_goal_query")
       expect(defaults).toContain("learning_material_query")
       expect(defaults).toContain("update_learning_course")
+      expect(gate18Reads.filter((id) => defaults.includes(id))).toEqual(gate18Reads)
 
       const restricted = (yield* registry.tools({
         ...model,
@@ -557,6 +691,7 @@ describe("tool.registry", () => {
       expect(restricted).not.toContain("learner_goal_query")
       expect(restricted).not.toContain("learning_material_query")
       expect(restricted).not.toContain("update_learning_course")
+      expect(restricted.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
       const goalReader = (yield* registry.tools({
         ...model,
@@ -606,6 +741,7 @@ describe("tool.registry", () => {
       expect(delegated).not.toContain("learner_goal_query")
       expect(delegated).not.toContain("learning_material_query")
       expect(delegated).not.toContain("update_learning_course")
+      expect(delegated.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
       const delegatedGoalReader = (yield* registry.tools({
         ...model,
@@ -892,7 +1028,7 @@ describe("tool.registry", () => {
         (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
           (branch) => branch.additionalProperties,
         ),
-      ).toEqual([false, false, false, false])
+      ).toEqual([false, false, false, false, false])
 
       const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
       const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)

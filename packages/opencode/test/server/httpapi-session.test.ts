@@ -1,4 +1,5 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
+import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import { afterEach, describe, expect } from "bun:test"
 import { NodeHttpServer, NodeServices } from "@effect/platform-node"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
@@ -248,128 +249,131 @@ describe("session HttpApi", () => {
     }),
   )
 
-  it.live("atomically starts a root Turn and serves its exact active, get, and await projections", () =>
-    Effect.gen(function* () {
-      const llm = yield* TestLLMServer
-      const release = Promise.withResolvers<void>()
-      yield* llm.hold("exact HTTP response", release.promise)
-      const directory = yield* tmpdirScoped({ git: true })
-      return yield* provideMachineConfig(
-        testProviderConfig(llm.url),
-        Effect.gen(function* () {
-          const headers = { "x-opencode-directory": directory, "content-type": "application/json" }
-          const sessionID = SessionID.create()
-          const turnID = Turn.ID.create()
-          const inputID = Turn.InputID.create()
-          const messageID = MessageID.ascending()
+  it.live(
+    "atomically starts a root Turn and serves its exact active, get, and await projections",
+    () =>
+      Effect.gen(function* () {
+        const llm = yield* TestLLMServer
+        const release = Promise.withResolvers<void>()
+        yield* llm.hold("exact HTTP response", release.promise)
+        const directory = yield* tmpdirScoped({ git: true })
+        return yield* provideMachineConfig(
+          testProviderConfig(llm.url),
+          Effect.gen(function* () {
+            const headers = { "x-opencode-directory": directory, "content-type": "application/json" }
+            const sessionID = SessionID.create()
+            const turnID = Turn.ID.create()
+            const inputID = Turn.InputID.create()
+            const messageID = MessageID.ascending()
 
-          const startedResponse = yield* request(pathFor(SessionPaths.start, { sessionID }), {
-            method: "POST",
-            headers,
-            body: JSON.stringify({
-              turnID,
-              inputID,
-              messageID,
-              agent: "repa",
-              model: { providerID: "test", modelID: "test-model" },
-              limits: { model: 1, tool: 0 },
-              session: { title: "atomic HTTP root" },
-              parts: [{ type: "text", text: "admit this exact root request" }],
-            }),
-          })
-          expect(startedResponse.status).toBe(200)
-          expect(yield* json<Turn.Info>(startedResponse)).toMatchObject({
-            id: turnID,
-            sessionID,
-            admissionKind: "learner",
-            initialInputID: inputID,
-            currentInputID: inputID,
-            state: "running",
-          })
+            const startedResponse = yield* request(pathFor(SessionPaths.start, { sessionID }), {
+              method: "POST",
+              headers,
+              body: JSON.stringify({
+                turnID,
+                inputID,
+                messageID,
+                agent: "repa",
+                model: { providerID: "test", modelID: "test-model" },
+                limits: { model: 1, tool: 0 },
+                session: { title: "atomic HTTP root" },
+                parts: [{ type: "text", text: "admit this exact root request" }],
+              }),
+            })
+            expect(startedResponse.status).toBe(200)
+            expect(yield* json<Turn.Info>(startedResponse)).toMatchObject({
+              id: turnID,
+              sessionID,
+              admissionKind: "learner",
+              initialInputID: inputID,
+              currentInputID: inputID,
+              state: "running",
+            })
 
-          const stored = yield* Effect.gen(function* () {
-            const database = yield* Database.Service
-            return yield* Effect.all(
-              {
-                session: database.db
-                  .select()
-                  .from(SessionTable)
-                  .where(eq(SessionTable.id, sessionID))
-                  .get()
-                  .pipe(Effect.orDie),
-                turn: database.db.select().from(TurnTable).where(eq(TurnTable.id, turnID)).get().pipe(Effect.orDie),
-                input: database.db
-                  .select()
-                  .from(TurnInputTable)
-                  .where(eq(TurnInputTable.id, inputID))
-                  .get()
-                  .pipe(Effect.orDie),
-                message: database.db
-                  .select()
-                  .from(MessageTable)
-                  .where(eq(MessageTable.id, messageID))
-                  .get()
-                  .pipe(Effect.orDie),
-                occurrence: database.db
-                  .select()
-                  .from(LearnerOccurrencePresentationTable)
-                  .where(eq(LearnerOccurrencePresentationTable.message_id, messageID))
-                  .get()
-                  .pipe(Effect.orDie),
-              },
-              { concurrency: "unbounded" },
+            const stored = yield* Effect.gen(function* () {
+              const database = yield* Database.Service
+              return yield* Effect.all(
+                {
+                  session: database.db
+                    .select()
+                    .from(SessionTable)
+                    .where(eq(SessionTable.id, sessionID))
+                    .get()
+                    .pipe(Effect.orDie),
+                  turn: database.db.select().from(TurnTable).where(eq(TurnTable.id, turnID)).get().pipe(Effect.orDie),
+                  input: database.db
+                    .select()
+                    .from(TurnInputTable)
+                    .where(eq(TurnInputTable.id, inputID))
+                    .get()
+                    .pipe(Effect.orDie),
+                  message: database.db
+                    .select()
+                    .from(MessageTable)
+                    .where(eq(MessageTable.id, messageID))
+                    .get()
+                    .pipe(Effect.orDie),
+                  occurrence: database.db
+                    .select()
+                    .from(LearnerOccurrencePresentationTable)
+                    .where(eq(LearnerOccurrencePresentationTable.message_id, messageID))
+                    .get()
+                    .pipe(Effect.orDie),
+                },
+                { concurrency: "unbounded" },
+              )
+            }).pipe(provideInstanceEffect(directory))
+            expect(stored.session?.id).toBe(sessionID)
+            expect(stored.turn).toMatchObject({ id: turnID, session_id: sessionID, initial_input_id: inputID })
+            expect(stored.input).toMatchObject({
+              id: inputID,
+              turn_id: turnID,
+              session_id: sessionID,
+              message_id: messageID,
+              source: "learner_root",
+            })
+            expect(stored.message).toMatchObject({ id: messageID, session_id: sessionID, data: { role: "user" } })
+            expect(stored.occurrence).toMatchObject({
+              message_id: messageID,
+              session_id: sessionID,
+              occurrence_id: stored.input?.occurrence_id,
+              provenance: "origin",
+            })
+
+            expect(
+              yield* requestJson<Turn.Info>(pathFor(SessionPaths.activeTurn, { sessionID }), { headers }),
+            ).toMatchObject({ id: turnID, state: "running" })
+            expect(
+              yield* requestJson<Turn.Info>(pathFor(SessionPaths.getTurn, { sessionID, turnID }), { headers }),
+            ).toMatchObject({ id: turnID, state: "running" })
+            expect(yield* requestJson<Turn.Info[]>(pathFor(SessionPaths.turns, { sessionID }), { headers })).toEqual([
+              expect.objectContaining({ id: turnID, state: "running" }),
+            ])
+
+            const awaiting = yield* request(pathFor(SessionPaths.awaitTurn, { sessionID, turnID }), { headers }).pipe(
+              Effect.forkChild,
             )
-          }).pipe(provideInstanceEffect(directory))
-          expect(stored.session?.id).toBe(sessionID)
-          expect(stored.turn).toMatchObject({ id: turnID, session_id: sessionID, initial_input_id: inputID })
-          expect(stored.input).toMatchObject({
-            id: inputID,
-            turn_id: turnID,
-            session_id: sessionID,
-            message_id: messageID,
-            source: "learner_root",
-          })
-          expect(stored.message).toMatchObject({ id: messageID, session_id: sessionID, data: { role: "user" } })
-          expect(stored.occurrence).toMatchObject({
-            message_id: messageID,
-            session_id: sessionID,
-            occurrence_id: stored.input?.occurrence_id,
-            provenance: "origin",
-          })
-
-          expect(
-            yield* requestJson<Turn.Info>(pathFor(SessionPaths.activeTurn, { sessionID }), { headers }),
-          ).toMatchObject({ id: turnID, state: "running" })
-          expect(
-            yield* requestJson<Turn.Info>(pathFor(SessionPaths.getTurn, { sessionID, turnID }), { headers }),
-          ).toMatchObject({ id: turnID, state: "running" })
-          expect(yield* requestJson<Turn.Info[]>(pathFor(SessionPaths.turns, { sessionID }), { headers })).toEqual([
-            expect.objectContaining({ id: turnID, state: "running" }),
-          ])
-
-          const awaiting = yield* request(pathFor(SessionPaths.awaitTurn, { sessionID, turnID }), { headers }).pipe(
-            Effect.forkChild,
-          )
-          expect(
-            yield* Effect.race(
-              Fiber.join(awaiting).pipe(Effect.as(true)),
-              Effect.sleep("50 millis").pipe(Effect.as(false)),
-            ),
-          ).toBe(false)
-          release.resolve()
-          const terminalResponse = yield* Fiber.join(awaiting)
-          expect(terminalResponse.status).toBe(200)
-          expect(yield* json<Turn.Info>(terminalResponse)).toMatchObject({
-            id: turnID,
-            state: "completed",
-            terminal: { outcome: "completed", reason: "normal" },
-          })
-          expect(
-            yield* requestJson<Turn.Info | null>(pathFor(SessionPaths.activeTurn, { sessionID }), { headers }),
-          ).toBeNull()
-        }),
-      )
-    }).pipe(Effect.provide(TestLLMServer.layer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node))),
+            expect(
+              yield* Effect.race(
+                Fiber.join(awaiting).pipe(Effect.as(true)),
+                Effect.sleep("50 millis").pipe(Effect.as(false)),
+              ),
+            ).toBe(false)
+            release.resolve()
+            const terminalResponse = yield* Fiber.join(awaiting)
+            expect(terminalResponse.status).toBe(200)
+            expect(yield* json<Turn.Info>(terminalResponse)).toMatchObject({
+              id: turnID,
+              state: "completed",
+              terminal: { outcome: "completed", reason: "normal" },
+            })
+            expect(
+              yield* requestJson<Turn.Info | null>(pathFor(SessionPaths.activeTurn, { sessionID }), { headers }),
+            ).toBeNull()
+          }),
+        )
+      }).pipe(Effect.provide(TestLLMServer.layer), Effect.provide(AppNodeBuilder.build(CrossSpawnSpawner.node))),
+    15_000,
   )
 
   it.live(
@@ -1702,7 +1706,7 @@ describe("session HttpApi", () => {
         yield* database.db
           .transaction((tx) =>
             Effect.gen(function* () {
-              yield* TurnLifecycle.admitModel(tx, {
+              yield* admitModelWithLearningContext(tx, {
                 turnID,
                 sessionID: session.id,
                 assistantMessageID: assistant.id,

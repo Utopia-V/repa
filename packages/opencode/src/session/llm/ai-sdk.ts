@@ -1,10 +1,27 @@
 import { FinishReason, LLMEvent, ProviderMetadata, ToolResultValue } from "@opencode-ai/llm"
 import { Effect, Schema } from "effect"
 import { type streamText } from "ai"
+import { isDeepStrictEqual } from "node:util"
+import { INVALID_TOOL_ID } from "@/tool/invalid"
 import { errorMessage } from "@/util/error"
 
 type Result = Awaited<ReturnType<typeof streamText>>
 type AISDKEvent = Result["fullStream"] extends AsyncIterable<infer T> ? T : never
+
+export type ToolEventAuthority = Readonly<{
+  offeredProviderNames: ReadonlySet<string>
+  repairedFallbacks: Map<string, Readonly<{ providerName: string; input: unknown }>>
+}>
+
+const RepairedFallback = Symbol("LLMAISDK.RepairedFallback")
+
+type RepairedFallbackEvent = LLMEvent & {
+  readonly [RepairedFallback]?: Readonly<{ from: string }>
+}
+
+export function repairedFallback(event: LLMEvent) {
+  return (event as RepairedFallbackEvent)[RepairedFallback]
+}
 
 export function adapterState() {
   return {
@@ -76,7 +93,33 @@ function currentReasoningID(state: ReturnType<typeof adapterState>, id: string |
 export function toLLMEvents(
   state: ReturnType<typeof adapterState>,
   event: AISDKEvent,
+  internalToolName: (provider: string) => string = (name) => name,
+  authority?: ToolEventAuthority,
 ): Effect.Effect<ReadonlyArray<LLMEvent>, unknown> {
+  const resolveToolName = (input: {
+    providerName: string
+    toolCallID: string
+    repairedInput?: unknown
+    allowRepairedFallback?: boolean
+  }) => {
+    const internal = internalToolName(input.providerName)
+    if (authority?.offeredProviderNames.has(input.providerName)) return { internal }
+    if (authority === undefined && internal !== INVALID_TOOL_ID) return { internal }
+    const repair = authority?.repairedFallbacks.get(input.toolCallID)
+    if (
+      input.allowRepairedFallback &&
+      internal === INVALID_TOOL_ID &&
+      authority &&
+      repair &&
+      authority.offeredProviderNames.has(repair.providerName) &&
+      isDeepStrictEqual(repair.input, input.repairedInput)
+    ) {
+      authority.repairedFallbacks.delete(input.toolCallID)
+      return { internal, repairedFrom: internalToolName(repair.providerName) }
+    }
+    throw new Error(`Provider tool name is outside the prepared provider surface: ${input.providerName}`)
+  }
+
   switch (event.type) {
     case "start":
       return Effect.succeed([])
@@ -120,6 +163,7 @@ export function toLLMEvents(
         // Reset so the adapter can be reused for a follow-up stream without leaking
         // counters or block IDs. adapterState() is the single source of truth for shape.
         Object.assign(state, adapterState())
+        authority?.repairedFallbacks.clear()
         return events
       })
 
@@ -189,11 +233,12 @@ export function toLLMEvents(
 
     case "tool-input-start":
       return Effect.sync(() => {
-        state.toolNames[event.id] = event.toolName
+        const name = resolveToolName({ providerName: event.toolName, toolCallID: event.id }).internal
+        state.toolNames[event.id] = name
         return [
           LLMEvent.toolInputStart({
             id: event.id,
-            name: event.toolName,
+            name,
             providerMetadata: providerMetadata(event.providerMetadata),
           }),
         ]
@@ -219,16 +264,27 @@ export function toLLMEvents(
 
     case "tool-call":
       return Effect.sync(() => {
-        state.toolNames[event.toolCallId] = event.toolName
-        return [
-          LLMEvent.toolCall({
-            id: event.toolCallId,
-            name: event.toolName,
-            input: event.input,
-            providerExecuted: "providerExecuted" in event ? event.providerExecuted : undefined,
-            providerMetadata: providerMetadata(event.providerMetadata),
-          }),
-        ]
+        const resolved = resolveToolName({
+          providerName: event.toolName,
+          toolCallID: event.toolCallId,
+          repairedInput: event.input,
+          allowRepairedFallback: true,
+        })
+        state.toolNames[event.toolCallId] = resolved.internal
+        const output: RepairedFallbackEvent = LLMEvent.toolCall({
+          id: event.toolCallId,
+          name: resolved.internal,
+          input: event.input,
+          providerExecuted: "providerExecuted" in event ? event.providerExecuted : undefined,
+          providerMetadata: providerMetadata(event.providerMetadata),
+        })
+        if (resolved.repairedFrom) {
+          Object.defineProperty(output, RepairedFallback, {
+            value: Object.freeze({ from: resolved.repairedFrom }),
+            enumerable: false,
+          })
+        }
+        return [output]
       })
 
     case "tool-result":
@@ -248,7 +304,11 @@ export function toLLMEvents(
 
     case "tool-error":
       return Effect.sync(() => {
-        const name = state.toolNames[event.toolCallId] ?? ("toolName" in event ? event.toolName : "unknown")
+        const name =
+          state.toolNames[event.toolCallId] ??
+          ("toolName" in event && typeof event.toolName === "string"
+            ? resolveToolName({ providerName: event.toolName, toolCallID: event.toolCallId }).internal
+            : "unknown")
         delete state.toolNames[event.toolCallId]
         return [
           LLMEvent.toolError({

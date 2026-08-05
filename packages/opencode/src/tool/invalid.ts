@@ -1,5 +1,7 @@
 import { Effect, Schema } from "effect"
-import * as Tool from "./tool"
+import { Tool } from "./tool"
+
+export const INVALID_TOOL_ID = "invalid"
 
 export const Parameters = Schema.Struct({
   tool: Schema.String,
@@ -7,7 +9,7 @@ export const Parameters = Schema.Struct({
 })
 
 export const InvalidTool = Tool.define(
-  "invalid",
+  INVALID_TOOL_ID,
   Effect.succeed({
     description: "Do not use",
     parameters: Parameters,

@@ -59,7 +59,7 @@ import {
 } from "@opencode-ai/core/learning-command"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { ProviderV2 } from "@opencode-ai/core/provider"
-import { desc, eq, inArray, or } from "drizzle-orm"
+import { and, desc, eq, inArray, or } from "drizzle-orm"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { TurnInputTable, TurnModelOperationTable } from "@opencode-ai/core/turn/sql"
@@ -1540,13 +1540,42 @@ const layer = Layer.effect(
           Effect.provideService(Database.Service, database),
         )
 
-        const { user: lastUser, assistant: lastAssistant, finished: lastFinished, tasks } = MessageV2.latest(msgs)
-
-        if (!lastUser) throw new Error("No user message found in stream. This should never happen.")
-
-        const lastAssistantMsg = msgs.findLast(
-          (msg) => msg.info.role === "assistant" && msg.info.id === lastAssistant?.id,
-        )
+        const currentTurn = yield* state.getTurn(sessionID, turnID)
+        const currentInput = yield* database.db
+          .select({ messageID: TurnInputTable.message_id })
+          .from(TurnInputTable)
+          .where(
+            and(
+              eq(TurnInputTable.id, currentTurn.currentInputID),
+              eq(TurnInputTable.turn_id, turnID),
+              eq(TurnInputTable.session_id, sessionID),
+            ),
+          )
+          .get()
+          .pipe(Effect.orDie)
+        if (!currentInput) {
+          return yield* new Turn.IntegrityError({
+            turnID,
+            reason: "Current Turn input has no exact Session Message presentation",
+          })
+        }
+        const currentWork = yield* MessageV2.currentWorkEffect({
+          sessionID,
+          turnID,
+          currentInputID: currentTurn.currentInputID,
+          currentInputMessageID: currentInput.messageID,
+          messages: msgs,
+        }).pipe(Effect.provideService(Database.Service, database))
+        const {
+          user: lastUser,
+          userMessage: lastUserMsg,
+          assistant: lastAssistant,
+          assistantMessage: lastAssistantMsg,
+          finished: lastFinished,
+          compactionFinished,
+          tasks,
+          interactiveMessages,
+        } = currentWork
         // Some providers return "stop" even when the assistant message contains
         // tool calls. Keep the loop running so tool results can be sent back to
         // the model, but ignore cleanup-marked interrupted orphans.
@@ -1557,10 +1586,12 @@ const layer = Layer.effect(
 
         if (
           !promotedSteer &&
-          lastAssistant?.finish &&
+          lastAssistant &&
+          lastFinished?.id === lastAssistant?.id &&
+          lastAssistant.finish &&
           !["tool-calls"].includes(lastAssistant.finish) &&
           !hasToolCalls &&
-          MessageV2.isAfter(lastAssistant, lastUser)
+          lastAssistant.parentID === lastUser.id
         ) {
           const orphan = lastAssistantMsg?.parts.find(
             (part): part is SessionV1.ToolPart => part.type === "tool" && isOrphanedInterruptedTool(part),
@@ -1581,7 +1612,7 @@ const layer = Layer.effect(
         if (task?.type === "compaction") {
           const result = yield* compaction.process({
             messages: msgs,
-            parentID: lastUser.id,
+            parentID: task.messageID,
             sessionID,
             auto: task.auto,
             overflow: task.overflow,
@@ -1609,9 +1640,9 @@ const layer = Layer.effect(
         }
 
         if (
-          lastFinished &&
-          lastFinished.summary !== true &&
-          (yield* compaction.isOverflow({ tokens: lastFinished.tokens, model }))
+          compactionFinished &&
+          compactionFinished.summary !== true &&
+          (yield* compaction.isOverflow({ tokens: compactionFinished.tokens, model }))
         ) {
           yield* compaction.create({ sessionID, agent: lastUser.agent, model: lastUser.model, auto: true })
           continue
@@ -1623,6 +1654,7 @@ const layer = Layer.effect(
         const snapshotFrontier = yield* db
           .transaction((tx) => LearningFrontier.read(tx))
           .pipe(Effect.catchTag("SqlError", Effect.die))
+        msgs = interactiveMessages
         msgs = yield* SessionReminders.apply({ messages: msgs, agent, session }).pipe(
           Effect.provideService(RuntimeFlags.Service, flags),
           Effect.provideService(FSUtil.Service, fsys),
@@ -1667,8 +1699,7 @@ const layer = Layer.effect(
           .pipe(Effect.onInterrupt(() => finalizeInterruptedAssistant))
 
         const outcome: "break" | "continue" | "exhausted" = yield* Effect.gen(function* () {
-          const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
-          const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
+          const bypassAgentCheck = lastUserMsg.parts.some((p) => p.type === "agent")
           const promptOps = yield* ops()
 
           const tools = yield* SessionTools.resolve({
@@ -1690,22 +1721,29 @@ const layer = Layer.effect(
           )
 
           if (lastUser.format?.type === "json_schema") {
-            tools["StructuredOutput"] = createStructuredOutputTool({
-              schema: lastUser.format.schema,
-              onSuccess(output) {
-                structured = output
-              },
-            })
+            SessionTools.install(
+              tools,
+              "StructuredOutput",
+              "program-owned structured output",
+              createStructuredOutputTool({
+                schema: lastUser.format.schema,
+                onSuccess(output) {
+                  structured = output
+                },
+              }),
+            )
           }
 
           yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
-          const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
+          const compactable = yield* compaction.compactable({ messages: msgs, model })
+          const [skills, env, instructions, mcpInstructions, modelMsgs, compactableModelMsgs] = yield* Effect.all([
             sys.skills(agent),
             sys.environment(model),
             instruction.system().pipe(Effect.orDie),
             sys.mcp(agent, session.permission),
             MessageV2.toModelMessagesEffect(msgs, model),
+            MessageV2.toModelMessagesEffect(compactable.messages, model),
           ])
           const system = [
             ...env,
@@ -1719,13 +1757,45 @@ const layer = Layer.effect(
             ...modelMsgs,
             ...(isLastStep ? [{ role: "assistant" as const, content: MAX_STEPS_PROMPT }] : []),
           ]
+          if (!llm.plan || !llm.finalize) {
+            return yield* new Turn.IntegrityError({
+              turnID,
+              reason: "Released-v1 interactive runtime has no Gate 18 request planning/finalization seam",
+            })
+          }
+          const requestPlan = yield* llm
+            .plan({
+              composition: { type: "interactive" },
+              user: lastUser,
+              agent,
+              permission: session.permission,
+              authority,
+              sessionID,
+              parentSessionID: session.parentID,
+              system,
+              messages: requestMessages,
+              compactableMessages: compactableModelMsgs,
+              compactionSelection: compactable.selection,
+              tools,
+              model,
+              toolChoice: format.type === "json_schema" ? "required" : undefined,
+            })
+            .pipe(
+              Effect.mapError(
+                (error) =>
+                  new Turn.IntegrityError({
+                    turnID,
+                    reason: `Gate 18 request planning failed before model admission: ${String(error)}`,
+                  }),
+              ),
+            )
           const requestEnvelope = normalizeTurnEnvelope({
             assistantMessageID: msg.id,
             agent: agent.name,
             model: { providerID: model.providerID, modelID: model.id, variant: lastUser.model.variant },
             system,
             messages: requestMessages,
-            tools: Object.keys(tools).sort(),
+            providerToolSurface: requestPlan.providerToolSurface.binding,
             ...(format.type === "json_schema" ? { toolChoice: "required", format } : {}),
           })
           const contextFingerprint = TurnLifecycle.envelopeFingerprint(
@@ -1749,6 +1819,7 @@ const layer = Layer.effect(
                     contextFingerprint,
                     snapshotFrontier,
                     timeAdmitted: Date.now(),
+                    learningContextBasis: requestPlan.capabilityBasis,
                   }
                   const existing = yield* tx
                     .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
@@ -1822,6 +1893,22 @@ const layer = Layer.effect(
               reason: `Model operation ${admitted.operation.assistantMessageID} replay has no live provider owner`,
             })
           }
+          const prepared = yield* llm
+            .finalize({
+              plan: requestPlan,
+              retainedSteeringCut: admitted.retainedSteeringCut,
+              learningContextCut: admitted.learningContextCut,
+              learningContextRenderedBlock: admitted.learningContextRenderedBlock,
+            })
+            .pipe(
+              Effect.mapError(
+                (error) =>
+                  new Turn.IntegrityError({
+                    turnID,
+                    reason: `Gate 18 admitted request could not be finalized exactly: ${String(error)}`,
+                  }),
+              ),
+            )
           step = nextStep
           if (step === 1) {
             titleWork = yield* scheduleTitle({
@@ -1840,19 +1927,7 @@ const layer = Layer.effect(
             )
           }
           yield* handle.bindModelOperation(admitted.operation)
-          const result = yield* handle.process({
-            composition: { type: "interactive" },
-            user: lastUser,
-            agent,
-            permission: session.permission,
-            sessionID,
-            parentSessionID: session.parentID,
-            system,
-            messages: requestMessages,
-            tools,
-            model,
-            toolChoice: format.type === "json_schema" ? "required" : undefined,
-          })
+          const result = yield* handle.process(prepared)
           failureReason ??= handle.failureReason
 
           if (structured !== undefined) {
@@ -1888,12 +1963,17 @@ const layer = Layer.effect(
 
           if (result === "stop") return "break" as const
           if (result === "compact") {
+            const mode = handle.compactionMode ?? "normal"
             yield* compaction.create({
               sessionID,
               agent: lastUser.agent,
               model: lastUser.model,
               auto: true,
-              overflow: !handle.message.finish,
+              overflow: mode === "provider_overflow",
+              capacityHistory:
+                mode === "capacity_history" && handle.compactionSelection
+                  ? { sourceAssistantMessageID: msg.id, selection: handle.compactionSelection }
+                  : undefined,
             })
           }
           return "continue" as const

@@ -1208,6 +1208,7 @@ const layer: Layer.Layer<
             if (cloned.type === "compaction" && cloned.tail_start_id) {
               cloned.tail_start_id = idMap.get(cloned.tail_start_id)
             }
+            if (cloned.type === "compaction") delete cloned.capacity_history
             return cloned
           })
           const recordProvenance = () =>

@@ -20,9 +20,11 @@ function appLayer(filename: string) {
     LayerNode.group([
       MaterialMap.node,
       MaterialMap.currentUseReaderNode,
+      MaterialMap.tutorCurrentUseReaderNode,
       Course.node,
       Representation.node,
       Representation.currentUseReaderNode,
+      Representation.tutorCurrentUseReaderNode,
       Artifact.node,
       ContentRoot.node,
       Database.node,
@@ -51,6 +53,7 @@ async function prepareFixture(materialsName = "materials") {
   const courses = await runtime.runPromise(Course.Service)
   const maps = await runtime.runPromise(MaterialMap.Service)
   const current = await runtime.runPromise(MaterialMap.CurrentUseReader)
+  const tutor = await runtime.runPromise(MaterialMap.TutorCurrentUseReader)
   const database = await runtime.runPromise(Database.Service)
   const proposal = await runtime.runPromise(roots.propose(materialsDirectory))
   const root = await runtime.runPromise(
@@ -97,6 +100,7 @@ async function prepareFixture(materialsName = "materials") {
     courses,
     maps,
     current,
+    tutor,
     database,
     root,
     read: presentRead,
@@ -111,6 +115,137 @@ async function closeFixture(fixture: Fixture) {
 }
 
 describe("Material Map authority", () => {
+  windowsTest("rejects Map ABA between pinned Tutor locator inspection and byte admission", async () => {
+    const fixture = await prepareFixture()
+    try {
+      const input = artifactMapInput(fixture)
+      const map = await fixture.runtime.runPromise(fixture.maps.createMap(input))
+      const selectorID = input.proposal.outline[1]!.selectors[1]!.id
+      const selector = await fixture.runtime.runPromise(fixture.maps.getSelector(map.id, selectorID))
+      const inspected = await fixture.runtime.runPromise(
+        fixture.database.db.transaction((tx) =>
+          MaterialMap.inspectTutorAccess(tx, {
+            mapID: map.id,
+            mapDispositionVersion: 0,
+            selectorID,
+            selectorCoordinate: selector.coordinate,
+            selectorWitness: selector.witness,
+            target: input.proposal.target,
+          }),
+        ),
+      )
+      const invocation = ContentRoot.CurrentLocalReadInvocation.trusted("gate18-aba-read", "gate18-test-profile")
+      const read = await fixture.runtime.runPromise(
+        fixture.roots.prepareLocalRead({
+          authority: { type: "content_root", contentRootID: fixture.root.id },
+          path: fixture.source,
+          maxBytes: 1024 * 1024,
+          invocation,
+        }),
+      )
+      await fixture.runtime.runPromise(
+        fixture.maps.withdrawMap({ mapID: map.id, expectedVersion: 0, reason: "ABA before Tutor admission" }),
+      )
+      await fixture.runtime.runPromise(fixture.maps.restoreMap({ mapID: map.id, expectedVersion: 1 }))
+
+      const failure = await fixture.runtime.runPromise(
+        Effect.flip(
+          fixture.tutor.resolveSelector({
+            mapID: map.id,
+            selectorID,
+            accessProof: inspected.proof,
+            access: { type: "artifact", read, invocation },
+            budgets: {
+              artifactBytes: 1024 * 1024,
+              representation: { integrityScanBytes: 1024 * 1024, returnBytes: 32_000, records: 64 },
+            },
+          }),
+        ),
+      )
+      expect(failure).toBeInstanceOf(MaterialMap.PreparationError)
+      if (failure instanceof MaterialMap.PreparationError) expect(failure.code).toBe("stale_target")
+    } finally {
+      await closeFixture(fixture)
+    }
+  })
+
+  windowsTest("expands exact Gate 18 metadata without bytes and fails closed after Map drift", async () => {
+    const fixture = await prepareFixture()
+    try {
+      const mapInput = artifactMapInput(fixture)
+      const map = await fixture.runtime.runPromise(fixture.maps.createMap(mapInput))
+      const course = await createCourseEndpoint(fixture, "Pinned material")
+      const draft = alignmentInput(map.id, mapInput.proposal.outline[1]!.selectors[0]!.id, course.endpoints[0]!)
+      const alignment = await fixture.runtime.runPromise(
+        fixture.maps.createAlignment({ ...draft, access: mapInput.access }),
+      )
+      const projection = await fixture.runtime.runPromise(
+        fixture.database.db.transaction((tx) =>
+          MaterialMap.projectLearningContext(tx, { endpoints: [course.endpoints[0]!], limit: 8 }),
+        ),
+      )
+      const entry = projection.entries.find((value) => value.alignment.id === alignment.id)
+      if (!entry) throw new Error("Expected projected material locator")
+      const locator = MaterialMap.learningContextLocator(entry, { metadata: true, tutor: true })
+      const frontier = await fixture.runtime.runPromise(
+        fixture.database.db.get<{ sequence: number }>(
+          sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+        ),
+      )
+
+      const exact = await fixture.runtime.runPromise(fixture.maps.readLearningContextMetadata(locator))
+      expect(exact).toMatchObject({
+        type: "available",
+        relation: "exact",
+        value: {
+          alignment: { id: alignment.id },
+          map: { id: map.id },
+          selector: { id: mapInput.proposal.outline[1]!.selectors[0]!.id },
+          target: { type: "artifact" },
+        },
+      })
+      expect(JSON.stringify(exact)).not.toContain('"bytes"')
+      expect(
+        await fixture.runtime.runPromise(
+          fixture.database.db.get<{ sequence: number }>(
+            sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+          ),
+        ),
+      ).toEqual(frontier)
+
+      await fixture.runtime.runPromise(
+        fixture.maps.withdrawMap({ mapID: map.id, expectedVersion: 0, reason: "later correction" }),
+      )
+      const afterCorrection = await fixture.runtime.runPromise(
+        fixture.database.db.get<{ sequence: number }>(
+          sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+        ),
+      )
+      expect(await fixture.runtime.runPromise(fixture.maps.readLearningContextMetadata(locator))).toMatchObject({
+        type: "superseded",
+        currentLocator: { map: { id: map.id, disposition: { version: 1, value: "withdrawn" } } },
+      })
+      expect(
+        await fixture.runtime.runPromise(
+          fixture.database.db.get<{ sequence: number }>(
+            sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+          ),
+        ),
+      ).toEqual(afterCorrection)
+
+      expect(
+        await fixture.runtime.runPromise(
+          fixture.maps.readLearningContextMetadata({
+            ...locator,
+            alignment: { ...locator.alignment, id: MaterialMap.createAlignmentID() },
+          }),
+        ),
+      ).toEqual({ type: "unavailable", cause: "alignment_not_found" })
+    } finally {
+      await closeFixture(fixture)
+    }
+  })
+
   windowsTest(
     "accepts Unicode case-bearing Artifact paths across Representation and Material persistence",
     async () => {

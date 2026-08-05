@@ -225,6 +225,7 @@ export interface JsonTransport<Body, Message> extends Transport<Body, JsonPrepar
 
 export const json = <Body, Message>(input: JsonInput<Body, Message>): JsonTransport<Body, Message> => ({
   id: "websocket-json",
+  describe: (prepared) => ({ kind: "websocket", method: "WEBSOCKET", url: prepared.url }),
   with: (patch) => json({ ...input, ...patch }),
   prepare: (prepareInput) =>
     Effect.gen(function* () {

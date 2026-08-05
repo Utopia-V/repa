@@ -21,13 +21,14 @@ export type Composition =
   | { readonly type: "interactive" }
   | { readonly type: "internal"; readonly purpose: SystemPrompt.InternalPurpose }
 
-type PrepareInput = {
+export type PlanInput = {
   readonly user: SessionV1.User
   readonly sessionID: string
   readonly parentSessionID?: string
   readonly model: Provider.Model
   readonly agent: Agent.Info
   readonly permission?: PermissionV1.Ruleset
+  readonly authority?: readonly Permission.AuthorityLayer[]
   readonly system: string[]
   readonly messages: ModelMessage[]
   readonly small?: boolean
@@ -39,12 +40,19 @@ type PrepareInput = {
   readonly flags: RuntimeFlags.Info
   readonly isWorkflow: boolean
   readonly composition: Composition
-  readonly retainedSteeringCut?: RetainedSteering.Cut
 }
 
-export type Prepared = {
-  readonly system: string[]
-  readonly messages: ModelMessage[]
+export type PrepareInput = PlanInput & {
+  readonly retainedSteeringCut?: RetainedSteering.Cut
+  readonly learningContextRenderedBlock?: string
+}
+
+export type Planned = {
+  readonly input: PlanInput
+  readonly core: string
+  readonly task?: string
+  readonly extensions: string[]
+  readonly isOpenaiOauth: boolean
   readonly tools: Record<string, Tool>
   readonly params: {
     readonly temperature?: number
@@ -58,6 +66,11 @@ export type Prepared = {
   readonly toolChoice?: "auto" | "required" | "none"
 }
 
+export type Prepared = Omit<Planned, "input" | "core" | "task" | "extensions" | "isOpenaiOauth"> & {
+  readonly system: string[]
+  readonly messages: ModelMessage[]
+}
+
 const mergeOptions = (target: Record<string, any>, source: Record<string, any> | undefined): Record<string, any> =>
   mergeDeep(target, source ?? {}) as Record<string, any>
 
@@ -65,16 +78,12 @@ export function renderSystem(system: readonly string[]) {
   return system.join("\n\n")
 }
 
-export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: PrepareInput) {
+export const plan = Effect.fn("LLMRequestPrep.plan")(function* (input: PlanInput) {
   if (input.composition.type === "internal" && input.composition.purpose === "representation") {
     return yield* Effect.fail(new Error("Representation sampling requires the dedicated Gate 11 carrier"))
   }
   const isOpenaiOauth = input.provider.id === "openai" && input.auth?.type === "oauth"
   const interactive = input.composition.type === "interactive"
-  if (interactive && !input.retainedSteeringCut) {
-    return yield* Effect.fail(new Error("Interactive request has no exact retained steering cut"))
-  }
-  const retainedSteering = interactive ? RetainedSteering.renderCut(input.retainedSteeringCut!) : undefined
   const core = interactive ? SystemPrompt.product() : SystemPrompt.internal()
   const task = input.composition.type === "internal" ? SystemPrompt.internalTask(input.composition.purpose) : undefined
   const extensions = (
@@ -84,16 +93,6 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     "experimental.chat.system.transform",
     { sessionID: input.sessionID, model: input.model },
     { system: extensions },
-  )
-  const protectedPrompts = new Set([
-    SystemPrompt.product(),
-    SystemPrompt.internal(),
-    ...(task ? [task] : []),
-    ...(retainedSteering ? [retainedSteering] : []),
-  ])
-  const system = [core, ...(interactive ? [retainedSteering, ...input.system] : [task]), ...extensions].filter(
-    (item, index): item is string =>
-      typeof item === "string" && (index <= 1 || !protectedPrompts.has(item)),
   )
 
   const variant =
@@ -115,21 +114,6 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     delete options.reasoningSummary
     delete options.include
   }
-  if (isOpenaiOauth) options.instructions = renderSystem(system)
-
-  const messages =
-    isOpenaiOauth || input.isWorkflow
-      ? input.messages
-      : [
-          ...system.map(
-            (x): ModelMessage => ({
-              role: "system",
-              content: x,
-            }),
-          ),
-          ...input.messages,
-        ]
-
   const transformedParams = yield* input.plugin.trigger(
     "chat.params",
     {
@@ -149,13 +133,6 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       options,
     },
   )
-  const params = isOpenaiOauth
-    ? {
-        ...transformedParams,
-        options: { ...transformedParams.options, instructions: renderSystem(system) },
-      }
-    : transformedParams
-
   const { headers } = yield* input.plugin.trigger(
     "chat.headers",
     {
@@ -203,10 +180,13 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
   }
 
   return {
-    system,
-    messages,
+    input,
+    core,
+    task,
+    extensions,
+    isOpenaiOauth,
     tools: Object.fromEntries(Object.entries(tools).toSorted(([a], [b]) => a.localeCompare(b))),
-    params,
+    params: transformedParams,
     toolChoice: input.composition.type === "internal" ? "none" : input.toolChoice,
     messageTransformOptions: options,
     headers: {
@@ -217,14 +197,76 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       ...input.model.headers,
       ...headers,
     },
-  }
+  } satisfies Planned
 })
 
-function resolveTools(input: Pick<PrepareInput, "tools" | "agent" | "permission" | "user" | "composition">) {
+export function finalize(
+  planned: Planned,
+  cuts: { readonly retainedSteeringCut?: RetainedSteering.Cut; readonly learningContextRenderedBlock?: string },
+): Prepared {
+  const interactive = planned.input.composition.type === "interactive"
+  if (interactive && !cuts.retainedSteeringCut) {
+    throw new Error("Interactive request has no exact retained steering cut")
+  }
+  if (interactive && !cuts.learningContextRenderedBlock) {
+    throw new Error("Interactive request has no exact learning context block")
+  }
+  const retainedSteering = interactive ? RetainedSteering.renderCut(cuts.retainedSteeringCut!) : undefined
+  const learningContext = interactive ? cuts.learningContextRenderedBlock : undefined
+  const protectedPrompts = new Set([
+    SystemPrompt.product(),
+    SystemPrompt.internal(),
+    ...(planned.task ? [planned.task] : []),
+    ...(retainedSteering ? [retainedSteering] : []),
+    ...(learningContext ? [learningContext] : []),
+  ])
+  const system = [
+    planned.core,
+    ...(interactive ? [retainedSteering, learningContext, ...planned.input.system] : [planned.task]),
+    ...planned.extensions,
+  ].filter(
+    (item, index): item is string =>
+      typeof item === "string" && (index <= (interactive ? 2 : 1) || !protectedPrompts.has(item)),
+  )
+  const messages =
+    planned.isOpenaiOauth || planned.input.isWorkflow
+      ? planned.input.messages
+      : [
+          ...system.map(
+            (content): ModelMessage => ({
+              role: "system",
+              content,
+            }),
+          ),
+          ...planned.input.messages,
+        ]
+  const params = planned.isOpenaiOauth
+    ? {
+        ...planned.params,
+        options: { ...planned.params.options, instructions: renderSystem(system) },
+      }
+    : planned.params
+  return {
+    system,
+    messages,
+    tools: planned.tools,
+    params,
+    toolChoice: planned.toolChoice,
+    messageTransformOptions: planned.messageTransformOptions,
+    headers: planned.headers,
+  }
+}
+
+export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: PrepareInput) {
+  return finalize(yield* plan(input), input)
+})
+
+function resolveTools(input: Pick<PlanInput, "tools" | "agent" | "permission" | "authority" | "user" | "composition">) {
   if (input.composition.type === "internal") return {}
   const disabled = Permission.disabled(
     Object.keys(input.tools),
     Permission.merge(input.agent.permission, input.permission ?? []),
+    input.authority ?? [],
   )
   return Record.filter(input.tools, (_, k) => input.user.tools?.[k] !== false && !disabled.has(k))
 }

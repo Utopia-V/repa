@@ -12,6 +12,94 @@ const database = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 const it = testEffect(LayerNode.compile(LayerNode.group([Course.node, Database.node]), [[Database.node, database]]))
 
 describe("Course authority", () => {
+  it.effect("expands an exact Gate 18 Course locator without retargeting a later selection", () =>
+    Effect.gen(function* () {
+      const courses = yield* Course.Service
+      const database = yield* Database.Service
+      const course = yield* courses.createCourse({ title: "Pinned course" })
+      const published = yield* courses.createView({
+        courseID: course.id,
+        name: "Pinned route",
+        expectedCourseVersion: 0,
+        authorship: Course.Authorship.learnerAuthored(),
+        revision: {
+          items: Array.from({ length: 65 }, (_, index) => ({ key: `item-${index}`, title: `Item ${index}` })),
+        },
+      })
+      yield* courses.select({
+        courseID: course.id,
+        revisionID: published.revision.id,
+        expectedCourseVersion: 0,
+        expectedSelectionVersion: 0,
+        expectedViewVersion: 0,
+        expectedRevisionVersion: 0,
+      })
+      const projection = yield* database.db.transaction((tx) =>
+        Course.projectLearningContext(tx, { limit: 64, includeCourseIDs: [course.id] }),
+      )
+      const entry = projection.entries.find(
+        (value): value is Course.LearningContextCourse => value.status === "available" && value.course.id === course.id,
+      )
+      if (!entry) return yield* Effect.die("Expected projected Course")
+      const locator = Course.learningContextLocator(entry, true)
+      expect(locator.itemIDs).toHaveLength(64)
+      expect(locator.itemCountAtCut).toBe(65)
+      const frontier = yield* database.db.get<{ sequence: number }>(
+        sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+      )
+
+      const first = yield* courses.readLearningContextLocator({ locator, limit: 64 })
+      expect(first).toMatchObject({
+        type: "available",
+        relation: "exact",
+        working: { range: { start: 0, returnedCount: 64, itemCountAtCut: 65, remaining: 1 } },
+      })
+      const second = yield* courses.readLearningContextLocator({ locator, start: 64, limit: 64 })
+      expect(second).toMatchObject({
+        type: "available",
+        relation: "exact",
+        working: { range: { start: 64, returnedCount: 1, itemCountAtCut: 65, remaining: 0 } },
+      })
+      expect(
+        yield* database.db.get<{ sequence: number }>(
+          sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+        ),
+      ).toEqual(frontier)
+
+      yield* courses.select({
+        courseID: course.id,
+        expectedCourseVersion: 0,
+        expectedSelectionRevisionID: published.revision.id,
+        expectedSelectionVersion: 1,
+      })
+      const afterSelection = yield* database.db.get<{ sequence: number }>(
+        sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+      )
+      expect(yield* courses.readLearningContextLocator({ locator, limit: 1 })).toMatchObject({
+        type: "available",
+        relation: "superseded",
+        selectionAtCut: { revisionID: published.revision.id, version: 1 },
+        currentSelection: { revisionID: undefined, version: 2 },
+        working: { revision: { id: published.revision.id }, range: { returnedCount: 1 } },
+      })
+
+      const malformed = yield* courses
+        .readLearningContextLocator({
+          locator: { ...locator, workingRevisionID: Course.RevisionID.make(`cvr_${"A".repeat(26)}`) },
+        })
+        .pipe(Effect.flip)
+      expect(malformed).toMatchObject({
+        _tag: "Course.InvalidTransitionError",
+        detail: "Pinned Course locator is malformed or relationally inconsistent",
+      })
+      expect(
+        yield* database.db.get<{ sequence: number }>(
+          sql`SELECT sequence FROM learning_shared_frontier WHERE singleton = 1`,
+        ),
+      ).toEqual(afterSelection)
+    }),
+  )
+
   it.effect("keeps exact selection stable and closes stale withdrawal races", () =>
     Effect.gen(function* () {
       const courses = yield* Course.Service

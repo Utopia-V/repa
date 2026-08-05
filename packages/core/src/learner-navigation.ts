@@ -123,6 +123,11 @@ export type AnchorResolution =
 export interface ReadInterface {
   readonly currentDefault: () => Effect.Effect<DefaultProjection, Error>
   readonly currentAnchor: (courseID: Course.CourseID) => Effect.Effect<AnchorProjection, Error>
+  readonly readDefaultTransition: (effectID: DefaultEffectID) => ReturnType<typeof readLearningContextDefaultTransition>
+  readonly readAnchorTransition: (input: {
+    readonly courseID: Course.CourseID
+    readonly effectID: AnchorEffectID
+  }) => ReturnType<typeof readLearningContextAnchorTransition>
   readonly listDefaultHistory: (options?: PageOptions) => Effect.Effect<Page<DefaultHistoryItem>, Error>
   readonly listAnchorHistory: (
     courseID: Course.CourseID,
@@ -147,6 +152,8 @@ function makeReadInterface(db: DatabaseShape): ReadInterface {
   return {
     currentDefault: () => snapshot(db, (tx) => readCurrentDefault(tx)),
     currentAnchor: (courseID) => snapshot(db, (tx) => readCurrentAnchor(tx, courseID)),
+    readDefaultTransition: (effectID) => snapshot(db, (tx) => readLearningContextDefaultTransition(tx, effectID)),
+    readAnchorTransition: (input) => snapshot(db, (tx) => readLearningContextAnchorTransition(tx, input)),
     listDefaultHistory: (options) => snapshot(db, (tx) => readDefaultHistory(tx, options)),
     listAnchorHistory: (courseID, options) => snapshot(db, (tx) => readAnchorHistory(tx, courseID, options)),
     listAnchoredCourses: (options) => snapshot(db, (tx) => readAnchoredCourses(tx, options)),
@@ -530,6 +537,128 @@ export function readCurrentDefault(tx: Transaction) {
 
 export function readCurrentAnchor(tx: Transaction, courseID: Course.CourseID) {
   return anchorHead(tx, courseID).pipe(Effect.flatMap((head) => anchorProjection(tx, courseID, head)))
+}
+
+/** Gate 18 exact current default head plus the persisted effect tuple that produced it. */
+export function projectLearningContextDefault(tx: Transaction, asOf: number) {
+  return Effect.gen(function* () {
+    const row = yield* defaultHead(tx)
+    return {
+      asOf,
+      projection: yield* defaultProjection(tx, row),
+      transition: row ? defaultLearningContextTransition(row) : undefined,
+    }
+  })
+}
+
+/** Gate 18 exact current anchor head plus the persisted effect tuple that produced it. */
+export function projectLearningContextAnchor(tx: Transaction, courseID: Course.CourseID, asOf: number) {
+  return Effect.gen(function* () {
+    const row = yield* anchorHead(tx, courseID)
+    return {
+      asOf,
+      projection: yield* anchorProjection(tx, courseID, row),
+      transition: row ? anchorLearningContextTransition(row) : undefined,
+    }
+  })
+}
+
+/** Pinned default-transition read; it never retargets to the current head. */
+export function readLearningContextDefaultTransition(tx: Transaction, effectID: DefaultEffectID) {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select()
+      .from(DefaultCoursePreferenceTransitionTable)
+      .where(eq(DefaultCoursePreferenceTransitionTable.id, effectID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!row) return { type: "unavailable" as const, cause: "transition_not_found" as const }
+    return {
+      type: "available" as const,
+      transition: defaultLearningContextTransition(row),
+      source: yield* sourceReceipt(tx, { kind: "default", effectID }),
+    }
+  })
+}
+
+/** Pinned anchor-transition read; it never retargets to another Course/head. */
+export function readLearningContextAnchorTransition(
+  tx: Transaction,
+  input: { readonly courseID: Course.CourseID; readonly effectID: AnchorEffectID },
+) {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select()
+      .from(CourseRouteAnchorTransitionTable)
+      .where(
+        and(
+          eq(CourseRouteAnchorTransitionTable.course_id, input.courseID),
+          eq(CourseRouteAnchorTransitionTable.id, input.effectID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!row) return { type: "unavailable" as const, cause: "transition_not_found" as const }
+    return {
+      type: "available" as const,
+      transition: anchorLearningContextTransition(row),
+      source: yield* sourceReceipt(tx, { kind: "anchor", effectID: input.effectID }),
+    }
+  })
+}
+
+function defaultLearningContextTransition(row: typeof DefaultCoursePreferenceTransitionTable.$inferSelect) {
+  return {
+    id: row.id,
+    version: row.version,
+    predecessorID: row.predecessor_id ?? undefined,
+    previousCourseID: row.previous_course_id ?? undefined,
+    courseID: row.course_id ?? undefined,
+    occurrenceID: row.occurrence_id,
+    target:
+      row.course_id === null
+        ? undefined
+        : {
+            courseVersion: row.target_course_version!,
+            selectionRevisionID: row.target_selection_revision_id ?? undefined,
+            selectionVersion: row.target_selection_version!,
+            viewID: row.target_view_id ?? undefined,
+            viewVersion: row.target_view_version ?? undefined,
+            revisionVersion: row.target_revision_version ?? undefined,
+          },
+    timeCommitted: row.time_committed,
+    commitOrder: row.commit_order,
+    frontier: { sequence: row.frontier_sequence, time: row.frontier_time },
+  }
+}
+
+function anchorLearningContextTransition(row: typeof CourseRouteAnchorTransitionTable.$inferSelect) {
+  return {
+    id: row.id,
+    courseID: row.course_id,
+    version: row.version,
+    predecessorID: row.predecessor_id ?? undefined,
+    previous:
+      row.previous_view_id && row.previous_revision_id && row.previous_item_id
+        ? { viewID: row.previous_view_id, revisionID: row.previous_revision_id, itemID: row.previous_item_id }
+        : undefined,
+    target:
+      row.target_view_id && row.target_revision_id && row.target_item_id
+        ? {
+            viewID: row.target_view_id,
+            revisionID: row.target_revision_id,
+            itemID: row.target_item_id,
+            courseVersion: row.target_course_version!,
+            selectionVersion: row.target_selection_version!,
+            viewVersion: row.target_view_version!,
+            revisionVersion: row.target_revision_version!,
+          }
+        : undefined,
+    occurrenceID: row.occurrence_id,
+    timeCommitted: row.time_committed,
+    commitOrder: row.commit_order,
+    frontier: { sequence: row.frontier_sequence, time: row.frontier_time },
+  }
 }
 
 /** Seal an anchor transition to the exact physical receipt that committed it. */

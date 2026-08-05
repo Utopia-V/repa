@@ -1,4 +1,5 @@
 import { Artifact } from "@opencode-ai/core/artifact"
+import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { ContentRootSchema } from "@opencode-ai/core/content-root/schema"
@@ -558,7 +559,7 @@ function insertAssistant(
             time_updated: time,
           })
           .run()
-        yield* TurnLifecycle.admitModel(tx, {
+        yield* admitModelWithLearningContext(tx, {
           turnID: interaction.turnID,
           sessionID: interaction.sessionID,
           assistantMessageID,

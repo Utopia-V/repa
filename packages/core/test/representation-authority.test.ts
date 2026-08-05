@@ -22,6 +22,7 @@ function appLayer(filename: string) {
       Representation.node,
       Representation.historicalReaderNode,
       Representation.currentUseReaderNode,
+      Representation.tutorCurrentUseReaderNode,
       Artifact.node,
       ContentRoot.node,
       Database.node,
@@ -114,6 +115,7 @@ async function prepareFixture() {
   const representations = await runtime.runPromise(Representation.Service)
   const historical = await runtime.runPromise(Representation.HistoricalReader)
   const current = await runtime.runPromise(Representation.CurrentUseReader)
+  const tutor = await runtime.runPromise(Representation.TutorCurrentUseReader)
   const databaseService = await runtime.runPromise(Database.Service)
   const proposal = await runtime.runPromise(roots.propose(materials))
   const root = await runtime.runPromise(
@@ -153,6 +155,7 @@ async function prepareFixture() {
     representations,
     historical,
     current,
+    tutor,
     databaseService,
     root,
     read,
@@ -285,6 +288,35 @@ describe("Representation authority", () => {
           }),
         )
         expect(direct.admission.basis).toBe("current_revision")
+        const tutor = await fixture.runtime.runPromise(
+          fixture.tutor.readForTutor({
+            representationRevisionID: accepted.id,
+            effectiveArtifactID: fixture.artifact.id,
+            selection: { type: "whole" },
+            budgets,
+          }),
+        )
+        expect(tutor).toMatchObject({ use: "tutor_current", admission: { basis: "current_revision" } })
+        await expect(
+          fixture.runtime.runPromise(
+            fixture.tutor.readForTutor({
+              representationRevisionID: accepted.id,
+              effectiveArtifactID: fixture.artifact.id,
+              selection: { type: "whole" },
+              budgets: { ...budgets, returnBytes: 32_769 },
+            }),
+          ),
+        ).rejects.toMatchObject({ _tag: "Representation.InvalidReadError" })
+        await expect(
+          fixture.runtime.runPromise(
+            fixture.tutor.readForTutor({
+              representationRevisionID: accepted.id,
+              effectiveArtifactID: fixture.artifact.id,
+              selection: { type: "whole" },
+              budgets: { ...budgets, records: 65 },
+            }),
+          ),
+        ).rejects.toMatchObject({ _tag: "Representation.InvalidReadError" })
 
         const canary = "gate11-provider-secret-canary"
         const modelDocument = ModelRenditionProfile.encode({

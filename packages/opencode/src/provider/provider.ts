@@ -35,6 +35,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { ModelStatus } from "./model-status"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
+import { ProviderWire } from "./wire"
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 10_000
 const HIBERNATED_INHERITED_PROVIDERS = new Set(["opencode", "opencode-go"])
@@ -103,6 +104,12 @@ function googleVertexAnthropicBaseURL(project: string | undefined, location: str
   return `https://aiplatform.${location}.rep.googleapis.com/v1/projects/${project}/locations/${location}/publishers/anthropic/models`
 }
 
+function googleVertexBaseURL(project: string | undefined, location: string | undefined) {
+  if (!project || !location) return
+  const endpoint = location === "global" ? "aiplatform.googleapis.com" : `${location}-aiplatform.googleapis.com`
+  return `https://${endpoint}/v1beta1/projects/${project}/locations/${location}/publishers/google`
+}
+
 type BundledSDK = {
   languageModel(modelId: string): LanguageModelV3
   chat?: (modelId: string) => LanguageModelV3
@@ -136,6 +143,163 @@ const BUNDLED_PROVIDERS: Record<string, () => Promise<(opts: any) => BundledSDK>
   "@ai-sdk/github-copilot": () =>
     import("@opencode-ai/core/github-copilot/copilot-provider").then((m) => m.createOpenaiCompatible),
   "venice-ai-sdk-provider": () => import("venice-ai-sdk-provider").then((m) => m.createVenice),
+}
+
+// Gate 18 may invoke a provider before model admission only when this pinned
+// factory is known to await the final JSON request through its injected fetch
+// port. Effective routes with a custom fetch are excluded separately because
+// that callback may retarget or rewrite the request after our port.
+const certificate = (
+  sourcePackage: string,
+  sourceVersion: string,
+  projector: string,
+  promptFields: readonly string[],
+  publicQuery: readonly string[] = [],
+  credentialQuery: readonly string[] = [],
+  compilerAuth: ProviderWire.Certificate["compilerAuth"] = "api_key",
+  bodyCredentials: ProviderWire.Certificate["bodyCredentials"] = [],
+  terminalRoutes: readonly string[] = [],
+): ProviderWire.Certificate =>
+  Object.freeze({
+    sourcePackage,
+    sourceVersion,
+    projector,
+    projectorVersion: 1,
+    promptFields: Object.freeze([...promptFields]),
+    publicQuery: Object.freeze([...publicQuery]),
+    credentialQuery: Object.freeze([...credentialQuery]),
+    bodyCredentials: Object.freeze([...bodyCredentials]),
+    compilerAuth,
+    terminalRoutes: Object.freeze([...terminalRoutes]),
+  })
+
+const GATE18_PROVIDER_CERTIFICATES: Readonly<Record<string, ProviderWire.Certificate>> = {
+  "@ai-sdk/amazon-bedrock": certificate(
+    "@ai-sdk/amazon-bedrock",
+    "4.0.112",
+    "bedrock",
+    ["messages", "system"],
+    [],
+    [],
+    "bedrock_bearer",
+  ),
+  "@ai-sdk/amazon-bedrock/mantle": certificate(
+    "@ai-sdk/amazon-bedrock",
+    "4.0.112",
+    "bedrock-mantle",
+    ["input", "instructions", "messages", "system"],
+    [],
+    [],
+    "bedrock_bearer",
+  ),
+  "@ai-sdk/anthropic": certificate("@ai-sdk/anthropic", "3.0.82", "anthropic-messages", ["messages", "system"]),
+  "@ai-sdk/azure": certificate(
+    "@ai-sdk/azure",
+    "3.0.49",
+    "azure-openai",
+    ["input", "instructions", "messages"],
+    ["api-version"],
+    ["api-key"],
+    "api_key",
+    ["openai_hosted_mcp"],
+  ),
+  "@ai-sdk/google": certificate(
+    "@ai-sdk/google",
+    "3.0.73",
+    "google-generative-ai",
+    ["contents", "systemInstruction"],
+    ["$alt", "alt", "prettyPrint"],
+    ["key"],
+  ),
+  "@ai-sdk/google-vertex": certificate(
+    "@ai-sdk/google-vertex",
+    "4.0.128",
+    "google-vertex",
+    ["contents", "messages", "system", "systemInstruction"],
+    ["$alt", "alt", "prettyPrint"],
+    [],
+    "vertex_api_key",
+  ),
+  "@ai-sdk/google-vertex/anthropic": certificate(
+    "@ai-sdk/google-vertex",
+    "4.0.128",
+    "google-vertex-anthropic",
+    ["messages", "system"],
+    ["$alt", "alt", "prettyPrint"],
+    [],
+    "vertex_anthropic_token",
+  ),
+  "@ai-sdk/openai": certificate(
+    "@ai-sdk/openai",
+    "3.0.53",
+    "openai",
+    ["input", "instructions", "messages"],
+    [],
+    [],
+    "api_key",
+    ["openai_hosted_mcp"],
+    ["openai-codex-oauth-http-v1"],
+  ),
+  "@ai-sdk/openai-compatible": certificate(
+    "@ai-sdk/openai-compatible",
+    "2.0.41",
+    "openai-compatible",
+    ["messages", "prompt"],
+    ["api-version"],
+    ["api-key", "key"],
+  ),
+  "@openrouter/ai-sdk-provider": certificate("@openrouter/ai-sdk-provider", "2.9.0", "openrouter", ["messages"]),
+  "@ai-sdk/xai": certificate("@ai-sdk/xai", "3.0.102", "xai", ["input", "instructions", "messages"]),
+  "@ai-sdk/mistral": certificate("@ai-sdk/mistral", "3.0.27", "mistral", ["messages"]),
+  "@ai-sdk/groq": certificate("@ai-sdk/groq", "3.0.31", "groq", ["messages"]),
+  "@ai-sdk/deepinfra": certificate("@ai-sdk/deepinfra", "2.0.41", "deepinfra", ["messages"]),
+  "@ai-sdk/cerebras": certificate("@ai-sdk/cerebras", "2.0.60", "cerebras", ["messages"]),
+  "@ai-sdk/cohere": certificate("@ai-sdk/cohere", "3.0.27", "cohere", ["messages"]),
+  "@ai-sdk/gateway": certificate("@ai-sdk/gateway", "3.0.104", "ai-gateway", ["prompt"], [], [], "gateway_api_key", [
+    "gateway_call_options",
+    "openai_hosted_mcp",
+  ]),
+  "@ai-sdk/togetherai": certificate("@ai-sdk/togetherai", "2.0.41", "togetherai", ["messages"]),
+  "@ai-sdk/perplexity": certificate("@ai-sdk/perplexity", "3.0.26", "perplexity", ["messages"]),
+  "@ai-sdk/vercel": certificate("@ai-sdk/vercel", "2.0.39", "vercel", ["messages", "prompt"]),
+  "@ai-sdk/alibaba": certificate("@ai-sdk/alibaba", "1.0.17", "alibaba", ["messages"]),
+  "venice-ai-sdk-provider": certificate("venice-ai-sdk-provider", "2.1.1", "venice", ["messages"]),
+}
+
+const GATE18_COMPILER_API_KEY = "repa-gate18-inert-credential"
+
+function compilerOptions(certificate: ProviderWire.Certificate, input: Record<string, any>) {
+  const options = { ...input }
+  delete options.fetch
+  delete options.credentialProvider
+  delete options.generateAuthToken
+  delete options.googleAuthOptions
+  delete options.accessKeyId
+  delete options.secretAccessKey
+  delete options.sessionToken
+  options.headers = {}
+  options.apiKey = GATE18_COMPILER_API_KEY
+  const callback = functionPath(options)
+  if (callback) {
+    throw new ProviderWire.SurfaceError(`Certified pure provider compiler has an unsupported callback: ${callback}`)
+  }
+  if (certificate.compilerAuth === "vertex_anthropic_token") {
+    options.generateAuthToken = async () => GATE18_COMPILER_API_KEY
+  }
+  return options
+}
+
+function functionPath(input: unknown, path: string[] = [], seen = new WeakSet<object>()): string | undefined {
+  if (typeof input === "function") return path.join(".") || "<root>"
+  if (!input || typeof input !== "object") return
+  if (seen.has(input)) return
+  seen.add(input)
+  if (Array.isArray(input)) {
+    return input.map((value, index) => functionPath(value, [...path, String(index)], seen)).find(Boolean)
+  }
+  return Object.entries(input)
+    .map(([key, value]) => functionPath(value, [...path, key], seen))
+    .find(Boolean)
 }
 
 type CustomModelLoader = (sdk: any, modelID: string, options?: Record<string, any>, model?: Model) => Promise<any>
@@ -1125,6 +1289,12 @@ export interface Interface {
   readonly getProvider: (providerID: ProviderV2.ID) => Effect.Effect<Info>
   readonly getModel: (providerID: ProviderV2.ID, modelID: ModelV2.ID) => Effect.Effect<Model, ModelNotFoundError>
   readonly getLanguage: (model: Model) => Effect.Effect<LanguageModelV3, ModelNotFoundError>
+  /**
+   * Resolve only a pinned provider route whose terminal fetch is safe for the
+   * Gate 18 no-I/O compile/verify seam. Dynamic packages and effective custom
+   * fetch routes fail before import or `doStream`.
+   */
+  readonly getInteractiveLanguage: (model: Model) => Effect.Effect<LanguageModelV3, ModelNotFoundError | InitError>
   readonly getRepresentationLanguage: (model: Model) => Effect.Effect<LanguageModelV3, ModelNotFoundError>
   readonly closest: (
     providerID: ProviderV2.ID,
@@ -1136,6 +1306,7 @@ export interface Interface {
 
 interface State {
   models: Map<string, LanguageModelV3>
+  compilerModels: Map<string, LanguageModelV3>
   representationModels: Map<string, LanguageModelV3>
   providers: Record<ProviderV2.ID, Info>
   catalog: Record<ProviderV2.ID, Info>
@@ -1305,6 +1476,47 @@ const layer = Layer.effect(
     const plugin = yield* Plugin.Service
     const modelsDevSvc = yield* ModelsDev.Service
     const runtimeFlags = yield* RuntimeFlags.Service
+    const verifiedCertificateVersions = new Set<string>()
+
+    const assertCertificateVersion = Effect.fn("Provider.assertCertificateVersion")(function* (
+      certificate: ProviderWire.Certificate,
+    ) {
+      const identity = `${certificate.sourcePackage}@${certificate.sourceVersion}`
+      if (verifiedCertificateVersions.has(identity)) return
+      const entry = yield* Effect.try({
+        try: () => Bun.resolveSync(certificate.sourcePackage, import.meta.dir),
+        catch: (cause) =>
+          new ProviderWire.SurfaceError(`Certified provider package cannot be resolved: ${String(cause)}`),
+      })
+      let current = path.dirname(entry)
+      while (true) {
+        const raw = yield* fs.readFileStringSafe(path.join(current, "package.json")).pipe(Effect.orDie)
+        if (raw) {
+          const manifest = yield* Effect.try({
+            try: () => JSON.parse(raw),
+            catch: (cause) =>
+              new ProviderWire.SurfaceError(`Certified provider package manifest is invalid: ${String(cause)}`),
+          })
+          if (isRecord(manifest) && manifest.name === certificate.sourcePackage) {
+            if (manifest.version !== certificate.sourceVersion) {
+              return yield* Effect.fail(
+                new ProviderWire.SurfaceError(
+                  `Certified provider version mismatch: expected ${identity}, found ${String(manifest.version)}`,
+                ),
+              )
+            }
+            verifiedCertificateVersions.add(identity)
+            return
+          }
+        }
+        const parent = path.dirname(current)
+        if (parent === current) break
+        current = parent
+      }
+      return yield* Effect.fail(
+        new ProviderWire.SurfaceError(`Certified provider manifest is unavailable: ${identity}`),
+      )
+    })
 
     const state = yield* InstanceState.make<State>(() =>
       Effect.gen(function* () {
@@ -1320,6 +1532,7 @@ const layer = Layer.effect(
 
         const providers: Record<ProviderV2.ID, Info> = {} as Record<ProviderV2.ID, Info>
         const languages = new Map<string, LanguageModelV3>()
+        const compilerLanguages = new Map<string, LanguageModelV3>()
         const representationLanguages = new Map<string, LanguageModelV3>()
         const modelLoaders: {
           [providerID: string]: CustomModelLoader
@@ -1632,6 +1845,7 @@ const layer = Layer.effect(
 
         return {
           models: languages,
+          compilerModels: compilerLanguages,
           representationModels: representationLanguages,
           providers,
           catalog,
@@ -1656,10 +1870,29 @@ const layer = Layer.effect(
       return { ...catalog, ...current.providers }
     })
 
-    async function resolveSDK(model: Model, s: State, envs: Record<string, string | undefined>) {
+    async function resolveSDK(
+      model: Model,
+      s: State,
+      envs: Record<string, string | undefined>,
+      purpose: "runtime" | "gate18_compiler" = "runtime",
+      compiler?: ProviderWire.Certificate,
+    ) {
       try {
         const provider = s.providers[model.providerID]
-        const options = { ...provider.options }
+        let options = { ...provider.options }
+
+        if (
+          model.providerID === "google-vertex" &&
+          model.api.npm === "@ai-sdk/google-vertex" &&
+          !options.baseURL &&
+          !model.api.url
+        ) {
+          const baseURL = googleVertexBaseURL(
+            typeof options.project === "string" ? options.project : undefined,
+            typeof options.location === "string" ? options.location : undefined,
+          )
+          if (baseURL) options.baseURL = baseURL
+        }
 
         if (
           model.providerID === "google-vertex" &&
@@ -1710,17 +1943,25 @@ const layer = Layer.effect(
             ...model.headers,
           }
 
+        const customFetch = options["fetch"]
+        delete options["fetch"]
+        if (purpose === "gate18_compiler") {
+          if (!compiler) throw new ProviderWire.SurfaceError("Pure provider compiler certificate is unavailable")
+          options = compilerOptions(compiler, options)
+        }
+
         const key = Hash.fast(
           JSON.stringify({
+            purpose,
             providerID: model.providerID,
             npm: model.api.npm,
+            terminalRoute: ProviderWire.routeIdentity(customFetch),
             options,
           }),
         )
         const existing = s.sdk.get(key)
         if (existing) return existing
 
-        const customFetch = options["fetch"]
         const chunkTimeout = options["chunkTimeout"]
         const headerTimeout = options["headerTimeout"]
         delete options["chunkTimeout"]
@@ -1743,11 +1984,14 @@ const layer = Layer.effect(
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined
 
-          const res = await fetchFn(input, {
-            ...opts,
-            // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
-            timeout: false,
-          }).finally(() => headerTimeoutCtl?.clear())
+          const routed = ProviderWire.route(customFetch, input, opts)
+          const res = await ProviderWire.interceptFetch(routed.input, routed.init, () =>
+            fetchFn(routed.input, {
+              ...routed.init,
+              // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
+              timeout: false,
+            }),
+          ).finally(() => headerTimeoutCtl?.clear())
 
           if (!chunkAbortCtl) return res
           return wrapSSE(res, chunkTimeout, chunkAbortCtl)
@@ -1846,6 +2090,67 @@ const layer = Layer.effect(
           cause instanceof NoSuchModelError
             ? new ModelNotFoundError({ modelID: model.id, providerID: model.providerID, cause })
             : undefined,
+      )
+    })
+
+    const getCompilerLanguage = Effect.fn("Provider.getCompilerLanguage")(function* (
+      model: Model,
+      certificate: ProviderWire.Certificate,
+    ) {
+      const s = yield* InstanceState.get(state)
+      const envs = yield* env.all()
+      const key = `${model.providerID}/${model.id}/${certificate.projector}/${certificate.projectorVersion}`
+      if (s.compilerModels.has(key)) return s.compilerModels.get(key)!
+
+      const provider = s.providers[model.providerID]
+      return yield* EffectPromise.refineRejection(
+        async () => {
+          const sdk = await resolveSDK(model, s, envs, "gate18_compiler", certificate)
+          const language = s.modelLoaders[model.providerID]
+            ? await s.modelLoaders[model.providerID](
+                sdk,
+                model.api.id,
+                compilerOptions(certificate, { ...provider.options, ...model.options }),
+                model,
+              )
+            : sdk.languageModel(model.api.id)
+          s.compilerModels.set(key, language)
+          return language
+        },
+        (cause) =>
+          cause instanceof NoSuchModelError
+            ? new ModelNotFoundError({ modelID: model.id, providerID: model.providerID, cause })
+            : undefined,
+      )
+    })
+
+    const getInteractiveLanguage = Effect.fn("Provider.getInteractiveLanguage")(function* (model: Model) {
+      const s = yield* InstanceState.get(state)
+      const provider = s.providers[model.providerID]
+      const certificate = GATE18_PROVIDER_CERTIFICATES[model.api.npm]
+      const customFetch =
+        model.providerID === "google-vertex" && !model.api.npm.includes("@ai-sdk/openai-compatible")
+          ? undefined
+          : provider?.options.fetch
+      const terminalRoute = ProviderWire.routeIdentity(customFetch)
+      if (
+        !certificate ||
+        (typeof customFetch === "function" && (!terminalRoute || !certificate.terminalRoutes.includes(terminalRoute)))
+      ) {
+        return yield* new InitError({
+          providerID: model.providerID,
+          cause: new ProviderWire.SurfaceError(
+            "Released-v1 interactive operation requires a pinned pure compiler and an admitted terminal route adapter",
+          ),
+        })
+      }
+      yield* assertCertificateVersion(certificate).pipe(
+        Effect.mapError((cause) => new InitError({ providerID: model.providerID, cause })),
+      )
+      return ProviderWire.certify(
+        yield* getLanguage(model),
+        yield* getCompilerLanguage(model, certificate),
+        certificate,
       )
     })
 
@@ -1993,6 +2298,7 @@ const layer = Layer.effect(
       getProvider,
       getModel,
       getLanguage,
+      getInteractiveLanguage,
       getRepresentationLanguage,
       closest,
       getSmallModel,

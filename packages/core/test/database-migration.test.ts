@@ -35,6 +35,7 @@ import agentNativeDefaultCourseMigration from "@opencode-ai/core/database/migrat
 import messageDiffProjectionMigration from "@opencode-ai/core/database/migration/repa/20260731120541_gate08_message_diff_projection"
 import agentNativeLearnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260731144324_gate16_agent_native_learner_goals"
 import learningBootstrapMigration from "@opencode-ai/core/database/migration/repa/20260802114557_gate17_learning_bootstrap"
+import learningContextMigration from "@opencode-ai/core/database/migration/repa/20260803182615_gate18_learning_context"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -205,6 +206,8 @@ const databaseV16Migrations = [
   messageDiffProjectionMigration,
   agentNativeLearnerGoalsMigration,
 ] as const
+
+const databaseV17Migrations = [...databaseV16Migrations, learningBootstrapMigration] as const
 
 function schemaManifestDigest(db: TestDatabase) {
   return db
@@ -444,6 +447,16 @@ function initializeDatabaseV16(db: TestDatabase) {
     yield* DatabaseMigration.apply(db, {
       path: "frozen-gate16.db",
       migrations: databaseV16Migrations,
+    })
+  })
+}
+
+function initializeDatabaseV17(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* initializeDatabaseV11(db)
+    yield* DatabaseMigration.apply(db, {
+      path: "frozen-gate17.db",
+      migrations: databaseV17Migrations,
     })
   })
 }
@@ -1495,8 +1508,19 @@ function completeSchemaManifest(db: TestDatabase) {
     )
 }
 
+function dropGate18(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql`DROP TRIGGER IF EXISTS turn_learning_context_cut_immutable_v18`)
+    yield* db.run(sql`DROP TRIGGER IF EXISTS turn_model_capacity_immutable_v18`)
+    yield* db.run(sql`DROP TABLE IF EXISTS turn_model_capacity`)
+    yield* db.run(sql`DROP TABLE IF EXISTS turn_learning_context_cut`)
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 17}`)
+  })
+}
+
 function dropGate17(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* dropGate18(db)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
     const triggers = yield* db.all<{ name: string }>(sql`
       SELECT name FROM sqlite_master
@@ -2046,6 +2070,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
           { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
           { version: BASELINE_VERSION + 16, id: learningBootstrapMigration.id },
+          { version: BASELINE_VERSION + 17, id: learningContextMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -2651,7 +2676,7 @@ describe("DatabaseMigration", () => {
     expect(result.mixedMissingView._tag).toBe("Failure")
   })
 
-  test("upgrades a frozen Gate 16 database to exact fresh Gate 17 parity without fabricating bootstrap state", async () => {
+  test("upgrades a frozen Gate 16 database through Gate 18 without fabricating bootstrap or context state", async () => {
     await using tmp = await tmpdir()
     const filename = path.join(tmp.path, "frozen-gate16.db")
     const fresh = await run(
@@ -2696,6 +2721,7 @@ describe("DatabaseMigration", () => {
             SELECT id, canonical_input FROM material_map WHERE id = 'map_gate17_fixture'
           `),
           bootstrapRows: yield* db.all(sql`SELECT id FROM learning_bootstrap_effect`),
+          contextRows: yield* db.all(sql`SELECT assistant_message_id FROM turn_learning_context_cut`),
           foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
           anchorSeal: yield* db.get<{ definition: string }>(sql`
             SELECT sql AS definition FROM sqlite_schema
@@ -2714,7 +2740,7 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV16Migrations.length + 1, id: learningBootstrapMigration.id },
+      { version: BASELINE_VERSION + databaseV17Migrations.length + 1, id: learningContextMigration.id },
     ])
     expect(upgraded.target).toEqual({
       authority_kind: "content_root",
@@ -2759,9 +2785,124 @@ describe("DatabaseMigration", () => {
       canonical_input: JSON.stringify({ fixture: "frozen_gate16" }),
     })
     expect(upgraded.bootstrapRows).toEqual([])
+    expect(upgraded.contextRows).toEqual([])
     expect(upgraded.foreignKeys).toEqual([])
     expect(upgraded.anchorSeal?.definition).toContain("invocation.command_name = 'update_learning_course'")
     expect(upgraded.anchorSeal?.definition).toContain("learning_bootstrap_anchor_result")
+  })
+
+  test("upgrades a frozen Gate 17 database to the exact immutable Gate 18 learning-context schema", async () => {
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        return yield* completeSchemaManifest(db)
+      }),
+    )
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV17(db)
+
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + databaseV17Migrations.length,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND name = 'turn_learning_context_cut'
+          `),
+        ).toBeUndefined()
+
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate17.db" })
+
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          journal: yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version DESC LIMIT 1`),
+          table: yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition FROM sqlite_schema
+            WHERE type = 'table' AND name = 'turn_learning_context_cut'
+          `),
+          trigger: yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition FROM sqlite_schema
+            WHERE type = 'trigger' AND name = 'turn_learning_context_cut_immutable_v18'
+          `),
+        }
+      }),
+    )
+
+    expect(upgraded.manifest).toEqual(fresh)
+    expect(upgraded.journal).toEqual([
+      { version: BASELINE_VERSION + databaseV17Migrations.length + 1, id: learningContextMigration.id },
+    ])
+    expect(upgraded.table?.definition).toContain("WITHOUT ROWID")
+    expect(upgraded.trigger?.definition).toContain("BEFORE UPDATE ON turn_learning_context_cut")
+
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        const unrelatedTriggers = yield* db.all<{ name: string }>(sql`
+          SELECT name FROM sqlite_schema
+          WHERE type = 'trigger' AND name <> 'turn_learning_context_cut_immutable_v18'
+        `)
+        yield* Effect.forEach(
+          unrelatedTriggers,
+          (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`),
+          { discard: true },
+        )
+        yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+        yield* db.run(sql`
+          INSERT INTO turn_model_operation (
+            assistant_message_id, turn_id, session_id, input_id, ordinal, state,
+            request_fingerprint, context_fingerprint, snapshot_frontier_sequence,
+            snapshot_frontier_time, observed_shared_frontier_sequence, observed_shared_frontier_time,
+            time_admitted, candidates_sealed
+          ) VALUES (
+            'msg_gate18_assistant', 'turn_gate18', 'gate18-session', 'input_gate18', 0, 'running',
+            ${"c".repeat(64)}, ${"d".repeat(64)}, 0, 0, 0, 0, 2, 0
+          )
+        `)
+        yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
+
+        const rendered = "<learning_context_v1>{}</learning_context_v1>"
+        const cut = {
+          schemaVersion: 1,
+          policyVersion: 1,
+          rendererVersion: 1,
+          operation: { assistantMessageID: "msg_gate18_assistant" },
+          cutAsOf: 2,
+          budget: { canonicalBytes: 0, renderedBytes: Buffer.byteLength(rendered) },
+          fingerprint: "e".repeat(64),
+          renderedFingerprint: "f".repeat(64),
+        }
+        let canonical = JSON.stringify(cut)
+        while (cut.budget.canonicalBytes !== Buffer.byteLength(canonical)) {
+          cut.budget.canonicalBytes = Buffer.byteLength(canonical)
+          canonical = JSON.stringify(cut)
+        }
+        yield* db.run(sql`
+          INSERT INTO turn_learning_context_cut (
+            assistant_message_id, canonical_cut, canonical_bytes, cut_fingerprint, cut_as_of,
+            rendered_block, rendered_bytes, rendered_fingerprint
+          ) VALUES (
+            'msg_gate18_assistant', ${canonical}, ${cut.budget.canonicalBytes}, ${cut.fingerprint}, 2,
+            ${rendered}, ${cut.budget.renderedBytes}, ${cut.renderedFingerprint}
+          )
+        `)
+
+        const update = yield* db
+          .run(
+            sql`UPDATE turn_learning_context_cut SET rendered_block = rendered_block WHERE assistant_message_id = 'msg_gate18_assistant'`,
+          )
+          .pipe(Effect.exit)
+        expect(Exit.isFailure(update)).toBeTrue()
+
+        yield* db.run(sql`DELETE FROM turn_model_operation WHERE assistant_message_id = 'msg_gate18_assistant'`)
+        expect(yield* db.all(sql`SELECT assistant_message_id FROM turn_learning_context_cut`)).toEqual([])
+        expect(yield* db.all(sql.raw("PRAGMA foreign_key_check"))).toEqual([])
+      }),
+    )
   })
 
   test("upgrades the frozen v12 schema through v13 to exact current Default-Course structural parity", async () => {
@@ -2807,6 +2948,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
         yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
         yield* db.transaction((tx) => learningBootstrapMigration.up(tx))
+        yield* db.transaction((tx) => learningContextMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
         return {
           structures: yield* structuralManifest(db),
@@ -2944,6 +3086,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
         yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
         yield* db.transaction((tx) => learningBootstrapMigration.up(tx))
+        yield* db.transaction((tx) => learningContextMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
 
         const after = yield* snapshot(db, columns)
@@ -6674,6 +6817,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 14, id: messageDiffProjectionMigration.id },
           { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
           { version: BASELINE_VERSION + 16, id: learningBootstrapMigration.id },
+          { version: BASELINE_VERSION + 17, id: learningContextMigration.id },
         ])
       }),
     )

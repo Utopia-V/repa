@@ -41,6 +41,8 @@ const withoutRowidTables = new Set([
   "learning_bootstrap_alignment_result",
   "learning_bootstrap_anchor_result",
   "learning_command_receipt",
+  "turn_learning_context_cut",
+  "turn_model_capacity",
 ])
 const args = parseArgs({
   args: process.argv.slice(2),

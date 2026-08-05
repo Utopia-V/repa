@@ -5,7 +5,7 @@ import { Endpoint, type EndpointPatch } from "./endpoint"
 import { RequestExecutor } from "./executor"
 import type { Framing } from "./framing"
 import { HttpTransport } from "./transport"
-import type { Transport, TransportRuntime } from "./transport"
+import type { Descriptor, Transport, TransportRuntime } from "./transport"
 import { WebSocketExecutor } from "./transport"
 import type { Protocol } from "./protocol"
 import { applyCachePolicy } from "../cache-policy"
@@ -150,9 +150,23 @@ export interface Interface {
    * route the request will resolve to.
    */
   readonly prepare: <Body = unknown>(request: LLMRequest) => Effect.Effect<PreparedRequestOf<Body>, LLMError>
+  /**
+   * Compile one immutable semantic request once and return a re-subscribable
+   * transport stream. Callers may retry this stream without re-resolving
+   * defaults, cache placement, protocol lowering, auth, or request bytes.
+   */
+  readonly prepareStream?: (request: LLMRequest) => Effect.Effect<PreparedStream, LLMError>
   readonly stream: StreamMethod
   readonly generate: GenerateMethod
 }
+
+export type PreparedStream = Readonly<{
+  request: LLMRequest
+  route: Readonly<{ id: string; protocol: ProtocolID }>
+  body: unknown
+  transport: Descriptor
+  stream: Stream.Stream<LLMEvent, LLMError>
+}>
 
 export interface StreamMethod {
   (request: LLMRequest): Stream.Stream<LLMEvent, LLMError>
@@ -178,6 +192,9 @@ const resolveRequestOptions = (request: LLMRequest) => {
     http: mergeHttpOptions(routeDefaults.http, modelDefaults?.http, request.http),
   })
 }
+
+/** Resolve every deterministic request option and cache placement used by compile. */
+export const resolveRequest = (request: LLMRequest) => applyCachePolicy(resolveRequestOptions(request))
 
 export interface MakeInput<Body, Frame, Event, State> {
   /** Route id used in diagnostics and prepared request metadata. */
@@ -342,7 +359,7 @@ export function make<Body, Prepared, Frame, Event, State>(
 // validated provider body plus transport-private prepared data, but does not
 // execute transport.
 const compile = Effect.fn("LLM.compile")(function* (request: LLMRequest) {
-  const resolved = applyCachePolicy(resolveRequestOptions(request))
+  const resolved = resolveRequest(request)
   const route = resolved.model.route
 
   const body = yield* route.body
@@ -378,6 +395,18 @@ const streamRequestWith = (runtime: TransportRuntime) => (request: LLMRequest) =
       return compiled.route.streamPrepared(compiled.prepared, compiled.request, runtime)
     }),
   )
+
+const prepareStreamWith = (runtime: TransportRuntime) =>
+  Effect.fn("LLMClient.prepareStream")(function* (request: LLMRequest) {
+    const compiled = yield* compile(request)
+    return {
+      request: compiled.request,
+      route: { id: compiled.route.id, protocol: compiled.route.protocol },
+      body: compiled.body,
+      transport: compiled.route.transport.describe(compiled.prepared),
+      stream: compiled.route.streamPrepared(compiled.prepared, compiled.request, runtime),
+    } satisfies PreparedStream
+  })
 
 const generateWith = (stream: Interface["stream"]) =>
   Effect.fn("LLM.generate")(function* (request: LLMRequest) {
@@ -417,11 +446,17 @@ export const streamRequest = (request: LLMRequest) =>
 export const layer: Layer.Layer<Service, never, RequestExecutor.Service> = Layer.effect(
   Service,
   Effect.gen(function* () {
-    const stream = streamRequestWith({
+    const runtime = {
       http: yield* RequestExecutor.Service,
       webSocket: Option.getOrUndefined(yield* Effect.serviceOption(WebSocketExecutor.Service)),
+    }
+    const stream = streamRequestWith(runtime)
+    return Service.of({
+      prepare: prepareWith as Interface["prepare"],
+      prepareStream: prepareStreamWith(runtime),
+      stream,
+      generate: generateWith(stream),
     })
-    return Service.of({ prepare: prepareWith as Interface["prepare"], stream, generate: generateWith(stream) })
   }),
 )
 
@@ -431,6 +466,7 @@ export const LLMClient = {
   Service,
   layer,
   prepare,
+  resolveRequest,
   stream,
   generate,
 } as const

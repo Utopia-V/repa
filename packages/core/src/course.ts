@@ -2,7 +2,8 @@ export * as Course from "./course"
 
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { and, asc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
+import { isDeepStrictEqual } from "node:util"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
 import { LearningFrontier } from "./learning-frontier"
@@ -12,29 +13,29 @@ import {
   Authorship,
   AcceptanceEffectExistsError,
   ConflictError,
+  CourseID,
   InactiveError,
   InvalidCursorError,
   InvalidTransitionError,
+  ItemID,
   NotFoundError,
+  RevisionID,
+  ViewID,
   createSelectionAcceptanceEffectID,
   createCourseID,
   createRevisionID,
   createViewID,
   type AuthorshipBasis,
   type CitationID,
-  type CourseID,
   type Error,
-  type ItemID,
   type MappingGroupID,
   type MappingKind,
   type Page,
   type PageOptions,
   type RevisionDisposition,
-  type RevisionID,
   type RevisionProposal,
   type RevisionWithdrawalReason,
   type SelectionAcceptanceEffectID,
-  type ViewID,
   type WithdrawalSelection,
 } from "./course/schema"
 import {
@@ -368,6 +369,90 @@ export type RevisionTransition = {
   readonly predecessorRevisionID?: RevisionID
 }
 
+export type LearningContextCourse = Readonly<{
+  status: "available"
+  course: CourseInfo
+  working?: Readonly<{
+    view: ViewInfo
+    revision: RevisionSummary
+    itemCountAtCut: number
+    items: readonly RevisionItem[]
+  }>
+}>
+
+export type LearningContextCourseProjection = Readonly<{
+  countAtCut: number
+  entries: readonly (
+    | LearningContextCourse
+    | Readonly<{ status: "unavailable"; courseID: CourseID; cause: "course_not_found" }>
+  )[]
+}>
+
+export type LearningContextLocator = Readonly<{
+  courseID: CourseID
+  stateVersion: number
+  selectionRevisionID: RevisionID | null
+  selectionVersion: number
+  workingViewID: ViewID | null
+  workingViewVersion: number | null
+  workingRevisionID: RevisionID | null
+  workingRevisionNumber: number | null
+  workingRevisionVersion: number | null
+  predecessorRevisionID: RevisionID | null
+  itemIDs: readonly ItemID[]
+  itemCountAtCut: number
+  lazyReadAvailable: boolean
+}>
+
+export type LearningContextLocatorRead =
+  | Readonly<{
+      type: "available"
+      relation: "exact" | "superseded"
+      selectionAtCut: Selection
+      currentSelection: Selection
+      course: CourseInfo
+      working?: Readonly<{
+        view: ViewInfo
+        revision: RevisionSummary
+        range: Readonly<{
+          start: number
+          returnedCount: number
+          itemCountAtCut: number
+          remaining: number
+          items: readonly RevisionItem[]
+        }>
+      }>
+    }>
+  | Readonly<{
+      type: "superseded"
+      cause: "course_changed" | "view_changed" | "revision_changed" | "revision_contents_changed"
+    }>
+  | Readonly<{
+      type: "unavailable"
+      cause: "course_not_found" | "view_not_found" | "revision_not_found"
+    }>
+
+export function learningContextLocator(
+  value: LearningContextCourse,
+  lazyReadAvailable: boolean,
+): LearningContextLocator {
+  return {
+    courseID: value.course.id,
+    stateVersion: value.course.stateVersion,
+    selectionRevisionID: value.course.selection.revisionID ?? null,
+    selectionVersion: value.course.selection.version,
+    workingViewID: value.working?.view.id ?? null,
+    workingViewVersion: value.working?.view.stateVersion ?? null,
+    workingRevisionID: value.working?.revision.id ?? null,
+    workingRevisionNumber: value.working?.revision.revisionNumber ?? null,
+    workingRevisionVersion: value.working?.revision.stateVersion ?? null,
+    predecessorRevisionID: value.working?.revision.predecessorRevisionID ?? null,
+    itemIDs: value.working?.items.map((item) => item.itemID) ?? [],
+    itemCountAtCut: value.working?.itemCountAtCut ?? 0,
+    lazyReadAvailable,
+  }
+}
+
 export type PublishedRevision = Readonly<{
   view: ViewInfo
   revision: RevisionSummary
@@ -546,6 +631,11 @@ export interface Interface {
   }) => Effect.Effect<RevisionSummary, Error>
   readonly listCourses: (options?: PageOptions) => Effect.Effect<Page<CourseInfo>, Error>
   readonly getCourse: (courseID: CourseID) => Effect.Effect<CourseInfo, Error>
+  readonly readLearningContextLocator: (input: {
+    readonly locator: unknown
+    readonly start?: number
+    readonly limit?: number
+  }) => Effect.Effect<LearningContextLocatorRead, Error>
   readonly listViews: (courseID: CourseID, options?: PageOptions) => Effect.Effect<Page<ViewInfo>, Error>
   readonly getView: (courseID: CourseID, viewID: ViewID) => Effect.Effect<ViewInfo, Error>
   readonly listRevisions: (
@@ -1799,6 +1889,18 @@ const layer = Layer.effect(
       return yield* snapshot(db, (tx) => prepareMembershipProof(tx, input))
     })
 
+    const readLearningContextLocator: Interface["readLearningContextLocator"] = Effect.fn(
+      "Course.readLearningContextLocator",
+    )(function* (input) {
+      const locator = yield* decodeLearningContextLocator(input.locator)
+      const start = input.start ?? 0
+      const limit = input.limit ?? 64
+      if (!Number.isSafeInteger(start) || start < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 64) {
+        return yield* new InvalidTransitionError({ detail: "Pinned Course range must use start >= 0 and limit 1..64" })
+      }
+      return yield* snapshot(db, (tx) => inspectLearningContextLocator(tx, locator, start, limit))
+    })
+
     return Service.of({
       createCourseInTransaction,
       correctCourseInTransaction,
@@ -1820,6 +1922,7 @@ const layer = Layer.effect(
       restoreRevision,
       listCourses,
       getCourse,
+      readLearningContextLocator,
       listViews,
       getView,
       listRevisions,
@@ -2741,6 +2844,335 @@ function applyWithdrawalSelection(
       input.time,
     )
   })
+}
+
+/**
+ * Gate 18 owner projection. The caller owns the surrounding transaction; this
+ * function neither advances the shared frontier nor creates an observation.
+ */
+export function projectLearningContext(
+  tx: Transaction,
+  input: { readonly limit: number; readonly includeCourseIDs?: readonly CourseID[] },
+): Effect.Effect<LearningContextCourseProjection, Error> {
+  return Effect.gen(function* () {
+    const count = yield* tx
+      .select({ value: sql<number>`count(*)` })
+      .from(CourseTable)
+      .where(isNull(CourseTable.withdrawal_reason))
+      .get()
+      .pipe(Effect.orDie)
+    const candidates = yield* tx
+      .select()
+      .from(CourseTable)
+      .where(isNull(CourseTable.withdrawal_reason))
+      .orderBy(asc(CourseTable.time_created), asc(CourseTable.id))
+      .limit(input.limit)
+      .all()
+      .pipe(Effect.orDie)
+    const forced = [...new Set(input.includeCourseIDs ?? [])].filter(
+      (courseID) => !candidates.some((course) => course.id === courseID),
+    )
+    const forcedRows =
+      forced.length === 0
+        ? []
+        : yield* tx.select().from(CourseTable).where(inArray(CourseTable.id, forced)).all().pipe(Effect.orDie)
+    const rows = [
+      ...candidates,
+      ...forcedRows.toSorted((left, right) =>
+        left.time_created === right.time_created
+          ? left.id.localeCompare(right.id)
+          : left.time_created - right.time_created,
+      ),
+    ]
+    const entries = yield* Effect.forEach(rows, (course) =>
+      Effect.gen(function* () {
+        const selection = yield* requireSelection(tx, course.id)
+        if (!selection.revision_id) {
+          return { status: "available" as const, course: courseInfo(course, selection) }
+        }
+        const revision = yield* tx
+          .select({ revision: CourseViewRevisionTable, state: CourseViewRevisionStateTable })
+          .from(CourseViewRevisionTable)
+          .innerJoin(
+            CourseViewRevisionStateTable,
+            eq(CourseViewRevisionStateTable.revision_id, CourseViewRevisionTable.id),
+          )
+          .where(
+            and(
+              eq(CourseViewRevisionTable.course_id, course.id),
+              eq(CourseViewRevisionTable.id, selection.revision_id),
+            ),
+          )
+          .get()
+          .pipe(Effect.orDie)
+        if (!revision) return yield* new NotFoundError({ entity: "revision", id: selection.revision_id })
+        const view = yield* requireView(tx, course.id, revision.revision.view_id)
+        const itemCount = yield* tx
+          .select({ value: sql<number>`count(*)` })
+          .from(CourseViewRevisionItemTable)
+          .where(eq(CourseViewRevisionItemTable.revision_id, revision.revision.id))
+          .get()
+          .pipe(Effect.orDie)
+        const items = yield* tx
+          .select()
+          .from(CourseViewRevisionItemTable)
+          .where(eq(CourseViewRevisionItemTable.revision_id, revision.revision.id))
+          .orderBy(asc(CourseViewRevisionItemTable.preorder_position), asc(CourseViewRevisionItemTable.item_id))
+          .limit(input.limit)
+          .all()
+          .pipe(Effect.orDie)
+        return {
+          status: "available" as const,
+          course: courseInfo(course, selection),
+          working: {
+            view: viewInfo(course, view),
+            revision: revisionSummary(
+              course,
+              view,
+              { ...revision.revision, ...revision.state },
+              selection,
+              yield* latestEligibleRevisionNumber(tx, course, view),
+            ),
+            itemCountAtCut: itemCount?.value ?? 0,
+            items: items.map((item) => ({
+              itemID: item.item_id,
+              parentItemID: item.parent_item_id ?? undefined,
+              title: item.title,
+              preorderPosition: item.preorder_position,
+              depth: item.depth,
+            })),
+          },
+        } satisfies LearningContextCourse
+      }),
+    )
+    const found = new Set(rows.map((row) => row.id))
+    const forcedUnavailable = forced.filter((courseID) => !found.has(courseID))
+    return {
+      countAtCut:
+        (count?.value ?? 0) +
+        forcedRows.filter((course) => course.withdrawal_reason !== null).length +
+        forcedUnavailable.length,
+      entries: [
+        ...entries,
+        ...forcedUnavailable.map((courseID) => ({
+          status: "unavailable" as const,
+          courseID,
+          cause: "course_not_found" as const,
+        })),
+      ],
+    }
+  })
+}
+
+function decodeLearningContextLocator(value: unknown): Effect.Effect<LearningContextLocator, InvalidTransitionError> {
+  if (!isLearningContextLocator(value)) {
+    return Effect.fail(
+      new InvalidTransitionError({ detail: "Pinned Course locator is malformed or relationally inconsistent" }),
+    )
+  }
+  return Effect.succeed(value)
+}
+
+function isLearningContextLocator(value: unknown): value is LearningContextLocator {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const input = value as Record<string, unknown>
+  if (
+    !isDeepStrictEqual(
+      Object.keys(input).toSorted(),
+      [
+        "courseID",
+        "itemCountAtCut",
+        "itemIDs",
+        "lazyReadAvailable",
+        "predecessorRevisionID",
+        "selectionRevisionID",
+        "selectionVersion",
+        "stateVersion",
+        "workingRevisionID",
+        "workingRevisionNumber",
+        "workingRevisionVersion",
+        "workingViewID",
+        "workingViewVersion",
+      ].toSorted(),
+    ) ||
+    !Schema.is(CourseID)(input.courseID) ||
+    !nonnegative(input.stateVersion) ||
+    !nullable(input.selectionRevisionID, RevisionID) ||
+    !nonnegative(input.selectionVersion) ||
+    !nullable(input.workingViewID, ViewID) ||
+    !nullableInteger(input.workingViewVersion) ||
+    !nullable(input.workingRevisionID, RevisionID) ||
+    !nullableInteger(input.workingRevisionNumber) ||
+    !nullableInteger(input.workingRevisionVersion) ||
+    !nullable(input.predecessorRevisionID, RevisionID) ||
+    !Array.isArray(input.itemIDs) ||
+    !input.itemIDs.every(Schema.is(ItemID)) ||
+    new Set(input.itemIDs).size !== input.itemIDs.length ||
+    !nonnegative(input.itemCountAtCut) ||
+    input.itemCountAtCut < input.itemIDs.length ||
+    typeof input.lazyReadAvailable !== "boolean"
+  ) {
+    return false
+  }
+  const withoutWorking = input.selectionRevisionID === null
+  return withoutWorking
+    ? input.workingViewID === null &&
+        input.workingViewVersion === null &&
+        input.workingRevisionID === null &&
+        input.workingRevisionNumber === null &&
+        input.workingRevisionVersion === null &&
+        input.predecessorRevisionID === null &&
+        input.itemIDs.length === 0 &&
+        input.itemCountAtCut === 0
+    : input.workingRevisionID === input.selectionRevisionID &&
+        input.workingViewID !== null &&
+        input.workingViewVersion !== null &&
+        input.workingRevisionNumber !== null &&
+        input.workingRevisionNumber >= 1 &&
+        input.workingRevisionVersion !== null &&
+        ((input.workingRevisionNumber === 1 && input.predecessorRevisionID === null) ||
+          (input.workingRevisionNumber > 1 && input.predecessorRevisionID !== null))
+}
+
+function inspectLearningContextLocator(
+  tx: Transaction,
+  locator: LearningContextLocator,
+  start: number,
+  limit: number,
+): Effect.Effect<LearningContextLocatorRead, Error> {
+  return Effect.gen(function* () {
+    const course = yield* tx
+      .select()
+      .from(CourseTable)
+      .where(eq(CourseTable.id, locator.courseID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!course) return { type: "unavailable", cause: "course_not_found" } as const
+    if (course.state_version !== locator.stateVersion) return { type: "superseded", cause: "course_changed" } as const
+    const selection = yield* requireSelection(tx, locator.courseID)
+    const selectionAtCut: SelectionRow = {
+      ...selection,
+      revision_id: locator.selectionRevisionID,
+      version: locator.selectionVersion,
+    }
+    const relation =
+      selection.revision_id === locator.selectionRevisionID && selection.version === locator.selectionVersion
+        ? ("exact" as const)
+        : ("superseded" as const)
+    if (locator.workingRevisionID === null) {
+      return {
+        type: "available",
+        relation,
+        selectionAtCut: { revisionID: undefined, version: locator.selectionVersion },
+        currentSelection: { revisionID: selection.revision_id ?? undefined, version: selection.version },
+        course: courseInfo(course, selectionAtCut),
+      }
+    }
+    const view = yield* tx
+      .select()
+      .from(CourseViewTable)
+      .where(and(eq(CourseViewTable.course_id, locator.courseID), eq(CourseViewTable.id, locator.workingViewID!)))
+      .get()
+      .pipe(Effect.orDie)
+    if (!view) return { type: "unavailable", cause: "view_not_found" } as const
+    if (view.state_version !== locator.workingViewVersion) return { type: "superseded", cause: "view_changed" } as const
+    const revision = yield* tx
+      .select({ revision: CourseViewRevisionTable, state: CourseViewRevisionStateTable })
+      .from(CourseViewRevisionTable)
+      .innerJoin(CourseViewRevisionStateTable, eq(CourseViewRevisionStateTable.revision_id, CourseViewRevisionTable.id))
+      .where(
+        and(
+          eq(CourseViewRevisionTable.course_id, locator.courseID),
+          eq(CourseViewRevisionTable.view_id, locator.workingViewID!),
+          eq(CourseViewRevisionTable.id, locator.workingRevisionID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!revision) return { type: "unavailable", cause: "revision_not_found" } as const
+    if (
+      revision.state.state_version !== locator.workingRevisionVersion ||
+      revision.revision.revision_number !== locator.workingRevisionNumber ||
+      revision.revision.predecessor_revision_id !== locator.predecessorRevisionID
+    ) {
+      return { type: "superseded", cause: "revision_changed" } as const
+    }
+    const itemCount =
+      (yield* tx
+        .select({ value: sql<number>`count(*)` })
+        .from(CourseViewRevisionItemTable)
+        .where(eq(CourseViewRevisionItemTable.revision_id, locator.workingRevisionID))
+        .get()
+        .pipe(Effect.orDie))?.value ?? 0
+    const prefix = yield* tx
+      .select({ itemID: CourseViewRevisionItemTable.item_id })
+      .from(CourseViewRevisionItemTable)
+      .where(eq(CourseViewRevisionItemTable.revision_id, locator.workingRevisionID))
+      .orderBy(asc(CourseViewRevisionItemTable.preorder_position), asc(CourseViewRevisionItemTable.item_id))
+      .limit(locator.itemIDs.length)
+      .all()
+      .pipe(Effect.orDie)
+    if (
+      itemCount !== locator.itemCountAtCut ||
+      !isDeepStrictEqual(
+        prefix.map((item) => item.itemID),
+        locator.itemIDs,
+      )
+    ) {
+      return { type: "superseded", cause: "revision_contents_changed" } as const
+    }
+    const items = yield* tx
+      .select()
+      .from(CourseViewRevisionItemTable)
+      .where(eq(CourseViewRevisionItemTable.revision_id, locator.workingRevisionID))
+      .orderBy(asc(CourseViewRevisionItemTable.preorder_position), asc(CourseViewRevisionItemTable.item_id))
+      .limit(limit)
+      .offset(start)
+      .all()
+      .pipe(Effect.orDie)
+    return {
+      type: "available",
+      relation,
+      selectionAtCut: { revisionID: locator.selectionRevisionID ?? undefined, version: locator.selectionVersion },
+      currentSelection: { revisionID: selection.revision_id ?? undefined, version: selection.version },
+      course: courseInfo(course, selectionAtCut),
+      working: {
+        view: viewInfo(course, view),
+        revision: revisionSummary(
+          course,
+          view,
+          { ...revision.revision, ...revision.state },
+          selectionAtCut,
+          yield* latestEligibleRevisionNumber(tx, course, view),
+        ),
+        range: {
+          start,
+          returnedCount: items.length,
+          itemCountAtCut: locator.itemCountAtCut,
+          remaining: Math.max(0, locator.itemCountAtCut - start - items.length),
+          items: items.map((item) => ({
+            itemID: item.item_id,
+            parentItemID: item.parent_item_id ?? undefined,
+            title: item.title,
+            preorderPosition: item.preorder_position,
+            depth: item.depth,
+          })),
+        },
+      },
+    }
+  })
+}
+
+function nonnegative(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+}
+
+function nullableInteger(value: unknown): value is number | null {
+  return value === null || nonnegative(value)
+}
+
+function nullable<A>(value: unknown, schema: Schema.Schema<A>): value is A | null {
+  return value === null || Schema.is(schema)(value)
 }
 
 function courseInfo(course: CourseRow, selection: SelectionRow): CourseInfo {

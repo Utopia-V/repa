@@ -66,6 +66,9 @@ export namespace ProviderTest {
           getLanguage: Effect.fn("TestProvider.getLanguage")(() =>
             Effect.die(new Error("ProviderTest.getLanguage not configured")),
           ),
+          getInteractiveLanguage: Effect.fn("TestProvider.getInteractiveLanguage")(() =>
+            Effect.die(new Error("ProviderTest.getInteractiveLanguage not configured")),
+          ),
           getRepresentationLanguage: Effect.fn("TestProvider.getRepresentationLanguage")(() =>
             Effect.die(new Error("ProviderTest.getRepresentationLanguage not configured")),
           ),

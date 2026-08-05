@@ -10,9 +10,15 @@ export interface TransportRuntime {
   readonly webSocket?: WebSocketExecutorInterface
 }
 
+export type Descriptor =
+  | Readonly<{ kind: "http"; method: string; url: string }>
+  | Readonly<{ kind: "websocket"; method: "WEBSOCKET"; url: string }>
+
 export interface Transport<Body, Prepared, Frame> {
   readonly id: string
   readonly prepare: (input: TransportPrepareInput<Body>) => Effect.Effect<Prepared, LLMError>
+  /** In-memory final transport identity; callers must sanitize credentials before persistence. */
+  readonly describe: (prepared: Prepared) => Descriptor
   readonly frames: (
     prepared: Prepared,
     request: LLMRequest,

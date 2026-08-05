@@ -52,7 +52,15 @@ type Options = {
   readonly tools?: Record<string, Tool>
   readonly toolChoice?: "auto" | "required" | "none"
   readonly retainedSteeringCut?: RetainedSteering.Cut | null
+  readonly learningContextRenderedBlock?: string | null
 }
+
+const learningContextBlock = [
+  "[Repa learning context — protected]",
+  "schemaVersion: repa.learning-context-cut.v1",
+  "cutFingerprint: test-learning-context",
+  "[/Repa learning context]",
+].join("\n")
 
 function prepare(options: Options = {}) {
   const messages: ModelMessage[] = options.messages ?? [{ role: "user", content: "Explain pointers with a diagram." }]
@@ -91,6 +99,12 @@ function prepare(options: Options = {}) {
           ? options.retainedSteeringCut === null
             ? undefined
             : (options.retainedSteeringCut ?? retainedSteeringCut())
+          : undefined,
+      learningContextRenderedBlock:
+        composition.type === "interactive"
+          ? options.learningContextRenderedBlock === null
+            ? undefined
+            : (options.learningContextRenderedBlock ?? learningContextBlock)
           : undefined,
       provider: {
         id: providerID,
@@ -142,6 +156,10 @@ describe("session.llm.request composition", () => {
 
   test("fails closed when an interactive operation has no exact retained steering cut", async () => {
     await expect(prepare({ retainedSteeringCut: null })).rejects.toThrow("no exact retained steering cut")
+  })
+
+  test("fails closed when an interactive operation has no exact learning-context block", async () => {
+    await expect(prepare({ learningContextRenderedBlock: null })).rejects.toThrow("no exact learning context block")
   })
 
   test("rejects representation before generic request hooks can inherit caller state", async () => {

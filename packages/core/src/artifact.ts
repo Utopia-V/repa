@@ -199,6 +199,7 @@ export type OrdinaryUseRevisionSnapshot = OrdinaryUseSnapshot & {
 
 export type OrdinaryUseByteSnapshot = OrdinaryUseSnapshot & {
   readonly fingerprint: Fingerprint
+  readonly mediaType: string
 }
 
 export type ExpectedOrdinarySource = {
@@ -217,9 +218,12 @@ export type OrdinaryUseByteStatus =
         | "source_missing"
         | "source_unbound"
         | "source_ineligible"
+        | "disposition_changed"
+        | "lineage_changed"
         | "revision_changed"
         | "attribution_changed"
         | "fingerprint_changed"
+        | "media_type_changed"
     }
 
 export type RevisionInfo = {
@@ -625,6 +629,7 @@ export function ordinaryUseByteSnapshot(snapshot: OrdinaryUseRevisionSnapshot): 
     attribution: snapshot.attribution,
     lineageVersion: snapshot.lineageVersion,
     fingerprint: snapshot.fingerprint,
+    mediaType: snapshot.mediaType,
   }
 }
 
@@ -661,6 +666,12 @@ export function inspectOrdinaryUseByteStatus(tx: Transaction, expected: Ordinary
     if (!current.source.currentRevisionID || !current.source.revisionAttribution || !current.source.descriptor) {
       return { status: "stale", cause: "source_ineligible" } as const
     }
+    if (current.dispositionVersion !== expected.dispositionVersion) {
+      return { status: "stale", cause: "disposition_changed" } as const
+    }
+    if (current.lineageVersion !== expected.lineageVersion) {
+      return { status: "stale", cause: "lineage_changed" } as const
+    }
     if (current.source.currentRevisionID !== expected.currentRevisionID) {
       return { status: "stale", cause: "revision_changed" } as const
     }
@@ -670,6 +681,9 @@ export function inspectOrdinaryUseByteStatus(tx: Transaction, expected: Ordinary
     const revision = yield* requireRevisionRow(tx, current.source.currentRevisionID)
     if (!sameFingerprint(revision, expected.fingerprint)) {
       return { status: "stale", cause: "fingerprint_changed" } as const
+    }
+    if (current.source.descriptor.mediaType !== expected.mediaType) {
+      return { status: "stale", cause: "media_type_changed" } as const
     }
     return { status: "eligible" } as const
   })
@@ -2278,7 +2292,8 @@ function equalOrdinaryUseByteSnapshot(left: OrdinaryUseByteSnapshot, right: Ordi
     equalOrdinaryUseSnapshot(left, right) &&
     left.fingerprint.algorithm === right.fingerprint.algorithm &&
     left.fingerprint.digest === right.fingerprint.digest &&
-    left.fingerprint.byteLength === right.fingerprint.byteLength
+    left.fingerprint.byteLength === right.fingerprint.byteLength &&
+    left.mediaType === right.mediaType
   )
 }
 

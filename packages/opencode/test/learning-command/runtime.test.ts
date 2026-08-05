@@ -1,4 +1,5 @@
 import { Course } from "@opencode-ai/core/course"
+import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import {
   CourseSelectionAcceptanceCommitSealTable,
   CourseSelectionAcceptanceEffectTable,
@@ -3589,6 +3590,17 @@ it.effect("settles Agent-native Default-Course actions once and denies before no
       courseID: seeded.course.id,
       usability: { usable: true },
     })
+    const initialDefaultEffectID = Schema.decodeSync(LearnerNavigation.DefaultEffectID)(output.settlement.effectID)
+    const pinnedDefault = yield* navigation.readDefaultTransition(initialDefaultEffectID)
+    expect(pinnedDefault).toMatchObject({
+      type: "available",
+      transition: { id: initialDefaultEffectID, version: 1, courseID: seeded.course.id },
+      source: {
+        occurrenceID: interaction.occurrenceID,
+        originSessionID: interaction.sessionID,
+        availability: "available",
+      },
+    })
     const partialV1Endpoint = JSON.stringify({
       kind: "course",
       locator: {
@@ -3825,6 +3837,7 @@ it.effect("settles Agent-native Default-Course actions once and denies before no
     ).toEqual({ outcome: "prompted_allow" })
 
     const cleared = yield* navigation.currentDefault()
+    expect(yield* navigation.readDefaultTransition(initialDefaultEffectID)).toEqual(pinnedDefault)
     const abandonedInput = {
       action: "set",
       courseID: seeded.course.id,
@@ -5333,6 +5346,24 @@ it.effect("keeps route anchors exact to one Course Revision Item and uses ordina
     expect(permissionRequests.some((request) => request.sessionID === interaction.sessionID)).toBe(false)
 
     const anchored = yield* navigation.currentAnchor(seeded.course.id)
+    const pinnedAnchor = yield* navigation.readAnchorTransition({
+      courseID: seeded.course.id,
+      effectID: result.effectID,
+    })
+    expect(pinnedAnchor).toMatchObject({
+      type: "available",
+      transition: {
+        id: result.effectID,
+        version: 1,
+        courseID: seeded.course.id,
+        target: { revisionID: seeded.view.revision.id, itemID: item.itemID },
+      },
+      source: {
+        occurrenceID: interaction.occurrenceID,
+        originSessionID: interaction.sessionID,
+        availability: "available",
+      },
+    })
     const deniedNoChangeInput = {
       courseID: seeded.course.id,
       expectedHeadID: anchored.headID,
@@ -5415,6 +5446,9 @@ it.effect("keeps route anchors exact to one Course Revision Item and uses ordina
       LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY,
       clearInput,
       context(clear.registration, "allow", LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY),
+    )
+    expect(yield* navigation.readAnchorTransition({ courseID: seeded.course.id, effectID: result.effectID })).toEqual(
+      pinnedAnchor,
     )
     const firstPage = yield* navigation.listAnchorHistory(seeded.course.id, { limit: 1 })
     expect(firstPage.items[0]?.effect.target).toBeNull()
@@ -9092,7 +9126,7 @@ function insertAssistant(
             time_updated: time,
           })
           .run()
-        yield* TurnLifecycle.admitModel(tx, {
+        yield* admitModelWithLearningContext(tx, {
           turnID: interaction.turnID,
           sessionID: interaction.sessionID,
           assistantMessageID,
@@ -9261,7 +9295,7 @@ function seedDelegatedLearningCommandInteraction(
             time_updated: time + 1,
           })
           .run()
-        yield* TurnLifecycle.admitModel(tx, {
+        yield* admitModelWithLearningContext(tx, {
           turnID: parentTurnID,
           sessionID: parentSessionID,
           assistantMessageID: parentAssistantMessageID,

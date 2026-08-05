@@ -9,6 +9,7 @@ import { ContentRootNTFS } from "./content-root/ntfs"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
 import { LearningFrontier } from "./learning-frontier"
+import { MAX_LAZY_BYTES, MAX_LAZY_ITEMS } from "./learning-context/schema"
 import { ModelRenditionProfile } from "./representation/model-rendition-profile"
 import { PDFTextProfile } from "./representation/pdf-text-profile"
 import {
@@ -264,6 +265,16 @@ export type CurrentUseRead = {
       }
 }
 
+export type TutorCurrentUseRead = {
+  readonly use: "tutor_current"
+  readonly representation: RepresentationInfo
+  readonly content: VerifiedContent
+  readonly proof: TutorCurrentUseProof
+  readonly receipt: CurrentUseReferenceReceipt
+  readonly storageSource: "canonical" | "deletion_stage"
+  readonly admission: CurrentUseRead["admission"]
+}
+
 export type CurrentUseStatus =
   | { readonly status: "eligible" }
   | {
@@ -290,6 +301,10 @@ export type CurrentUseDescriptor = {
 }
 
 type CurrentUseExpectation = CurrentAdmission & { readonly availabilityVersion: number }
+type TutorCurrentUseExpectation = CurrentAdmission & {
+  readonly availabilityVersion: number
+  readonly availabilityDisposition: Availability
+}
 
 export type CurrentUseReferenceReceipt = Readonly<{
   representationRevisionID: RevisionID
@@ -300,10 +315,19 @@ export type CurrentUseReferenceReceipt = Readonly<{
   availabilityVersion: number
   availability: Availability
   artifact: Artifact.OrdinaryUseRevisionSnapshot
-  continuedUseGrant?: Readonly<{ id: ContinuedUseGrantID; version: number }>
+  continuedUseGrant?: Readonly<{
+    id: ContinuedUseGrantID
+    version: number
+    disposition: "active" | "revoked"
+    oldSourceRevisionID: Artifact.RevisionID
+    currentSourceRevisionID: Artifact.RevisionID
+    currentLineageVersion: number
+    currentAttribution: Artifact.AttributionBasis
+  }>
 }>
 
 const currentUseProofToken = Symbol("Representation.CurrentUseProof")
+const tutorCurrentUseProofToken = Symbol("Representation.TutorCurrentUseProof")
 
 export class CurrentUseProof {
   readonly representationRevisionID: RevisionID
@@ -315,19 +339,7 @@ export class CurrentUseProof {
     if (token !== currentUseProofToken) throw new Error("Representation current-use proofs are owner-issued")
     this.representationRevisionID = expectation.row.id
     this.effectiveArtifactID = expectation.row.effective_artifact_id
-    this.receipt = Object.freeze({
-      representationRevisionID: expectation.row.id,
-      effectiveArtifactID: expectation.row.effective_artifact_id,
-      sourceRevisionID: expectation.row.source_revision_id,
-      acceptedLineageVersion: expectation.row.accepted_lineage_version,
-      attribution: attribution(expectation.row.attribution_type, expectation.row.attribution_member_id),
-      availabilityVersion: expectation.availabilityVersion,
-      availability: expectation.availability.disposition,
-      artifact: expectation.artifact,
-      ...(expectation.grant
-        ? { continuedUseGrant: { id: expectation.grant.id, version: expectation.grant.version } }
-        : {}),
-    })
+    this.receipt = Object.freeze(currentUseReceipt(expectation, expectation.availabilityVersion))
     this.#expectation = expectation
   }
 
@@ -400,12 +412,44 @@ export interface CurrentUseReaderInterface {
   }) => Effect.Effect<CurrentUseRead, Error>
 }
 
+export class TutorCurrentUseProof {
+  readonly representationRevisionID: RevisionID
+  readonly effectiveArtifactID: Artifact.ArtifactID
+  readonly receipt: CurrentUseReferenceReceipt
+  #expectation: TutorCurrentUseExpectation
+
+  constructor(token: symbol, expectation: TutorCurrentUseExpectation) {
+    if (token !== tutorCurrentUseProofToken) throw new Error("Representation Tutor current-use proofs are owner-issued")
+    this.representationRevisionID = expectation.row.id
+    this.effectiveArtifactID = expectation.row.effective_artifact_id
+    this.receipt = Object.freeze(currentUseReceipt(expectation, expectation.availabilityVersion))
+    this.#expectation = expectation
+  }
+
+  expectation(token: symbol) {
+    if (token !== tutorCurrentUseProofToken) return
+    return this.#expectation
+  }
+}
+
+export interface TutorCurrentUseReaderInterface {
+  readonly readForTutor: (input: {
+    readonly representationRevisionID: RevisionID
+    readonly effectiveArtifactID: Artifact.ArtifactID
+    readonly selection: ReadSelection
+    readonly budgets: ReadBudgets
+  }) => Effect.Effect<TutorCurrentUseRead, Error>
+}
+
 export class Service extends Context.Service<Service, Interface>()("@repa/Representation") {}
 export class HistoricalReader extends Context.Service<HistoricalReader, HistoricalReaderInterface>()(
   "@repa/Representation/HistoricalReader",
 ) {}
 export class CurrentUseReader extends Context.Service<CurrentUseReader, CurrentUseReaderInterface>()(
   "@repa/Representation/CurrentUseReader",
+) {}
+export class TutorCurrentUseReader extends Context.Service<TutorCurrentUseReader, TutorCurrentUseReaderInterface>()(
+  "@repa/Representation/TutorCurrentUseReader",
 ) {}
 
 export type Error =
@@ -995,6 +1039,61 @@ const currentUseLayer = Layer.effect(
   }),
 )
 
+const tutorCurrentUseLayer = Layer.effect(
+  TutorCurrentUseReader,
+  Effect.gen(function* () {
+    const database = yield* Database.Service
+    const db = database.db
+    const readForTutor: TutorCurrentUseReaderInterface["readForTutor"] = Effect.fn("Representation.readForTutor")(
+      function* (input) {
+        yield* validateTutorReadBudgets(input.budgets)
+        const admission = yield* snapshot(db, (tx) =>
+          admitCurrentUse(tx, {
+            revisionID: input.representationRevisionID,
+            effectiveArtifactID: input.effectiveArtifactID,
+          }),
+        )
+        yield* requireIntegrityBudget(admission.row, input.budgets)
+        const store = yield* openStorage(database.filename)
+        const read = yield* storageEffect("read", () =>
+          store.readRetained(expectedObject(admission.row), input.budgets.integrityScanBytes),
+        )
+        if (read.status === "missing") return yield* unavailable(admission.row.id, "externally_missing")
+        if (read.status === "integrity_mismatch") return yield* unavailable(admission.row.id, "integrity_mismatch")
+        const content = yield* materializeContent(admission.row, read.bytes, input.selection, input.budgets)
+        const finalized = yield* snapshot(db, (tx) =>
+          revalidateTutorCurrentUse(tx, {
+            ...admission,
+            availabilityVersion: admission.availability.version,
+            availabilityDisposition: admission.availability.disposition,
+          }),
+        )
+        return {
+          use: "tutor_current",
+          representation: representationInfo(admission.row, finalized.availability),
+          content,
+          proof: new TutorCurrentUseProof(tutorCurrentUseProofToken, {
+            ...admission,
+            availabilityVersion: admission.availability.version,
+            availabilityDisposition: admission.availability.disposition,
+          }),
+          receipt: currentUseReceipt(admission, admission.availability.version),
+          storageSource: read.source,
+          admission: admission.grant
+            ? {
+                basis: "continued_use_grant",
+                artifact: finalized.artifact,
+                grantID: admission.grant.id,
+                grantVersion: admission.grant.version,
+              }
+            : { basis: "current_revision", artifact: finalized.artifact },
+        }
+      },
+    )
+    return { readForTutor }
+  }),
+)
+
 export const historicalReaderNode = makeGlobalNode({
   service: HistoricalReader,
   layer: historicalLayer,
@@ -1004,6 +1103,12 @@ export const historicalReaderNode = makeGlobalNode({
 export const currentUseReaderNode = makeGlobalNode({
   service: CurrentUseReader,
   layer: currentUseLayer,
+  deps: [Database.node],
+})
+
+export const tutorCurrentUseReaderNode = makeGlobalNode({
+  service: TutorCurrentUseReader,
+  layer: tutorCurrentUseLayer,
   deps: [Database.node],
 })
 
@@ -1065,6 +1170,64 @@ export function inspectCurrentUseStatus(tx: Transaction, representationRevisionI
   })
 }
 
+export function requireTutorCurrentUseProof(tx: Transaction, proof: TutorCurrentUseProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof TutorCurrentUseProof ? proof.expectation(tutorCurrentUseProofToken) : undefined
+    if (!expected) {
+      return yield* new InvalidTransitionError({ detail: "Representation Tutor current-use proof is not owner-issued" })
+    }
+    yield* revalidateTutorCurrentUse(tx, expected)
+    return proof
+  })
+}
+
+/** Gate 18 metadata-only projection. It performs no storage I/O or availability write. */
+export function inspectLearningContextMetadata(tx: Transaction, representationRevisionID: RevisionID) {
+  return Effect.gen(function* () {
+    const row = yield* requireRepresentationRow(tx, representationRevisionID)
+    const availability = yield* requireAvailabilityRow(tx, representationRevisionID)
+    const artifact = yield* Artifact.readOrdinaryUseRevisionSnapshot(tx, row.effective_artifact_id).pipe(
+      Effect.map((value) => ({ type: "available" as const, value })),
+      Effect.catch((error) => {
+        if (error instanceof Artifact.NotFoundError || error instanceof Artifact.InactiveError) {
+          return Effect.succeed({ type: "unavailable" as const })
+        }
+        throw error
+      }),
+    )
+    const admission = yield* admitCurrentUse(tx, {
+      revisionID: row.id,
+      effectiveArtifactID: row.effective_artifact_id,
+    }).pipe(
+      Effect.map((value) => ({ type: "admitted" as const, value })),
+      Effect.catch((error) => Effect.succeed({ type: "denied" as const, status: currentUseStatusFailure(error) })),
+    )
+    const currentUse =
+      admission.type === "denied"
+        ? admission.status
+        : admission.value.availability.disposition === "available"
+          ? ({ status: "eligible" as const } satisfies CurrentUseStatus)
+          : ({
+              status: "stale" as const,
+              cause: admission.value.availability.disposition as Exclude<Availability, "available">,
+            } satisfies CurrentUseStatus)
+    const admittedReceipt =
+      admission.type === "admitted"
+        ? new CurrentUseProof(currentUseProofToken, {
+            ...admission.value,
+            availabilityVersion: admission.value.availability.version,
+          }).receipt
+        : undefined
+    return {
+      representation: representationInfo(row, availability),
+      currentArtifact: artifact.type === "available" ? artifact.value : undefined,
+      currentUse,
+      admittedReceipt,
+      activeContinuedUseGrant: admittedReceipt?.continuedUseGrant,
+    }
+  })
+}
+
 function currentUseStatusFailure(error: Error): CurrentUseStatus {
   if (error instanceof CurrentUseDeniedError) return { status: "stale", cause: error.reason }
   if (error instanceof UnavailableError) {
@@ -1073,13 +1236,12 @@ function currentUseStatusFailure(error: Error): CurrentUseStatus {
   if (
     error instanceof Artifact.NotFoundError ||
     error instanceof Artifact.InactiveError ||
-    error instanceof Artifact.InvalidTransitionError ||
     error instanceof Artifact.ConflictError
   ) {
     return { status: "stale", cause: "artifact_ineligible" }
   }
   if (error instanceof NotFoundError) return { status: "stale", cause: "representation_not_found" }
-  return { status: "stale", cause: "material_unavailable" }
+  throw error
 }
 
 function snapshot<A, E, R>(database: DatabaseShape, read: (tx: Transaction) => Effect.Effect<A, E, R>) {
@@ -1568,6 +1730,81 @@ function revalidateCurrentUse(tx: Transaction, input: CurrentAdmission & { reado
   })
 }
 
+function revalidateTutorCurrentUse(
+  tx: Transaction,
+  input: CurrentAdmission & {
+    readonly availabilityVersion: number
+    readonly availabilityDisposition: Availability
+  },
+) {
+  return Effect.gen(function* () {
+    const artifact = yield* Artifact.requireOrdinaryUseRevisionSnapshot(tx, input.artifact)
+    const availability = yield* requireAvailabilityRow(tx, input.row.id)
+    if (
+      availability.version !== input.availabilityVersion ||
+      availability.disposition !== input.availabilityDisposition ||
+      availability.disposition === "explicitly_deleted"
+    ) {
+      return yield* new CurrentUseDeniedError({
+        revisionID: input.row.id,
+        effectiveArtifactID: input.row.effective_artifact_id,
+        reason: "availability_changed",
+      })
+    }
+    if (!input.grant) return { artifact, availability }
+    const grant = yield* requireGrantRow(tx, input.grant.id)
+    if (
+      grant.version !== input.grant.version ||
+      grant.disposition !== "active" ||
+      grant.effective_artifact_id !== artifact.effectiveArtifactID ||
+      grant.representation_revision_id !== input.row.id ||
+      grant.old_source_revision_id !== input.row.source_revision_id ||
+      grant.current_source_revision_id !== artifact.currentRevisionID ||
+      grant.current_lineage_version !== artifact.lineageVersion ||
+      !sameAttribution(
+        attribution(grant.current_attribution_type, grant.current_attribution_member_id),
+        artifact.attribution,
+      )
+    ) {
+      return yield* new CurrentUseDeniedError({
+        revisionID: input.row.id,
+        effectiveArtifactID: input.row.effective_artifact_id,
+        reason: grant.disposition === "revoked" ? "grant_revoked" : "grant_stale",
+      })
+    }
+    return { artifact, availability, grant }
+  })
+}
+
+function currentUseReceipt(admission: CurrentAdmission, availabilityVersion: number): CurrentUseReferenceReceipt {
+  return {
+    representationRevisionID: admission.row.id,
+    effectiveArtifactID: admission.row.effective_artifact_id,
+    sourceRevisionID: admission.row.source_revision_id,
+    acceptedLineageVersion: admission.row.accepted_lineage_version,
+    attribution: attribution(admission.row.attribution_type, admission.row.attribution_member_id),
+    availabilityVersion,
+    availability: admission.availability.disposition,
+    artifact: admission.artifact,
+    ...(admission.grant
+      ? {
+          continuedUseGrant: {
+            id: admission.grant.id,
+            version: admission.grant.version,
+            disposition: admission.grant.disposition,
+            oldSourceRevisionID: admission.grant.old_source_revision_id,
+            currentSourceRevisionID: admission.grant.current_source_revision_id,
+            currentLineageVersion: admission.grant.current_lineage_version,
+            currentAttribution: attribution(
+              admission.grant.current_attribution_type,
+              admission.grant.current_attribution_member_id,
+            ),
+          },
+        }
+      : {}),
+  }
+}
+
 function materializeContent(
   row: RevisionRow,
   bytes: Uint8Array,
@@ -1637,6 +1874,20 @@ function validateReadBudgets(input: ReadBudgets): Effect.Effect<void, InvalidRea
     return Effect.void
   }
   return Effect.fail(new InvalidReadError({ detail: "Representation read budgets must be non-negative safe integers" }))
+}
+
+function validateTutorReadBudgets(input: ReadBudgets): Effect.Effect<void, InvalidReadError> {
+  return validateReadBudgets(input).pipe(
+    Effect.flatMap(() =>
+      input.returnBytes <= MAX_LAZY_BYTES && input.records <= MAX_LAZY_ITEMS
+        ? Effect.void
+        : Effect.fail(
+            new InvalidReadError({
+              detail: "Tutor Representation reads exceed the Gate 18 byte or item allowance",
+            }),
+          ),
+    ),
+  )
 }
 
 function requireIntegrityBudget(row: RevisionRow, budgets: ReadBudgets) {

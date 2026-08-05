@@ -117,6 +117,7 @@ export interface HttpJsonTransport<Body, Frame> extends Transport<Body, HttpPrep
 
 export const httpJson = <Body, Frame>(input: HttpJsonInput<Body, Frame>): HttpJsonTransport<Body, Frame> => ({
   id: "http-json",
+  describe: (prepared) => ({ kind: "http", method: "POST", url: prepared.request.url }),
   with: (patch) => httpJson({ ...input, ...patch }),
   prepare: (prepareInput) =>
     jsonRequestParts({

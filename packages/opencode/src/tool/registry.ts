@@ -14,7 +14,7 @@ import { Database } from "@opencode-ai/core/database/database"
 import { TodoWriteTool } from "./todo"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
-import { InvalidTool } from "./invalid"
+import { INVALID_TOOL_ID, InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
 import * as Tool from "./tool"
 import { Config } from "@/config/config"
@@ -79,9 +79,12 @@ import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { CourseQueryTool, LearningNavigationQueryTool } from "./course-navigation-query"
 import { LearnerGoalQueryTool } from "./learner-goal-query"
 import { LearningMaterialQueryTool } from "./learning-material-query"
+import { LearningMaterialReadTool } from "./learning-material-read"
+import { LearningInteractionReadTool } from "./learning-interaction-read"
 import { Artifact } from "@opencode-ai/core/artifact"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import { Representation } from "@opencode-ai/core/representation"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -89,19 +92,30 @@ export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: fals
 
 type TaskDef = Tool.InferDef<typeof TaskTool>
 type ReadDef = Tool.InferDef<typeof ReadTool>
+type InvalidDef = Tool.InferDef<typeof InvalidTool>
 
 type State = {
   custom: Tool.Def[]
   builtin: Tool.Def[]
+  invalid: InvalidDef
   task: TaskDef
   read: ReadDef
+}
+
+function registeredToolMap(items: readonly Tool.Def[]) {
+  const ids = new Set<string>()
+  items.forEach((item) => {
+    if (ids.has(item.id)) throw new Error(`Registered tool ID ${item.id} has more than one implementation`)
+    ids.add(item.id)
+  })
+  return Object.fromEntries(items.map((item) => [item.id, item]))
 }
 
 export interface Interface {
   readonly ids: () => Effect.Effect<string[]>
   readonly permissionCatalog: () => Effect.Effect<string[]>
   readonly all: () => Effect.Effect<Tool.Def[]>
-  readonly named: () => Effect.Effect<{ task: TaskDef; read: ReadDef }>
+  readonly named: () => Effect.Effect<{ invalid: InvalidDef; task: TaskDef; read: ReadDef }>
   readonly tools: (model: {
     providerID: ProviderV2.ID
     modelID: ModelV2.ID
@@ -146,6 +160,8 @@ const layer = Layer.effect(
     const learningNavigationQuery = yield* LearningNavigationQueryTool
     const learnerGoalQuery = yield* LearnerGoalQueryTool
     const learningMaterialQuery = yield* LearningMaterialQueryTool
+    const learningMaterialRead = yield* LearningMaterialReadTool
+    const learningInteractionRead = yield* LearningInteractionReadTool
     const representationConvert = yield* RepresentationConvertTool
     const updateRetainedLearningSteering = yield* UpdateRetainedLearningSteeringTool
     const updateLearnerGoals = yield* UpdateLearnerGoalsTool
@@ -276,6 +292,8 @@ const layer = Layer.effect(
           learningNavigationQuery: Tool.init(learningNavigationQuery),
           learnerGoalQuery: Tool.init(learnerGoalQuery),
           learningMaterialQuery: Tool.init(learningMaterialQuery),
+          learningMaterialRead: Tool.init(learningMaterialRead),
+          learningInteractionRead: Tool.init(learningInteractionRead),
           representationConvert: Tool.init(representationConvert),
           updateRetainedLearningSteering: Tool.init(updateRetainedLearningSteering),
           updateLearnerGoals: Tool.init(updateLearnerGoals),
@@ -300,6 +318,8 @@ const layer = Layer.effect(
             tool.learningNavigationQuery,
             tool.learnerGoalQuery,
             tool.learningMaterialQuery,
+            tool.learningMaterialRead,
+            tool.learningInteractionRead,
             tool.representationConvert,
             tool.updateRetainedLearningSteering,
             tool.updateLearnerGoals,
@@ -325,6 +345,7 @@ const layer = Layer.effect(
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
           ],
+          invalid: tool.invalid,
           task: tool.task,
           read: tool.read,
         }
@@ -333,7 +354,9 @@ const layer = Layer.effect(
 
     const all: Interface["all"] = Effect.fn("ToolRegistry.all")(function* () {
       const s = yield* InstanceState.get(state)
-      return [...s.builtin, ...s.custom] as Tool.Def[]
+      const result = [...s.builtin, ...s.custom] as Tool.Def[]
+      registeredToolMap(result)
+      return result
     })
 
     const ids: Interface["ids"] = Effect.fn("ToolRegistry.ids")(function* () {
@@ -342,10 +365,17 @@ const layer = Layer.effect(
 
     const permissionCatalog: Interface["permissionCatalog"] = Effect.fn("ToolRegistry.permissionCatalog")(function* () {
       const local = (yield* all())
-        .filter((tool) => tool.id !== InvalidTool.id)
+        .filter((tool) => tool.id !== INVALID_TOOL_ID)
         .map((tool) => Permission.permissionForTool(tool.id))
-      const remote = Object.keys(yield* mcp.tools()).map(Permission.permissionForTool)
-      return [...new Set([...local, ...remote])].filter((permission) => permission !== "*").sort()
+      const remoteIDs = Object.keys(yield* mcp.tools())
+      remoteIDs.forEach((id) => {
+        assertExternalToolID(id, "mcp")
+        assertExternalContentToolID(id, "mcp")
+      })
+      const remote = remoteIDs.map(Permission.permissionForTool)
+      return [...new Set([...local, ...remote, LearningContext.AUTOMATIC_CONTEXT_CAPABILITY_ID])]
+        .filter((permission) => permission !== "*")
+        .sort()
     })
 
     const describeTask = Effect.fn("ToolRegistry.describeTask")(function* (
@@ -396,12 +426,10 @@ const layer = Layer.effect(
         ? yield* describeCodeMode(input)
         : undefined
       const ruleset = Permission.merge(input.agent.permission, input.permission ?? [])
-      const enabled = Permission.visibleTools(
-        Object.fromEntries(filtered.map((tool) => [tool.id, tool])),
-        ruleset,
-        input.authority ?? [],
+      const enabled = Permission.visibleTools(registeredToolMap(filtered), ruleset, input.authority ?? [])
+      const visible = Object.values(enabled).filter(
+        (tool) => tool.id !== INVALID_TOOL_ID && (tool.id !== "execute" || codeModeDescription),
       )
-      const visible = Object.values(enabled).filter((tool) => tool.id !== "execute" || codeModeDescription)
 
       return yield* Effect.forEach(
         visible,
@@ -439,7 +467,7 @@ const layer = Layer.effect(
 
     const named: Interface["named"] = Effect.fn("ToolRegistry.named")(function* () {
       const s = yield* InstanceState.get(state)
-      return { task: s.task, read: s.read }
+      return { invalid: s.invalid, task: s.task, read: s.read }
     })
 
     return Service.of({ ids, permissionCatalog, all, named, tools })
@@ -555,6 +583,7 @@ export const node = LayerNode.make({
     LearnerNavigation.readNode,
     Artifact.node,
     MaterialMap.node,
+    MaterialMap.tutorCurrentUseReaderNode,
     Representation.node,
   ],
 })

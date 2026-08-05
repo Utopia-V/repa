@@ -1,4 +1,5 @@
 import { describe, expect } from "bun:test"
+import { admitModelWithLearningContext } from "./fixture/model-admission"
 import { eq, sql } from "drizzle-orm"
 import { Effect, Exit, Layer } from "effect"
 import { Course } from "@opencode-ai/core/course"
@@ -8,6 +9,7 @@ import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerGoalDispositionV2Table } from "@opencode-ai/core/learner-goal/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
@@ -18,6 +20,7 @@ import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { ProviderV2 } from "@opencode-ai/core/provider"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { Turn } from "@opencode-ai/schema/turn"
 import { testEffect } from "./lib/effect"
 
@@ -148,6 +151,63 @@ describe("Agent-native learner Goal authority", () => {
           },
         ],
       })
+      const before = yield* db.transaction((tx) =>
+        LearnerGoal.readLearningContextRevision(tx, {
+          goalID: operation.goalID,
+          revisionID: operation.revisionID,
+          asOf: Date.parse("2026-08-04T00:00:00.000Z"),
+          maxBytes: 32_768,
+          maxItems: 64,
+        }),
+      )
+      const after = yield* db.transaction((tx) =>
+        LearnerGoal.readLearningContextRevision(tx, {
+          goalID: operation.goalID,
+          revisionID: operation.revisionID,
+          asOf: Date.parse("2026-08-06T00:00:00.000Z"),
+          maxBytes: 32_768,
+          maxItems: 64,
+        }),
+      )
+      expect(before).toMatchObject({
+        type: "available",
+        relationAsOf: Date.parse("2026-08-04T00:00:00.000Z"),
+        revision: { id: operation.revisionID, targetRelation: "before" },
+      })
+      expect(after).toMatchObject({
+        type: "available",
+        relationAsOf: Date.parse("2026-08-06T00:00:00.000Z"),
+        revision: { id: operation.revisionID, targetRelation: "after" },
+      })
+      expect(
+        yield* db.transaction((tx) =>
+          LearnerGoal.readLearningContextRevision(tx, {
+            goalID: operation.goalID,
+            revisionID: operation.revisionID,
+            asOf: Date.parse("2026-08-06T00:00:00.000Z"),
+            maxBytes: 32_768,
+            maxItems: 1,
+            field: "conditions",
+          }),
+        ),
+      ).toMatchObject({
+        type: "available",
+        field: "conditions",
+        value: { offset: 0, items: ["Finish the practice set"], total: 1 },
+      })
+      expect(
+        yield* Effect.flip(
+          db.transaction((tx) =>
+            LearnerGoal.readLearningContextRevision(tx, {
+              goalID: operation.goalID,
+              revisionID: operation.revisionID,
+              asOf: 0,
+              maxBytes: 32_769,
+              maxItems: 64,
+            }),
+          ),
+        ),
+      ).toBeInstanceOf(LearnerGoal.LearningContextReadError)
       expect(yield* db.all(sql`PRAGMA foreign_key_check`)).toEqual([])
     }),
   )
@@ -700,6 +760,156 @@ describe("Agent-native learner Goal authority", () => {
       ).toMatchObject({ type: "settled", settlement: { outcome: "applied", schemaVersion: 2 } })
     }),
   )
+
+  it.effect(
+    "keeps Course and Goal families represented under deterministic Gate 18 byte pressure without writing",
+    () =>
+      Effect.gen(function* () {
+        const db = (yield* Database.Service).db
+        const courses = yield* Course.Service
+        const base = Date.now() + 1_000
+        yield* Effect.forEach(
+          Array.from({ length: 8 }, (_, index) => index),
+          (index) => courses.createCourse({ title: `Pressure Course ${index} ${"课".repeat(100)}` }),
+          { discard: true },
+        )
+        const command: LearnerGoal.CommandV2 = {
+          operations: Array.from({ length: 8 }, (_, index) => ({
+            type: "create" as const,
+            outcome: `Pressure Goal ${index} ${"x".repeat(2_800)}`,
+            conditions: [`Condition ${index} ${"y".repeat(500)}`],
+          })),
+        }
+        const invocation = yield* seedAgentInvocation(db, "gate18-pressure", command, base)
+        const reserved = yield* db.transaction((tx) =>
+          LearningCommand.reserveLearnerGoalsV2(tx, {
+            ...invocation,
+            settlement: { time: base + 1, order: 1 },
+          }),
+        )
+        if (reserved.type !== "admitted" || !reserved.candidate) {
+          return yield* Effect.die("Expected the Gate 18 pressure Goal candidate")
+        }
+        yield* db.transaction((tx) =>
+          LearningCommand.settleLearnerGoalPolicyV2(tx, {
+            partID: invocation.envelope.partID,
+            outcome: "policy_allow",
+            policyBasis: { source: "test", rule: "allow" },
+            time: base + 2,
+            order: 2,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          LearningCommand.settleLearnerGoalsV2(tx, {
+            partID: invocation.envelope.partID,
+            settlement: { time: base + 3, order: 3 },
+          }),
+        )
+        const frontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+        const providerSurface = LearningContext.bindProviderToolSurface({
+          route: {
+            runtime: "ai_sdk",
+            provider: "gate18-pressure-provider",
+            model: "gate18-pressure-model",
+            protocol: "language-model-v3",
+            compiler: {
+              sourcePackage: "gate18-pressure-provider",
+              sourceVersion: "1",
+              projector: "test",
+              projectorVersion: 1,
+              promptFields: ["messages"],
+              publicQuery: [],
+              credentialQuery: [],
+              bodyCredentials: [],
+              compilerAuth: "api_key",
+              terminalRoutes: [],
+            },
+            transport: {
+              method: "POST",
+              endpoint: { protocol: "https:", host: "provider.test", pathname: "/v1", query: [] },
+            },
+          },
+          toolChoice: { state: "absent" },
+          definitions: LearningContext.LAZY_READ_CAPABILITY_IDS.map((id) => ({
+            id,
+            value: {
+              type: "function",
+              name: id,
+              description: `Gate 18 pressure fixture for ${id}`,
+              inputSchema: { type: "object", properties: {}, additionalProperties: false },
+            },
+          })),
+        })
+        const retained = {
+          schemaVersion: 1,
+          assistantMessageID: invocation.envelope.assistantMessageID,
+          cutAsOf: base + 100,
+          throughSteeringRevision: 0,
+          throughSharedFrontier: frontier,
+          sourceTemporalContext: {
+            state: "unavailable",
+            occurrenceID: invocation.envelope.occurrenceID,
+            instant: base + 100,
+            reason: "timezone_unavailable",
+            sourceOrder: 1,
+          },
+          items: [],
+          renderedBytes: 0,
+          fingerprint: "a".repeat(64),
+        } as unknown as RetainedSteering.Cut
+        const input = {
+          operation: {
+            sessionID: invocation.envelope.sessionID,
+            turnID: invocation.envelope.turnID,
+            inputID: invocation.envelope.inputID,
+            causalOccurrenceID: invocation.envelope.occurrenceID,
+            assistantMessageID: invocation.envelope.assistantMessageID,
+            ordinal: 0,
+          },
+          retainedSteering: retained,
+          capabilityBasis: {
+            catalogVersion: LearningContext.CAPABILITY_CATALOG_VERSION,
+            policyFingerprint: "b".repeat(64),
+            effectiveAutomaticContext: true,
+            effectiveLazyReadCapabilities: [...LearningContext.LAZY_READ_CAPABILITY_IDS],
+            effectiveProviderToolSurfaceBinding: providerSurface.binding,
+          },
+        } satisfies LearningContext.PrepareInput
+        const before = yield* Effect.all({
+          courses: db.all(sql`SELECT * FROM course ORDER BY id`),
+          goals: db.all(sql`SELECT * FROM learner_goal_revision ORDER BY goal_id, version`),
+          frontier: db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`),
+        })
+        const first = yield* db.transaction((tx) => LearningContext.prepareCut(tx, input))
+        const second = yield* db.transaction((tx) => LearningContext.prepareCut(tx, input))
+        const sections = Object.fromEntries(first.cut.sections.map((section) => [section.owner, section]))
+
+        expect(second).toEqual(first)
+        expect(sections.course).toMatchObject({ countAtCut: 8 })
+        expect(sections.learner_goal).toMatchObject({ countAtCut: 8 })
+        expect(sections.course?.entries.length).toBeGreaterThan(0)
+        expect(sections.learner_goal?.entries.length).toBeGreaterThan(0)
+        expect(
+          first.cut.sections.some((section) => section.coverage === "locator_only" || section.coverage === "truncated"),
+        ).toBeTrue()
+        expect(
+          first.cut.sections.some(
+            (section) =>
+              section.omission.type === "exact" &&
+              section.omission.reasons.some((reason) => reason.reason === "gate18_byte_budget"),
+          ),
+        ).toBeTrue()
+        expect(first.cut.budget.canonicalBytes).toBeLessThanOrEqual(LearningContext.MAX_CANONICAL_BYTES)
+        expect(first.cut.budget.renderedBytes).toBeLessThanOrEqual(LearningContext.MAX_RENDERED_BYTES)
+        expect(
+          yield* Effect.all({
+            courses: db.all(sql`SELECT * FROM course ORDER BY id`),
+            goals: db.all(sql`SELECT * FROM learner_goal_revision ORDER BY goal_id, version`),
+            frontier: db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`),
+          }),
+        ).toEqual(before)
+      }),
+  )
 })
 
 function seedAgentInvocation(
@@ -816,7 +1026,7 @@ function seedAgentInvocation(
             time_updated: time + 1,
           })
           .run()
-        yield* TurnLifecycle.admitModel(tx, {
+        yield* admitModelWithLearningContext(tx, {
           turnID,
           sessionID,
           assistantMessageID,

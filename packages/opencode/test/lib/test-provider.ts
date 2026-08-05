@@ -25,7 +25,7 @@ export function testProviderConfig(llmUrl: string) {
             temperature: false,
             tool_call: true,
             release_date: "2025-01-01",
-            limit: { context: 100_000, output: 10_000 },
+            limit: { context: 200_000, output: 10_000 },
             cost: { input: 0, output: 0 },
             options: {},
           },

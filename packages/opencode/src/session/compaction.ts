@@ -22,6 +22,8 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { buildPrompt } from "@opencode-ai/core/session/compaction"
 import { SessionCompactionEvent } from "@opencode-ai/schema/session-compaction-event"
+import { LearningContext } from "@opencode-ai/core/learning-context"
+import { Database } from "@opencode-ai/core/database/database"
 
 export const Event = SessionCompactionEvent
 
@@ -48,6 +50,17 @@ type CompletedCompaction = {
   assistantIndex: number
   summary: string | undefined
 }
+
+export type OverflowSelection = Readonly<{
+  tailStartMessageID: MessageID
+  removableMessageIDs: readonly MessageID[]
+  removableMessageIDsFingerprint: string
+}>
+
+export type Compactable = Readonly<{
+  messages: SessionV1.WithParts[]
+  selection?: OverflowSelection
+}>
 
 function summaryText(message: SessionV1.WithParts) {
   const text = message.parts
@@ -133,6 +146,11 @@ export interface Interface {
     model: Provider.Model
   }) => Effect.Effect<boolean>
   readonly prune: (input: { sessionID: SessionID }) => Effect.Effect<void>
+  /** Exact prefix the compaction owner may replace while retaining a tail. */
+  readonly compactable: (input: {
+    messages: SessionV1.WithParts[]
+    model: Provider.Model
+  }) => Effect.Effect<Compactable>
   readonly process: (input: {
     parentID: MessageID
     messages: SessionV1.WithParts[]
@@ -146,6 +164,10 @@ export interface Interface {
     model: { providerID: ProviderV2.ID; modelID: ModelV2.ID }
     auto: boolean
     overflow?: boolean
+    capacityHistory?: Readonly<{
+      sourceAssistantMessageID: MessageID
+      selection: OverflowSelection
+    }>
   }) => Effect.Effect<void>
 }
 
@@ -164,6 +186,7 @@ const layer = Layer.effect(
     const provider = yield* Provider.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
+    const database = yield* Database.Service
 
     const isOverflow = Effect.fn("SessionCompaction.isOverflow")(function* (input: {
       tokens: SessionV1.Assistant["tokens"]
@@ -235,6 +258,40 @@ const layer = Layer.effect(
       return {
         head: input.messages.slice(0, keep.start),
         tail_start_id: keep.id,
+      }
+    })
+
+    const compactable = Effect.fn("SessionCompaction.compactable")(function* (input: {
+      messages: SessionV1.WithParts[]
+      model: Provider.Model
+    }) {
+      const prior = completedCompactions(input.messages)
+      const hidden = new Set(prior.flatMap((item) => [item.userIndex, item.assistantIndex]))
+      const visible = input.messages.filter((_, index) => !hidden.has(index))
+      const selected = yield* select({ messages: visible, cfg: yield* config.get(), model: input.model })
+      // Without a retained tail, compaction would absorb the current user
+      // input. Gate 18 therefore treats the whole request as fixed instead of
+      // claiming that history can safely repair it.
+      if (!selected.tail_start_id || selected.head.length === 0) return { messages: [] }
+      const removable = new Set([
+        ...input.messages.filter((_, index) => hidden.has(index)).map((message) => message.info.id),
+        ...selected.head.map((message) => message.info.id),
+      ])
+      const end = input.messages.findIndex((message) => !removable.has(message.info.id))
+      if (end < 1 || input.messages.slice(end).some((message) => removable.has(message.info.id))) {
+        return { messages: [] }
+      }
+      const messages = input.messages.slice(0, end)
+      const removableMessageIDs = messages.map((message) => message.info.id)
+      return {
+        messages,
+        selection: {
+          tailStartMessageID: selected.tail_start_id,
+          removableMessageIDs,
+          removableMessageIDsFingerprint: LearningContext.canonicalFingerprint(
+            LearningContext.toJsonValue(removableMessageIDs),
+          ),
+        },
       }
     })
 
@@ -335,10 +392,52 @@ const layer = Layer.effect(
       const prior = completedCompactions(history)
       const hidden = new Set(prior.flatMap((item) => [item.userIndex, item.assistantIndex]))
       const previousSummary = prior.at(-1)?.summary
-      const selected = yield* select({
-        messages: history.filter((_, index) => !hidden.has(index)),
-        cfg,
-        model,
+      const selected = yield* Effect.gen(function* () {
+        const capacityHistory = compactionPart?.capacity_history
+        if (!capacityHistory) {
+          return yield* select({
+            messages: history.filter((_, index) => !hidden.has(index)),
+            cfg,
+            model,
+          })
+        }
+        if (input.overflow) {
+          return yield* Effect.die(new Error("Capacity-history compaction cannot use provider-overflow replay"))
+        }
+        const tail = compactionPart.tail_start_id
+        const tailIndex = tail ? history.findIndex((message) => message.info.id === tail) : -1
+        if (tailIndex < 1) return yield* Effect.die(new Error("Capacity-history compaction tail is unavailable"))
+        const sourceIndex = history.findIndex(
+          (message) =>
+            message.info.id === capacityHistory.source_assistant_message_id && message.info.role === "assistant",
+        )
+        if (sourceIndex <= tailIndex) {
+          return yield* Effect.die(new Error("Capacity-history source Assistant is unavailable"))
+        }
+        const head = history.slice(0, tailIndex)
+        const ids = head.map((message) => message.info.id)
+        if (
+          capacityHistory.removable_message_count !== ids.length ||
+          capacityHistory.removable_message_ids_fingerprint !==
+            LearningContext.canonicalFingerprint(LearningContext.toJsonValue(ids))
+        ) {
+          return yield* Effect.die(new Error("Capacity-history compaction prefix differs from its admitted selection"))
+        }
+        const capacity = yield* database.db
+          .transaction((tx) => LearningContext.readCapacity(tx, capacityHistory.source_assistant_message_id))
+          .pipe(Effect.orDie)
+        const removableHistory = capacity.type === "available" ? capacity.assessment.removableHistory : undefined
+        if (
+          capacity.type !== "available" ||
+          capacity.assessment.decision !== "history_overflow" ||
+          !removableHistory ||
+          removableHistory.tailStartMessageID !== tail ||
+          removableHistory.messageCount !== ids.length ||
+          removableHistory.messageIDsFingerprint !== capacityHistory.removable_message_ids_fingerprint
+        ) {
+          return yield* Effect.die(new Error("Capacity-history marker differs from its durable capacity assessment"))
+        }
+        return { head, tail_start_id: tail }
       })
       // Plugins may extend the task input, but the program-owned compaction contract remains fixed in the system prompt.
       const compacting = yield* plugin.trigger(
@@ -528,6 +627,10 @@ const layer = Layer.effect(
       model: { providerID: ProviderV2.ID; modelID: ModelV2.ID }
       auto: boolean
       overflow?: boolean
+      capacityHistory?: Readonly<{
+        sourceAssistantMessageID: MessageID
+        selection: OverflowSelection
+      }>
     }) {
       const msg = yield* session.updateMessage({
         id: MessageID.ascending(),
@@ -544,12 +647,21 @@ const layer = Layer.effect(
         type: "compaction",
         auto: input.auto,
         overflow: input.overflow,
+        tail_start_id: input.capacityHistory?.selection.tailStartMessageID,
+        capacity_history: input.capacityHistory
+          ? {
+              source_assistant_message_id: input.capacityHistory.sourceAssistantMessageID,
+              removable_message_count: input.capacityHistory.selection.removableMessageIDs.length,
+              removable_message_ids_fingerprint: input.capacityHistory.selection.removableMessageIDsFingerprint,
+            }
+          : undefined,
       })
     })
 
     return Service.of({
       isOverflow,
       prune,
+      compactable,
       process: processCompaction,
       create,
     })
@@ -568,6 +680,7 @@ export const node = LayerNode.make({
     Provider.node,
     EventV2Bridge.node,
     RuntimeFlags.node,
+    Database.node,
   ],
 })
 

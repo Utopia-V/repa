@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test"
 import { mkdir } from "fs/promises"
 import path from "path"
+import { pathToFileURL } from "url"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Effect, Layer } from "effect"
@@ -15,6 +16,8 @@ import { Config } from "@/config/config"
 import { Env } from "../../src/env"
 import { Plugin } from "../../src/plugin/index"
 import { Provider } from "@/provider/provider"
+import { ProviderWire } from "@/provider/wire"
+import type { LanguageModelV3CallOptions } from "@ai-sdk/provider"
 
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceBootstrap } from "@/project/bootstrap"
@@ -117,6 +120,8 @@ const compatibleProviderConfig = (name: string) => ({
   },
   options: { apiKey: "local-key" },
 })
+
+const untrustedProviderModule = pathToFileURL(path.join(import.meta.dir, "../fixture/untrusted-provider.ts")).href
 
 it.instance("provider loaded from env variable", () =>
   Effect.gen(function* () {
@@ -228,6 +233,42 @@ it.instance(
             },
           },
           options: { apiKey: "custom-key" },
+        },
+      },
+    },
+  },
+)
+
+it.instance(
+  "interactive language rejects an uncertified dynamic provider before import or provider I/O",
+  Effect.gen(function* () {
+    const global = globalThis as typeof globalThis & Record<string, unknown>
+    delete global.__repaGate18UntrustedProviderImported
+    const provider = yield* Provider.Service
+    const model = yield* provider.getModel(ProviderV2.ID.make("untrusted-dynamic"), ModelV2.ID.make("model"))
+
+    const error = yield* provider.getInteractiveLanguage(model).pipe(Effect.flip)
+
+    expect(Provider.InitError.isInstance(error)).toBe(true)
+    expect(String(error.cause)).toContain("pinned pure compiler")
+    expect(global.__repaGate18UntrustedProviderImported).toBeUndefined()
+  }),
+  {
+    config: {
+      provider: {
+        "untrusted-dynamic": {
+          name: "Untrusted Dynamic Provider",
+          npm: untrustedProviderModule,
+          api: "https://untrusted.invalid/v1",
+          env: [],
+          models: {
+            model: {
+              name: "Untrusted Model",
+              tool_call: true,
+              limit: { context: 128000, output: 4096 },
+            },
+          },
+          options: { apiKey: "not-used" },
         },
       },
     },
@@ -1796,6 +1837,35 @@ it.instance("Google Vertex: keeps regional Claude endpoints unchanged", () =>
     expect(languageBaseURL(language)).toBe(
       "https://europe-west1-aiplatform.googleapis.com/v1/projects/test-project/locations/europe-west1/publishers/anthropic/models",
     )
+  }),
+)
+
+it.instance("Google Vertex: compiles its ADC route without resolving ADC before admission", () =>
+  Effect.gen(function* () {
+    yield* set("GOOGLE_VERTEX_PROJECT", "test-project")
+    yield* set("GOOGLE_VERTEX_LOCATION", "us-central1")
+    yield* remove("GOOGLE_VERTEX_API_KEY")
+    yield* remove("GOOGLE_APPLICATION_CREDENTIALS")
+    const provider = yield* Provider.Service
+    const model = yield* provider.getModel(ProviderV2.ID.make("google-vertex"), ModelV2.ID.make("gemini-2.0-flash"))
+    expect(model.api.npm).toBe("@ai-sdk/google-vertex")
+    const language = yield* provider.getInteractiveLanguage(model)
+    const captured = yield* Effect.promise(() =>
+      ProviderWire.capture(language, {
+        prompt: [{ role: "user", content: [{ type: "text", text: "Compile without reading ADC." }] }],
+      } as LanguageModelV3CallOptions),
+    )
+    const projected = ProviderWire.project(language, captured, [])
+
+    expect(projected.transport.endpoint).toMatchObject({
+      protocol: "https:",
+      host: "us-central1-aiplatform.googleapis.com",
+    })
+    expect(projected.transport.endpoint.pathname).toContain(
+      "/v1beta1/projects/test-project/locations/us-central1/publishers/google/",
+    )
+    expect(projected.transport.endpoint.query.some((item) => item.key === "key")).toBe(false)
+    expect(projected.compiler.compilerAuth).toBe("vertex_api_key")
   }),
 )
 

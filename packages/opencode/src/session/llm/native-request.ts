@@ -25,6 +25,7 @@ export type RequestInput = {
   readonly system?: readonly string[]
   readonly messages: readonly ModelMessage[]
   readonly tools?: Record<string, ToolInput>
+  readonly definitions?: readonly ToolDefinition[]
   readonly toolChoice?: "auto" | "required" | "none"
   readonly temperature?: number
   readonly topP?: number
@@ -123,7 +124,7 @@ const schema = (value: unknown): JsonSchema => {
   return value
 }
 
-const tools = (input: Record<string, ToolInput> | undefined): ToolDefinition[] =>
+export const toolDefinitions = (input: Record<string, ToolInput> | undefined): ToolDefinition[] =>
   Object.entries(input ?? {}).map(([name, item]) =>
     ToolDefinition.make({
       name,
@@ -186,7 +187,7 @@ export const request = (input: RequestInput) => {
     model: model(input, input.headers),
     system: [...(input.system ?? []).map(SystemPart.make), ...converted.system],
     messages: converted.messages,
-    tools: tools(input.tools),
+    tools: input.definitions ?? toolDefinitions(input.tools),
     toolChoice: input.toolChoice,
     generation: generation(input),
     providerOptions: input.providerOptions,

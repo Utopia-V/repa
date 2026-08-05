@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test"
+import { admitModelWithLearningContext } from "./fixture/model-admission"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { CourseSchema } from "@opencode-ai/core/course/schema"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
@@ -14,6 +16,7 @@ import {
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { TurnLearningContext } from "@opencode-ai/core/turn/learning-context"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
 import { Turn } from "@opencode-ai/schema/turn"
@@ -54,6 +57,54 @@ describe("TurnLifecycle", () => {
     )
   })
 
+  test("rolls back the model operation, presentation, and both context cuts when Gate 18 commit fails", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time: 10 })
+        const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
+        yield* db.run(
+          sql.raw(`
+          CREATE TEMP TRIGGER gate18_cut_commit_fault
+          BEFORE INSERT ON turn_learning_context_cut
+          BEGIN
+            SELECT RAISE(ABORT, 'injected Gate 18 cut commit failure');
+          END
+        `),
+        )
+        const failed = yield* db
+          .transaction((tx) =>
+            admitModelWithLearningContext(tx, {
+              turnID: root.turnID,
+              sessionID: root.sessionID,
+              assistantMessageID,
+              requestEnvelope: { prompt: "atomic Gate 18 admission" },
+              contextFingerprint: fingerprint("atomic-gate18-context"),
+              snapshotFrontier: { sequence: 0, time: 0 },
+              timeAdmitted: 11,
+            }),
+          )
+          .pipe(
+            Effect.exit,
+            Effect.ensuring(db.run(sql.raw("DROP TRIGGER gate18_cut_commit_fault")).pipe(Effect.orDie)),
+          )
+        expect(Exit.isFailure(failed)).toBeTrue()
+        expect(
+          yield* Effect.all({
+            operations: db.get(sql`SELECT count(*) AS count FROM turn_model_operation`),
+            presentations: db.get(sql`SELECT count(*) AS count FROM turn_model_presentation`),
+            learningCuts: db.get(sql`SELECT count(*) AS count FROM turn_learning_context_cut`),
+            modelCount: db.get(sql`SELECT model_count AS count FROM turn WHERE id = ${root.turnID}`),
+          }),
+        ).toEqual({
+          operations: { count: 0 },
+          presentations: { count: 0 },
+          learningCuts: { count: 0 },
+          modelCount: { count: 0 },
+        })
+      }),
+    )
+  })
+
   test("exact-replays model, tool, and terminal results without duplicating counted work", async () => {
     await withDatabase((db) =>
       Effect.gen(function* () {
@@ -68,16 +119,16 @@ describe("TurnLifecycle", () => {
           snapshotFrontier: { sequence: 0, time: 0 },
           timeAdmitted: 11,
         }
-        const first = yield* db.transaction((tx) => TurnLifecycle.admitModel(tx, firstRequest))
+        const first = yield* db.transaction((tx) => admitModelWithLearningContext(tx, firstRequest))
         const firstReplay = yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, { ...firstRequest, timeAdmitted: 999 }),
+          admitModelWithLearningContext(tx, { ...firstRequest, timeAdmitted: 999 }),
         )
         expect(first).toMatchObject({ type: "admitted", replay: false, operation: { ordinal: 0 } })
         expect(firstReplay).toEqual({ ...first, replay: true })
         expect(
           yield* Effect.flip(
             db.transaction((tx) =>
-              TurnLifecycle.admitModel(tx, {
+              admitModelWithLearningContext(tx, {
                 ...firstRequest,
                 requestEnvelope: { prompt: "changed text" },
               }),
@@ -170,7 +221,7 @@ describe("TurnLifecycle", () => {
 
         const secondMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 16)
         const second = yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             ...firstRequest,
             assistantMessageID: secondMessageID,
             timeAdmitted: 16,
@@ -205,9 +256,9 @@ describe("TurnLifecycle", () => {
           assistantMessageID: rejectedMessageID,
           timeAdmitted: 19,
         }
-        const exhausted = yield* db.transaction((tx) => TurnLifecycle.admitModel(tx, rejectedRequest))
+        const exhausted = yield* db.transaction((tx) => admitModelWithLearningContext(tx, rejectedRequest))
         const exhaustedReplay = yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, { ...rejectedRequest, timeAdmitted: 999 }),
+          admitModelWithLearningContext(tx, { ...rejectedRequest, timeAdmitted: 999 }),
         )
         expect(exhausted).toMatchObject({
           type: "exhausted",
@@ -225,7 +276,7 @@ describe("TurnLifecycle", () => {
         const terminalRoot = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time: 30 })
         const terminalMessageID = yield* addAssistantMessage(db, terminalRoot.sessionID, terminalRoot.messageID, 31)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: terminalRoot.turnID,
             sessionID: terminalRoot.sessionID,
             assistantMessageID: terminalMessageID,
@@ -284,6 +335,93 @@ describe("TurnLifecycle", () => {
     )
   })
 
+  test("binds durable capacity evidence to the exact provider surface stored by the Gate 18 cut", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time: 10 })
+        const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
+        const route = {
+          runtime: "ai_sdk",
+          provider: "test-provider",
+          model: "test-model",
+          protocol: "language-model-v3",
+          compiler: {
+            sourcePackage: "test-provider",
+            sourceVersion: "1",
+            projector: "test",
+            projectorVersion: 1,
+            promptFields: ["messages"],
+            publicQuery: [],
+            credentialQuery: [],
+            bodyCredentials: [],
+            compilerAuth: "api_key",
+            terminalRoutes: [],
+          },
+          transport: {
+            method: "POST",
+            endpoint: { protocol: "https:", host: "provider.test", pathname: "/v1", query: [] },
+          },
+        } as const
+        const admittedSurface = LearningContext.bindProviderToolSurface({
+          route,
+          toolChoice: { state: "present", value: { type: "auto" } },
+          definitions: [{ id: "probe", value: { name: "probe", description: "admitted" } }],
+        })
+        const otherSurface = LearningContext.bindProviderToolSurface({
+          route,
+          toolChoice: { state: "present", value: { type: "auto" } },
+          definitions: [{ id: "probe", value: { name: "probe", description: "different" } }],
+        })
+        const basis = {
+          ...LearningContext.unavailableCapabilityBasis(),
+          policyFingerprint: LearningContext.canonicalFingerprint(
+            LearningContext.toJsonValue({ automaticContext: "withheld", provider: "test-provider" }),
+          ),
+          effectiveProviderToolSurfaceBinding: admittedSurface.binding,
+        }
+        const admitted = yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID,
+            requestEnvelope: { providerToolSurface: admittedSurface.binding },
+            contextFingerprint: fingerprint("capacity-provider-surface"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 11,
+            learningContextBasis: basis,
+          }),
+        )
+        if (admitted.type !== "admitted") return yield* Effect.die("Expected admitted model operation")
+        const prepare = (surface: typeof admittedSurface) =>
+          LearningContext.prepareCapacity({
+            assistantMessageID,
+            envelopeFingerprint: fingerprint("capacity-envelope"),
+            retainedSteeringFingerprint: admitted.retainedSteeringCut.fingerprint,
+            learningContextFingerprint: admitted.learningContextCut.fingerprint,
+            learningContextRenderedFingerprint: admitted.learningContextCut.renderedFingerprint,
+            providerToolSurfaceFingerprint: surface.binding.combinedFingerprint,
+            providerToolSurfaceCanonicalBytes: surface.binding.combinedCanonicalBytes,
+            fixedEstimatedTokens: 100,
+            removableEstimatedTokens: 0,
+            inputLimitTokens: 1_000,
+          })
+
+        expect(
+          yield* Effect.flip(db.transaction((tx) => LearningContext.commitCapacity(tx, prepare(otherSurface)))),
+        ).toMatchObject({
+          name: "LearningContext.CapacityIntegrityError",
+          reason: "operation_context_mismatch",
+        })
+        const committed = yield* db.transaction((tx) => LearningContext.commitCapacity(tx, prepare(admittedSurface)))
+        expect(committed.replay).toBe(false)
+        expect(yield* db.transaction((tx) => LearningContext.commitCapacity(tx, prepare(admittedSurface)))).toEqual({
+          ...committed,
+          replay: true,
+        })
+      }),
+    )
+  })
+
   test("freezes a model operation to one promoted learner occurrence", async () => {
     await withDatabase((db) =>
       Effect.gen(function* () {
@@ -304,7 +442,7 @@ describe("TurnLifecycle", () => {
 
         const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, steer.messageID, 21)
         const operation = yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: root.turnID,
             sessionID: root.sessionID,
             assistantMessageID,
@@ -335,7 +473,7 @@ describe("TurnLifecycle", () => {
         const later = yield* addLearnerInput(db, root.sessionID, 11)
         const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 12)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: root.turnID,
             sessionID: root.sessionID,
             assistantMessageID,
@@ -527,7 +665,7 @@ describe("TurnLifecycle", () => {
         const later = yield* addLearnerInput(db, parent.sessionID, 11)
         const parentAssistantMessageID = yield* addAssistantMessage(db, parent.sessionID, parent.messageID, 12)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: parent.turnID,
             sessionID: parent.sessionID,
             assistantMessageID: parentAssistantMessageID,
@@ -599,7 +737,7 @@ describe("TurnLifecycle", () => {
 
         const childAssistantMessageID = yield* addAssistantMessage(db, childSessionID, childMessageID, 17)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: childTurnID,
             sessionID: childSessionID,
             assistantMessageID: childAssistantMessageID,
@@ -693,7 +831,7 @@ describe("TurnLifecycle", () => {
         const root = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 10 })
         const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: root.turnID,
             sessionID: root.sessionID,
             assistantMessageID,
@@ -803,13 +941,223 @@ describe("TurnLifecycle", () => {
     )
   })
 
+  test("binds compaction-replay provenance and Message/Part bodies in exact Interaction locators", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const root = yield* createRoot(db, { limits: { model: 2, tool: 0 }, time: 10, text: "keep me exact" })
+        const firstAssistant = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: firstAssistant,
+            requestEnvelope: { prompt: "first" },
+            contextFingerprint: fingerprint("interaction-first"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 11,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.sealCandidateSet(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: firstAssistant,
+            candidates: [],
+            timeSealed: 12,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleModel(tx, {
+            turnID: root.turnID,
+            assistantMessageID: firstAssistant,
+            state: "completed",
+            time: 13,
+          }),
+        )
+
+        const replayMessageID = SessionV1.MessageID.ascending()
+        const replayPartID = SessionV1.PartID.ascending()
+        yield* db.transaction((tx) =>
+          Effect.gen(function* () {
+            yield* insertUserMessage(tx, root.sessionID, replayMessageID, replayPartID, 14, "keep me exact")
+            yield* Occurrence.copyPresentation(tx, {
+              sourceMessageID: root.messageID,
+              sessionID: root.sessionID,
+              messageID: replayMessageID,
+              provenance: "compaction_replay",
+            })
+          }),
+        )
+        const secondAssistant = yield* addAssistantMessage(db, root.sessionID, replayMessageID, 15)
+        yield* db.transaction((tx) =>
+          admitModelWithLearningContext(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: secondAssistant,
+            requestEnvelope: { prompt: "after compaction" },
+            contextFingerprint: fingerprint("interaction-second"),
+            snapshotFrontier: { sequence: 0, time: 0 },
+            timeAdmitted: 15,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.sealCandidateSet(tx, {
+            turnID: root.turnID,
+            sessionID: root.sessionID,
+            assistantMessageID: secondAssistant,
+            candidates: [],
+            timeSealed: 16,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settleModel(tx, {
+            turnID: root.turnID,
+            assistantMessageID: secondAssistant,
+            state: "completed",
+            time: 17,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.settle(tx, { turnID: root.turnID, outcome: "completed", reason: "normal", time: 18 }),
+        )
+
+        const current = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time: 20 })
+        const projected = yield* db.transaction((tx) =>
+          TurnLearningContext.projectLearningContext(tx, { currentSessionID: current.sessionID, limit: 4 }),
+        )
+        const entry = projected.entries.find((item) => item.locator.turnID === root.turnID)
+        if (!entry || entry.locator.status !== "available") return yield* Effect.die("Expected Interaction locator")
+        expect(entry.locator.presentationProvenance).toMatchObject({
+          count: 2,
+          kinds: ["origin", "compaction_replay"],
+          historicalMessageOrPart: false,
+        })
+        expect(entry.locator.messageRange?.count).toBe(4)
+        const exact = yield* db.transaction((tx) =>
+          TurnLearningContext.readExactRange(tx, {
+            locator: entry.locator,
+            maxItems: 64,
+            maxBytes: 32_768,
+          }),
+        )
+        if (exact.type !== "available") return yield* Effect.die("Expected exact Interaction range")
+        expect(exact.items).toHaveLength(6)
+        const exactIDs = new Set(exact.items.map((item) => item.id))
+        expect(exactIDs.has(replayMessageID)).toBeTrue()
+        expect(exactIDs.has(replayPartID)).toBeTrue()
+
+        yield* db.run(sql`
+          UPDATE part
+          SET data = ${JSON.stringify({ type: "text", text: "same ID, changed body" })}, time_updated = 19
+          WHERE id = ${replayPartID}
+        `)
+        expect(
+          yield* db.transaction((tx) =>
+            TurnLearningContext.readExactRange(tx, {
+              locator: entry.locator,
+              maxItems: 64,
+              maxBytes: 32_768,
+            }),
+          ),
+        ).toMatchObject({ type: "stale", reason: "presentation_range_changed", items: [] })
+      }),
+    )
+  })
+
+  test("projects same-title recent Turns as body-free locators and never falls back to a similar transcript", async () => {
+    await withDatabase((db) =>
+      Effect.gen(function* () {
+        const settle = (time: number, text: string) =>
+          Effect.gen(function* () {
+            const root = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time, text })
+            const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, time + 1)
+            yield* db.transaction((tx) =>
+              admitModelWithLearningContext(tx, {
+                turnID: root.turnID,
+                sessionID: root.sessionID,
+                assistantMessageID,
+                requestEnvelope: { prompt: text },
+                contextFingerprint: fingerprint(text),
+                snapshotFrontier: { sequence: 0, time: 0 },
+                timeAdmitted: time + 1,
+              }),
+            )
+            yield* db.transaction((tx) =>
+              TurnLifecycle.sealCandidateSet(tx, {
+                turnID: root.turnID,
+                sessionID: root.sessionID,
+                assistantMessageID,
+                candidates: [],
+                timeSealed: time + 2,
+              }),
+            )
+            yield* db.transaction((tx) =>
+              TurnLifecycle.settleModel(tx, {
+                turnID: root.turnID,
+                assistantMessageID,
+                state: "completed",
+                time: time + 3,
+              }),
+            )
+            yield* db.transaction((tx) =>
+              TurnLifecycle.settle(tx, {
+                turnID: root.turnID,
+                outcome: "completed",
+                reason: "normal",
+                time: time + 4,
+              }),
+            )
+            return root
+          })
+
+        const earlier = yield* settle(10, "private transcript marker alpha")
+        const later = yield* settle(20, "private transcript marker beta")
+        const current = yield* createRoot(db, {
+          limits: { model: 1, tool: 0 },
+          time: 30,
+          text: "fresh Session request",
+        })
+        const projected = yield* db.transaction((tx) =>
+          TurnLearningContext.projectLearningContext(tx, { currentSessionID: current.sessionID, limit: 4 }),
+        )
+
+        expect(projected.entries.map((entry) => entry.locator.turnID)).toEqual([later.turnID, earlier.turnID])
+        expect(
+          projected.entries.every(
+            (entry) => "navigationHint" in entry && entry.navigationHint.sessionTitle === "Turn test",
+          ),
+        ).toBeTrue()
+        expect(JSON.stringify(projected)).not.toContain("private transcript marker")
+        const locator = projected.entries.find((entry) => entry.locator.turnID === earlier.turnID)?.locator
+        if (!locator) return yield* Effect.die("Expected exact earlier Interaction locator")
+        const exact = yield* db.transaction((tx) =>
+          TurnLearningContext.readExactRange(tx, { locator, maxItems: 64, maxBytes: 32_768 }),
+        )
+        if (exact.type !== "available") return yield* Effect.die("Expected exact earlier Interaction range")
+        expect(JSON.stringify(exact.items)).toContain("private transcript marker alpha")
+        expect(JSON.stringify(exact.items)).not.toContain("private transcript marker beta")
+
+        yield* db.run(sql`
+          UPDATE part
+          SET data = ${JSON.stringify({ type: "text", text: "same IDs, corrected alpha body" })}, time_updated = 31
+          WHERE message_id = ${earlier.messageID}
+        `)
+        expect(
+          yield* db.transaction((tx) =>
+            TurnLearningContext.readExactRange(tx, { locator, maxItems: 64, maxBytes: 32_768 }),
+          ),
+        ).toMatchObject({ type: "stale", reason: "presentation_range_changed", items: [] })
+      }),
+    )
+  })
+
   test("redacts removed transcript content while retaining terminal Turn and Tool identity", async () => {
     await withDatabase((db) =>
       Effect.gen(function* () {
         const root = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time: 10 })
         const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: root.turnID,
             sessionID: root.sessionID,
             assistantMessageID,
@@ -1004,7 +1352,7 @@ describe("TurnLifecycle", () => {
           ),
         ).toMatchObject({ _tag: "EffectDrizzleQueryError" })
         const admitted = yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: second.turnID,
             sessionID: second.sessionID,
             assistantMessageID,
@@ -1138,7 +1486,7 @@ describe("TurnLifecycle", () => {
         const providerOrphan = yield* createRoot(db, { limits: { model: 1, tool: 0 }, time: 10 })
         const providerMessageID = yield* addAssistantMessage(db, providerOrphan.sessionID, providerOrphan.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: providerOrphan.turnID,
             sessionID: providerOrphan.sessionID,
             assistantMessageID: providerMessageID,
@@ -1152,7 +1500,7 @@ describe("TurnLifecycle", () => {
         const toolOrphan = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 20 })
         const toolMessageID = yield* addAssistantMessage(db, toolOrphan.sessionID, toolOrphan.messageID, 21)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: toolOrphan.turnID,
             sessionID: toolOrphan.sessionID,
             assistantMessageID: toolMessageID,
@@ -1404,7 +1752,7 @@ describe("TurnLifecycle", () => {
         const source = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 10 })
         const sourceAssistantMessageID = yield* addAssistantMessage(db, source.sessionID, source.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: source.turnID,
             sessionID: source.sessionID,
             assistantMessageID: sourceAssistantMessageID,
@@ -1638,7 +1986,7 @@ describe("TurnLifecycle", () => {
         const parent = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 10 })
         const assistantMessageID = yield* addAssistantMessage(db, parent.sessionID, parent.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: parent.turnID,
             sessionID: parent.sessionID,
             assistantMessageID,
@@ -1916,7 +2264,7 @@ describe("TurnLifecycle", () => {
         const root = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 10 })
         const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: root.turnID,
             sessionID: root.sessionID,
             assistantMessageID,
@@ -2115,9 +2463,7 @@ describe("TurnLifecycle", () => {
 
         expect(
           Exit.isFailure(
-            yield* db
-              .run(sql`DELETE FROM learning_command_receipt WHERE id = ${applied.receiptID}`)
-              .pipe(Effect.exit),
+            yield* db.run(sql`DELETE FROM learning_command_receipt WHERE id = ${applied.receiptID}`).pipe(Effect.exit),
           ),
         ).toBe(true)
         yield* db.transaction((tx) => TurnLifecycle.garbageCollectUnavailableSources(tx, [root.turnID]))
@@ -2239,7 +2585,7 @@ describe("TurnLifecycle", () => {
 
         const assistantMessageID = yield* addAssistantMessage(db, root.sessionID, root.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: root.turnID,
             sessionID: root.sessionID,
             assistantMessageID,
@@ -2326,7 +2672,7 @@ describe("TurnLifecycle", () => {
         const parent = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time: 10 })
         const parentMessageID = yield* addAssistantMessage(db, parent.sessionID, parent.messageID, 11)
         yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, {
+          admitModelWithLearningContext(tx, {
             turnID: parent.turnID,
             sessionID: parent.sessionID,
             assistantMessageID: parentMessageID,
@@ -2570,9 +2916,7 @@ describe("Gate 15 retained learning steering", () => {
           { time: sourceTime + 1, key: "gate15-create" },
         )
         expect(prepared.model).toMatchObject({ type: "admitted", replay: false })
-        const initialCut = yield* db.transaction((tx) =>
-          RetainedSteering.readCut(tx, prepared.assistantMessageID),
-        )
+        const initialCut = yield* db.transaction((tx) => RetainedSteering.readCut(tx, prepared.assistantMessageID))
         expect(initialCut).toMatchObject({
           type: "available",
           cut: {
@@ -2591,9 +2935,11 @@ describe("Gate 15 retained learning steering", () => {
         expect(RetainedSteering.renderCut(initialCut.cut)).toContain(
           `${new Date(initialCut.cut.cutAsOf).toISOString()} (active-policy selection only`,
         )
-        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))).toEqual({
-          type: "candidate",
-        })
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))).toEqual(
+          {
+            type: "candidate",
+          },
+        )
         const applied = yield* db.transaction((tx) =>
           Effect.gen(function* () {
             const result = yield* LearningCommand.settleRetainedSteering(tx, {
@@ -2706,7 +3052,7 @@ describe("Gate 15 retained learning steering", () => {
           },
         })
         const replay = yield* db.transaction((tx) =>
-          TurnLifecycle.admitModel(tx, { ...frozen.request, timeAdmitted: validUntil + 100 }),
+          admitModelWithLearningContext(tx, { ...frozen.request, timeAdmitted: validUntil + 100 }),
         )
         expect(replay).toEqual({ ...frozen.result, replay: true })
         expect(yield* db.transaction((tx) => RetainedSteering.readCut(tx, frozen.assistantMessageID))).toEqual(
@@ -2769,9 +3115,7 @@ describe("Gate 15 retained learning steering", () => {
           },
           { time: time + 1, key: "gate15-timezone-unavailable" },
         )
-        const unavailableCut = yield* db.transaction((tx) =>
-          RetainedSteering.readCut(tx, prepared.assistantMessageID),
-        )
+        const unavailableCut = yield* db.transaction((tx) => RetainedSteering.readCut(tx, prepared.assistantMessageID))
         expect(unavailableCut).toMatchObject({
           type: "available",
           cut: {
@@ -2789,11 +3133,13 @@ describe("Gate 15 retained learning steering", () => {
         expect(protectedPrompt).toContain("Do not derive a date, timezone, or offset")
         expect(protectedPrompt).not.toContain(new Date(unavailableCut.cut.cutAsOf).toISOString())
         expect(protectedPrompt).not.toContain(`\"instant\":${time}`)
-        expect(protectedPrompt).not.toContain("\"timeZone\"")
-        expect(protectedPrompt).not.toContain("\"utcOffsetMinutes\"")
-        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))).toEqual({
-          type: "candidate",
-        })
+        expect(protectedPrompt).not.toContain('"timeZone"')
+        expect(protectedPrompt).not.toContain('"utcOffsetMinutes"')
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, prepared.invocation))).toEqual(
+          {
+            type: "candidate",
+          },
+        )
         const frontierBefore = yield* db.transaction((tx) => LearningFrontier.read(tx))
         const rejected = yield* db.transaction((tx) =>
           LearningCommand.settleRetainedSteering(tx, {
@@ -2983,9 +3329,7 @@ describe("Gate 15 retained learning steering", () => {
             }),
           ),
         ).toMatchObject({ type: "settled", settlement: { outcome: "error", code: "validation_error" } })
-        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual(
-          transitionCount,
-        )
+        expect(yield* db.get(sql`SELECT count(*) AS count FROM retained_steering_transition`)).toEqual(transitionCount)
         expect(yield* db.transaction((tx) => LearningFrontier.read(tx))).toEqual(frontier)
       }),
     )
@@ -3038,7 +3382,9 @@ describe("Gate 15 retained learning steering", () => {
           time: time + 7,
           key: "gate15-linear-duplicate",
         })
-        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, duplicate.invocation))).toEqual({
+        expect(
+          yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, duplicate.invocation)),
+        ).toEqual({
           type: "terminal",
           reason: "already_applied",
         })
@@ -3065,10 +3411,12 @@ describe("Gate 15 retained learning steering", () => {
           },
           { time: time + 13, key: "gate15-linear-conflict" },
         )
-        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, conflict.invocation))).toEqual({
-          type: "terminal",
-          reason: "semantic_conflict",
-        })
+        expect(yield* db.transaction((tx) => LearningCommand.reserveRetainedSteering(tx, conflict.invocation))).toEqual(
+          {
+            type: "terminal",
+            reason: "semantic_conflict",
+          },
+        )
         expect(
           yield* db.transaction((tx) =>
             LearningCommand.settleRetainedSteeringReservation(tx, {
@@ -3476,12 +3824,7 @@ describe("Gate 15 retained learning steering", () => {
           text: "Continue with a worked example.",
           timeZone: "UTC",
         })
-        const sampledAssistantMessageID = yield* addAssistantMessage(
-          db,
-          sampled.sessionID,
-          sampled.messageID,
-          time + 3,
-        )
+        const sampledAssistantMessageID = yield* addAssistantMessage(db, sampled.sessionID, sampled.messageID, time + 3)
         const receiptID = "receipt_gate15_commit_seal_attack"
         const attack = yield* db.transaction((tx) =>
           Effect.gen(function* () {
@@ -3517,12 +3860,16 @@ describe("Gate 15 retained learning steering", () => {
               FROM learning_command_invocation
               WHERE part_id = ${prepared.candidate.partID}
             `)
-            const prematureTerminal = yield* tx.run(sql`
+            const prematureTerminal = yield* tx
+              .run(
+                sql`
               UPDATE learning_command_invocation
               SET status = 'applied', receipt_id = ${receiptID},
                   settlement = ${JSON.stringify(settlement)}, time_settled = ${time + 5}, settlement_order = 1
               WHERE part_id = ${prepared.candidate.partID}
-            `).pipe(Effect.exit)
+            `,
+              )
+              .pipe(Effect.exit)
             expect(Exit.isFailure(prematureTerminal)).toBe(true)
             expect(Exit.isFailure(prematureTerminal) ? Cause.pretty(prematureTerminal.cause) : "").toContain(
               "retained_steering_learning_command_terminal_invalid",
@@ -3569,12 +3916,11 @@ describe("Gate 15 retained learning steering", () => {
               },
               items: [],
             }
-            const staleFingerprint = new Bun.CryptoHasher("sha256")
-              .update(JSON.stringify(staleBase))
-              .digest("hex")
+            const staleFingerprint = new Bun.CryptoHasher("sha256").update(JSON.stringify(staleBase)).digest("hex")
             const staleCut = { ...staleBase, renderedBytes: 0, fingerprint: staleFingerprint }
             const cutAttempt = yield* tx
-              .run(sql`
+              .run(
+                sql`
                 INSERT INTO turn_model_operation (
                   assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal,
                   state, request_fingerprint, context_fingerprint, snapshot_frontier_sequence,
@@ -3588,7 +3934,8 @@ describe("Gate 15 retained learning steering", () => {
                   ${frontier.sequence}, ${frontier.time}, ${time + 6}, ${JSON.stringify(staleCut)},
                   ${staleFingerprint}, ${time + 6}, 0
                 )
-              `)
+              `,
+              )
               .pipe(Effect.exit)
             return { cutAttempt, effect }
           }),
@@ -3727,12 +4074,11 @@ describe("Gate 15 retained learning steering", () => {
               },
               items: [],
             }
-            const staleFingerprint = new Bun.CryptoHasher("sha256")
-              .update(JSON.stringify(staleBase))
-              .digest("hex")
+            const staleFingerprint = new Bun.CryptoHasher("sha256").update(JSON.stringify(staleBase)).digest("hex")
             const staleCut = { ...staleBase, renderedBytes: 0, fingerprint: staleFingerprint }
             const cutAttempt = yield* tx
-              .run(sql`
+              .run(
+                sql`
                 INSERT INTO turn_model_operation (
                   assistant_message_id, turn_id, session_id, input_id, causal_occurrence_id, ordinal,
                   state, request_fingerprint, context_fingerprint, snapshot_frontier_sequence,
@@ -3746,7 +4092,8 @@ describe("Gate 15 retained learning steering", () => {
                   ${frontier.sequence}, ${frontier.time}, ${frontier.sequence}, ${frontier.time}, ${time + 16},
                   ${JSON.stringify(staleCut)}, ${staleFingerprint}, ${time + 16}, 0
                 )
-              `)
+              `,
+              )
               .pipe(Effect.exit)
             return { cutAttempt, effect }
           }),
@@ -3821,15 +4168,15 @@ describe("Gate 15 retained learning steering", () => {
         expect(
           Exit.isFailure(
             yield* db
-              .run(sql`UPDATE retained_steering_transition SET source_excerpt = 'forged' WHERE id = ${applied.effectID}`)
+              .run(
+                sql`UPDATE retained_steering_transition SET source_excerpt = 'forged' WHERE id = ${applied.effectID}`,
+              )
               .pipe(Effect.exit),
           ),
         ).toBe(true)
         expect(
           Exit.isFailure(
-            yield* db
-              .run(sql`DELETE FROM learning_command_receipt WHERE id = ${applied.receiptID}`)
-              .pipe(Effect.exit),
+            yield* db.run(sql`DELETE FROM learning_command_receipt WHERE id = ${applied.receiptID}`).pipe(Effect.exit),
           ),
         ).toBe(true)
 
@@ -3859,10 +4206,12 @@ describe("Gate 15 retained learning steering", () => {
         expect(
           Exit.isFailure(
             yield* db
-              .run(sql`
+              .run(
+                sql`
                 UPDATE learning_command_invocation SET settlement_order = 99
                 WHERE part_id = ${conflict.candidate.partID}
-              `)
+              `,
+              )
               .pipe(Effect.exit),
           ),
         ).toBe(true)
@@ -3893,12 +4242,14 @@ describe("Gate 15 retained learning steering", () => {
         expect(
           Exit.isFailure(
             yield* db
-              .run(sql`
+              .run(
+                sql`
                 UPDATE learning_command_invocation
                 SET status = 'already_applied', receipt_id = ${applied.receiptID},
                     settlement = ${crossOccurrence}, time_settled = ${time + 25}, settlement_order = 3
                 WHERE part_id = ${other.candidate.partID}
-              `)
+              `,
+              )
               .pipe(Effect.exit),
           ),
         ).toBe(true)
@@ -3948,7 +4299,7 @@ describe("Gate 15 retained learning steering", () => {
         expect(
           yield* db
             .transaction((tx) =>
-              TurnLifecycle.admitModel(tx, {
+              admitModelWithLearningContext(tx, {
                 turnID: corruptRoot.turnID,
                 sessionID: corruptRoot.sessionID,
                 assistantMessageID: corruptAssistantMessageID,
@@ -3983,7 +4334,8 @@ describe("Gate 15 retained learning steering", () => {
         expect(
           Exit.isFailure(
             yield* db
-              .run(sql`
+              .run(
+                sql`
                 INSERT INTO learning_admitted_occurrence (
                   id, origin_session_id, origin_message_id, time_admitted, source_order,
                   source_temporal_state, source_timezone, source_utc_offset_minutes,
@@ -3992,7 +4344,8 @@ describe("Gate 15 retained learning steering", () => {
                   ${orphan.id}, ${root.sessionID}, ${orphanMessageID}, ${orphanTime}, ${orphan.sourceOrder},
                   'unavailable', NULL, NULL, 'timezone_unavailable'
                 )
-              `)
+              `,
+              )
               .pipe(Effect.exit),
           ),
         ).toBe(true)
@@ -4004,7 +4357,8 @@ describe("Gate 15 retained learning steering", () => {
         expect(
           Exit.isFailure(
             yield* db
-              .run(sql`
+              .run(
+                sql`
                 INSERT INTO learning_admitted_occurrence (
                   id, origin_session_id, origin_message_id, time_admitted, source_order,
                   source_temporal_state, source_timezone, source_utc_offset_minutes,
@@ -4013,11 +4367,16 @@ describe("Gate 15 retained learning steering", () => {
                   ${LearningCommand.createOccurrenceID()}, ${root.sessionID}, ${reusedMessageID}, ${orphanTime},
                   ${orphan.sourceOrder}, 'resolved', 'UTC', 0, NULL
                 )
-              `)
+              `,
+              )
               .pipe(Effect.exit),
           ),
         ).toBe(true)
-        expect(yield* db.get(sql`SELECT occurrence_id FROM learning_occurrence_source_order WHERE sequence = ${orphan.sourceOrder}`)).toEqual({
+        expect(
+          yield* db.get(
+            sql`SELECT occurrence_id FROM learning_occurrence_source_order WHERE sequence = ${orphan.sourceOrder}`,
+          ),
+        ).toEqual({
           occurrence_id: orphan.id,
         })
       }),
@@ -4225,7 +4584,15 @@ function insertUserMessage(
   return Effect.gen(function* () {
     yield* tx.run(sql`
       INSERT INTO message (id, session_id, time_created, time_updated, data)
-      VALUES (${messageID}, ${sessionID}, ${time}, ${time}, ${JSON.stringify({ role: "user" })})
+      VALUES (
+        ${messageID}, ${sessionID}, ${time}, ${time},
+        ${JSON.stringify({
+          role: "user",
+          time: { created: time },
+          agent: "repa",
+          model: { providerID: "test-provider", modelID: "test-model" },
+        })}
+      )
     `)
     yield* tx.run(sql`
       INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
@@ -4244,7 +4611,21 @@ function addAssistantMessage(
     const messageID = SessionV1.MessageID.ascending()
     yield* db.run(sql`
       INSERT INTO message (id, session_id, time_created, time_updated, data)
-      VALUES (${messageID}, ${sessionID}, ${time}, ${time}, ${JSON.stringify({ role: "assistant", parentID })})
+      VALUES (
+        ${messageID}, ${sessionID}, ${time}, ${time},
+        ${JSON.stringify({
+          role: "assistant",
+          time: { created: time },
+          parentID,
+          modelID: "test-model",
+          providerID: "test-provider",
+          mode: "repa",
+          agent: "repa",
+          path: { cwd: "C:\\project", root: "C:\\project" },
+          cost: 0,
+          tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        })}
+      )
     `)
     return messageID
   })
@@ -4302,7 +4683,7 @@ function prepareRetainedInvocation(
       snapshotFrontier,
       timeAdmitted: input.time,
     }
-    const model = yield* db.transaction((tx) => TurnLifecycle.admitModel(tx, modelRequest))
+    const model = yield* db.transaction((tx) => admitModelWithLearningContext(tx, modelRequest))
     const [candidate] = yield* addToolCandidates(
       db,
       root.sessionID,
@@ -4366,12 +4747,7 @@ function prepareRetainedInvocation(
 
 type PreparedRetainedInvocation = Effect.Success<ReturnType<typeof prepareRetainedInvocation>>
 
-function settlePreparedTool(
-  db: TestDatabase,
-  root: RootTurn,
-  prepared: PreparedRetainedInvocation,
-  time: number,
-) {
+function settlePreparedTool(db: TestDatabase, root: RootTurn, prepared: PreparedRetainedInvocation, time: number) {
   return db.transaction((tx) =>
     TurnLifecycle.settleTool(tx, {
       turnID: root.turnID,
@@ -4409,7 +4785,7 @@ function admitRetainedCut(
       snapshotFrontier,
       timeAdmitted: input.time,
     }
-    const result = yield* db.transaction((tx) => TurnLifecycle.admitModel(tx, request))
+    const result = yield* db.transaction((tx) => admitModelWithLearningContext(tx, request))
     const cut = yield* db.transaction((tx) => RetainedSteering.readCut(tx, assistantMessageID))
     return { assistantMessageID, cut, request, result }
   })
@@ -4465,7 +4841,7 @@ function createCompletedParentChild(db: TestDatabase, time: number) {
     const parent = yield* createRoot(db, { limits: { model: 1, tool: 1 }, time })
     const parentAssistantMessageID = yield* addAssistantMessage(db, parent.sessionID, parent.messageID, time + 1)
     yield* db.transaction((tx) =>
-      TurnLifecycle.admitModel(tx, {
+      admitModelWithLearningContext(tx, {
         turnID: parent.turnID,
         sessionID: parent.sessionID,
         assistantMessageID: parentAssistantMessageID,

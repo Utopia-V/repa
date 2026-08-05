@@ -1,4 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test"
+import { admitModelWithLearningContext } from "./fixture/model-admission"
 import { eq, sql } from "drizzle-orm"
 import { Effect, Exit, Layer } from "effect"
 import { mkdtempSync, rmSync } from "node:fs"
@@ -25,6 +26,7 @@ import {
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { Project } from "@opencode-ai/core/project"
@@ -33,6 +35,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { Representation } from "@opencode-ai/core/representation"
 import { PDFTextProfile } from "@opencode-ai/core/representation/pdf-text-profile"
 import { RetainedSteeringTransitionTable } from "@opencode-ai/core/retained-steering/sql"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
@@ -1033,6 +1036,120 @@ describe("learning bootstrap", () => {
         expect(yield* db.select().from(ArtifactTable).all()).toHaveLength(3)
         expect(yield* db.select().from(LearningCourseMaterialAdoptionTable).all()).toHaveLength(3)
         expect(yield* db.select().from(LearningBootstrapEffectTable).all()).toHaveLength(3)
+        const assistantMessageID = SessionV1.MessageID.make("msg_gate18_bootstrap_projection")
+        const frontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+        const providerSurface = LearningContext.bindProviderToolSurface({
+          route: {
+            runtime: "ai_sdk",
+            provider: "gate18-test-provider",
+            model: "gate18-test-model",
+            protocol: "language-model-v3",
+            compiler: {
+              sourcePackage: "gate18-test-provider",
+              sourceVersion: "1",
+              projector: "test",
+              projectorVersion: 1,
+              promptFields: ["messages"],
+              publicQuery: [],
+              credentialQuery: [],
+              bodyCredentials: [],
+              compilerAuth: "api_key",
+              terminalRoutes: [],
+            },
+            transport: {
+              method: "POST",
+              endpoint: { protocol: "https:", host: "provider.test", pathname: "/v1", query: [] },
+            },
+          },
+          toolChoice: { state: "absent" },
+          definitions: LearningContext.LAZY_READ_CAPABILITY_IDS.map((id) => ({
+            id,
+            value: {
+              type: "function",
+              name: id,
+              description: `Gate 18 fixture definition for ${id}`,
+              inputSchema: { type: "object", properties: {}, additionalProperties: false },
+            },
+          })),
+        })
+        const context = yield* db.transaction((tx) =>
+          LearningContext.prepareCut(tx, {
+            operation: {
+              sessionID: SessionSchema.ID.make("ses_gate18_bootstrap_projection"),
+              turnID: Turn.ID.make("trn_gate18_bootstrap_projection"),
+              inputID: Turn.InputID.make("tri_gate18_bootstrap_projection"),
+              assistantMessageID,
+              ordinal: 0,
+            },
+            retainedSteering: {
+              schemaVersion: 1,
+              assistantMessageID,
+              cutAsOf: base + 100,
+              throughSteeringRevision: 0,
+              throughSharedFrontier: frontier,
+              sourceTemporalContext: {
+                state: "unavailable",
+                occurrenceID: "occ_gate18_bootstrap_projection",
+                instant: base + 100,
+                reason: "timezone_unavailable",
+                sourceOrder: 1,
+              },
+              items: [],
+              renderedBytes: 0,
+              fingerprint: "a".repeat(64),
+            } as unknown as RetainedSteering.Cut,
+            capabilityBasis: {
+              catalogVersion: LearningContext.CAPABILITY_CATALOG_VERSION,
+              policyFingerprint: "b".repeat(64),
+              effectiveAutomaticContext: true,
+              effectiveLazyReadCapabilities: [...LearningContext.LAZY_READ_CAPABILITY_IDS],
+              effectiveProviderToolSurfaceBinding: providerSurface.binding,
+            },
+          }),
+        )
+        const sections = Object.fromEntries(context.cut.sections.map((section) => [section.owner, section]))
+        expect(sections.course).toMatchObject({
+          coverage: "complete",
+          countAtCut: 3,
+          omission: { type: "none" },
+        })
+        expect(sections.course?.entries).toHaveLength(3)
+        expect(sections.course?.entries.every((entry) => entry.locator.lazyReadAvailable === true)).toBe(true)
+        expect(sections.learner_navigation).toMatchObject({
+          coverage: "complete",
+          countAtCut: 1,
+          omission: { type: "none" },
+        })
+        expect(sections.learner_navigation?.entries).toHaveLength(1)
+        expect(sections.learner_navigation?.entries[0]?.locator).toMatchObject({
+          asOf: base + 100,
+          lazyReadAvailable: true,
+        })
+        expect(sections.learner_goal).toMatchObject({
+          coverage: "empty",
+          countAtCut: 0,
+          omission: { type: "none" },
+          entries: [],
+        })
+        expect(sections.material).toMatchObject({
+          coverage: "locator_only",
+          countAtCut: 1,
+          omission: { type: "none" },
+        })
+        expect(sections.material?.entries).toHaveLength(1)
+        expect(sections.material?.entries[0]).toMatchObject({
+          locator: { metadataReadAvailable: true, tutorReadAvailable: true },
+          semantic: { state: "locator_only", reason: "entry_allowance" },
+        })
+        expect(sections.interaction).toMatchObject({
+          coverage: "empty",
+          countAtCut: 0,
+          omission: { type: "none" },
+          entries: [],
+        })
+        expect(LearningContext.decodeStored(context.canonicalCut, context.renderedBlock, assistantMessageID)).toEqual(
+          context.cut,
+        )
         expect(yield* db.all(sql.raw("PRAGMA foreign_key_check"))).toEqual([])
       }),
   )
@@ -1683,7 +1800,7 @@ function seedAgentTurn(
     )
     yield* db.transaction((tx) =>
       Effect.gen(function* () {
-        yield* TurnLifecycle.admitModel(tx, {
+        yield* admitModelWithLearningContext(tx, {
           turnID,
           sessionID,
           assistantMessageID,

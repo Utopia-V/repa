@@ -7,6 +7,9 @@ import {
   renderOAuthError,
   type IdTokenClaims,
 } from "../../src/plugin/openai/codex"
+import { ProviderWire } from "@/provider/wire"
+import { createOpenAI } from "@ai-sdk/openai"
+import type { LanguageModelV3CallOptions } from "@ai-sdk/provider"
 
 function createTestJwt(payload: object): string {
   const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url")
@@ -147,6 +150,95 @@ describe("plugin.codex", () => {
     expect(disabledOptions.fetch).toBeUndefined()
     expect(enabledOptions.fetch).toBeFunction()
     await enabled.dispose?.()
+  })
+
+  test("exposes the default OAuth endpoint rewrite as a pure admitted terminal route", async () => {
+    let authReads = 0
+    let sends = 0
+    using server = Bun.serve({
+      port: 0,
+      fetch(request) {
+        sends++
+        expect(new URL(request.url).pathname).toBe("/backend-api/codex/responses")
+        expect(request.headers.get("authorization")).toBe("Bearer access-secret")
+        return new Response("data: [DONE]\n\n", {
+          headers: { "content-type": "text/event-stream" },
+        })
+      },
+    })
+    const endpoint = new URL("/backend-api/codex/responses", server.url).toString()
+    const hooks = await CodexAuthPlugin({} as never, {
+      codexApiEndpoint: endpoint,
+    })
+    const loaded = await hooks.auth!.loader!(async () => {
+      authReads++
+      return {
+        type: "oauth",
+        refresh: "refresh-secret",
+        access: "access-secret",
+        expires: Date.now() + 60_000,
+      } as never
+    }, {} as never)
+
+    expect(ProviderWire.routeIdentity(loaded.fetch)).toBe("openai-codex-oauth-http-v1")
+    expect(
+      ProviderWire.route(loaded.fetch, "https://api.openai.com/v1/responses", {
+        method: "POST",
+        body: "{}",
+      }).input.toString(),
+    ).toBe(endpoint)
+    expect(authReads).toBe(1)
+
+    const terminal = Object.assign(
+      async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+        const routed = ProviderWire.route(loaded.fetch, input, init)
+        return ProviderWire.interceptFetch(routed.input, routed.init, () => loaded.fetch!(routed.input, routed.init))
+      },
+      { preconnect: fetch.preconnect },
+    )
+    const runtime = createOpenAI({
+      apiKey: loaded.apiKey,
+      baseURL: "https://api.openai.com/v1",
+      fetch: terminal,
+    }).responses("gpt-5")
+    const compiler = createOpenAI({
+      apiKey: "inert-compiler-key",
+      baseURL: "https://api.openai.com/v1",
+      fetch: terminal,
+    }).responses("gpt-5")
+    const language = ProviderWire.certify(runtime, compiler, {
+      sourcePackage: "@ai-sdk/openai",
+      sourceVersion: "3.0.53",
+      projector: "openai",
+      projectorVersion: 1,
+      promptFields: ["input", "instructions", "messages"],
+      publicQuery: [],
+      credentialQuery: [],
+      bodyCredentials: ["openai_hosted_mcp"],
+      compilerAuth: "api_key",
+      terminalRoutes: ["openai-codex-oauth-http-v1"],
+    })
+    const compiled = await ProviderWire.capture(language, {
+      prompt: [{ role: "user", content: [{ type: "text", text: "Compile without reading OAuth state." }] }],
+    } as LanguageModelV3CallOptions)
+    const projected = ProviderWire.project(language, compiled, [])
+    const expectedEndpoint = new URL(endpoint)
+    expect(projected.transport.endpoint).toMatchObject({
+      protocol: expectedEndpoint.protocol,
+      host: expectedEndpoint.host,
+      pathname: "/backend-api/codex/responses",
+    })
+    expect(projected.compiler.terminalRoutes).toEqual(["openai-codex-oauth-http-v1"])
+    expect(JSON.stringify(projected)).not.toContain("refresh-secret")
+    expect(JSON.stringify(projected)).not.toContain("access-secret")
+    expect(authReads).toBe(1)
+    expect(sends).toBe(0)
+
+    await ProviderWire.verified(language, compiled).doStream({
+      prompt: [{ role: "user", content: [{ type: "text", text: "Compile without reading OAuth state." }] }],
+    } as LanguageModelV3CallOptions)
+    expect(authReads).toBe(2)
+    expect(sends).toBe(1)
   })
 
   test("deduplicates concurrent Codex token refreshes", async () => {

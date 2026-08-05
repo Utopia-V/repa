@@ -358,7 +358,7 @@ function llm() {
       LLM.Service.of({
         stream: (input) => {
           const item = queue.shift() ?? Stream.empty
-          const stream = typeof item === "function" ? item(input) : item
+          const stream = typeof item === "function" ? item("open" in input ? input.plan.input : input) : item
           return stream.pipe(Stream.mapEffect((event) => Effect.succeed(event)))
         },
       }),
@@ -673,6 +673,101 @@ describe("session.compaction.create", () => {
           summary: "",
         })
       }),
+    ),
+  )
+})
+
+describe("session.compaction.compactable", () => {
+  it.live(
+    "returns only the exact prefix selected by the compaction owner",
+    provideTmpdirInstance(
+      (dir) =>
+        Effect.gen(function* () {
+          const compact = yield* SessionCompaction.Service
+          const ssn = yield* SessionNs.Service
+          const info = yield* materializeTestSessionInfo()
+          const oldUser = yield* createUserMessage(info.id, "old history ".repeat(400))
+          const oldAssistant = yield* createAssistantMessage(info.id, oldUser.id, dir)
+          const currentUser = yield* createUserMessage(info.id, "current learner input")
+          const messages = yield* MessageV2.filterCompactedEffect(info.id)
+          const selected = yield* compact.compactable({
+            messages,
+            model: createModel({ context: 100_000, output: 32_000 }),
+          })
+
+          expect(selected.messages).toEqual(messages.slice(0, -1))
+          expect(selected.messages.map((message) => message.info.id)).toContain(oldUser.id)
+          expect(selected.messages.map((message) => message.info.id)).toContain(oldAssistant.id)
+          expect(selected.messages.some((message) => message.info.id === currentUser.id)).toBe(false)
+          expect(selected.selection).toMatchObject({
+            tailStartMessageID: currentUser.id,
+            removableMessageIDs: selected.messages.map((message) => message.info.id),
+          })
+        }),
+      { config: { compaction: { tail_turns: 1, preserve_recent_tokens: 2_000 } } },
+    ),
+  )
+
+  it.live(
+    "does not classify a completed summary alone as repeatedly removable history",
+    provideTmpdirInstance(
+      (dir) =>
+        Effect.gen(function* () {
+          const compact = yield* SessionCompaction.Service
+          const ssn = yield* SessionNs.Service
+          const info = yield* materializeTestSessionInfo()
+          const retainedUser = yield* createUserMessage(info.id, "retained tail")
+          yield* createAssistantMessage(info.id, retainedUser.id, dir)
+          const marker = yield* ssn.updateMessage({
+            id: MessageID.ascending(),
+            role: "user",
+            sessionID: info.id,
+            agent: "repa",
+            model: ref,
+            time: { created: Date.now() },
+          })
+          yield* ssn.updatePart({
+            id: PartID.ascending(),
+            messageID: marker.id,
+            sessionID: info.id,
+            type: "compaction",
+            auto: true,
+            tail_start_id: retainedUser.id,
+          })
+          const summary = yield* ssn.updateMessage({
+            id: MessageID.ascending(),
+            role: "assistant",
+            sessionID: info.id,
+            mode: "compaction",
+            agent: "compaction",
+            path: { cwd: dir, root: dir },
+            cost: 0,
+            tokens: { output: 1, input: 1, reasoning: 0, cache: { read: 0, write: 0 } },
+            modelID: ref.modelID,
+            providerID: ref.providerID,
+            parentID: marker.id,
+            time: { created: Date.now() },
+            summary: true,
+            finish: "stop",
+          })
+          yield* ssn.updatePart({
+            id: PartID.ascending(),
+            messageID: summary.id,
+            sessionID: info.id,
+            type: "text",
+            text: "already compacted summary",
+          })
+          yield* createUserMessage(info.id, "current learner input")
+          const messages = yield* MessageV2.filterCompactedEffect(info.id)
+
+          expect(
+            yield* compact.compactable({
+              messages,
+              model: createModel({ context: 100_000, output: 32_000 }),
+            }),
+          ).toEqual({ messages: [] })
+        }),
+      { config: { compaction: { tail_turns: 2, preserve_recent_tokens: 8_000 } } },
     ),
   )
 })

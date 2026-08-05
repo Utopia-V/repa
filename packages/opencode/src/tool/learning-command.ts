@@ -3,9 +3,11 @@ import { PROPOSE_DEFAULT_COURSE_PREFERENCE_CAPABILITY } from "@opencode-ai/core/
 import { normalizeCommand } from "@/learning-command/input"
 import type { LearningCommandRuntime } from "@/learning-command/runtime"
 import { COURSE_NAVIGATION_QUERY_TOOL_IDS } from "./course-navigation-query"
+import { INVALID_TOOL_ID } from "./invalid"
 import { LEARNER_GOAL_QUERY_TOOL_IDS } from "./learner-goal-query"
 import { LEARNING_MATERIAL_QUERY_TOOL_IDS } from "./learning-material-query"
 import { Tool } from "./tool"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 
 type Preparation = LearningCommandRuntime.Interface["prepare"]
 
@@ -26,6 +28,15 @@ export function toolCallPreparation(tool: Tool.Def): Preparation | undefined {
 }
 
 export function assertExternalToolID(id: string, source: "custom" | "mcp") {
+  if (id === INVALID_TOOL_ID) {
+    throw new Error(`${source} tool ID ${id} is reserved for Repa's program-owned invalid-tool fallback`)
+  }
+  if (
+    id === LearningContext.AUTOMATIC_CONTEXT_CAPABILITY_ID ||
+    LearningContext.LAZY_READ_CAPABILITY_IDS.includes(id as LearningContext.LazyReadCapabilityID)
+  ) {
+    throw new Error(`${source} tool ID ${id} is reserved by Repa's learning-context authority`)
+  }
   if (isLearningCommandToolID(id)) {
     throw new Error(`${source} tool ID ${id} is reserved by the learning-command runtime`)
   }

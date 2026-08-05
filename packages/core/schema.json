@@ -1,10 +1,8 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "294654eb-874e-412f-ba3d-f9dbf92db3b0",
-  "prevIds": [
-    "62000f4c-6dac-4f48-b0c1-2c668fa1e735"
-  ],
+  "id": "c4982dbb-55a3-4a3e-9988-5e8e3668b5db",
+  "prevIds": ["9a5f6841-eb53-4cce-a83c-2ccb4e3a217a"],
   "ddl": [
     {
       "name": "workspace",
@@ -340,6 +338,14 @@
     },
     {
       "name": "learning_command_receipt",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_learning_context_cut",
+      "entityType": "tables"
+    },
+    {
+      "name": "turn_model_capacity",
       "entityType": "tables"
     },
     {
@@ -7586,6 +7592,156 @@
       "autoincrement": false,
       "default": null,
       "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_cut",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_bytes",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cut_fingerprint",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cut_as_of",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rendered_block",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rendered_bytes",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rendered_fingerprint",
+      "entityType": "columns",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "turn_model_capacity"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_assessment",
+      "entityType": "columns",
+      "table": "turn_model_capacity"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assessment_bytes",
+      "entityType": "columns",
+      "table": "turn_model_capacity"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assessment_fingerprint",
+      "entityType": "columns",
+      "table": "turn_model_capacity"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "envelope_fingerprint",
+      "entityType": "columns",
+      "table": "turn_model_capacity"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "classification",
+      "entityType": "columns",
+      "table": "turn_model_capacity"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "decision",
+      "entityType": "columns",
+      "table": "turn_model_capacity"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
       "name": "id",
       "entityType": "columns",
       "table": "material_course_alignment_disposition_event"
@@ -12911,13 +13067,9 @@
       "table": "turn_unavailable_tool"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -12926,13 +13078,9 @@
       "table": "workspace"
     },
     {
-      "columns": [
-        "source_order"
-      ],
+      "columns": ["source_order"],
       "tableTo": "learning_occurrence_source_order",
-      "columnsTo": [
-        "sequence"
-      ],
+      "columnsTo": ["sequence"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -12941,13 +13089,9 @@
       "table": "learning_admitted_occurrence"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "part",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -12956,13 +13100,9 @@
       "table": "learning_historical_tool_presentation"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -12971,13 +13111,9 @@
       "table": "learning_occurrence_presentation"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -12986,13 +13122,9 @@
       "table": "learning_occurrence_presentation"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -13001,13 +13133,9 @@
       "table": "learning_occurrence_tombstone"
     },
     {
-      "columns": [
-        "active_account_id"
-      ],
+      "columns": ["active_account_id"],
       "tableTo": "account",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "SET NULL",
       "nameExplicit": false,
@@ -13016,13 +13144,9 @@
       "table": "account_state"
     },
     {
-      "columns": [
-        "artifact_id"
-      ],
+      "columns": ["artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13031,15 +13155,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "artifact_id",
-        "active_binding_id"
-      ],
+      "columns": ["artifact_id", "active_binding_id"],
       "tableTo": "artifact_source_binding",
-      "columnsTo": [
-        "recorded_artifact_id",
-        "id"
-      ],
+      "columnsTo": ["recorded_artifact_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13048,13 +13166,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "current_revision_id"
-      ],
+      "columns": ["current_revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13063,13 +13177,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "revision_attribution_member_id"
-      ],
+      "columns": ["revision_attribution_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13078,15 +13188,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "artifact_id",
-        "source_state_observation_id"
-      ],
+      "columns": ["artifact_id", "source_state_observation_id"],
       "tableTo": "artifact_source_observation",
-      "columnsTo": [
-        "recorded_artifact_id",
-        "id"
-      ],
+      "columnsTo": ["recorded_artifact_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13095,13 +13199,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "source_state_member_id"
-      ],
+      "columns": ["source_state_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13110,13 +13210,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "descriptor_observation_id"
-      ],
+      "columns": ["descriptor_observation_id"],
       "tableTo": "artifact_source_observation",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13125,15 +13221,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "descriptor_observation_id",
-        "descriptor_correction_id"
-      ],
+      "columns": ["descriptor_observation_id", "descriptor_correction_id"],
       "tableTo": "artifact_observation_correction",
-      "columnsTo": [
-        "observation_id",
-        "id"
-      ],
+      "columnsTo": ["observation_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13142,13 +13232,9 @@
       "table": "artifact_current_source"
     },
     {
-      "columns": [
-        "boundary_binding_id"
-      ],
+      "columns": ["boundary_binding_id"],
       "tableTo": "artifact_source_binding",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13157,13 +13243,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "boundary_observation_id"
-      ],
+      "columns": ["boundary_observation_id"],
       "tableTo": "artifact_source_observation",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13172,13 +13254,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "boundary_descriptor_observation_id"
-      ],
+      "columns": ["boundary_descriptor_observation_id"],
       "tableTo": "artifact_source_observation",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13187,13 +13265,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "boundary_descriptor_correction_id"
-      ],
+      "columns": ["boundary_descriptor_correction_id"],
       "tableTo": "artifact_observation_correction",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13202,13 +13276,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "set_id"
-      ],
+      "columns": ["set_id"],
       "tableTo": "artifact_lineage_correction_set",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13217,13 +13287,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "recorded_artifact_id"
-      ],
+      "columns": ["recorded_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13232,13 +13298,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "boundary_revision_id"
-      ],
+      "columns": ["boundary_revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13247,13 +13309,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "outcome_artifact_id"
-      ],
+      "columns": ["outcome_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13262,13 +13320,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "expected_winning_member_id"
-      ],
+      "columns": ["expected_winning_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13277,13 +13331,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "boundary_source_member_id"
-      ],
+      "columns": ["boundary_source_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13292,13 +13342,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "boundary_revision_attribution_member_id"
-      ],
+      "columns": ["boundary_revision_attribution_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13307,13 +13353,9 @@
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "admission_root_artifact_id"
-      ],
+      "columns": ["admission_root_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13322,13 +13364,9 @@
       "table": "artifact_lineage_correction_set"
     },
     {
-      "columns": [
-        "new_artifact_id"
-      ],
+      "columns": ["new_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13337,13 +13375,9 @@
       "table": "artifact_lineage_correction_set"
     },
     {
-      "columns": [
-        "observation_id"
-      ],
+      "columns": ["observation_id"],
       "tableTo": "artifact_source_observation",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13352,15 +13386,9 @@
       "table": "artifact_observation_correction"
     },
     {
-      "columns": [
-        "observation_id",
-        "predecessor_correction_id"
-      ],
+      "columns": ["observation_id", "predecessor_correction_id"],
       "tableTo": "artifact_observation_correction",
-      "columnsTo": [
-        "observation_id",
-        "id"
-      ],
+      "columnsTo": ["observation_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13369,13 +13397,9 @@
       "table": "artifact_observation_correction"
     },
     {
-      "columns": [
-        "recorded_artifact_id"
-      ],
+      "columns": ["recorded_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13384,13 +13408,9 @@
       "table": "artifact_revision"
     },
     {
-      "columns": [
-        "recorded_artifact_id"
-      ],
+      "columns": ["recorded_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13399,13 +13419,9 @@
       "table": "artifact_source_binding"
     },
     {
-      "columns": [
-        "basis_lineage_member_id"
-      ],
+      "columns": ["basis_lineage_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13414,13 +13430,9 @@
       "table": "artifact_source_binding"
     },
     {
-      "columns": [
-        "recorded_artifact_id"
-      ],
+      "columns": ["recorded_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13429,15 +13441,9 @@
       "table": "artifact_source_observation"
     },
     {
-      "columns": [
-        "recorded_artifact_id",
-        "binding_id"
-      ],
+      "columns": ["recorded_artifact_id", "binding_id"],
       "tableTo": "artifact_source_binding",
-      "columnsTo": [
-        "recorded_artifact_id",
-        "id"
-      ],
+      "columnsTo": ["recorded_artifact_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13446,13 +13452,9 @@
       "table": "artifact_source_observation"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13461,13 +13463,9 @@
       "table": "artifact_source_observation"
     },
     {
-      "columns": [
-        "revision_attribution_member_id"
-      ],
+      "columns": ["revision_attribution_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13476,13 +13474,9 @@
       "table": "artifact_source_observation"
     },
     {
-      "columns": [
-        "admission_root_artifact_id"
-      ],
+      "columns": ["admission_root_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13491,13 +13485,9 @@
       "table": "artifact"
     },
     {
-      "columns": [
-        "provenance_content_root_id"
-      ],
+      "columns": ["provenance_content_root_id"],
       "tableTo": "content_root",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13506,15 +13496,9 @@
       "table": "content_mutation_grant"
     },
     {
-      "columns": [
-        "provenance_content_root_id",
-        "provenance_binding_id"
-      ],
+      "columns": ["provenance_content_root_id", "provenance_binding_id"],
       "tableTo": "content_root_binding",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13523,13 +13507,9 @@
       "table": "content_mutation_grant"
     },
     {
-      "columns": [
-        "content_root_id"
-      ],
+      "columns": ["content_root_id"],
       "tableTo": "content_root",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13538,15 +13518,9 @@
       "table": "content_root_binding_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "binding_id"
-      ],
+      "columns": ["content_root_id", "binding_id"],
       "tableTo": "content_root_binding",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13555,13 +13529,9 @@
       "table": "content_root_binding_episode"
     },
     {
-      "columns": [
-        "content_root_id"
-      ],
+      "columns": ["content_root_id"],
       "tableTo": "content_root",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13570,13 +13540,9 @@
       "table": "content_root_binding"
     },
     {
-      "columns": [
-        "content_root_id"
-      ],
+      "columns": ["content_root_id"],
       "tableTo": "content_root",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13585,15 +13551,9 @@
       "table": "content_root_current"
     },
     {
-      "columns": [
-        "content_root_id",
-        "binding_id"
-      ],
+      "columns": ["content_root_id", "binding_id"],
       "tableTo": "content_root_binding",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13602,15 +13562,9 @@
       "table": "content_root_current"
     },
     {
-      "columns": [
-        "content_root_id",
-        "binding_episode_id"
-      ],
+      "columns": ["content_root_id", "binding_episode_id"],
       "tableTo": "content_root_binding_episode",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13619,15 +13573,9 @@
       "table": "content_root_current"
     },
     {
-      "columns": [
-        "content_root_id",
-        "grant_episode_id"
-      ],
+      "columns": ["content_root_id", "grant_episode_id"],
       "tableTo": "content_root_grant_episode",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13636,13 +13584,9 @@
       "table": "content_root_current"
     },
     {
-      "columns": [
-        "content_root_id"
-      ],
+      "columns": ["content_root_id"],
       "tableTo": "content_root",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13651,15 +13595,9 @@
       "table": "content_root_grant_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "binding_id"
-      ],
+      "columns": ["content_root_id", "binding_id"],
       "tableTo": "content_root_binding",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13668,15 +13606,9 @@
       "table": "content_root_grant_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "binding_episode_id"
-      ],
+      "columns": ["content_root_id", "binding_episode_id"],
       "tableTo": "content_root_binding_episode",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13685,13 +13617,9 @@
       "table": "content_root_grant_episode"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13700,13 +13628,9 @@
       "table": "course_item"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "course_selection_acceptance_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13715,13 +13639,9 @@
       "table": "course_selection_acceptance_commit_seal"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13730,13 +13650,9 @@
       "table": "course_selection_acceptance_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13745,13 +13661,9 @@
       "table": "course_selection_acceptance_commit_seal"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13760,13 +13672,9 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13775,15 +13683,9 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": [
-        "course_id",
-        "accepted_revision_id"
-      ],
+      "columns": ["course_id", "accepted_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13792,15 +13694,9 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": [
-        "course_id",
-        "previous_revision_id"
-      ],
+      "columns": ["course_id", "previous_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13809,13 +13705,9 @@
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13824,17 +13716,9 @@
       "table": "course_state_history"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id"
-      ],
+      "columns": ["course_id", "view_id", "revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13843,15 +13727,9 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "item_id"],
       "tableTo": "course_item",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13860,19 +13738,9 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "parent_item_id"
-      ],
+      "columns": ["course_id", "view_id", "revision_id", "parent_item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13881,17 +13749,9 @@
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13900,17 +13760,9 @@
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "target_revision_id"
-      ],
+      "columns": ["course_id", "view_id", "target_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13919,21 +13771,9 @@
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "group_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "group_id"],
       "tableTo": "course_view_revision_mapping_group",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13942,19 +13782,9 @@
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13963,21 +13793,9 @@
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "group_id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "group_id"],
       "tableTo": "course_view_revision_mapping_group",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -13986,19 +13804,9 @@
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "target_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "view_id", "target_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14007,19 +13815,9 @@
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": [
-        "course_id",
-        "source_view_id",
-        "source_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "source_view_id", "source_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14028,19 +13826,9 @@
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": [
-        "course_id",
-        "target_view_id",
-        "target_revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "target_view_id", "target_revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14049,17 +13837,9 @@
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id"
-      ],
+      "columns": ["course_id", "view_id", "revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14068,15 +13848,9 @@
       "table": "course_view_revision_state"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id"
-      ],
+      "columns": ["course_id", "view_id"],
       "tableTo": "course_view",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14085,17 +13859,9 @@
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "predecessor_revision_id"
-      ],
+      "columns": ["course_id", "view_id", "predecessor_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14104,13 +13870,9 @@
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14119,13 +13881,9 @@
       "table": "course_view"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14134,15 +13892,9 @@
       "table": "course_working_selection"
     },
     {
-      "columns": [
-        "course_id",
-        "revision_id"
-      ],
+      "columns": ["course_id", "revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14151,13 +13903,9 @@
       "table": "course_working_selection"
     },
     {
-      "columns": [
-        "aggregate_id"
-      ],
+      "columns": ["aggregate_id"],
       "tableTo": "event_sequence",
-      "columnsTo": [
-        "aggregate_id"
-      ],
+      "columnsTo": ["aggregate_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -14166,13 +13914,9 @@
       "table": "event"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learner_goal_disposition_v2",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -14181,13 +13925,9 @@
       "table": "learner_goal_capability_issue_v2"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learner_goal_disposition_v2",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -14196,15 +13936,9 @@
       "table": "learner_goal_capability_settlement_v2"
     },
     {
-      "columns": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columns": ["invocation_part_id", "permission_request_id"],
       "tableTo": "learner_goal_capability_issue_v2",
-      "columnsTo": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columnsTo": ["invocation_part_id", "permission_request_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -14213,13 +13947,9 @@
       "table": "learner_goal_capability_settlement_v2"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -14228,13 +13958,9 @@
       "table": "learner_goal_command"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learner_goal_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14243,13 +13969,9 @@
       "table": "learner_goal_commit_seal"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14258,13 +13980,9 @@
       "table": "learner_goal_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14273,13 +13991,9 @@
       "table": "learner_goal_commit_seal"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14288,13 +14002,9 @@
       "table": "learner_goal_condition"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14303,13 +14013,9 @@
       "table": "learner_goal_course_scope"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14318,13 +14024,9 @@
       "table": "learner_goal_course_scope"
     },
     {
-      "columns": [
-        "carried_from_revision_id"
-      ],
+      "columns": ["carried_from_revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14333,13 +14035,9 @@
       "table": "learner_goal_course_scope"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -14348,13 +14046,9 @@
       "table": "learner_goal_disposition_v2"
     },
     {
-      "columns": [
-        "legacy_command_part_id"
-      ],
+      "columns": ["legacy_command_part_id"],
       "tableTo": "learner_goal_command",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -14363,13 +14057,9 @@
       "table": "learner_goal_disposition_v2"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learner_goal_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14378,13 +14068,9 @@
       "table": "learner_goal_effect_operation"
     },
     {
-      "columns": [
-        "goal_id"
-      ],
+      "columns": ["goal_id"],
       "tableTo": "learner_goal",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14393,13 +14079,9 @@
       "table": "learner_goal_effect_operation"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14408,13 +14090,9 @@
       "table": "learner_goal_effect_operation"
     },
     {
-      "columns": [
-        "replacement_target_goal_id"
-      ],
+      "columns": ["replacement_target_goal_id"],
       "tableTo": "learner_goal",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14423,13 +14101,9 @@
       "table": "learner_goal_effect_operation"
     },
     {
-      "columns": [
-        "replacement_target_revision_id"
-      ],
+      "columns": ["replacement_target_revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14438,13 +14112,9 @@
       "table": "learner_goal_effect_operation"
     },
     {
-      "columns": [
-        "commit_seal_id"
-      ],
+      "columns": ["commit_seal_id"],
       "tableTo": "learner_goal_commit_seal",
-      "columnsTo": [
-        "effect_id"
-      ],
+      "columnsTo": ["effect_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14453,13 +14123,9 @@
       "table": "learner_goal_effect"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14468,13 +14134,9 @@
       "table": "learner_goal_effect"
     },
     {
-      "columns": [
-        "agent_action_part_id"
-      ],
+      "columns": ["agent_action_part_id"],
       "tableTo": "learner_goal_disposition_v2",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14483,13 +14145,9 @@
       "table": "learner_goal_effect"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14498,13 +14156,9 @@
       "table": "learner_goal_field_basis"
     },
     {
-      "columns": [
-        "predecessor_revision_id"
-      ],
+      "columns": ["predecessor_revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14513,13 +14167,9 @@
       "table": "learner_goal_field_basis"
     },
     {
-      "columns": [
-        "goal_id"
-      ],
+      "columns": ["goal_id"],
       "tableTo": "learner_goal",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14528,13 +14178,9 @@
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "predecessor_id"
-      ],
+      "columns": ["predecessor_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14543,13 +14189,9 @@
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learner_goal_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14558,15 +14200,9 @@
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "target_timezone_release_id",
-        "target_timezone"
-      ],
+      "columns": ["target_timezone_release_id", "target_timezone"],
       "tableTo": "learner_goal_time_zone",
-      "columnsTo": [
-        "release_id",
-        "name"
-      ],
+      "columnsTo": ["release_id", "name"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14575,13 +14211,9 @@
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14590,13 +14222,9 @@
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "singleton"
-      ],
+      "columns": ["singleton"],
       "tableTo": "learner_goal_state",
-      "columnsTo": [
-        "singleton"
-      ],
+      "columnsTo": ["singleton"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14605,13 +14233,9 @@
       "table": "learner_goal_state_guard"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14620,13 +14244,9 @@
       "table": "learner_goal_supersession"
     },
     {
-      "columns": [
-        "source_goal_id"
-      ],
+      "columns": ["source_goal_id"],
       "tableTo": "learner_goal",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14635,13 +14255,9 @@
       "table": "learner_goal_supersession"
     },
     {
-      "columns": [
-        "target_goal_id"
-      ],
+      "columns": ["target_goal_id"],
       "tableTo": "learner_goal",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14650,13 +14266,9 @@
       "table": "learner_goal_supersession"
     },
     {
-      "columns": [
-        "target_revision_id"
-      ],
+      "columns": ["target_revision_id"],
       "tableTo": "learner_goal_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14665,13 +14277,9 @@
       "table": "learner_goal_supersession"
     },
     {
-      "columns": [
-        "release_id"
-      ],
+      "columns": ["release_id"],
       "tableTo": "learner_goal_time_zone_release",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14680,13 +14288,9 @@
       "table": "learner_goal_time_zone"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14695,15 +14299,9 @@
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "course_id",
-        "predecessor_id"
-      ],
+      "columns": ["course_id", "predecessor_id"],
       "tableTo": "learner_course_route_anchor_transition",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14712,19 +14310,9 @@
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "course_id",
-        "previous_view_id",
-        "previous_revision_id",
-        "previous_item_id"
-      ],
+      "columns": ["course_id", "previous_view_id", "previous_revision_id", "previous_item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14733,19 +14321,9 @@
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "course_id",
-        "target_view_id",
-        "target_revision_id",
-        "target_item_id"
-      ],
+      "columns": ["course_id", "target_view_id", "target_revision_id", "target_item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14754,13 +14332,9 @@
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14769,13 +14343,9 @@
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "predecessor_id"
-      ],
+      "columns": ["predecessor_id"],
       "tableTo": "learner_default_course_transition",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14784,13 +14354,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "previous_course_id"
-      ],
+      "columns": ["previous_course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14799,13 +14365,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14814,15 +14376,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "course_id",
-        "target_view_id"
-      ],
+      "columns": ["course_id", "target_view_id"],
       "tableTo": "course_view",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14831,17 +14387,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "course_id",
-        "target_view_id",
-        "target_selection_revision_id"
-      ],
+      "columns": ["course_id", "target_view_id", "target_selection_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "view_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14850,13 +14398,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14865,13 +14409,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "authorization_part_id"
-      ],
+      "columns": ["authorization_part_id"],
       "tableTo": "learner_default_course_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14880,13 +14420,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "agent_action_part_id"
-      ],
+      "columns": ["agent_action_part_id"],
       "tableTo": "learner_default_course_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14895,13 +14431,9 @@
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learner_course_route_anchor_transition",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14910,13 +14442,9 @@
       "table": "learner_course_route_anchor_commit_seal"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14925,13 +14453,9 @@
       "table": "learner_course_route_anchor_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14940,13 +14464,9 @@
       "table": "learner_course_route_anchor_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learner_default_course_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14955,13 +14475,9 @@
       "table": "learner_default_course_acknowledgement"
     },
     {
-      "columns": [
-        "effect_authorization_part_id"
-      ],
+      "columns": ["effect_authorization_part_id"],
       "tableTo": "learner_default_course_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14970,13 +14486,9 @@
       "table": "learner_default_course_acknowledgement"
     },
     {
-      "columns": [
-        "effect_agent_action_part_id"
-      ],
+      "columns": ["effect_agent_action_part_id"],
       "tableTo": "learner_default_course_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -14985,13 +14497,9 @@
       "table": "learner_default_course_acknowledgement"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learner_default_course_transition",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15000,13 +14508,9 @@
       "table": "learner_default_course_acknowledgement"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15015,13 +14519,9 @@
       "table": "learner_default_course_acknowledgement"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learner_default_course_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15030,13 +14530,9 @@
       "table": "learner_default_course_capability_issue"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learner_default_course_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15045,15 +14541,9 @@
       "table": "learner_default_course_capability_settlement"
     },
     {
-      "columns": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columns": ["invocation_part_id", "permission_request_id"],
       "tableTo": "learner_default_course_capability_issue",
-      "columnsTo": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columnsTo": ["invocation_part_id", "permission_request_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15062,13 +14552,9 @@
       "table": "learner_default_course_capability_settlement"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -15077,13 +14563,9 @@
       "table": "learner_default_course_command"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learner_default_course_transition",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15092,13 +14574,9 @@
       "table": "learner_default_course_commit_seal"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15107,13 +14585,9 @@
       "table": "learner_default_course_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15122,13 +14596,9 @@
       "table": "learner_default_course_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15137,13 +14607,9 @@
       "table": "learner_default_course_disposition"
     },
     {
-      "columns": [
-        "proposal_part_id"
-      ],
+      "columns": ["proposal_part_id"],
       "tableTo": "learner_default_course_proposal",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15152,17 +14618,9 @@
       "table": "learner_default_course_disposition"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id",
-        "assistant_message_id"
-      ],
+      "columns": ["turn_id", "part_id", "assistant_message_id"],
       "tableTo": "turn_tool_candidate",
-      "columnsTo": [
-        "turn_id",
-        "part_id",
-        "assistant_message_id"
-      ],
+      "columnsTo": ["turn_id", "part_id", "assistant_message_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15171,13 +14629,9 @@
       "table": "learner_default_course_proposal"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "turn_candidate_presentation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15186,13 +14640,9 @@
       "table": "learner_default_course_proposal"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15201,13 +14651,9 @@
       "table": "learning_bootstrap_alignment_result"
     },
     {
-      "columns": [
-        "alignment_id"
-      ],
+      "columns": ["alignment_id"],
       "tableTo": "material_course_alignment",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15216,13 +14662,9 @@
       "table": "learning_bootstrap_alignment_result"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15231,13 +14673,9 @@
       "table": "learning_bootstrap_anchor_result"
     },
     {
-      "columns": [
-        "anchor_effect_id"
-      ],
+      "columns": ["anchor_effect_id"],
       "tableTo": "learner_course_route_anchor_transition",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15246,13 +14684,9 @@
       "table": "learning_bootstrap_anchor_result"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_bootstrap_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -15261,13 +14695,9 @@
       "table": "learning_bootstrap_capability_issue"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_bootstrap_disposition",
-      "columnsTo": [
-        "invocation_part_id"
-      ],
+      "columnsTo": ["invocation_part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -15276,15 +14706,9 @@
       "table": "learning_bootstrap_capability_settlement"
     },
     {
-      "columns": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columns": ["invocation_part_id", "permission_request_id"],
       "tableTo": "learning_bootstrap_capability_issue",
-      "columnsTo": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columnsTo": ["invocation_part_id", "permission_request_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -15293,13 +14717,9 @@
       "table": "learning_bootstrap_capability_settlement"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15308,13 +14728,9 @@
       "table": "learning_bootstrap_commit_seal"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15323,13 +14739,9 @@
       "table": "learning_bootstrap_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15338,13 +14750,9 @@
       "table": "learning_bootstrap_commit_seal"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15353,13 +14761,9 @@
       "table": "learning_bootstrap_course_result"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15368,13 +14772,9 @@
       "table": "learning_bootstrap_course_result"
     },
     {
-      "columns": [
-        "existing_effect_id"
-      ],
+      "columns": ["existing_effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15383,13 +14783,9 @@
       "table": "learning_bootstrap_disposition"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -15398,13 +14794,9 @@
       "table": "learning_bootstrap_disposition"
     },
     {
-      "columns": [
-        "commit_seal_id"
-      ],
+      "columns": ["commit_seal_id"],
       "tableTo": "learning_bootstrap_commit_seal",
-      "columnsTo": [
-        "effect_id"
-      ],
+      "columnsTo": ["effect_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15413,13 +14805,9 @@
       "table": "learning_bootstrap_effect"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15428,13 +14816,9 @@
       "table": "learning_bootstrap_effect"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15443,13 +14827,9 @@
       "table": "learning_bootstrap_effect"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15458,13 +14838,9 @@
       "table": "learning_bootstrap_effect"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15473,13 +14849,9 @@
       "table": "learning_bootstrap_map_result"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15488,13 +14860,9 @@
       "table": "learning_bootstrap_map_result"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15503,13 +14871,9 @@
       "table": "learning_bootstrap_material_result"
     },
     {
-      "columns": [
-        "adoption_id"
-      ],
+      "columns": ["adoption_id"],
       "tableTo": "learning_course_material_adoption",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15518,13 +14882,9 @@
       "table": "learning_bootstrap_material_result"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15533,13 +14893,9 @@
       "table": "learning_bootstrap_route_result"
     },
     {
-      "columns": [
-        "view_id"
-      ],
+      "columns": ["view_id"],
       "tableTo": "course_view",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15548,13 +14904,9 @@
       "table": "learning_bootstrap_route_result"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15563,13 +14915,9 @@
       "table": "learning_bootstrap_route_result"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15578,13 +14926,9 @@
       "table": "learning_bootstrap_selection_result"
     },
     {
-      "columns": [
-        "selected_revision_id"
-      ],
+      "columns": ["selected_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15593,13 +14937,9 @@
       "table": "learning_bootstrap_selection_result"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "tableTo": "course",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15608,13 +14948,9 @@
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "artifact_id"
-      ],
+      "columns": ["artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15623,13 +14959,9 @@
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "artifact_revision_id"
-      ],
+      "columns": ["artifact_revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15638,13 +14970,9 @@
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "attribution_member_id"
-      ],
+      "columns": ["attribution_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15653,13 +14981,9 @@
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "representation_revision_id"
-      ],
+      "columns": ["representation_revision_id"],
       "tableTo": "representation_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15668,13 +14992,9 @@
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "creation_effect_id"
-      ],
+      "columns": ["creation_effect_id"],
       "tableTo": "learning_bootstrap_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15683,13 +15003,9 @@
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15698,13 +15014,9 @@
       "table": "learning_command_invocation"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15713,13 +15025,9 @@
       "table": "learning_command_receipt"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15728,13 +15036,31 @@
       "table": "learning_command_receipt"
     },
     {
-      "columns": [
-        "alignment_id"
-      ],
+      "columns": ["assistant_message_id"],
+      "tableTo": "turn_model_operation",
+      "columnsTo": ["assistant_message_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_learning_context_cut_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "columns": ["assistant_message_id"],
+      "tableTo": "turn_model_operation",
+      "columnsTo": ["assistant_message_id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_turn_model_capacity_assistant_message_id_turn_model_operation_assistant_message_id_fk",
+      "entityType": "fks",
+      "table": "turn_model_capacity"
+    },
+    {
+      "columns": ["alignment_id"],
       "tableTo": "material_course_alignment",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15743,13 +15069,9 @@
       "table": "material_course_alignment_disposition_event"
     },
     {
-      "columns": [
-        "alignment_id"
-      ],
+      "columns": ["alignment_id"],
       "tableTo": "material_course_alignment",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15758,15 +15080,9 @@
       "table": "material_course_alignment_state"
     },
     {
-      "columns": [
-        "map_id",
-        "selector_id"
-      ],
+      "columns": ["map_id", "selector_id"],
       "tableTo": "material_selector",
-      "columnsTo": [
-        "map_id",
-        "id"
-      ],
+      "columnsTo": ["map_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15775,19 +15091,9 @@
       "table": "material_course_alignment"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "view_id", "revision_id", "item_id"],
       "tableTo": "course_view_revision_item",
-      "columnsTo": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columnsTo": ["course_id", "view_id", "revision_id", "item_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15796,15 +15102,9 @@
       "table": "material_course_alignment"
     },
     {
-      "columns": [
-        "course_id",
-        "observed_selection_revision_id"
-      ],
+      "columns": ["course_id", "observed_selection_revision_id"],
       "tableTo": "course_view_revision",
-      "columnsTo": [
-        "course_id",
-        "id"
-      ],
+      "columnsTo": ["course_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15813,13 +15113,9 @@
       "table": "material_course_alignment"
     },
     {
-      "columns": [
-        "supersedes_alignment_id"
-      ],
+      "columns": ["supersedes_alignment_id"],
       "tableTo": "material_course_alignment",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15828,13 +15124,9 @@
       "table": "material_course_alignment"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15843,13 +15135,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "artifact_id"
-      ],
+      "columns": ["artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15858,13 +15146,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "artifact_revision_id"
-      ],
+      "columns": ["artifact_revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15873,13 +15157,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "artifact_binding_id"
-      ],
+      "columns": ["artifact_binding_id"],
       "tableTo": "artifact_source_binding",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15888,13 +15168,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "descriptor_observation_id"
-      ],
+      "columns": ["descriptor_observation_id"],
       "tableTo": "artifact_source_observation",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15903,13 +15179,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "descriptor_correction_id"
-      ],
+      "columns": ["descriptor_correction_id"],
       "tableTo": "artifact_observation_correction",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15918,13 +15190,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "attribution_member_id"
-      ],
+      "columns": ["attribution_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15933,13 +15201,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "content_root_id"
-      ],
+      "columns": ["content_root_id"],
       "tableTo": "content_root",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15948,15 +15212,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "content_root_id",
-        "content_root_binding_id"
-      ],
+      "columns": ["content_root_id", "content_root_binding_id"],
       "tableTo": "content_root_binding",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15972,12 +15230,7 @@
         "content_root_binding_episode_ordinal"
       ],
       "tableTo": "content_root_binding_episode",
-      "columnsTo": [
-        "content_root_id",
-        "id",
-        "binding_id",
-        "ordinal"
-      ],
+      "columnsTo": ["content_root_id", "id", "binding_id", "ordinal"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -15994,13 +15247,7 @@
         "content_root_grant_episode_ordinal"
       ],
       "tableTo": "content_root_grant_episode",
-      "columnsTo": [
-        "content_root_id",
-        "id",
-        "binding_id",
-        "binding_episode_id",
-        "ordinal"
-      ],
+      "columnsTo": ["content_root_id", "id", "binding_id", "binding_episode_id", "ordinal"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16009,13 +15256,9 @@
       "table": "material_map_artifact_target"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16024,13 +15267,9 @@
       "table": "material_map_disposition_event"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16039,13 +15278,9 @@
       "table": "material_map_representation_target"
     },
     {
-      "columns": [
-        "representation_revision_id"
-      ],
+      "columns": ["representation_revision_id"],
       "tableTo": "representation_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16054,13 +15289,9 @@
       "table": "material_map_representation_target"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16069,13 +15300,9 @@
       "table": "material_map_state"
     },
     {
-      "columns": [
-        "supersedes_map_id"
-      ],
+      "columns": ["supersedes_map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16084,13 +15311,9 @@
       "table": "material_map"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16099,15 +15322,9 @@
       "table": "material_outline_node"
     },
     {
-      "columns": [
-        "map_id",
-        "parent_node_id"
-      ],
+      "columns": ["map_id", "parent_node_id"],
       "tableTo": "material_outline_node",
-      "columnsTo": [
-        "map_id",
-        "id"
-      ],
+      "columnsTo": ["map_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16116,13 +15333,9 @@
       "table": "material_outline_node"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "tableTo": "material_map",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16131,15 +15344,9 @@
       "table": "material_selector"
     },
     {
-      "columns": [
-        "map_id",
-        "node_id"
-      ],
+      "columns": ["map_id", "node_id"],
       "tableTo": "material_outline_node",
-      "columnsTo": [
-        "map_id",
-        "id"
-      ],
+      "columnsTo": ["map_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16148,13 +15355,9 @@
       "table": "material_selector"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16163,13 +15366,9 @@
       "table": "permission"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16178,13 +15377,9 @@
       "table": "project_directory"
     },
     {
-      "columns": [
-        "representation_revision_id"
-      ],
+      "columns": ["representation_revision_id"],
       "tableTo": "representation_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16193,13 +15388,9 @@
       "table": "representation_availability_current"
     },
     {
-      "columns": [
-        "representation_revision_id"
-      ],
+      "columns": ["representation_revision_id"],
       "tableTo": "representation_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16208,13 +15399,9 @@
       "table": "representation_availability_event"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "representation_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16223,13 +15410,9 @@
       "table": "representation_command_commit_seal"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16238,13 +15421,9 @@
       "table": "representation_command_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16253,13 +15432,9 @@
       "table": "representation_command_commit_seal"
     },
     {
-      "columns": [
-        "effective_artifact_id"
-      ],
+      "columns": ["effective_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16268,13 +15443,9 @@
       "table": "representation_continued_use_grant"
     },
     {
-      "columns": [
-        "representation_revision_id"
-      ],
+      "columns": ["representation_revision_id"],
       "tableTo": "representation_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16283,13 +15454,9 @@
       "table": "representation_continued_use_grant"
     },
     {
-      "columns": [
-        "old_source_revision_id"
-      ],
+      "columns": ["old_source_revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16298,13 +15465,9 @@
       "table": "representation_continued_use_grant"
     },
     {
-      "columns": [
-        "current_source_revision_id"
-      ],
+      "columns": ["current_source_revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16313,13 +15476,9 @@
       "table": "representation_continued_use_grant"
     },
     {
-      "columns": [
-        "current_attribution_member_id"
-      ],
+      "columns": ["current_attribution_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16328,13 +15487,9 @@
       "table": "representation_continued_use_grant"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "tableTo": "representation_effect",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16343,13 +15498,9 @@
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "source_revision_id"
-      ],
+      "columns": ["source_revision_id"],
       "tableTo": "artifact_revision",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16358,13 +15509,9 @@
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "effective_artifact_id"
-      ],
+      "columns": ["effective_artifact_id"],
       "tableTo": "artifact",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16373,13 +15520,9 @@
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "attribution_member_id"
-      ],
+      "columns": ["attribution_member_id"],
       "tableTo": "artifact_lineage_correction_member",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16388,13 +15531,9 @@
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "content_root_id"
-      ],
+      "columns": ["content_root_id"],
       "tableTo": "content_root",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16403,15 +15542,9 @@
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "content_root_id",
-        "content_root_binding_id"
-      ],
+      "columns": ["content_root_id", "content_root_binding_id"],
       "tableTo": "content_root_binding",
-      "columnsTo": [
-        "content_root_id",
-        "id"
-      ],
+      "columnsTo": ["content_root_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16427,12 +15560,7 @@
         "content_root_binding_episode_ordinal"
       ],
       "tableTo": "content_root_binding_episode",
-      "columnsTo": [
-        "content_root_id",
-        "id",
-        "binding_id",
-        "ordinal"
-      ],
+      "columnsTo": ["content_root_id", "id", "binding_id", "ordinal"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16449,13 +15577,7 @@
         "content_root_grant_version"
       ],
       "tableTo": "content_root_grant_episode",
-      "columnsTo": [
-        "content_root_id",
-        "id",
-        "binding_id",
-        "binding_episode_id",
-        "ordinal"
-      ],
+      "columnsTo": ["content_root_id", "id", "binding_id", "binding_episode_id", "ordinal"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16464,13 +15586,9 @@
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16479,13 +15597,9 @@
       "table": "retained_steering_command"
     },
     {
-      "columns": [
-        "transition_id"
-      ],
+      "columns": ["transition_id"],
       "tableTo": "retained_steering_transition",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16494,13 +15608,9 @@
       "table": "retained_steering_commit_seal"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "tableTo": "learning_command_receipt",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16509,13 +15619,9 @@
       "table": "retained_steering_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "tableTo": "learning_command_invocation",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16524,13 +15630,9 @@
       "table": "retained_steering_commit_seal"
     },
     {
-      "columns": [
-        "commit_seal_id"
-      ],
+      "columns": ["commit_seal_id"],
       "tableTo": "retained_steering_commit_seal",
-      "columnsTo": [
-        "transition_id"
-      ],
+      "columnsTo": ["transition_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16539,13 +15641,9 @@
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "policy_id"
-      ],
+      "columns": ["policy_id"],
       "tableTo": "retained_steering_policy",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16554,13 +15652,9 @@
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "predecessor_id"
-      ],
+      "columns": ["predecessor_id"],
       "tableTo": "retained_steering_transition",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16569,13 +15663,9 @@
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16584,13 +15674,9 @@
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16599,13 +15685,9 @@
       "table": "message"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16614,13 +15696,9 @@
       "table": "part"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16629,13 +15707,9 @@
       "table": "session_context_epoch"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16644,13 +15718,9 @@
       "table": "session_historical_message_presentation"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "part",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16659,13 +15729,9 @@
       "table": "session_historical_part_presentation"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "tableTo": "session_historical_message_presentation",
-      "columnsTo": [
-        "message_id"
-      ],
+      "columnsTo": ["message_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16674,13 +15740,9 @@
       "table": "session_historical_part_presentation"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16689,13 +15751,9 @@
       "table": "session_input"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16704,13 +15762,9 @@
       "table": "session_message"
     },
     {
-      "columns": [
-        "project_id"
-      ],
+      "columns": ["project_id"],
       "tableTo": "project",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16719,13 +15773,9 @@
       "table": "session"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16734,13 +15784,9 @@
       "table": "todo"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16749,13 +15795,9 @@
       "table": "session_share"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "turn_tool_candidate",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16764,13 +15806,9 @@
       "table": "turn_candidate_presentation"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "part",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16779,13 +15817,9 @@
       "table": "turn_candidate_presentation"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "turn_tool_candidate",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16794,15 +15828,9 @@
       "table": "turn_candidate_redaction"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id"
-      ],
+      "columns": ["turn_id", "part_id"],
       "tableTo": "turn_tool_candidate",
-      "columnsTo": [
-        "turn_id",
-        "part_id"
-      ],
+      "columnsTo": ["turn_id", "part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16811,13 +15839,9 @@
       "table": "turn_candidate_redaction"
     },
     {
-      "columns": [
-        "child_turn_id"
-      ],
+      "columns": ["child_turn_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16826,17 +15850,9 @@
       "table": "turn_child_lineage"
     },
     {
-      "columns": [
-        "child_turn_id",
-        "child_session_id",
-        "child_depth"
-      ],
+      "columns": ["child_turn_id", "child_session_id", "child_depth"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id",
-        "session_id",
-        "depth"
-      ],
+      "columnsTo": ["id", "session_id", "depth"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16845,17 +15861,9 @@
       "table": "turn_child_lineage"
     },
     {
-      "columns": [
-        "parent_turn_id",
-        "parent_session_id",
-        "parent_depth"
-      ],
+      "columns": ["parent_turn_id", "parent_session_id", "parent_depth"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id",
-        "session_id",
-        "depth"
-      ],
+      "columnsTo": ["id", "session_id", "depth"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16864,17 +15872,9 @@
       "table": "turn_child_lineage"
     },
     {
-      "columns": [
-        "parent_turn_id",
-        "parent_task_part_id",
-        "parent_model_message_id"
-      ],
+      "columns": ["parent_turn_id", "parent_task_part_id", "parent_model_message_id"],
       "tableTo": "turn_tool_invocation",
-      "columnsTo": [
-        "turn_id",
-        "part_id",
-        "assistant_message_id"
-      ],
+      "columnsTo": ["turn_id", "part_id", "assistant_message_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -16883,13 +15883,9 @@
       "table": "turn_child_lineage"
     },
     {
-      "columns": [
-        "parent_task_part_id"
-      ],
+      "columns": ["parent_task_part_id"],
       "tableTo": "part",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16898,15 +15894,9 @@
       "table": "turn_child_result"
     },
     {
-      "columns": [
-        "parent_turn_id",
-        "parent_task_part_id"
-      ],
+      "columns": ["parent_turn_id", "parent_task_part_id"],
       "tableTo": "turn_tool_invocation",
-      "columnsTo": [
-        "turn_id",
-        "part_id"
-      ],
+      "columnsTo": ["turn_id", "part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16915,13 +15905,9 @@
       "table": "turn_child_result"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16930,13 +15916,9 @@
       "table": "turn_historical_input_presentation"
     },
     {
-      "columns": [
-        "assistant_message_id"
-      ],
+      "columns": ["assistant_message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16945,13 +15927,9 @@
       "table": "turn_historical_model_presentation"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "part",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16960,13 +15938,9 @@
       "table": "turn_historical_tool_presentation"
     },
     {
-      "columns": [
-        "input_id"
-      ],
+      "columns": ["input_id"],
       "tableTo": "turn_input",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16975,13 +15949,9 @@
       "table": "turn_input_presentation"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -16990,13 +15960,9 @@
       "table": "turn_input_presentation"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17005,13 +15971,9 @@
       "table": "turn_input"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -17020,15 +15982,9 @@
       "table": "turn_input"
     },
     {
-      "columns": [
-        "turn_id",
-        "session_id"
-      ],
+      "columns": ["turn_id", "session_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id",
-        "session_id"
-      ],
+      "columnsTo": ["id", "session_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17037,13 +15993,9 @@
       "table": "turn_input"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17052,13 +16004,9 @@
       "table": "turn_model_operation"
     },
     {
-      "columns": [
-        "causal_occurrence_id"
-      ],
+      "columns": ["causal_occurrence_id"],
       "tableTo": "learning_admitted_occurrence",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -17067,15 +16015,9 @@
       "table": "turn_model_operation"
     },
     {
-      "columns": [
-        "turn_id",
-        "session_id"
-      ],
+      "columns": ["turn_id", "session_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id",
-        "session_id"
-      ],
+      "columnsTo": ["id", "session_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17084,15 +16026,9 @@
       "table": "turn_model_operation"
     },
     {
-      "columns": [
-        "turn_id",
-        "input_id"
-      ],
+      "columns": ["turn_id", "input_id"],
       "tableTo": "turn_input",
-      "columnsTo": [
-        "turn_id",
-        "id"
-      ],
+      "columnsTo": ["turn_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -17101,13 +16037,9 @@
       "table": "turn_model_operation"
     },
     {
-      "columns": [
-        "assistant_message_id"
-      ],
+      "columns": ["assistant_message_id"],
       "tableTo": "turn_model_operation",
-      "columnsTo": [
-        "assistant_message_id"
-      ],
+      "columnsTo": ["assistant_message_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17116,13 +16048,9 @@
       "table": "turn_model_presentation"
     },
     {
-      "columns": [
-        "assistant_message_id"
-      ],
+      "columns": ["assistant_message_id"],
       "tableTo": "message",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17131,13 +16059,9 @@
       "table": "turn_model_presentation"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "tableTo": "session",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17146,13 +16070,9 @@
       "table": "turn"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17161,17 +16081,9 @@
       "table": "turn_tool_candidate"
     },
     {
-      "columns": [
-        "turn_id",
-        "assistant_message_id",
-        "session_id"
-      ],
+      "columns": ["turn_id", "assistant_message_id", "session_id"],
       "tableTo": "turn_model_operation",
-      "columnsTo": [
-        "turn_id",
-        "assistant_message_id",
-        "session_id"
-      ],
+      "columnsTo": ["turn_id", "assistant_message_id", "session_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17180,13 +16092,9 @@
       "table": "turn_tool_candidate"
     },
     {
-      "columns": [
-        "exhaustion_turn_id"
-      ],
+      "columns": ["exhaustion_turn_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "RESTRICT",
       "nameExplicit": false,
@@ -17195,13 +16103,9 @@
       "table": "turn_tool_candidate"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "tableTo": "turn_tool_candidate",
-      "columnsTo": [
-        "part_id"
-      ],
+      "columnsTo": ["part_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17210,17 +16114,9 @@
       "table": "turn_tool_invocation"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id",
-        "assistant_message_id"
-      ],
+      "columns": ["turn_id", "part_id", "assistant_message_id"],
       "tableTo": "turn_tool_candidate",
-      "columnsTo": [
-        "turn_id",
-        "part_id",
-        "assistant_message_id"
-      ],
+      "columnsTo": ["turn_id", "part_id", "assistant_message_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17229,15 +16125,9 @@
       "table": "turn_tool_invocation"
     },
     {
-      "columns": [
-        "turn_id",
-        "session_id"
-      ],
+      "columns": ["turn_id", "session_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id",
-        "session_id"
-      ],
+      "columnsTo": ["id", "session_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17246,13 +16136,9 @@
       "table": "turn_tool_invocation"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "tableTo": "turn",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17261,13 +16147,9 @@
       "table": "turn_transcript_redaction"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "tableTo": "turn_unavailable_source",
-      "columnsTo": [
-        "turn_id"
-      ],
+      "columnsTo": ["turn_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17276,13 +16158,9 @@
       "table": "turn_unavailable_model"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "tableTo": "turn_unavailable_source",
-      "columnsTo": [
-        "turn_id"
-      ],
+      "columnsTo": ["turn_id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "nameExplicit": false,
@@ -17291,1221 +16169,952 @@
       "table": "turn_unavailable_tool"
     },
     {
-      "columns": [
-        "email",
-        "url"
-      ],
+      "columns": ["email", "url"],
       "nameExplicit": false,
       "name": "control_account_pk",
       "entityType": "pks",
       "table": "control_account"
     },
     {
-      "columns": [
-        "course_id",
-        "version"
-      ],
+      "columns": ["course_id", "version"],
       "nameExplicit": false,
       "name": "course_state_history_pk",
       "entityType": "pks",
       "table": "course_state_history"
     },
     {
-      "columns": [
-        "revision_id",
-        "item_id"
-      ],
+      "columns": ["revision_id", "item_id"],
       "nameExplicit": false,
       "name": "course_view_revision_item_pk",
       "entityType": "pks",
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "group_id",
-        "item_id"
-      ],
+      "columns": ["group_id", "item_id"],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_source_pk",
       "entityType": "pks",
       "table": "course_view_revision_mapping_source"
     },
     {
-      "columns": [
-        "group_id",
-        "item_id"
-      ],
+      "columns": ["group_id", "item_id"],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_target_pk",
       "entityType": "pks",
       "table": "course_view_revision_mapping_target"
     },
     {
-      "columns": [
-        "revision_id",
-        "ordinal"
-      ],
+      "columns": ["revision_id", "ordinal"],
       "nameExplicit": false,
       "name": "learner_goal_condition_pk",
       "entityType": "pks",
       "table": "learner_goal_condition"
     },
     {
-      "columns": [
-        "revision_id",
-        "course_id"
-      ],
+      "columns": ["revision_id", "course_id"],
       "nameExplicit": false,
       "name": "learner_goal_course_scope_pk",
       "entityType": "pks",
       "table": "learner_goal_course_scope"
     },
     {
-      "columns": [
-        "effect_id",
-        "ordinal"
-      ],
+      "columns": ["effect_id", "ordinal"],
       "nameExplicit": false,
       "name": "learner_goal_effect_operation_pk",
       "entityType": "pks",
       "table": "learner_goal_effect_operation"
     },
     {
-      "columns": [
-        "revision_id",
-        "field"
-      ],
+      "columns": ["revision_id", "field"],
       "nameExplicit": false,
       "name": "learner_goal_field_basis_pk",
       "entityType": "pks",
       "table": "learner_goal_field_basis"
     },
     {
-      "columns": [
-        "release_id",
-        "name"
-      ],
+      "columns": ["release_id", "name"],
       "nameExplicit": false,
       "name": "learner_goal_time_zone_pk",
       "entityType": "pks",
       "table": "learner_goal_time_zone"
     },
     {
-      "columns": [
-        "effect_id",
-        "local_key"
-      ],
+      "columns": ["effect_id", "local_key"],
       "nameExplicit": false,
       "name": "learning_bootstrap_alignment_result_pk",
       "entityType": "pks",
       "table": "learning_bootstrap_alignment_result"
     },
     {
-      "columns": [
-        "effect_id",
-        "local_key"
-      ],
+      "columns": ["effect_id", "local_key"],
       "nameExplicit": false,
       "name": "learning_bootstrap_map_result_pk",
       "entityType": "pks",
       "table": "learning_bootstrap_map_result"
     },
     {
-      "columns": [
-        "effect_id",
-        "ordinal"
-      ],
+      "columns": ["effect_id", "ordinal"],
       "nameExplicit": false,
       "name": "learning_bootstrap_material_result_pk",
       "entityType": "pks",
       "table": "learning_bootstrap_material_result"
     },
     {
-      "columns": [
-        "project_id",
-        "directory"
-      ],
+      "columns": ["project_id", "directory"],
       "nameExplicit": false,
       "name": "project_directory_pk",
       "entityType": "pks",
       "table": "project_directory"
     },
     {
-      "columns": [
-        "session_id",
-        "position"
-      ],
+      "columns": ["session_id", "position"],
       "nameExplicit": false,
       "name": "todo_pk",
       "entityType": "pks",
       "table": "todo"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "workspace_pk",
       "table": "workspace",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "name"
-      ],
+      "columns": ["name"],
       "nameExplicit": false,
       "name": "data_migration_pk",
       "table": "data_migration",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learning_admitted_occurrence_pk",
       "table": "learning_admitted_occurrence",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "learning_historical_tool_presentation_pk",
       "table": "learning_historical_tool_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "nameExplicit": false,
       "name": "learning_occurrence_presentation_pk",
       "table": "learning_occurrence_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "sequence"
-      ],
+      "columns": ["sequence"],
       "nameExplicit": false,
       "name": "learning_occurrence_source_order_pk",
       "table": "learning_occurrence_source_order",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "nameExplicit": false,
       "name": "learning_occurrence_tombstone_pk",
       "table": "learning_occurrence_tombstone",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "singleton"
-      ],
+      "columns": ["singleton"],
       "nameExplicit": false,
       "name": "learning_shared_frontier_pk",
       "table": "learning_shared_frontier",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_state_pk",
       "table": "account_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_pk",
       "table": "account",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "artifact_id"
-      ],
+      "columns": ["artifact_id"],
       "nameExplicit": false,
       "name": "artifact_current_source_pk",
       "table": "artifact_current_source",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_lineage_correction_member_pk",
       "table": "artifact_lineage_correction_member",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_lineage_correction_set_pk",
       "table": "artifact_lineage_correction_set",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_observation_correction_pk",
       "table": "artifact_observation_correction",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_revision_pk",
       "table": "artifact_revision",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_source_binding_pk",
       "table": "artifact_source_binding",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_source_observation_pk",
       "table": "artifact_source_observation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "artifact_pk",
       "table": "artifact",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "content_mutation_grant_pk",
       "table": "content_mutation_grant",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "content_root_binding_episode_pk",
       "table": "content_root_binding_episode",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "content_root_binding_pk",
       "table": "content_root_binding",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "content_root_id"
-      ],
+      "columns": ["content_root_id"],
       "nameExplicit": false,
       "name": "content_root_current_pk",
       "table": "content_root_current",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "content_root_grant_episode_pk",
       "table": "content_root_grant_episode",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "content_root_pk",
       "table": "content_root",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_item_pk",
       "table": "course_item",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "course_selection_acceptance_commit_seal_pk",
       "table": "course_selection_acceptance_commit_seal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_selection_acceptance_effect_pk",
       "table": "course_selection_acceptance_effect",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_pk",
       "table": "course",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_revision_mapping_group_pk",
       "table": "course_view_revision_mapping_group",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_revision_reuse_citation_pk",
       "table": "course_view_revision_reuse_citation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "nameExplicit": false,
       "name": "course_view_revision_state_pk",
       "table": "course_view_revision_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_revision_pk",
       "table": "course_view_revision",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "course_view_pk",
       "table": "course_view",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "course_id"
-      ],
+      "columns": ["course_id"],
       "nameExplicit": false,
       "name": "course_working_selection_pk",
       "table": "course_working_selection",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "credential_pk",
       "table": "credential",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "aggregate_id"
-      ],
+      "columns": ["aggregate_id"],
       "nameExplicit": false,
       "name": "event_sequence_pk",
       "table": "event_sequence",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_goal_capability_issue_v2_pk",
       "table": "learner_goal_capability_issue_v2",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_goal_capability_settlement_v2_pk",
       "table": "learner_goal_capability_settlement_v2",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_goal_command_pk",
       "table": "learner_goal_command",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learner_goal_commit_seal_pk",
       "table": "learner_goal_commit_seal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_goal_disposition_v2_pk",
       "table": "learner_goal_disposition_v2",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learner_goal_effect_pk",
       "table": "learner_goal_effect",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learner_goal_revision_pk",
       "table": "learner_goal_revision",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "singleton"
-      ],
+      "columns": ["singleton"],
       "nameExplicit": false,
       "name": "learner_goal_state_guard_pk",
       "table": "learner_goal_state_guard",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "singleton"
-      ],
+      "columns": ["singleton"],
       "nameExplicit": false,
       "name": "learner_goal_state_pk",
       "table": "learner_goal_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "revision_id"
-      ],
+      "columns": ["revision_id"],
       "nameExplicit": false,
       "name": "learner_goal_supersession_pk",
       "table": "learner_goal_supersession",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learner_goal_pk",
       "table": "learner_goal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learner_goal_time_zone_release_pk",
       "table": "learner_goal_time_zone_release",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learner_course_route_anchor_transition_pk",
       "table": "learner_course_route_anchor_transition",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learner_default_course_transition_pk",
       "table": "learner_default_course_transition",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learner_course_route_anchor_commit_seal_pk",
       "table": "learner_course_route_anchor_commit_seal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_default_course_acknowledgement_pk",
       "table": "learner_default_course_acknowledgement",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_default_course_capability_issue_pk",
       "table": "learner_default_course_capability_issue",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_default_course_capability_settlement_pk",
       "table": "learner_default_course_capability_settlement",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_default_course_command_pk",
       "table": "learner_default_course_command",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learner_default_course_commit_seal_pk",
       "table": "learner_default_course_commit_seal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learner_default_course_disposition_pk",
       "table": "learner_default_course_disposition",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "learner_default_course_proposal_pk",
       "table": "learner_default_course_proposal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_anchor_result_pk",
       "table": "learning_bootstrap_anchor_result",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_capability_issue_pk",
       "table": "learning_bootstrap_capability_issue",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_capability_settlement_pk",
       "table": "learning_bootstrap_capability_settlement",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_commit_seal_pk",
       "table": "learning_bootstrap_commit_seal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_course_result_pk",
       "table": "learning_bootstrap_course_result",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_disposition_pk",
       "table": "learning_bootstrap_disposition",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_effect_pk",
       "table": "learning_bootstrap_effect",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_route_result_pk",
       "table": "learning_bootstrap_route_result",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_selection_result_pk",
       "table": "learning_bootstrap_selection_result",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learning_course_material_adoption_pk",
       "table": "learning_course_material_adoption",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "learning_command_invocation_pk",
       "table": "learning_command_invocation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "learning_command_receipt_pk",
       "table": "learning_command_receipt",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["assistant_message_id"],
+      "nameExplicit": false,
+      "name": "turn_learning_context_cut_pk",
+      "table": "turn_learning_context_cut",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["assistant_message_id"],
+      "nameExplicit": false,
+      "name": "turn_model_capacity_pk",
+      "table": "turn_model_capacity",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "material_course_alignment_disposition_event_pk",
       "table": "material_course_alignment_disposition_event",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "alignment_id"
-      ],
+      "columns": ["alignment_id"],
       "nameExplicit": false,
       "name": "material_course_alignment_state_pk",
       "table": "material_course_alignment_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "material_course_alignment_pk",
       "table": "material_course_alignment",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "nameExplicit": false,
       "name": "material_map_artifact_target_pk",
       "table": "material_map_artifact_target",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "material_map_disposition_event_pk",
       "table": "material_map_disposition_event",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "nameExplicit": false,
       "name": "material_map_representation_target_pk",
       "table": "material_map_representation_target",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "nameExplicit": false,
       "name": "material_map_state_pk",
       "table": "material_map_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "material_map_pk",
       "table": "material_map",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "material_outline_node_pk",
       "table": "material_outline_node",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "material_selector_pk",
       "table": "material_selector",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "permission_pk",
       "table": "permission",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "project_pk",
       "table": "project",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "representation_revision_id"
-      ],
+      "columns": ["representation_revision_id"],
       "nameExplicit": false,
       "name": "representation_availability_current_pk",
       "table": "representation_availability_current",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "representation_availability_event_pk",
       "table": "representation_availability_event",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": false,
       "name": "representation_command_commit_seal_pk",
       "table": "representation_command_commit_seal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "representation_continued_use_grant_pk",
       "table": "representation_continued_use_grant",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "representation_effect_pk",
       "table": "representation_effect",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "representation_revision_pk",
       "table": "representation_revision",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "retained_steering_command_pk",
       "table": "retained_steering_command",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "transition_id"
-      ],
+      "columns": ["transition_id"],
       "nameExplicit": false,
       "name": "retained_steering_commit_seal_pk",
       "table": "retained_steering_commit_seal",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "retained_steering_policy_pk",
       "table": "retained_steering_policy",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "singleton"
-      ],
+      "columns": ["singleton"],
       "nameExplicit": false,
       "name": "retained_steering_state_pk",
       "table": "retained_steering_state",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "retained_steering_transition_pk",
       "table": "retained_steering_transition",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "message_pk",
       "table": "message",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "part_pk",
       "table": "part",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "nameExplicit": false,
       "name": "session_context_epoch_pk",
       "table": "session_context_epoch",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "nameExplicit": false,
       "name": "session_historical_message_presentation_pk",
       "table": "session_historical_message_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "session_historical_part_presentation_pk",
       "table": "session_historical_part_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_input_pk",
       "table": "session_input",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_message_pk",
       "table": "session_message",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_pk",
       "table": "session",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "session_id"
-      ],
+      "columns": ["session_id"],
       "nameExplicit": false,
       "name": "session_share_pk",
       "table": "session_share",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "turn_candidate_presentation_pk",
       "table": "turn_candidate_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "turn_candidate_redaction_pk",
       "table": "turn_candidate_redaction",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "child_turn_id"
-      ],
+      "columns": ["child_turn_id"],
       "nameExplicit": false,
       "name": "turn_child_lineage_pk",
       "table": "turn_child_lineage",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "parent_task_part_id"
-      ],
+      "columns": ["parent_task_part_id"],
       "nameExplicit": false,
       "name": "turn_child_result_pk",
       "table": "turn_child_result",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "nameExplicit": false,
       "name": "turn_historical_input_presentation_pk",
       "table": "turn_historical_input_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "assistant_message_id"
-      ],
+      "columns": ["assistant_message_id"],
       "nameExplicit": false,
       "name": "turn_historical_model_presentation_pk",
       "table": "turn_historical_model_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "turn_historical_tool_presentation_pk",
       "table": "turn_historical_tool_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "input_id"
-      ],
+      "columns": ["input_id"],
       "nameExplicit": false,
       "name": "turn_input_presentation_pk",
       "table": "turn_input_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "turn_input_pk",
       "table": "turn_input",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "assistant_message_id"
-      ],
+      "columns": ["assistant_message_id"],
       "nameExplicit": false,
       "name": "turn_model_operation_pk",
       "table": "turn_model_operation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "assistant_message_id"
-      ],
+      "columns": ["assistant_message_id"],
       "nameExplicit": false,
       "name": "turn_model_presentation_pk",
       "table": "turn_model_presentation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "turn_pk",
       "table": "turn",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "turn_tool_candidate_pk",
       "table": "turn_tool_candidate",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": false,
       "name": "turn_tool_invocation_pk",
       "table": "turn_tool_invocation",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "nameExplicit": false,
       "name": "turn_transcript_redaction_pk",
       "table": "turn_transcript_redaction",
       "entityType": "pks"
     },
     {
-      "columns": [
-        "turn_id"
-      ],
+      "columns": ["turn_id"],
       "nameExplicit": false,
       "name": "turn_unavailable_source_pk",
       "table": "turn_unavailable_source",
@@ -20734,1157 +19343,826 @@
       "table": "turn_unavailable_source"
     },
     {
-      "columns": [
-        "origin_session_id",
-        "origin_message_id"
-      ],
+      "columns": ["origin_session_id", "origin_message_id"],
       "nameExplicit": true,
       "name": "learning_admitted_occurrence_origin_unique",
       "entityType": "uniques",
       "table": "learning_admitted_occurrence"
     },
     {
-      "columns": [
-        "origin_session_id",
-        "origin_message_id"
-      ],
+      "columns": ["origin_session_id", "origin_message_id"],
       "nameExplicit": true,
       "name": "learning_occurrence_source_order_origin_unique",
       "entityType": "uniques",
       "table": "learning_occurrence_source_order"
     },
     {
-      "columns": [
-        "set_id",
-        "id"
-      ],
+      "columns": ["set_id", "id"],
       "nameExplicit": true,
       "name": "artifact_lineage_correction_member_set_id_unique",
       "entityType": "uniques",
       "table": "artifact_lineage_correction_member"
     },
     {
-      "columns": [
-        "new_artifact_id"
-      ],
+      "columns": ["new_artifact_id"],
       "nameExplicit": true,
       "name": "artifact_lineage_correction_set_new_artifact_unique",
       "entityType": "uniques",
       "table": "artifact_lineage_correction_set"
     },
     {
-      "columns": [
-        "observation_id",
-        "id"
-      ],
+      "columns": ["observation_id", "id"],
       "nameExplicit": true,
       "name": "artifact_observation_correction_observation_id_unique",
       "entityType": "uniques",
       "table": "artifact_observation_correction"
     },
     {
-      "columns": [
-        "observation_id",
-        "correction_sequence"
-      ],
+      "columns": ["observation_id", "correction_sequence"],
       "nameExplicit": true,
       "name": "artifact_observation_correction_sequence_unique",
       "entityType": "uniques",
       "table": "artifact_observation_correction"
     },
     {
-      "columns": [
-        "recorded_artifact_id",
-        "id"
-      ],
+      "columns": ["recorded_artifact_id", "id"],
       "nameExplicit": true,
       "name": "artifact_revision_recorded_id_unique",
       "entityType": "uniques",
       "table": "artifact_revision"
     },
     {
-      "columns": [
-        "recorded_artifact_id",
-        "fingerprint_algorithm",
-        "fingerprint_digest",
-        "byte_length"
-      ],
+      "columns": ["recorded_artifact_id", "fingerprint_algorithm", "fingerprint_digest", "byte_length"],
       "nameExplicit": true,
       "name": "artifact_revision_fingerprint_unique",
       "entityType": "uniques",
       "table": "artifact_revision"
     },
     {
-      "columns": [
-        "recorded_artifact_id",
-        "id"
-      ],
+      "columns": ["recorded_artifact_id", "id"],
       "nameExplicit": true,
       "name": "artifact_source_binding_recorded_id_unique",
       "entityType": "uniques",
       "table": "artifact_source_binding"
     },
     {
-      "columns": [
-        "recorded_artifact_id",
-        "binding_ordinal"
-      ],
+      "columns": ["recorded_artifact_id", "binding_ordinal"],
       "nameExplicit": true,
       "name": "artifact_source_binding_ordinal_unique",
       "entityType": "uniques",
       "table": "artifact_source_binding"
     },
     {
-      "columns": [
-        "recorded_artifact_id",
-        "id"
-      ],
+      "columns": ["recorded_artifact_id", "id"],
       "nameExplicit": true,
       "name": "artifact_source_observation_recorded_id_unique",
       "entityType": "uniques",
       "table": "artifact_source_observation"
     },
     {
-      "columns": [
-        "recorded_artifact_id",
-        "occurrence_ordinal"
-      ],
+      "columns": ["recorded_artifact_id", "occurrence_ordinal"],
       "nameExplicit": true,
       "name": "artifact_source_observation_ordinal_unique",
       "entityType": "uniques",
       "table": "artifact_source_observation"
     },
     {
-      "columns": [
-        "content_root_id",
-        "id"
-      ],
+      "columns": ["content_root_id", "id"],
       "nameExplicit": true,
       "name": "content_root_binding_episode_root_id_unique",
       "entityType": "uniques",
       "table": "content_root_binding_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "id",
-        "binding_id",
-        "ordinal"
-      ],
+      "columns": ["content_root_id", "id", "binding_id", "ordinal"],
       "nameExplicit": true,
       "name": "content_root_binding_episode_receipt_unique",
       "entityType": "uniques",
       "table": "content_root_binding_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "ordinal"
-      ],
+      "columns": ["content_root_id", "ordinal"],
       "nameExplicit": true,
       "name": "content_root_binding_episode_ordinal_unique",
       "entityType": "uniques",
       "table": "content_root_binding_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "id"
-      ],
+      "columns": ["content_root_id", "id"],
       "nameExplicit": true,
       "name": "content_root_binding_root_id_unique",
       "entityType": "uniques",
       "table": "content_root_binding"
     },
     {
-      "columns": [
-        "canonical_path_key",
-        "platform",
-        "volume_serial",
-        "object_id",
-        "creation_time"
-      ],
+      "columns": ["canonical_path_key", "platform", "volume_serial", "object_id", "creation_time"],
       "nameExplicit": true,
       "name": "content_root_binding_exact_key_unique",
       "entityType": "uniques",
       "table": "content_root_binding"
     },
     {
-      "columns": [
-        "content_root_id",
-        "id"
-      ],
+      "columns": ["content_root_id", "id"],
       "nameExplicit": true,
       "name": "content_root_grant_episode_root_id_unique",
       "entityType": "uniques",
       "table": "content_root_grant_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "id",
-        "binding_id",
-        "binding_episode_id",
-        "ordinal"
-      ],
+      "columns": ["content_root_id", "id", "binding_id", "binding_episode_id", "ordinal"],
       "nameExplicit": true,
       "name": "content_root_grant_episode_receipt_unique",
       "entityType": "uniques",
       "table": "content_root_grant_episode"
     },
     {
-      "columns": [
-        "content_root_id",
-        "ordinal"
-      ],
+      "columns": ["content_root_id", "ordinal"],
       "nameExplicit": true,
       "name": "content_root_grant_episode_ordinal_unique",
       "entityType": "uniques",
       "table": "content_root_grant_episode"
     },
     {
-      "columns": [
-        "course_id",
-        "id"
-      ],
+      "columns": ["course_id", "id"],
       "nameExplicit": true,
       "name": "course_item_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_item"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "nameExplicit": true,
       "name": "course_selection_acceptance_commit_seal_receipt_unique",
       "entityType": "uniques",
       "table": "course_selection_acceptance_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": true,
       "name": "course_selection_acceptance_commit_seal_invocation_unique",
       "entityType": "uniques",
       "table": "course_selection_acceptance_commit_seal"
     },
     {
-      "columns": [
-        "occurrence_id",
-        "course_id"
-      ],
+      "columns": ["occurrence_id", "course_id"],
       "nameExplicit": true,
       "name": "course_selection_acceptance_effect_address_unique",
       "entityType": "uniques",
       "table": "course_selection_acceptance_effect"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_id",
-        "item_id"
-      ],
+      "columns": ["course_id", "view_id", "revision_id", "item_id"],
       "nameExplicit": true,
       "name": "course_view_revision_item_owner_unique",
       "entityType": "uniques",
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "revision_id",
-        "preorder_position"
-      ],
+      "columns": ["revision_id", "preorder_position"],
       "nameExplicit": true,
       "name": "course_view_revision_item_position_unique",
       "entityType": "uniques",
       "table": "course_view_revision_item"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "source_revision_id",
-        "target_revision_id",
-        "id"
-      ],
+      "columns": ["course_id", "view_id", "source_revision_id", "target_revision_id", "id"],
       "nameExplicit": true,
       "name": "course_view_revision_mapping_group_owner_unique",
       "entityType": "uniques",
       "table": "course_view_revision_mapping_group"
     },
     {
-      "columns": [
-        "target_revision_id",
-        "item_id"
-      ],
+      "columns": ["target_revision_id", "item_id"],
       "nameExplicit": true,
       "name": "course_view_revision_reuse_citation_target_unique",
       "entityType": "uniques",
       "table": "course_view_revision_reuse_citation"
     },
     {
-      "columns": [
-        "course_id",
-        "revision_id"
-      ],
+      "columns": ["course_id", "revision_id"],
       "nameExplicit": true,
       "name": "course_view_revision_state_course_id_revision_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision_state"
     },
     {
-      "columns": [
-        "course_id",
-        "id"
-      ],
+      "columns": ["course_id", "id"],
       "nameExplicit": true,
       "name": "course_view_revision_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "id"
-      ],
+      "columns": ["course_id", "view_id", "id"],
       "nameExplicit": true,
       "name": "course_view_revision_course_view_id_id_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "view_id",
-        "revision_number"
-      ],
+      "columns": ["course_id", "view_id", "revision_number"],
       "nameExplicit": true,
       "name": "course_view_revision_number_unique",
       "entityType": "uniques",
       "table": "course_view_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "id"
-      ],
+      "columns": ["course_id", "id"],
       "nameExplicit": true,
       "name": "course_view_course_id_id_unique",
       "entityType": "uniques",
       "table": "course_view"
     },
     {
-      "columns": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columns": ["invocation_part_id", "permission_request_id"],
       "nameExplicit": true,
       "name": "learner_goal_capability_issue_v2_invocation_request_unique",
       "entityType": "uniques",
       "table": "learner_goal_capability_issue_v2"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "nameExplicit": true,
       "name": "learner_goal_commit_seal_receipt_unique",
       "entityType": "uniques",
       "table": "learner_goal_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": true,
       "name": "learner_goal_commit_seal_invocation_unique",
       "entityType": "uniques",
       "table": "learner_goal_commit_seal"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "nameExplicit": true,
       "name": "learner_goal_effect_occurrence_unique",
       "entityType": "uniques",
       "table": "learner_goal_effect"
     },
     {
-      "columns": [
-        "frontier_sequence"
-      ],
+      "columns": ["frontier_sequence"],
       "nameExplicit": true,
       "name": "learner_goal_effect_frontier_unique",
       "entityType": "uniques",
       "table": "learner_goal_effect"
     },
     {
-      "columns": [
-        "goal_id",
-        "version"
-      ],
+      "columns": ["goal_id", "version"],
       "nameExplicit": true,
       "name": "learner_goal_revision_goal_version_unique",
       "entityType": "uniques",
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "predecessor_id"
-      ],
+      "columns": ["predecessor_id"],
       "nameExplicit": true,
       "name": "learner_goal_revision_predecessor_unique",
       "entityType": "uniques",
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "effect_id",
-        "operation_ordinal",
-        "revision_role"
-      ],
+      "columns": ["effect_id", "operation_ordinal", "revision_role"],
       "nameExplicit": true,
       "name": "learner_goal_revision_effect_role_unique",
       "entityType": "uniques",
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "revision_order"
-      ],
+      "columns": ["revision_order"],
       "nameExplicit": true,
       "name": "learner_goal_revision_order_unique",
       "entityType": "uniques",
       "table": "learner_goal_revision"
     },
     {
-      "columns": [
-        "course_id",
-        "id"
-      ],
+      "columns": ["course_id", "id"],
       "nameExplicit": true,
       "name": "learner_course_route_anchor_owner_unique",
       "entityType": "uniques",
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "course_id",
-        "version"
-      ],
+      "columns": ["course_id", "version"],
       "nameExplicit": true,
       "name": "learner_course_route_anchor_version_unique",
       "entityType": "uniques",
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "course_id",
-        "predecessor_id"
-      ],
+      "columns": ["course_id", "predecessor_id"],
       "nameExplicit": true,
       "name": "learner_course_route_anchor_predecessor_unique",
       "entityType": "uniques",
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "occurrence_id",
-        "course_id"
-      ],
+      "columns": ["occurrence_id", "course_id"],
       "nameExplicit": true,
       "name": "learner_course_route_anchor_occurrence_unique",
       "entityType": "uniques",
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "frontier_sequence"
-      ],
+      "columns": ["frontier_sequence"],
       "nameExplicit": true,
       "name": "learner_course_route_anchor_frontier_unique",
       "entityType": "uniques",
       "table": "learner_course_route_anchor_transition"
     },
     {
-      "columns": [
-        "version"
-      ],
+      "columns": ["version"],
       "nameExplicit": true,
       "name": "learner_default_course_version_unique",
       "entityType": "uniques",
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "predecessor_id"
-      ],
+      "columns": ["predecessor_id"],
       "nameExplicit": true,
       "name": "learner_default_course_predecessor_unique",
       "entityType": "uniques",
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "nameExplicit": true,
       "name": "learner_default_course_occurrence_unique",
       "entityType": "uniques",
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "frontier_sequence"
-      ],
+      "columns": ["frontier_sequence"],
       "nameExplicit": true,
       "name": "learner_default_course_frontier_unique",
       "entityType": "uniques",
       "table": "learner_default_course_transition"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "nameExplicit": true,
       "name": "learner_course_route_anchor_commit_seal_receipt_unique",
       "entityType": "uniques",
       "table": "learner_course_route_anchor_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": true,
       "name": "learner_course_route_anchor_commit_seal_invocation_unique",
       "entityType": "uniques",
       "table": "learner_course_route_anchor_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columns": ["invocation_part_id", "permission_request_id"],
       "nameExplicit": true,
       "name": "learner_default_course_capability_issue_invocation_request_unique",
       "entityType": "uniques",
       "table": "learner_default_course_capability_issue"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "nameExplicit": true,
       "name": "learner_default_course_commit_seal_receipt_unique",
       "entityType": "uniques",
       "table": "learner_default_course_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": true,
       "name": "learner_default_course_commit_seal_invocation_unique",
       "entityType": "uniques",
       "table": "learner_default_course_commit_seal"
     },
     {
-      "columns": [
-        "assistant_message_id",
-        "emission_ordinal"
-      ],
+      "columns": ["assistant_message_id", "emission_ordinal"],
       "nameExplicit": true,
       "name": "learner_default_course_proposal_assistant_emission_unique",
       "entityType": "uniques",
       "table": "learner_default_course_proposal"
     },
     {
-      "columns": [
-        "alignment_id"
-      ],
+      "columns": ["alignment_id"],
       "nameExplicit": true,
       "name": "learning_bootstrap_alignment_identity_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_alignment_result"
     },
     {
-      "columns": [
-        "invocation_part_id",
-        "permission_request_id"
-      ],
+      "columns": ["invocation_part_id", "permission_request_id"],
       "nameExplicit": true,
       "name": "learning_bootstrap_capability_issue_exact",
       "entityType": "uniques",
       "table": "learning_bootstrap_capability_issue"
     },
     {
-      "columns": [
-        "map_id"
-      ],
+      "columns": ["map_id"],
       "nameExplicit": true,
       "name": "learning_bootstrap_map_identity_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_map_result"
     },
     {
-      "columns": [
-        "effect_id",
-        "local_key"
-      ],
+      "columns": ["effect_id", "local_key"],
       "nameExplicit": true,
       "name": "learning_bootstrap_material_key_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_material_result"
     },
     {
-      "columns": [
-        "course_id",
-        "artifact_id",
-        "artifact_revision_id",
-        "attribution_type",
-        "attribution_member_id"
-      ],
+      "columns": ["course_id", "artifact_id", "artifact_revision_id", "attribution_type", "attribution_member_id"],
       "nameExplicit": true,
       "name": "learning_course_material_artifact_unique",
       "entityType": "uniques",
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "course_id",
-        "representation_revision_id"
-      ],
+      "columns": ["course_id", "representation_revision_id"],
       "nameExplicit": true,
       "name": "learning_course_material_representation_unique",
       "entityType": "uniques",
       "table": "learning_course_material_adoption"
     },
     {
-      "columns": [
-        "assistant_message_id",
-        "provider_call_id"
-      ],
+      "columns": ["assistant_message_id", "provider_call_id"],
       "nameExplicit": true,
       "name": "learning_command_invocation_assistant_call_unique",
       "entityType": "uniques",
       "table": "learning_command_invocation"
     },
     {
-      "columns": [
-        "assistant_message_id",
-        "emission_ordinal"
-      ],
+      "columns": ["assistant_message_id", "emission_ordinal"],
       "nameExplicit": true,
       "name": "learning_command_invocation_assistant_ordinal_unique",
       "entityType": "uniques",
       "table": "learning_command_invocation"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": true,
       "name": "learning_command_receipt_invocation_unique",
       "entityType": "uniques",
       "table": "learning_command_receipt"
     },
     {
-      "columns": [
-        "alignment_id",
-        "version"
-      ],
+      "columns": ["alignment_id", "version"],
       "nameExplicit": true,
       "name": "material_course_alignment_disposition_version_unique",
       "entityType": "uniques",
       "table": "material_course_alignment_disposition_event"
     },
     {
-      "columns": [
-        "id",
-        "map_id",
-        "selector_id"
-      ],
+      "columns": ["id", "map_id", "selector_id"],
       "nameExplicit": true,
       "name": "material_course_alignment_owner_unique",
       "entityType": "uniques",
       "table": "material_course_alignment"
     },
     {
-      "columns": [
-        "map_id",
-        "version"
-      ],
+      "columns": ["map_id", "version"],
       "nameExplicit": true,
       "name": "material_map_disposition_version_unique",
       "entityType": "uniques",
       "table": "material_map_disposition_event"
     },
     {
-      "columns": [
-        "id",
-        "target_kind"
-      ],
+      "columns": ["id", "target_kind"],
       "nameExplicit": true,
       "name": "material_map_id_target_unique",
       "entityType": "uniques",
       "table": "material_map"
     },
     {
-      "columns": [
-        "map_id",
-        "id"
-      ],
+      "columns": ["map_id", "id"],
       "nameExplicit": true,
       "name": "material_outline_node_owner_unique",
       "entityType": "uniques",
       "table": "material_outline_node"
     },
     {
-      "columns": [
-        "map_id",
-        "preorder_position"
-      ],
+      "columns": ["map_id", "preorder_position"],
       "nameExplicit": true,
       "name": "material_outline_node_position_unique",
       "entityType": "uniques",
       "table": "material_outline_node"
     },
     {
-      "columns": [
-        "map_id",
-        "id"
-      ],
+      "columns": ["map_id", "id"],
       "nameExplicit": true,
       "name": "material_selector_owner_unique",
       "entityType": "uniques",
       "table": "material_selector"
     },
     {
-      "columns": [
-        "map_id",
-        "node_id",
-        "selector_position"
-      ],
+      "columns": ["map_id", "node_id", "selector_position"],
       "nameExplicit": true,
       "name": "material_selector_node_position_unique",
       "entityType": "uniques",
       "table": "material_selector"
     },
     {
-      "columns": [
-        "representation_revision_id",
-        "version"
-      ],
+      "columns": ["representation_revision_id", "version"],
       "nameExplicit": true,
       "name": "representation_availability_version_unique",
       "entityType": "uniques",
       "table": "representation_availability_event"
     },
     {
-      "columns": [
-        "operation_identity"
-      ],
+      "columns": ["operation_identity"],
       "nameExplicit": true,
       "name": "representation_availability_operation_unique",
       "entityType": "uniques",
       "table": "representation_availability_event"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "nameExplicit": true,
       "name": "representation_command_commit_seal_receipt_unique",
       "entityType": "uniques",
       "table": "representation_command_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": true,
       "name": "representation_command_commit_seal_invocation_unique",
       "entityType": "uniques",
       "table": "representation_command_commit_seal"
     },
     {
-      "columns": [
-        "authorization_operation_identity"
-      ],
+      "columns": ["authorization_operation_identity"],
       "nameExplicit": true,
       "name": "representation_continued_use_authorization_operation_unique",
       "entityType": "uniques",
       "table": "representation_continued_use_grant"
     },
     {
-      "columns": [
-        "revocation_operation_identity"
-      ],
+      "columns": ["revocation_operation_identity"],
       "nameExplicit": true,
       "name": "representation_continued_use_revocation_operation_unique",
       "entityType": "uniques",
       "table": "representation_continued_use_grant"
     },
     {
-      "columns": [
-        "operation_identity"
-      ],
+      "columns": ["operation_identity"],
       "nameExplicit": true,
       "name": "representation_effect_operation_unique",
       "entityType": "uniques",
       "table": "representation_effect"
     },
     {
-      "columns": [
-        "effect_id"
-      ],
+      "columns": ["effect_id"],
       "nameExplicit": true,
       "name": "representation_revision_effect_unique",
       "entityType": "uniques",
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "storage_key"
-      ],
+      "columns": ["storage_key"],
       "nameExplicit": true,
       "name": "representation_revision_storage_key_unique",
       "entityType": "uniques",
       "table": "representation_revision"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "nameExplicit": true,
       "name": "retained_steering_commit_seal_receipt_unique",
       "entityType": "uniques",
       "table": "retained_steering_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": true,
       "name": "retained_steering_commit_seal_invocation_unique",
       "entityType": "uniques",
       "table": "retained_steering_commit_seal"
     },
     {
-      "columns": [
-        "policy_id",
-        "version"
-      ],
+      "columns": ["policy_id", "version"],
       "nameExplicit": true,
       "name": "retained_steering_policy_version_unique",
       "entityType": "uniques",
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "predecessor_id"
-      ],
+      "columns": ["predecessor_id"],
       "nameExplicit": true,
       "name": "retained_steering_predecessor_unique",
       "entityType": "uniques",
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "nameExplicit": true,
       "name": "retained_steering_occurrence_unique",
       "entityType": "uniques",
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "source_order"
-      ],
+      "columns": ["source_order"],
       "nameExplicit": true,
       "name": "retained_steering_source_order_unique",
       "entityType": "uniques",
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "steering_revision"
-      ],
+      "columns": ["steering_revision"],
       "nameExplicit": true,
       "name": "retained_steering_revision_unique",
       "entityType": "uniques",
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "frontier_sequence"
-      ],
+      "columns": ["frontier_sequence"],
       "nameExplicit": true,
       "name": "retained_steering_frontier_unique",
       "entityType": "uniques",
       "table": "retained_steering_transition"
     },
     {
-      "columns": [
-        "child_turn_id",
-        "child_session_id"
-      ],
+      "columns": ["child_turn_id", "child_session_id"],
       "nameExplicit": true,
       "name": "turn_child_lineage_child_session_unique",
       "entityType": "uniques",
       "table": "turn_child_lineage"
     },
     {
-      "columns": [
-        "child_turn_id"
-      ],
+      "columns": ["child_turn_id"],
       "nameExplicit": true,
       "name": "turn_child_result_child_unique",
       "entityType": "uniques",
       "table": "turn_child_result"
     },
     {
-      "columns": [
-        "turn_id",
-        "id"
-      ],
+      "columns": ["turn_id", "id"],
       "nameExplicit": true,
       "name": "turn_input_turn_id_unique",
       "entityType": "uniques",
       "table": "turn_input"
     },
     {
-      "columns": [
-        "session_id",
-        "id"
-      ],
+      "columns": ["session_id", "id"],
       "nameExplicit": true,
       "name": "turn_input_session_id_unique",
       "entityType": "uniques",
       "table": "turn_input"
     },
     {
-      "columns": [
-        "turn_id",
-        "assistant_message_id"
-      ],
+      "columns": ["turn_id", "assistant_message_id"],
       "nameExplicit": true,
       "name": "turn_model_turn_message_unique",
       "entityType": "uniques",
       "table": "turn_model_operation"
     },
     {
-      "columns": [
-        "turn_id",
-        "assistant_message_id",
-        "session_id"
-      ],
+      "columns": ["turn_id", "assistant_message_id", "session_id"],
       "nameExplicit": true,
       "name": "turn_model_turn_message_session_unique",
       "entityType": "uniques",
       "table": "turn_model_operation"
     },
     {
-      "columns": [
-        "id",
-        "session_id",
-        "depth"
-      ],
+      "columns": ["id", "session_id", "depth"],
       "nameExplicit": true,
       "name": "turn_id_session_depth_unique",
       "entityType": "uniques",
       "table": "turn"
     },
     {
-      "columns": [
-        "id",
-        "session_id"
-      ],
+      "columns": ["id", "session_id"],
       "nameExplicit": true,
       "name": "turn_id_session_unique",
       "entityType": "uniques",
       "table": "turn"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id"
-      ],
+      "columns": ["turn_id", "part_id"],
       "nameExplicit": true,
       "name": "turn_candidate_turn_part_unique",
       "entityType": "uniques",
       "table": "turn_tool_candidate"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id",
-        "assistant_message_id"
-      ],
+      "columns": ["turn_id", "part_id", "assistant_message_id"],
       "nameExplicit": true,
       "name": "turn_candidate_turn_part_model_unique",
       "entityType": "uniques",
       "table": "turn_tool_candidate"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id"
-      ],
+      "columns": ["turn_id", "part_id"],
       "nameExplicit": true,
       "name": "turn_invocation_turn_part_unique",
       "entityType": "uniques",
       "table": "turn_tool_invocation"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id",
-        "assistant_message_id"
-      ],
+      "columns": ["turn_id", "part_id", "assistant_message_id"],
       "nameExplicit": true,
       "name": "turn_invocation_turn_part_model_unique",
       "entityType": "uniques",
       "table": "turn_tool_invocation"
     },
     {
-      "columns": [
-        "turn_id",
-        "assistant_message_id"
-      ],
+      "columns": ["turn_id", "assistant_message_id"],
       "nameExplicit": true,
       "name": "turn_unavailable_model_identity_unique",
       "entityType": "uniques",
       "table": "turn_unavailable_model"
     },
     {
-      "columns": [
-        "assistant_message_id"
-      ],
+      "columns": ["assistant_message_id"],
       "nameExplicit": true,
       "name": "turn_unavailable_model_message_unique",
       "entityType": "uniques",
       "table": "turn_unavailable_model"
     },
     {
-      "columns": [
-        "turn_id",
-        "part_id"
-      ],
+      "columns": ["turn_id", "part_id"],
       "nameExplicit": true,
       "name": "turn_unavailable_tool_identity_unique",
       "entityType": "uniques",
       "table": "turn_unavailable_tool"
     },
     {
-      "columns": [
-        "part_id"
-      ],
+      "columns": ["part_id"],
       "nameExplicit": true,
       "name": "turn_unavailable_tool_part_unique",
       "entityType": "uniques",
       "table": "turn_unavailable_tool"
     },
     {
-      "columns": [
-        "source_order"
-      ],
+      "columns": ["source_order"],
       "nameExplicit": false,
       "name": "learning_admitted_occurrence_source_order_unique",
       "entityType": "uniques",
       "table": "learning_admitted_occurrence"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "nameExplicit": false,
       "name": "learning_occurrence_source_order_occurrence_id_unique",
       "entityType": "uniques",
       "table": "learning_occurrence_source_order"
     },
     {
-      "columns": [
-        "permission_request_id"
-      ],
+      "columns": ["permission_request_id"],
       "nameExplicit": false,
       "name": "learner_goal_capability_issue_v2_permission_request_id_unique",
       "entityType": "uniques",
       "table": "learner_goal_capability_issue_v2"
     },
     {
-      "columns": [
-        "permission_request_id"
-      ],
+      "columns": ["permission_request_id"],
       "nameExplicit": false,
       "name": "learner_default_course_capability_issue_permission_request_id_unique",
       "entityType": "uniques",
       "table": "learner_default_course_capability_issue"
     },
     {
-      "columns": [
-        "permission_request_id"
-      ],
+      "columns": ["permission_request_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_capability_issue_permission_request_id_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_capability_issue"
     },
     {
-      "columns": [
-        "receipt_id"
-      ],
+      "columns": ["receipt_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_commit_seal_receipt_id_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_commit_seal"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_commit_seal_invocation_part_id_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_commit_seal"
     },
     {
-      "columns": [
-        "occurrence_id"
-      ],
+      "columns": ["occurrence_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_effect_occurrence_id_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_effect"
     },
     {
-      "columns": [
-        "invocation_part_id"
-      ],
+      "columns": ["invocation_part_id"],
       "nameExplicit": false,
       "name": "learning_bootstrap_effect_invocation_part_id_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_effect"
     },
     {
-      "columns": [
-        "frontier_sequence"
-      ],
+      "columns": ["frontier_sequence"],
       "nameExplicit": false,
       "name": "learning_bootstrap_effect_frontier_sequence_unique",
       "entityType": "uniques",
       "table": "learning_bootstrap_effect"
     },
     {
-      "columns": [
-        "message_id"
-      ],
+      "columns": ["message_id"],
       "nameExplicit": false,
       "name": "turn_input_presentation_message_id_unique",
       "entityType": "uniques",
@@ -23077,6 +21355,48 @@
       "name": "learning_command_receipt_time_order",
       "entityType": "checks",
       "table": "learning_command_receipt"
+    },
+    {
+      "value": "json_valid(\"canonical_cut\")\n        AND json_type(\"canonical_cut\") = 'object'\n        AND json_extract(\"canonical_cut\", '$.schemaVersion') = 1\n        AND json_extract(\"canonical_cut\", '$.policyVersion') = 1\n        AND json_extract(\"canonical_cut\", '$.rendererVersion') = 1\n        AND json_extract(\"canonical_cut\", '$.operation.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_cut\", '$.cutAsOf') = \"cut_as_of\"\n        AND json_extract(\"canonical_cut\", '$.budget.canonicalBytes') = \"canonical_bytes\"\n        AND json_extract(\"canonical_cut\", '$.budget.renderedBytes') = \"rendered_bytes\"\n        AND json_extract(\"canonical_cut\", '$.fingerprint') = \"cut_fingerprint\"\n        AND json_extract(\"canonical_cut\", '$.renderedFingerprint') = \"rendered_fingerprint\"",
+      "name": "turn_learning_context_cut_canonical_shape",
+      "entityType": "checks",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "value": "\"canonical_bytes\" = length(CAST(\"canonical_cut\" AS BLOB))\n        AND \"canonical_bytes\" BETWEEN 1 AND 32768\n        AND \"rendered_bytes\" = length(CAST(\"rendered_block\" AS BLOB))\n        AND \"rendered_bytes\" BETWEEN 1 AND 16384",
+      "name": "turn_learning_context_cut_bytes",
+      "entityType": "checks",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "value": "length(\"cut_fingerprint\") = 64\n        AND \"cut_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"rendered_fingerprint\") = 64\n        AND \"rendered_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "turn_learning_context_cut_fingerprints",
+      "entityType": "checks",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "value": "\"cut_as_of\" >= 0",
+      "name": "turn_learning_context_cut_time",
+      "entityType": "checks",
+      "table": "turn_learning_context_cut"
+    },
+    {
+      "value": "json_valid(\"canonical_assessment\")\n        AND json_type(\"canonical_assessment\") = 'object'\n        AND json_extract(\"canonical_assessment\", '$.schemaVersion') = 1\n        AND json_extract(\"canonical_assessment\", '$.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_assessment\", '$.fingerprint') = \"assessment_fingerprint\"\n        AND json_extract(\"canonical_assessment\", '$.envelopeFingerprint') = \"envelope_fingerprint\"\n        AND json_extract(\"canonical_assessment\", '$.classification') = \"classification\"\n        AND json_extract(\"canonical_assessment\", '$.decision') = \"decision\"",
+      "name": "turn_model_capacity_shape",
+      "entityType": "checks",
+      "table": "turn_model_capacity"
+    },
+    {
+      "value": "\"assessment_bytes\" = length(CAST(\"canonical_assessment\" AS BLOB))\n        AND \"assessment_bytes\" > 0",
+      "name": "turn_model_capacity_bytes",
+      "entityType": "checks",
+      "table": "turn_model_capacity"
+    },
+    {
+      "value": "length(\"assessment_fingerprint\") = 64\n        AND \"assessment_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"envelope_fingerprint\") = 64\n        AND \"envelope_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "turn_model_capacity_fingerprints",
+      "entityType": "checks",
+      "table": "turn_model_capacity"
     },
     {
       "value": "\"version\" >= 0",

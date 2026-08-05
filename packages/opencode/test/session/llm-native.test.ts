@@ -8,7 +8,6 @@ import { LLMNative } from "@/session/llm/native-request"
 import { LLMNativeRuntime } from "@/session/llm/native-runtime"
 import type { Provider } from "@/provider/provider"
 
-import { OAUTH_DUMMY_KEY } from "@/auth"
 import { testEffect } from "../lib/effect"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
@@ -415,14 +414,14 @@ describe("session.llm-native.request", () => {
         provider: providerInfo,
         auth: { type: "oauth", refresh: "refresh", access: "access", expires: 1 },
       }),
-    ).toEqual({ type: "unsupported", reason: "OAuth auth requires a provider fetch override" })
+    ).toEqual({ type: "unsupported", reason: "OAuth auth uses the certified AI SDK terminal route" })
     expect(
       LLMNativeRuntime.status({
         model: baseModel,
-        provider: { ...providerInfo, options: { apiKey: OAUTH_DUMMY_KEY, fetch: async () => new Response() } },
+        provider: { ...providerInfo, options: { apiKey: "oauth-dummy", fetch: async () => new Response() } },
         auth: { type: "oauth", refresh: "refresh", access: "access", expires: 1 },
       }),
-    ).toMatchObject({ type: "supported", apiKey: OAUTH_DUMMY_KEY })
+    ).toEqual({ type: "unsupported", reason: "OAuth auth uses the certified AI SDK terminal route" })
 
     expect(
       LLMNativeRuntime.status({
@@ -675,17 +674,13 @@ describe("session.llm-native.request", () => {
     }),
   )
 
-  it.effect("uses provider fetch override for native OpenAI OAuth requests", () =>
+  it.effect("declines native OpenAI OAuth before its provider fetch so the Session service can use AI SDK", () =>
     Effect.gen(function* () {
-      const captures: Array<{ url: string; body: unknown }> = []
+      let captures = 0
       const customFetch = Object.assign(
-        async (input: Parameters<typeof fetch>[0], init: Parameters<typeof fetch>[1]) => {
-          const request = input instanceof Request ? input : new Request(input, init)
-          captures.push({ url: request.url, body: await request.clone().json() })
-          return responsesStream([
-            { type: "response.output_text.delta", item_id: "msg_1", delta: "Hello" },
-            { type: "response.completed", response: { usage: { input_tokens: 1, output_tokens: 1 } } },
-          ])
+        async () => {
+          captures++
+          return new Response()
         },
         { preconnect: () => undefined },
       ) satisfies typeof fetch
@@ -693,7 +688,7 @@ describe("session.llm-native.request", () => {
       const llmClient = yield* LLMClient.Service
       const native = LLMNativeRuntime.stream({
         model: baseModel,
-        provider: { ...providerInfo, options: { apiKey: OAUTH_DUMMY_KEY, fetch: customFetch } },
+        provider: { ...providerInfo, options: { apiKey: "oauth-dummy", fetch: customFetch } },
         auth: { type: "oauth", refresh: "refresh", access: "access", expires: Date.now() + 60_000 },
         llmClient,
         messages: [{ role: "user", content: "hello" }],
@@ -702,25 +697,49 @@ describe("session.llm-native.request", () => {
         headers: {},
         abort: new AbortController().signal,
       })
-      expect(native.type).toBe("supported")
-      if (native.type === "unsupported") throw new Error(native.reason)
-      const events = Array.from(yield* native.stream.pipe(Stream.runCollect))
+      expect(native).toEqual({ type: "unsupported", reason: "OAuth auth uses the certified AI SDK terminal route" })
+      expect(captures).toBe(0)
+    }),
+  )
 
-      expect(captures).toHaveLength(1)
-      expect(captures[0]).toMatchObject({
-        url: "https://api.openai.com/v1/responses",
-        body: {
-          model: "gpt-5-mini",
-          instructions: "You are concise.",
-          input: [{ role: "user", content: [{ type: "input_text", text: "hello" }] }],
-        },
+  it.effect("binds the native base URL and rejects a baseURL-only change before stream open", () =>
+    Effect.gen(function* () {
+      const llmClient = yield* LLMClient.Service
+      const firstProvider = {
+        ...providerInfo,
+        options: { apiKey: "test-openai-key", baseURL: "https://first.example.test/v1" },
+      }
+      const planned = LLMNativeRuntime.plan({
+        model: baseModel,
+        provider: firstProvider,
+        auth: undefined,
+        messages: [{ role: "user", content: "hello" }],
+        tools: {},
+        headers: {},
       })
-      expect(events).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ type: "text-delta", text: "Hello" }),
-          expect.objectContaining({ type: "finish" }),
-        ]),
-      )
+      expect(planned.type).toBe("supported")
+      if (planned.type === "unsupported") throw new Error(planned.reason)
+      const bound = yield* LLMNativeRuntime.bindProviderSurface({ plan: planned, llmClient })
+      expect(bound.route.transport.endpoint.host).toBe("first.example.test")
+
+      const changed = {
+        ...bound,
+        baseURL: "https://second.example.test/v1",
+        input: {
+          ...bound.input,
+          provider: {
+            ...firstProvider,
+            options: { apiKey: "test-openai-key", baseURL: "https://second.example.test/v1" },
+          },
+        },
+      } satisfies LLMNativeRuntime.Plan
+      const conflict = yield* LLMNativeRuntime.prepare({
+        plan: changed,
+        llmClient,
+        messages: [{ role: "user", content: "hello" }],
+      }).pipe(Effect.exit)
+      expect(conflict._tag).toBe("Failure")
+      if (conflict._tag === "Failure") expect(String(conflict.cause)).toContain("compiled request changed")
     }),
   )
 })

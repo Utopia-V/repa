@@ -43,6 +43,7 @@ describe("Gate 13 ownership boundary", () => {
       "learning-command/input.ts",
       "learning-command/runtime.ts",
       "tool/learning-material-query.ts",
+      "tool/learning-material-read.ts",
       "tool/registry.ts",
     ])
     expect(

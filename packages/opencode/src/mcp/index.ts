@@ -665,6 +665,7 @@ const layer = Layer.effect(
 
     const tools = Effect.fn("MCP.tools")(function* () {
       const result: Record<string, McpTool> = {}
+      const origins = new Map<string, Readonly<{ server: string; tool: string }>>()
       const s = yield* InstanceState.get(state)
 
       const cfg = yield* cfgSvc.get()
@@ -681,7 +682,15 @@ const layer = Layer.effect(
         }
         const timeout = requestTimeout(s, clientName, mcpConfig, defaultTimeout)
         for (const def of listed) {
-          result[McpCatalog.toolName(clientName, def.name)] = { def, client, timeout }
+          const id = McpCatalog.toolName(clientName, def.name)
+          const previous = origins.get(id)
+          if (previous) {
+            throw new Error(
+              `MCP tool ID collision after canonicalization: ${id} represents both ${JSON.stringify(previous)} and ${JSON.stringify({ server: clientName, tool: def.name })}`,
+            )
+          }
+          origins.set(id, { server: clientName, tool: def.name })
+          result[id] = { def, client, timeout }
         }
       }
       return result

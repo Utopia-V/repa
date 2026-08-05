@@ -1,4 +1,5 @@
 import { LearnerAdmission, Occurrence } from "@opencode-ai/core/learning-command"
+import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
@@ -279,7 +280,7 @@ const materializeTestChildSession = Effect.fn("Test.materializeChildSession")(fu
           })
         }).pipe(Effect.orDie)
       const admitModel = () =>
-        TurnLifecycle.admitModel(tx, {
+        admitModelWithLearningContext(tx, {
           turnID: parentTurnID,
           sessionID: parent.id,
           assistantMessageID: parentAssistantMessageID,

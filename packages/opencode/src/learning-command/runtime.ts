@@ -44,6 +44,7 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { InstanceRef } from "@/effect/instance-ref"
+import { workspaceReadIdentity } from "./workspace-authority"
 import { Permission } from "@/permission"
 import { eq } from "drizzle-orm"
 import { Cause, Context, Deferred, Effect, Exit, Layer, Schema } from "effect"
@@ -1171,11 +1172,7 @@ function executeLearningBootstrapOnce(
             ? {
                 activeWorkspace: ContentRoot.ActiveWorkspaceRead.trusted(
                   instance.directory,
-                  JSON.stringify({
-                    projectID: instance.project.id,
-                    directory: instance.directory,
-                    worktree: instance.worktree,
-                  }),
+                  workspaceReadIdentity(instance),
                 ),
               }
             : {}),

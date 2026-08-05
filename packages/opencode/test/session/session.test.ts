@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { EventV2 } from "@opencode-ai/core/event"
 import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
@@ -228,7 +229,7 @@ const recordCompletedModelSample = Effect.fn("test.recordCompletedModelSample")(
   })
   yield* events.transaction((tx) =>
     Effect.gen(function* () {
-      const model = yield* TurnLifecycle.admitModel(tx, {
+      const model = yield* admitModelWithLearningContext(tx, {
         turnID: input.turnID,
         sessionID: input.sessionID,
         assistantMessageID: assistant.id,
@@ -344,7 +345,7 @@ const seedDelegatedStartFixture = Effect.fn("test.seedDelegatedStartFixture")(fu
   })
   yield* events.transaction((tx) =>
     Effect.gen(function* () {
-      const model = yield* TurnLifecycle.admitModel(tx, {
+      const model = yield* admitModelWithLearningContext(tx, {
         turnID: parentTurnID,
         sessionID: fixture.info.id,
         assistantMessageID: assistant.id,
@@ -2799,7 +2800,7 @@ describe("Session", () => {
             yield* Deferred.await(releaseWork)
             yield* database.db.transaction((tx) =>
               Effect.gen(function* () {
-                const model = yield* TurnLifecycle.admitModel(tx, {
+                const model = yield* admitModelWithLearningContext(tx, {
                   turnID,
                   sessionID: fixture.info.id,
                   assistantMessageID: assistant.id,

@@ -1,18 +1,22 @@
 import { Artifact } from "@opencode-ai/core/artifact"
 import { Course } from "@opencode-ai/core/course"
+import { Database } from "@opencode-ai/core/database/database"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import { waitForAbort } from "@opencode-ai/core/process"
 import { Representation } from "@opencode-ai/core/representation"
-import { PositiveInt } from "@opencode-ai/core/schema"
+import { NonNegativeInt, PositiveInt } from "@opencode-ai/core/schema"
+import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Effect, Schema } from "effect"
 import { ToolJsonSchema } from "./json-schema"
+import { learningContextReadResult } from "./learning-context-read"
 import { Tool } from "./tool"
 
 export const LEARNING_MATERIAL_QUERY_TOOL_ID = "learning_material_query"
 export const LEARNING_MATERIAL_QUERY_TOOL_IDS = [LEARNING_MATERIAL_QUERY_TOOL_ID] as const
 
 const PageInput = {
-  limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(100))),
+  limit: Schema.optional(PositiveInt.check(Schema.isLessThanOrEqualTo(64))),
   cursor: Schema.optional(Schema.String),
 }
 
@@ -42,6 +46,11 @@ const Membership = Schema.Struct({
 })
 
 const LearningMaterialQueryInput = Schema.Union([
+  Schema.Struct({
+    action: Schema.Literal("pinned_learning_context"),
+    cutAssistantMessageID: SessionV1.MessageID,
+    entryIndex: NonNegativeInt.check(Schema.isLessThanOrEqualTo(7)),
+  }),
   Schema.Struct({
     action: Schema.Literal("list_artifacts"),
     includeWithdrawn: Schema.optional(Schema.Boolean),
@@ -124,19 +133,72 @@ const LearningMaterialQueryInput = Schema.Union([
 export const LearningMaterialQueryTool = Tool.define<
   typeof LearningMaterialQueryInput,
   Record<string, unknown>,
-  Artifact.Service | Representation.Service | MaterialMap.Service
+  Artifact.Service | Representation.Service | MaterialMap.Service | Database.Service
 >(
   LEARNING_MATERIAL_QUERY_TOOL_ID,
   Effect.gen(function* () {
     const artifacts = yield* Artifact.Service
     const representations = yield* Representation.Service
     const maps = yield* MaterialMap.Service
+    const database = yield* Database.Service
     return {
       description:
-        "Read bounded authoritative Artifact, Representation, Material Map, selector, and Course-alignment metadata without reading material bytes or reconciling owner state. Every list returns at most 100 records plus exact omission truth and an opaque query-bound cursor. Use exact returned identities, revisions, attribution, disposition, supersession, correction, and membership state when composing an explicit learning bootstrap; transient reads, search results, attachments, and web material are not adopted by this tool.",
+        "Read bounded authoritative Artifact, Representation, Material Map, selector, and Course-alignment metadata without reading material bytes or reconciling owner state. pinned_learning_context expands a zero-based Material entry from one exact stored Gate 18 cut and returns exact metadata or a typed superseded/unavailable result; it never substitutes a new Map, selector, Artifact Revision, or Representation. Every list returns at most 64 records plus exact omission truth and an opaque query-bound cursor. Results fail truthfully when the Gate 18 lazy-read byte allowance cannot carry a whole value. Use exact returned identities, revisions, attribution, disposition, supersession, correction, and membership state when composing an explicit learning bootstrap; transient reads, search results, attachments, and web material are not adopted by this tool.",
       parameters: LearningMaterialQueryInput,
       jsonSchema: ToolJsonSchema.fromSchema(LearningMaterialQueryInput, { additionalProperties: false }),
       execute: (input: Schema.Schema.Type<typeof LearningMaterialQueryInput>, context) => {
+        if (input.action === "pinned_learning_context") {
+          return abortable(
+            Effect.gen(function* () {
+              const stored = yield* database.db.transaction((tx) =>
+                LearningContext.readCut(tx, input.cutAssistantMessageID),
+              )
+              if (stored.type !== "available") {
+                return learningContextReadResult({
+                  title: "Pinned learning-material metadata",
+                  metadata: {
+                    action: input.action,
+                    cutAssistantMessageID: input.cutAssistantMessageID,
+                    entryIndex: input.entryIndex,
+                    result: stored.type,
+                  },
+                  value: { result: stored },
+                  itemCount: 0,
+                })
+              }
+              const section = stored.cut.sections.find((value) => value.owner === "material")!
+              const entry = section.entries[input.entryIndex]
+              if (!entry || entry.kind !== "material") {
+                return learningContextReadResult({
+                  title: "Pinned learning-material metadata",
+                  metadata: {
+                    action: input.action,
+                    cutAssistantMessageID: input.cutAssistantMessageID,
+                    entryIndex: input.entryIndex,
+                    result: "entry_not_found",
+                  },
+                  value: { result: { type: "entry_not_found" } },
+                  itemCount: 0,
+                })
+              }
+              const result = yield* maps.readLearningContextMetadata(
+                entry.locator as MaterialMap.LearningContextLocator,
+              )
+              return learningContextReadResult({
+                title: "Pinned learning-material metadata",
+                metadata: {
+                  action: input.action,
+                  cutAssistantMessageID: input.cutAssistantMessageID,
+                  entryIndex: input.entryIndex,
+                  result: result.type,
+                },
+                value: { result: pinnedMaterialRead(result) },
+                itemCount: result.type === "available" ? 1 : 0,
+              })
+            }),
+            context.abort,
+          ).pipe(Effect.orDie)
+        }
         if (input.action === "get_artifact") {
           return exactRead(artifacts.getArtifact(input.artifactID), input.action, context.abort, (value) => value)
         }
@@ -287,11 +349,14 @@ function exactRead<A, E, R, B>(
   project: (value: A) => B,
 ) {
   return abortable(effect, signal).pipe(
-    Effect.map((value) => ({
-      title: action.replaceAll("_", " "),
-      metadata: { action },
-      output: JSON.stringify({ value: project(value) }, null, 2),
-    })),
+    Effect.map((value) =>
+      learningContextReadResult({
+        title: action.replaceAll("_", " "),
+        metadata: { action },
+        value: { value: project(value) },
+        itemCount: 1,
+      }),
+    ),
     Effect.orDie,
   )
 }
@@ -309,7 +374,7 @@ function pageRead<A, E, R, B>(
         omitted: page.cursor !== undefined,
         ...(page.cursor ? { cursor: page.cursor } : {}),
       }
-      return {
+      return learningContextReadResult({
         title: action.replaceAll("_", " "),
         metadata: {
           action,
@@ -317,8 +382,9 @@ function pageRead<A, E, R, B>(
           omitted: result.omitted,
           ...(page.cursor ? { cursor: page.cursor } : {}),
         },
-        output: JSON.stringify(result, null, 2),
-      }
+        value: result,
+        itemCount: result.items.length,
+      })
     }),
     Effect.orDie,
   )
@@ -326,7 +392,7 @@ function pageRead<A, E, R, B>(
 
 function pageOptions(input: { readonly limit?: number; readonly cursor?: string }) {
   return {
-    ...(input.limit === undefined ? {} : { limit: input.limit }),
+    limit: input.limit ?? 64,
     ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
   }
 }
@@ -341,6 +407,42 @@ function alignmentOptions(input: {
     ...pageOptions(input),
     ...(input.includeWithdrawn === undefined ? {} : { includeWithdrawn: input.includeWithdrawn }),
     ...(input.includeSuperseded === undefined ? {} : { includeSuperseded: input.includeSuperseded }),
+  }
+}
+
+function pinnedMaterialRead(result: MaterialMap.LearningContextMetadataRead) {
+  if (result.type !== "available") return result
+  const value = result.value
+  return {
+    type: result.type,
+    relation: result.relation,
+    value: {
+      alignment: alignmentRead(value.alignment),
+      map: {
+        id: value.map.id,
+        supersedesMapID: value.map.supersedesMapID,
+        authorship: value.map.authorship,
+        timeCreated: value.map.timeCreated,
+        disposition: value.map.disposition,
+        superseded: value.map.superseded,
+      },
+      selector: value.selector,
+      target:
+        value.target.type === "artifact"
+          ? {
+              type: value.target.type,
+              recorded: value.target.recorded,
+              current: value.target.current,
+              currentUse: value.target.currentUse,
+            }
+          : {
+              type: value.target.type,
+              representation: representationRead(value.target.metadata.representation),
+              currentArtifact: value.target.metadata.currentArtifact,
+              currentUse: value.target.metadata.currentUse,
+              activeContinuedUseGrant: value.target.metadata.activeContinuedUseGrant,
+            },
+    },
   }
 }
 

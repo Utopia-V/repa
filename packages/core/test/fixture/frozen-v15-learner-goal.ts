@@ -1,4 +1,5 @@
 import { SqliteClient } from "@effect/sql-sqlite-bun"
+import { admitLegacyModelWithoutLearningContext } from "./model-admission"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import { Turn } from "@opencode-ai/schema/turn"
 import { eq, sql } from "drizzle-orm"
@@ -231,7 +232,7 @@ export function seedFrozenV15AdmittedLearnerGoal(
               time_updated: time + 1,
             })
             .run()
-          yield* TurnLifecycle.admitModel(tx, {
+          yield* admitLegacyModelWithoutLearningContext(tx, {
             turnID,
             sessionID,
             assistantMessageID,

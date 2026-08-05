@@ -13,6 +13,7 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { materializeTestSessionInfo } from "../fixture/session"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 
 const it = testEffect(
   LayerNode.compile(LayerNode.group([SessionNs.node, MessageV2.node, SessionProjector.node, EventV2Bridge.node])),
@@ -120,6 +121,7 @@ const addCompactionPart = Effect.fn("Test.addCompactionPart")(function* (
   sessionID: SessionID,
   messageID: MessageID,
   tailStartID?: MessageID,
+  capacityHistory?: SessionV1.CompactionPart["capacity_history"],
 ) {
   const session = yield* SessionNs.Service
   yield* session.updatePart({
@@ -129,7 +131,8 @@ const addCompactionPart = Effect.fn("Test.addCompactionPart")(function* (
     type: "compaction",
     auto: true,
     tail_start_id: tailStartID,
-  } as any)
+    capacity_history: capacityHistory,
+  })
 })
 
 describe("MessageV2.page", () => {
@@ -782,7 +785,11 @@ describe("MessageV2.filterCompacted", () => {
       })
 
       const c1 = yield* addUser(created.id)
-      yield* addCompactionPart(created.id, c1, u2)
+      yield* addCompactionPart(created.id, c1, u2, {
+        source_assistant_message_id: a2,
+        removable_message_count: 2,
+        removable_message_ids_fingerprint: LearningContext.canonicalFingerprint(LearningContext.toJsonValue([u1, a1])),
+      })
       const s1 = yield* addAssistant(created.id, c1, { summary: true, finish: "end_turn" })
       yield* session.updatePart({
         id: PartID.ascending(),
@@ -814,10 +821,69 @@ describe("MessageV2.filterCompacted", () => {
       if (!tailPart || tailPart.type !== "compaction") throw new Error("Expected forked compaction part")
       expect(tailPart.tail_start_id).toBeDefined()
       expect(childFiltered.some((m) => m.info.id === tailPart.tail_start_id)).toBe(true)
+      expect(tailPart.capacity_history).toBeUndefined()
+      const childExecutable = yield* MessageV2.filterCompactedEffect(forked.id)
+      expect(childExecutable.flatMap((message) => message.parts).some((part) => part.id === tailPart.id)).toBe(true)
+      expect(MessageV2.latest(childExecutable).tasks).toEqual([])
 
       yield* session.remove(forked.id)
       yield* session.remove(created.id)
     }),
+  )
+
+  it.instance(
+    "fork preserves unfinished compaction provenance without transferring execution or capacity authority",
+    () =>
+      Effect.gen(function* () {
+        const session = yield* SessionNs.Service
+        const created = yield* materializeTestSessionInfo({ time: 0, text: "A" })
+        const source = yield* session.messages({ sessionID: created.id })
+        const aUser = source[0]!.info.id
+        const aAssistant = yield* addAssistant(created.id, aUser, { finish: "end_turn" })
+        const bUser = yield* addUser(created.id, "B")
+        const bAssistant = yield* addAssistant(created.id, bUser, { finish: "end_turn" })
+        const cUser = yield* addUser(created.id, "C")
+        yield* addAssistant(created.id, cUser, { finish: "end_turn" })
+        const dUser = yield* addUser(created.id, "D")
+        const capacityAssistant = yield* addAssistant(created.id, dUser)
+        const marker = yield* addUser(created.id)
+        const removable = [aUser, aAssistant, bUser, bAssistant]
+        yield* addCompactionPart(created.id, marker, cUser, {
+          source_assistant_message_id: capacityAssistant,
+          removable_message_count: removable.length,
+          removable_message_ids_fingerprint: LearningContext.canonicalFingerprint(
+            LearningContext.toJsonValue(removable),
+          ),
+        })
+        const overflowMarker = yield* addUser(created.id)
+        yield* session.updatePart({
+          id: PartID.ascending(),
+          sessionID: created.id,
+          messageID: overflowMarker,
+          type: "compaction",
+          auto: true,
+          overflow: true,
+        })
+
+        const forked = yield* materializeTestSessionInfo({ fork: { sourceSessionID: created.id } })
+        const stored = yield* session.messages({ sessionID: forked.id })
+        const clonedMarkers = stored
+          .flatMap((message) => message.parts)
+          .filter((part): part is SessionV1.CompactionPart => part.type === "compaction")
+        expect(clonedMarkers).toHaveLength(2)
+        expect(clonedMarkers.every((part) => part.capacity_history === undefined)).toBe(true)
+        expect(clonedMarkers.some((part) => part.tail_start_id !== undefined)).toBe(true)
+        expect(clonedMarkers.some((part) => part.overflow === true)).toBe(true)
+
+        const projected = yield* MessageV2.filterCompactedEffect(forked.id)
+        const clonedMarkerIDs = new Set(clonedMarkers.map((part) => part.id))
+        expect(projected.flatMap((message) => message.parts).some((part) => clonedMarkerIDs.has(part.id))).toBe(false)
+        expect(MessageV2.latest(projected).tasks).toEqual([])
+        expect(projected.filter((message) => message.info.role === "user").at(-1)?.info.sessionID).toBe(forked.id)
+
+        yield* session.remove(forked.id)
+        yield* session.remove(created.id)
+      }),
   )
 
   it.instance("retains an assistant tail when compaction starts inside a turn", () =>

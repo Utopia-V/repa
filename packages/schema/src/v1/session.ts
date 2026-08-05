@@ -198,6 +198,13 @@ export const CompactionPart = Schema.Struct({
   auto: Schema.Boolean,
   overflow: Schema.optional(Schema.Boolean),
   tail_start_id: Schema.optional(MessageID),
+  capacity_history: Schema.optional(
+    Schema.Struct({
+      source_assistant_message_id: MessageID,
+      removable_message_count: NonNegativeInt,
+      removable_message_ids_fingerprint: Schema.String,
+    }),
+  ),
 }).annotate({ identifier: "CompactionPart" })
 export type CompactionPart = Types.DeepMutable<Schema.Schema.Type<typeof CompactionPart>>
 

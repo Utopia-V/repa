@@ -4,6 +4,7 @@ import { expect } from "bun:test"
 import { Server } from "@modelcontextprotocol/sdk/server/index.js"
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js"
 import {
+  CallToolRequestSchema,
   GetPromptRequestSchema,
   ListPromptsRequestSchema,
   ListResourcesRequestSchema,
@@ -40,6 +41,7 @@ interface LifecycleServerState {
   roots?: Array<{ uri: string; name?: string }>
   client?: { name: string; version: string }
   requests: string[]
+  toolCalls: string[]
   aborted: number
 }
 
@@ -53,6 +55,7 @@ function lifecycleServer(input?: { capabilities?: ServerCapabilities; instructio
         resources: [],
         resourceTemplates: [],
         requests: [],
+        toolCalls: [],
         aborted: 0,
       }
 
@@ -71,6 +74,10 @@ function lifecycleServer(input?: { capabilities?: ServerCapabilities; instructio
             if (state.listToolsError) throw new Error(state.listToolsError)
             const page = state.toolPages?.[request.params?.cursor ?? "initial"]
             return Promise.resolve({ tools: page?.items ?? state.tools, nextCursor: page?.nextCursor })
+          })
+          protocol.setRequestHandler(CallToolRequestSchema, (request) => {
+            state.toolCalls.push(request.params.name)
+            return Promise.resolve({ content: [{ type: "text" as const, text: "called" }] })
           })
         }
         if (capabilities.prompts) {
@@ -495,6 +502,49 @@ it.instance("tools() prefixes sanitized server and tool names", () =>
     yield* mcp.add("my.special-server", remote(server.url))
 
     expect(Object.keys(yield* mcp.tools())).toEqual(["my_special-server_tool-a", "my_special-server_tool_b"])
+  }),
+)
+
+it.instance("rejects same-server MCP tool-name collisions before catalog admission or invocation", () =>
+  Effect.gen(function* () {
+    const server = yield* lifecycleServer({ capabilities: { tools: {} } })
+    server.state.tools = [
+      { name: "x.y", inputSchema: { type: "object" } },
+      { name: "x_y", inputSchema: { type: "object" } },
+    ]
+    const mcp = yield* MCP.Service
+    yield* mcp.add("a", remote(server.url))
+
+    const exit = yield* mcp.tools().pipe(Effect.exit)
+    expect(Exit.isFailure(exit)).toBeTrue()
+    if (Exit.isFailure(exit)) {
+      expect(Cause.pretty(exit.cause)).toContain(
+        'MCP tool ID collision after canonicalization: a_x_y represents both {"server":"a","tool":"x.y"} and {"server":"a","tool":"x_y"}',
+      )
+    }
+    expect(server.state.toolCalls).toEqual([])
+  }),
+)
+
+it.instance("rejects cross-server MCP name collisions before catalog admission or invocation", () =>
+  Effect.gen(function* () {
+    const dotted = yield* lifecycleServer({ capabilities: { tools: {} } })
+    const underscored = yield* lifecycleServer({ capabilities: { tools: {} } })
+    dotted.state.tools = [{ name: "x", inputSchema: { type: "object" } }]
+    underscored.state.tools = [{ name: "x", inputSchema: { type: "object" } }]
+    const mcp = yield* MCP.Service
+    yield* mcp.add("a.b", remote(dotted.url))
+    yield* mcp.add("a_b", remote(underscored.url))
+
+    const exit = yield* mcp.tools().pipe(Effect.exit)
+    expect(Exit.isFailure(exit)).toBeTrue()
+    if (Exit.isFailure(exit)) {
+      expect(Cause.pretty(exit.cause)).toContain(
+        'MCP tool ID collision after canonicalization: a_b_x represents both {"server":"a.b","tool":"x"} and {"server":"a_b","tool":"x"}',
+      )
+    }
+    expect(dotted.state.toolCalls).toEqual([])
+    expect(underscored.state.toolCalls).toEqual([])
   }),
 )
 

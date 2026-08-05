@@ -51,6 +51,13 @@ function resolveRunInput(value?: string, piped?: string): string | undefined {
   return value + "\n" + piped
 }
 
+export function resolveRunMessage(args: readonly string[], piped: string | undefined, command: boolean) {
+  const value = command
+    ? args.map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg)).join(" ")
+    : args.join(" ")
+  return resolveRunInput(value, piped) ?? ""
+}
+
 export function nonInteractivePermissionDecision(
   request: Pick<PermissionV1.Request, "metadata">,
   auto: boolean,
@@ -276,7 +283,8 @@ export const RunCommand = effectCmd({
     const agentSvc = args.attach ? undefined : yield* Agent.Service
     const localInstance = args.attach ? undefined : yield* InstanceRef
     yield* Effect.promise(async () => {
-      const rawMessage = [...args.message, ...(args["--"] || [])].join(" ")
+      const inputArguments = [...args.message, ...(args["--"] || [])]
+      const rawMessage = inputArguments.join(" ")
       const interactive = args.mini
       const auto = args.auto || args.yolo || args["dangerously-skip-permissions"]
       const thinking = interactive ? (args.thinking ?? true) : (args.thinking ?? false)
@@ -291,10 +299,6 @@ export const RunCommand = effectCmd({
 
         throw error
       }
-
-      let message = [...args.message, ...(args["--"] || [])]
-        .map((arg) => (arg.includes(" ") ? `"${arg.replace(/"/g, '\\"')}"` : arg))
-        .join(" ")
 
       if (interactive && args.command) {
         die("--mini cannot be used with --command")
@@ -421,7 +425,7 @@ export const RunCommand = effectCmd({
       }
 
       const piped = process.stdin.isTTY ? undefined : await Bun.stdin.text()
-      message = resolveRunInput(message, piped) ?? ""
+      const message = resolveRunMessage(inputArguments, piped, args.command !== undefined)
       const initialInput = resolveRunInput(rawMessage, piped)
 
       if (message.trim().length === 0 && !args.command && !interactive) {

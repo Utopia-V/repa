@@ -3,7 +3,7 @@ import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import path from "path"
-import { tool, type ModelMessage } from "ai"
+import { jsonSchema, tool, type ModelMessage } from "ai"
 import { Cause, Effect, Exit, Fiber, Layer, Stream } from "effect"
 import { InstanceRef } from "../../src/effect/instance-ref"
 import { HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
@@ -21,6 +21,7 @@ import { SessionID, MessageID } from "../../src/session/schema"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Permission } from "@/permission"
 import { LLMAISDK } from "@/session/llm/ai-sdk"
+import { ToolNameProjection } from "@/session/llm/tool-name-projection"
 import { Session as SessionNs } from "@/session/session"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
@@ -31,6 +32,9 @@ import { Database } from "@opencode-ai/core/database/database"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { createOccurrenceID } from "@opencode-ai/core/learning-command/occurrence-schema"
 import { retainedSteeringCut } from "../fixture/retained-steering"
+import { LearningContext } from "@opencode-ai/core/learning-context"
+import { SessionSchema } from "@opencode-ai/core/session/schema"
+import { Turn } from "@opencode-ai/schema/turn"
 
 type ConfigModel = NonNullable<NonNullable<ConfigV1.Info["provider"]>[string]["models"]>[string]
 
@@ -79,7 +83,7 @@ const copilotReplayConfig = (model: ModelsDev.Provider["models"][string], baseUR
   }
 }
 
-const it = testEffect(AppNodeBuilder.build(LayerNode.group([LLM.node, Provider.node])))
+const it = testEffect(AppNodeBuilder.build(LayerNode.group([LLM.node, Provider.node, Database.node])))
 
 // Gate 6 gives the ordinary test runtime one physical database owner. These
 // custom LLM layers intentionally build a second runtime, so they use the
@@ -88,28 +92,78 @@ const it = testEffect(AppNodeBuilder.build(LayerNode.group([LLM.node, Provider.n
 const nestedRuntimeDatabase = Database.layerFromPath(":memory:").pipe(Layer.orDie)
 
 // LLM.stream returns a Stream, not an Effect, so we can't use the serviceUse proxy.
-const drain = (input: LLM.StreamInput) =>
-  LLM.Service.use((svc) => svc.stream(withRetainedSteeringCut(input)).pipe(Stream.runDrain))
+const drain = (input: LLM.StreamInput) => prepareAndDrain(input)
 
 // drainWith builds an isolated runtime so custom replacements fully own LLM and
 // its transitive deps.
-const drainWith = (layer: Layer.Layer<LLM.Service>, input: LLM.StreamInput) =>
+const drainWith = (layer: Layer.Layer<LLM.Service | Database.Service>, input: LLM.StreamInput) =>
+  Effect.gen(function* () {
+    const ctx = yield* InstanceRef
+    if (!ctx) return yield* Effect.die("InstanceRef not provided")
+    return yield* Effect.promise(() =>
+      Effect.runPromise(prepareAndDrain(input).pipe(Effect.provide(layer), Effect.provideService(InstanceRef, ctx))),
+    )
+  })
+
+const collectWith = (layer: Layer.Layer<LLM.Service | Database.Service>, input: LLM.StreamInput) =>
   Effect.gen(function* () {
     const ctx = yield* InstanceRef
     if (!ctx) return yield* Effect.die("InstanceRef not provided")
     return yield* Effect.promise(() =>
       Effect.runPromise(
-        LLM.Service.use((svc) => svc.stream(withRetainedSteeringCut(input)).pipe(Stream.runDrain)).pipe(
-          Effect.provide(layer),
-          Effect.provideService(InstanceRef, ctx),
-        ),
+        Effect.gen(function* () {
+          const llm = yield* LLM.Service
+          const prepared = yield* prepareInteractive(input)
+          return yield* llm.stream(prepared.prepared).pipe(Stream.runCollect)
+        }).pipe(Effect.provide(layer), Effect.provideService(InstanceRef, ctx)),
       ),
     )
   })
 
-function withRetainedSteeringCut(input: LLM.StreamInput): LLM.StreamInput {
-  if (input.composition.type !== "interactive" || input.retainedSteeringCut) return input
-  return { ...input, retainedSteeringCut: retainedSteeringCut() }
+type Transaction = Parameters<Parameters<Database.Interface["db"]["transaction"]>[0]>[0]
+
+function prepareAndDrain(input: LLM.StreamInput) {
+  return Effect.gen(function* () {
+    const llm = yield* LLM.Service
+    if (input.composition.type !== "interactive")
+      return yield* llm.stream(input as LLM.InternalStreamInput).pipe(Stream.runDrain)
+    const prepared = yield* prepareInteractive(input)
+    return yield* llm.stream(prepared.prepared).pipe(Stream.runDrain)
+  })
+}
+
+function prepareInteractive(input: LLM.StreamInput) {
+  return Effect.gen(function* () {
+    if (input.composition.type !== "interactive") return yield* Effect.die("Expected an interactive LLM input")
+    const llm = yield* LLM.Service
+    if (!llm.plan || !llm.finalize) return yield* Effect.die("Gate 18 LLM planning seam is unavailable")
+    const retained = input.retainedSteeringCut ?? retainedSteeringCut()
+    const planned = yield* llm.plan({ ...input, retainedSteeringCut: retained })
+    const database = yield* Database.Service
+    const learning =
+      input.learningContextCut && input.learningContextRenderedBlock
+        ? { cut: input.learningContextCut, renderedBlock: input.learningContextRenderedBlock }
+        : yield* database.db.transaction((tx: Transaction) =>
+            LearningContext.prepareCut(tx, {
+              operation: {
+                sessionID: SessionSchema.ID.make(input.sessionID),
+                turnID: Turn.ID.make(`trn_${retained.assistantMessageID}`),
+                inputID: Turn.InputID.make(`tri_${retained.assistantMessageID}`),
+                assistantMessageID: retained.assistantMessageID,
+                ordinal: 0,
+              },
+              retainedSteering: retained,
+              capabilityBasis: planned.capabilityBasis,
+            }),
+          )
+    const prepared = yield* llm.finalize({
+      plan: planned,
+      retainedSteeringCut: retained,
+      learningContextCut: learning.cut,
+      learningContextRenderedBlock: learning.renderedBlock,
+    })
+    return { prepared, planned, retained, learning }
+  })
 }
 
 function llmLayerWithExecutor(
@@ -118,7 +172,7 @@ function llmLayerWithExecutor(
     flags?: Partial<RuntimeFlags.Info>
   } = {},
 ) {
-  return AppNodeBuilder.build(LLM.node, [
+  return AppNodeBuilder.build(LayerNode.group([LLM.node, Database.node]), [
     [Database.node, nestedRuntimeDatabase],
     [RuntimeFlags.node, RuntimeFlags.layer(options.flags)],
     ...(options.executor ? ([[LayerNodePlatform.requestExecutor, options.executor]] as const) : []),
@@ -703,7 +757,7 @@ beforeAll(() => {
       }
 
       const url = new URL(req.url)
-      const body = (await req.json()) as Record<string, unknown>
+      const body = req.method === "GET" ? {} : ((await req.json()) as Record<string, unknown>)
       next.resolve({ url, headers: req.headers, body })
 
       if (!url.pathname.endsWith(next.path)) {
@@ -806,6 +860,28 @@ function createEventResponse(chunks: unknown[], includeDone = false) {
     status: 200,
     headers: { "Content-Type": "text/event-stream" },
   })
+}
+
+function anthropicTextResponse(model: string, text: string) {
+  return createEventResponse([
+    {
+      type: "message_start",
+      message: {
+        id: `msg-${text.toLowerCase()}`,
+        model,
+        usage: { input_tokens: 1, cache_creation_input_tokens: null, cache_read_input_tokens: null },
+      },
+    },
+    { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+    { type: "content_block_delta", index: 0, delta: { type: "text_delta", text } },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "message_delta",
+      delta: { stop_reason: "end_turn", stop_sequence: null, container: null },
+      usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: null, cache_read_input_tokens: null },
+    },
+    { type: "message_stop" },
+  ])
 }
 
 describe("session.llm.stream", () => {
@@ -1099,6 +1175,664 @@ describe("session.llm.stream", () => {
   )
 
   it.instance(
+    "binds and dispatches an oversized permitted tool without embedding its body in the learning cut",
+    () =>
+      Effect.gen(function* () {
+        const fixture = loadFixture(alibabaQwenFixture.providerID, alibabaQwenFixture.modelID)
+        const request = waitRequest(
+          "/chat/completions",
+          new Response(createChatStream("Oversized tool accepted"), {
+            status: 200,
+            headers: { "Content-Type": "text/event-stream" },
+          }),
+        )
+        const resolved = yield* Provider.use.getModel(
+          ProviderV2.ID.make(alibabaQwenFixture.providerID),
+          ModelV2.ID.make(fixture.model.id),
+        )
+        const sessionID = SessionID.make("session-test-oversized-provider-tool")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const description = `oversized-marker:${"x".repeat(40_120)}`
+        const retained = retainedSteeringCut({ cutAsOf: 12_345 })
+        const input = {
+          user: {
+            id: MessageID.make("msg_user-oversized-provider-tool"),
+            sessionID,
+            role: "user",
+            time: { created: retained.cutAsOf },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.make(alibabaQwenFixture.providerID), modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" as const },
+          model: resolved,
+          agent,
+          system: ["Use the permitted tool only when useful."],
+          messages: [{ role: "user" as const, content: "Continue." }],
+          tools: {
+            oversized_lookup: tool({
+              description,
+              inputSchema: z.object({ value: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+          toolChoice: "required" as const,
+          retainedSteeringCut: retained,
+        } satisfies LLM.StreamInput
+
+        const first = yield* prepareInteractive(input)
+        const changed = yield* prepareInteractive({
+          ...input,
+          tools: {
+            oversized_lookup: tool({
+              description: `${description.slice(0, -1)}y`,
+              inputSchema: z.object({ value: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+        })
+        const firstDefinition = first.planned.providerToolSurface.binding.definitions.find(
+          (definition) => definition.id === "oversized_lookup",
+        )
+        const changedDefinition = changed.planned.providerToolSurface.binding.definitions.find(
+          (definition) => definition.id === "oversized_lookup",
+        )
+
+        expect(firstDefinition?.canonicalBytes).toBeGreaterThan(40_120)
+        expect(firstDefinition?.canonicalBytes).toBe(changedDefinition?.canonicalBytes)
+        expect(firstDefinition?.fingerprint).not.toBe(changedDefinition?.fingerprint)
+        expect(first.planned.providerToolSurface.binding.fingerprint).not.toBe(
+          changed.planned.providerToolSurface.binding.fingerprint,
+        )
+        expect(first.planned.providerToolSurface.binding.combinedFingerprint).not.toBe(
+          changed.planned.providerToolSurface.binding.combinedFingerprint,
+        )
+        expect(first.learning.cut.budget.canonicalBytes).toBeLessThanOrEqual(32_768)
+        expect(LearningContext.canonicalJson(LearningContext.toJsonValue(first.learning.cut))).not.toContain(
+          "oversized-marker",
+        )
+        expect(first.prepared.capacity?.assessment).toMatchObject({
+          classification: "capacity_known",
+          decision: "fit",
+          providerToolSurfaceFingerprint: first.planned.providerToolSurface.binding.combinedFingerprint,
+          providerToolSurfaceCanonicalBytes: first.planned.providerToolSurface.binding.combinedCanonicalBytes,
+        })
+        expect(first.prepared.capacity!.assessment.fixedEstimatedTokens).toBeGreaterThan(40_120)
+
+        const llm = yield* LLM.Service
+        const conflict = yield* llm.finalize!({
+          plan: changed.planned,
+          retainedSteeringCut: retained,
+          learningContextCut: first.learning.cut,
+          learningContextRenderedBlock: first.learning.renderedBlock,
+        }).pipe(Effect.exit)
+        expect(Exit.isFailure(conflict)).toBe(true)
+        if (Exit.isFailure(conflict)) expect(Cause.pretty(conflict.cause)).toContain("does not bind this exact request")
+
+        yield* llm.stream(first.prepared).pipe(Stream.runDrain)
+        const capture = yield* Effect.promise(() => request)
+        const definitions = capture.body.tools as Array<{
+          function?: { name?: string; description?: string }
+        }>
+        const sent = definitions.find((definition) => definition.function?.name === "oversized_lookup")
+        expect(sent?.function?.description).toBe(description)
+      }),
+    {
+      config: () => ({
+        enabled_providers: [alibabaQwenFixture.providerID],
+        provider: {
+          [alibabaQwenFixture.providerID]: {
+            options: { apiKey: "test-key", baseURL: `${state.server!.url.origin}/v1` },
+          },
+        },
+      }),
+    },
+  )
+
+  it.instance(
+    "binds Anthropic's actual route-visible definition metadata and exact none omission",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("anthropic", "claude-3-sonnet-20240229").model
+        const autoRequest = waitRequest("/messages", anthropicTextResponse(model.id, "Auto"))
+        const noneRequest = waitRequest("/messages", anthropicTextResponse(model.id, "None"))
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.make("anthropic"), ModelV2.ID.make(model.id))
+        const sessionID = SessionID.make("session-test-anthropic-wire-surface")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const retained = retainedSteeringCut({ cutAsOf: 23_456 })
+        const base = {
+          user: {
+            id: MessageID.make("msg_user-anthropic-wire-surface"),
+            sessionID,
+            role: "user",
+            time: { created: retained.cutAsOf },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.make("anthropic"), modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" as const },
+          model: resolved,
+          agent,
+          system: ["Use exact owner reads when needed."],
+          messages: [{ role: "user" as const, content: "Continue." }],
+          tools: {
+            learning_material_read: tool({
+              description: "Read exact current-use learning material",
+              inputSchema: z.object({ locator: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+          retainedSteeringCut: retained,
+        } satisfies LLM.StreamInput
+        const automatic = yield* prepareInteractive(base)
+        const withheld = yield* prepareInteractive({ ...base, toolChoice: "none" })
+        const restricted = yield* prepareInteractive({
+          ...base,
+          agent: {
+            ...agent,
+            permission: Permission.fromConfig({ "*": "deny", learning_material_read: "allow" }),
+          },
+        })
+        const delegated = yield* prepareInteractive({
+          ...base,
+          authority: [
+            {
+              ruleset: Permission.fromConfig({ learning_material_read: "allow" }),
+              absence: "deny",
+            },
+          ],
+        })
+        const definition = automatic.planned.providerToolSurface.definitions[0]
+
+        expect(definition?.id).toBe("learning_material_read")
+        expect(definition?.value).toMatchObject({
+          path: ["tools", 0],
+          value: {
+            name: "learning_material_read",
+            description: "Read exact current-use learning material",
+            input_schema: expect.any(Object),
+            eager_input_streaming: true,
+          },
+        })
+        expect(automatic.planned.capabilityBasis.effectiveLazyReadCapabilities).toContain("learning_material_read")
+        expect(automatic.planned.capabilityBasis.effectiveAutomaticContext).toBeTrue()
+        expect(withheld.planned.providerToolSurface.definitions).toEqual([])
+        expect(withheld.planned.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
+        expect(restricted.planned.capabilityBasis).toMatchObject({
+          effectiveAutomaticContext: false,
+          effectiveLazyReadCapabilities: ["learning_material_read"],
+        })
+        expect(delegated.planned.capabilityBasis).toMatchObject({
+          effectiveAutomaticContext: false,
+          effectiveLazyReadCapabilities: ["learning_material_read"],
+        })
+        expect(withheld.planned.providerToolSurface.binding.combinedFingerprint).not.toBe(
+          automatic.planned.providerToolSurface.binding.combinedFingerprint,
+        )
+
+        const llm = yield* LLM.Service
+        yield* llm.stream(automatic.prepared).pipe(Stream.runDrain)
+        yield* llm.stream(withheld.prepared).pipe(Stream.runDrain)
+        const auto = yield* Effect.promise(() => autoRequest)
+        const none = yield* Effect.promise(() => noneRequest)
+        expect(auto.body.tools).toEqual([
+          expect.objectContaining({
+            name: "learning_material_read",
+            input_schema: expect.any(Object),
+            eager_input_streaming: true,
+          }),
+        ])
+        expect(auto.body.tool_choice).toEqual(expect.objectContaining({ type: "auto" }))
+        expect(none.body).not.toHaveProperty("tools")
+        expect(none.body).not.toHaveProperty("tool_choice")
+      }),
+    {
+      config: () => ({
+        enabled_providers: ["anthropic"],
+        provider: {
+          anthropic: {
+            name: "Anthropic",
+            env: ["ANTHROPIC_API_KEY"],
+            npm: "@ai-sdk/anthropic",
+            api: "https://api.anthropic.com/v1",
+            models: {
+              [loadFixture("anthropic", "claude-3-sonnet-20240229").model.id]: configModel(
+                loadFixture("anthropic", "claude-3-sonnet-20240229").model,
+              ) as ConfigModel,
+            },
+            options: { apiKey: "test-anthropic-key", baseURL: `${state.server!.url.origin}/v1` },
+          },
+        },
+      }),
+    },
+  )
+
+  it.instance(
+    "classifies only an explicit compactable prefix as removable history",
+    () =>
+      Effect.gen(function* () {
+        const fixture = loadFixture(alibabaQwenFixture.providerID, alibabaQwenFixture.modelID)
+        const resolved = yield* Provider.use.getModel(
+          ProviderV2.ID.make(alibabaQwenFixture.providerID),
+          ModelV2.ID.make(fixture.model.id),
+        )
+        const sessionID = SessionID.make("session-test-capacity-partition")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const retained = retainedSteeringCut({ cutAsOf: 22_222 })
+        const old = { role: "user" as const, content: `old:${"h".repeat(60_000)}` }
+        const current = { role: "user" as const, content: "current learner input" }
+        const removableMessageIDs = [MessageID.make("msg_capacity-partition-old")]
+        const base = {
+          user: {
+            id: MessageID.make("msg_user-capacity-partition"),
+            sessionID,
+            role: "user",
+            time: { created: retained.cutAsOf },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.make(alibabaQwenFixture.providerID), modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" as const },
+          model: resolved,
+          agent,
+          system: ["Keep the current learner input."],
+          messages: [old, current],
+          compactableMessages: [old],
+          compactionSelection: {
+            tailStartMessageID: MessageID.make("msg_capacity-partition-current"),
+            removableMessageIDs,
+            removableMessageIDsFingerprint: LearningContext.canonicalFingerprint(
+              LearningContext.toJsonValue(removableMessageIDs),
+            ),
+          },
+          tools: {},
+          retainedSteeringCut: retained,
+        } satisfies LLM.StreamInput
+        const measured = yield* prepareInteractive(base)
+        const measuredCapacity = measured.prepared.capacity!.assessment
+        expect(measuredCapacity.removableEstimatedTokens).toBeGreaterThan(50_000)
+        expect(measuredCapacity.fixedEstimatedTokens).toBeLessThan(measuredCapacity.totalEstimatedTokens)
+        const historyLimit =
+          measuredCapacity.fixedEstimatedTokens + Math.floor(measuredCapacity.removableEstimatedTokens / 2)
+        const history = yield* prepareInteractive({
+          ...base,
+          model: {
+            ...resolved,
+            limit: {
+              ...resolved.limit,
+              input: historyLimit,
+              context: historyLimit + resolved.limit.output,
+            },
+          },
+        })
+        expect(history.prepared.capacity?.assessment).toMatchObject({
+          classification: "capacity_known",
+          decision: "history_overflow",
+          usableInputLimitTokens: historyLimit,
+        })
+
+        const fixedMeasured = yield* prepareInteractive({
+          ...base,
+          messages: [current, { role: "user", content: `latest:${"f".repeat(60_000)}` }],
+          compactableMessages: [],
+          compactionSelection: undefined,
+        })
+        const fixedLimit = fixedMeasured.prepared.capacity!.assessment.fixedEstimatedTokens - 1
+        const fixed = yield* prepareInteractive({
+          ...base,
+          messages: [current, { role: "user", content: `latest:${"f".repeat(60_000)}` }],
+          compactableMessages: [],
+          compactionSelection: undefined,
+          model: {
+            ...resolved,
+            limit: {
+              ...resolved.limit,
+              input: fixedLimit,
+              context: fixedLimit + resolved.limit.output,
+            },
+          },
+        })
+        expect(fixed.prepared.capacity?.assessment).toMatchObject({
+          classification: "capacity_invalid",
+          decision: "fixed_overflow",
+          usableInputLimitTokens: fixedLimit,
+        })
+        expect(fixed.prepared.capacity?.assessment.removableEstimatedTokens).toBe(0)
+      }),
+    {
+      config: () => ({
+        enabled_providers: [alibabaQwenFixture.providerID],
+        provider: {
+          [alibabaQwenFixture.providerID]: {
+            options: { apiKey: "test-key", baseURL: `${state.server!.url.origin}/v1` },
+          },
+        },
+      }),
+    },
+  )
+
+  it.instance(
+    "binds actual OpenAI Responses parallel/max tool controls before admission without provider I/O",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("openai", "gpt-5.2").model
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.openai, ModelV2.ID.make(model.id))
+        const sessionID = SessionID.make("session-test-openai-provider-controls")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const retained = retainedSteeringCut({ cutAsOf: 24_680 })
+        const base = {
+          user: {
+            id: MessageID.make("msg_user-openai-provider-controls"),
+            sessionID,
+            role: "user",
+            time: { created: retained.cutAsOf },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.openai, modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" as const },
+          agent,
+          system: ["Use the exact tool surface."],
+          messages: [{ role: "user" as const, content: "Continue." }],
+          tools: {
+            exact_lookup: tool({
+              description: "Read one exact owner projection",
+              inputSchema: z.object({ id: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+          retainedSteeringCut: retained,
+        }
+        const queueBefore = state.queue.length
+        const parallel = yield* prepareInteractive({
+          ...base,
+          model: {
+            ...resolved,
+            options: { ...resolved.options, parallelToolCalls: true, maxToolCalls: 2 },
+          },
+        })
+        const serial = yield* prepareInteractive({
+          ...base,
+          model: {
+            ...resolved,
+            options: { ...resolved.options, parallelToolCalls: false, maxToolCalls: 3 },
+          },
+        })
+        const parallelSurface = JSON.stringify(parallel.planned.providerToolSurface.surface)
+        const serialSurface = JSON.stringify(serial.planned.providerToolSurface.surface)
+
+        expect(parallelSurface).toContain('"parallel_tool_calls":true')
+        expect(parallelSurface).toContain('"max_tool_calls":2')
+        expect(serialSurface).toContain('"parallel_tool_calls":false')
+        expect(serialSurface).toContain('"max_tool_calls":3')
+        expect(parallel.planned.providerToolSurface.binding.combinedFingerprint).not.toBe(
+          serial.planned.providerToolSurface.binding.combinedFingerprint,
+        )
+        expect(parallel.prepared.capacity?.assessment.envelopeFingerprint).not.toBe(
+          serial.prepared.capacity?.assessment.envelopeFingerprint,
+        )
+        expect(state.queue.length).toBe(queueBefore)
+
+        const llm = yield* LLM.Service
+        const conflict = yield* llm.finalize!({
+          plan: serial.planned,
+          retainedSteeringCut: retained,
+          learningContextCut: parallel.learning.cut,
+          learningContextRenderedBlock: parallel.learning.renderedBlock,
+        }).pipe(Effect.exit)
+        expect(Exit.isFailure(conflict)).toBe(true)
+      }),
+    { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+  )
+
+  it.instance(
+    "counts MCP-shaped ordinary schema metadata exactly and conflicts before OpenAI transport",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("openai", "gpt-5.2").model
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.openai, ModelV2.ID.make(model.id))
+        const sessionID = SessionID.make("session-test-openai-mcp-schema-collision")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const retained = retainedSteeringCut({ cutAsOf: 24_681 })
+        const queueBefore = state.queue.length
+        const definition = (marker: string) =>
+          tool({
+            description: "Read one exact owner projection",
+            inputSchema: jsonSchema({
+              type: "object",
+              properties: {
+                source: {
+                  type: "object",
+                  default: {
+                    type: "mcp",
+                    authorization: `ordinary-${marker}`,
+                    headers: { mode: `${marker}:${"x".repeat(40_000)}` },
+                  },
+                },
+              },
+            }),
+            execute: async () => ({ output: "unused" }),
+          })
+        const base = {
+          user: {
+            id: MessageID.make("msg_user-openai-mcp-schema-collision"),
+            sessionID,
+            role: "user",
+            time: { created: retained.cutAsOf },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.openai, modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" as const },
+          model: resolved,
+          agent,
+          system: ["Use the exact tool surface."],
+          messages: [{ role: "user" as const, content: "Continue." }],
+          toolChoice: "required" as const,
+          retainedSteeringCut: retained,
+        }
+        const first = yield* prepareInteractive({ ...base, tools: { exact_lookup: definition("A") } })
+        const changed = yield* prepareInteractive({ ...base, tools: { exact_lookup: definition("B") } })
+        const firstDefinition = first.planned.providerToolSurface.binding.definitions.find(
+          (item) => item.id === "exact_lookup",
+        )
+        const changedDefinition = changed.planned.providerToolSurface.binding.definitions.find(
+          (item) => item.id === "exact_lookup",
+        )
+
+        expect(firstDefinition?.canonicalBytes).toBeGreaterThan(40_000)
+        expect(firstDefinition?.canonicalBytes).toBe(changedDefinition?.canonicalBytes)
+        expect(firstDefinition?.fingerprint).not.toBe(changedDefinition?.fingerprint)
+        expect(first.prepared.capacity!.assessment.fixedEstimatedTokens).toBeGreaterThan(40_000)
+        expect(first.prepared.capacity!.assessment.envelopeFingerprint).not.toBe(
+          changed.prepared.capacity!.assessment.envelopeFingerprint,
+        )
+        expect(state.queue.length).toBe(queueBefore)
+
+        const llm = yield* LLM.Service
+        const conflict = yield* llm.finalize!({
+          plan: changed.planned,
+          retainedSteeringCut: retained,
+          learningContextCut: first.learning.cut,
+          learningContextRenderedBlock: first.learning.renderedBlock,
+        }).pipe(Effect.exit)
+        expect(Exit.isFailure(conflict)).toBe(true)
+        if (Exit.isFailure(conflict)) expect(Cause.pretty(conflict.cause)).toContain("does not bind this exact request")
+        expect(state.queue.length).toBe(queueBefore)
+      }),
+    { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+  )
+
+  it.instance(
+    "projects stable internal tool identities onto legal collision-safe OpenAI wire names",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("openai", "gpt-5.2").model
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.openai, ModelV2.ID.make(model.id))
+        const sessionID = SessionID.make("session-test-openai-tool-name-projection")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        const retained = retainedSteeringCut({ cutAsOf: 24_682 })
+        const input = {
+          user: {
+            id: MessageID.make("msg_user-openai-tool-name-projection"),
+            sessionID,
+            role: "user",
+            time: { created: retained.cutAsOf },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.openai, modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" as const },
+          model: resolved,
+          agent,
+          system: ["Continue after the exact retained tool result."],
+          messages: [
+            {
+              role: "assistant" as const,
+              content: [
+                {
+                  type: "tool-call" as const,
+                  toolCallId: "call-prior-convert",
+                  toolName: "representation.convert",
+                  input: { artifactID: "artifact-1" },
+                },
+              ],
+            },
+            {
+              role: "tool" as const,
+              content: [
+                {
+                  type: "tool-result" as const,
+                  toolCallId: "call-prior-convert",
+                  toolName: "representation.convert",
+                  output: { type: "text" as const, value: "converted" },
+                },
+              ],
+            },
+            { role: "user" as const, content: "Continue." },
+          ],
+          tools: {
+            "representation.convert": tool({
+              description: "Convert one exact retained Representation",
+              inputSchema: z.object({ artifactID: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+            representation_convert: tool({
+              description: "A distinct already-valid tool identity",
+              inputSchema: z.object({ artifactID: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+          retainedSteeringCut: retained,
+        } satisfies LLM.StreamInput
+        const prepared = yield* prepareInteractive(input)
+        const provider = prepared.planned.toolNames.provider("representation.convert")
+        expect(provider).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
+        expect(provider).not.toBe("representation_convert")
+        expect(prepared.planned.toolNames.internal(provider)).toBe("representation.convert")
+        expect(prepared.planned.providerToolSurface.binding.definitions.map((item) => item.id).toSorted()).toEqual(
+          [provider, "representation_convert"].toSorted(),
+        )
+        expect(prepared.prepared.capacity?.assessment.providerToolSurfaceFingerprint).toBe(
+          prepared.planned.providerToolSurface.binding.combinedFingerprint,
+        )
+
+        const request = waitRequest(
+          "/responses",
+          createEventResponse(
+            [
+              {
+                type: "response.created",
+                response: {
+                  id: "resp-tool-name-projection",
+                  created_at: Math.floor(Date.now() / 1000),
+                  model: model.id,
+                  service_tier: null,
+                },
+              },
+              {
+                type: "response.output_item.added",
+                output_index: 0,
+                item: {
+                  type: "message",
+                  id: "item-tool-name-projection",
+                  status: "in_progress",
+                  role: "assistant",
+                  content: [],
+                },
+              },
+              {
+                type: "response.content_part.added",
+                item_id: "item-tool-name-projection",
+                output_index: 0,
+                content_index: 0,
+                part: { type: "output_text", text: "", annotations: [] },
+              },
+              {
+                type: "response.output_text.delta",
+                item_id: "item-tool-name-projection",
+                delta: "Continued",
+                logprobs: null,
+              },
+              {
+                type: "response.completed",
+                response: {
+                  incomplete_details: null,
+                  usage: {
+                    input_tokens: 1,
+                    input_tokens_details: null,
+                    output_tokens: 1,
+                    output_tokens_details: null,
+                  },
+                  service_tier: null,
+                },
+              },
+            ],
+            true,
+          ),
+        )
+        const llm = yield* LLM.Service
+        yield* llm.stream(prepared.prepared).pipe(Stream.runDrain)
+        const capture = yield* Effect.promise(() => request)
+        const definitions = capture.body.tools as Array<{ type?: string; name?: string }>
+        expect(definitions.map((item) => item.name).toSorted()).toEqual([provider, "representation_convert"].toSorted())
+        expect(JSON.stringify(capture.body.input)).toContain(`"name":"${provider}"`)
+        expect(JSON.stringify(capture.body)).not.toContain('"name":"representation.convert"')
+      }),
+    { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+  )
+
+  it.instance(
     "sends responses API payload for OpenAI models",
     () =>
       Effect.gen(function* () {
@@ -1324,8 +2058,8 @@ describe("session.llm.stream", () => {
         expect(payload).not.toContain(new Date(cutAsOf).toISOString())
         expect(payload).not.toContain(new Date(sourceInstant).toISOString())
         expect(payload).not.toContain("Today's date:")
-        expect(payload).not.toContain("\"timeZone\"")
-        expect(payload).not.toContain("\"utcOffsetMinutes\"")
+        expect(payload).not.toContain('"timeZone"')
+        expect(payload).not.toContain('"utcOffsetMinutes"')
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
   )
@@ -1402,7 +2136,7 @@ describe("session.llm.stream", () => {
         } satisfies Agent.Info
 
         yield* drainWith(
-          AppNodeBuilder.build(LLM.node, [
+          AppNodeBuilder.build(LayerNode.group([LLM.node, Database.node]), [
             [Database.node, nestedRuntimeDatabase],
             [LayerNodePlatform.llmClient, failingNativeClient],
             [RuntimeFlags.node, RuntimeFlags.layer({ experimentalNativeLlm: false })],
@@ -1422,15 +2156,31 @@ describe("session.llm.stream", () => {
             agent,
             system: ["You are a helpful assistant."],
             messages: [{ role: "user", content: "Hello" }],
-            tools: {},
+            tools: {
+              course_query: tool({
+                description: "Read exact Course owner state",
+                inputSchema: z.object({ courseID: z.string() }),
+                execute: async () => ({ output: "unused" }),
+              }),
+            },
           },
         )
 
         const capture = yield* Effect.promise(() => request)
         expect(capture.url.pathname.endsWith("/responses")).toBe(true)
         expect(capture.body.model).toBe(resolved.api.id)
+        expect(capture.body.tools).toEqual([
+          expect.objectContaining({
+            type: "function",
+            name: "course_query",
+            description: "Read exact Course owner state",
+            parameters: expect.any(Object),
+            strict: false,
+          }),
+        ])
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+    20_000,
   )
 
   it.instance(
@@ -1499,6 +2249,7 @@ describe("session.llm.stream", () => {
         expect(capture.body.input).toContainEqual({ role: "user", content: [{ type: "input_text", text: "Hello" }] })
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+    20_000,
   )
 
   it.instance(
@@ -1600,6 +2351,7 @@ describe("session.llm.stream", () => {
         expect(executed).toBeUndefined()
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, "https://injected-openai.test/v1") },
+    20_000,
   )
 
   it.instance(
@@ -1734,7 +2486,9 @@ describe("session.llm.stream", () => {
 
         expect(Exit.isFailure(exit)).toBe(true)
         if (Exit.isFailure(exit)) {
-          expect(String(Cause.squash(exit.cause))).toContain("Internal operation cannot call tool: _noop")
+          expect(String(Cause.squash(exit.cause))).toContain(
+            "Provider tool name is outside the prepared provider surface: _noop",
+          )
         }
         const captured = yield* Effect.promise(() => request)
         expect(captured.body.tools).toEqual([
@@ -1854,6 +2608,197 @@ describe("session.llm.stream", () => {
         }
       },
     },
+    20_000,
+  )
+
+  it.instance(
+    "dispatches the same collision-safe provider tool identities through the native runtime",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("openai", "gpt-5.2").model
+        const projected = ToolNameProjection.make([
+          "representation.convert",
+          "representation_convert",
+          "invalid",
+        ]).provider("representation.convert")
+        const request = waitRequest(
+          "/responses",
+          createEventResponse(
+            [
+              {
+                type: "response.output_item.added",
+                item: {
+                  type: "function_call",
+                  id: "item-native-tool-name",
+                  call_id: "call-native-tool-name",
+                  name: projected,
+                },
+              },
+              {
+                type: "response.function_call_arguments.delta",
+                item_id: "item-native-tool-name",
+                delta: '{"artifactID":"artifact-1"}',
+              },
+              {
+                type: "response.output_item.done",
+                item: {
+                  type: "function_call",
+                  id: "item-native-tool-name",
+                  call_id: "call-native-tool-name",
+                  name: projected,
+                  arguments: '{"artifactID":"artifact-1"}',
+                },
+              },
+              {
+                type: "response.completed",
+                response: {
+                  incomplete_details: null,
+                  usage: { input_tokens: 1, output_tokens: 1 },
+                },
+              },
+            ],
+            true,
+          ),
+        )
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.openai, ModelV2.ID.make(model.id))
+        const sessionID = SessionID.make("session-test-native-tool-name-projection")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+
+        const events = yield* collectWith(llmLayerWithExecutor({ flags: { experimentalNativeLlm: true } }), {
+          user: {
+            id: MessageID.make("msg_user-native-tool-name-projection"),
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.openai, modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" },
+          model: resolved,
+          agent,
+          system: [],
+          messages: [{ role: "user", content: "Continue" }],
+          tools: {
+            "representation.convert": tool({
+              description: "Convert one Representation",
+              inputSchema: z.object({ artifactID: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+            representation_convert: tool({
+              description: "A separate valid tool",
+              inputSchema: z.object({ artifactID: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+        })
+
+        const capture = yield* Effect.promise(() => request)
+        const definitions = capture.body.tools as Array<{ name?: string }>
+        const names = definitions.map((item) => item.name)
+        expect(projected).toMatch(/^[A-Za-z0-9_-]{1,64}$/)
+        expect(names).toContain("representation_convert")
+        expect(names).toContain(projected)
+        expect(names).not.toContain("representation.convert")
+        expect(Array.from(events)).toContainEqual(
+          expect.objectContaining({
+            type: "tool-call",
+            name: "representation.convert",
+            input: { artifactID: "artifact-1" },
+          }),
+        )
+      }),
+    { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+    20_000,
+  )
+
+  it.instance(
+    "rejects unbound and fallback native calls without advertising or executing invalid",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("openai", "gpt-5.2").model
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.openai, ModelV2.ID.make(model.id))
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        let invalidExecutions = 0
+
+        yield* Effect.forEach(["not_offered", "invalid"], (emitted) =>
+          Effect.gen(function* () {
+            const itemID = `item-native-${emitted}`
+            const callID = `call-native-${emitted}`
+            const request = waitRequest(
+              "/responses",
+              createEventResponse(
+                [
+                  {
+                    type: "response.output_item.added",
+                    item: { type: "function_call", id: itemID, call_id: callID, name: emitted },
+                  },
+                  { type: "response.function_call_arguments.delta", item_id: itemID, delta: "{}" },
+                  {
+                    type: "response.output_item.done",
+                    item: { type: "function_call", id: itemID, call_id: callID, name: emitted, arguments: "{}" },
+                  },
+                  {
+                    type: "response.completed",
+                    response: { incomplete_details: null, usage: { input_tokens: 1, output_tokens: 1 } },
+                  },
+                ],
+                true,
+              ),
+            )
+            const sessionID = SessionID.make(`session-test-native-${emitted}`)
+            const exit = yield* collectWith(llmLayerWithExecutor({ flags: { experimentalNativeLlm: true } }), {
+              user: {
+                id: MessageID.make(`msg_user-native-${emitted}`),
+                sessionID,
+                role: "user",
+                time: { created: Date.now() },
+                agent: agent.name,
+                model: { providerID: ProviderV2.ID.openai, modelID: resolved.id },
+              } satisfies SessionV1.User,
+              sessionID,
+              composition: { type: "interactive" },
+              model: resolved,
+              agent,
+              system: [],
+              messages: [{ role: "user", content: "Continue" }],
+              tools: {
+                invalid: tool({
+                  description: "attempted external fallback replacement",
+                  inputSchema: z.object({}),
+                  execute: async () => {
+                    invalidExecutions++
+                    return { output: "external effect" }
+                  },
+                }),
+              },
+              ...(emitted === "invalid" ? { toolChoice: "none" as const } : {}),
+            }).pipe(Effect.exit)
+
+            const capture = yield* Effect.promise(() => request)
+            expect(JSON.stringify(capture.body)).not.toContain('"name":"invalid"')
+            expect(Exit.isFailure(exit)).toBeTrue()
+            if (Exit.isFailure(exit)) {
+              expect(Cause.pretty(exit.cause)).toContain(
+                `Provider tool name is outside the prepared provider surface: ${emitted}`,
+              )
+            }
+          }),
+        )
+        expect(invalidExecutions).toBe(0)
+      }),
+    { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+    20_000,
   )
 
   it.instance(
@@ -1951,6 +2896,161 @@ describe("session.llm.stream", () => {
         expect(capture.url.pathname.endsWith("/responses")).toBe(true)
       }),
     { config: () => openAIConfig(loadFixture("openai", "gpt-5.2").model, `${state.server!.url.origin}/v1`) },
+  )
+
+  it.instance(
+    "materializes unsupported URL media once and reuses one frozen provider prompt across retry",
+    () =>
+      Effect.gen(function* () {
+        const model = loadFixture("anthropic", "claude-3-sonnet-20240229").model
+        const assetBytes = new TextEncoder().encode(`frozen-asset:${"m".repeat(8_192)}`)
+        const assetRequest = waitRequest(
+          "/asset.bin",
+          new Response(assetBytes, { status: 200, headers: { "Content-Type": "application/pdf" } }),
+        )
+        const firstAttempt = waitRequest(
+          "/messages",
+          new Response(JSON.stringify({ error: { message: "transient", type: "server_error" } }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }),
+        )
+        const secondAttempt = waitRequest(
+          "/messages",
+          createEventResponse([
+            {
+              type: "message_start",
+              message: {
+                id: "msg-frozen-media",
+                model: model.id,
+                usage: {
+                  input_tokens: 3,
+                  cache_creation_input_tokens: null,
+                  cache_read_input_tokens: null,
+                },
+              },
+            },
+            {
+              type: "content_block_start",
+              index: 0,
+              content_block: { type: "text", text: "" },
+            },
+            {
+              type: "content_block_delta",
+              index: 0,
+              delta: { type: "text_delta", text: "Frozen" },
+            },
+            { type: "content_block_stop", index: 0 },
+            {
+              type: "message_delta",
+              delta: { stop_reason: "end_turn", stop_sequence: null, container: null },
+              usage: {
+                input_tokens: 3,
+                output_tokens: 2,
+                cache_creation_input_tokens: null,
+                cache_read_input_tokens: null,
+              },
+            },
+            { type: "message_stop" },
+          ]),
+        )
+        const resolved = yield* Provider.use.getModel(ProviderV2.ID.make("anthropic"), ModelV2.ID.make(model.id))
+        const provider = yield* Provider.Service
+        const language = yield* provider.getLanguage(resolved)
+        Object.defineProperty(language, "supportedUrls", {
+          configurable: true,
+          value: {},
+        })
+        const sessionID = SessionID.make("session-test-frozen-media-retry")
+        const agent = {
+          name: "test",
+          mode: "primary",
+          options: {},
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        } satisfies Agent.Info
+        yield* Effect.acquireRelease(
+          Effect.sync(() => {
+            const previous = globalThis.fetch
+            globalThis.fetch = Object.assign(
+              (request: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+                const url = new URL(request instanceof Request ? request.url : request)
+                return url.hostname === "asset.repa.example"
+                  ? previous(new URL(`/asset.bin`, state.server!.url), init)
+                  : previous(request, init)
+              },
+              { preconnect: previous.preconnect },
+            )
+            return previous
+          }),
+          (previous) => Effect.sync(() => void (globalThis.fetch = previous)),
+        )
+        yield* drain({
+          user: {
+            id: MessageID.make("msg_user-frozen-media-retry"),
+            sessionID,
+            role: "user",
+            time: { created: Date.now() },
+            agent: agent.name,
+            model: { providerID: ProviderV2.ID.make("anthropic"), modelID: resolved.id },
+          } satisfies SessionV1.User,
+          sessionID,
+          composition: { type: "interactive" },
+          model: resolved,
+          agent,
+          system: ["Inspect the attached binary without refetching it."],
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: "Inspect this asset." },
+                {
+                  type: "file",
+                  mediaType: "application/pdf",
+                  filename: "asset.pdf",
+                  data: new URL("https://asset.repa.example/asset.bin"),
+                },
+              ],
+            },
+          ],
+          tools: {
+            "representation.convert": tool({
+              description: "Convert one Representation",
+              inputSchema: z.object({ artifactID: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+          retries: 1,
+        })
+        const assetCapture = yield* Effect.promise(() => Promise.race([assetRequest, timeout(1_000)]))
+        expect(assetCapture.url.pathname).toBe("/asset.bin")
+        const first = yield* Effect.promise(() => firstAttempt)
+        const second = yield* Effect.promise(() => secondAttempt)
+        expect(first.body).toEqual(second.body)
+        expect(JSON.stringify(first.body)).toContain(Buffer.from(assetBytes).toString("base64"))
+        const definitions = first.body.tools as Array<{ name?: string }>
+        expect(definitions).toHaveLength(1)
+        expect(definitions[0]?.name).toMatch(/^repa_representation_convert_[a-f0-9]{24}$/)
+        expect(definitions[0]?.name).not.toBe("representation.convert")
+        expect(state.queue).toHaveLength(0)
+      }),
+    {
+      config: () => {
+        const model = loadFixture("anthropic", "claude-3-sonnet-20240229").model
+        return {
+          enabled_providers: ["anthropic"],
+          provider: {
+            anthropic: {
+              name: "Anthropic",
+              env: ["ANTHROPIC_API_KEY"],
+              npm: "@ai-sdk/anthropic",
+              api: "https://api.anthropic.com/v1",
+              models: { [model.id]: configModel(model) as ConfigModel },
+              options: { apiKey: "test-anthropic-key", baseURL: `${state.server!.url.origin}/v1` },
+            },
+          },
+        }
+      },
+    },
   )
 
   const minimaxFixture = { providerID: "minimax", modelID: "MiniMax-M2.5" }
@@ -2319,10 +3419,10 @@ describe("session.llm.stream", () => {
           model: { providerID: ProviderV2.ID.make(geminiFixture.providerID), modelID: resolved.id },
         } satisfies SessionV1.User
 
-        yield* drain({
+        const input = {
           user,
           sessionID,
-          composition: { type: "interactive" },
+          composition: { type: "interactive" as const },
           model: resolved,
           agent,
           system: ["You are a helpful assistant."],
@@ -2330,8 +3430,18 @@ describe("session.llm.stream", () => {
             { role: "user", content: "Hello" },
             { role: "assistant", content: [{ type: "reasoning", text: "" }] },
           ],
-          tools: {},
-        })
+          tools: {
+            course_query: tool({
+              description: "Read exact Course owner state",
+              inputSchema: z.object({ courseID: z.string() }),
+              execute: async () => ({ output: "unused" }),
+            }),
+          },
+          toolChoice: "required" as const,
+        } satisfies LLM.StreamInput
+        const prepared = yield* prepareInteractive(input)
+        const llm = yield* LLM.Service
+        yield* llm.stream(prepared.prepared).pipe(Stream.runDrain)
 
         const capture = yield* Effect.promise(() => request)
         const body = capture.body
@@ -2344,6 +3454,20 @@ describe("session.llm.stream", () => {
         expect(config?.temperature).toBe(0.3)
         expect(config?.topP).toBe(0.8)
         expect(config?.maxOutputTokens).toBe(ProviderTransform.maxOutputTokens(resolved))
+        const tools = body.tools as Array<{ functionDeclarations?: Array<Record<string, unknown>> }>
+        const sent = tools[0]?.functionDeclarations?.[0]
+        expect(sent).toMatchObject({ name: "course_query", description: "Read exact Course owner state" })
+        if (!sent) return yield* Effect.die("Expected Gemini function declaration")
+        expect(prepared.planned.providerToolSurface.definitions).toEqual([
+          {
+            id: "course_query",
+            value: LearningContext.toJsonValue({ path: ["tools", 0, "functionDeclarations", 0], value: sent }),
+          },
+        ])
+        expect(prepared.planned.providerToolSurface.toolChoice).toMatchObject({
+          state: "present",
+          value: [expect.objectContaining({ path: ["toolConfig", "functionCallingConfig"] })],
+        })
       }),
     {
       config: () => ({

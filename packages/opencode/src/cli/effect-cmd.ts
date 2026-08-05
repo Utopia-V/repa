@@ -70,10 +70,12 @@ interface EffectCmdOpts<Args, A> {
  * Handlers are typically `Effect.fn("Cli.<name>")(function*(args) { ... })`,
  * which adds a named tracing span per CLI invocation. Once all commands use
  * `effectCmd`, swapping the underlying `cmd()` factory for effect/cli's
- * `Command.make(...)` won't touch any handler bodies.
+ * `Command.make(...)` won't touch any handler bodies. The returned command also
+ * exposes the exact unwrapped `effectHandler` for embedded callers that already
+ * own AppRuntime and Instance lifetimes.
  */
-export const effectCmd = <Args, A>(opts: EffectCmdOpts<Args, A>) =>
-  cmd<{}, Args>({
+export const effectCmd = <Args, A>(opts: EffectCmdOpts<Args, A>) => {
+  const command = cmd<{}, Args>({
     command: opts.command,
     aliases: opts.aliases,
     describe: opts.describe,
@@ -114,3 +116,5 @@ export const effectCmd = <Args, A>(opts: EffectCmdOpts<Args, A>) =>
       }
     },
   })
+  return Object.assign(command, { effectHandler: opts.handler })
+}

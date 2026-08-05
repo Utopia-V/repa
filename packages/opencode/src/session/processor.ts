@@ -41,16 +41,28 @@ import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 import { LLMNativeRuntime } from "./llm/native-runtime"
+import { LLMAISDK } from "./llm/ai-sdk"
+import { INVALID_TOOL_ID } from "@/tool/invalid"
 
 const DOOM_LOOP_THRESHOLD = 3
 export type Result = "compact" | "stop" | "continue"
+export type CompactionMode = "normal" | "provider_overflow" | "capacity_history"
 export type FailureReason = Extract<
   Turn.TerminalReason,
   "provider_failure" | "tool_runtime_failure" | "permission_failure" | "projection_failure" | "integrity_failure"
 >
 
 class ProcessorIntegrityFailure extends Error {}
+class CapacityFailure extends Error {
+  constructor(
+    readonly decision: "fixed_overflow" | "invalid_limits",
+    message: string,
+  ) {
+    super(message)
+  }
+}
 
 export type RegisteredToolCall = Readonly<{
   turnID: Turn.ID
@@ -71,6 +83,8 @@ export type ToolCallPreparation = (input: unknown, registration: RegisteredToolC
 export interface Handle {
   readonly message: SessionV1.Assistant
   readonly failureReason?: FailureReason
+  readonly compactionMode?: CompactionMode
+  readonly compactionSelection?: LLM.StreamInput["compactionSelection"]
   readonly updateToolCall: (
     toolCallID: string,
     update: (part: SessionV1.ToolPart) => SessionV1.ToolPart,
@@ -87,7 +101,7 @@ export interface Handle {
   readonly failToolCall?: (toolCallID: string, error: unknown) => Effect.Effect<boolean>
   readonly registeredToolCall: (toolCallID: string) => RegisteredToolCall | undefined
   readonly bindModelOperation: (operation: Turn.ModelOperation) => Effect.Effect<void, Turn.Error>
-  readonly process: (streamInput: LLM.StreamInput) => Effect.Effect<Result>
+  readonly process: (streamInput: LLM.InternalStreamInput | LLM.Prepared) => Effect.Effect<Result>
 }
 
 type Input = {
@@ -188,13 +202,18 @@ const layer = Layer.effect(
       let dispatchedToolCallID: string | undefined
       let modelOperation: Turn.ModelOperation | undefined
       let retainedSteeringCut: RetainedSteering.Cut | undefined
+      let learningContextCut: LearningContext.Cut | undefined
+      let learningContextRenderedBlock: string | undefined
       let activeTools: LLM.StreamInput["tools"] = {}
       let toolController: AbortController | undefined
       let failureReason: FailureReason | undefined
+      let compactionMode: CompactionMode | undefined
+      let compactionSelection: LLM.StreamInput["compactionSelection"]
 
       const classifyFailure = (error: unknown, fallback: FailureReason): FailureReason => {
         if (
           error instanceof ProcessorIntegrityFailure ||
+          error instanceof CapacityFailure ||
           error instanceof Turn.IntegrityError ||
           error instanceof Turn.AdmissionConflictError ||
           error instanceof Turn.SourceUnavailableError
@@ -314,28 +333,44 @@ const layer = Layer.effect(
         if (modelOperation && !isDeepStrictEqual(modelOperation, operation)) {
           return yield* new Turn.AdmissionConflictError({ turnID: operation.turnID })
         }
-        const read = yield* database.db
-          .transaction((tx) => RetainedSteering.readCut(tx, operation.assistantMessageID))
+        const [retained, learning] = yield* database.db
+          .transaction((tx) =>
+            Effect.all([
+              RetainedSteering.readCut(tx, operation.assistantMessageID),
+              LearningContext.readCut(tx, operation.assistantMessageID),
+            ]),
+          )
           .pipe(
             Effect.mapError(
               (error) =>
                 new Turn.IntegrityError({
                   turnID: operation.turnID,
-                  reason: `Retained steering cut read failed: ${"reason" in error ? error.reason : "database_error"}`,
+                  reason: `Model context cut read failed: ${"reason" in error ? error.reason : "database_error"}`,
                 }),
             ),
           )
-        if (read.type === "not_found") {
+        if (retained.type === "not_found" || learning.type === "not_found") {
           return yield* new Turn.IntegrityError({
             turnID: operation.turnID,
-            reason: "Interactive model operation has no retained steering cut",
+            reason: "Interactive model operation has no complete Gate 15/Gate 18 context cuts",
           })
         }
-        if (read.type === "source_unavailable") {
+        if (retained.type === "source_unavailable" || learning.type === "source_unavailable") {
           return yield* new Turn.SourceUnavailableError({ turnID: operation.turnID })
         }
+        if (
+          learning.cut.operation.turnID !== operation.turnID ||
+          learning.cut.operation.sessionID !== operation.sessionID ||
+          learning.cut.operation.assistantMessageID !== operation.assistantMessageID ||
+          learning.cut.retainedSteering.fingerprint !== retained.cut.fingerprint ||
+          learning.cut.retainedSteering.cutAsOf !== retained.cut.cutAsOf
+        ) {
+          return yield* new Turn.AdmissionConflictError({ turnID: operation.turnID })
+        }
         modelOperation = operation
-        retainedSteeringCut = read.cut
+        retainedSteeringCut = retained.cut
+        learningContextCut = learning.cut
+        learningContextRenderedBlock = learning.renderedBlock
       })
 
       const updateToolCall = Effect.fn("SessionProcessor.updateToolCall")(function* (
@@ -759,6 +794,29 @@ const layer = Layer.effect(
             if (ctx.assistantMessage.summary) {
               throw new ProcessorIntegrityFailure(`Tool call not allowed while generating summary: ${value.name}`)
             }
+            const repair = LLMAISDK.repairedFallback(value)
+            const buffered = ctx.toolcalls[value.id]
+            if (repair) {
+              if (value.name !== INVALID_TOOL_ID) {
+                throw new ProcessorIntegrityFailure(
+                  `AI SDK repair target is not the program invalid fallback: ${value.id}`,
+                )
+              }
+              if (
+                buffered &&
+                (buffered.name !== repair.from ||
+                  buffered.finalized ||
+                  buffered.prepared ||
+                  buffered.registration ||
+                  candidateSetSealed)
+              ) {
+                throw new ProcessorIntegrityFailure(`AI SDK repair provenance conflicts with tool call ${value.id}`)
+              }
+              if (buffered) {
+                buffered.name = INVALID_TOOL_ID
+                buffered.raw = ""
+              }
+            }
             const call = reserveToolCall(value)
             const input = canonicalToolInput(value.name, value.input)
             if (call.finalized) {
@@ -861,6 +919,9 @@ const layer = Layer.effect(
           }
 
           case "provider-error":
+            if (value.classification === "context-overflow") {
+              throw new SessionV1.ContextOverflowError({ message: value.message })
+            }
             throw new Error(value.message)
 
           case "step-start":
@@ -928,6 +989,7 @@ const layer = Layer.effect(
               isOverflow({ cfg: yield* config.get(), tokens: usage.tokens, model: ctx.model })
             ) {
               ctx.needsCompaction = true
+              compactionMode = "normal"
             }
             return
           }
@@ -1371,6 +1433,23 @@ const layer = Layer.effect(
           error: errorMessage(e),
           stack: e instanceof Error ? e.stack : undefined,
         })
+        if (e instanceof CapacityFailure) {
+          failureReason ??= "integrity_failure"
+          const error =
+            e.decision === "fixed_overflow"
+              ? new SessionV1.ContextOverflowError({ message: e.message }).toObject()
+              : new SessionV1.APIError({
+                  message: e.message,
+                  isRetryable: false,
+                  metadata: { classification: "capacity_invalid", decision: e.decision },
+                }).toObject()
+          ctx.assistantMessage.error = error
+          ctx.assistantMessage.finish = "error"
+          yield* session.updateMessage(ctx.assistantMessage)
+          yield* events.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
+          yield* status.set(ctx.sessionID, { type: "idle" })
+          return
+        }
         const error = parse(e)
         if (SessionV1.ContextOverflowError.isInstance(error)) {
           if ((yield* config.get()).compaction?.auto === false && !ctx.assistantMessage.summary) {
@@ -1384,6 +1463,7 @@ const layer = Layer.effect(
           }
           failureReason = undefined
           ctx.needsCompaction = true
+          compactionMode = "provider_overflow"
           yield* events.publish(Session.Event.Error, { sessionID: ctx.sessionID, error })
           return
         }
@@ -1397,12 +1477,17 @@ const layer = Layer.effect(
         yield* status.set(ctx.sessionID, { type: "idle" })
       })
 
-      const process = Effect.fn("SessionProcessor.process")(function* (streamInput: LLM.StreamInput) {
+      const process = Effect.fn("SessionProcessor.process")(function* (
+        streamInput: LLM.InternalStreamInput | LLM.Prepared,
+      ) {
+        const operationInput = "open" in streamInput ? streamInput.plan.input : streamInput
         yield* Effect.logInfo("process", {
           "session.id": input.sessionID,
           messageID: input.assistantMessage.id,
         })
         ctx.needsCompaction = false
+        compactionMode = undefined
+        compactionSelection = undefined
         ctx.shouldBreak = (yield* config.get()).experimental?.continue_loop_on_deny !== true
 
         return yield* Effect.gen(function* () {
@@ -1410,19 +1495,71 @@ const layer = Layer.effect(
             ctx.currentText = undefined
             ctx.reasoningMap = {}
             yield* status.set(ctx.sessionID, { type: "busy" })
-            if (streamInput.composition.type === "interactive" && !input.turnID) {
+            if (operationInput.composition.type === "interactive" && !input.turnID) {
               throw new ProcessorIntegrityFailure(
                 `Interactive Assistant operation has no exact Turn: ${input.assistantMessage.id}`,
               )
             }
-            if (streamInput.composition.type === "interactive" && !retainedSteeringCut) {
+            if (
+              operationInput.composition.type === "interactive" &&
+              (!retainedSteeringCut || !learningContextCut || !learningContextRenderedBlock)
+            ) {
               throw new ProcessorIntegrityFailure(
-                `Interactive Assistant operation has no exact retained steering cut: ${input.assistantMessage.id}`,
+                `Interactive Assistant operation has no exact Gate 15/Gate 18 context cuts: ${input.assistantMessage.id}`,
               )
             }
-            activeTools = streamInput.tools
+            if (
+              "open" in streamInput &&
+              operationInput.composition.type === "interactive" &&
+              (!streamInput.capacity ||
+                !isDeepStrictEqual(streamInput.plan.capabilityBasis, learningContextCut!.capabilityBasis))
+            ) {
+              throw new ProcessorIntegrityFailure(
+                `Prepared provider surface does not match the admitted Gate 18 cut: ${input.assistantMessage.id}`,
+              )
+            }
+            activeTools = "open" in streamInput ? streamInput.request.tools : operationInput.tools
             toolController = new AbortController()
-            yield* llm.stream({ ...streamInput, retainedSteeringCut }).pipe(
+            if ("open" in streamInput && streamInput.capacity) {
+              const evidence = yield* database.db.transaction((tx) =>
+                LearningContext.commitCapacity(tx, streamInput.capacity!),
+              )
+              if (evidence.assessment.decision === "history_overflow") {
+                const selection = operationInput.compactionSelection
+                if (
+                  !selection ||
+                  !evidence.assessment.removableHistory ||
+                  evidence.assessment.removableHistory.tailStartMessageID !== selection.tailStartMessageID ||
+                  evidence.assessment.removableHistory.messageCount !== selection.removableMessageIDs.length ||
+                  evidence.assessment.removableHistory.messageIDsFingerprint !==
+                    selection.removableMessageIDsFingerprint
+                ) {
+                  throw new ProcessorIntegrityFailure(
+                    "History-overflow capacity does not bind one exact compaction selection",
+                  )
+                }
+                yield* observeFailure(sealAndSettleModel("failed", true), "provider_failure")
+                ctx.needsCompaction = true
+                compactionMode = "capacity_history"
+                compactionSelection = selection
+                return
+              }
+              if (
+                evidence.assessment.decision === "fixed_overflow" ||
+                evidence.assessment.decision === "invalid_limits"
+              ) {
+                throw new CapacityFailure(
+                  evidence.assessment.decision,
+                  `Provider request is not transportable: ${evidence.assessment.decision} (${evidence.assessment.reason ?? "capacity_invalid"})`,
+                )
+              }
+              if (!["fit", "uncertain"].includes(evidence.assessment.decision)) {
+                throw new ProcessorIntegrityFailure(
+                  `Unexpected provider-capacity decision: ${evidence.assessment.decision}`,
+                )
+              }
+            }
+            yield* llm.stream(streamInput).pipe(
               Stream.tap((event) =>
                 observeFailure(
                   handleEvent(event),
@@ -1445,14 +1582,14 @@ const layer = Layer.effect(
                 }),
               ),
             )
-            if (streamInput.composition.type === "internal") return
+            if (operationInput.composition.type === "internal") return
             yield* observeFailure(sealAndSettleModel("completed", false), "integrity_failure")
-            yield* drainToolCandidates(streamInput.messages, toolController.signal)
+            yield* drainToolCandidates(operationInput.messages, toolController.signal)
           }).pipe(
             Effect.onInterrupt(() =>
               Effect.gen(function* () {
                 aborted = true
-                if (streamInput.composition.type === "interactive") {
+                if (operationInput.composition.type === "interactive") {
                   yield* sealAndSettleModel("interrupted", true).pipe(Effect.uninterruptible, Effect.ignore)
                 }
                 if (!ctx.assistantMessage.error) {
@@ -1465,7 +1602,7 @@ const layer = Layer.effect(
               (cause) =>
                 Effect.gen(function* () {
                   failureReason ??= classifyFailure(Cause.squash(cause), "provider_failure")
-                  if (streamInput.composition.type === "interactive") {
+                  if (operationInput.composition.type === "interactive") {
                     yield* observeFailure(sealAndSettleModel("failed", true), "integrity_failure").pipe(Effect.ignore)
                   }
                   return yield* Effect.fail(Cause.squash(cause))
@@ -1487,6 +1624,12 @@ const layer = Layer.effect(
         },
         get failureReason() {
           return failureReason
+        },
+        get compactionMode() {
+          return compactionMode
+        },
+        get compactionSelection() {
+          return compactionSelection
         },
         updateToolCall,
         completeToolCall,

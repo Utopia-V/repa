@@ -4,6 +4,7 @@ import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
 import type { EffectDrizzleQueryError } from "drizzle-orm/effect-core/errors"
 import { and, asc, count, eq, gt, inArray, isNull, or, sql, type SQL } from "drizzle-orm"
 import { Cause, Context, Effect, Layer, Scope } from "effect"
+import { isDeepStrictEqual } from "node:util"
 import { Artifact } from "./artifact"
 import { ContentRoot } from "./content-root"
 import { ContentRootNTFS } from "./content-root/ntfs"
@@ -11,6 +12,15 @@ import { Course } from "./course"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
 import { LearningFrontier } from "./learning-frontier"
+import {
+  MAX_LAZY_BYTES,
+  MAX_LAZY_ITEMS,
+  canonicalFingerprint,
+  canonicalJson,
+  sha256,
+  toJsonValue,
+  utf8Bytes,
+} from "./learning-context/schema"
 import { MaterialMapCursor } from "./material-map/cursor"
 import {
   AlignmentDispositionEventID,
@@ -200,6 +210,60 @@ export type SelectorResolution = {
   readonly receipt: CurrentUseReceipt
 }
 
+export type LearningContextMaterial = Readonly<{
+  alignment: AlignmentInfo
+  map: MapInfo
+  selector: SelectorInfo
+  target:
+    | Readonly<{
+        type: "representation"
+        metadata: Effect.Success<ReturnType<typeof Representation.inspectLearningContextMetadata>>
+      }>
+    | Readonly<{
+        type: "artifact"
+        recorded: Extract<TargetReceipt, { readonly type: "artifact" }>
+        current:
+          | Readonly<{ type: "available"; value: Artifact.OrdinaryUseRevisionSnapshot }>
+          | Readonly<{ type: "unavailable" }>
+        currentUse: Artifact.OrdinaryUseByteStatus
+      }>
+}>
+
+export type LearningContextLocator = ReturnType<typeof learningContextLocator>
+
+export type LearningContextMetadataRead =
+  | Readonly<{ type: "available"; relation: "exact"; value: LearningContextMaterial }>
+  | Readonly<{ type: "superseded"; currentLocator: LearningContextLocator }>
+  | Readonly<{ type: "unavailable"; cause: "alignment_not_found" }>
+
+export type TutorSelectorResolution = {
+  readonly map: Readonly<{
+    id: MapID
+    canonicalInput: Readonly<{ canonicalBytes: number; fingerprint: string }>
+    target: TargetReceipt
+    supersedesMapID?: MapID
+    authorship: AuthorshipReceipt
+    timeCreated: number
+    disposition: MapInfo["disposition"]
+    superseded: boolean
+  }>
+  readonly selector: SelectorInfo
+  readonly content: Readonly<{ encoding: "base64"; data: string; byteLength: number }>
+  readonly witness: MaterialSelector.Witness
+  readonly target:
+    | Readonly<{
+        type: "artifact"
+        revision: Artifact.RevisionReferenceReceipt
+        authorization: ContentRoot.LocalReadAuthorizationReceipt
+      }>
+    | Readonly<{
+        type: "representation"
+        receipt: Representation.CurrentUseReferenceReceipt
+        storageSource: "canonical" | "deletion_stage"
+      }>
+  readonly canonicalBytes: number
+}
+
 type CurrentReceiptExpectation = {
   readonly mapID: MapID
   readonly selectorID: SelectorID
@@ -233,6 +297,24 @@ export interface CurrentUseReaderInterface {
     readonly budgets: MaterialTarget.ReadBudgets
     readonly abort?: AbortSignal
   }) => Effect.Effect<SelectorResolution, Error>
+}
+
+export interface TutorCurrentUseReaderInterface {
+  readonly resolveSelector: (input: {
+    readonly mapID: MapID
+    readonly selectorID: SelectorID
+    readonly accessProof: TutorAccessProof
+    readonly access:
+      | Readonly<{
+          type: "artifact"
+          read: ContentRoot.PreparedLocalRead
+          invocation: ContentRoot.CurrentLocalReadInvocation
+        }>
+      | Readonly<{ type: "representation"; effectiveArtifactID?: Artifact.ArtifactID }>
+    readonly budgets: MaterialTarget.ReadBudgets
+    readonly maxOutputBytes?: number
+    readonly abort?: AbortSignal
+  }) => Effect.Effect<TutorSelectorResolution, Error>
 }
 
 export interface Interface {
@@ -316,6 +398,9 @@ export interface Interface {
     readonly abort?: AbortSignal
   }) => Effect.Effect<AlignmentInfo, Error>
   readonly getAlignment: (alignmentID: AlignmentID) => Effect.Effect<AlignmentInfo, Error>
+  readonly readLearningContextMetadata: (
+    locator: LearningContextLocator,
+  ) => Effect.Effect<LearningContextMetadataRead, Error>
   readonly listAlignmentsForMap: (
     mapID: MapID,
     options?: AlignmentListOptions,
@@ -351,6 +436,9 @@ export interface Interface {
 export class Service extends Context.Service<Service, Interface>()("@repa/MaterialMap") {}
 export class CurrentUseReader extends Context.Service<CurrentUseReader, CurrentUseReaderInterface>()(
   "@repa/MaterialMap/CurrentUseReader",
+) {}
+export class TutorCurrentUseReader extends Context.Service<TutorCurrentUseReader, TutorCurrentUseReaderInterface>()(
+  "@repa/MaterialMap/TutorCurrentUseReader",
 ) {}
 
 const currentUseLayer = Layer.effect(
@@ -420,6 +508,196 @@ const currentUseLayer = Layer.effect(
         }
       },
     )
+    return { resolveSelector }
+  }),
+)
+
+const tutorCurrentUseLayer = Layer.effect(
+  TutorCurrentUseReader,
+  Effect.gen(function* () {
+    const database = yield* Database.Service
+    const representations = yield* Representation.TutorCurrentUseReader
+    const resolveSelector: TutorCurrentUseReaderInterface["resolveSelector"] = Effect.fn(
+      "MaterialMap.resolveSelectorForTutor",
+    )(function* (input) {
+      const maxOutputBytes = input.maxOutputBytes ?? MAX_LAZY_BYTES
+      yield* validateTutorReadBudgets(input.budgets, maxOutputBytes)
+      yield* requireTutorReadActive(input.abort)
+      const expectation = input.accessProof.expectation(tutorAccessProofToken)
+      if (!expectation) {
+        return yield* new PreparationError({
+          code: "stale_target",
+          detail: "Tutor material access requires one owner-issued locator proof",
+        })
+      }
+      const admitted = yield* snapshot(database.db, (tx) =>
+        Effect.gen(function* () {
+          const current = yield* requireTutorAccessExpectation(tx, expectation)
+          if (current.map.target.type === "artifact") {
+            if (input.access.type !== "artifact") {
+              return yield* new PreparationError({
+                code: "source_provenance",
+                detail: "Fresh Artifact authority is required",
+              })
+            }
+            const revision = yield* Artifact.prepareRevisionReferenceInTransaction(
+              tx,
+              current.map.target.effectiveArtifactID,
+              current.map.target.revisionID,
+              current.map.target.attribution,
+            )
+            if (!sameTutorArtifactTarget(current.map.target, revision.receipt)) {
+              return yield* new PreparationError({
+                code: "stale_target",
+                detail: "The exact Artifact target is no longer current",
+              })
+            }
+            return {
+              type: "artifact" as const,
+              current,
+              revision,
+              read: input.access.read,
+              invocation: input.access.invocation,
+            }
+          }
+          if (input.access.type !== "representation") {
+            return yield* new PreparationError({ code: "stale_target", detail: "The Map targets a Representation" })
+          }
+          const metadata = yield* Representation.inspectLearningContextMetadata(
+            tx,
+            current.map.target.representationRevisionID,
+          )
+          if (
+            input.access.effectiveArtifactID &&
+            input.access.effectiveArtifactID !== metadata.representation.sourceProof.ordinary.effectiveArtifactID
+          ) {
+            return yield* new PreparationError({
+              code: "stale_target",
+              detail: "The Artifact hint names another source",
+            })
+          }
+          const plan = MaterialSelector.representationReadSelection(
+            [current.selector.coordinate],
+            metadata.representation.profile,
+          )
+          if (!plan.ok) {
+            return yield* new PreparationError({
+              code: "unsupported_selector",
+              detail: `Selector/profile mismatch: ${plan.error}`,
+            })
+          }
+          return {
+            type: "representation" as const,
+            current,
+            metadata,
+            plan: plan.value,
+            representationRevisionID: current.map.target.representationRevisionID,
+            effectiveArtifactID: metadata.representation.sourceProof.ordinary.effectiveArtifactID,
+          }
+        }),
+      )
+      yield* requireTutorReadActive(input.abort)
+      if (admitted.type === "artifact") {
+        const target = admitted.current.map.target
+        if (
+          target.type !== "artifact" ||
+          !sameTutorAuthorization(target.authorization, admitted.read.authorization) ||
+          admitted.read.observation.descriptor.canonicalPath !== target.activeLocation ||
+          !sameWitness(admitted.read.observation.fingerprint, target.fingerprint)
+        ) {
+          return yield* new PreparationError({
+            code: "source_provenance",
+            detail: "The current local-read authority did not resolve the exact active Artifact bytes",
+          })
+        }
+        const selected = yield* selectTutorBytes(
+          {
+            type: "artifact",
+            bytes: admitted.read.observation.bytes,
+            fingerprint: target.fingerprint,
+          },
+          admitted.current.selector,
+          maxOutputBytes,
+        )
+        yield* requireTutorReadActive(input.abort)
+        const finalized = yield* snapshot(database.db, (tx) =>
+          Effect.gen(function* () {
+            const current = yield* requireTutorAccessExpectation(tx, expectation)
+            yield* requireSameTutorMap(admitted.current, current)
+            const authorization = yield* admitted.read.requireForTutor(tx, admitted.invocation)
+            const revision = yield* Artifact.requireRevisionReference(tx, admitted.revision)
+            return { current, authorization, revision }
+          }),
+        )
+        return yield* tutorResolution(
+          {
+            map: finalized.current.map,
+            selector: finalized.current.selector,
+            bytes: selected.bytes,
+            witness: selected.witness,
+            target: { type: "artifact", revision: finalized.revision, authorization: finalized.authorization },
+          },
+          maxOutputBytes,
+        )
+      }
+      if (input.access.type !== "representation") {
+        return yield* new PreparationError({ code: "stale_target", detail: "Representation access changed" })
+      }
+      const selection =
+        admitted.plan.type === "pdf_pages"
+          ? { type: "pdf_pages" as const, startPage: admitted.plan.startPage }
+          : admitted.plan
+      const read = yield* representations.readForTutor({
+        representationRevisionID: admitted.representationRevisionID,
+        effectiveArtifactID: admitted.effectiveArtifactID,
+        selection,
+        budgets: input.budgets.representation,
+      })
+      if (
+        admitted.plan.type === "pdf_pages" &&
+        (read.content.records < admitted.plan.records || read.content.truncated)
+      ) {
+        return yield* new PreparationError({
+          code: "over_budget",
+          detail: "The bounded Representation page read did not reach the selector end",
+        })
+      }
+      const selected = yield* selectTutorBytes(
+        {
+          type: "representation",
+          profile: read.representation.profile,
+          bytes: read.content.bytes,
+          complete: admitted.plan.type !== "pdf_pages",
+          ...(admitted.plan.type === "pdf_pages" ? { startPage: admitted.plan.startPage } : {}),
+          output: {
+            algorithm: "sha256",
+            digest: read.representation.output.digest,
+            byteLength: read.representation.output.byteLength,
+          },
+        },
+        admitted.current.selector,
+        maxOutputBytes,
+      )
+      yield* requireTutorReadActive(input.abort)
+      const finalized = yield* snapshot(database.db, (tx) =>
+        Effect.gen(function* () {
+          const current = yield* requireTutorAccessExpectation(tx, expectation)
+          yield* requireSameTutorMap(admitted.current, current)
+          yield* Representation.requireTutorCurrentUseProof(tx, read.proof)
+          return current
+        }),
+      )
+      return yield* tutorResolution(
+        {
+          map: finalized.map,
+          selector: finalized.selector,
+          bytes: selected.bytes,
+          witness: selected.witness,
+          target: { type: "representation", receipt: read.receipt, storageSource: read.storageSource },
+        },
+        maxOutputBytes,
+      )
+    })
     return { resolveSelector }
   }),
 )
@@ -919,6 +1197,12 @@ const layer = Layer.effect(
       return yield* snapshot(db, (tx) => requireAlignmentInfo(tx, alignmentID))
     })
 
+    const readLearningContextMetadata: Interface["readLearningContextMetadata"] = Effect.fn(
+      "MaterialMap.readLearningContextMetadata",
+    )(function* (locator) {
+      return yield* snapshot(db, (tx) => inspectLearningContextMetadata(tx, locator))
+    })
+
     const listAlignmentsForMap: Interface["listAlignmentsForMap"] = Effect.fn("MaterialMap.listAlignmentsForMap")(
       function* (mapID, options) {
         return yield* listAlignments(db, {
@@ -1014,6 +1298,7 @@ const layer = Layer.effect(
       restoreMap,
       createAlignment,
       getAlignment,
+      readLearningContextMetadata,
       listAlignmentsForMap,
       listAlignmentsForSelector,
       listAlignmentsForMembership,
@@ -1039,6 +1324,12 @@ export const currentUseReaderNode = makeGlobalNode({
   deps: [Database.node, Artifact.node, ContentRoot.node, Representation.currentUseReaderNode],
 })
 
+export const tutorCurrentUseReaderNode = makeGlobalNode({
+  service: TutorCurrentUseReader,
+  layer: tutorCurrentUseLayer,
+  deps: [Database.node, Representation.tutorCurrentUseReaderNode],
+})
+
 export const node = makeGlobalNode({
   service: Service,
   layer,
@@ -1059,6 +1350,183 @@ function snapshot<A, E, R>(
   return database
     .transaction(read)
     .pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die), Effect.catchTag("SqlError", Effect.die))
+}
+
+function validateTutorReadBudgets(budgets: MaterialTarget.ReadBudgets, maxOutputBytes: number) {
+  const valid =
+    Number.isSafeInteger(budgets.artifactBytes) &&
+    budgets.artifactBytes > 0 &&
+    budgets.artifactBytes <= MaterialTarget.limits.artifactBytes &&
+    Number.isSafeInteger(budgets.representation.integrityScanBytes) &&
+    budgets.representation.integrityScanBytes > 0 &&
+    budgets.representation.integrityScanBytes <= MaterialTarget.limits.representationIntegrityBytes &&
+    Number.isSafeInteger(budgets.representation.returnBytes) &&
+    budgets.representation.returnBytes > 0 &&
+    budgets.representation.returnBytes <= MAX_LAZY_BYTES &&
+    Number.isSafeInteger(budgets.representation.records) &&
+    budgets.representation.records > 0 &&
+    budgets.representation.records <= MAX_LAZY_ITEMS &&
+    Number.isSafeInteger(maxOutputBytes) &&
+    maxOutputBytes > 0 &&
+    maxOutputBytes <= MAX_LAZY_BYTES
+  return valid
+    ? Effect.void
+    : Effect.fail(
+        new PreparationError({
+          code: "over_budget",
+          detail: "Tutor material reads exceed the Gate 18 byte or item allowance",
+        }),
+      )
+}
+
+function requireTutorReadActive(abort?: AbortSignal) {
+  return abort?.aborted
+    ? Effect.fail(new PreparationError({ code: "cancelled", detail: "Tutor material read was cancelled" }))
+    : Effect.void
+}
+
+function selectTutorBytes(target: MaterialSelector.TargetContent, selector: SelectorInfo, maxOutputBytes: number) {
+  return Effect.gen(function* () {
+    const result = MaterialSelector.select(target, selector.coordinate)
+    if (!result.ok) {
+      return yield* new PreparationError({
+        code: result.error === "profile_mismatch" ? "unsupported_selector" : "invalid_selector",
+        detail: `Selector validation failed: ${result.error}`,
+      })
+    }
+    if (!sameWitness(result.value.witness, selector.witness)) {
+      return yield* new PreparationError({
+        code: "witness_mismatch",
+        detail: "The selected current content does not match the exact stored selector witness",
+      })
+    }
+    if (result.value.bytes.byteLength > maxOutputBytes) {
+      return yield* new PreparationError({
+        code: "over_budget",
+        detail: "The selected material bytes exceed the Gate 18 lazy-read allowance",
+      })
+    }
+    return result.value
+  })
+}
+
+function tutorResolution(
+  input: Readonly<{
+    map: MapInfo
+    selector: SelectorInfo
+    bytes: Uint8Array
+    witness: MaterialSelector.Witness
+    target: TutorSelectorResolution["target"]
+  }>,
+  maxOutputBytes: number,
+) {
+  return Effect.gen(function* () {
+    const canonicalInput = canonicalJson(toJsonValue(input.map.canonicalInput))
+    const base = {
+      map: {
+        id: input.map.id,
+        canonicalInput: {
+          canonicalBytes: utf8Bytes(canonicalInput),
+          fingerprint: canonicalFingerprint(toJsonValue(input.map.canonicalInput)),
+        },
+        target: input.map.target,
+        ...(input.map.supersedesMapID ? { supersedesMapID: input.map.supersedesMapID } : {}),
+        authorship: input.map.authorship,
+        timeCreated: input.map.timeCreated,
+        disposition: input.map.disposition,
+        superseded: input.map.superseded,
+      },
+      selector: input.selector,
+      content: {
+        encoding: "base64" as const,
+        data: Buffer.from(input.bytes).toString("base64"),
+        byteLength: input.bytes.byteLength,
+      },
+      witness: input.witness,
+      target: input.target,
+    }
+    let canonicalBytes = 0
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const result = { ...base, canonicalBytes }
+      const next = utf8Bytes(canonicalJson(toJsonValue(result)))
+      if (next === canonicalBytes) {
+        if (next > maxOutputBytes) {
+          return yield* new PreparationError({
+            code: "over_budget",
+            detail: `The complete Tutor material result exceeds the Gate 18 output allowance (${next}/${maxOutputBytes})`,
+          })
+        }
+        return result satisfies TutorSelectorResolution
+      }
+      canonicalBytes = next
+    }
+    return yield* new PreparationError({
+      code: "over_budget",
+      detail: "The Tutor material output byte count did not converge",
+    })
+  })
+}
+
+function requireSameTutorMap(
+  expected: Readonly<{ map: MapInfo; selector: SelectorInfo }>,
+  current: Readonly<{ map: MapInfo; selector: SelectorInfo }>,
+) {
+  if (
+    expected.map.id !== current.map.id ||
+    expected.map.disposition.version !== current.map.disposition.version ||
+    !isDeepStrictEqual(expected.map.target, current.map.target)
+  ) {
+    return Effect.fail(
+      new ConflictError({
+        entity: "map_state",
+        id: expected.map.id,
+        detail: "The exact Map target or disposition changed during Tutor current-use resolution",
+      }),
+    )
+  }
+  if (!isDeepStrictEqual(expected.selector, current.selector)) {
+    return Effect.fail(
+      new PreparationError({
+        code: "witness_mismatch",
+        detail: "The exact selector identity, coordinate, or witness changed during Tutor current-use resolution",
+      }),
+    )
+  }
+  return Effect.void
+}
+
+function sameTutorArtifactTarget(target: ArtifactTargetReceipt, revision: Artifact.RevisionReferenceReceipt) {
+  return (
+    revision.revision.effectiveArtifactID === target.effectiveArtifactID &&
+    revision.revision.id === target.revisionID &&
+    sameAttribution(revision.revision.attribution, target.attribution) &&
+    revision.dispositionVersion === target.dispositionVersion &&
+    revision.lineageVersion === target.lineageVersion &&
+    revision.sourceVersion === target.sourceVersion &&
+    revision.availability === "available" &&
+    revision.activeBindingID === target.artifactBindingID &&
+    revision.activeLocation === target.activeLocation &&
+    revision.currentRevisionID === target.revisionID &&
+    revision.currentAttribution !== undefined &&
+    sameAttribution(revision.currentAttribution, target.attribution) &&
+    revision.descriptorObservationID === target.descriptorObservationID &&
+    revision.descriptorCorrectionID === target.descriptorCorrectionID &&
+    revision.mediaType === target.mediaType &&
+    sameWitness(revision.revision.fingerprint, target.fingerprint)
+  )
+}
+
+function sameTutorAuthorization(
+  expected: ArtifactTargetReceipt["authorization"],
+  current: ContentRoot.LocalReadAuthorizationReceipt,
+) {
+  if (expected.kind === "content_root" || expected.kind === "content_root_historical_v16") {
+    return current.kind === "content_root" && current.contentRoot.contentRootID === expected.contentRoot.contentRootID
+  }
+  if (expected.kind === "active_workspace") {
+    return current.kind === "active_workspace" && current.workspaceIdentity === expected.workspaceIdentity
+  }
+  return current.kind === "one_operation" && current.operationIdentity !== expected.operationIdentity
 }
 
 function normalizeMap(mapID: MapID, proposal: MapProposal, authorship: Authorship) {
@@ -2106,6 +2574,7 @@ function findAlignmentInfo(source: Transaction, alignmentID: AlignmentID) {
             attribution: map.target.attribution,
             lineageVersion: map.target.lineageVersion,
             fingerprint: map.target.fingerprint,
+            mediaType: map.target.mediaType,
           })
         : yield* Representation.inspectCurrentUseStatus(source, map.target.representationRevisionID)
     const course = yield* Course.inspectMembershipStatus(source, endpoint, selection)
@@ -2160,6 +2629,292 @@ function requireAlignmentInfo(source: Transaction, alignmentID: AlignmentID) {
     const info = yield* findAlignmentInfo(source, alignmentID)
     if (!info) return yield* new NotFoundError({ entity: "alignment", id: alignmentID })
     return info
+  })
+}
+
+/**
+ * Gate 18 transaction-scoped material locator projection. Only alignments
+ * structurally attached to the supplied Course membership endpoints are
+ * considered; no global winner is invented.
+ */
+export function projectLearningContext(
+  tx: Transaction,
+  input: { readonly endpoints: readonly Course.MembershipEndpoint[]; readonly limit: number },
+) {
+  return Effect.gen(function* () {
+    if (input.endpoints.length === 0) return { countAtCut: 0, entries: [] as const }
+    const membership = or(
+      ...input.endpoints.map((endpoint) =>
+        and(
+          eq(MaterialCourseAlignmentTable.course_id, endpoint.courseID),
+          eq(MaterialCourseAlignmentTable.view_id, endpoint.viewID),
+          eq(MaterialCourseAlignmentTable.revision_id, endpoint.revisionID),
+          eq(MaterialCourseAlignmentTable.item_id, endpoint.itemID),
+        ),
+      ),
+    )
+    if (!membership) return { countAtCut: 0, entries: [] as const }
+    const countAtCut =
+      (yield* tx
+        .select({ value: count() })
+        .from(MaterialCourseAlignmentTable)
+        .where(membership)
+        .get()
+        .pipe(Effect.orDie))?.value ?? 0
+    const rows = yield* tx
+      .select({ id: MaterialCourseAlignmentTable.id })
+      .from(MaterialCourseAlignmentTable)
+      .where(membership)
+      .orderBy(asc(MaterialCourseAlignmentTable.time_created), asc(MaterialCourseAlignmentTable.id))
+      .limit(input.limit)
+      .all()
+      .pipe(Effect.orDie)
+    const entries = yield* Effect.forEach(rows, (row) => learningContextMaterial(tx, row.id))
+    return { countAtCut, entries }
+  })
+}
+
+function learningContextMaterial(tx: Transaction, alignmentID: AlignmentID) {
+  return Effect.gen(function* () {
+    const alignment = yield* requireAlignmentInfo(tx, alignmentID)
+    const map = yield* requireMapInfo(tx, alignment.mapID)
+    const selector = yield* requireSelectorInfo(tx, alignment.mapID, alignment.selectorID)
+    const target =
+      map.target.type === "representation"
+        ? {
+            type: "representation" as const,
+            metadata: yield* Representation.inspectLearningContextMetadata(tx, map.target.representationRevisionID),
+          }
+        : {
+            type: "artifact" as const,
+            recorded: map.target,
+            current: yield* Artifact.readOrdinaryUseRevisionSnapshot(tx, map.target.effectiveArtifactID).pipe(
+              Effect.map((value) => ({ type: "available" as const, value })),
+              Effect.catch((error) => {
+                if (error instanceof Artifact.NotFoundError || error instanceof Artifact.InactiveError) {
+                  return Effect.succeed({ type: "unavailable" as const })
+                }
+                throw error
+              }),
+            ),
+            currentUse: yield* Artifact.inspectOrdinaryUseByteStatus(tx, {
+              effectiveArtifactID: map.target.effectiveArtifactID,
+              dispositionVersion: map.target.dispositionVersion,
+              currentRevisionID: map.target.revisionID,
+              attribution: map.target.attribution,
+              lineageVersion: map.target.lineageVersion,
+              fingerprint: map.target.fingerprint,
+              mediaType: map.target.mediaType,
+            }),
+          }
+    return { alignment, map, selector, target }
+  })
+}
+
+function inspectLearningContextMetadata(tx: Transaction, expected: LearningContextLocator) {
+  return Effect.gen(function* () {
+    const existing = yield* findAlignmentInfo(tx, expected.alignment.id)
+    if (!existing) return { type: "unavailable", cause: "alignment_not_found" } as const
+    const value = yield* learningContextMaterial(tx, expected.alignment.id)
+    const currentLocator = learningContextLocator(value, {
+      metadata: expected.metadataReadAvailable,
+      tutor: expected.tutorReadAvailable,
+    })
+    if (!isDeepStrictEqual(currentLocator, expected)) return { type: "superseded", currentLocator } as const
+    return { type: "available", relation: "exact", value } as const
+  })
+}
+
+export function learningContextLocator(
+  value: LearningContextMaterial,
+  lazy: Readonly<{ metadata: boolean; tutor: boolean }>,
+) {
+  return {
+    alignment: {
+      id: value.alignment.id,
+      disposition: {
+        version: value.alignment.disposition.version,
+        value: value.alignment.disposition.disposition,
+      },
+      superseded: value.alignment.superseded,
+      membership: {
+        course: value.alignment.course,
+        acceptedCourseVersion: value.alignment.membershipReceipt.courseVersion,
+        acceptedViewVersion: value.alignment.membershipReceipt.viewVersion,
+        acceptedRevisionVersion: value.alignment.membershipReceipt.revisionVersion,
+        selection: value.alignment.selection,
+      },
+    },
+    map: {
+      id: value.map.id,
+      disposition: {
+        version: value.map.disposition.version,
+        value: value.map.disposition.disposition,
+      },
+      superseded: value.map.superseded,
+    },
+    selector: {
+      id: value.selector.id,
+      coordinate: value.selector.coordinate,
+      witness: value.selector.witness,
+    },
+    target:
+      value.target.type === "representation"
+        ? compactLearningContextRepresentation(value.target.metadata)
+        : {
+            type: "artifact" as const,
+            effectiveArtifactID: value.target.recorded.effectiveArtifactID,
+            recorded: compactLearningContextArtifact(value.target.recorded),
+            current: value.target.current,
+            targetAdmission: value.target.currentUse,
+          },
+    metadataReadAvailable: lazy.metadata,
+    tutorReadAvailable: lazy.tutor,
+  }
+}
+
+function compactLearningContextRepresentation(
+  value: Effect.Success<ReturnType<typeof Representation.inspectLearningContextMetadata>>,
+) {
+  const representation = value.representation
+  return {
+    type: "representation" as const,
+    representationRevisionID: representation.id,
+    effectiveArtifactID: representation.sourceProof.ordinary.effectiveArtifactID,
+    acceptance: {
+      sourceRevisionID: representation.sourceProof.ordinary.currentRevisionID,
+      acceptedLineageVersion: representation.sourceProof.ordinary.lineageVersion,
+      acceptedAttribution: representation.sourceProof.ordinary.attribution,
+      output: {
+        digest: representation.output.digest,
+        byteLength: representation.output.byteLength,
+        mediaType: representation.output.mediaType,
+      },
+    },
+    availability: {
+      version: representation.availability.version,
+      disposition: representation.availability.disposition,
+    },
+    currentArtifact: value.currentArtifact
+      ? { type: "available" as const, value: value.currentArtifact }
+      : { type: "unavailable" as const },
+    targetAdmission: {
+      status: value.currentUse,
+      activeGrant: value.activeContinuedUseGrant ?? null,
+    },
+    metadata: learningContextReference(representation),
+  }
+}
+
+function compactLearningContextArtifact(value: Extract<TargetReceipt, { readonly type: "artifact" }>) {
+  return {
+    revisionID: value.revisionID,
+    attribution: value.attribution,
+    dispositionVersion: value.dispositionVersion,
+    lineageVersion: value.lineageVersion,
+    sourceVersion: value.sourceVersion,
+    artifactBindingID: value.artifactBindingID,
+    fingerprint: value.fingerprint,
+    mediaType: value.mediaType,
+    authorizationProvenance: compactLearningContextAuthorization(value.authorization),
+  }
+}
+
+function compactLearningContextAuthorization(
+  value:
+    | Extract<TargetReceipt, { readonly type: "artifact" }>["authorization"]
+    | Representation.SourceProof["authorization"],
+) {
+  if (!("kind" in value)) {
+    return {
+      kind: "content_root" as const,
+      contentRootID: value.contentRootID,
+      bindingID: value.bindingID,
+      bindingEpisodeID: value.bindingEpisodeID,
+      bindingEpisodeOrdinal: value.bindingEpisodeOrdinal,
+      grantEpisodeID: value.grantEpisodeID,
+      grantVersion: value.grantVersion,
+    }
+  }
+  if (value.kind === "content_root" || value.kind === "content_root_historical_v16") {
+    return {
+      kind: value.kind,
+      contentRoot: value.contentRoot,
+      grantEpisodeOrdinal: value.grantEpisodeOrdinal,
+      ...(value.kind === "content_root_historical_v16" ? { receipt: learningContextReference(value) } : {}),
+    }
+  }
+  if (value.kind === "active_workspace") {
+    return {
+      kind: value.kind,
+      workspaceIdentity: value.workspaceIdentity,
+      receipt: learningContextReference(value),
+    }
+  }
+  return {
+    kind: value.kind,
+    priorOperationIdentity: value.operationIdentity,
+    receipt: learningContextReference(value),
+  }
+}
+
+function learningContextReference(value: unknown) {
+  const canonical = canonicalJson(toJsonValue(value))
+  return { canonicalBytes: utf8Bytes(canonical), fingerprint: sha256(canonical) }
+}
+
+export type TutorAccessExpectation = Readonly<{
+  mapID: MapID
+  mapDispositionVersion: number
+  selectorID: SelectorID
+  selectorCoordinate: SelectorInfo["coordinate"]
+  selectorWitness: SelectorInfo["witness"]
+  target: MapTarget
+}>
+
+const tutorAccessProofToken = Symbol("MaterialMap.TutorAccessProof")
+
+export class TutorAccessProof {
+  #expectation: TutorAccessExpectation
+
+  constructor(token: symbol, expectation: TutorAccessExpectation) {
+    if (token !== tutorAccessProofToken) throw new Error("Tutor access proofs are owner-issued")
+    this.#expectation = structuredClone(expectation)
+  }
+
+  expectation(token: symbol) {
+    if (token !== tutorAccessProofToken) return
+    return this.#expectation
+  }
+}
+
+/**
+ * Resolve one Gate 18 Tutor locator inside a database snapshot. This returns
+ * stored provenance for current-operation authorization but performs no I/O,
+ * observation, availability reconciliation, or historical read.
+ */
+export function inspectTutorAccess(tx: Transaction, expected: TutorAccessExpectation) {
+  return Effect.gen(function* () {
+    const current = yield* requireTutorAccessExpectation(tx, expected)
+    return { current, proof: new TutorAccessProof(tutorAccessProofToken, expected) }
+  })
+}
+
+function requireTutorAccessExpectation(tx: Transaction, expected: TutorAccessExpectation) {
+  return Effect.gen(function* () {
+    const current = yield* requireCurrentMapSelector(tx, expected.mapID, expected.selectorID)
+    if (
+      current.map.disposition.version !== expected.mapDispositionVersion ||
+      !isDeepStrictEqual(current.selector.coordinate, expected.selectorCoordinate) ||
+      !sameWitness(current.selector.witness, expected.selectorWitness) ||
+      !receiptMatchesTarget(current.map.target, expected.target)
+    ) {
+      return yield* new PreparationError({
+        code: "stale_target",
+        detail: "The pinned Map disposition, selector, witness, or target no longer matches",
+      })
+    }
+    return current
   })
 }
 

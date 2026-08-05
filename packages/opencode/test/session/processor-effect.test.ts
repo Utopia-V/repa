@@ -1,4 +1,5 @@
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -13,10 +14,12 @@ import { Provider } from "@/provider/provider"
 import { Session } from "@/session/session"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
+import { SessionCompaction } from "../../src/session/compaction"
 import { SessionProcessor } from "../../src/session/processor"
 import { MessageID, PartID, SessionID } from "../../src/session/schema"
 import { SessionStatus } from "../../src/session/status"
 import { SessionSummary } from "../../src/session/summary"
+import { recover as recoverTurns } from "../../src/session/turn-recovery"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { provideTmpdirInstance, provideTmpdirServer } from "../fixture/fixture"
 import { materializeTestSession } from "../fixture/session"
@@ -39,6 +42,8 @@ import { eq, sql } from "drizzle-orm"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LearningContext } from "@opencode-ai/core/learning-context"
+import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnModelOperationTable, TurnToolCandidateTable } from "@opencode-ai/core/turn/sql"
 import { PROPOSE_DEFAULT_COURSE_PREFERENCE_TOOL_ID } from "@/tool/learning-command"
 
@@ -263,6 +268,7 @@ const prepareLearningInvocation = Effect.fn("TestSession.prepareLearningInvocati
 
 const root = LayerNode.group([
   SessionProcessor.node,
+  LLM.node,
   Session.node,
   SessionProjector.node,
   Provider.node,
@@ -277,12 +283,15 @@ const replacements = [
   [SessionSummary.node, summary],
   [RuntimeFlags.node, RuntimeFlags.layer({ experimentalEventSystem: true })],
 ] as const
-const env = LayerNode.compile(
-  LayerNode.group([root, LayerNode.make({ service: TestLLMServer, layer: TestLLMServer.layer, deps: [] })]),
+const testLLMServerNode = LayerNode.make({ service: TestLLMServer, layer: TestLLMServer.layer, deps: [] })
+const env = LayerNode.compile(LayerNode.group([root, testLLMServerNode]), replacements)
+const capacityCompactionEnv = LayerNode.compile(
+  LayerNode.group([root, testLLMServerNode, SessionCompaction.node]),
   replacements,
 )
 
 const it = testEffect(env)
+const itCapacityCompaction = testEffect(capacityCompactionEnv)
 
 const providerErrorLLM = Layer.succeed(
   LLM.Service,
@@ -454,6 +463,7 @@ const admitTurnModel = Effect.fn("TestSession.admitTurnModel")(function* (
   parent: SessionV1.User,
   assistantMessageID: MessageID,
   limits: Turn.Limits = { model: 4, tool: 8 },
+  learningContextBasis?: LearningContext.CapabilityBasis,
 ) {
   const database = yield* Database.Service
   const time = Date.now()
@@ -464,7 +474,7 @@ const admitTurnModel = Effect.fn("TestSession.admitTurnModel")(function* (
         if (!active) return yield* Effect.die(`Processor test Session ${sessionID} has no active Turn`)
         const turnID = active.id
         const snapshotFrontier = yield* LearningFrontier.read(tx)
-        yield* TurnLifecycle.admitModel(tx, {
+        yield* admitModelWithLearningContext(tx, {
           turnID,
           sessionID,
           assistantMessageID,
@@ -472,6 +482,7 @@ const admitTurnModel = Effect.fn("TestSession.admitTurnModel")(function* (
           contextFingerprint: TurnLifecycle.envelopeFingerprint({ context: "processor-test" }),
           snapshotFrontier,
           timeAdmitted: time,
+          learningContextBasis,
         })
         return turnID
       }),
@@ -484,8 +495,14 @@ const boot = Effect.fn("test.boot")(function* () {
   const processor = yield* SessionProcessor.Service
   const session = yield* Session.Service
   const provider = yield* Provider.Service
+  const llm = yield* LLM.Service
   const database = yield* Database.Service
   const eventBridge = yield* EventV2Bridge.Service
+  // These processor event oracles deliberately bypass released interactive request planning.
+  // Keep the broader raw input confined to this test adapter; production callers require Prepared.
+  type TestHandle = Omit<SessionProcessor.Handle, "process"> & {
+    process: (input: LLM.StreamInput | LLM.Prepared) => Effect.Effect<SessionProcessor.Result>
+  }
   const processors = {
     create: (input: Parameters<SessionProcessor.Interface["create"]>[0]) => {
       return Effect.gen(function* () {
@@ -499,24 +516,77 @@ const boot = Effect.fn("test.boot")(function* () {
             }),
           )
           yield* handle.bindModelOperation(operation)
-          return handle
+          return handle as TestHandle
         }
         const parent = (yield* MessageV2.get({
           sessionID: input.sessionID,
           messageID: input.assistantMessage.parentID,
         })).info
         if (parent.role !== "user") return yield* Effect.die("Interactive processor test requires a parent User")
-        const turnID = yield* admitTurnModel(input.sessionID, parent, input.assistantMessage.id)
-        const handle = yield* processor.create({ ...input, turnID })
-        const operation = yield* database.db.transaction((tx) =>
-          TurnLifecycle.modelOperation(tx, {
-            turnID,
-            sessionID: input.sessionID,
-            assistantMessageID: input.assistantMessage.id,
-          }),
-        )
-        yield* handle.bindModelOperation(operation)
-        return handle
+        let handle: SessionProcessor.Handle | undefined
+        const bind = (learningContextBasis?: LearningContext.CapabilityBasis) =>
+          Effect.gen(function* () {
+            if (handle) return handle
+            const turnID = yield* admitTurnModel(
+              input.sessionID,
+              parent,
+              input.assistantMessage.id,
+              undefined,
+              learningContextBasis,
+            )
+            handle = yield* processor.create({ ...input, turnID })
+            const operation = yield* database.db.transaction((tx) =>
+              TurnLifecycle.modelOperation(tx, {
+                turnID,
+                sessionID: input.sessionID,
+                assistantMessageID: input.assistantMessage.id,
+              }),
+            )
+            yield* handle.bindModelOperation(operation)
+            return handle
+          })
+        const process: TestHandle["process"] = (streamInput) =>
+          Effect.gen(function* () {
+            if ("open" in streamInput) {
+              return yield* (yield* bind(streamInput.plan.capabilityBasis)).process(streamInput)
+            }
+            if (streamInput.composition.type !== "interactive" || !llm.plan || !llm.finalize) {
+              return yield* (yield* bind()).process(streamInput as LLM.InternalStreamInput)
+            }
+            const plan = yield* llm.plan(streamInput)
+            const active = yield* bind(plan.capabilityBasis)
+            const [retained, learning] = yield* database.db.transaction((tx) =>
+              Effect.all([
+                RetainedSteering.readCut(tx, input.assistantMessage.id),
+                LearningContext.readCut(tx, input.assistantMessage.id),
+              ]),
+            )
+            if (retained.type !== "available" || learning.type !== "available") {
+              return yield* Effect.die(`Model operation ${input.assistantMessage.id} has no complete context cuts`)
+            }
+            return yield* active.process(
+              yield* llm.finalize({
+                plan,
+                retainedSteeringCut: retained.cut,
+                learningContextCut: learning.cut,
+                learningContextRenderedBlock: learning.renderedBlock,
+              }),
+            )
+          }).pipe(
+            Effect.provideService(Database.Service, database),
+            Effect.provideService(EventV2Bridge.Service, eventBridge),
+            Effect.orDie,
+          )
+        return new Proxy({ process } as TestHandle, {
+          get(target, property) {
+            if (property === "process") return process
+            if (property === "message") return handle?.message ?? input.assistantMessage
+            if (property === "failureReason") return handle?.failureReason
+            if (!handle) return Reflect.get(target, property)
+            const value = Reflect.get(handle, property, handle)
+            return typeof value === "function" ? value.bind(handle) : value
+          },
+        })
       }).pipe(
         Effect.provideService(Database.Service, database),
         Effect.provideService(EventV2Bridge.Service, eventBridge),
@@ -576,6 +646,657 @@ it.live("session.processor effect tests capture llm input cleanly", () =>
       }),
     { config: (url) => providerCfg(url) },
   ),
+)
+
+it.live("session.processor commits exact capacity decisions before opening the provider stream", () =>
+  provideTmpdirServer(
+    ({ dir, llm: server }) =>
+      Effect.gen(function* () {
+        const { processors, provider, database } = yield* boot()
+        const llm = yield* LLM.Service
+        if (!llm.plan || !llm.finalize) return yield* Effect.die("Gate 18 LLM planning seam is unavailable")
+
+        const readCuts = (assistantMessageID: MessageID) =>
+          database.db
+            .transaction((tx) =>
+              Effect.all([
+                RetainedSteering.readCut(tx, assistantMessageID),
+                LearningContext.readCut(tx, assistantMessageID),
+              ]),
+            )
+            .pipe(
+              Effect.flatMap(([retained, learning]) => {
+                if (retained.type !== "available" || learning.type !== "available") {
+                  return Effect.die(`Model operation ${assistantMessageID} has no complete context cuts`)
+                }
+                return Effect.succeed({ retained: retained.cut, learning })
+              }),
+            )
+
+        const fixedSession = yield* runningSession("fixed envelope", { model: 4, tool: 0 })
+        const fixedMessage = yield* assistant(fixedSession.chat.id, fixedSession.parent.id, path.resolve(dir))
+        const baseModel = yield* provider.getModel(ref.providerID, ref.modelID)
+        const fixedModel = {
+          ...baseModel,
+          limit: { ...baseModel.limit, context: 2, input: 1, output: 1 },
+        }
+        const fixedInput = {
+          user: {
+            id: fixedSession.parent.id,
+            sessionID: fixedSession.chat.id,
+            role: "user",
+            time: fixedSession.parent.time,
+            agent: fixedSession.parent.agent,
+            model: { providerID: ref.providerID, modelID: ref.modelID },
+          } satisfies SessionV1.User,
+          sessionID: fixedSession.chat.id,
+          composition: { type: "interactive" as const },
+          model: fixedModel,
+          agent: agent(),
+          system: ["Keep this mandatory instruction."],
+          messages: [{ role: "user" as const, content: "fixed current learner input" }],
+          compactableMessages: [],
+          tools: {},
+        } satisfies LLM.StreamInput
+        const fixedPlan = yield* llm.plan(fixedInput)
+        const fixedTurnID = yield* admitTurnModel(
+          fixedSession.chat.id,
+          fixedSession.parent,
+          fixedMessage.id,
+          { model: 4, tool: 0 },
+          fixedPlan.capabilityBasis,
+        )
+        const fixedHandle = yield* processors.create({
+          assistantMessage: fixedMessage,
+          sessionID: fixedSession.chat.id,
+          model: fixedModel,
+          turnID: fixedTurnID,
+        })
+        const fixedCuts = yield* readCuts(fixedMessage.id)
+        const fixedPrepared = yield* llm.finalize({
+          plan: fixedPlan,
+          retainedSteeringCut: fixedCuts.retained,
+          learningContextCut: fixedCuts.learning.cut,
+          learningContextRenderedBlock: fixedCuts.learning.renderedBlock,
+        })
+        expect(fixedPrepared.capacity?.assessment).toMatchObject({
+          classification: "capacity_invalid",
+          decision: "fixed_overflow",
+          removableEstimatedTokens: 0,
+        })
+        let fixedOpened = false
+        const fixedOutcome = yield* fixedHandle.process({
+          ...fixedPrepared,
+          open: () => {
+            fixedOpened = true
+            return Stream.empty
+          },
+        })
+        expect(fixedOutcome).toBe("stop")
+        expect(fixedOpened).toBe(false)
+        expect(SessionV1.ContextOverflowError.isInstance(fixedHandle.message.error)).toBe(true)
+        const fixedCapacity = yield* database.db.transaction((tx) => LearningContext.readCapacity(tx, fixedMessage.id))
+        expect(fixedCapacity).toMatchObject({
+          type: "available",
+          assessment: { classification: "capacity_invalid", decision: "fixed_overflow" },
+        })
+
+        const historySession = yield* runningSession("history envelope", { model: 4, tool: 0 })
+        const historyMessage = yield* assistant(historySession.chat.id, historySession.parent.id, path.resolve(dir))
+        const old = { role: "user" as const, content: `old:${"h".repeat(30_000)}` }
+        const current = { role: "user" as const, content: "current learner input" }
+        const removableMessageIDs = [MessageID.make("msg_capacity-history-old")]
+        const historyInput = {
+          user: {
+            id: historySession.parent.id,
+            sessionID: historySession.chat.id,
+            role: "user",
+            time: historySession.parent.time,
+            agent: historySession.parent.agent,
+            model: { providerID: ref.providerID, modelID: ref.modelID },
+          } satisfies SessionV1.User,
+          sessionID: historySession.chat.id,
+          composition: { type: "interactive" as const },
+          model: baseModel,
+          agent: agent(),
+          system: ["Keep the current learner input."],
+          messages: [old, current],
+          compactableMessages: [old],
+          compactionSelection: {
+            tailStartMessageID: MessageID.make("msg_capacity-history-current"),
+            removableMessageIDs,
+            removableMessageIDsFingerprint: LearningContext.canonicalFingerprint(
+              LearningContext.toJsonValue(removableMessageIDs),
+            ),
+          },
+          tools: {},
+        } satisfies LLM.StreamInput
+        const measuredPlan = yield* llm.plan(historyInput)
+        const historyTurnID = yield* admitTurnModel(
+          historySession.chat.id,
+          historySession.parent,
+          historyMessage.id,
+          { model: 4, tool: 0 },
+          measuredPlan.capabilityBasis,
+        )
+        const historyHandle = yield* processors.create({
+          assistantMessage: historyMessage,
+          sessionID: historySession.chat.id,
+          model: baseModel,
+          turnID: historyTurnID,
+        })
+        const historyCuts = yield* readCuts(historyMessage.id)
+        const measured = yield* llm.finalize({
+          plan: measuredPlan,
+          retainedSteeringCut: historyCuts.retained,
+          learningContextCut: historyCuts.learning.cut,
+          learningContextRenderedBlock: historyCuts.learning.renderedBlock,
+        })
+        const measuredCapacity = measured.capacity?.assessment
+        if (!measuredCapacity || measuredCapacity.removableEstimatedTokens === 0) {
+          return yield* Effect.die("Expected a measurable compactable history prefix")
+        }
+        const usableInputLimit =
+          measuredCapacity.fixedEstimatedTokens + Math.floor(measuredCapacity.removableEstimatedTokens / 2)
+        const constrainedModel = {
+          ...baseModel,
+          limit: {
+            ...baseModel.limit,
+            context: usableInputLimit + (measuredCapacity.outputReserveTokens ?? baseModel.limit.output),
+          },
+        }
+        const constrainedPlan = yield* llm.plan({ ...historyInput, model: constrainedModel })
+        expect(constrainedPlan.capabilityBasis).toEqual(measuredPlan.capabilityBasis)
+        const historyPrepared = yield* llm.finalize({
+          plan: constrainedPlan,
+          retainedSteeringCut: historyCuts.retained,
+          learningContextCut: historyCuts.learning.cut,
+          learningContextRenderedBlock: historyCuts.learning.renderedBlock,
+        })
+        expect(historyPrepared.capacity?.assessment).toMatchObject({
+          classification: "capacity_known",
+          decision: "history_overflow",
+          usableInputLimitTokens: usableInputLimit,
+        })
+        let historyOpened = false
+        const historyOutcome = yield* historyHandle.process({
+          ...historyPrepared,
+          open: () => {
+            historyOpened = true
+            return Stream.empty
+          },
+        })
+        expect(historyOutcome).toBe("compact")
+        expect(historyOpened).toBe(false)
+        expect(historyHandle.message.error).toBeUndefined()
+        const historyCapacity = yield* database.db.transaction((tx) =>
+          LearningContext.readCapacity(tx, historyMessage.id),
+        )
+        expect(historyCapacity).toMatchObject({
+          type: "available",
+          assessment: { classification: "capacity_known", decision: "history_overflow" },
+        })
+        expect(yield* server.calls).toBe(0)
+      }),
+    { config: (url) => providerCfg(url) },
+  ),
+)
+
+it.live(
+  "post-admission capacity failure preserves cuts and never opens or redispatches the provider",
+  () =>
+    provideTmpdirServer(
+      ({ dir, llm: server }) =>
+        Effect.gen(function* () {
+          const { processors, provider, database } = yield* boot()
+          const events = yield* EventV2Bridge.Service
+          const llm = yield* LLM.Service
+          if (!llm.plan || !llm.finalize) return yield* Effect.die("Gate 18 LLM planning seam is unavailable")
+
+          const seeded = yield* runningSession("capacity fault", { model: 2, tool: 0 })
+          const message = yield* assistant(seeded.chat.id, seeded.parent.id, path.resolve(dir))
+          const model = yield* provider.getModel(ref.providerID, ref.modelID)
+          const input = {
+            user: seeded.parent,
+            sessionID: seeded.chat.id,
+            composition: { type: "interactive" as const },
+            model,
+            agent: agent(),
+            system: ["Keep the admitted context cuts durable across a capacity write fault."],
+            messages: [{ role: "user" as const, content: "capacity fault" }],
+            compactableMessages: [],
+            tools: {},
+          } satisfies LLM.StreamInput
+          const plan = yield* llm.plan(input)
+          const turnID = yield* admitTurnModel(
+            seeded.chat.id,
+            seeded.parent,
+            message.id,
+            { model: 2, tool: 0 },
+            plan.capabilityBasis,
+          )
+          const handle = yield* processors.create({
+            assistantMessage: message,
+            sessionID: seeded.chat.id,
+            model,
+            turnID,
+          })
+          const operation = yield* database.db.transaction((tx) =>
+            TurnLifecycle.modelOperation(tx, {
+              turnID,
+              sessionID: seeded.chat.id,
+              assistantMessageID: message.id,
+            }),
+          )
+          yield* handle.bindModelOperation(operation)
+          const before = yield* database.db.transaction((tx) =>
+            Effect.all({
+              retained: RetainedSteering.readCut(tx, message.id),
+              learning: LearningContext.readCut(tx, message.id),
+              capacity: LearningContext.readCapacity(tx, message.id),
+            }),
+          )
+          if (before.retained.type !== "available" || before.learning.type !== "available") {
+            return yield* Effect.die("Model admission did not commit both context cuts")
+          }
+          expect(before.capacity).toEqual({ type: "not_found", assistantMessageID: message.id })
+          const prepared = yield* llm.finalize({
+            plan,
+            retainedSteeringCut: before.retained.cut,
+            learningContextCut: before.learning.cut,
+            learningContextRenderedBlock: before.learning.renderedBlock,
+          })
+          expect(prepared.capacity?.assessment.decision).toBe("fit")
+
+          yield* database.db.run(
+            sql.raw(`
+            CREATE TEMP TRIGGER gate18_capacity_insert_fault
+            BEFORE INSERT ON turn_model_capacity
+            BEGIN
+              SELECT RAISE(ABORT, 'injected Gate 18 capacity failure');
+            END
+          `),
+          )
+          let opens = 0
+          const outcome = yield* handle
+            .process({
+              ...prepared,
+              open: (abort) => {
+                opens += 1
+                return prepared.open(abort)
+              },
+            })
+            .pipe(
+              Effect.ensuring(
+                database.db.run(sql.raw("DROP TRIGGER IF EXISTS gate18_capacity_insert_fault")).pipe(Effect.orDie),
+              ),
+            )
+
+          expect(outcome).toBe("stop")
+          expect(opens).toBe(0)
+          expect(yield* server.calls).toBe(0)
+          const after = yield* database.db.transaction((tx) =>
+            Effect.all({
+              retained: RetainedSteering.readCut(tx, message.id),
+              learning: LearningContext.readCut(tx, message.id),
+              capacity: LearningContext.readCapacity(tx, message.id),
+              model: TurnLifecycle.modelOperation(tx, {
+                turnID,
+                sessionID: seeded.chat.id,
+                assistantMessageID: message.id,
+              }),
+              turn: TurnLifecycle.info(tx, turnID),
+            }),
+          )
+          expect(after.retained).toEqual(before.retained)
+          expect(after.learning).toEqual(before.learning)
+          expect(after.capacity).toEqual({ type: "not_found", assistantMessageID: message.id })
+          expect(after.model.state).toBe("failed")
+          expect(after.turn.state).toBe("running")
+          const stored = yield* MessageV2.get({ sessionID: seeded.chat.id, messageID: message.id })
+          expect(stored.info).toMatchObject({ role: "assistant", finish: "error" })
+          expect(stored.info.role === "assistant" && stored.info.error).toBeDefined()
+
+          const recovered = yield* recoverTurns(events, Date.now() + 1_000)
+          const recoveredTarget = recovered.filter((turn) => turn.id === turnID)
+          expect(recoveredTarget).toHaveLength(1)
+          expect(recoveredTarget[0]).toMatchObject({
+            id: turnID,
+            state: "interrupted",
+            terminal: { reason: "startup_recovery" },
+          })
+          expect(yield* recoverTurns(events, Date.now() + 2_000)).toEqual([])
+          expect(opens).toBe(0)
+          expect(yield* server.calls).toBe(0)
+          expect(yield* database.db.transaction((tx) => LearningContext.readCapacity(tx, message.id))).toEqual({
+            type: "not_found",
+            assistantMessageID: message.id,
+          })
+        }),
+      { config: (url) => providerCfg(url) },
+    ),
+  { timeout: 20_000 },
+)
+
+itCapacityCompaction.live(
+  "capacity admission and compaction consume one exact four-turn removable prefix",
+  () =>
+    provideTmpdirServer(
+      ({ dir, llm: server }) =>
+        Effect.gen(function* () {
+          const { processors, provider, database } = yield* boot()
+          const session = yield* Session.Service
+          const llm = yield* LLM.Service
+          const compaction = yield* SessionCompaction.Service
+          if (!llm.plan || !llm.finalize) return yield* Effect.die("Gate 18 LLM planning seam is unavailable")
+
+          const seeded = yield* materializeTestSession({
+            text: "CURRENT-D",
+            settle: false,
+            limits: { model: 4, tool: 0 },
+            time: 4_000,
+          })
+          const historicalTurn = (input: { label: string; text: string; time: number }) =>
+            Effect.gen(function* () {
+              const user = yield* session.updateMessage({
+                id: MessageID.ascending(),
+                role: "user",
+                sessionID: seeded.info.id,
+                agent: "repa",
+                model: { providerID: ref.providerID, modelID: ref.modelID },
+                time: { created: input.time },
+              })
+              yield* session.updatePart({
+                id: PartID.ascending(),
+                messageID: user.id,
+                sessionID: seeded.info.id,
+                type: "text",
+                text: input.text,
+              })
+              const reply = yield* session.updateMessage({
+                id: MessageID.ascending(),
+                role: "assistant",
+                sessionID: seeded.info.id,
+                mode: "repa",
+                agent: "repa",
+                path: { cwd: path.resolve(dir), root: path.resolve(dir) },
+                cost: 0,
+                tokens: { total: 0, input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+                modelID: ref.modelID,
+                providerID: ref.providerID,
+                parentID: user.id,
+                time: { created: input.time + 1 },
+                finish: "end_turn",
+              })
+              yield* session.updatePart({
+                id: PartID.ascending(),
+                messageID: reply.id,
+                sessionID: seeded.info.id,
+                type: "text",
+                text: `${input.label}-REPLY`,
+              })
+              return { user, reply }
+            })
+
+          const a = yield* historicalTurn({
+            label: "REMOVE-A",
+            text: `REMOVE-A:${"a".repeat(24_000)}`,
+            time: 1_000,
+          })
+          const b = yield* historicalTurn({
+            label: "REMOVE-B",
+            text: `REMOVE-B:${"b".repeat(24_000)}`,
+            time: 2_000,
+          })
+          const c = yield* historicalTurn({
+            label: "KEEP-C",
+            text: `KEEP-C:${"c".repeat(1_000)}`,
+            time: 3_000,
+          })
+          const baseModel = yield* provider.getModel(ref.providerID, ref.modelID)
+          const original = yield* MessageV2.filterCompactedEffect(seeded.info.id)
+          expect(original.map((message) => message.info.id)).toEqual([
+            a.user.id,
+            a.reply.id,
+            b.user.id,
+            b.reply.id,
+            c.user.id,
+            c.reply.id,
+            seeded.user.id,
+          ])
+          const compactable = yield* compaction.compactable({ messages: original, model: baseModel })
+          const removableMessageIDs = [a.user.id, a.reply.id, b.user.id, b.reply.id]
+          expect(compactable.messages.map((message) => message.info.id)).toEqual(removableMessageIDs)
+          expect(compactable.selection).toEqual({
+            tailStartMessageID: c.user.id,
+            removableMessageIDs,
+            removableMessageIDsFingerprint: LearningContext.canonicalFingerprint(
+              LearningContext.toJsonValue(removableMessageIDs),
+            ),
+          })
+          if (!compactable.selection) return yield* Effect.die("Expected an exact four-turn compaction selection")
+
+          const fullModelMessages = yield* MessageV2.toModelMessagesEffect(original, baseModel)
+          const compactableModelMessages = yield* MessageV2.toModelMessagesEffect(compactable.messages, baseModel)
+          const sourceAssistant = yield* assistant(seeded.info.id, seeded.user.id, path.resolve(dir))
+          const input = {
+            user: seeded.user,
+            sessionID: seeded.info.id,
+            composition: { type: "interactive" as const },
+            model: baseModel,
+            agent: agent(),
+            system: ["Keep the retained C and current D turns exact."],
+            messages: fullModelMessages,
+            compactableMessages: compactableModelMessages,
+            compactionSelection: compactable.selection,
+            tools: {},
+          } satisfies LLM.StreamInput
+          const measuredPlan = yield* llm.plan(input)
+          const turnID = yield* admitTurnModel(
+            seeded.info.id,
+            seeded.user,
+            sourceAssistant.id,
+            { model: 4, tool: 0 },
+            measuredPlan.capabilityBasis,
+          )
+          const readCuts = (assistantMessageID: MessageID) =>
+            database.db
+              .transaction((tx) =>
+                Effect.all([
+                  RetainedSteering.readCut(tx, assistantMessageID),
+                  LearningContext.readCut(tx, assistantMessageID),
+                ]),
+              )
+              .pipe(
+                Effect.flatMap(([retained, learning]) => {
+                  if (retained.type !== "available" || learning.type !== "available") {
+                    return Effect.die(`Model operation ${assistantMessageID} has no complete context cuts`)
+                  }
+                  return Effect.succeed({ retained: retained.cut, learning })
+                }),
+              )
+          const sourceCuts = yield* readCuts(sourceAssistant.id)
+          const measured = yield* llm.finalize({
+            plan: measuredPlan,
+            retainedSteeringCut: sourceCuts.retained,
+            learningContextCut: sourceCuts.learning.cut,
+            learningContextRenderedBlock: sourceCuts.learning.renderedBlock,
+          })
+          const measuredCapacity = measured.capacity?.assessment
+          if (!measuredCapacity || measuredCapacity.removableEstimatedTokens === 0) {
+            return yield* Effect.die("Expected measurable A+B removable history")
+          }
+          const usableInputLimit =
+            measuredCapacity.fixedEstimatedTokens + Math.floor(measuredCapacity.removableEstimatedTokens * 0.4)
+          expect(usableInputLimit).toBeGreaterThan(measuredCapacity.fixedEstimatedTokens)
+          expect(usableInputLimit).toBeLessThan(
+            measuredCapacity.fixedEstimatedTokens + Math.floor(measuredCapacity.removableEstimatedTokens / 2),
+          )
+          const constrainedModel = {
+            ...baseModel,
+            limit: {
+              ...baseModel.limit,
+              context: usableInputLimit + (measuredCapacity.outputReserveTokens ?? baseModel.limit.output),
+            },
+          }
+          const constrainedPlan = yield* llm.plan({ ...input, model: constrainedModel })
+          expect(constrainedPlan.capabilityBasis).toEqual(measuredPlan.capabilityBasis)
+          const prepared = yield* llm.finalize({
+            plan: constrainedPlan,
+            retainedSteeringCut: sourceCuts.retained,
+            learningContextCut: sourceCuts.learning.cut,
+            learningContextRenderedBlock: sourceCuts.learning.renderedBlock,
+          })
+          expect(prepared.capacity?.assessment).toMatchObject({
+            decision: "history_overflow",
+            removableHistory: {
+              tailStartMessageID: c.user.id,
+              messageCount: removableMessageIDs.length,
+              messageIDsFingerprint: compactable.selection.removableMessageIDsFingerprint,
+            },
+          })
+          const sourceHandle = yield* processors.create({
+            assistantMessage: sourceAssistant,
+            sessionID: seeded.info.id,
+            model: constrainedModel,
+            turnID,
+          })
+          const sourceOperation = yield* database.db.transaction((tx) =>
+            TurnLifecycle.modelOperation(tx, {
+              turnID,
+              sessionID: seeded.info.id,
+              assistantMessageID: sourceAssistant.id,
+            }),
+          )
+          yield* sourceHandle.bindModelOperation(sourceOperation)
+          const sourceResult = yield* sourceHandle.process(prepared)
+          expect(sourceResult).toBe("compact")
+          expect(sourceHandle.compactionMode).toBe("capacity_history")
+          expect(sourceHandle.compactionSelection).toEqual(compactable.selection)
+          expect(yield* server.calls).toBe(0)
+
+          yield* compaction.create({
+            sessionID: seeded.info.id,
+            agent: seeded.user.agent,
+            model: seeded.user.model,
+            auto: true,
+            capacityHistory: { sourceAssistantMessageID: sourceAssistant.id, selection: compactable.selection },
+          })
+          const withMarker = yield* MessageV2.filterCompactedEffect(seeded.info.id)
+          const marker = withMarker.findLast(
+            (message) => message.info.role === "user" && message.parts.some((part) => part.type === "compaction"),
+          )
+          if (!marker) return yield* Effect.die("Expected a capacity-history compaction marker")
+
+          yield* server.text("A+B anchored summary", { usage: { input: 10, output: 4 } })
+          expect(
+            yield* compaction.process({
+              parentID: marker.info.id,
+              messages: withMarker,
+              sessionID: seeded.info.id,
+              auto: true,
+            }),
+          ).toBe("continue")
+          expect(yield* server.calls).toBe(1)
+          const summaryInput = JSON.stringify((yield* server.inputs)[0])
+          expect(summaryInput).toContain("REMOVE-A")
+          expect(summaryInput).toContain("REMOVE-B")
+          expect(summaryInput).not.toContain("KEEP-C")
+          expect(summaryInput).not.toContain("CURRENT-D")
+
+          const compacted = yield* MessageV2.filterCompactedEffect(seeded.info.id)
+          expect(
+            compacted.filter(
+              (message) =>
+                message.info.role === "user" &&
+                message.parts.some((part) => part.type === "text" && part.text === "CURRENT-D"),
+            ),
+          ).toHaveLength(1)
+          expect(
+            compacted.filter(
+              (message) => message.info.role === "assistant" && message.info.summary && message.info.finish,
+            ),
+          ).toHaveLength(1)
+          expect(
+            compacted.filter(
+              (message) => message.info.role === "user" && message.parts.some((part) => part.type === "compaction"),
+            ),
+          ).toHaveLength(1)
+          const continuation = compacted.findLast(
+            (message) =>
+              message.info.role === "user" &&
+              message.parts.some((part) => part.type === "text" && part.metadata?.compaction_continue === true),
+          )
+          if (!continuation || continuation.info.role !== "user") {
+            return yield* Effect.die("Expected one synthetic post-compaction continuation")
+          }
+
+          const postCompactable = yield* compaction.compactable({ messages: compacted, model: constrainedModel })
+          const nextAssistant = yield* assistant(seeded.info.id, continuation.info.id, path.resolve(dir))
+          const nextInput = {
+            user: continuation.info,
+            sessionID: seeded.info.id,
+            composition: { type: "interactive" as const },
+            model: constrainedModel,
+            agent: agent(),
+            system: ["Continue from the anchored summary and retained tail."],
+            messages: yield* MessageV2.toModelMessagesEffect(compacted, constrainedModel),
+            compactableMessages: yield* MessageV2.toModelMessagesEffect(postCompactable.messages, constrainedModel),
+            compactionSelection: postCompactable.selection,
+            tools: {},
+          } satisfies LLM.StreamInput
+          const nextPlan = yield* llm.plan(nextInput)
+          const nextTurnID = yield* admitTurnModel(
+            seeded.info.id,
+            continuation.info,
+            nextAssistant.id,
+            { model: 4, tool: 0 },
+            nextPlan.capabilityBasis,
+          )
+          expect(nextTurnID).toBe(turnID)
+          const nextCuts = yield* readCuts(nextAssistant.id)
+          const nextPrepared = yield* llm.finalize({
+            plan: nextPlan,
+            retainedSteeringCut: nextCuts.retained,
+            learningContextCut: nextCuts.learning.cut,
+            learningContextRenderedBlock: nextCuts.learning.renderedBlock,
+          })
+          expect(nextPrepared.capacity?.assessment.decision).toBe("fit")
+          yield* server.text("continued after one compaction", { usage: { input: 20, output: 5 } })
+          const nextHandle = yield* processors.create({
+            assistantMessage: nextAssistant,
+            sessionID: seeded.info.id,
+            model: constrainedModel,
+            turnID: nextTurnID,
+          })
+          const nextOperation = yield* database.db.transaction((tx) =>
+            TurnLifecycle.modelOperation(tx, {
+              turnID: nextTurnID,
+              sessionID: seeded.info.id,
+              assistantMessageID: nextAssistant.id,
+            }),
+          )
+          yield* nextHandle.bindModelOperation(nextOperation)
+          expect(yield* nextHandle.process(nextPrepared)).toBe("continue")
+          expect(yield* server.calls).toBe(2)
+          const finalMessages = yield* session.messages({ sessionID: seeded.info.id })
+          expect(
+            finalMessages.filter(
+              (message) => message.info.role === "user" && message.parts.some((part) => part.type === "compaction"),
+            ),
+          ).toHaveLength(1)
+          expect(
+            finalMessages.filter((message) => message.info.role === "assistant" && message.info.summary),
+          ).toHaveLength(1)
+        }),
+      {
+        config: (url) => ({
+          ...providerCfg(url),
+          compaction: { auto: true, tail_turns: 2, preserve_recent_tokens: 8_000 },
+        }),
+      },
+    ),
+  { timeout: 30_000 },
 )
 
 it.live("session.processor effect tests preserve text start time", () =>
@@ -795,12 +1516,12 @@ it.live("session.processor effect tests stop after token overflow requests compa
         const database = yield* Database.Service
         const { processors, session, provider } = yield* boot()
 
-        yield* llm.text("after", { usage: { input: 100, output: 0 } })
+        yield* llm.text("after", { usage: { input: 100_000, output: 0 } })
 
         const { chat, parent } = yield* runningSession("compact")
         const msg = yield* assistant(chat.id, parent.id, path.resolve(dir))
         const base = yield* provider.getModel(ref.providerID, ref.modelID)
-        const mdl = { ...base, limit: { context: 20, output: 10 } }
+        const mdl = { ...base, limit: { context: 100_000, output: 10_000 } }
         const handle = yield* processors.create({
           assistantMessage: msg,
           sessionID: chat.id,

@@ -17,17 +17,26 @@ import {
 } from "@opencode-ai/core/v1/session"
 
 import { NamedError } from "@opencode-ai/core/util/error"
+import { TurnInputTable, TurnModelOperationTable } from "@opencode-ai/core/turn/sql"
+import { Turn } from "@opencode-ai/schema/turn"
 import { APICallError, convertToModelMessages, LoadAPIKeyError, type ModelMessage, type UIMessage } from "ai"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { NotFoundError } from "@/storage/storage"
 import { and } from "drizzle-orm"
+import { asc } from "drizzle-orm"
 import { desc } from "drizzle-orm"
 import { eq } from "drizzle-orm"
 import { inArray } from "drizzle-orm"
 import { lt } from "drizzle-orm"
 import { or } from "drizzle-orm"
-import { MessageTable, PartTable, SessionTable } from "@opencode-ai/core/session/sql"
+import {
+  MessageTable,
+  PartTable,
+  SessionHistoricalMessagePresentationTable,
+  SessionHistoricalPartPresentationTable,
+  SessionTable,
+} from "@opencode-ai/core/session/sql"
 import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { errorMessage } from "@/util/error"
@@ -35,6 +44,7 @@ import { isMedia } from "@/util/media"
 import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { Effect, Schema } from "effect"
+import { isContextOverflowFailure } from "@opencode-ai/llm"
 
 /** Error shape thrown by Bun's fetch() when gzip/br decompression fails mid-stream */
 interface FetchDecompressionError extends Error {
@@ -572,38 +582,272 @@ export function filterCompacted(msgs: Iterable<WithParts>) {
 }
 
 export const filterCompactedEffect = Effect.fnUntraced(function* (sessionID: SessionID) {
-  return filterCompacted(yield* stream(sessionID))
+  const database = yield* Database.Service
+  const historical = yield* database.db
+    .select({ partID: SessionHistoricalPartPresentationTable.part_id })
+    .from(SessionHistoricalPartPresentationTable)
+    .where(eq(SessionHistoricalPartPresentationTable.session_id, sessionID))
+    .all()
+    .pipe(Effect.orDie)
+  return filterHistoricalTasks(filterCompacted(yield* stream(sessionID)), new Set(historical.map((row) => row.partID)))
 })
+
+export function filterHistoricalTasks(msgs: WithParts[], historicalPartIDs: ReadonlySet<string>) {
+  if (historicalPartIDs.size === 0) return msgs
+  const completed = new Set(
+    msgs.flatMap((message) =>
+      message.info.role === "assistant" && message.info.finish && !message.info.error ? [message.info.parentID] : [],
+    ),
+  )
+  const summaries = new Set(
+    msgs.flatMap((message) =>
+      message.info.role === "assistant" && message.info.summary && message.info.finish && !message.info.error
+        ? [message.info.parentID]
+        : [],
+    ),
+  )
+  return msgs.flatMap((message) => {
+    const unfinished = message.parts.filter(
+      (part) =>
+        historicalPartIDs.has(part.id) &&
+        ((part.type === "compaction" && !summaries.has(part.messageID)) ||
+          (part.type === "subtask" && !completed.has(part.messageID))),
+    )
+    if (unfinished.length === 0) return [message]
+    const excluded = new Set(unfinished.map((part) => part.id))
+    const parts = message.parts.filter((part) => !excluded.has(part.id))
+    return parts.length === 0 ? [] : [{ ...message, parts }]
+  })
+}
 
 export function isAfter(left: Info, right: Info) {
   if (left.time.created !== right.time.created) return left.time.created > right.time.created
   return left.id > right.id
 }
 
-// filterCompacted reorders messages for model consumption
-// ([compaction-user, summary, ...retained tail..., continue-user]), so array
-// position is not chronological. Fork clones also receive fresh IDs after the
-// new root input while retaining their earlier creation times. Derive each
-// binding by the durable (created time, ID) order so neither projection shape
-// can make old work current. tasks are compaction/subtask parts newer than the
-// latest finished assistant — i.e. unprocessed work.
-export function latest(msgs: WithParts[]) {
+function latestExcluding(msgs: WithParts[], historicalMessageIDs: ReadonlySet<string>) {
   let user: User | undefined
   let assistant: Assistant | undefined
   let finished: Assistant | undefined
   for (const msg of msgs) {
+    if (historicalMessageIDs.has(msg.info.id)) continue
     const info = msg.info
     if (info.role === "user" && (!user || isAfter(info, user))) user = info
     if (info.role === "assistant" && (!assistant || isAfter(info, assistant))) assistant = info
     if (info.role === "assistant" && info.finish && (!finished || isAfter(info, finished))) finished = info
   }
-  const tasks = msgs.flatMap((m) =>
-    finished && !isAfter(m.info, finished)
+  const tasks = msgs.flatMap((message) =>
+    historicalMessageIDs.has(message.info.id) || (finished && !isAfter(message.info, finished))
       ? []
-      : m.parts.filter((p): p is CompactionPart | SubtaskPart => p.type === "compaction" || p.type === "subtask"),
+      : message.parts.filter(
+          (part): part is CompactionPart | SubtaskPart => part.type === "compaction" || part.type === "subtask",
+        ),
   )
   return { user, assistant, finished, tasks }
 }
+
+function pendingTasks(msgs: WithParts[], historicalMessageIDs: ReadonlySet<string>) {
+  const completed = new Set(
+    msgs.flatMap((message) =>
+      message.info.role === "assistant" && message.info.finish && !message.info.error ? [message.info.parentID] : [],
+    ),
+  )
+  const summaries = new Set(
+    msgs.flatMap((message) =>
+      message.info.role === "assistant" && message.info.summary && message.info.finish && !message.info.error
+        ? [message.info.parentID]
+        : [],
+    ),
+  )
+  return msgs.flatMap((message) =>
+    historicalMessageIDs.has(message.info.id)
+      ? []
+      : message.parts.filter(
+          (part): part is CompactionPart | SubtaskPart =>
+            (part.type === "compaction" && !summaries.has(message.info.id)) ||
+            (part.type === "subtask" && !completed.has(message.info.id)),
+        ),
+  )
+}
+
+// filterCompacted reorders messages for model consumption
+// ([compaction-user, summary, ...retained tail..., continue-user]), so array
+// position is not chronological. This legacy presentation helper therefore
+// uses (created time, ID). Executable Turn work must use currentWorkEffect,
+// which binds exact Turn/Input/operation identities instead.
+// tasks are compaction/subtask parts newer than the latest finished assistant
+// — i.e. unprocessed work.
+export function latest(msgs: WithParts[]) {
+  return latestExcluding(msgs, new Set())
+}
+
+export const currentWorkEffect = Effect.fnUntraced(function* (input: {
+  sessionID: SessionID
+  turnID: Turn.ID
+  currentInputID: Turn.InputID
+  currentInputMessageID: MessageID
+  messages: WithParts[]
+}) {
+  const database = yield* Database.Service
+  const historical = yield* database.db
+    .select({ messageID: SessionHistoricalMessagePresentationTable.message_id })
+    .from(SessionHistoricalMessagePresentationTable)
+    .where(eq(SessionHistoricalMessagePresentationTable.session_id, input.sessionID))
+    .all()
+    .pipe(Effect.orDie)
+  const historicalMessageIDs = new Set(historical.map((row) => row.messageID))
+  if (historicalMessageIDs.has(input.currentInputMessageID)) {
+    return yield* new Turn.IntegrityError({
+      turnID: input.turnID,
+      reason: "Current Turn input Message is marked as historical Session presentation",
+    })
+  }
+  const turnInputs = yield* database.db
+    .select({
+      id: TurnInputTable.id,
+      messageID: TurnInputTable.message_id,
+      ordinal: TurnInputTable.ordinal,
+    })
+    .from(TurnInputTable)
+    .where(and(eq(TurnInputTable.turn_id, input.turnID), eq(TurnInputTable.session_id, input.sessionID)))
+    .orderBy(asc(TurnInputTable.ordinal))
+    .all()
+    .pipe(Effect.orDie)
+  const currentTurnInput = turnInputs.find((turnInput) => turnInput.id === input.currentInputID)
+  if (
+    !currentTurnInput ||
+    currentTurnInput.messageID !== input.currentInputMessageID ||
+    turnInputs.at(-1)?.id !== currentTurnInput.id
+  ) {
+    return yield* new Turn.IntegrityError({
+      turnID: input.turnID,
+      reason: "Current Turn input does not match the exact causal input frontier",
+    })
+  }
+  const turnInputMessages = yield* Effect.forEach(turnInputs, (turnInput) =>
+    get({ sessionID: input.sessionID, messageID: turnInput.messageID }).pipe(
+      Effect.mapError(
+        () =>
+          new Turn.IntegrityError({
+            turnID: input.turnID,
+            reason: `Turn input ${turnInput.id} has no exact Session Message presentation`,
+          }),
+      ),
+      Effect.flatMap((message) => {
+        if (message.info.role !== "user" || historicalMessageIDs.has(message.info.id)) {
+          return Effect.fail(
+            new Turn.IntegrityError({
+              turnID: input.turnID,
+              reason: `Turn input ${turnInput.id} is not an executable User presentation`,
+            }),
+          )
+        }
+        return Effect.succeed({ ...turnInput, message: message as WithParts & { info: User } })
+      }),
+    ),
+  )
+  const turnInputByID = new Map(turnInputMessages.map((turnInput) => [turnInput.id, turnInput] as const))
+  const operations = yield* database.db
+    .select({
+      assistantMessageID: TurnModelOperationTable.assistant_message_id,
+      inputID: TurnModelOperationTable.input_id,
+      ordinal: TurnModelOperationTable.ordinal,
+      state: TurnModelOperationTable.state,
+    })
+    .from(TurnModelOperationTable)
+    .where(
+      and(eq(TurnModelOperationTable.turn_id, input.turnID), eq(TurnModelOperationTable.session_id, input.sessionID)),
+    )
+    .orderBy(asc(TurnModelOperationTable.ordinal))
+    .all()
+    .pipe(Effect.orDie)
+  const assistantMessages = yield* Effect.forEach(operations, (operation) =>
+    Effect.gen(function* () {
+      const turnInput = turnInputByID.get(operation.inputID)
+      if (!turnInput) {
+        return yield* new Turn.IntegrityError({
+          turnID: input.turnID,
+          reason: `Turn model operation ${operation.assistantMessageID} has no exact Turn input`,
+        })
+      }
+      const message = yield* get({ sessionID: input.sessionID, messageID: operation.assistantMessageID }).pipe(
+        Effect.mapError(
+          () =>
+            new Turn.IntegrityError({
+              turnID: input.turnID,
+              reason: `Turn model operation ${operation.assistantMessageID} has no exact Assistant presentation`,
+            }),
+        ),
+      )
+      if (
+        message.info.role !== "assistant" ||
+        message.info.parentID !== turnInput.message.info.id ||
+        historicalMessageIDs.has(message.info.id)
+      ) {
+        return yield* new Turn.IntegrityError({
+          turnID: input.turnID,
+          reason: `Turn model operation ${operation.assistantMessageID} is not parented to its exact User presentation`,
+        })
+      }
+      return {
+        input: turnInput,
+        message: message as WithParts & { info: Assistant },
+        ordinal: operation.ordinal,
+        state: operation.state,
+      }
+    }),
+  )
+  if (
+    assistantMessages.some(
+      (operation, index) => index > 0 && operation.input.ordinal < assistantMessages[index - 1]!.input.ordinal,
+    )
+  ) {
+    return yield* new Turn.IntegrityError({
+      turnID: input.turnID,
+      reason: "Turn model operation order crosses the durable input order",
+    })
+  }
+  // The compacted transcript is only prior-context policy: equal timestamps,
+  // caller IDs, or its retained-tail stop point cannot order or remove active
+  // Turn work. Rebuild that work once from the durable input/model ordinals.
+  const causalSuffix = turnInputMessages.flatMap((turnInput) => [
+    turnInput.message,
+    ...assistantMessages
+      .filter((operation) => operation.input.id === turnInput.id)
+      .map((operation) => operation.message),
+  ])
+  const causalMessageIDs = new Set(causalSuffix.map((message) => message.info.id))
+  const legacyActiveMessages = input.messages.filter((message) => causalMessageIDs.has(message.info.id))
+  if (
+    causalMessageIDs.size !== causalSuffix.length ||
+    new Set(legacyActiveMessages.map((message) => message.info.id)).size !== legacyActiveMessages.length
+  ) {
+    return yield* new Turn.IntegrityError({
+      turnID: input.turnID,
+      reason: "Active Turn causal presentations contain a duplicate Message identity",
+    })
+  }
+  const currentInput = turnInputByID.get(input.currentInputID)!
+  const currentAssistantMessages = assistantMessages.filter((operation) => operation.input.id === currentInput.id)
+  const assistantMessage = currentAssistantMessages.at(-1)?.message
+  const finishedMessage = currentAssistantMessages.findLast(
+    (operation) => operation.state === "completed" && operation.message.info.finish,
+  )?.message
+  const presentation = latestExcluding(input.messages, historicalMessageIDs)
+  return {
+    user: currentInput.message.info,
+    userMessage: currentInput.message,
+    assistant: assistantMessage?.info,
+    assistantMessage,
+    finished: finishedMessage?.info,
+    compactionFinished: presentation.finished,
+    tasks: pendingTasks(input.messages, historicalMessageIDs),
+    interactiveMessages: [
+      ...input.messages.filter((message) => !causalMessageIDs.has(message.info.id)),
+      ...causalSuffix,
+    ],
+  }
+})
 
 export function fromError(
   e: unknown,
@@ -619,6 +863,10 @@ export function fromError(
       ).toObject()
     case OutputLengthError.isInstance(e):
       return e
+    case ContextOverflowError.isInstance(e):
+      return e instanceof ContextOverflowError ? e.toObject() : e
+    case isContextOverflowFailure(e):
+      return new ContextOverflowError({ message: errorMessage(e) }, { cause: e }).toObject()
     case LoadAPIKeyError.isInstance(e):
       return new AuthError(
         {

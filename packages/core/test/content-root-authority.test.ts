@@ -22,7 +22,12 @@ function appLayer(filename = ":memory:") {
   ])
 }
 
-async function withRuntime<A>(use: (input: { service: ContentRoot.Interface; runtime: ManagedRuntime.ManagedRuntime<ContentRoot.Service | Database.Service, never> }) => Promise<A>) {
+async function withRuntime<A>(
+  use: (input: {
+    service: ContentRoot.Interface
+    runtime: ManagedRuntime.ManagedRuntime<ContentRoot.Service | Database.Service, never>
+  }) => Promise<A>,
+) {
   const runtime = ManagedRuntime.make(appLayer())
   try {
     const service = await runtime.runPromise(ContentRoot.Service)
@@ -92,7 +97,9 @@ describe("ContentRoot authority", () => {
       _tag: "ContentRoot.PathError",
       reason: "invalid_path",
     })
-    expect(captureFailure(() => ContentRootNTFS.normalizeRelativePath(`bad-${String.fromCharCode(0xd800)}.md`))).toMatchObject({
+    expect(
+      captureFailure(() => ContentRootNTFS.normalizeRelativePath(`bad-${String.fromCharCode(0xd800)}.md`)),
+    ).toMatchObject({
       _tag: "ContentRoot.PathError",
       reason: "invalid_path",
     })
@@ -151,10 +158,7 @@ describe("ContentRoot authority", () => {
 
         const database = await runtime.runPromise(Database.Service)
         const episodes = await Effect.runPromise(
-          database.db
-            .select()
-            .from(ContentRootGrantEpisodeTable)
-            .orderBy(ContentRootGrantEpisodeTable.ordinal),
+          database.db.select().from(ContentRootGrantEpisodeTable).orderBy(ContentRootGrantEpisodeTable.ordinal),
         )
         expect(episodes).toHaveLength(2)
         expect(episodes[0]).toMatchObject({ ordinal: 1, close_basis: "learner revoked" })
@@ -214,11 +218,98 @@ describe("ContentRoot authority", () => {
         expect(outcome.revoked).toMatchObject({ disposition: "revoked", grantVersion: root.grantVersion })
         expect(
           await runtime.runPromise(
-            Effect.flip(
-              service.read({ contentRootID: root.id, relativePath: "source.md", maxBytes: 1000 }),
-            ),
+            Effect.flip(service.read({ contentRootID: root.id, relativePath: "source.md", maxBytes: 1000 })),
           ),
         ).toMatchObject({ _tag: "ContentRoot.InvalidTransitionError" })
+      })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  windowsTest("binds Tutor local-read proofs to the exact current operation, workspace, and profile", async () => {
+    const directory = await temporaryDirectory()
+    const source = path.join(directory, "source.md")
+    await writeFile(source, "exact Tutor source")
+    try {
+      await withRuntime(async ({ service, runtime }) => {
+        const proposal = await runtime.runPromise(service.propose(directory))
+        const root = await runtime.runPromise(
+          service.approve({
+            proposal,
+            approval: ContentRoot.LearnerApproval.contentRoot(proposal, "Tutor read fixture"),
+          }),
+        )
+        const database = await runtime.runPromise(Database.Service)
+        const operationA = ContentRoot.CurrentLocalReadInvocation.trusted("operation-A", "profile-A", "workspace-A")
+        const operationB = ContentRoot.CurrentLocalReadInvocation.trusted("operation-B", "profile-A", "workspace-A")
+        const differentProfile = ContentRoot.CurrentLocalReadInvocation.trusted(
+          "operation-A",
+          "profile-B",
+          "workspace-A",
+        )
+        const differentWorkspace = ContentRoot.CurrentLocalReadInvocation.trusted(
+          "operation-A",
+          "profile-A",
+          "workspace-B",
+        )
+
+        const durable = await runtime.runPromise(
+          service.prepareLocalRead({
+            authority: { type: "content_root", contentRootID: root.id },
+            path: source,
+            invocation: operationA,
+          }),
+        )
+        await runtime.runPromise(database.db.transaction((tx) => durable.requireForTutor(tx, operationA)))
+        await expect(
+          runtime.runPromise(database.db.transaction((tx) => durable.requireForTutor(tx, operationB))),
+        ).rejects.toMatchObject({ _tag: "ContentRoot.InvalidTransitionError" })
+
+        const workspace = await runtime.runPromise(
+          service.prepareLocalRead({
+            authority: {
+              type: "active_workspace",
+              scope: ContentRoot.ActiveWorkspaceRead.trusted(directory, "workspace-A"),
+            },
+            path: source,
+            invocation: operationA,
+          }),
+        )
+        await runtime.runPromise(database.db.transaction((tx) => workspace.requireForTutor(tx, operationA)))
+        await expect(
+          runtime.runPromise(database.db.transaction((tx) => workspace.requireForTutor(tx, differentProfile))),
+        ).rejects.toMatchObject({ _tag: "ContentRoot.InvalidTransitionError" })
+        await expect(
+          runtime.runPromise(database.db.transaction((tx) => workspace.requireForTutor(tx, differentWorkspace))),
+        ).rejects.toMatchObject({ _tag: "ContentRoot.InvalidTransitionError" })
+
+        const once = await runtime.runPromise(
+          service.prepareLocalRead({
+            authority: {
+              type: "one_operation",
+              grant: ContentRoot.OneOperationRead.trusted(source, "operation-A", "approval-A"),
+            },
+            path: source,
+            invocation: operationA,
+          }),
+        )
+        await runtime.runPromise(database.db.transaction((tx) => once.requireForTutor(tx, operationA)))
+        await expect(
+          runtime.runPromise(database.db.transaction((tx) => once.requireForTutor(tx, operationB))),
+        ).rejects.toMatchObject({ _tag: "ContentRoot.InvalidTransitionError" })
+
+        const newlyApproved = await runtime.runPromise(
+          service.prepareLocalRead({
+            authority: {
+              type: "one_operation",
+              grant: ContentRoot.OneOperationRead.trusted(source, "operation-B", "approval-B"),
+            },
+            path: source,
+            invocation: operationB,
+          }),
+        )
+        await runtime.runPromise(database.db.transaction((tx) => newlyApproved.requireForTutor(tx, operationB)))
       })
     } finally {
       await rm(directory, { recursive: true, force: true })
@@ -513,7 +604,9 @@ describe("ContentRoot authority", () => {
         ])
 
         expect(retry.id).toBe(first.id)
-        expect((await runtime.runPromise(service.listMutationGrants())).filter((grant) => grant.disposition === "active")).toHaveLength(1)
+        expect(
+          (await runtime.runPromise(service.listMutationGrants())).filter((grant) => grant.disposition === "active"),
+        ).toHaveLength(1)
 
         const revoked = await runtime.runPromise(
           service.revokeMutationGrant({
@@ -524,7 +617,9 @@ describe("ContentRoot authority", () => {
         )
         const replay = await runtime.runPromise(service.approveMutationGrant({ proposal, approval }))
         expect(replay).toMatchObject({ id: first.id, disposition: "revoked", version: revoked.version })
-        expect((await runtime.runPromise(service.listMutationGrants())).filter((grant) => grant.disposition === "active")).toEqual([])
+        expect(
+          (await runtime.runPromise(service.listMutationGrants())).filter((grant) => grant.disposition === "active"),
+        ).toEqual([])
       })
     } finally {
       await rm(directory, { recursive: true, force: true })
@@ -573,9 +668,10 @@ describe("ContentRoot authority", () => {
         const persistedRoot = await runtime.runPromise(service.get(root.id))
         expect(persistedRoot.binding.descriptor.verifierVersion).toBe(999)
         expect(persistedRoot.verification).toMatchObject({ status: "unsupported" })
-        expect(
-          await runtime.runPromise(Effect.flip(service.inventory({ contentRootID: root.id }))),
-        ).toMatchObject({ _tag: "ContentRoot.PathError", reason: "unreadable" })
+        expect(await runtime.runPromise(Effect.flip(service.inventory({ contentRootID: root.id })))).toMatchObject({
+          _tag: "ContentRoot.PathError",
+          reason: "unreadable",
+        })
 
         const persistedMutation = await runtime.runPromise(service.getMutationGrant(mutation.id))
         expect(persistedMutation.anchor.verifierVersion).toBe(999)
@@ -873,9 +969,9 @@ for (let index = 0; index < 80; index++) {
         const admitted = await inventory
         expect(admitted.grantVersion).toBe(1)
         expect(admitted.entries).toHaveLength(200)
-        expect(
-          await runtime.runPromise(Effect.flip(service.inventory({ contentRootID: root.id }))),
-        ).toMatchObject({ _tag: "ContentRoot.InvalidTransitionError" })
+        expect(await runtime.runPromise(Effect.flip(service.inventory({ contentRootID: root.id })))).toMatchObject({
+          _tag: "ContentRoot.InvalidTransitionError",
+        })
       })
     } finally {
       await rm(directory, { recursive: true, force: true })

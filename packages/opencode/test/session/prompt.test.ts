@@ -28,7 +28,12 @@ import { Image } from "../../src/image/image"
 import { Question } from "../../src/question"
 import { Todo } from "../../src/session/todo"
 import { Session } from "@/session/session"
-import { SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
+import {
+  SessionHistoricalMessagePresentationTable,
+  SessionHistoricalPartPresentationTable,
+  SessionMessageTable,
+  SessionTable,
+} from "@opencode-ai/core/session/sql"
 import { LLM } from "../../src/session/llm"
 import { MessageV2 } from "../../src/session/message-v2"
 import { FSUtil } from "@opencode-ai/core/fs-util"
@@ -54,6 +59,7 @@ import { Ripgrep } from "@opencode-ai/core/ripgrep"
 import { Format } from "../../src/format"
 import { TestInstance, tmpdirScoped } from "../fixture/fixture"
 import { materializeTestSession } from "../fixture/session"
+import { admitModelWithLearningContext } from "../fixture/model-admission"
 import { awaitWithTimeout, pollWithTimeout, testEffect } from "../lib/effect"
 import { httpError, reply, TestLLMServer } from "../lib/llm-server"
 import { RuntimeFlags } from "@/effect/runtime-flags"
@@ -69,6 +75,7 @@ import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { TurnInputTable, TurnModelOperationTable, TurnTable } from "@opencode-ai/core/turn/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LearningContext } from "@opencode-ai/core/learning-context"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { entryBody } from "@/cli/cmd/run/entry.body"
@@ -130,6 +137,9 @@ function errorTool(parts: SessionV1.Part[]) {
 const contextBuildHooks: Array<() => PromiseLike<void>> = []
 const resourceReadHooks: Array<() => PromiseLike<void>> = []
 const compactionPruneHooks: Array<() => Effect.Effect<void>> = []
+const compactionProcessHooks: Array<
+  (input: Parameters<SessionCompaction.Interface["process"]>[0]) => Effect.Effect<"continue" | "stop">
+> = []
 const summaryHooks: Array<() => Effect.Effect<void>> = []
 
 const hookedCompaction = Layer.succeed(
@@ -137,7 +147,8 @@ const hookedCompaction = Layer.succeed(
   SessionCompaction.Service.of({
     isOverflow: () => Effect.succeed(false),
     prune: () => compactionPruneHooks.shift()?.() ?? Effect.void,
-    process: () => Effect.succeed("stop"),
+    compactable: () => Effect.succeed({ messages: [] }),
+    process: (input) => compactionProcessHooks.shift()?.(input) ?? Effect.succeed("stop"),
     create: () => Effect.void,
   }),
 )
@@ -302,6 +313,15 @@ const compactionBoundary = testEffect(
     [SessionCompaction.node, hookedCompaction],
   ]),
 )
+const forkCompactionBoundary = testEffect(
+  LayerNode.compile(LayerNode.group([promptRoot, testLLMServerNode]), [
+    [SessionSummary.node, summary],
+    [LSP.node, lsp],
+    [MCP.node, makeMcp()],
+    [RuntimeFlags.node, runtimeFlags],
+    [SessionCompaction.node, hookedCompaction],
+  ]),
+)
 const internalSessionWorkBoundary = testEffect(
   LayerNode.compile(LayerNode.group([promptRoot, testLLMServerNode]), [
     [SessionSummary.node, hookedSummary],
@@ -344,7 +364,7 @@ const cfg = {
           temperature: false,
           tool_call: true,
           release_date: "2025-01-01",
-          limit: { context: 100000, output: 10000 },
+          limit: { context: 200000, output: 10000 },
           cost: { input: 0, output: 0 },
           options: {},
         },
@@ -371,6 +391,35 @@ function providerCfg(url: string) {
       },
     },
   }
+}
+
+function exactCurrentProviderCfg(url: string) {
+  return {
+    ...providerCfg(url),
+    agent: {
+      prior_agent: { description: "Prior transcript agent" },
+      current_agent: { description: "Exact current root agent" },
+      root_agent: { description: "Initial Turn agent" },
+      steer_agent: { description: "Exact promoted-steer agent" },
+    },
+  }
+}
+
+function providerMessageOrder(input: Record<string, unknown>, texts: string[]) {
+  const messages = input.messages
+  expect(Array.isArray(messages)).toBe(true)
+  if (!Array.isArray(messages)) throw new Error("Expected provider request messages")
+  return {
+    messages,
+    indexes: texts.map((text) => messages.findIndex((message) => JSON.stringify(message).includes(text))),
+  }
+}
+
+function expectProviderSequence(input: Record<string, unknown>, texts: string[]) {
+  const order = providerMessageOrder(input, texts)
+  expect(order.indexes.every((index) => index >= 0)).toBe(true)
+  expect(order.indexes).toEqual(order.indexes.map((_, index) => order.indexes[0]! + index))
+  return order
 }
 
 const writeText = Effect.fn("test.writeText")(function* (file: string, text: string) {
@@ -645,6 +694,730 @@ noLLMServer.instance(
       yield* sessions.remove(sessionID)
     }),
   { config: cfg },
+)
+
+forkCompactionBoundary.instance(
+  "keeps a real parent capacity-history marker inert while the fork admits and runs only its new input",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const source = yield* materializeTestSession({
+        title: "parent with interrupted capacity compaction",
+        text: "CURRENT-D",
+        settle: false,
+        limits: { model: 1, tool: 0 },
+        time: 4_000,
+      })
+      const historicalTurn = (input: { label: string; text: string; time: number }) =>
+        Effect.gen(function* () {
+          const user = yield* sessions.updateMessage({
+            id: MessageID.ascending(),
+            role: "user",
+            sessionID: source.info.id,
+            agent: "repa",
+            model: ref,
+            time: { created: input.time },
+          })
+          yield* sessions.updatePart({
+            id: PartID.ascending(),
+            messageID: user.id,
+            sessionID: source.info.id,
+            type: "text",
+            text: input.text,
+          })
+          const assistant: SessionV1.Assistant = {
+            id: MessageID.ascending(),
+            role: "assistant",
+            parentID: user.id,
+            sessionID: source.info.id,
+            mode: "repa",
+            agent: "repa",
+            path: { cwd: path.resolve(dir), root: path.resolve(dir) },
+            cost: 0,
+            tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            modelID: ref.modelID,
+            providerID: ref.providerID,
+            time: { created: input.time + 1 },
+            finish: "end_turn",
+          }
+          yield* sessions.updateMessage(assistant)
+          yield* sessions.updatePart({
+            id: PartID.ascending(),
+            messageID: assistant.id,
+            sessionID: source.info.id,
+            type: "text",
+            text: `${input.label}-REPLY`,
+          })
+          return { user, assistant }
+        })
+      const a = yield* historicalTurn({ label: "REMOVE-A", text: "REMOVE-A", time: 1_000 })
+      const b = yield* historicalTurn({ label: "REMOVE-B", text: "REMOVE-B", time: 2_000 })
+      const c = yield* historicalTurn({ label: "KEEP-C", text: "KEEP-C", time: 3_000 })
+      const sourceAssistant: SessionV1.Assistant = {
+        id: MessageID.ascending(),
+        role: "assistant",
+        parentID: source.user.id,
+        sessionID: source.info.id,
+        mode: "repa",
+        agent: "repa",
+        path: { cwd: path.resolve(dir), root: path.resolve(dir) },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        modelID: ref.modelID,
+        providerID: ref.providerID,
+        time: { created: 4_001 },
+      }
+      yield* sessions.updateMessage(sourceAssistant)
+
+      const capabilityBasis = LearningContext.unavailableCapabilityBasis()
+      const admitted = yield* database.db.transaction((tx) =>
+        Effect.gen(function* () {
+          const snapshotFrontier = yield* LearningFrontier.read(tx)
+          return yield* admitModelWithLearningContext(tx, {
+            turnID: source.turn.id,
+            sessionID: source.info.id,
+            assistantMessageID: sourceAssistant.id,
+            requestEnvelope: { purpose: "fork-capacity-history-source" },
+            contextFingerprint: TurnLifecycle.envelopeFingerprint({ test: "fork-capacity-history-source" }),
+            snapshotFrontier,
+            timeAdmitted: 4_001,
+            learningContextBasis: capabilityBasis,
+          })
+        }),
+      )
+      if (admitted.type !== "admitted") return yield* Effect.die("Expected source model admission")
+
+      const removableMessageIDs = [a.user.id, a.assistant.id, b.user.id, b.assistant.id]
+      const removableMessageIDsFingerprint = LearningContext.canonicalFingerprint(
+        LearningContext.toJsonValue(removableMessageIDs),
+      )
+      const capacity = LearningContext.prepareCapacity({
+        assistantMessageID: sourceAssistant.id,
+        envelopeFingerprint: TurnLifecycle.envelopeFingerprint({ test: "fork-capacity-envelope" }),
+        retainedSteeringFingerprint: admitted.retainedSteeringCut.fingerprint,
+        learningContextFingerprint: admitted.learningContextCut.fingerprint,
+        learningContextRenderedFingerprint: admitted.learningContextCut.renderedFingerprint,
+        providerToolSurfaceFingerprint: capabilityBasis.effectiveProviderToolSurfaceBinding.combinedFingerprint,
+        providerToolSurfaceCanonicalBytes: capabilityBasis.effectiveProviderToolSurfaceBinding.combinedCanonicalBytes,
+        fixedEstimatedTokens: 200,
+        removableEstimatedTokens: 200,
+        removableHistory: {
+          tailStartMessageID: c.user.id,
+          messageCount: removableMessageIDs.length,
+          messageIDsFingerprint: removableMessageIDsFingerprint,
+        },
+        inputLimitTokens: 300,
+      })
+      expect(capacity.assessment.decision).toBe("history_overflow")
+      yield* database.db.transaction((tx) => LearningContext.commitCapacity(tx, capacity))
+
+      const marker = yield* sessions.updateMessage({
+        id: MessageID.ascending(),
+        role: "user",
+        sessionID: source.info.id,
+        agent: "repa",
+        model: ref,
+        time: { created: 5_000 },
+      })
+      const markerPart = yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: marker.id,
+        sessionID: source.info.id,
+        type: "compaction",
+        auto: true,
+        tail_start_id: c.user.id,
+        capacity_history: {
+          source_assistant_message_id: sourceAssistant.id,
+          removable_message_count: removableMessageIDs.length,
+          removable_message_ids_fingerprint: removableMessageIDsFingerprint,
+        },
+      })
+      yield* database.db.transaction((tx) =>
+        TurnLifecycle.settle(tx, {
+          turnID: source.turn.id,
+          outcome: "interrupted",
+          reason: "learner_interrupt",
+          time: 5_001,
+        }),
+      )
+      expect(
+        yield* database.db.transaction((tx) => LearningContext.readCapacity(tx, sourceAssistant.id)),
+      ).toMatchObject({ type: "available", assessment: { decision: "history_overflow" } })
+
+      const sourceFrontier = yield* database.db
+        .select({ sequence: EventSequenceTable.seq })
+        .from(EventSequenceTable)
+        .where(eq(EventSequenceTable.aggregate_id, source.info.id))
+        .get()
+        .pipe(Effect.orDie)
+      if (!sourceFrontier) return yield* Effect.die("Expected exact source Session frontier")
+
+      const routedCompactions: Parameters<SessionCompaction.Interface["process"]>[0][] = []
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          compactionProcessHooks.length = 0
+        }),
+      )
+      compactionProcessHooks.push((input) =>
+        Effect.sync(() => {
+          routedCompactions.push(input)
+          return "stop" as const
+        }),
+      )
+      yield* llm.text("fork-local response")
+      const targetSessionID = SessionID.create()
+      const targetTurnID = Turn.ID.create()
+      const targetMessageID = MessageID.ascending()
+      const targetText = "FORK-LOCAL-INPUT-UNIQUE"
+      yield* prompt.start({
+        sessionID: targetSessionID,
+        turnID: targetTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: targetMessageID,
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "fork-local capacity assessment" },
+        fork: { sourceSessionID: source.info.id, sourceEventSequence: sourceFrontier.sequence },
+        parts: [{ type: "text", text: targetText }],
+      })
+      const targetTerminal = yield* prompt.awaitTurn(targetSessionID, targetTurnID)
+      expect(targetTerminal.terminal).toMatchObject({
+        outcome: "completed",
+        reason: "normal",
+      })
+      expect(routedCompactions).toEqual([])
+      expect(yield* llm.calls).toBe(1)
+      const providerPayload = JSON.stringify((yield* llm.inputs)[0])
+      expect(providerPayload.split(targetText)).toHaveLength(2)
+
+      const stored = yield* sessions.messages({ sessionID: targetSessionID })
+      expect(
+        stored.flatMap((message) => message.parts).filter((part) => part.type === "text" && part.text === targetText),
+      ).toHaveLength(1)
+      const clonedMarker = stored
+        .flatMap((message) => message.parts)
+        .find((part): part is SessionV1.CompactionPart => part.type === "compaction")
+      expect(clonedMarker).toBeDefined()
+      if (!clonedMarker) return yield* Effect.die("Expected cloned historical compaction marker")
+      expect(clonedMarker.capacity_history).toBeUndefined()
+      const historicalParts = yield* database.db
+        .select({ partID: SessionHistoricalPartPresentationTable.part_id })
+        .from(SessionHistoricalPartPresentationTable)
+        .where(eq(SessionHistoricalPartPresentationTable.session_id, targetSessionID))
+        .all()
+        .pipe(Effect.orDie)
+      expect(historicalParts.map((row) => row.partID)).toContain(clonedMarker.id)
+      expect(historicalParts.map((row) => row.partID)).not.toContain(markerPart.id)
+      const projected = yield* MessageV2.filterCompactedEffect(targetSessionID)
+      expect(projected.flatMap((message) => message.parts).some((part) => part.id === clonedMarker.id)).toBe(false)
+      expect(MessageV2.latest(projected).tasks).toEqual([])
+
+      const operations = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, targetTurnID))
+        .all()
+        .pipe(Effect.orDie)
+      expect(operations).toHaveLength(1)
+      expect(
+        yield* database.db.transaction((tx) => LearningContext.readCapacity(tx, operations[0]!.assistantMessageID)),
+      ).toMatchObject({ type: "available", assessment: { decision: "fit" } })
+      const historicalMessages = yield* database.db
+        .select({
+          messageID: SessionHistoricalMessagePresentationTable.message_id,
+          sourceMessageID: SessionHistoricalMessagePresentationTable.source_message_id,
+        })
+        .from(SessionHistoricalMessagePresentationTable)
+        .where(eq(SessionHistoricalMessagePresentationTable.session_id, targetSessionID))
+        .all()
+        .pipe(Effect.orDie)
+      const clonedSourceAssistant = historicalMessages.find(
+        (row) => row.sourceMessageID === sourceAssistant.id,
+      )?.messageID
+      expect(clonedSourceAssistant).toBeDefined()
+      if (!clonedSourceAssistant) return yield* Effect.die("Expected cloned source Assistant provenance")
+      expect(yield* database.db.transaction((tx) => LearningContext.readCapacity(tx, clonedSourceAssistant))).toEqual({
+        type: "not_found",
+        assistantMessageID: clonedSourceAssistant,
+      })
+
+      yield* sessions.remove(targetSessionID)
+      yield* sessions.remove(source.info.id)
+    }),
+  { timeout: 30_000 },
+)
+
+forkCompactionBoundary.instance(
+  "keeps equal-time fork history context-only while the exact new root owns execution",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      // Freeze the supported transition at the current causal floor. A fixed
+      // future date would leak into the shared test database's monotonic event
+      // clock even after Bun's wall clock is restored.
+      const instant = Date.now()
+      setSystemTime(new Date(instant))
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          setSystemTime()
+        }),
+      )
+
+      const sourceText = "EQUAL-TIME-HISTORICAL-CONTEXT"
+      const source = yield* materializeTestSession({
+        title: "equal-time fork source",
+        agent: "historical-agent",
+        model: ref,
+        text: sourceText,
+        time: instant,
+      })
+      const sourceAssistant: SessionV1.Assistant = {
+        id: MessageID.ascending(),
+        role: "assistant",
+        parentID: source.user.id,
+        sessionID: source.info.id,
+        mode: "historical-agent",
+        agent: "historical-agent",
+        path: { cwd: path.resolve(dir), root: path.resolve(dir) },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        modelID: ref.modelID,
+        providerID: ref.providerID,
+        time: { created: instant, completed: instant },
+        finish: "stop",
+      }
+      yield* sessions.updateMessage(sourceAssistant)
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: sourceAssistant.id,
+        sessionID: source.info.id,
+        type: "text",
+        text: "historical answer remains visible only as transcript context",
+      })
+      const sourceFrontier = yield* database.db
+        .select({ sequence: EventSequenceTable.seq })
+        .from(EventSequenceTable)
+        .where(eq(EventSequenceTable.aggregate_id, source.info.id))
+        .get()
+        .pipe(Effect.orDie)
+      if (!sourceFrontier) return yield* Effect.die("Expected exact source Session frontier")
+
+      yield* llm.text("fork root response")
+      const targetSessionID = SessionID.create()
+      const targetTurnID = Turn.ID.create()
+      const targetMessageID = MessageID.ascending()
+      const targetText = "EQUAL-TIME-NEW-FORK-ROOT"
+      yield* prompt.start({
+        sessionID: targetSessionID,
+        turnID: targetTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: targetMessageID,
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "equal-time fork target" },
+        fork: { sourceSessionID: source.info.id, sourceEventSequence: sourceFrontier.sequence },
+        parts: [{ type: "text", text: targetText }],
+      })
+      const terminal = yield* prompt.awaitTurn(targetSessionID, targetTurnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+      expect(yield* llm.calls).toBe(1)
+      const providerPayload = JSON.stringify((yield* llm.inputs)[0])
+      expect(providerPayload.split(targetText)).toHaveLength(2)
+      expect(providerPayload).toContain(sourceText)
+
+      const historical = new Set(
+        (yield* database.db
+          .select({ messageID: SessionHistoricalMessagePresentationTable.message_id })
+          .from(SessionHistoricalMessagePresentationTable)
+          .where(eq(SessionHistoricalMessagePresentationTable.session_id, targetSessionID))
+          .all()
+          .pipe(Effect.orDie)).map((row) => row.messageID),
+      )
+      const stored = yield* sessions.messages({ sessionID: targetSessionID })
+      const assistant = stored.find(
+        (message): message is SessionV1.WithParts & { info: SessionV1.Assistant } =>
+          message.info.role === "assistant" && !historical.has(message.info.id),
+      )?.info
+      expect(assistant).toMatchObject({
+        parentID: targetMessageID,
+        agent: "repa",
+        providerID: ref.providerID,
+        modelID: ref.modelID,
+        finish: "stop",
+      })
+      expect(stored.filter((message) => historical.has(message.info.id))).toHaveLength(2)
+
+      yield* sessions.remove(targetSessionID)
+      yield* sessions.remove(source.info.id)
+    }),
+  { timeout: 30_000 },
+)
+
+it.instance(
+  "executes an exact same-time resumed root despite lexicographically later prior transcript messages",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(exactCurrentProviderCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const instant = Date.now()
+      setSystemTime(new Date(instant))
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          setSystemTime()
+        }),
+      )
+
+      const seeded = yield* materializeTestSession({
+        title: "same-time resumed Session",
+        agent: "prior_agent",
+        model: ref,
+        text: "LOW-ID-OLDER-SESSION-CONTEXT",
+        time: instant,
+      })
+      const priorUserID = MessageID.make("msg_z_prior_user")
+      const priorAssistantID = MessageID.make("msg_zz_prior_assistant")
+      yield* sessions.updateMessage({
+        id: priorUserID,
+        role: "user",
+        sessionID: seeded.info.id,
+        agent: "prior_agent",
+        model: ref,
+        time: { created: instant },
+      })
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: priorUserID,
+        sessionID: seeded.info.id,
+        type: "text",
+        text: "SAME-TIME-PRIOR-USER-CONTEXT",
+      })
+      yield* sessions.updateMessage({
+        id: priorAssistantID,
+        role: "assistant",
+        parentID: priorUserID,
+        sessionID: seeded.info.id,
+        mode: "prior_agent",
+        agent: "prior_agent",
+        path: { cwd: path.resolve(dir), root: path.resolve(dir) },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        modelID: ref.modelID,
+        providerID: ref.providerID,
+        time: { created: instant, completed: instant },
+        finish: "stop",
+      })
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: priorAssistantID,
+        sessionID: seeded.info.id,
+        type: "text",
+        text: "SAME-TIME-PRIOR-ASSISTANT-CONTEXT",
+      })
+
+      const turnID = Turn.ID.create()
+      const inputID = Turn.InputID.create()
+      const currentMessageID = MessageID.make("msg_a_exact_current_input")
+      const currentText = "SAME-TIME-EXACT-RESUMED-ROOT"
+      yield* llm.text("exact resumed-root response")
+      yield* prompt.start({
+        sessionID: seeded.info.id,
+        turnID,
+        inputID,
+        messageID: currentMessageID,
+        agent: "current_agent",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        parts: [{ type: "text", text: currentText }],
+      })
+      const terminal = yield* prompt.awaitTurn(seeded.info.id, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+      expect(yield* llm.calls).toBe(1)
+      const providerInput = (yield* llm.inputs)[0]!
+      const providerPayload = JSON.stringify(providerInput)
+      expect(providerPayload.split(currentText)).toHaveLength(2)
+      expect(providerPayload).toContain("SAME-TIME-PRIOR-USER-CONTEXT")
+      expect(providerPayload).toContain("SAME-TIME-PRIOR-ASSISTANT-CONTEXT")
+      const providerOrder = expectProviderSequence(providerInput, [
+        "SAME-TIME-PRIOR-USER-CONTEXT",
+        "SAME-TIME-PRIOR-ASSISTANT-CONTEXT",
+        currentText,
+      ])
+      expect(providerOrder.indexes[2]).toBe(providerOrder.messages.length - 1)
+
+      const operation = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, turnID))
+        .get()
+        .pipe(Effect.orDie)
+      expect(operation).toBeDefined()
+      if (!operation) return yield* Effect.die("Expected exact resumed-root model operation")
+      const assistant = yield* MessageV2.get({
+        sessionID: seeded.info.id,
+        messageID: operation.assistantMessageID,
+      })
+      expect(assistant.info).toMatchObject({
+        role: "assistant",
+        parentID: currentMessageID,
+        agent: "current_agent",
+        providerID: ref.providerID,
+        modelID: ref.modelID,
+        finish: "stop",
+      })
+
+      yield* sessions.remove(seeded.info.id)
+    }),
+  { config: cfg, timeout: 30_000 },
+)
+
+it.instance(
+  "binds a lexicographically lower same-time promoted steer as the exact executable input",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(exactCurrentProviderCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const instant = Date.now()
+      setSystemTime(new Date(instant))
+      const releaseRoot = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() =>
+        Deferred.succeed(releaseRoot, undefined).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              setSystemTime()
+            }),
+          ),
+          Effect.asVoid,
+        ),
+      )
+
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      const rootInputID = Turn.InputID.create()
+      const steerInputID = Turn.InputID.create()
+      const rootMessageID = MessageID.make("msg_z_same_time_root")
+      const steerMessageID = MessageID.make("msg_a_same_time_exact_steer")
+      const rootText = "SAME-TIME-ROOT-BEFORE-STEER"
+      const steerText = "SAME-TIME-LEXICOGRAPHICALLY-LOWER-STEER"
+      yield* llm.hold("root response", deferredAsPromise(releaseRoot))
+      yield* llm.text("exact steer response")
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: rootInputID,
+        messageID: rootMessageID,
+        agent: "root_agent",
+        model: ref,
+        limits: { model: 2, tool: 0 },
+        session: { title: "same-time promoted steer" },
+        parts: [{ type: "text", text: rootText }],
+      })
+      yield* awaitWithTimeout(llm.wait(1), "root provider request did not begin before steer", "5 seconds")
+
+      const steer = yield* prompt
+        .steer({
+          sessionID,
+          expectedTurnID: turnID,
+          inputID: steerInputID,
+          messageID: steerMessageID,
+          agent: "steer_agent",
+          model: ref,
+          parts: [{ type: "text", text: steerText }],
+        })
+        .pipe(Effect.forkChild)
+      // The steer fiber has no public queue-state projection. Yielding here lets
+      // its synchronous admission path reach the owner queue while the root
+      // provider remains causally blocked; the assertions below fail if it did
+      // not queue and promote through the ordinary path.
+      yield* Effect.yieldNow
+      yield* Deferred.succeed(releaseRoot, undefined)
+      expect((yield* Fiber.join(steer)).id).toBe(steerInputID)
+      yield* awaitWithTimeout(llm.wait(2), "promoted steer did not own a second provider request", "5 seconds")
+      const terminal = yield* prompt.awaitTurn(sessionID, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+      expect(yield* llm.calls).toBe(2)
+      const secondInput = (yield* llm.inputs)[1]!
+      const secondPayload = JSON.stringify(secondInput)
+      expect(secondPayload.split(steerText)).toHaveLength(2)
+      expect(secondPayload).toContain(rootText)
+      const providerOrder = expectProviderSequence(secondInput, [rootText, "root response", steerText])
+      expect(providerOrder.indexes[2]).toBe(providerOrder.messages.length - 1)
+
+      const operations = yield* database.db
+        .select({
+          inputID: TurnModelOperationTable.input_id,
+          assistantMessageID: TurnModelOperationTable.assistant_message_id,
+        })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, turnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      expect(operations.map((operation) => operation.inputID)).toEqual([rootInputID, steerInputID])
+      const steerAssistant = yield* MessageV2.get({
+        sessionID,
+        messageID: operations[1]!.assistantMessageID,
+      })
+      expect(steerAssistant.info).toMatchObject({
+        role: "assistant",
+        parentID: steerMessageID,
+        agent: "steer_agent",
+        providerID: ref.providerID,
+        modelID: ref.modelID,
+        finish: "stop",
+      })
+
+      yield* sessions.remove(sessionID)
+    }),
+  { config: cfg, timeout: 30_000 },
+)
+
+it.instance(
+  "reanchors an exact same-time current input after completed compaction cuts the legacy transcript",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(exactCurrentProviderCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const instant = Date.now()
+      setSystemTime(new Date(instant))
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          setSystemTime()
+        }),
+      )
+
+      const seeded = yield* materializeTestSession({
+        title: "same-time completed compaction boundary",
+        agent: "prior_agent",
+        model: ref,
+        text: "OLDER-PRE-COMPACTION-CONTEXT",
+        time: instant - 1,
+      })
+      const retainedUserID = MessageID.make("msg_z_retained_tail_user")
+      const retainedAssistantID = MessageID.make("msg_zx_retained_tail_assistant")
+      const markerID = MessageID.make("msg_zz_compaction_marker")
+      const summaryID = MessageID.make("msg_zzz_compaction_summary")
+      yield* sessions.updateMessage({
+        id: retainedUserID,
+        role: "user",
+        sessionID: seeded.info.id,
+        agent: "prior_agent",
+        model: ref,
+        time: { created: instant },
+      })
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: retainedUserID,
+        sessionID: seeded.info.id,
+        type: "text",
+        text: "SAME-TIME-RETAINED-TAIL-USER",
+      })
+      yield* sessions.updateMessage({
+        id: retainedAssistantID,
+        role: "assistant",
+        parentID: retainedUserID,
+        sessionID: seeded.info.id,
+        mode: "prior_agent",
+        agent: "prior_agent",
+        path: { cwd: path.resolve(dir), root: path.resolve(dir) },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        modelID: ref.modelID,
+        providerID: ref.providerID,
+        time: { created: instant, completed: instant },
+        finish: "stop",
+      })
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: retainedAssistantID,
+        sessionID: seeded.info.id,
+        type: "text",
+        text: "SAME-TIME-RETAINED-TAIL-ASSISTANT",
+      })
+      yield* sessions.updateMessage({
+        id: markerID,
+        role: "user",
+        sessionID: seeded.info.id,
+        agent: "prior_agent",
+        model: ref,
+        time: { created: instant },
+      })
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: markerID,
+        sessionID: seeded.info.id,
+        type: "compaction",
+        auto: true,
+        tail_start_id: retainedUserID,
+      })
+      yield* sessions.updateMessage({
+        id: summaryID,
+        role: "assistant",
+        parentID: markerID,
+        sessionID: seeded.info.id,
+        mode: "compaction",
+        agent: "compaction",
+        path: { cwd: path.resolve(dir), root: path.resolve(dir) },
+        cost: 0,
+        tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+        modelID: ref.modelID,
+        providerID: ref.providerID,
+        time: { created: instant, completed: instant },
+        summary: true,
+        finish: "stop",
+      })
+      yield* sessions.updatePart({
+        id: PartID.ascending(),
+        messageID: summaryID,
+        sessionID: seeded.info.id,
+        type: "text",
+        text: "SAME-TIME-COMPLETED-SUMMARY",
+      })
+
+      const turnID = Turn.ID.create()
+      const currentMessageID = MessageID.make("msg_a_exact_post_compaction_input")
+      const currentText = "SAME-TIME-EXACT-POST-COMPACTION-INPUT"
+      yield* llm.text("post-compaction exact response")
+      yield* prompt.start({
+        sessionID: seeded.info.id,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: currentMessageID,
+        agent: "current_agent",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        parts: [{ type: "text", text: currentText }],
+      })
+      const terminal = yield* prompt.awaitTurn(seeded.info.id, turnID)
+      expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
+
+      const compacted = yield* MessageV2.filterCompactedEffect(seeded.info.id)
+      expect(compacted.some((message) => message.info.id === currentMessageID)).toBe(false)
+      const providerInput = (yield* llm.inputs)[0]!
+      const providerOrder = expectProviderSequence(providerInput, [
+        "SAME-TIME-COMPLETED-SUMMARY",
+        "SAME-TIME-RETAINED-TAIL-USER",
+        "SAME-TIME-RETAINED-TAIL-ASSISTANT",
+        currentText,
+      ])
+      expect(providerOrder.indexes[3]).toBe(providerOrder.messages.length - 1)
+
+      yield* sessions.remove(seeded.info.id)
+    }),
+  { config: cfg, timeout: 30_000 },
 )
 
 compactionBoundary.instance(
@@ -1119,7 +1892,11 @@ it.instance(
       process.env.TZ = "America/New_York"
       setSystemTime(new Date(rootOperationTime))
       contextRelease.resolve()
-      yield* awaitWithTimeout(llm.wait(1), "root provider request was not dispatched")
+      yield* awaitWithTimeout(
+        llm.wait(1),
+        "root provider request was not dispatched after exact context compilation",
+        "5 seconds",
+      )
 
       process.env.TZ = "Asia/Shanghai"
       setSystemTime(new Date(steerSourceTime))
@@ -1161,7 +1938,11 @@ it.instance(
       steerSourceRelease.resolve()
       rootResponse.resolve()
       expect((yield* Fiber.join(steer)).id).toBe(steerInputID)
-      yield* awaitWithTimeout(llm.wait(2), "promoted-steer provider request was not dispatched")
+      yield* awaitWithTimeout(
+        llm.wait(2),
+        "promoted-steer provider request was not dispatched after exact context compilation",
+        "5 seconds",
+      )
       const terminal = yield* prompt.awaitTurn(sessionID, turnID)
       expect(terminal.terminal).toMatchObject({ outcome: "completed", reason: "normal" })
 
@@ -1175,6 +1956,9 @@ it.instance(
       expect(operations).toHaveLength(2)
       const cuts = yield* Effect.forEach(operations, (operation) =>
         database.db.transaction((tx) => RetainedSteering.readCut(tx, operation.assistantMessageID)),
+      )
+      const learningCuts = yield* Effect.forEach(operations, (operation) =>
+        database.db.transaction((tx) => LearningContext.readCut(tx, operation.assistantMessageID)),
       )
       expect(cuts[0]).toMatchObject({
         type: "available",
@@ -1202,20 +1986,174 @@ it.instance(
       if (cuts[0]?.type !== "available" || cuts[1]?.type !== "available") {
         return yield* Effect.die("Expected both stored source-relative cuts")
       }
+      expect(learningCuts).toMatchObject([
+        { type: "available", cut: { operation: { inputID: expect.any(String) }, cutAsOf: rootOperationTime } },
+        { type: "available", cut: { operation: { inputID: steerInputID }, cutAsOf: steerOperationTime } },
+      ])
+      if (learningCuts[0]?.type !== "available" || learningCuts[1]?.type !== "available") {
+        return yield* Effect.die("Expected both exact Gate 18 cuts")
+      }
+      expect(learningCuts[0].cut.fingerprint).not.toBe(learningCuts[1].cut.fingerprint)
       const hits = yield* llm.hits
       expect(hits).toHaveLength(2)
       const rootPayload = JSON.stringify(hits[0]?.body)
       const steerPayload = JSON.stringify(hits[1]?.body)
       expect(rootPayload).toContain(JSON.stringify(RetainedSteering.renderCut(cuts[0].cut)).slice(1, -1))
       expect(steerPayload).toContain(JSON.stringify(RetainedSteering.renderCut(cuts[1].cut)).slice(1, -1))
+      expect(rootPayload).toContain(JSON.stringify(learningCuts[0].renderedBlock).slice(1, -1))
+      expect(steerPayload).toContain(JSON.stringify(learningCuts[1].renderedBlock).slice(1, -1))
       expect(rootPayload.split("[Repa retained learner steering — protected]")).toHaveLength(2)
       expect(steerPayload.split("[Repa retained learner steering — protected]")).toHaveLength(2)
+      expect(rootPayload.split("[Repa learning context — protected]")).toHaveLength(2)
+      expect(steerPayload.split("[Repa learning context — protected]")).toHaveLength(2)
       expect(rootPayload).not.toContain("Today's date:")
       expect(rootPayload).not.toContain("America/New_York")
       expect(steerPayload).not.toContain("America/New_York")
       expect(steerPayload).toContain("Source-relative time is unavailable")
       expect(steerPayload).not.toContain(new Date(steerOperationTime).toISOString())
       yield* sessions.remove(sessionID)
+    }),
+  { config: cfg },
+  30_000,
+)
+
+it.instance(
+  "rejects an AI SDK unbound tool before any fallback execution",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      yield* llm.tool("not_offered", {})
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "program invalid fallback",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Call only a tool that was actually offered." }],
+      })
+
+      const terminal = yield* prompt.awaitTurn(sessionID, turnID)
+      const messages = yield* MessageV2.filterCompactedEffect(sessionID)
+      const calls = messages
+        .flatMap((message) => message.parts)
+        .filter((part): part is SessionV1.ToolPart => part.type === "tool")
+      const assistant = messages.find(
+        (message): message is SessionV1.WithParts & { info: SessionV1.Assistant } => message.info.role === "assistant",
+      )
+      expect(terminal.terminal).toMatchObject({
+        outcome: "failed",
+        reason: "provider_failure",
+        counters: { model: 1, tool: 0 },
+      })
+      expect(calls).toEqual([])
+      expect(assistant?.info.error).toMatchObject({
+        name: "UnknownError",
+        data: { message: "Provider tool name is outside the frozen projection: not_offered" },
+      })
+      expect(yield* llm.calls).toBe(1)
+    }),
+  { config: cfg },
+  30_000,
+)
+
+it.instance(
+  "rejects a provider-origin invalid call before creating a tool candidate",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      yield* llm.tool("invalid", { tool: "read", error: "provider-forged fallback" })
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "provider fallback provenance",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Do not accept an unoffered fallback identity." }],
+      })
+
+      const terminal = yield* prompt.awaitTurn(sessionID, turnID)
+      const messages = yield* MessageV2.filterCompactedEffect(sessionID)
+      expect(terminal.terminal).toMatchObject({
+        outcome: "failed",
+        reason: "provider_failure",
+        counters: { model: 1, tool: 0 },
+      })
+      expect(messages.flatMap((message) => message.parts).filter((part) => part.type === "tool")).toEqual([])
+      expect(JSON.stringify(messages)).toContain("Provider tool name is outside the prepared provider surface: invalid")
+      const hits = yield* llm.hits
+      expect(hits).toHaveLength(1)
+      expect(JSON.stringify(hits[0]?.body.tools)).not.toContain('"name":"invalid"')
+    }),
+  { config: cfg },
+  30_000,
+)
+
+it.instance(
+  "executes one inert invalid fallback only for malformed arguments to an offered AI SDK tool",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessionID = SessionID.create()
+      const turnID = Turn.ID.create()
+      yield* llm.push(reply().toolInput("read", "{").item())
+      yield* llm.text("Recovered after the inert repair.")
+
+      yield* prompt.start({
+        sessionID,
+        turnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "offered tool argument repair",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Read one file if the arguments are valid." }],
+      })
+
+      const terminal = yield* prompt.awaitTurn(sessionID, turnID)
+      const parts = (yield* MessageV2.filterCompactedEffect(sessionID)).flatMap((message) => message.parts)
+      const repaired = parts.filter(
+        (part): part is SessionV1.ToolPart => part.type === "tool" && part.tool === "invalid",
+      )
+      expect(repaired).toHaveLength(1)
+      expect(terminal.terminal).toMatchObject({
+        outcome: "completed",
+        reason: "normal",
+        counters: { model: 2, tool: 1 },
+      })
+      expect(repaired[0]?.state).toMatchObject({
+        status: "completed",
+        input: { tool: "read", error: expect.any(String) },
+        title: "Invalid Tool",
+      })
+      expect(JSON.stringify(parts)).toContain("Recovered after the inert repair.")
+      const hits = yield* llm.hits
+      expect(hits).toHaveLength(2)
+      hits.forEach((hit) => expect(JSON.stringify(hit.body.tools)).not.toContain('"name":"invalid"'))
     }),
   { config: cfg },
   30_000,

@@ -129,8 +129,9 @@ it.instance("rejects GitLab workflow callback execution before provider IO", () 
         toolChoice: "required",
       })
       .pipe(Stream.runDrain, Effect.exit)
+    if (!llm.plan) return yield* Effect.die("Gate 18 LLM planning seam is unavailable")
     const interactiveExit = yield* llm
-      .stream({
+      .plan({
         composition: { type: "interactive" },
         sessionID,
         model,
@@ -147,7 +148,7 @@ it.instance("rejects GitLab workflow callback execution before provider IO", () 
         messages: [{ role: "user", content: "Act through the workflow" }],
         tools: {},
       })
-      .pipe(Stream.runDrain, Effect.exit)
+      .pipe(Effect.exit)
 
     expect(Exit.isFailure(exit)).toBe(true)
     expect(Exit.isFailure(interactiveExit)).toBe(true)

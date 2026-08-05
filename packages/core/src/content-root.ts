@@ -278,6 +278,7 @@ export type LocalReadAuthorizationReceipt =
 
 const workspaceReadToken = Symbol("ContentRoot.ActiveWorkspaceRead")
 const operationReadToken = Symbol("ContentRoot.OneOperationRead")
+const currentLocalReadInvocationToken = Symbol("ContentRoot.CurrentLocalReadInvocation")
 const preparedLocalReadToken = Symbol("ContentRoot.PreparedLocalRead")
 
 /** Trusted active execution-workspace scope; it never becomes a durable ContentRoot. */
@@ -315,25 +316,76 @@ export class OneOperationRead {
   }
 }
 
+/** Trusted identity of the physical Tutor tool invocation consuming a Gate 10 read. */
+export class CurrentLocalReadInvocation {
+  private constructor(
+    readonly operationIdentity: string,
+    readonly profileIdentity: string,
+    readonly workspaceIdentity?: string,
+  ) {}
+
+  static trusted(operationIdentity: string, profileIdentity: string, workspaceIdentity?: string) {
+    return new CurrentLocalReadInvocation(operationIdentity, profileIdentity, workspaceIdentity)
+  }
+
+  expectation(token: symbol) {
+    if (token !== currentLocalReadInvocationToken) return undefined
+    return {
+      operationIdentity: this.operationIdentity,
+      profileIdentity: this.profileIdentity,
+      workspaceIdentity: this.workspaceIdentity,
+    }
+  }
+}
+
 /** Race-safe bytes and exact authority provenance for one Gate 10 local read. */
 export class PreparedLocalRead {
   readonly authorization: LocalReadAuthorizationReceipt
   readonly observation: ContentRootNTFS.PreparedFile
   #require: (tx: Transaction) => Effect.Effect<LocalReadAuthorizationReceipt, Error>
+  #invocation?: Readonly<{ operationIdentity: string; profileIdentity: string; workspaceIdentity?: string }>
 
   constructor(
     token: symbol,
     authorization: LocalReadAuthorizationReceipt,
     observation: ContentRootNTFS.PreparedFile,
     require: (tx: Transaction) => Effect.Effect<LocalReadAuthorizationReceipt, Error>,
+    invocation?: Readonly<{ operationIdentity: string; profileIdentity: string; workspaceIdentity?: string }>,
   ) {
     if (token !== preparedLocalReadToken) throw new Error("Local-read proofs are owner-issued")
     this.authorization = Object.freeze({ ...authorization, root: Object.freeze({ ...authorization.root }) })
     this.observation = Object.freeze({ ...observation, bytes: observation.bytes.slice() })
     this.#require = require
+    this.#invocation = invocation ? Object.freeze({ ...invocation }) : undefined
   }
 
   require(tx: Transaction) {
+    return this.#require(tx)
+  }
+
+  requireForTutor(tx: Transaction, invocation: CurrentLocalReadInvocation) {
+    const current =
+      invocation instanceof CurrentLocalReadInvocation
+        ? invocation.expectation(currentLocalReadInvocationToken)
+        : undefined
+    const expected = this.#invocation
+    if (
+      !current ||
+      !expected ||
+      current.operationIdentity !== expected.operationIdentity ||
+      current.profileIdentity !== expected.profileIdentity ||
+      current.workspaceIdentity !== expected.workspaceIdentity ||
+      (this.authorization.kind === "one_operation" &&
+        current.operationIdentity !== this.authorization.operationIdentity) ||
+      (this.authorization.kind === "active_workspace" &&
+        current.workspaceIdentity !== this.authorization.workspaceIdentity)
+    ) {
+      return Effect.fail(
+        new InvalidTransitionError({
+          detail: "Tutor local-read authority does not belong to this exact current operation/workspace/profile",
+        }),
+      )
+    }
     return this.#require(tx)
   }
 }
@@ -469,16 +521,19 @@ export interface Interface {
           authority: { readonly type: "content_root"; readonly contentRootID: ContentRootID }
           path: string
           maxBytes?: number
+          invocation?: CurrentLocalReadInvocation
         }>
       | Readonly<{
           authority: { readonly type: "active_workspace"; readonly scope: ActiveWorkspaceRead }
           path: string
           maxBytes?: number
+          invocation?: CurrentLocalReadInvocation
         }>
       | Readonly<{
           authority: { readonly type: "one_operation"; readonly grant: OneOperationRead }
           path: string
           maxBytes?: number
+          invocation?: CurrentLocalReadInvocation
         }>,
   ) => Effect.Effect<PreparedLocalRead, Error>
   readonly subscribeInvalidation: (contentRootID: ContentRootID) => Effect.Effect<AbortSignal, never, Scope.Scope>
@@ -724,6 +779,10 @@ const layer = Layer.effect(
 
     const prepareLocalRead: Interface["prepareLocalRead"] = Effect.fn("ContentRoot.prepareLocalRead")(
       function* (input) {
+        const invocation = input.invocation?.expectation(currentLocalReadInvocationToken)
+        if (input.invocation && (!invocation || !invocation.operationIdentity || !invocation.profileIdentity)) {
+          return yield* new InvalidTransitionError({ detail: "Current Tutor local-read invocation is invalid" })
+        }
         if (input.authority.type === "content_root") {
           const authorized = yield* authorize(input.authority.contentRootID)
           const relativePath = yield* localRelativePath(authorized.stored.binding.descriptor, input.path)
@@ -756,30 +815,35 @@ const layer = Layer.effect(
             },
             grantEpisodeOrdinal: authorized.grant.ordinal,
           } satisfies LocalReadAuthorizationReceipt
-          return new PreparedLocalRead(preparedLocalReadToken, authorization, observation, (tx) =>
-            Effect.gen(function* () {
-              const current = yield* requireStoredRoot(tx, authorization.contentRoot.contentRootID)
-              if (
-                current.disposition !== "active" ||
-                !current.grant ||
-                current.binding.id !== authorization.contentRoot.bindingID ||
-                current.bindingEpisode.id !== authorization.contentRoot.bindingEpisodeID ||
-                current.bindingEpisode.ordinal !== authorization.contentRoot.bindingEpisodeOrdinal ||
-                current.grant.id !== authorization.contentRoot.grantEpisodeID ||
-                current.grant.ordinal !== authorization.grantEpisodeOrdinal ||
-                current.grantVersion !== authorization.contentRoot.grantVersion ||
-                !ContentRootNTFS.sameObject(current.binding.descriptor, authorization.root)
-              ) {
-                return yield* new ConflictError({
-                  entity: "grant_episode",
-                  id: authorization.contentRoot.grantEpisodeID,
-                  detail: "The exact ContentRoot read authority changed before local composition",
-                })
-              }
-              yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
-              yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
-              return authorization
-            }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+          return new PreparedLocalRead(
+            preparedLocalReadToken,
+            authorization,
+            observation,
+            (tx) =>
+              Effect.gen(function* () {
+                const current = yield* requireStoredRoot(tx, authorization.contentRoot.contentRootID)
+                if (
+                  current.disposition !== "active" ||
+                  !current.grant ||
+                  current.binding.id !== authorization.contentRoot.bindingID ||
+                  current.bindingEpisode.id !== authorization.contentRoot.bindingEpisodeID ||
+                  current.bindingEpisode.ordinal !== authorization.contentRoot.bindingEpisodeOrdinal ||
+                  current.grant.id !== authorization.contentRoot.grantEpisodeID ||
+                  current.grant.ordinal !== authorization.grantEpisodeOrdinal ||
+                  current.grantVersion !== authorization.contentRoot.grantVersion ||
+                  !ContentRootNTFS.sameObject(current.binding.descriptor, authorization.root)
+                ) {
+                  return yield* new ConflictError({
+                    entity: "grant_episode",
+                    id: authorization.contentRoot.grantEpisodeID,
+                    detail: "The exact ContentRoot read authority changed before local composition",
+                  })
+                }
+                yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
+                yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
+                return authorization
+              }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+            invocation,
           )
         }
 
@@ -787,6 +851,11 @@ const layer = Layer.effect(
           const scope = input.authority.scope.expectation(workspaceReadToken)
           if (!scope || !scope.directory || !scope.workspaceIdentity) {
             return yield* new InvalidTransitionError({ detail: "Active workspace read scope is invalid" })
+          }
+          if (invocation && invocation.workspaceIdentity !== scope.workspaceIdentity) {
+            return yield* new InvalidTransitionError({
+              detail: "Active workspace read does not match the current Tutor workspace identity",
+            })
           }
           const root = yield* native(() => ContentRootNTFS.inspectDirectory(scope.directory))
           const relativePath = yield* localRelativePath(root, input.path)
@@ -807,18 +876,28 @@ const layer = Layer.effect(
             canonicalPath: observation.descriptor.canonicalPath,
             workspaceIdentity: scope.workspaceIdentity,
           } satisfies LocalReadAuthorizationReceipt
-          return new PreparedLocalRead(preparedLocalReadToken, authorization, observation, () =>
-            Effect.gen(function* () {
-              yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
-              yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
-              return authorization
-            }),
+          return new PreparedLocalRead(
+            preparedLocalReadToken,
+            authorization,
+            observation,
+            () =>
+              Effect.gen(function* () {
+                yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
+                yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
+                return authorization
+              }),
+            invocation,
           )
         }
 
         const grant = input.authority.grant.expectation(operationReadToken)
         if (!grant || !grant.path || !grant.operationIdentity || !grant.approvalBasis.trim()) {
           return yield* new InvalidTransitionError({ detail: "One-operation local read grant is invalid" })
+        }
+        if (invocation && invocation.operationIdentity !== grant.operationIdentity) {
+          return yield* new InvalidTransitionError({
+            detail: "One-operation local read grant belongs to another Tutor invocation",
+          })
         }
         const requested = win32.resolve(input.path)
         if (requested.toLocaleLowerCase("und") !== win32.resolve(grant.path).toLocaleLowerCase("und")) {
@@ -848,12 +927,17 @@ const layer = Layer.effect(
           operationIdentity: grant.operationIdentity,
           approvalBasis: grant.approvalBasis,
         } satisfies LocalReadAuthorizationReceipt
-        return new PreparedLocalRead(preparedLocalReadToken, authorization, observation, () =>
-          Effect.gen(function* () {
-            yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
-            yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
-            return authorization
-          }),
+        return new PreparedLocalRead(
+          preparedLocalReadToken,
+          authorization,
+          observation,
+          () =>
+            Effect.gen(function* () {
+              yield* native(() => ContentRootNTFS.requireSameObject(authorization.root))
+              yield* native(() => ContentRootNTFS.requireUnchangedFile(observation.descriptor))
+              return authorization
+            }),
+          invocation,
         )
       },
     )

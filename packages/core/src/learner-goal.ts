@@ -7,6 +7,7 @@ import { CourseTable } from "./course/sql"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
 import { LearningFrontier } from "./learning-frontier"
+import { MAX_LAZY_BYTES, MAX_LAZY_ITEMS, canonicalFingerprint, toJsonValue, utf8Bytes } from "./learning-context/schema"
 import { Occurrence } from "./learning-command/occurrence"
 import { AdmittedLearnerOccurrenceTable, LearnerOccurrenceTombstoneTable } from "./learning-command/occurrence.sql"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "./learning-command/sql"
@@ -267,6 +268,10 @@ export interface ReadInterface {
     IntegrityError | import("./learner-goal/schema").InvalidCursorError
   >
   readonly readEffect: (effectID: EffectID) => Effect.Effect<EffectRead | undefined, IntegrityError>
+  readonly readRevision: (
+    input: Omit<Parameters<typeof readLearningContextRevision>[1], "asOf" | "maxBytes" | "maxItems"> &
+      Readonly<{ asOf: number; maxBytes?: number; maxItems?: number }>,
+  ) => ReturnType<typeof readLearningContextRevision>
 }
 
 export class ReadService extends Context.Service<ReadService, ReadInterface>()("@repa/LearnerGoal/Read") {}
@@ -280,6 +285,14 @@ const readLayer = Layer.effect(
       readHistory: (goalID, asOf, options) => snapshot(database.db, (tx) => readHistory(tx, goalID, asOf, options)),
       discover: (asOf, filter, options) => snapshot(database.db, (tx) => discover(tx, asOf, filter, options)),
       readEffect: (effectID) => snapshot(database.db, (tx) => readEffect(tx, effectID)),
+      readRevision: (input) =>
+        snapshot(database.db, (tx) =>
+          readLearningContextRevision(tx, {
+            ...input,
+            maxBytes: input.maxBytes ?? MAX_LAZY_BYTES,
+            maxItems: input.maxItems ?? MAX_LAZY_ITEMS,
+          }),
+        ),
     } satisfies ReadInterface
   }),
 )
@@ -2733,6 +2746,280 @@ export function discover(tx: Transaction, asOf: number, filter: DiscoveryFilter 
         : {}),
     }
   })
+}
+
+/** Gate 18 transaction-scoped, zero-write Goal projection. */
+export function projectLearningContext(tx: Transaction, asOf: number, limit: number) {
+  return Effect.gen(function* () {
+    const count = yield* tx
+      .select({ value: sql<number>`count(*)` })
+      .from(LearnerGoalTable)
+      .get()
+      .pipe(Effect.orDie)
+    const page = yield* discover(tx, asOf, {}, { limit })
+    const countAtCut = count?.value ?? 0
+    if (page.items.length !== Math.min(countAtCut, limit)) {
+      return yield* integrity("Goal learning-context projection disagrees with the Goal identity count")
+    }
+    return {
+      countAtCut,
+      throughRevision: page.throughRevision,
+      entries: yield* Effect.forEach(page.items, (goal) =>
+        Effect.gen(function* () {
+          const scopeCourses = goal.head.scope.type === "courses" ? goal.head.scope.courses : []
+          return {
+            ...goal,
+            learningContextDependencies: {
+              asOf,
+              target: goal.head.target,
+              targetRelation: goal.head.targetRelation,
+              scopeCourses: yield* Effect.forEach(scopeCourses, (course) =>
+                Course.inspectPreferenceTarget(tx, course.courseID),
+              ),
+            },
+          }
+        }),
+      ),
+    }
+  })
+}
+
+export type LearningContextRevisionField = "outcome" | "conditions" | "scope" | "target" | "fieldBases" | "disposition"
+
+export class LearningContextReadError extends Error {
+  readonly code: "invalid_budget" | "mandatory_over_budget"
+
+  constructor(code: LearningContextReadError["code"], message: string) {
+    super(message)
+    this.name = "LearnerGoal.LearningContextReadError"
+    this.code = code
+  }
+}
+
+/** Read one immutable Goal Revision without retargeting to the current head. */
+export function readLearningContextRevision(
+  tx: Transaction,
+  input: {
+    readonly goalID: GoalID
+    readonly revisionID: RevisionID
+    readonly asOf: number
+    readonly maxBytes: number
+    readonly maxItems: number
+    readonly field?: LearningContextRevisionField
+    readonly offset?: number
+  },
+) {
+  return Effect.gen(function* () {
+    if (
+      !Number.isSafeInteger(input.asOf) ||
+      input.asOf < 0 ||
+      !Number.isSafeInteger(input.maxBytes) ||
+      input.maxBytes <= 0 ||
+      input.maxBytes > MAX_LAZY_BYTES ||
+      !Number.isSafeInteger(input.maxItems) ||
+      input.maxItems <= 0 ||
+      input.maxItems > MAX_LAZY_ITEMS ||
+      !Number.isSafeInteger(input.offset ?? 0) ||
+      (input.offset ?? 0) < 0
+    ) {
+      return yield* Effect.fail(
+        new LearningContextReadError(
+          "invalid_budget",
+          "Goal learning-context reads must stay within the Gate 18 byte and item limits",
+        ),
+      )
+    }
+    const goal = yield* tx
+      .select()
+      .from(LearnerGoalTable)
+      .where(eq(LearnerGoalTable.id, input.goalID))
+      .get()
+      .pipe(Effect.orDie)
+    if (!goal) return { type: "unavailable" as const, cause: "goal_not_found" as const }
+    const revision = yield* tx
+      .select()
+      .from(LearnerGoalRevisionTable)
+      .where(
+        and(
+          eq(LearnerGoalRevisionTable.goal_id, input.goalID),
+          eq(LearnerGoalRevisionTable.id, input.revisionID),
+          committedRevision,
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    if (!revision) return { type: "unavailable" as const, cause: "revision_not_found" as const }
+    const value = yield* revisionRead(tx, revision, input.asOf)
+    const identity = {
+      id: value.id,
+      goalID: value.goalID,
+      version: value.version,
+      ...(value.predecessorID ? { predecessorID: value.predecessorID } : {}),
+      schemaVersion: value.schemaVersion,
+      targetVersion: value.targetVersion,
+      revisionOrder: value.revisionOrder,
+      effectID: value.effectID,
+      occurrenceID: value.occurrenceID,
+      sourceOrder: value.sourceOrder,
+      timeCommitted: value.timeCommitted,
+      commitOrder: value.commitOrder,
+      frontierSequence: value.frontierSequence,
+      source: value.source,
+    }
+    const wholeReference = exactLearningContextValue(value)
+    if (!input.field) {
+      const itemCount = 1 + value.conditions.length + (value.scope.type === "courses" ? value.scope.courses.length : 0)
+      if (itemCount > input.maxItems) {
+        return yield* boundedLearningContextRead(
+          {
+            type: "over_budget" as const,
+            reason: "item_budget" as const,
+            goalID: input.goalID,
+            revision: identity,
+            relationAsOf: input.asOf,
+            requiredItems: itemCount,
+            required: wholeReference,
+            availableFields: learningContextRevisionFields(value),
+          },
+          input.maxBytes,
+        )
+      }
+      return yield* boundedLearningContextRead(
+        {
+          type: "available" as const,
+          goalID: input.goalID,
+          timeCreated: goal.time_created,
+          relationAsOf: input.asOf,
+          revision: value,
+          itemCount,
+        },
+        input.maxBytes,
+        {
+          type: "over_budget" as const,
+          reason: "byte_budget" as const,
+          goalID: input.goalID,
+          revision: identity,
+          relationAsOf: input.asOf,
+          requiredItems: itemCount,
+          required: wholeReference,
+          availableFields: learningContextRevisionFields(value),
+        },
+      )
+    }
+
+    const offset = input.offset ?? 0
+    const field = learningContextField(value, input.field, offset, input.maxItems)
+    return yield* boundedLearningContextRead(
+      {
+        type: "available" as const,
+        goalID: input.goalID,
+        timeCreated: goal.time_created,
+        relationAsOf: input.asOf,
+        revision: identity,
+        field: input.field,
+        value: field,
+        itemCount: fieldItemCount(field),
+      },
+      input.maxBytes,
+      {
+        type: "over_budget" as const,
+        reason: "field_byte_budget" as const,
+        goalID: input.goalID,
+        revision: identity,
+        relationAsOf: input.asOf,
+        field: input.field,
+        required: exactLearningContextValue(field),
+      },
+    )
+  })
+}
+
+function learningContextRevisionFields(value: Revision): readonly LearningContextRevisionField[] {
+  return [
+    "outcome",
+    "conditions",
+    "scope",
+    "target",
+    ...(value.schemaVersion === 1 ? (["fieldBases"] as const) : []),
+    "disposition",
+  ]
+}
+
+function learningContextField(
+  revision: Revision,
+  field: LearningContextRevisionField,
+  offset: number,
+  maxItems: number,
+) {
+  if (field === "conditions") {
+    const items = revision.conditions.slice(offset, offset + maxItems)
+    return {
+      offset,
+      items,
+      total: revision.conditions.length,
+      full: exactLearningContextValue(revision.conditions),
+      ...(offset + items.length < revision.conditions.length ? { nextOffset: offset + items.length } : {}),
+    }
+  }
+  if (field === "scope" && revision.scope.type === "courses") {
+    const items = revision.scope.courses.slice(offset, offset + maxItems)
+    return {
+      type: "courses" as const,
+      offset,
+      items,
+      total: revision.scope.courses.length,
+      full: exactLearningContextValue(revision.scope),
+      ...(offset + items.length < revision.scope.courses.length ? { nextOffset: offset + items.length } : {}),
+    }
+  }
+  if (field === "fieldBases") {
+    return revision.schemaVersion === 1
+      ? { type: "available" as const, value: revision.fieldBases }
+      : { type: "not_applicable" as const }
+  }
+  return revision[field]
+}
+
+function fieldItemCount(value: unknown) {
+  if (!value || typeof value !== "object" || !("items" in value) || !Array.isArray(value.items)) return 1
+  return value.items.length
+}
+
+function exactLearningContextValue(value: unknown) {
+  const canonical = JSON.stringify(toJsonValue(value))
+  return { canonicalBytes: utf8Bytes(canonical), fingerprint: canonicalFingerprint(toJsonValue(value)) }
+}
+
+function boundedLearningContextRead<const T extends Readonly<Record<string, unknown>>>(
+  value: T,
+  maxBytes: number,
+  fallback?: Readonly<Record<string, unknown>>,
+) {
+  return Effect.gen(function* () {
+    const result = measuredLearningContextRead(value)
+    if (result.canonicalBytes <= maxBytes) return result
+    if (fallback) {
+      const bounded = measuredLearningContextRead(fallback)
+      if (bounded.canonicalBytes <= maxBytes) return bounded
+    }
+    return yield* Effect.fail(
+      new LearningContextReadError(
+        "mandatory_over_budget",
+        "The exact Goal revision locator cannot fit within the requested Gate 18 byte budget",
+      ),
+    )
+  })
+}
+
+function measuredLearningContextRead<const T extends Readonly<Record<string, unknown>>>(value: T) {
+  let canonicalBytes = 0
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const result = { ...value, canonicalBytes }
+    const next = utf8Bytes(JSON.stringify(toJsonValue(result)))
+    if (next === canonicalBytes) return result
+    canonicalBytes = next
+  }
+  throw new LearningContextReadError("mandatory_over_budget", "Goal learning-context byte accounting did not converge")
 }
 
 export function readEffect(tx: Transaction, effectID: EffectID): Effect.Effect<EffectRead | undefined, IntegrityError> {

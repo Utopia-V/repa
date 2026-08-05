@@ -1,4 +1,5 @@
 import { Database } from "@opencode-ai/core/database/database"
+import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventTable } from "@opencode-ai/core/event/sql"
@@ -333,7 +334,7 @@ function addAssistant(db: Db, root: Root, time: number, completed: boolean, erro
 
 function admitModel(db: Db, root: Root, assistant: SessionV1.Assistant, time: number) {
   return db.transaction((tx) =>
-    TurnLifecycle.admitModel(tx, {
+    admitModelWithLearningContext(tx, {
       turnID: root.turnID,
       sessionID: root.sessionID,
       assistantMessageID: assistant.id,
