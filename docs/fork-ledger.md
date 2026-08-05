@@ -2618,11 +2618,13 @@ manifest SHA-256
 and tracked binary-diff SHA-256
 `FD4854C9AFD74516FB27CA894FDC935910F3515D31EBDABC7E3DD9E24746E61F`.
 Both Gate 18 review layers are accepted with no acceptance-changing finding or
-material unknown remaining. The candidate remains detached, uncommitted,
-unstaged, and unintegrated; this acceptance establishes readiness only for a
-separately authorized integration step and grants no release or later-Gate
-authority. Post-verdict documentation edits record that disposition without
-changing the reviewed production code or tests.
+material unknown remaining. The maintainer then separately authorized local
+integration. Exact implementation commit
+`284d2a4ae440fb01f0f5a32eca58a5948464cc5e` contains the reviewed
+production/test projection plus post-verdict status records; `main` was
+fast-forwarded through its docs-only closure/status successor. No production or
+test content changed after reviewer acceptance, and no push, release, or
+later-Gate authority follows.
 
 ## Historical evidence locators
 

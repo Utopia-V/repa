@@ -19,9 +19,11 @@ unadvertised program fallback and pre-catalog rejection of colliding raw MCP
 origins. The reviewer returned **Accept** for the exact rebound candidate on
 2026-08-05 with `G18-IR-001..008` closed, no new acceptance-changing finding,
 and no material unknown. Together with the accepted contract/theory layer, the
-whole-Gate review is complete. This establishes readiness only for a separately
-authorized integration step; it does not authorize or claim a commit,
-integration, release, or later Gate.
+whole-Gate review is complete. The maintainer separately authorized local
+integration; the reviewed production/test projection plus post-verdict status
+records are committed at `284d2a4ae440fb01f0f5a32eca58a5948464cc5e` and
+integrated into `main` through a docs-only closure/status successor. No push,
+release, or later Gate is authorized or claimed.
 
 ## Exact authority and candidate binding
 
@@ -37,13 +39,17 @@ integration, release, or later Gate.
   `733137B901BD476B59AAF4C48760E1127CF1613D115D581D24B8B935BCE8C078`;
 - review-bound tracked binary-diff SHA-256:
   `FD4854C9AFD74516FB27CA894FDC935910F3515D31EBDABC7E3DD9E24746E61F`;
-- checkout state: detached at the implementation base. No Gate 18 commit,
-  staging, push, merge, or integration has been performed; and
+- review checkout state: detached at the implementation base, with no commit,
+  staging, push, merge, or integration performed before acceptance;
 - implementation/evidence disposition: **Accept**, with `G18-IR-001..008`
   closed by the same reviewer and no acceptance-changing finding or material
   unknown remaining. This post-verdict status reconciliation changes only the
   owning status documents; production code and tests remain the exact reviewed
-  candidate.
+  candidate; and
+- local integration: implementation commit
+  `284d2a4ae440fb01f0f5a32eca58a5948464cc5e` contains that reviewed
+  production/test projection plus the post-verdict status records, and `main`
+  includes it through a docs-only closure/status successor. No push occurred.
 
 The released-model run used Repa's ordinary model catalog and retained OpenAI
 OAuth discovery. `openai/gpt-5.6-luna` was present in that catalog and in the
@@ -634,4 +640,5 @@ The same reviewer evaluated the candidate against these rejection questions:
 The same reviewer answered this complete boundary with **Accept** after
 reproducing the final AI SDK/native projection and MCP collision oracles. All
 `G18-IR-001..008` findings are closed. No implementation/evidence blocker or
-material unknown remains; commit and integration remain deliberately pending.
+material unknown remains. The separately authorized local commit/integration is
+complete; push, release, and later-Gate work remain outside this record.

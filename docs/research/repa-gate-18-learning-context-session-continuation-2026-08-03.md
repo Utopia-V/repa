@@ -17,9 +17,11 @@ review-bound implementation candidate has manifest SHA-256
 `733137B901BD476B59AAF4C48760E1127CF1613D115D581D24B8B935BCE8C078`
 and tracked binary-diff SHA-256
 `FD4854C9AFD74516FB27CA894FDC935910F3515D31EBDABC7E3DD9E24746E61F`.
-Both review layers are accepted; the candidate is ready only for a separately
-authorized integration step. No commit, integration, release, or later-Gate
-authority is established.
+Both review layers are accepted. After separate maintainer authorization, the
+reviewed production/test projection plus post-verdict status records were
+committed as `284d2a4ae440fb01f0f5a32eca58a5948464cc5e` and integrated into
+`main` through a docs-only closure/status successor. No push, release, or
+later-Gate authority is established.
 
 Date: 2026-08-03; contract/theory accepted 2026-08-04;
 implementation/evidence accepted 2026-08-05
@@ -1096,12 +1098,13 @@ integration, release state, or later Gate is accepted by that verdict.
 
 ## Implementation/evidence acceptance locator
 
-The uncommitted executor candidate, deterministic evidence, and separately
+The reviewed executor candidate, deterministic evidence, and separately
 authorized released-model evidence are recorded in the
 [Gate 18 implementation/evidence record](repa-gate-18-learning-context-session-continuation-implementation-evidence-2026-08-04.md).
 The same whole-Gate reviewer returned **Accept** for the exact review-bound
 candidate after closing `G18-IR-001..008`; no acceptance-changing finding or
 material unknown remains. This completes Gate 18's contract/theory and
-implementation/evidence review layers. Integration remains a separate,
-unauthorized step, so no commit, staging, merge, release, or later-Gate state is
-claimed here.
+implementation/evidence review layers. The separately authorized local
+integration is fixed at implementation commit
+`284d2a4ae440fb01f0f5a32eca58a5948464cc5e` plus its docs-only closure/status
+successor. No push, release, or later-Gate state is claimed here.

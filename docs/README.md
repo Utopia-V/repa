@@ -21,9 +21,11 @@ on 2026-08-04, then closed `G18-IR-001..008` and accepted the exact uncommitted
 implementation/evidence candidate on 2026-08-05. The accepted evidence includes
 the separately authorized isolated `openai/gpt-5.6-luna` qualification with 62
 captured provider attempts, 57 durable interactive model operations, 22 learner
-scenarios, and TUI/direct-run/ACP carrier coverage. The whole-Gate review is
-complete; the candidate awaits separately authorized integration, and no
-commit, integration, release, or later-Gate authority is implied.
+scenarios, and TUI/direct-run/ACP carrier coverage. The maintainer then
+authorized local integration: exact implementation commit `284d2a4ae` carries
+the reviewed production/test projection plus post-verdict status records, and
+`main` was fast-forwarded through its docs-only closure/status successor. No
+push, release, or later-Gate transition is implied.
 The accepted Agent-native Gate 14/16, retained OAuth, and Gate 8 corrections are
 integrated. The pre-Gate-17 audit remains falsifiable hazard provenance rather
 than the current control point or a permanent project-health verdict. The
@@ -219,14 +221,15 @@ trace databases, exact once-only permission shapes, carrier equivalence,
 correction history, no-partial-write failure, and internal diagnostic logging
 before accepting exact candidate `39a8c2f4` for integration. `main` was
 fast-forwarded through closure/status commit `506b420cf`; all changes after the
-accepted candidate are documentation-only. Gate 18's contract and uncommitted
+accepted candidate are documentation-only. Gate 18's contract and reviewed
 implementation/evidence candidate are accepted under
 `G18-WG-20260804-019fc837-01`, with `G18-CR-001..004` and
 `G18-IR-001..008` closed by the same independent reviewer. The accepted live
 trace binds 57 durable interactive operations to 62 captured final provider
-attempts across the contract matrix and TUI/direct-run/ACP carriers. Gate 18
-now awaits a separately authorized integration step; no commit, merge, release,
-or next-Gate transition has occurred.
+attempts across the contract matrix and TUI/direct-run/ACP carriers. The
+maintainer authorized local integration; implementation commit `284d2a4ae` and
+its docs-only closure/status successor are now in `main`. No push, release, or
+next-Gate transition has occurred.
 On 2026-07-28, corrective
 implementation candidates for
 Gate 5 identity, build, and permission behavior; Gate 6/8 database and
@@ -247,11 +250,11 @@ V15-predecessor/V16-migration correction is accepted and integrated at
 `93e2412d3`; its exact Agent-native implementation/evidence is accepted and
 integrated at `2baba9eea`. Gate 17 is accepted at `39a8c2f4` and included in
 mainline through closure/status commit `506b420cf`. Gate 18's exact contract
-candidate `2DDAA563...` and review-bound uncommitted implementation/evidence
-candidate are accepted by the same reviewer, with `G18-CR-001..004` and
-`G18-IR-001..008` closed. The implementation is ready for separately governed
-integration; the unaffected audit reconciliation is not reopened, and no
-commit, release, or next-Gate transition is claimed.
+candidate `2DDAA563...` and implementation/evidence candidate are accepted by
+the same reviewer, with `G18-CR-001..004` and `G18-IR-001..008` closed. The
+accepted implementation is integrated locally at `284d2a4ae` with a docs-only
+closure/status successor; the unaffected audit reconciliation is not reopened,
+and no push, release, or next-Gate transition is claimed.
 Documentation reconciliation and inherited-material classification are
 current evidence, not proof against future counterexample. “Accepted” records
 a decision and its provenance; it is not a correctness axiom.
@@ -292,7 +295,7 @@ in the [inherited-material index](inherited/README.md).
 | 15. [Retained scoped steering](research/opencode-fork-gate-15-retained-scoped-steering-2026-07-20.md)                      | Makes only learner instructions with a real future sampling consumer into source-linked, scoped, correctable policy state.                                                                    | Closed again at corrective integration `9e91d43c6`. The shared presenter preserves committed create/replace/retract instruction, scope, normalized expiry/timezone, state/version, relation, and correction guidance across TUI, direct-run, replay, and later provider failure. Commit `03ea74ec4` remains historical provenance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)                          | Preserves learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning.                                               | **Closed at Agent-native implementation commit `2baba9eea`.** Original reviewer `019fb2a3-c902-7882-8134-1bf33f1eb04d` accepted the V15→V16 contract and exact implementation after closing `G16-AN-001..003` and `G16-AN-IMP-001..003`. Current behavior uses bounded Goal/Course reads, one typed semantic-intent write, runtime-owned identity/version/temporal facts, exact root/delegated Agent issuance, configured capability policy, semantic-first replay/recovery, historical V1 replay-only truth, and durable terminal presentation. Mixed changed/no-change settlement, retired-producer package reachability, and pre-epoch validation are causally covered. Gate 17 remains a separate contract and implementation/evidence boundary.                                                                                                                                                                                               |
 | 17. [Natural-language learning bootstrap](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)         | Accepted contract boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn.                                                  | **Closed at exact implementation/evidence commit `39a8c2f4`.** Contract `cf0cfbd0` omits built-in `/learn`; the implementation preserves Gate 10's exact local-read union and one-new-Artifact ceiling, composes one closed request-bound Course/View/material/selection/anchor set through owner-private seams, uses Gate 8 settlement/recovery, and projects one typed TUI/direct-run/ACP truth. Original fresh reviewer `019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed `G17-IE-001..005` and accepted the deterministic evidence, passing seven-Turn released-v1 trace, honest interrupted/no-partial-write negative trace, and internal diagnostics correction. The accepted implementation is in mainline through closure/status commit `506b420cf`; subsequent changes are documentation-only. This closure does not claim exhaustive interpretation, pedagogical efficacy, reliability, release readiness, or Gate 23 product-loop behavior. |
-| 18. [Learning context and Session continuation](research/repa-gate-18-learning-context-session-continuation-2026-08-03.md) | Accepted contract for one bounded, immutable, operation-exact learning-context cut with owner-specific lazy exact reads and no cross-Session transcript import.                               | **Whole-Gate independent review complete: contract/theory and implementation/evidence accepted.** Same top-level reviewer `019fc874-72ee-75b3-92e9-0b923b85efb2` accepted semantic contract candidate `2DDAA563...` and the exact uncommitted implementation/evidence candidate under `G18-WG-20260804-019fc837-01`, with `G18-CR-001..004` and `G18-IR-001..008` closed. The accepted evidence includes the separately authorized isolated `openai/gpt-5.6-luna` qualification and the deterministic SDK-repair-provenance/MCP-collision closures. The candidate is ready only for a separately authorized integration step; no commit, integration, release, or later-Gate authority is established.                                                                                                                                                                                                                                             |
+| 18. [Learning context and Session continuation](research/repa-gate-18-learning-context-session-continuation-2026-08-03.md) | Accepted contract for one bounded, immutable, operation-exact learning-context cut with owner-specific lazy exact reads and no cross-Session transcript import.                               | **Closed and integrated locally at implementation commit `284d2a4ae` plus its docs-only closure/status successor.** Same top-level reviewer `019fc874-72ee-75b3-92e9-0b923b85efb2` accepted semantic contract candidate `2DDAA563...` and the exact implementation/evidence candidate under `G18-WG-20260804-019fc837-01`, with `G18-CR-001..004` and `G18-IR-001..008` closed. The accepted evidence includes the separately authorized isolated `openai/gpt-5.6-luna` qualification and deterministic SDK-repair-provenance/MCP-collision closure. No push, release, or later-Gate authority is established.                                                                                                                                                                                                                                                                                                                                     |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,
