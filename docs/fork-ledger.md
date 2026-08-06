@@ -2626,6 +2626,61 @@ fast-forwarded through its docs-only closure/status successor. No production or
 test content changed after reviewer acceptance, and no push, release, or
 later-Gate authority follows.
 
+## 2026-08-06 Gate 19 contract and implementation/evidence acceptance
+
+Against exact base `8ababa1ee53cd0907056f33812621142538807dd`, the executor
+first tried to falsify Roadmap 09's candidate Gate 19 rather than deriving a
+learner schema from the Gate number. Exact source-readable controls were
+negative; after legal source-Session deletion, the bounded fixture produced a
+later-action collision that existing Course, navigation, Goal, steering,
+Material/current-use, Interaction, and Gate 18 reads could not distinguish.
+Collision-result SHA-256 is
+`7A8F7A64AE83BD402C858BC62410DEED484E3F383262B68B0B7E765D4B602A0D`.
+
+Whole-Gate review run `G19-WG-20260805-019fd20c-01` retained independent
+reviewer task `019fd269-e042-7423-85a9-bce7121f9b6e` across both layers. Two
+contract/theory `Revise` passes forced an occurrence-plus-exact-selector/Course
+effect address, source-unavailable-only automatic pressure, ablation of
+unconsumed uncertainty states, and a program-enforced operation/basis/source
+matrix. The reviewer closed `G19-CR-001..005` and accepted semantic candidate
+SHA-256
+`E3630BD59EAE438251EA09660FEF99127292E388B16CC5F25110DCA9AA9E79DF`.
+The accepted contract review-record SHA-256 before integration-only status
+reconciliation is
+`47A7BACEE1448800AE207E65D57B07A1B429F6B05DE197B2505232A7C2B38F84`.
+
+The first implementation/evidence review returned `Revise` for ten bounded
+compatibility, causal-order, SQL-authority, ownership, presentation,
+source-deletion admission, pre-write validation, causal composition, recovery,
+and evidence-record defects. The executor repaired those defects inside the
+accepted boundary. The same reviewer then closed `G19-IR-001..010` and returned
+final **Accept** with no new acceptance-changing finding, owner blocker, or
+execution failure. The exact reviewed production/test projection is 38 files /
+4,538 canonical manifest bytes with SHA-256
+`29323F3D019C1F8115545374B4AFD8C9107C53E7FE64C875947495548329CF4A`;
+the accepted implementation/evidence record SHA-256 before integration-only
+status reconciliation is
+`09F13862AC1339D6E3A4440C5752E96DC8EE554ED8415BEB6825DAFD8C41FA56`.
+
+The reviewer independently reproduced the six isolated Core semantic cases,
+the migration check and frozen Gate 18 compatibility case, Gate 19
+runtime/recovery, semantic presentation, exact request/provider composition,
+the deletion/admission interleaving, the real stored-state SessionPrompt join,
+and `git diff --check`. Bun 1.3.14 on Windows still has an unknown-frequency
+native segmentation-fault risk in aggregate attempts; no independently
+selected isolated oracle produced a semantic assertion failure. This limits
+aggregate execution-reliability claims rather than the accepted Gate 19 domain
+boundary.
+
+The maintainer then separately authorized integration and push. Exact
+implementation commit `9027b45a4853165b18b2c2697e727a066f6c7c22` contains
+the accepted production/test projection and three review records; `main`
+includes it through this docs-only closure/status successor. The pre-existing
+maintainer-owned `AGENTS.md` modification was excluded. No production or test
+content changed after reviewer acceptance, and no release, Gate 20+, production
+move-selection, representative-model-quality, or educational-efficacy claim
+follows.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

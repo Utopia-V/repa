@@ -1,13 +1,17 @@
 # Repa Gate 19: first learner-record adaptation
 
-Status: **Accepted contract/theory layer.** After the Gate-opening and local
-design/evidence grill, independent review returned two `Revise` passes and a
-final `Accept`. The same reviewer closed `G19-CR-001` through `G19-CR-005` and
-accepted exact semantic candidate SHA-256
+Status: **Whole-Gate accepted and integrated.** After the Gate-opening and local
+design/evidence grill, retained independent reviewer task
+`019fd269-e042-7423-85a9-bce7121f9b6e` accepted the contract/theory layer after
+closing `G19-CR-001..005`, then accepted implementation/evidence after closing
+`G19-IR-001..010` under `G19-WG-20260805-019fd20c-01`. The exact accepted
+semantic candidate SHA-256 remains
 `E3630BD59EAE438251EA09660FEF99127292E388B16CC5F25110DCA9AA9E79DF`.
-This acceptance authorizes only the scoped implementation described here. It
-does not accept implementation/evidence, integration, release, or later-Gate
-state.
+After separate maintainer authorization, the reviewed production/test
+projection and review records were committed as
+`9027b45a4853165b18b2c2697e727a066f6c7c22` and integrated into `main`
+through a docs-only closure/status successor. No release or later-Gate state is
+established.
 
 Date: 2026-08-05
 
@@ -15,10 +19,12 @@ Last revised: 2026-08-06
 
 Exact derivation base:
 `8ababa1ee53cd0907056f33812621142538807dd` (`HEAD`, `main`, and `origin/main`
-at opening and at this revision). Gate 18 contract/theory and
+at opening and throughout independent review). Gate 18 contract/theory and
 implementation/evidence were already independently accepted and integrated at
-that base. This candidate and its bounded experiment are the only working-tree
-items and remain untracked review artifacts in the shared main checkout.
+that base. At contract review time this contract and its bounded experiment
+were untracked review artifacts; the later implementation and all three review
+records are now fixed by the integration commit above. The maintainer-owned
+`AGENTS.md` change was excluded from the reviewed candidate and integration.
 
 Authority and correction routing:
 [product origin](../foundation/00-product-origin.md),

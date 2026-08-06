@@ -1,19 +1,23 @@
 # Gate 19 first learner-record adaptation implementation/evidence record
 
-Status: **implementation/evidence repair candidate awaiting closure by the
-retained independent reviewer.** The contract/theory layer remains accepted.
-The first implementation/evidence pass received `Revise`; this record binds the
-uncommitted repairs for `G19-IR-001..010` and their fresh evidence to the same
-whole-Gate review run. It does not claim implementation acceptance, integration,
-release, or authority for Gate 20 or any later Gate.
+Status: **implementation/evidence accepted and integrated.** The first pass
+received `Revise`; retained independent reviewer task
+`019fd269-e042-7423-85a9-bce7121f9b6e` subsequently closed
+`G19-IR-001..010` and returned final `Accept` under whole-Gate review run
+`G19-WG-20260805-019fd20c-01`. Together with the accepted contract/theory
+layer, Gate 19 is closed. After separate maintainer authorization, exact
+implementation commit `9027b45a4853165b18b2c2697e727a066f6c7c22` captured
+the reviewed production/test projection and review records; `main` includes it
+through a docs-only closure/status successor. This does not establish release
+state or authority for Gate 20 or any later Gate.
 
 Date: 2026-08-06
 
 ## Exact authority and review binding
 
 - implementation base: `8ababa1ee53cd0907056f33812621142538807dd`, with
-  `HEAD`, `main`, and `origin/main` equal at implementation start and at this
-  evidence pass;
+  `HEAD`, `main`, and `origin/main` equal throughout implementation and
+  independent review;
 - accepted Gate 19 semantic candidate SHA-256:
   `E3630BD59EAE438251EA09660FEF99127292E388B16CC5F25110DCA9AA9E79DF`;
 - exact pre-contract collision result SHA-256:
@@ -24,11 +28,19 @@ Date: 2026-08-06
   `019fd269-e042-7423-85a9-bce7121f9b6e`;
 - contract/theory disposition: **Accept**, with `G19-CR-001..005` closed and no
   material contract unknown or owner blocker;
-- implementation/evidence disposition: **Revise**, with `G19-IR-001..010`
-  repaired in the current candidate and awaiting reviewer closure; and
+- implementation/evidence disposition: **Accept**, with `G19-IR-001..010`
+  closed, no new acceptance-changing finding, and no owner blocker or execution
+  failure remaining;
 - production/test candidate manifest: **38 files / 4,538 canonical bytes**,
   SHA-256
-  `29323F3D019C1F8115545374B4AFD8C9107C53E7FE64C875947495548329CF4A`.
+  `29323F3D019C1F8115545374B4AFD8C9107C53E7FE64C875947495548329CF4A`;
+- accepted review-record SHA-256 for this file before status-only
+  reconciliation:
+  `09F13862AC1339D6E3A4440C5752E96DC8EE554ED8415BEB6825DAFD8C41FA56`;
+  and
+- local integration commit:
+  `9027b45a4853165b18b2c2697e727a066f6c7c22`, followed only by the
+  docs-only closure/status successor.
 
 The manifest contains every modified or untracked `packages/**` file and no
 documentation or `AGENTS.md` file. Its canonical form sorts repository-relative
@@ -44,9 +56,11 @@ tree also contains a maintainer-owned `AGENTS.md` change outside Gate 19. This
 executor did not edit, revert, stage, or include it in the Gate 19 candidate
 manifest.
 
-No Git staging, commit, branch movement, merge, push, release, credential use,
-paid call, or durable provider effect was performed. All provider evidence in
-this record is local request compilation and capture only.
+Before independent acceptance, no Git staging, commit, branch movement, merge,
+push, release, credential use, paid call, or durable provider effect was
+performed. The later separately authorized integration changed only Git state;
+all provider evidence in this record remains local request compilation and
+capture only.
 
 ## Implemented production boundary
 
@@ -527,8 +541,9 @@ git diff --check
 ```
 
 All three package typechecks pass. `git diff --check` reports no whitespace
-error. The checkout remains on the exact base with no tracked Git operation;
-line-ending notices are existing Windows autocrlf warnings, not content errors.
+error. At review time the checkout remained on the exact base with no tracked
+Git operation; line-ending notices were existing Windows autocrlf warnings,
+not content errors.
 
 No aggregate test/assertion total is claimed: the decisive commands have
 different isolation boundaries, and adding their counts would obscure the
@@ -543,9 +558,9 @@ the causal-order repair; the runtime cause and frequency remain unknown.
 
 ## Implementation/evidence review repair delta
 
-The first implementation/evidence review returned `Revise`. The current
-candidate answers each acceptance-changing finding without reopening the
-accepted contract:
+The first implementation/evidence review returned `Revise`. The repaired
+candidate answered each acceptance-changing finding without reopening the
+accepted contract, and the same reviewer returned final `Accept`:
 
 | Finding | Repair and decisive evidence |
 | --- | --- |
@@ -580,7 +595,8 @@ This implementation does not establish:
 - a credentialed/provider qualification. No credential or provider endpoint was
   opened by Gate 19 evidence.
 
-The implementation/evidence reviewer should reject or revise the candidate if:
+The implementation/evidence reviewer tested the candidate against these
+rejection conditions and would have rejected or revised it if:
 
 1. any legal decoder/domain/SQL transition can relabel a learner report as
    Tutor observation, create revision-0 learner report, or rewrite assessment
@@ -599,9 +615,8 @@ The implementation/evidence reviewer should reject or revise the candidate if:
 8. the deterministic provider trace is being used to claim ordinary-Agent move
    quality rather than only causal state-to-request wiring.
 
-No maintainer-owned product choice or expensive external boundary is known at
-this candidate. A valid implementation finding should be repaired in this
-executor context and returned to the same reviewer. If review shows that the
-exact selector slot or report/observation strength cannot be preserved without
-a new general criterion or pedagogic authority, the contract must reopen rather
-than expanding Gate 19 silently.
+No maintainer-owned product choice or expensive external boundary remained at
+acceptance. The same reviewer closed every implementation finding without
+requiring a new general criterion or pedagogic authority, so the contract did
+not reopen. The separately authorized integration is complete at the exact
+commit named above; release and all later-Gate work remain outside this record.

@@ -1,7 +1,8 @@
 # Repa documentation
 
-Status: Gate 17 is closed at exact accepted implementation/evidence commit
-`39a8c2f4`. The baseline omits `/learn`; the accepted ordinary-Agent bootstrap
+Status: Gates 17 through 19 are closed at their exact accepted boundaries.
+Gate 17 is fixed at implementation/evidence commit `39a8c2f4`. The baseline
+omits `/learn`; the accepted ordinary-Agent bootstrap
 preserves Gate 10's local-read union and one-new-Artifact ceiling, uses the
 existing Gate 8 settlement/recovery path, and teaches in the same Turn. Original
 fresh reviewer task `019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed
@@ -26,6 +27,21 @@ authorized local integration: exact implementation commit `284d2a4ae` carries
 the reviewed production/test projection plus post-verdict status records, and
 `main` was fast-forwarded through its docs-only closure/status successor. No
 push, release, or later-Gate transition is implied.
+Gate 19's
+[contract](research/repa-gate-19-first-learner-record-adaptation-2026-08-05.md),
+[bounded collision result](research/repa-gate-19-source-unavailable-collision-result-2026-08-05.md),
+and
+[implementation/evidence record](research/repa-gate-19-first-learner-record-adaptation-implementation-evidence-2026-08-06.md)
+are accepted under `G19-WG-20260805-019fd20c-01`. Retained reviewer task
+`019fd269-e042-7423-85a9-bce7121f9b6e` closed `G19-CR-001..005` and
+`G19-IR-001..010` against the exact source-deletion collision, minimum
+occurrence-bound evidence authority, correction model, zero-write behavior,
+and production state-to-request join. Exact implementation commit `9027b45a4`
+contains the reviewed production/test projection and review records; `main`
+includes it through this docs-only closure/status successor. The disclosed Bun
+1.3.14 Windows aggregate native instability limits one-shot execution claims
+but did not produce a semantic assertion failure in the independently selected
+isolated oracles. No release or Gate 20+ transition is implied.
 The accepted Agent-native Gate 14/16, retained OAuth, and Gate 8 corrections are
 integrated. The pre-Gate-17 audit remains falsifiable hazard provenance rather
 than the current control point or a permanent project-health verdict. The
@@ -296,6 +312,7 @@ in the [inherited-material index](inherited/README.md).
 | 16. [Learner Goal authority](research/opencode-fork-gate-16-learner-goal-authority-2026-07-21.md)                          | Preserves learner-owned outcomes with source, scope, revision, correction, optional conditions and target time, and explicit lifecycle meaning.                                               | **Closed at Agent-native implementation commit `2baba9eea`.** Original reviewer `019fb2a3-c902-7882-8134-1bf33f1eb04d` accepted the V15→V16 contract and exact implementation after closing `G16-AN-001..003` and `G16-AN-IMP-001..003`. Current behavior uses bounded Goal/Course reads, one typed semantic-intent write, runtime-owned identity/version/temporal facts, exact root/delegated Agent issuance, configured capability policy, semantic-first replay/recovery, historical V1 replay-only truth, and durable terminal presentation. Mixed changed/no-change settlement, retired-producer package reachability, and pre-epoch validation are causally covered. Gate 17 remains a separate contract and implementation/evidence boundary.                                                                                                                                                                                               |
 | 17. [Natural-language learning bootstrap](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)         | Accepted contract boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn.                                                  | **Closed at exact implementation/evidence commit `39a8c2f4`.** Contract `cf0cfbd0` omits built-in `/learn`; the implementation preserves Gate 10's exact local-read union and one-new-Artifact ceiling, composes one closed request-bound Course/View/material/selection/anchor set through owner-private seams, uses Gate 8 settlement/recovery, and projects one typed TUI/direct-run/ACP truth. Original fresh reviewer `019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed `G17-IE-001..005` and accepted the deterministic evidence, passing seven-Turn released-v1 trace, honest interrupted/no-partial-write negative trace, and internal diagnostics correction. The accepted implementation is in mainline through closure/status commit `506b420cf`; subsequent changes are documentation-only. This closure does not claim exhaustive interpretation, pedagogical efficacy, reliability, release readiness, or Gate 23 product-loop behavior. |
 | 18. [Learning context and Session continuation](research/repa-gate-18-learning-context-session-continuation-2026-08-03.md) | Accepted contract for one bounded, immutable, operation-exact learning-context cut with owner-specific lazy exact reads and no cross-Session transcript import.                               | **Closed and integrated locally at implementation commit `284d2a4ae` plus its docs-only closure/status successor.** Same top-level reviewer `019fc874-72ee-75b3-92e9-0b923b85efb2` accepted semantic contract candidate `2DDAA563...` and the exact implementation/evidence candidate under `G18-WG-20260804-019fc837-01`, with `G18-CR-001..004` and `G18-IR-001..008` closed. The accepted evidence includes the separately authorized isolated `openai/gpt-5.6-luna` qualification and deterministic SDK-repair-provenance/MCP-collision closure. No push, release, or later-Gate authority is established.                                                                                                                                                                                                                                                                                                                                     |
+| 19. [First learner-record adaptation](research/repa-gate-19-first-learner-record-adaptation-2026-08-05.md)                 | Preserves one source-linked, occurrence-bound, correctable learner-response assessment against an exact immutable selector only where source deletion creates a later-action collision.       | **Closed and integrated at implementation commit `9027b45a4` plus this docs-only closure/status successor.** Retained reviewer `019fd269-e042-7423-85a9-bce7121f9b6e` accepted contract/theory and implementation/evidence under `G19-WG-20260805-019fd20c-01`, closing `G19-CR-001..005` and `G19-IR-001..010`. The boundary preserves ordinary zero-write teaching, uses source-readable data instead of cached pressure, and establishes neither mastery/understanding nor aggregation, planning, future attention, production move selection, or Gate 20+. Bun 1.3.14 Windows aggregate native instability remains an explicitly bounded execution-reliability unknown.                                                                                                                                                                                                                                  |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,
@@ -329,6 +346,9 @@ reopen chains, and evidence qualifications live in the
 - [Gate 17 implementation/evidence record](research/repa-gate-17-natural-language-learning-bootstrap-implementation-evidence-2026-08-02.md)
 - [Gate 18 learning context and Session continuation contract](research/repa-gate-18-learning-context-session-continuation-2026-08-03.md)
 - [Gate 18 implementation/evidence record](research/repa-gate-18-learning-context-session-continuation-implementation-evidence-2026-08-04.md)
+- [Gate 19 first learner-record adaptation contract](research/repa-gate-19-first-learner-record-adaptation-2026-08-05.md)
+- [Gate 19 source-unavailable collision result](research/repa-gate-19-source-unavailable-collision-result-2026-08-05.md)
+- [Gate 19 implementation/evidence record](research/repa-gate-19-first-learner-record-adaptation-implementation-evidence-2026-08-06.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions
