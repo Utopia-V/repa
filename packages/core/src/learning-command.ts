@@ -110,6 +110,31 @@ export type {
 } from "./learning-bootstrap"
 
 export {
+  PERMISSION_PATTERN as LEARNER_RESPONSE_EVIDENCE_PERMISSION_PATTERN,
+  READ_CAPABILITY as LEARNER_RESPONSE_EVIDENCE_READ_CAPABILITY,
+  READ_VERSION as LEARNER_RESPONSE_EVIDENCE_READ_VERSION,
+  UPDATE_CAPABILITY as UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+  UPDATE_VERSION as UPDATE_LEARNER_RESPONSE_EVIDENCE_VERSION,
+  canonicalizeCommand as canonicalizeLearnerResponseEvidence,
+  issueCapabilityPrompt as issueLearnerResponseEvidenceCapabilityPrompt,
+  readInvocationVersion as readLearnerResponseEvidenceInvocationVersion,
+  recover as recoverLearnerResponseEvidence,
+  recoverCapability as recoverLearnerResponseEvidenceCapability,
+  reserve as reserveLearnerResponseEvidence,
+  settle as settleLearnerResponseEvidence,
+  settleFailure as settleLearnerResponseEvidenceFailure,
+  settlePolicy as settleLearnerResponseEvidencePolicy,
+  settlePrompt as settleLearnerResponseEvidencePrompt,
+} from "./learner-response-evidence"
+export type {
+  Invocation as LearnerResponseEvidenceInvocation,
+  InvocationVersion as LearnerResponseEvidenceInvocationVersion,
+  PolicyInput as LearnerResponseEvidencePolicyInput,
+  PromptIssueInput as LearnerResponseEvidencePromptIssueInput,
+  PromptSettlementInput as LearnerResponseEvidencePromptSettlementInput,
+} from "./learner-response-evidence"
+
+export {
   assertAssistantDeletable,
   assertPartDeletable,
   exactSettlement,

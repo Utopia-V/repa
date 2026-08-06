@@ -2,6 +2,7 @@ import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { MaterialMap } from "@opencode-ai/core/material-map"
@@ -574,6 +575,50 @@ export const UpdateLearningCourseInput = Schema.Struct({
 
 export type UpdateLearningCourseInput = typeof UpdateLearningCourseInput.Type
 
+const LearnerResponseEvidenceAssessment = {
+  relation: Schema.Literals(["supports", "does_not_support"]),
+  exposure: Schema.Literals([
+    "learner_response_before_tutor_disclosure",
+    "tutor_disclosure_before_learner_response",
+  ]),
+}
+
+export const UpdateLearnerResponseEvidenceInput = Schema.Union([
+  Schema.Struct({
+    operation: Schema.Literal("create"),
+    ...LearnerResponseEvidenceAssessment,
+    conditionAssistantMessageID: SessionV1.MessageID,
+    target: Schema.Struct({
+      mapID: MaterialMap.MapID,
+      selectorID: MaterialMap.SelectorID,
+      courseID: Course.CourseID,
+      viewID: Course.ViewID,
+      revisionID: Course.RevisionID,
+      itemID: Course.ItemID,
+    }),
+    alignmentID: MaterialMap.AlignmentID,
+  }),
+  Schema.Struct({
+    operation: Schema.Literal("revise_from_tutor_interpretation"),
+    recordID: LearnerResponseEvidence.RecordID,
+    expectedVersion: NonNegativeInt,
+    ...LearnerResponseEvidenceAssessment,
+  }),
+  Schema.Struct({
+    operation: Schema.Literal("revise_from_learner_report"),
+    recordID: LearnerResponseEvidence.RecordID,
+    expectedVersion: NonNegativeInt,
+    ...LearnerResponseEvidenceAssessment,
+  }),
+  Schema.Struct({
+    operation: Schema.Literal("retract"),
+    recordID: LearnerResponseEvidence.RecordID,
+    expectedVersion: NonNegativeInt,
+  }),
+]).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export type UpdateLearnerResponseEvidenceInput = typeof UpdateLearnerResponseEvidenceInput.Type
+
 const decode = Schema.decodeUnknownSync(AcceptCourseViewRevisionInput)
 const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput)
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
@@ -585,6 +630,7 @@ const decodeSteering = Schema.decodeUnknownSync(UpdateRetainedLearningSteeringIn
 const decodeLegacyGoals = Schema.decodeUnknownSync(LegacyUpdateLearnerGoalsInput)
 const decodeGoalsV2 = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
 const decodeLearningBootstrap = Schema.decodeUnknownSync(UpdateLearningCourseInput)
+const decodeLearnerResponseEvidence = Schema.decodeUnknownSync(UpdateLearnerResponseEvidenceInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
   const value = decode(input)
@@ -686,6 +732,12 @@ export function normalizeLearningBootstrap(input: unknown): UpdateLearningCourse
   return value
 }
 
+export function normalizeLearnerResponseEvidence(input: unknown): UpdateLearnerResponseEvidenceInput {
+  const value = decodeLearnerResponseEvidence(input)
+  LearningCommand.canonicalizeLearnerResponseEvidence(value)
+  return value
+}
+
 function normalizeBoundary(input: string) {
   const value = input.trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(value)
@@ -703,6 +755,9 @@ export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY) return normalizeSteering(input)
   if (toolID === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY) return normalizeGoalsV2(input)
   if (toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) return normalizeLearningBootstrap(input)
+  if (toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
+    return normalizeLearnerResponseEvidence(input)
+  }
   throw new Error(`Unknown reserved learning command ${toolID}`)
 }
 

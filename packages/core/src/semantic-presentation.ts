@@ -3,6 +3,7 @@ export * as SemanticPresentation from "./semantic-presentation"
 import { SemanticPresentationV1 } from "@opencode-ai/schema/semantic-presentation-v1"
 import { Option, Schema } from "effect"
 import { LearningBootstrap } from "./learning-bootstrap"
+import { LearnerResponseEvidence } from "./learner-response-evidence"
 import { PermissionV1 } from "./v1/permission"
 
 export { SemanticPresentationV1 }
@@ -21,6 +22,7 @@ const consequentialPermissionCapabilities = new Set([
   "update_retained_learning_steering",
   "update_learner_goals",
   "update_learning_course",
+  "update_learner_response_evidence",
 ])
 
 const consequentialResultTools = new Set([
@@ -32,6 +34,7 @@ const consequentialResultTools = new Set([
   "update_retained_learning_steering",
   "update_learner_goals",
   "update_learning_course",
+  "update_learner_response_evidence",
 ])
 
 export type Fact = Readonly<{ label: string; value: string }>
@@ -69,6 +72,10 @@ type LearningBootstrapMaterialTarget = NonNullable<LearningBootstrapChild["mater
 type LearningBootstrapScope = Extract<
   SemanticPresentationV1.ProposalBasis,
   { readonly kind: "learning_bootstrap_capability" }
+>["scope"]
+type LearnerResponseEvidenceScope = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "learner_response_evidence_capability" }
 >["scope"]
 
 export type ProposalProjection = Readonly<{
@@ -416,6 +423,30 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       },
     })
   }
+  if (basis.kind === "learner_response_evidence_capability") {
+    const command = canonicalLearnerResponseEvidenceCommand(basis.scope)
+    if (
+      !command ||
+      !same(command, basis.scope.command) ||
+      !same(learnerResponseEvidenceScope(command, basis.scope.subject, basis.scope.target), basis.scope) ||
+      LearnerResponseEvidence.commandFingerprint(command) !== basis.commandFingerprint
+    ) {
+      return undefined
+    }
+    return expected(value, {
+      capability: "update_learner_response_evidence",
+      patterns: [LearnerResponseEvidence.PERMISSION_PATTERN],
+      always: [LearnerResponseEvidence.PERMISSION_PATTERN],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        evidenceKind: "learner_response_evidence",
+        commandFingerprint: basis.commandFingerprint,
+        issuance: basis.issuance,
+        scope: basis.scope,
+      },
+    })
+  }
   if (basis.kind === "course_route_anchor") {
     if (
       (basis.target === null && basis.locator !== undefined) ||
@@ -508,6 +539,68 @@ function canonicalLearningBootstrapCommand(scope: LearningBootstrapScope) {
     } as unknown as LearningBootstrap.Command)
   } catch {
     return undefined
+  }
+}
+
+function canonicalLearnerResponseEvidenceCommand(scope: LearnerResponseEvidenceScope) {
+  try {
+    const command = scope.command
+    return LearnerResponseEvidence.canonicalizeCommand(
+      (command.operation === "create"
+        ? {
+            operation: command.operation,
+            relation: command.relation,
+            exposure: command.exposure,
+            conditionAssistantMessageID: command.conditionAssistantMessageID,
+            target: command.target,
+            alignmentID: command.alignmentID,
+          }
+        : command.operation === "retract"
+          ? {
+              operation: command.operation,
+              recordID: command.recordID as LearnerResponseEvidence.RecordID,
+              expectedVersion: command.expectedVersion,
+            }
+          : {
+              operation: command.operation,
+              recordID: command.recordID as LearnerResponseEvidence.RecordID,
+              expectedVersion: command.expectedVersion,
+              relation: command.relation,
+              exposure: command.exposure,
+            }) as unknown as LearnerResponseEvidence.Command,
+    )
+  } catch {
+    return undefined
+  }
+}
+
+function learnerResponseEvidenceScope(
+  command: LearnerResponseEvidence.CanonicalCommand,
+  subject: LearnerResponseEvidenceScope["subject"],
+  target: LearnerResponseEvidenceScope["target"],
+) {
+  const operation = command.operation
+  return {
+    command,
+    subject,
+    target,
+    assessmentScope: "entire_exact_selector" as const,
+    programBasis:
+      operation === "create" || operation === "revise_from_tutor_interpretation"
+        ? ("tutor_interpretation" as const)
+        : operation === "revise_from_learner_report"
+          ? ("learner_report" as const)
+          : ("preserve" as const),
+    programDisposition: operation === "retract" ? ("retracted" as const) : ("active" as const),
+    assessmentSourcePolicy:
+      operation === "create"
+        ? ("current_response_and_disclosure" as const)
+        : operation === "revise_from_tutor_interpretation"
+          ? ("original_response_and_disclosure" as const)
+          : operation === "revise_from_learner_report"
+            ? ("current_learner_correction" as const)
+            : ("preserve_existing_basis" as const),
+    nonImplications: ["mastery", "understanding", "retention", "required_next_action"] as const,
   }
 }
 
@@ -725,6 +818,42 @@ function projectProposal(
         ),
         fact("Expected View version", basis.expectedViewVersion),
         fact("Expected Revision version", basis.expectedRevisionVersion),
+      ],
+    )
+  }
+  if (basis.kind === "learner_response_evidence_capability") {
+    const command = basis.scope.command
+    const target = basis.scope.target
+    return proposalProjection(
+      basis,
+      approval,
+      "update_learner_response_evidence",
+      command.operation === "create" ? "Record this learner-response evidence" : "Correct this learner-response evidence",
+      "This configured capability approval is bound to one exact occurrence-and-selector assessment or one exact corrected head. It does not assert mastery or understanding.",
+      [
+        fact("Issuance", basis.issuance),
+        fact("Operation", command.operation),
+        fact(
+          "Subject occurrence",
+          `${basis.scope.subject.occurrenceID}; session ${basis.scope.subject.sessionID}; turn ${basis.scope.subject.turnID}; input ${basis.scope.subject.inputID}; source order ${basis.scope.subject.sourceOrder}`,
+        ),
+        fact(
+          "Exact target",
+          `${target.mapID}/${target.selectorID} -> ${target.courseID}/${target.viewID}/${target.revisionID}/${target.itemID}`,
+        ),
+        fact(
+          "Target versions",
+          `alignment ${target.alignmentDispositionVersion}; map ${target.mapDispositionVersion}; course ${target.courseVersion}; view ${target.viewVersion}; revision ${target.revisionVersion}`,
+        ),
+        ...(command.operation === "create" ? [] : [fact("Expected record head", `${command.recordID} version ${command.expectedVersion}`)]),
+        fact("Assessment scope", basis.scope.assessmentScope),
+        fact("Program-bound basis", basis.scope.programBasis),
+        fact("Program-bound disposition", basis.scope.programDisposition),
+        fact("Assessment source", basis.scope.assessmentSourcePolicy),
+        ...(command.operation === "retract"
+          ? []
+          : [fact("Relation", command.relation), fact("Disclosure order", command.exposure)]),
+        fact("Does not imply", basis.scope.nonImplications.join(", ")),
       ],
     )
   }
@@ -1605,6 +1734,62 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
           ? [fact("Route anchor", learningBootstrapAnchorText(basis.acknowledgement.anchor))]
           : []),
         ...(basis.acknowledgement ? [fact("Correction", basis.acknowledgement.correction)] : []),
+      ],
+    )
+  }
+  if (basis.kind === "learner_response_evidence_result") {
+    const semanticTerminal = basis.disposition === "semantic_terminal_v1"
+    const candidate = basis.disposition === "candidate_v1"
+    const committed = settlement.outcome === "applied" || settlement.outcome === "already_applied"
+    if (
+      semanticTerminal !== (basis.semanticOutcome !== undefined) ||
+      candidate !== (basis.issuance !== undefined) ||
+      candidate !== (basis.capabilityOutcome !== undefined) ||
+      (!candidate && basis.permissionRequestID !== undefined) ||
+      committed !== (basis.effect !== undefined) ||
+      (semanticTerminal &&
+        (basis.semanticOutcome === "already_applied"
+          ? settlement.outcome !== "already_applied"
+          : settlement.outcome !== "error" || settlement.code !== "semantic_conflict")) ||
+      (basis.effect?.operation === "retract" && basis.effect.disposition !== "retracted") ||
+      (basis.effect?.operation !== "retract" && basis.effect?.disposition === "retracted") ||
+      ((basis.effect?.operation === "create" || basis.effect?.operation === "revise_from_tutor_interpretation") &&
+        basis.effect.basis !== "tutor_interpretation") ||
+      (basis.effect?.operation === "revise_from_learner_report" && basis.effect.basis !== "learner_report")
+    ) {
+      return undefined
+    }
+    return resultProjection(
+      basis,
+      "update_learner_response_evidence",
+      "Learner-response evidence settlement",
+      resultSummary("Learner-response evidence", outcome),
+      [
+        ...failure,
+        fact("Disposition", basis.disposition),
+        ...(basis.issuance ? [fact("Issuance", basis.issuance)] : []),
+        ...(basis.capabilityOutcome ? [fact("Capability", basis.capabilityOutcome)] : []),
+        ...(basis.permissionRequestID ? [fact("Permission request", basis.permissionRequestID)] : []),
+        ...(basis.effect
+          ? [
+              fact("Record", `${basis.effect.recordID} version ${basis.effect.version}`),
+              fact("Revision", basis.effect.revisionID),
+              fact(
+                "Subject occurrence",
+                `${basis.effect.subject.occurrenceID}; session ${basis.effect.subject.sessionID}; turn ${basis.effect.subject.turnID}; input ${basis.effect.subject.inputID}; source order ${basis.effect.subject.sourceOrder}`,
+              ),
+              fact(
+                "Exact target",
+                `${basis.effect.target.mapID}/${basis.effect.target.selectorID} -> ${basis.effect.target.courseID}/${basis.effect.target.viewID}/${basis.effect.target.revisionID}/${basis.effect.target.itemID}`,
+              ),
+              fact("Operation", basis.effect.operation),
+              fact("Relation", basis.effect.relation),
+              fact("Disclosure order", basis.effect.exposure),
+              fact("Evidence basis", basis.effect.basis),
+              fact("Record disposition", basis.effect.disposition),
+              fact("Does not imply", "mastery, understanding, retention, or a required next action"),
+            ]
+          : []),
       ],
     )
   }

@@ -4,9 +4,12 @@ import type { SessionSchema } from "../session/schema"
 import type { MessageID } from "../v1/session"
 
 export const SCHEMA_VERSION = 1 as const
-export const POLICY_VERSION = 1 as const
-export const RENDERER_VERSION = 1 as const
-export const CAPABILITY_CATALOG_VERSION = 1 as const
+export const LEGACY_POLICY_VERSION = 1 as const
+export const POLICY_VERSION = 2 as const
+export const LEGACY_RENDERER_VERSION = 1 as const
+export const RENDERER_VERSION = 2 as const
+export const LEGACY_CAPABILITY_CATALOG_VERSION = 1 as const
+export const CAPABILITY_CATALOG_VERSION = 2 as const
 
 export const MAX_CANONICAL_BYTES = 32_768
 export const MAX_RENDERED_BYTES = 16_384
@@ -17,13 +20,17 @@ export const MAX_LAZY_BYTES = 32_768
 export const MAX_LAZY_ITEMS = 64
 
 export const AUTOMATIC_CONTEXT_CAPABILITY_ID = "learning_context" as const
-export const LAZY_READ_CAPABILITY_IDS = [
+export const LEGACY_LAZY_READ_CAPABILITY_IDS = [
   "course_query",
   "learning_navigation_query",
   "learner_goal_query",
   "learning_material_query",
   "learning_material_read",
   "learning_interaction_read",
+] as const
+export const LAZY_READ_CAPABILITY_IDS = [
+  ...LEGACY_LAZY_READ_CAPABILITY_IDS,
+  "learner_response_evidence_read",
 ] as const
 
 export type LazyReadCapabilityID = (typeof LAZY_READ_CAPABILITY_IDS)[number]
@@ -146,13 +153,26 @@ export type BoundedValue =
     }>
 
 export type Entry = Readonly<{
-  kind: "course" | "navigation_default" | "navigation_anchor" | "goal" | "material" | "interaction"
+  kind:
+    | "course"
+    | "navigation_default"
+    | "navigation_anchor"
+    | "goal"
+    | "material"
+    | "interaction"
+    | "learner_response_evidence"
   locator: Readonly<Record<string, JsonValue>>
   semantic?: BoundedValue
 }>
 
 export type Section = Readonly<{
-  owner: "course" | "learner_navigation" | "learner_goal" | "material" | "interaction"
+  owner:
+    | "course"
+    | "learner_navigation"
+    | "learner_goal"
+    | "material"
+    | "interaction"
+    | "learner_response_evidence"
   scope: string
   selectionBasis: string
   coverage: Coverage
@@ -189,8 +209,8 @@ export type Operation = Readonly<{
 
 export type Cut = Readonly<{
   schemaVersion: typeof SCHEMA_VERSION
-  policyVersion: typeof POLICY_VERSION
-  rendererVersion: typeof RENDERER_VERSION
+  policyVersion: typeof LEGACY_POLICY_VERSION | typeof POLICY_VERSION
+  rendererVersion: typeof LEGACY_RENDERER_VERSION | typeof RENDERER_VERSION
   operation: Operation
   cutAsOf: number
   throughSharedFrontier: LearningFrontier.Snapshot

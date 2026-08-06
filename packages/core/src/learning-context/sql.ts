@@ -25,8 +25,10 @@ export const TurnLearningContextCutTable = sqliteTable(
       sql`json_valid(${table.canonical_cut})
         AND json_type(${table.canonical_cut}) = 'object'
         AND json_extract(${table.canonical_cut}, '$.schemaVersion') = 1
-        AND json_extract(${table.canonical_cut}, '$.policyVersion') = 1
-        AND json_extract(${table.canonical_cut}, '$.rendererVersion') = 1
+        AND ((json_extract(${table.canonical_cut}, '$.policyVersion') = 1
+            AND json_extract(${table.canonical_cut}, '$.rendererVersion') = 1)
+          OR (json_extract(${table.canonical_cut}, '$.policyVersion') = 2
+            AND json_extract(${table.canonical_cut}, '$.rendererVersion') = 2))
         AND json_extract(${table.canonical_cut}, '$.operation.assistantMessageID') = ${table.assistant_message_id}
         AND json_extract(${table.canonical_cut}, '$.cutAsOf') = ${table.cut_as_of}
         AND json_extract(${table.canonical_cut}, '$.budget.canonicalBytes') = ${table.canonical_bytes}

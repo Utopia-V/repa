@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import type { Course } from "@opencode-ai/core/course"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
+import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import type { DefaultCourseV2Authorization } from "@opencode-ai/core/learner-navigation/default-course-v2"
@@ -1315,5 +1316,156 @@ describe("learning command semantic basis and projection", () => {
         value: { title: item.title, outcome: item.outcome },
       })
     }
+  })
+})
+
+describe("learner-response-evidence semantic presentation", () => {
+  test("binds the exact operation/basis/source shape and renders no mastery claim", () => {
+    const command = LearnerResponseEvidence.canonicalizeCommand({
+      operation: "create",
+      relation: "supports",
+      exposure: "learner_response_before_tutor_disclosure",
+      conditionAssistantMessageID: "msg_condition" as SessionV1.MessageID,
+      target: {
+        mapID: `mmp_${"a".repeat(26)}` as never,
+        selectorID: `msl_${"b".repeat(26)}` as never,
+        courseID: `crs_${"c".repeat(26)}` as never,
+        viewID: `cvw_${"d".repeat(26)}` as never,
+        revisionID: `cvr_${"e".repeat(26)}` as never,
+        itemID: `cit_${"f".repeat(26)}` as never,
+      },
+      alignmentID: `mca_${"g".repeat(26)}` as never,
+    })
+    if (command.operation !== "create") throw new Error("Expected a canonical create command")
+    const subject = {
+      occurrenceID: `occ_${"s".repeat(26)}` as never,
+      sourceOrder: 1,
+      sessionID: `ses_${"t".repeat(26)}` as never,
+      messageID: `msg_${"u".repeat(26)}` as never,
+      turnID: `trn_${"v".repeat(26)}` as never,
+      inputID: `inp_${"w".repeat(26)}` as never,
+      timeAdmitted: 1,
+    }
+    const target = {
+      ...command.target,
+      alignmentID: command.alignmentID,
+      alignmentDispositionVersion: 1,
+      mapDispositionVersion: 1,
+      courseVersion: 1,
+      viewVersion: 1,
+      revisionVersion: 1,
+    }
+    const candidate = {
+      canonicalCommand: command,
+      commandFingerprint: LearnerResponseEvidence.commandFingerprint(command),
+      agentAction: { kind: "root", lineage: [] },
+      materialized: {
+        subject,
+        target,
+        programBasis: "tutor_interpretation",
+        programDisposition: "active",
+      },
+    } as unknown as LearnerResponseEvidence.Candidate
+    const proposal = LearningCommandPresentation.learnerResponseEvidenceCapability(candidate, envelope)
+    const scope = LearningCommandPresentation.learnerResponseEvidenceScope(candidate)
+    const proposalRead = SemanticPresentation.readProposal(
+      request({
+        permission: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        patterns: [LearnerResponseEvidence.PERMISSION_PATTERN],
+        always: [LearnerResponseEvidence.PERMISSION_PATTERN],
+        metadata: {
+          evidenceKind: "learner_response_evidence",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: "root",
+          scope,
+          ...SemanticPresentation.metadata(proposal),
+        },
+      }),
+      true,
+    )
+    expect(proposalRead).toMatchObject({
+      type: "valid",
+      value: {
+        capability: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        approval: "policy",
+      },
+    })
+    expect(JSON.stringify(proposalRead)).toContain("Does not imply")
+    expect(JSON.stringify(proposalRead)).toContain(subject.occurrenceID)
+    expect(JSON.stringify(proposalRead)).toContain(target.selectorID)
+    const differentSubjectCandidate = {
+      ...candidate,
+      materialized: {
+        ...candidate.materialized,
+        subject: { ...subject, occurrenceID: `occ_${"x".repeat(26)}` },
+      },
+    } as unknown as LearnerResponseEvidence.Candidate
+    expect(
+      JSON.stringify(
+        LearningCommandPresentation.learnerResponseEvidenceCapability(differentSubjectCandidate, envelope).basis,
+      ),
+    ).not.toBe(JSON.stringify(proposal.basis))
+    expect(
+      SemanticPresentation.readProposal(
+        request({
+          permission: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          patterns: [LearnerResponseEvidence.PERMISSION_PATTERN],
+          always: [LearnerResponseEvidence.PERMISSION_PATTERN],
+          metadata: {
+            evidenceKind: "learner_response_evidence",
+            commandFingerprint: candidate.commandFingerprint,
+            issuance: "root",
+            scope: { ...scope, programBasis: "learner_report" },
+            ...SemanticPresentation.metadata(proposal),
+          },
+        }),
+        true,
+      ),
+    ).toEqual({ type: "invalid" })
+
+    const settlement = {
+      outcome: "applied",
+      evidenceKind: "learner_response_evidence",
+      schemaVersion: 1,
+      receiptID: LearningCommand.createReceiptID(),
+      effectID: `lrr_${"h".repeat(26)}`,
+      recordID: `lre_${"i".repeat(26)}`,
+      revisionID: `lrr_${"h".repeat(26)}`,
+      version: 0,
+      subject,
+      target,
+      operation: "create",
+      relation: "supports",
+      exposure: "learner_response_before_tutor_disclosure",
+      basis: "tutor_interpretation",
+      disposition: "active",
+      frontierSequence: 1,
+      settlementTime: 2,
+      settlementOrder: 1,
+    } as unknown as LearnerResponseEvidence.AppliedSettlement & LearningCommand.PhysicalSettlement
+    const result = LearningCommandPresentation.learnerResponseEvidenceSettlementResult(
+      settlement,
+      {
+        version: 1,
+        status: "applied",
+        disposition: "candidate_v1",
+        candidate,
+        capabilityOutcome: "policy_allow",
+        settlement,
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    const projection = SemanticPresentation.projectResultBasis(result.basis)
+    expect(projection).toMatchObject({
+      capability: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+      outcome: "committed",
+    })
+    expect(JSON.stringify(projection)).toContain("Does not imply")
+    expect(JSON.stringify(projection)).toContain(subject.occurrenceID)
+    expect(JSON.stringify(projection)).toContain(target.selectorID)
+    if (result.basis.kind !== "learner_response_evidence_result") throw new Error("Unexpected presentation basis")
+    const forged = { ...result.basis, effect: { ...result.basis.effect!, basis: "learner_report" as const } }
+    expect(SemanticPresentation.projectResultBasis(forged)).toBeUndefined()
   })
 })

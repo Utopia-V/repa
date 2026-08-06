@@ -7,6 +7,7 @@ import { EventV2 } from "@opencode-ai/core/event"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
+import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { MaterialMap } from "@opencode-ai/core/material-map"
@@ -63,6 +64,7 @@ import {
   normalizeGoalsV2,
   normalizeLegacyGoals,
   normalizeLearningBootstrap,
+  normalizeLearnerResponseEvidence,
   normalizeSteering,
   retainedSteeringCommand,
   type AcceptCourseViewRevisionInput,
@@ -73,10 +75,12 @@ import {
   type LegacyUpdateLearnerGoalsInput,
   type UpdateLearnerGoalsInput,
   type UpdateLearningCourseInput,
+  type UpdateLearnerResponseEvidenceInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
 import { LearningCommandPermission } from "./permission"
 import { LearningCommandPresentation } from "./presentation"
+import { resolveLearnerResponseEvidenceMaterial } from "@/learning-context/learner-response-evidence-material"
 
 export type Registration = Readonly<{
   turnID: Turn.ID
@@ -91,6 +95,7 @@ export type Registration = Readonly<{
 }>
 
 export type ExecuteContext = Readonly<{
+  agent?: string
   sessionID: SessionV1.ToolPart["sessionID"]
   messageID: SessionV1.Assistant["id"]
   callID?: string
@@ -117,6 +122,7 @@ export type PrimaryCapability =
   | typeof LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
+  | typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
 
 type Canonical =
   | Readonly<{
@@ -231,6 +237,21 @@ type BootstrapExecutionPreparation =
   | Readonly<{ type: "candidate"; candidate: LearningBootstrap.Candidate }>
   | Readonly<{ type: "settled"; exact: ExactResult }>
 
+type ResponseEvidenceCanonical = Readonly<{
+  toolID: typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
+  input: UpdateLearnerResponseEvidenceInput
+}>
+
+type ResponseEvidenceActive = Readonly<{
+  canonical: ResponseEvidenceCanonical
+  registration: Registration
+  deferred: Deferred.Deferred<ExactResult, unknown>
+}>
+
+type ResponseEvidenceExecutionPreparation =
+  | Readonly<{ type: "candidate"; candidate: LearnerResponseEvidence.Candidate }>
+  | Readonly<{ type: "settled"; exact: ExactResult }>
+
 export interface Interface {
   readonly prepare: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly execute: (input: unknown, context: ExecuteContext) => Effect.Effect<ExactResult, unknown>
@@ -261,11 +282,13 @@ const layer = Layer.effect(
     const artifacts = yield* Artifact.Service
     const contentRoots = yield* ContentRoot.Service
     const maps = yield* MaterialMap.Service
+    const tutorMaterials = yield* MaterialMap.TutorCurrentUseReader
     const inflight = new Map<SessionV1.PartID, Active>()
     const defaultV2Inflight = new Map<SessionV1.PartID, DefaultV2Active>()
     const defaultV3Inflight = new Map<SessionV1.PartID, DefaultV3Active>()
     const goalV2Inflight = new Map<SessionV1.PartID, GoalV2Active>()
     const bootstrapInflight = new Map<SessionV1.PartID, BootstrapActive>()
+    const responseEvidenceInflight = new Map<SessionV1.PartID, ResponseEvidenceActive>()
 
     yield* recoverAdmitted(events)
 
@@ -282,6 +305,9 @@ const layer = Layer.effect(
       }
       if (toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
         return yield* prepareLearningBootstrap(events, modelInput, registration)
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
+        return yield* prepareLearnerResponseEvidence(events, modelInput, registration)
       }
       const canonical = canonicalInput(toolID, modelInput)
       const transaction = events.transaction((tx) =>
@@ -365,6 +391,16 @@ const layer = Layer.effect(
           permission,
           bootstrapInflight,
           { database, courses, artifacts, contentRoots, maps },
+          modelInput,
+          context,
+        )
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
+        return yield* executeLearnerResponseEvidence(
+          events,
+          permission,
+          responseEvidenceInflight,
+          { database, contentRoots, maps, tutorMaterials },
           modelInput,
           context,
         )
@@ -1522,6 +1558,611 @@ function loadCommittedLearningBootstrapResult(
         const state = yield* readLearningBootstrapState(tx, registration)
         if (!state || state.status === "admitted") return noEvent(undefined)
         return noEvent(exactFromPart(yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state)))
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+type ResponseEvidenceRuntimeOwners = Readonly<{
+  database: Database.Interface
+  contentRoots: ContentRoot.Interface
+  maps: MaterialMap.Interface
+  tutorMaterials: MaterialMap.TutorCurrentUseReaderInterface
+}>
+
+function prepareLearnerResponseEvidence(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const canonical = {
+          toolID: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          input: normalizeLearnerResponseEvidence(modelInput),
+        } satisfies ResponseEvidenceCanonical
+        const existing = yield* readLearnerResponseEvidenceState(tx, registration)
+        if (existing) {
+          const state = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            yield* assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, state)
+          }
+          return noEvent(undefined)
+        }
+
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const row = yield* readPartRow(tx, registration.partID)
+        if (!row) {
+          return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+        }
+        const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+          turnID: registration.turnID,
+          inputID: registration.inputID,
+          causalOccurrenceID: registration.causalOccurrenceID,
+          partID: registration.partID,
+          callID: registration.callID,
+          emissionOrdinal: registration.emissionOrdinal,
+          sessionID: registration.sessionID,
+          assistantMessageID: registration.assistantMessageID,
+          capabilityIdentity: canonical.toolID,
+        })
+        const timeAdmitted = Math.max(
+          row.time_created,
+          trusted.modelTimeAdmitted,
+          trusted.candidateTimeRegistered,
+          trusted.toolTimeAdmitted,
+        )
+        yield* assertLearnerResponseEvidenceAdmittedPart(tx, canonical, registration)
+        const reserved = yield* LearnerResponseEvidence.reserve(tx, {
+          envelope: learnerResponseEvidenceEnvelope(registration, timeAdmitted),
+          command: canonical.input,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, timeAdmitted),
+        })
+        if (reserved.type === "admitted") return noEvent(undefined)
+        if (reserved.type === "replay") {
+          return yield* Effect.die("New learner-response-evidence admission unexpectedly replayed")
+        }
+        const state = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+        const part = learnerResponseEvidenceTerminalPart(canonical, registration, state)
+        return withPartEvent(undefined, part, requirePhysicalSettlement(state.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function executeLearnerResponseEvidence(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  inflight: Map<SessionV1.PartID, ResponseEvidenceActive>,
+  owners: ResponseEvidenceRuntimeOwners,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+      input: normalizeLearnerResponseEvidence(modelInput),
+    } satisfies ResponseEvidenceCanonical
+    const active = inflight.get(registration.partID)
+    if (active) {
+      if (!isDeepStrictEqual(active.registration, registration) || !isDeepStrictEqual(active.canonical, canonical)) {
+        return yield* invocationConflict(registration)
+      }
+      return yield* Deferred.await(active.deferred)
+    }
+
+    const deferred = Deferred.makeUnsafe<ExactResult, unknown>()
+    const token = { canonical, registration, deferred } satisfies ResponseEvidenceActive
+    inflight.set(registration.partID, token)
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const exit = yield* restore(
+          executeLearnerResponseEvidenceOnce(events, permission, canonical, registration, owners, context),
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(exit)) {
+          const reconciled = yield* loadCommittedLearnerResponseEvidenceResult(events, canonical, registration).pipe(
+            Effect.exit,
+          )
+          if (Exit.isSuccess(reconciled) && reconciled.value) {
+            yield* Deferred.succeed(deferred, reconciled.value).pipe(Effect.ignore)
+            if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+            return reconciled.value
+          }
+          const cause = Exit.isFailure(reconciled) ? reconciled.cause : exit.cause
+          yield* Deferred.failCause(deferred, cause).pipe(Effect.ignore)
+          if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+          return yield* Effect.failCause(cause)
+        }
+        yield* Deferred.succeed(deferred, exit.value).pipe(Effect.ignore)
+        if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+        return exit.value
+      }),
+    )
+  })
+}
+
+function executeLearnerResponseEvidenceOnce(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+  owners: ResponseEvidenceRuntimeOwners,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* events.transaction<
+      ResponseEvidenceExecutionPreparation,
+      typeof SessionV1.Event.PartUpdated
+    >((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent({
+            type: "settled" as const,
+            exact: exactFromPart(yield* assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, state)),
+          })
+        }
+        if (state.disposition !== "candidate_v1" || !state.candidate) {
+          return yield* Effect.die("Admitted learner-response-evidence invocation is not a complete candidate")
+        }
+        return noEvent({ type: "candidate" as const, candidate: state.candidate })
+      }).pipe(Effect.orDie),
+    )
+    if (prepared.result.type === "settled") return prepared.result.exact
+
+    const authority = requirePermissionContext(context)
+    const candidate = prepared.result.candidate
+    const scope = LearningCommandPresentation.learnerResponseEvidenceScope(candidate)
+    const presentation = LearningCommandPresentation.learnerResponseEvidenceCapability(candidate, {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    })
+    const shownScope = {
+      patterns: [LearnerResponseEvidence.PERMISSION_PATTERN],
+      agentAction: candidate.agentAction,
+      scope,
+      semanticPresentation: presentation,
+    }
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        sessionID: registration.sessionID,
+        permission: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        patterns: [LearnerResponseEvidence.PERMISSION_PATTERN],
+        always: [LearnerResponseEvidence.PERMISSION_PATTERN],
+        requirePrompt: false,
+        metadata: {
+          evidenceKind: "learner_response_evidence",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: candidate.agentAction.kind,
+          scope,
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: { messageID: registration.assistantMessageID, callID: registration.callID },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+        lifecycle: {
+          resolution: "request_exact",
+          selected: (selection) =>
+            persistLearnerResponseEvidenceSelection(events, registration, selection, shownScope),
+          replied: (input) => persistLearnerResponseEvidenceReply(events, registration, input),
+        },
+      },
+      context.abort,
+    )
+    if (permissionOutcome.type !== "allow" || context.abort.aborted) {
+      return yield* completeLearnerResponseEvidence(events, canonical, registration)
+    }
+
+    const current = yield* events
+      .transaction((tx) =>
+        requireLearnerResponseEvidenceState(tx, canonical, registration).pipe(Effect.map(noEvent), Effect.orDie),
+      )
+      .pipe(Effect.map((result) => result.result))
+    if (current.status !== "admitted" || current.disposition !== "candidate_v1" || !current.candidate) {
+      return exactFromPart(
+        yield* events
+          .transaction((tx) =>
+            assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, current).pipe(
+              Effect.map((part) => noEvent(part)),
+              Effect.orDie,
+            ),
+          )
+          .pipe(Effect.map((result) => result.result)),
+      )
+    }
+
+    const proof = yield* prepareLearnerResponseEvidenceCurrentUse(owners, current.candidate, registration, context).pipe(
+      Effect.exit,
+    )
+    if (Exit.isFailure(proof)) {
+      return yield* failLearnerResponseEvidence(events, canonical, registration, Cause.squash(proof.cause))
+    }
+    return yield* completeLearnerResponseEvidence(events, canonical, registration, proof.value)
+  })
+}
+
+function persistLearnerResponseEvidenceSelection(
+  events: EventV2.Interface,
+  registration: Registration,
+  selection: Permission.Selection,
+  shownScope: Readonly<Record<string, unknown>>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        if (selection.action === "ask") {
+          yield* LearnerResponseEvidence.issueCapabilityPrompt(tx, {
+            partID: registration.partID,
+            requestID: selection.request.id,
+            policyBasis: { ...selection.basis },
+            shownScope,
+            time: metadata.time,
+            order: metadata.order,
+          })
+          return noEvent(undefined)
+        }
+        yield* LearnerResponseEvidence.settlePolicy(tx, {
+          partID: registration.partID,
+          outcome: selection.action === "allow" ? "policy_allow" : "policy_deny",
+          policyBasis: { ...selection.basis },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function persistLearnerResponseEvidenceReply(
+  events: EventV2.Interface,
+  registration: Registration,
+  input: Readonly<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        yield* LearnerResponseEvidence.settlePrompt(tx, {
+          partID: registration.partID,
+          requestID: input.request.id,
+          outcome:
+            input.reply.reply === "once" || input.reply.reply === "always"
+              ? "prompted_allow"
+              : input.reply.reply === "cancel"
+                ? "prompted_cancel"
+                : input.reply.message
+                  ? "prompted_correct"
+                  : "prompted_deny",
+          reply: { ...input.reply },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function prepareLearnerResponseEvidenceCurrentUse(
+  owners: ResponseEvidenceRuntimeOwners,
+  candidate: LearnerResponseEvidence.Candidate,
+  registration: Registration,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    if (candidate.canonicalCommand.operation !== "create" || !candidate.materialized.target) return undefined
+    const target = candidate.materialized.target
+    const targetProof = yield* owners.database.db.transaction((tx) =>
+      MaterialMap.prepareEvidenceTargetProof(tx, {
+        alignmentID: target.alignmentID,
+        mapID: target.mapID,
+        selectorID: target.selectorID,
+        course: {
+          courseID: target.courseID,
+          viewID: target.viewID,
+          revisionID: target.revisionID,
+          itemID: target.itemID,
+        },
+      }),
+    )
+    const operationIdentity = `${registration.partID}:${registration.callID}`
+    const profileIdentity = JSON.stringify({
+      agent: context.agent ?? "repa",
+      sessionID: context.sessionID,
+      permission: requirePermissionContext(context),
+    })
+    const resolved = yield* resolveLearnerResponseEvidenceMaterial(owners, {
+      mapID: target.mapID,
+      selectorID: target.selectorID,
+      operationIdentity,
+      profileIdentity,
+      abort: context.abort,
+    })
+    if (
+      resolved.byteLength <= 0 ||
+      resolved.byteLength > LearnerResponseEvidence.MAX_SELECTOR_BYTES
+    ) {
+      return yield* new LearnerResponseEvidence.InvalidCommandError({ reason: "capacity_exceeded" })
+    }
+    return { targetProof, currentUse: resolved.receipt }
+  })
+}
+
+function completeLearnerResponseEvidence(
+  events: EventV2.Interface,
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+  proof?: Readonly<{
+    targetProof: MaterialMap.EvidenceTargetProof
+    currentUse: MaterialMap.CurrentUseReceipt
+  }>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(
+            exactFromPart(yield* assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, state)),
+          )
+        }
+        const settlement = proof || canonical.input.operation !== "create"
+          ? yield* Effect.gen(function* () {
+              const consumed = yield* LearningFrontier.read(tx)
+              yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+              return yield* LearnerResponseEvidence.settle(tx, {
+                partID: registration.partID,
+                settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+                ...(proof ?? {}),
+              })
+            })
+          : yield* LearnerResponseEvidence.recover(tx, {
+              partID: registration.partID,
+              settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+            })
+        if (settlement.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: registration.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        const terminal = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+        const part = learnerResponseEvidenceTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function failLearnerResponseEvidence(
+  events: EventV2.Interface,
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+  error: unknown,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(
+            exactFromPart(yield* assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, state)),
+          )
+        }
+        yield* LearnerResponseEvidence.settleFailure(tx, {
+          partID: registration.partID,
+          error,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        const terminal = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+        const part = learnerResponseEvidenceTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function readLearnerResponseEvidenceState(tx: EventV2.Transaction, registration: Registration) {
+  return LearnerResponseEvidence.readInvocationVersion(tx, {
+    partID: registration.partID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+  })
+}
+
+function requireLearnerResponseEvidenceState(
+  tx: EventV2.Transaction,
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+) {
+  return Effect.gen(function* () {
+    const state = yield* readLearnerResponseEvidenceState(tx, registration)
+    if (!state) return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    const storedCommand =
+      state.disposition === "candidate_v1"
+        ? state.candidate?.canonicalCommand
+        : state.disposition === "semantic_terminal_v1"
+          ? state.semanticTerminal?.canonicalCommand
+          : undefined
+    if (
+      storedCommand &&
+      !isDeepStrictEqual(storedCommand, LearnerResponseEvidence.canonicalizeCommand(canonical.input))
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted" && (state.disposition !== "candidate_v1" || !state.candidate)) {
+      return yield* Effect.die("Admitted learner-response-evidence invocation is not a complete candidate")
+    }
+    const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!physical || !physical.turn_id || !physical.input_id) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const envelope = learnerResponseEvidenceEnvelope(registration, physical.time_admitted)
+    if (
+      physical.turn_id !== envelope.turnID ||
+      physical.input_id !== envelope.inputID ||
+      physical.occurrence_id !== envelope.occurrenceID ||
+      physical.session_id !== envelope.sessionID ||
+      physical.parent_user_message_id !== envelope.parentUserMessageID ||
+      physical.assistant_message_id !== envelope.assistantMessageID ||
+      physical.emission_ordinal !== envelope.emissionOrdinal ||
+      physical.capability_identity !== envelope.capabilityIdentity ||
+      physical.capability_version !== envelope.capabilityVersion ||
+      physical.authorization_basis !== envelope.authorizationBasis
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted") yield* assertLearnerResponseEvidenceAdmittedPart(tx, canonical, registration)
+    return state
+  })
+}
+
+function learnerResponseEvidenceEnvelope(
+  registration: Registration,
+  timeAdmitted: number,
+): LearningCommand.InvocationEnvelope & Readonly<{ authorizationBasis: "agent_action"; capabilityVersion: 1 }> {
+  return {
+    occurrenceID: registration.causalOccurrenceID!,
+    turnID: registration.turnID,
+    inputID: registration.inputID,
+    sessionID: registration.sessionID,
+    parentUserMessageID: registration.parentUserMessageID,
+    assistantMessageID: registration.assistantMessageID,
+    partID: registration.partID,
+    providerCallID: registration.callID,
+    emissionOrdinal: registration.emissionOrdinal,
+    capabilityIdentity: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+    capabilityVersion: 1,
+    authorizationBasis: "agent_action",
+    timeAdmitted,
+  }
+}
+
+function assertLearnerResponseEvidenceAdmittedPart(
+  tx: EventV2.Transaction,
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+) {
+  return readPart(tx, registration.partID).pipe(
+    Effect.flatMap((part) =>
+      part.id === registration.partID &&
+      part.messageID === registration.assistantMessageID &&
+      part.sessionID === registration.sessionID &&
+      part.type === "tool" &&
+      part.tool === canonical.toolID &&
+      part.callID === registration.callID &&
+      part.state.status === "pending" &&
+      isDeepStrictEqual(part.state.input, canonical.input)
+        ? Effect.void
+        : invocationConflict(registration),
+    ),
+  )
+}
+
+function assertLearnerResponseEvidenceTerminalPart(
+  tx: EventV2.Transaction,
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+  state: LearnerResponseEvidence.InvocationVersion,
+) {
+  return Effect.gen(function* () {
+    const expected = learnerResponseEvidenceTerminalPart(canonical, registration, state)
+    const part = yield* readPart(tx, registration.partID)
+    if (
+      !isDeepStrictEqual(invocationPart(part), invocationPart(expected)) ||
+      SemanticPresentation.readResult(part, true).type !== "valid"
+    ) {
+      return yield* Effect.die(
+        `Terminal learner-response-evidence Part ${registration.partID} diverged from its settlement`,
+      )
+    }
+    return part
+  })
+}
+
+function learnerResponseEvidenceTerminalPart(
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+  state: LearnerResponseEvidence.InvocationVersion,
+) {
+  const settlement = requirePhysicalSettlement(state.settlement)
+  const presentation = LearningCommandPresentation.learnerResponseEvidenceSettlementResult(settlement, state, {
+    sessionID: registration.sessionID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+    partID: registration.partID,
+  })
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Learner-response-evidence settlement has no valid semantic projection")
+  const exact = {
+    title: projected.title,
+    metadata: {
+      command: canonical.toolID,
+      commandVersion: 1,
+      outcome: settlement.outcome,
+      ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+      durablySettled: projected.durablySettled,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    },
+    output: JSON.stringify({
+      settlement,
+      disposition: state.disposition,
+      ...(state.disposition === "candidate_v1" && state.candidate
+        ? {
+            agentAction: state.candidate.agentAction,
+            ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+            ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+          }
+        : {}),
+      ...(state.disposition === "semantic_terminal_v1" && state.semanticTerminal
+        ? { semanticTerminal: state.semanticTerminal }
+        : {}),
+    }),
+  }
+  const part = {
+    id: registration.partID,
+    messageID: registration.assistantMessageID,
+    sessionID: registration.sessionID,
+    type: "tool",
+    tool: canonical.toolID,
+    callID: registration.callID,
+    state: {
+      status: "completed",
+      input: canonical.input,
+      output: exact.output,
+      title: exact.title,
+      metadata: exact.metadata,
+      time: { start: state.timeAdmitted, end: settlement.settlementTime },
+    },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal learner-response-evidence Part ${registration.partID} is invalid`)
+  }
+  return part
+}
+
+function loadCommittedLearnerResponseEvidenceResult(
+  events: EventV2.Interface,
+  canonical: ResponseEvidenceCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* readLearnerResponseEvidenceState(tx, registration)
+        if (!state || state.status === "admitted") return noEvent(undefined)
+        return noEvent(
+          exactFromPart(yield* assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, state)),
+        )
       }).pipe(Effect.orDie),
     )
     .pipe(Effect.map((result) => result.result))
@@ -2914,6 +3555,29 @@ function loadCommittedExactResult(
             return exactFromPart(yield* assertLearningBootstrapTerminalPart(tx, canonical, registration, state))
           }
         }
+        if (physical?.command_name === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
+          const state = yield* readLearnerResponseEvidenceState(tx, registration)
+          if (state) {
+            if (state.status === "admitted") return undefined
+            const row = yield* readPartRow(tx, registration.partID)
+            if (!row) {
+              return yield* new LearningCommand.InvocationTranscriptUnavailableError({
+                partID: registration.partID,
+              })
+            }
+            const part = partFromRow(row)
+            if (part.tool !== LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
+              return yield* Effect.die(`Learner-response-evidence Part ${registration.partID} changed tool identity`)
+            }
+            const canonical = {
+              toolID: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+              input: normalizeLearnerResponseEvidence(part.state.input),
+            } satisfies ResponseEvidenceCanonical
+            return exactFromPart(
+              yield* assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, state),
+            )
+          }
+        }
         const canonical = attemptedCanonical ?? (yield* canonicalFromStoredPart(tx, registration.partID))
         if (!canonical) return undefined
         const prepared = yield* loadPhysicalPrepared(tx, canonical, registration)
@@ -3498,7 +4162,8 @@ export function recoverAdmitted(events: EventV2.Interface) {
             rows.filter(
               (row) =>
                 isPrimaryCapability(row.command_name) ||
-                row.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+                row.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
+                row.command_name === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
             ),
           ),
         ),
@@ -3603,6 +4268,9 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
     if (physical.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
       return yield* interruptLearningBootstrapTransaction(tx, registration)
     }
+    if (physical.command_name === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
+      return yield* interruptLearnerResponseEvidenceTransaction(tx, registration)
+    }
     const row = yield* readPartRow(tx, registration.partID)
     if (!row) {
       return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
@@ -3696,6 +4364,35 @@ function interruptLearningBootstrapTransaction(tx: EventV2.Transaction, registra
       return yield* Effect.die(`Recovered learning-bootstrap invocation ${registration.partID} remained admitted`)
     }
     const completed = learningBootstrapTerminalPart(canonical, registration, terminal)
+    return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
+  })
+}
+
+function interruptLearnerResponseEvidenceTransaction(tx: EventV2.Transaction, registration: Registration) {
+  return Effect.gen(function* () {
+    const row = yield* readPartRow(tx, registration.partID)
+    if (!row) {
+      return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+    }
+    const part = partFromRow(row)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+      input: normalizeLearnerResponseEvidence(part.state.input),
+    } satisfies ResponseEvidenceCanonical
+    const state = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+    if (state.status !== "admitted") {
+      yield* assertLearnerResponseEvidenceTerminalPart(tx, canonical, registration, state)
+      return noEvent(true)
+    }
+    yield* LearnerResponseEvidence.recover(tx, {
+      partID: registration.partID,
+      settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+    })
+    const terminal = yield* requireLearnerResponseEvidenceState(tx, canonical, registration)
+    if (terminal.status === "admitted") {
+      return yield* Effect.die(`Recovered learner-response-evidence invocation ${registration.partID} remained admitted`)
+    }
+    const completed = learnerResponseEvidenceTerminalPart(canonical, registration, terminal)
     return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
   })
 }
@@ -4292,8 +4989,11 @@ function isRegistration(value: unknown): value is Registration {
 }
 
 function canonicalInput(toolID: PrimaryCapability, input: unknown): Canonical {
-  if (toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY) {
-    throw new Error("Learning bootstrap uses its dedicated Agent-action admission path")
+  if (
+    toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
+    toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
+  ) {
+    throw new Error("This command uses its dedicated Agent-action admission path")
   }
   if (toolID === LearningCommand.ACCEPT_COURSE_VIEW_REVISION_CAPABILITY) {
     return { toolID, input: normalize(input) }
@@ -4523,6 +5223,7 @@ export const node = LayerNode.make({
     Artifact.node,
     ContentRoot.node,
     MaterialMap.node,
+    MaterialMap.tutorCurrentUseReaderNode,
   ],
 })
 

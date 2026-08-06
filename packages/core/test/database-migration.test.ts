@@ -36,6 +36,7 @@ import messageDiffProjectionMigration from "@opencode-ai/core/database/migration
 import agentNativeLearnerGoalsMigration from "@opencode-ai/core/database/migration/repa/20260731144324_gate16_agent_native_learner_goals"
 import learningBootstrapMigration from "@opencode-ai/core/database/migration/repa/20260802114557_gate17_learning_bootstrap"
 import learningContextMigration from "@opencode-ai/core/database/migration/repa/20260803182615_gate18_learning_context"
+import learnerResponseEvidenceMigration from "@opencode-ai/core/database/migration/repa/20260806041450_gate19_learner_response_evidence"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -50,11 +51,16 @@ import { Artifact } from "@opencode-ai/core/artifact"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
 import { MaterialMap } from "@opencode-ai/core/material-map"
+import { LearningContext } from "@opencode-ai/core/learning-context"
+import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { Representation } from "@opencode-ai/core/representation"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
+import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
+import { Turn } from "@opencode-ai/schema/turn"
+import { admitLegacyModelWithoutLearningContext } from "./fixture/model-admission"
 import { learningCommandStatements } from "@opencode-ai/core/learner-navigation/learning-command-constraint-v12"
 import { noEffectStatement } from "@opencode-ai/core/learner-navigation/learning-command-constraint-v13"
 import { tmpdir } from "./fixture/tmpdir"
@@ -208,6 +214,7 @@ const databaseV16Migrations = [
 ] as const
 
 const databaseV17Migrations = [...databaseV16Migrations, learningBootstrapMigration] as const
+const databaseV18Migrations = [...databaseV17Migrations, learningContextMigration] as const
 
 function schemaManifestDigest(db: TestDatabase) {
   return db
@@ -457,6 +464,16 @@ function initializeDatabaseV17(db: TestDatabase) {
     yield* DatabaseMigration.apply(db, {
       path: "frozen-gate17.db",
       migrations: databaseV17Migrations,
+    })
+  })
+}
+
+function initializeDatabaseV18(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* initializeDatabaseV11(db)
+    yield* DatabaseMigration.apply(db, {
+      path: "frozen-gate18.db",
+      migrations: databaseV18Migrations,
     })
   })
 }
@@ -1508,6 +1525,117 @@ function completeSchemaManifest(db: TestDatabase) {
     )
 }
 
+function prepareLegacyLearningContextCut(input: {
+  readonly sessionID: SessionSchema.ID
+  readonly turnID: Turn.ID
+  readonly inputID: Turn.InputID
+  readonly occurrenceID: string
+  readonly assistantMessageID: SessionV1.MessageID
+  readonly ordinal: number
+  readonly cutAsOf: number
+  readonly throughSharedFrontier: LearningFrontier.Snapshot
+  readonly retainedSteeringFingerprint: string
+  readonly collideWithFutureLazyReadID?: boolean
+}) {
+  type Transaction = Parameters<Parameters<Database.Interface["db"]["transaction"]>[0]>[0]
+  return LearningContext.prepareCut({} as Transaction, {
+    operation: {
+      sessionID: input.sessionID,
+      turnID: input.turnID,
+      inputID: input.inputID,
+      causalOccurrenceID: input.occurrenceID,
+      assistantMessageID: input.assistantMessageID,
+      ordinal: input.ordinal,
+    },
+    retainedSteering: {
+      assistantMessageID: input.assistantMessageID,
+      cutAsOf: input.cutAsOf,
+      throughSharedFrontier: input.throughSharedFrontier,
+      fingerprint: input.retainedSteeringFingerprint,
+    } as unknown as Parameters<typeof LearningContext.prepareCut>[1]["retainedSteering"],
+    capabilityBasis: LearningContext.unavailableCapabilityBasis(),
+  }).pipe(
+    Effect.map((prepared) => {
+      const providerToolSurface = input.collideWithFutureLazyReadID
+        ? LearningContext.bindProviderToolSurface({
+            route: prepared.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.route,
+            toolChoice: { state: "absent" },
+            definitions: [
+              {
+                id: "learner_response_evidence_read",
+                value: { type: "function", name: "learner_response_evidence_read", description: "legacy custom tool" },
+              },
+            ],
+          })
+        : undefined
+      const base = {
+        schemaVersion: 1 as const,
+        policyVersion: 1 as const,
+        rendererVersion: 1 as const,
+        operation: prepared.cut.operation,
+        cutAsOf: prepared.cut.cutAsOf,
+        throughSharedFrontier: prepared.cut.throughSharedFrontier,
+        retainedSteering: prepared.cut.retainedSteering,
+        capabilityBasis: {
+          ...prepared.cut.capabilityBasis,
+          catalogVersion: 1,
+          ...(providerToolSurface
+            ? {
+                effectiveLazyReadCapabilities: [],
+                effectiveProviderToolSurfaceBinding: providerToolSurface.binding,
+              }
+            : {}),
+        },
+        sections: prepared.cut.sections.filter((section) => section.owner !== "learner_response_evidence"),
+      }
+      const entryCounts = Object.fromEntries(base.sections.map((section) => [section.owner, section.entries.length]))
+      let canonicalBytes = 0
+      let renderedBytes = 0
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const budget = { canonicalBytes, renderedBytes, entryCounts, hardLimits: LearningContext.hardLimits }
+        const fingerprint = LearningContext.canonicalFingerprint(LearningContext.toJsonValue({ ...base, budget }))
+        const draft = { ...base, budget, fingerprint, renderedFingerprint: "0".repeat(64) }
+        const renderedBlock = renderLegacyLearningContext(draft as unknown as LearningContext.Cut)
+        renderedBytes = LearningContext.utf8Bytes(renderedBlock)
+        const cut = {
+          ...draft,
+          budget: { ...budget, renderedBytes },
+          renderedFingerprint: LearningContext.sha256(renderedBlock),
+        } as unknown as LearningContext.Cut
+        const canonicalCut = LearningContext.canonicalJson(LearningContext.toJsonValue(cut))
+        const nextCanonicalBytes = LearningContext.utf8Bytes(canonicalCut)
+        if (nextCanonicalBytes === canonicalBytes && cut.budget.renderedBytes === renderedBytes) {
+          return { cut, canonicalCut, renderedBlock }
+        }
+        canonicalBytes = nextCanonicalBytes
+      }
+      throw new Error("Legacy Gate 18 learning-context byte accounting did not converge")
+    }),
+  )
+}
+
+function renderLegacyLearningContext(cut: LearningContext.Cut) {
+  return [
+    "[Repa learning context — protected]",
+    `schemaVersion: ${cut.schemaVersion}; policyVersion: ${cut.policyVersion}; rendererVersion: ${cut.rendererVersion}`,
+    `cutFingerprint: ${cut.fingerprint}`,
+    `cutAsOf: ${cut.cutAsOf}; throughSharedFrontier: ${LearningContext.canonicalJson(LearningContext.toJsonValue(cut.throughSharedFrontier))}`,
+    `retainedSteering: ${LearningContext.canonicalJson(LearningContext.toJsonValue(cut.retainedSteering))}`,
+    `capabilityBasis: ${LearningContext.canonicalJson(
+      LearningContext.toJsonValue({
+        catalogVersion: cut.capabilityBasis.catalogVersion,
+        policyFingerprint: cut.capabilityBasis.policyFingerprint,
+        effectiveAutomaticContext: cut.capabilityBasis.effectiveAutomaticContext,
+        effectiveLazyReadCapabilities: cut.capabilityBasis.effectiveLazyReadCapabilities,
+        providerToolSurface: cut.capabilityBasis.effectiveProviderToolSurfaceBinding,
+      }),
+    )}`,
+    `sections (canonical order is not priority): ${LearningContext.canonicalJson(LearningContext.toJsonValue(cut.sections))}`,
+    "This is a bounded observation condition for this sample, not learning truth, priority, mastery, progress, or a selected Tutor move. Use exact owner reads when available; never infer missing detail or authorization from a locator.",
+    "[/Repa learning context]",
+  ].join("\n")
+}
+
 function dropGate18(db: TestDatabase) {
   return Effect.gen(function* () {
     yield* db.run(sql`DROP TRIGGER IF EXISTS turn_learning_context_cut_immutable_v18`)
@@ -2071,6 +2199,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
           { version: BASELINE_VERSION + 16, id: learningBootstrapMigration.id },
           { version: BASELINE_VERSION + 17, id: learningContextMigration.id },
+          { version: BASELINE_VERSION + 18, id: learnerResponseEvidenceMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -2676,7 +2805,7 @@ describe("DatabaseMigration", () => {
     expect(result.mixedMissingView._tag).toBe("Failure")
   })
 
-  test("upgrades a frozen Gate 16 database through Gate 18 without fabricating bootstrap or context state", async () => {
+  test("upgrades a frozen Gate 16 database through Gate 19 without fabricating bootstrap or context state", async () => {
     await using tmp = await tmpdir()
     const filename = path.join(tmp.path, "frozen-gate16.db")
     const fresh = await run(
@@ -2740,7 +2869,7 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV17Migrations.length + 1, id: learningContextMigration.id },
+      { version: BASELINE_VERSION + databaseV17Migrations.length + 2, id: learnerResponseEvidenceMigration.id },
     ])
     expect(upgraded.target).toEqual({
       authority_kind: "content_root",
@@ -2791,7 +2920,7 @@ describe("DatabaseMigration", () => {
     expect(upgraded.anchorSeal?.definition).toContain("learning_bootstrap_anchor_result")
   })
 
-  test("upgrades a frozen Gate 17 database to the exact immutable Gate 18 learning-context schema", async () => {
+  test("upgrades a frozen Gate 17 database through Gate 19 while preserving the Gate 18 schema", async () => {
     const fresh = await run(
       Effect.gen(function* () {
         const db = yield* makeDb
@@ -2833,7 +2962,7 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV17Migrations.length + 1, id: learningContextMigration.id },
+      { version: BASELINE_VERSION + databaseV17Migrations.length + 2, id: learnerResponseEvidenceMigration.id },
     ])
     expect(upgraded.table?.definition).toContain("WITHOUT ROWID")
     expect(upgraded.trigger?.definition).toContain("BEFORE UPDATE ON turn_learning_context_cut")
@@ -2905,6 +3034,198 @@ describe("DatabaseMigration", () => {
     )
   })
 
+  test("upgrades a frozen Gate 18 database without rewriting its decodable v1 context cut", async () => {
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        return yield* completeSchemaManifest(db)
+      }),
+    )
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV18(db)
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + databaseV18Migrations.length,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND name = 'learner_response_evidence_record'
+          `),
+        ).toBeUndefined()
+
+        const sessionID = SessionSchema.ID.create()
+        const turnID = Turn.ID.create()
+        const inputID = Turn.InputID.create()
+        const occurrenceMessageID = SessionV1.MessageID.ascending()
+        const occurrencePartID = SessionV1.PartID.ascending()
+        const assistantMessageID = SessionV1.MessageID.ascending()
+        yield* db.run(sql`
+          INSERT OR IGNORE INTO project (id, worktree, time_created, time_updated, sandboxes)
+          VALUES (${ProjectV2.ID.global}, '/', 100, 100, '[]')
+        `)
+        yield* db.run(sql`
+          INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
+          VALUES (${sessionID}, ${ProjectV2.ID.global}, ${sessionID}, '/', 'Frozen Gate 18', 'test', 100, 100)
+        `)
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES (${occurrenceMessageID}, ${sessionID}, 100, 100, '{"role":"user"}')
+        `)
+        yield* db.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+          VALUES (${occurrencePartID}, ${occurrenceMessageID}, ${sessionID}, 100, 100, '{"type":"text","text":"frozen Gate 18"}')
+        `)
+        const occurrence = yield* db.transaction((tx) =>
+          Occurrence.admit(tx, {
+            admission: LearnerAdmission.interactive({ timeZone: "UTC" }),
+            sessionID,
+            messageID: occurrenceMessageID,
+            timeAdmitted: 100,
+          }),
+        )
+        yield* db.transaction((tx) =>
+          TurnLifecycle.admit(tx, {
+            kind: "learner",
+            turnID,
+            sessionID,
+            inputID,
+            messageID: occurrenceMessageID,
+            occurrenceID: occurrence.id,
+            limits: { model: 1, tool: 0 },
+            envelope: { fixture: "frozen_gate18" },
+            policyBasis: { fixture: "frozen_gate18" },
+            timeAdmitted: 100,
+          }),
+        )
+        yield* db.run(sql`
+          INSERT INTO message (id, session_id, time_created, time_updated, data)
+          VALUES (
+            ${assistantMessageID}, ${sessionID}, 101, 101,
+            ${JSON.stringify({
+              role: "assistant",
+              time: { created: 101 },
+              parentID: occurrenceMessageID,
+              modelID: "frozen-model",
+              providerID: "frozen-provider",
+              mode: "repa",
+              agent: "repa",
+              path: { cwd: "C:\\learning", root: "C:\\learning" },
+              cost: 0,
+              tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+            })}
+          )
+        `)
+        const frontier = yield* db.transaction((tx) => LearningFrontier.read(tx))
+        yield* db.transaction((tx) =>
+          admitLegacyModelWithoutLearningContext(tx, {
+            turnID,
+            sessionID,
+            assistantMessageID,
+            requestEnvelope: { prompt: "frozen Gate 18 request" },
+            contextFingerprint: "1".repeat(64),
+            snapshotFrontier: frontier,
+            timeAdmitted: 101,
+          }),
+        )
+        const operation = yield* db.get<{
+          ordinal: number
+          timeAdmitted: number
+          observedSequence: number
+          observedTime: number
+          retainedFingerprint: string
+        }>(sql`
+          SELECT
+            ordinal,
+            time_admitted AS timeAdmitted,
+            observed_shared_frontier_sequence AS observedSequence,
+            observed_shared_frontier_time AS observedTime,
+            retained_steering_cut_fingerprint AS retainedFingerprint
+          FROM turn_model_operation
+          WHERE assistant_message_id = ${assistantMessageID}
+        `)
+        if (!operation) return yield* Effect.die("Expected frozen Gate 18 model operation")
+        const legacy = yield* prepareLegacyLearningContextCut({
+          sessionID,
+          turnID,
+          inputID,
+          occurrenceID: occurrence.id,
+          assistantMessageID,
+          ordinal: operation.ordinal,
+          cutAsOf: operation.timeAdmitted,
+          throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
+          retainedSteeringFingerprint: operation.retainedFingerprint,
+          collideWithFutureLazyReadID: true,
+        })
+        yield* db.run(sql`
+          INSERT INTO turn_learning_context_cut (
+            assistant_message_id, canonical_cut, canonical_bytes, cut_fingerprint, cut_as_of,
+            rendered_block, rendered_bytes, rendered_fingerprint
+          ) VALUES (
+            ${assistantMessageID}, ${legacy.canonicalCut}, ${legacy.cut.budget.canonicalBytes},
+            ${legacy.cut.fingerprint}, ${legacy.cut.cutAsOf}, ${legacy.renderedBlock},
+            ${legacy.cut.budget.renderedBytes}, ${legacy.cut.renderedFingerprint}
+          )
+        `)
+        const before = yield* db.transaction((tx) => LearningContext.readCut(tx, assistantMessageID))
+
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate18.db" })
+
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          journal: yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version DESC LIMIT 1`),
+          before,
+          after: yield* db.transaction((tx) => LearningContext.readCut(tx, assistantMessageID)),
+          tables: yield* db.all<{ name: string }>(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND name LIKE 'learner_response_evidence_%'
+            ORDER BY name
+          `),
+          triggers: yield* db.all<{ name: string }>(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'trigger' AND name LIKE 'learner_response_evidence_%_v19'
+            ORDER BY name
+          `),
+          evidenceRows: yield* db.get(sql`
+            SELECT
+              (SELECT count(*) FROM learner_response_evidence_record) AS records,
+              (SELECT count(*) FROM learner_response_evidence_revision) AS revisions,
+              (SELECT count(*) FROM learner_response_evidence_commit_seal) AS seals
+          `),
+          foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
+        }
+      }),
+    )
+
+    expect(upgraded.manifest).toEqual(fresh)
+    expect(upgraded.journal).toEqual([
+      { version: BASELINE_VERSION + databaseV18Migrations.length + 1, id: learnerResponseEvidenceMigration.id },
+    ])
+    expect(upgraded.before).toEqual(upgraded.after)
+    expect(upgraded.after.type).toBe("available")
+    if (upgraded.after.type !== "available") throw new Error("Expected preserved Gate 18 cut")
+    expect(upgraded.after.cut.policyVersion).toBe(1)
+    expect(upgraded.after.cut.rendererVersion).toBe(1)
+    expect(upgraded.after.cut.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
+    expect(
+      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map((definition) => definition.id),
+    ).toEqual(["learner_response_evidence_read"])
+    expect(upgraded.after.cut.sections).toHaveLength(5)
+    expect(upgraded.tables.map((row) => row.name)).toEqual([
+      "learner_response_evidence_capability_issue",
+      "learner_response_evidence_capability_settlement",
+      "learner_response_evidence_commit_seal",
+      "learner_response_evidence_disposition",
+      "learner_response_evidence_record",
+      "learner_response_evidence_revision",
+    ])
+    expect(upgraded.triggers.length).toBeGreaterThanOrEqual(12)
+    expect(upgraded.evidenceRows).toEqual({ records: 0, revisions: 0, seals: 0 })
+    expect(upgraded.foreignKeys).toEqual([])
+  })
+
   test("upgrades the frozen v12 schema through v13 to exact current Default-Course structural parity", async () => {
     const tables = [
       "learner_default_course_acknowledgement",
@@ -2949,6 +3270,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
         yield* db.transaction((tx) => learningBootstrapMigration.up(tx))
         yield* db.transaction((tx) => learningContextMigration.up(tx))
+        yield* db.transaction((tx) => learnerResponseEvidenceMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
         return {
           structures: yield* structuralManifest(db),
@@ -3087,6 +3409,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => agentNativeLearnerGoalsMigration.up(tx))
         yield* db.transaction((tx) => learningBootstrapMigration.up(tx))
         yield* db.transaction((tx) => learningContextMigration.up(tx))
+        yield* db.transaction((tx) => learnerResponseEvidenceMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
 
         const after = yield* snapshot(db, columns)
@@ -6818,6 +7141,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 15, id: agentNativeLearnerGoalsMigration.id },
           { version: BASELINE_VERSION + 16, id: learningBootstrapMigration.id },
           { version: BASELINE_VERSION + 17, id: learningContextMigration.id },
+          { version: BASELINE_VERSION + 18, id: learnerResponseEvidenceMigration.id },
         ])
       }),
     )

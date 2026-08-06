@@ -51,6 +51,9 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Database } from "@opencode-ai/core/database/database"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { LearningContext } from "@opencode-ai/core/learning-context"
+import { ContentRoot } from "@opencode-ai/core/content-root"
+import { MaterialMap } from "@opencode-ai/core/material-map"
 import {
   InvalidCausalSourceError,
   LearnerAdmission,
@@ -67,6 +70,7 @@ import { Turn } from "@opencode-ai/schema/turn"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { LLMEvent } from "@opencode-ai/llm"
+import { resolveLearnerResponseEvidenceMaterial } from "@/learning-context/learner-response-evidence-material"
 
 // @ts-ignore
 globalThis.AI_SDK_LOG_WARNINGS = false
@@ -213,6 +217,9 @@ const layer = Layer.effect(
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
     const database = yield* Database.Service
+    const contentRoots = yield* ContentRoot.Service
+    const maps = yield* MaterialMap.Service
+    const tutorMaterials = yield* MaterialMap.TutorCurrentUseReader
     const { db } = database
     const titleInFlight = new Set<SessionID>()
     const ops = Effect.fn("SessionPrompt.ops")(function* () {
@@ -1801,6 +1808,49 @@ const layer = Layer.effect(
           const contextFingerprint = TurnLifecycle.envelopeFingerprint(
             normalizeTurnEnvelope({ system, messages: requestMessages }),
           )
+          const learnerResponseEvidenceRequirements = requestPlan.capabilityBasis.effectiveAutomaticContext
+            ? yield* db
+                .transaction((tx) =>
+                  LearningContext.listLearnerResponseEvidenceRequirements(tx, {
+                    cutAsOf: Math.max(Date.now(), snapshotFrontier.time),
+                  }),
+                )
+                .pipe(Effect.orDie)
+            : []
+          const learnerResponseEvidenceMaterials = yield* Effect.forEach(
+            learnerResponseEvidenceRequirements,
+            (requirement) =>
+              resolveLearnerResponseEvidenceMaterial(
+                { database, contentRoots, maps, tutorMaterials },
+                {
+                  mapID: requirement.mapID,
+                  selectorID: requirement.selectorID,
+                  operationIdentity: `learning-context:${msg.id}:${requirement.mapID}:${requirement.selectorID}`,
+                  profileIdentity: JSON.stringify({
+                    agent: agent.name,
+                    sessionID,
+                    permission: session.permission,
+                    authority,
+                  }),
+                },
+              ).pipe(
+                Effect.map((resolved) => ({
+                  mapID: requirement.mapID,
+                  selectorID: requirement.selectorID,
+                  state: "available" as const,
+                  receipt: resolved.receipt,
+                  byteLength: resolved.byteLength,
+                })),
+                Effect.catch(() =>
+                  Effect.succeed({
+                    mapID: requirement.mapID,
+                    selectorID: requirement.selectorID,
+                    state: "unavailable" as const,
+                  }),
+                ),
+              ),
+            { concurrency: 4 },
+          )
           const sealedFrontier = yield* db
             .transaction((tx) => LearningFrontier.read(tx))
             .pipe(Effect.catchTag("SqlError", Effect.die))
@@ -1820,6 +1870,7 @@ const layer = Layer.effect(
                     snapshotFrontier,
                     timeAdmitted: Date.now(),
                     learningContextBasis: requestPlan.capabilityBasis,
+                    learnerResponseEvidenceMaterials,
                   }
                   const existing = yield* tx
                     .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
@@ -2221,6 +2272,9 @@ export const node = LayerNode.make({
     EventV2Bridge.node,
     RuntimeFlags.node,
     Database.node,
+    ContentRoot.node,
+    MaterialMap.node,
+    MaterialMap.tutorCurrentUseReaderNode,
   ],
 })
 

@@ -166,6 +166,19 @@ export type AlignmentOwnerReceipt = Readonly<{
   superseded: boolean
 }>
 
+export type EvidenceTargetReceipt = Readonly<{
+  alignmentID: AlignmentID
+  alignmentDispositionVersion: number
+  mapID: MapID
+  mapDispositionVersion: number
+  selectorID: SelectorID
+  selectorByteLength: number
+  course: Course.MembershipEndpoint
+  courseVersion: number
+  viewVersion: number
+  revisionVersion: number
+}>
+
 export type OutlineNodeSummary = Omit<OutlineNodeInfo, "selectors"> & Readonly<{ selectorCount: number }>
 
 const ownerProofToken = Symbol("MaterialMap.OwnerProof")
@@ -193,6 +206,22 @@ export class AlignmentOwnerProof {
   constructor(token: symbol, receipt: AlignmentOwnerReceipt) {
     if (token !== ownerProofToken) throw new Error("Alignment-owner proofs are owner-issued")
     this.receipt = Object.freeze({ ...receipt })
+    this.#receipt = this.receipt
+  }
+
+  expectation(token: symbol) {
+    if (token !== ownerProofToken) return
+    return this.#receipt
+  }
+}
+
+export class EvidenceTargetProof {
+  readonly receipt: EvidenceTargetReceipt
+  #receipt: EvidenceTargetReceipt
+
+  constructor(token: symbol, receipt: EvidenceTargetReceipt) {
+    if (token !== ownerProofToken) throw new Error("Evidence-target proofs are owner-issued")
+    this.receipt = Object.freeze({ ...receipt, course: Object.freeze({ ...receipt.course }) })
     this.#receipt = this.receipt
   }
 
@@ -262,6 +291,8 @@ export type TutorSelectorResolution = {
         storageSource: "canonical" | "deletion_stage"
       }>
   readonly canonicalBytes: number
+  /** Non-enumerable owner proof; it is never part of a tool result or persisted body. */
+  readonly receipt: CurrentUseReceipt
 }
 
 type CurrentReceiptExpectation = {
@@ -636,6 +667,18 @@ const tutorCurrentUseLayer = Layer.effect(
             bytes: selected.bytes,
             witness: selected.witness,
             target: { type: "artifact", revision: finalized.revision, authorization: finalized.authorization },
+            receipt: new CurrentUseReceipt(currentReceiptToken, {
+              mapID: finalized.current.map.id,
+              selectorID: finalized.current.selector.id,
+              mapDispositionVersion: finalized.current.map.disposition.version,
+              require: (tx) =>
+                Effect.gen(function* () {
+                  const current = yield* requireTutorAccessExpectation(tx, expectation)
+                  yield* requireSameTutorMap(finalized.current, current)
+                  yield* admitted.read.requireForTutor(tx, admitted.invocation)
+                  yield* Artifact.requireRevisionReference(tx, admitted.revision)
+                }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+            }),
           },
           maxOutputBytes,
         )
@@ -694,6 +737,17 @@ const tutorCurrentUseLayer = Layer.effect(
           bytes: selected.bytes,
           witness: selected.witness,
           target: { type: "representation", receipt: read.receipt, storageSource: read.storageSource },
+          receipt: new CurrentUseReceipt(currentReceiptToken, {
+            mapID: finalized.map.id,
+            selectorID: finalized.selector.id,
+            mapDispositionVersion: finalized.map.disposition.version,
+            require: (tx) =>
+              Effect.gen(function* () {
+                const current = yield* requireTutorAccessExpectation(tx, expectation)
+                yield* requireSameTutorMap(finalized, current)
+                yield* Representation.requireTutorCurrentUseProof(tx, read.proof)
+              }).pipe(Effect.catchTag("EffectDrizzleQueryError", Effect.die)),
+          }),
         },
         maxOutputBytes,
       )
@@ -1417,6 +1471,7 @@ function tutorResolution(
     bytes: Uint8Array
     witness: MaterialSelector.Witness
     target: TutorSelectorResolution["target"]
+    receipt: CurrentUseReceipt
   }>,
   maxOutputBytes: number,
 ) {
@@ -1456,7 +1511,12 @@ function tutorResolution(
             detail: `The complete Tutor material result exceeds the Gate 18 output allowance (${next}/${maxOutputBytes})`,
           })
         }
-        return result satisfies TutorSelectorResolution
+        return Object.defineProperty(result, "receipt", {
+          value: input.receipt,
+          enumerable: false,
+          writable: false,
+          configurable: false,
+        }) as TutorSelectorResolution
       }
       canonicalBytes = next
     }
@@ -2304,6 +2364,100 @@ export function requireAlignmentOwnerProof(tx: Transaction, proof: AlignmentOwne
         detail: "Alignment state changed",
       })
     }
+    return current
+  })
+}
+
+export function prepareEvidenceTargetProof(
+  tx: Transaction,
+  input: Readonly<{
+    alignmentID: AlignmentID
+    mapID: MapID
+    selectorID: SelectorID
+    course: Course.MembershipEndpoint
+  }>,
+) {
+  return Effect.gen(function* () {
+    const alignment = yield* requireAlignmentInfo(tx, input.alignmentID)
+    if (
+      alignment.mapID !== input.mapID ||
+      alignment.selectorID !== input.selectorID ||
+      !isDeepStrictEqual(alignment.course, input.course)
+    ) {
+      return yield* new InvalidTransitionError({
+        detail: "The neutral alignment does not connect the exact evidence endpoints",
+      })
+    }
+    if (alignment.disposition.disposition !== "active" || alignment.superseded) {
+      return yield* new InactiveError({ entity: "alignment", id: input.alignmentID })
+    }
+    const current = yield* requireCurrentMapSelector(tx, input.mapID, input.selectorID)
+    if (current.map.superseded) return yield* new InactiveError({ entity: "map", id: input.mapID })
+    const membership = yield* Course.prepareMembershipProof(tx, {
+      endpoint: input.course,
+      selection: { type: "explicit_exact" },
+    })
+    return new EvidenceTargetProof(ownerProofToken, {
+      alignmentID: alignment.id,
+      alignmentDispositionVersion: alignment.disposition.version,
+      mapID: current.map.id,
+      mapDispositionVersion: current.map.disposition.version,
+      selectorID: current.selector.id,
+      selectorByteLength: current.selector.witness.byteLength,
+      course: membership.endpoint,
+      courseVersion: membership.receipt.courseVersion,
+      viewVersion: membership.receipt.viewVersion,
+      revisionVersion: membership.receipt.revisionVersion,
+    })
+  })
+}
+
+export function requireEvidenceTargetProof(tx: Transaction, proof: EvidenceTargetProof) {
+  return Effect.gen(function* () {
+    const expected = proof instanceof EvidenceTargetProof ? proof.expectation(ownerProofToken) : undefined
+    if (!expected) {
+      return yield* new InvalidTransitionError({ detail: "Evidence target requires one owner-issued proof" })
+    }
+    const current = yield* prepareEvidenceTargetProof(tx, {
+      alignmentID: expected.alignmentID,
+      mapID: expected.mapID,
+      selectorID: expected.selectorID,
+      course: expected.course,
+    })
+    if (!isDeepStrictEqual(current.receipt, expected)) {
+      return yield* new ConflictError({
+        entity: "alignment_state",
+        id: expected.alignmentID,
+        detail: "Evidence target ownership changed",
+      })
+    }
+    return current
+  })
+}
+
+export function requireCurrentUseReceipt(
+  tx: Transaction,
+  receipt: CurrentUseReceipt,
+  input: Readonly<{ mapID: MapID; selectorID: SelectorID; consume?: boolean }>,
+) {
+  return Effect.gen(function* () {
+    const expected =
+      receipt instanceof CurrentUseReceipt ? receipt.expectation(currentReceiptToken, input.consume ?? false) : undefined
+    if (!expected || expected.mapID !== input.mapID || expected.selectorID !== input.selectorID) {
+      return yield* new PreparationError({
+        code: "stale_target",
+        detail: "Current-use proof belongs to another exact selector",
+      })
+    }
+    const current = yield* requireCurrentMapSelector(tx, input.mapID, input.selectorID)
+    if (current.map.disposition.version !== expected.mapDispositionVersion || current.map.superseded) {
+      return yield* new ConflictError({
+        entity: "map_state",
+        id: input.mapID,
+        detail: "Map current-use state changed after selector resolution",
+      })
+    }
+    yield* expected.require(tx)
     return current
   })
 }

@@ -43,6 +43,13 @@ const withoutRowidTables = new Set([
   "learning_command_receipt",
   "turn_learning_context_cut",
   "turn_model_capacity",
+  "turn_model_source_retention",
+  "learner_response_evidence_disposition",
+  "learner_response_evidence_capability_issue",
+  "learner_response_evidence_capability_settlement",
+  "learner_response_evidence_record",
+  "learner_response_evidence_revision",
+  "learner_response_evidence_commit_seal",
 ])
 const args = parseArgs({
   args: process.argv.slice(2),

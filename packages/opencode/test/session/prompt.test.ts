@@ -1,10 +1,12 @@
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Database } from "@opencode-ai/core/database/database"
+import { ContentRoot } from "@opencode-ai/core/content-root"
+import { Course } from "@opencode-ai/core/course"
 import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { eq } from "drizzle-orm"
+import { eq, sql } from "drizzle-orm"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { EventV2 } from "@opencode-ai/core/event"
 import { expect, setSystemTime } from "bun:test"
@@ -70,12 +72,14 @@ import { InstanceStore } from "@/project/instance-store"
 import { TestConsole } from "effect/testing"
 import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { TurnInputTable, TurnModelOperationTable, TurnTable } from "@opencode-ai/core/turn/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningContext } from "@opencode-ai/core/learning-context"
+import { MaterialMap } from "@opencode-ai/core/material-map"
 import { Turn } from "@opencode-ai/schema/turn"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { entryBody } from "@/cli/cmd/run/entry.body"
@@ -117,6 +121,13 @@ function withSh<A, E, R>(fx: () => Effect.Effect<A, E, R>) {
 
 function toolPart(parts: SessionV1.Part[]) {
   return parts.find((part): part is SessionV1.ToolPart => part.type === "tool")
+}
+
+function providerText(value: unknown): string[] {
+  if (typeof value === "string") return [value]
+  if (Array.isArray(value)) return value.flatMap(providerText)
+  if (value && typeof value === "object") return Object.values(value as Record<string, unknown>).flatMap(providerText)
+  return []
 }
 
 type CompletedToolPart = SessionV1.ToolPart & { state: SessionV1.ToolStateCompleted }
@@ -255,6 +266,7 @@ const promptRoot = LayerNode.group([
   Question.node,
   Todo.node,
   ToolRegistry.node,
+  ContentRoot.node,
   Skill.node,
   Git.node,
   Ripgrep.node,
@@ -2336,7 +2348,7 @@ it.instance(
 )
 
 it.instance(
-  "FIFO steers bind distinct model operations and survive a frontier-rebuild boundary without over-promotion",
+  "FIFO steers bind distinct model operations and retry across a Session-deletion frontier without over-promotion",
   () =>
     Effect.gen(function* () {
       const { llm } = yield* useServerConfig(providerCfg)
@@ -2446,10 +2458,11 @@ it.instance(
       expect(beforeRebuildModels.map((model) => model.inputID)).toEqual([rootInputID])
       expect(beforeRebuildTurn?.currentInputID).toBe(steerAInputID)
 
-      // The shared frontier is database-wide. Materializing a separate Session above
-      // makes this transition causally external to the Turn under test.
+      // Session deletion can change Gate 19 source availability. It must therefore
+      // invalidate this already-started context build through the same shared seal.
+      yield* sessions.remove(otherSession.info.id)
       const advancedFrontier = yield* database.db
-        .transaction((tx) => LearningFrontier.advance(tx, { time: Date.now() }))
+        .transaction((tx) => LearningFrontier.read(tx))
         .pipe(Effect.catchTag("SqlError", Effect.die))
       contextRelease.resolve()
 
@@ -2523,10 +2536,439 @@ it.instance(
           .map((event) => (event.data as { input?: { id?: string } }).input?.id),
       ).toEqual([steerAInputID, steerBInputID])
       yield* sessions.remove(sessionID)
-      yield* sessions.remove(otherSession.info.id)
     }),
   { config: cfg },
   30_000,
+)
+
+projectOriginIt(
+  "joins stored deleted learner evidence through SessionPrompt into provider requests and recomputes after correction",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const roots = yield* ContentRoot.Service
+      const criterion = "A semaphore bounds simultaneous entrants to its protected region."
+      const sourcePath = path.join(dir, "gate19-semaphore.txt")
+      yield* Effect.promise(() => Bun.write(sourcePath, `${criterion}\n`))
+      const rootProposal = yield* roots.propose(dir)
+      const contentRoot = yield* roots.approve({
+        proposal: rootProposal,
+        approval: ContentRoot.LearnerApproval.contentRoot(rootProposal, "Gate 19 prompt trace"),
+      })
+      const bootstrapInput = {
+        course: { type: "new", title: "Semaphore concurrency" },
+        route: {
+          type: "new_view",
+          key: "route",
+          name: "Concurrency evidence",
+          authorship: "learner_requested",
+          revision: { items: [{ key: "criterion", title: "Explain the semaphore concurrency bound" }] },
+        },
+        selection: { type: "set", target: { type: "route" } },
+        materials: [
+          {
+            type: "local",
+            key: "source",
+            path: sourcePath,
+            authority: { type: "content_root", contentRootID: contentRoot.id },
+          },
+        ],
+        maps: [
+          {
+            key: "map",
+            materialKey: "source",
+            authorship: "learner_requested",
+            outline: [
+              {
+                key: "criterion",
+                title: "Exact semaphore proposition",
+                selectors: [
+                  {
+                    key: "exact",
+                    coordinate: {
+                      kind: "artifact_byte_range.v1",
+                      startByte: 0,
+                      endByte: new TextEncoder().encode(criterion).byteLength,
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        alignments: [
+          {
+            key: "exact_alignment",
+            mapKey: "map",
+            selectorKey: "exact",
+            authorship: "learner_requested",
+            course: { type: "route_item", itemKey: "criterion" },
+            reason: "Neutral provenance for the exact selector and Course membership",
+          },
+        ],
+        anchor: { type: "set", target: { type: "route_item", itemKey: "criterion" } },
+      } as const
+      const sourceSessionID = SessionID.create()
+      const conditionTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY, bootstrapInput)
+      yield* llm.text("State the exact proposition before I reveal whether your formulation matches it.")
+      yield* prompt.start({
+        sessionID: sourceSessionID,
+        turnID: conditionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 2 },
+        session: {
+          title: "Gate 19 source Session",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Create the exact source route, then elicit my response." }],
+      })
+      expect((yield* prompt.awaitTurn(sourceSessionID, conditionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const conditionOperations = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, conditionTurnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      expect(conditionOperations).toHaveLength(2)
+      const conditionAssistantMessageID = conditionOperations[1]?.assistantMessageID
+      if (!conditionAssistantMessageID) return yield* Effect.die("Missing exact Gate 19 condition operation")
+
+      type TargetRow = {
+        alignmentID: MaterialMap.AlignmentID
+        mapID: MaterialMap.MapID
+        selectorID: MaterialMap.SelectorID
+        courseID: Course.CourseID
+        viewID: Course.ViewID
+        revisionID: Course.RevisionID
+        itemID: Course.ItemID
+      }
+      const target = yield* database.db.get<TargetRow>(sql`
+        SELECT alignment.id AS alignmentID, alignment.map_id AS mapID,
+               alignment.selector_id AS selectorID, alignment.course_id AS courseID,
+               alignment.view_id AS viewID, alignment.revision_id AS revisionID,
+               alignment.item_id AS itemID
+        FROM material_course_alignment AS alignment
+        JOIN material_selector AS selector
+          ON selector.map_id = alignment.map_id AND selector.id = alignment.selector_id
+        WHERE selector.kind = 'artifact_byte_range.v1'
+      `)
+      if (!target) return yield* Effect.die("Missing exact Gate 19 target")
+
+      const responseTurnID = Turn.ID.create()
+      const responseText = "A semaphore limits how many tasks enter the protected region simultaneously."
+      const createInput = {
+        operation: "create",
+        relation: "supports",
+        exposure: "learner_response_before_tutor_disclosure",
+        conditionAssistantMessageID,
+        target: {
+          mapID: target.mapID,
+          selectorID: target.selectorID,
+          courseID: target.courseID,
+          viewID: target.viewID,
+          revisionID: target.revisionID,
+          itemID: target.itemID,
+        },
+        alignmentID: target.alignmentID,
+      } as const
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY, createInput)
+      yield* llm.error(400, { error: { message: "post-commit Gate 19 provider failure" } })
+      yield* prompt.start({
+        sessionID: sourceSessionID,
+        turnID: responseTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 2 },
+        parts: [{ type: "text", text: responseText }],
+      })
+      expect((yield* prompt.awaitTurn(sourceSessionID, responseTurnID)).terminal).toMatchObject({
+        outcome: "failed",
+        reason: "provider_failure",
+        counters: { model: 2, tool: 1 },
+      })
+      const committedEvidencePart = (yield* sessions.messages({ sessionID: sourceSessionID }))
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        )
+      expect(committedEvidencePart?.state).toMatchObject({
+        status: "completed",
+        metadata: { outcome: "applied", semanticPresentationRequired: true },
+      })
+      const stored = yield* database.db.get<{ recordID: LearnerResponseEvidence.RecordID; version: number }>(sql`
+        SELECT id AS recordID, current_version AS version FROM learner_response_evidence_record
+      `)
+      if (!stored) return yield* Effect.die("Gate 19 prompt trace did not persist one record")
+      expect(stored.version).toBe(0)
+      expect(
+        yield* database.db.transaction((tx) =>
+          LearningContext.listLearnerResponseEvidenceRequirements(tx, { cutAsOf: Date.now() }),
+        ),
+      ).toEqual([])
+
+      const beforeDeletion = yield* database.db.transaction((tx) => LearningFrontier.read(tx))
+      yield* sessions.remove(sourceSessionID)
+      const afterDeletion = yield* database.db.transaction((tx) => LearningFrontier.read(tx))
+      expect(afterDeletion.sequence).toBe(beforeDeletion.sequence + 1)
+      expect(
+        yield* database.db.transaction((tx) =>
+          LearningContext.listLearnerResponseEvidenceRequirements(tx, { cutAsOf: Date.now() }),
+        ),
+      ).toEqual([{ mapID: target.mapID, selectorID: target.selectorID }])
+      expect(
+        yield* database.db.get<{ messages: number; parts: number }>(sql`
+          SELECT (SELECT count(*) FROM message WHERE session_id = ${sourceSessionID}) AS messages,
+                 (SELECT count(*) FROM part WHERE session_id = ${sourceSessionID}) AS parts
+        `),
+      ).toEqual({ messages: 0, parts: 0 })
+
+      const laterSessionID = SessionID.create()
+      const laterTurnID = Turn.ID.create()
+      const laterRequest =
+        "Continue from my current course position. Do not repeat the explanation. Choose one useful next move."
+      const hitsBeforeLater = (yield* llm.hits).length
+      yield* llm.text("application-only move")
+      const laterStart = {
+        sessionID: laterSessionID,
+        turnID: laterTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "Gate 19 later action", permission: [{ permission: "*", pattern: "*", action: "allow" }] },
+        parts: [{ type: "text", text: laterRequest }],
+      } as const
+      yield* prompt.start(laterStart)
+      const laterTerminal = yield* prompt.awaitTurn(laterSessionID, laterTurnID)
+      expect(laterTerminal.terminal).toMatchObject({ outcome: "completed" })
+      const laterHit = (yield* llm.hits)[hitsBeforeLater]
+      if (!laterHit) return yield* Effect.die("Missing Gate 19 provider request")
+      const laterBlock = providerText(laterHit.body).find((value) =>
+        value.includes("[Repa learning context — protected]"),
+      )
+      if (!laterBlock) return yield* Effect.die("Provider request omitted the production learning-context block")
+      expect(laterBlock).toContain('"owner":"learner_response_evidence"')
+      expect(laterBlock).toContain('"relation":"supports"')
+      expect(laterBlock).toContain('"exposure":"learner_response_before_tutor_disclosure"')
+      expect(laterBlock).not.toContain(responseText)
+      expect(laterBlock).not.toContain(criterion)
+      const firstOracle = laterBlock.includes('"relation":"supports"')
+        ? "application_question_only"
+        : "underdetermined_without_record"
+      expect(firstOracle).toBe("application_question_only")
+      const laterOperation = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, laterTurnID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!laterOperation) return yield* Effect.die("Missing admitted Gate 19 provider operation")
+      const firstCut = yield* database.db.transaction((tx) => LearningContext.readCut(tx, laterOperation.assistantMessageID))
+      if (firstCut.type !== "available") return yield* Effect.die("Missing stored Gate 19 production cut")
+      expect(firstCut.cut.sections.find((section) => section.owner === "learner_response_evidence")).toMatchObject({
+        countAtCut: 1,
+        entries: [{ semantic: { state: "value", value: { relation: "supports" } } }],
+      })
+      const immutableFirstCut = JSON.stringify(firstCut.cut)
+
+      const correctionSessionID = SessionID.create()
+      const correctionTurnID = Turn.ID.create()
+      const correctionInput = {
+        operation: "revise_from_learner_report",
+        recordID: stored.recordID,
+        expectedVersion: 0,
+        relation: "does_not_support",
+        exposure: "learner_response_before_tutor_disclosure",
+      } as const
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY, correctionInput)
+      yield* llm.text("The correction remains a learner report, not observed mastery.")
+      yield* prompt.start({
+        sessionID: correctionSessionID,
+        turnID: correctionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 2 },
+        session: {
+          title: "Gate 19 learner correction",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Correction: my earlier response omitted the release rule." }],
+      })
+      expect((yield* prompt.awaitTurn(correctionSessionID, correctionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+      })
+      expect(
+        yield* database.db.get(sql`
+          SELECT revision.relation, revision.basis, record.current_version AS version
+          FROM learner_response_evidence_record AS record
+          JOIN learner_response_evidence_revision AS revision ON revision.id = record.current_revision_id
+          WHERE record.id = ${stored.recordID}
+        `),
+      ).toEqual({ relation: "does_not_support", basis: "learner_report", version: 1 })
+      const hitsBeforeReplay = (yield* llm.hits).length
+      expect(yield* prompt.start(laterStart)).toEqual(laterTerminal)
+      expect((yield* llm.hits).length).toBe(hitsBeforeReplay)
+      expect(
+        JSON.stringify(yield* database.db.transaction((tx) => LearningContext.readCut(tx, laterOperation.assistantMessageID))),
+      ).toContain(immutableFirstCut)
+
+      const readableCorrectionSessionID = SessionID.create()
+      const readableCorrectionTurnID = Turn.ID.create()
+      yield* llm.text("no automatic assessment pressure while the correction source is readable")
+      yield* prompt.start({
+        sessionID: readableCorrectionSessionID,
+        turnID: readableCorrectionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "Gate 19 readable correction control" },
+        parts: [{ type: "text", text: laterRequest }],
+      })
+      yield* prompt.awaitTurn(readableCorrectionSessionID, readableCorrectionTurnID)
+      const readableCorrectionOperation = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, readableCorrectionTurnID))
+        .get()
+        .pipe(Effect.orDie)
+      if (!readableCorrectionOperation) return yield* Effect.die("Missing readable-correction control operation")
+      const readableCorrectionCut = yield* database.db.transaction((tx) =>
+        LearningContext.readCut(tx, readableCorrectionOperation.assistantMessageID),
+      )
+      if (readableCorrectionCut.type !== "available") return yield* Effect.die("Missing readable-correction cut")
+      expect(
+        readableCorrectionCut.cut.sections.find((section) => section.owner === "learner_response_evidence"),
+      ).toMatchObject({ countAtCut: 0, entries: [] })
+
+      yield* sessions.remove(correctionSessionID)
+      const correctedLaterSessionID = SessionID.create()
+      const correctedLaterTurnID = Turn.ID.create()
+      const hitsBeforeCorrected = (yield* llm.hits).length
+      yield* llm.text("correction-only move")
+      yield* prompt.start({
+        sessionID: correctedLaterSessionID,
+        turnID: correctedLaterTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "Gate 19 corrected later action" },
+        parts: [{ type: "text", text: laterRequest }],
+      })
+      yield* prompt.awaitTurn(correctedLaterSessionID, correctedLaterTurnID)
+      const correctedHit = (yield* llm.hits)[hitsBeforeCorrected]
+      const correctedBlock = correctedHit
+        ? providerText(correctedHit.body).find((value) => value.includes("[Repa learning context — protected]"))
+        : undefined
+      if (!correctedBlock) return yield* Effect.die("Corrected provider request omitted production context")
+      expect(correctedBlock).toContain('"relation":"does_not_support"')
+      expect(
+        correctedBlock.includes('"relation":"does_not_support"')
+          ? "correction_only"
+          : "underdetermined_without_record",
+      ).toBe("correction_only")
+
+      const disclosureCorrectionSessionID = SessionID.create()
+      const disclosureCorrectionTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY, {
+        operation: "revise_from_learner_report",
+        recordID: stored.recordID,
+        expectedVersion: 1,
+        relation: "supports",
+        exposure: "tutor_disclosure_before_learner_response",
+      })
+      yield* llm.text("The disclosure-order correction remains a learner report, not observed mastery.")
+      yield* prompt.start({
+        sessionID: disclosureCorrectionSessionID,
+        turnID: disclosureCorrectionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 2 },
+        session: {
+          title: "Gate 19 disclosure-order correction",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Correction: the Tutor disclosed the proposition before that response." }],
+      })
+      expect(
+        (yield* prompt.awaitTurn(disclosureCorrectionSessionID, disclosureCorrectionTurnID)).terminal,
+      ).toMatchObject({ outcome: "completed" })
+      expect(
+        yield* database.db.get(sql`
+          SELECT revision.relation, revision.exposure, revision.basis, record.current_version AS version
+          FROM learner_response_evidence_record AS record
+          JOIN learner_response_evidence_revision AS revision ON revision.id = record.current_revision_id
+          WHERE record.id = ${stored.recordID}
+        `),
+      ).toEqual({
+        relation: "supports",
+        exposure: "tutor_disclosure_before_learner_response",
+        basis: "learner_report",
+        version: 2,
+      })
+      yield* sessions.remove(disclosureCorrectionSessionID)
+
+      const disclosureLaterSessionID = SessionID.create()
+      const disclosureLaterTurnID = Turn.ID.create()
+      const hitsBeforeDisclosure = (yield* llm.hits).length
+      yield* llm.text("new-answer hidden-check move")
+      yield* prompt.start({
+        sessionID: disclosureLaterSessionID,
+        turnID: disclosureLaterTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "Gate 19 disclosure-order later action" },
+        parts: [{ type: "text", text: laterRequest }],
+      })
+      expect((yield* prompt.awaitTurn(disclosureLaterSessionID, disclosureLaterTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+      })
+      const disclosureHit = (yield* llm.hits)[hitsBeforeDisclosure]
+      const disclosureBlock = disclosureHit
+        ? providerText(disclosureHit.body).find((value) => value.includes("[Repa learning context — protected]"))
+        : undefined
+      if (!disclosureBlock) return yield* Effect.die("Disclosure-order request omitted production context")
+      expect(disclosureBlock).toContain('"relation":"supports"')
+      expect(disclosureBlock).toContain('"exposure":"tutor_disclosure_before_learner_response"')
+      expect(
+        disclosureBlock.includes('"relation":"supports"') &&
+          disclosureBlock.includes('"exposure":"tutor_disclosure_before_learner_response"')
+          ? "new_answer_hidden_check_only"
+          : "underdetermined_without_record",
+      ).toBe("new_answer_hidden_check_only")
+
+      yield* sessions.remove(laterSessionID)
+      yield* sessions.remove(readableCorrectionSessionID)
+      yield* sessions.remove(correctedLaterSessionID)
+      yield* sessions.remove(disclosureLaterSessionID)
+    }),
+  { config: cfg },
+  60_000,
 )
 
 it.instance(

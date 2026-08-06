@@ -1,4 +1,5 @@
 import { Course } from "@opencode-ai/core/course"
+import { ContentRoot } from "@opencode-ai/core/content-root"
 import { admitModelWithLearningContext } from "@test/fixture/model-admission"
 import {
   CourseSelectionAcceptanceCommitSealTable,
@@ -20,6 +21,7 @@ import {
   settleDefaultCourseV3,
 } from "@opencode-ai/core/learner-navigation/default-course-v2"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import {
   LearnerGoalCapabilityIssueV2Table,
   LearnerGoalCapabilitySettlementV2Table,
@@ -31,6 +33,7 @@ import {
   LearnerGoalRevisionTable,
 } from "@opencode-ai/core/learner-goal/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
+import { MaterialMap } from "@opencode-ai/core/material-map"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { RetainedSteeringCommandTable, RetainedSteeringCommitSealTable } from "@opencode-ai/core/retained-steering/sql"
 import { LearningCommandInvocationTable, LearningCommandReceiptTable } from "@opencode-ai/core/learning-command/sql"
@@ -178,6 +181,7 @@ const root = LayerNode.group([
   LearningCommandRuntime.node,
   Session.node,
   Course.node,
+  ContentRoot.node,
   LearnerNavigation.readNode,
   LearnerGoal.readNode,
   Database.node,
@@ -8390,6 +8394,737 @@ it.effect(
     }),
   60_000,
 )
+
+test("runs learner-response evidence through root/delegated policy, exact current-use proof, and typed replay", async () => {
+  if (process.platform !== "win32") return
+  await using temporary = await tmpdir()
+  const filename = join(temporary.path, "learner-response-evidence-runtime.sqlite")
+  const criterion = "A semaphore bounds simultaneous entrants to its protected region."
+  const sourceBody = `${criterion}\n${"x".repeat(2_100)}`
+  const sourcePath = join(temporary.path, "semaphore.txt")
+  await Bun.write(sourcePath, sourceBody)
+
+  const reopened = await Effect.runPromise(
+    Effect.gen(function* () {
+      permissionRequests.length = 0
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const roots = yield* ContentRoot.Service
+      const rootProposal = yield* roots.propose(temporary.path)
+      const contentRoot = yield* roots.approve({
+        proposal: rootProposal,
+        approval: ContentRoot.LearnerApproval.contentRoot(rootProposal, "Gate 19 runtime evidence"),
+      })
+      const base = Date.now() - 10_000
+      const bootstrapInput = {
+        course: { type: "new", title: "Semaphore concurrency" },
+        route: {
+          type: "new_view",
+          key: "route",
+          name: "Concurrency evidence",
+          authorship: "learner_requested",
+          revision: { items: [{ key: "criterion", title: "Explain the semaphore concurrency bound" }] },
+        },
+        selection: { type: "set", target: { type: "route" } },
+        materials: [
+          {
+            type: "local",
+            key: "source",
+            path: sourcePath,
+            authority: { type: "content_root", contentRootID: contentRoot.id },
+          },
+        ],
+        maps: [
+          {
+            key: "map",
+            materialKey: "source",
+            authorship: "learner_requested",
+            outline: [
+              {
+                key: "criterion",
+                title: "Exact semaphore proposition",
+                selectors: [
+                  {
+                    key: "exact",
+                    coordinate: {
+                      kind: "artifact_byte_range.v1",
+                      startByte: 0,
+                      endByte: new TextEncoder().encode(criterion).byteLength,
+                    },
+                  },
+                  { key: "too_wide", coordinate: { kind: "whole_target.v1" } },
+                ],
+              },
+            ],
+          },
+        ],
+        alignments: [
+          {
+            key: "exact_alignment",
+            mapKey: "map",
+            selectorKey: "exact",
+            authorship: "learner_requested",
+            course: { type: "route_item", itemKey: "criterion" },
+            reason: "Neutral provenance for the exact selector and Course membership",
+          },
+          {
+            key: "wide_alignment",
+            mapKey: "map",
+            selectorKey: "too_wide",
+            authorship: "learner_requested",
+            course: { type: "route_item", itemKey: "criterion" },
+            reason: "Capacity-bound counterexample over the same Course membership",
+          },
+        ],
+        anchor: { type: "set", target: { type: "route_item", itemKey: "criterion" } },
+      } as const
+      const condition = yield* seedInteraction(
+        db,
+        "learner-evidence-runtime-condition",
+        bootstrapInput,
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        {
+          text: "Create this exact Course and source; then ask me to state the semaphore concurrency bound.",
+          time: base,
+        },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        bootstrapInput,
+        condition.registration,
+      )
+      expect(
+        yield* db.get<Record<string, number>>(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation
+              WHERE part_id = ${condition.registration.partID} AND status = 'admitted') AS invocations,
+            (SELECT count(*) FROM learning_bootstrap_disposition
+              WHERE invocation_part_id = ${condition.registration.partID}) AS dispositions
+        `),
+      ).toEqual({ invocations: 1, dispositions: 1 })
+      const bootstrap = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY,
+        bootstrapInput,
+        context(condition.registration, "allow", LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY),
+      )
+      expect(JSON.parse(bootstrap.output)).toMatchObject({ settlement: { outcome: "applied" } })
+      yield* db
+        .insert(PartTable)
+        .values({
+          id: SessionV1.PartID.ascending("prt_gate19_condition_text"),
+          session_id: condition.sessionID,
+          message_id: condition.registration.assistantMessageID,
+          data: {
+            type: "text",
+            text: "State the exact proposition before I reveal whether your formulation matches it.",
+          } as (typeof PartTable.$inferInsert)["data"],
+          time_created: base + 1,
+          time_updated: base + 1,
+        })
+        .run()
+      yield* settleInteractionTurn(db, condition, base + 10)
+
+      type TargetRow = {
+        alignmentID: string
+        mapID: string
+        selectorID: string
+        kind: string
+        courseID: string
+        viewID: string
+        revisionID: string
+        itemID: string
+      }
+      const targets = yield* db.all<TargetRow>(sql`
+        SELECT
+          alignment.id AS alignmentID,
+          alignment.map_id AS mapID,
+          alignment.selector_id AS selectorID,
+          selector.kind AS kind,
+          alignment.course_id AS courseID,
+          alignment.view_id AS viewID,
+          alignment.revision_id AS revisionID,
+          alignment.item_id AS itemID
+        FROM material_course_alignment AS alignment
+        JOIN material_selector AS selector
+          ON selector.map_id = alignment.map_id AND selector.id = alignment.selector_id
+        ORDER BY selector.kind, selector.id
+      `)
+      const exactTarget = targets.find((target) => target.kind === "artifact_byte_range.v1")
+      const wideTarget = targets.find((target) => target.kind === "whole_target.v1")
+      if (!exactTarget || !wideTarget) return yield* Effect.die("Gate 19 runtime fixture has no exact target pair")
+
+      const createInput = {
+        operation: "create",
+        relation: "supports",
+        exposure: "tutor_disclosure_before_learner_response",
+        conditionAssistantMessageID: condition.registration.assistantMessageID,
+        target: {
+          mapID: exactTarget.mapID,
+          selectorID: exactTarget.selectorID,
+          courseID: exactTarget.courseID,
+          viewID: exactTarget.viewID,
+          revisionID: exactTarget.revisionID,
+          itemID: exactTarget.itemID,
+        },
+        alignmentID: exactTarget.alignmentID,
+      } as const
+      const response = yield* seedFollowupInteraction(
+        db,
+        condition,
+        "learner-evidence-runtime-create",
+        createInput,
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        {
+          text: "A semaphore limits how many tasks enter the protected region simultaneously.",
+          time: Date.now(),
+        },
+      )
+      expect(
+        yield* db.get(sql`
+          SELECT occurrence.source_order AS sourceOrder,
+                 turn.admission_kind AS admissionKind,
+                 turn.depth AS depth,
+                 input.source AS inputSource,
+                 operation.state AS conditionState,
+                 operation.time_settled AS conditionTime,
+                 presentation.assistant_message_id AS presentationMessage
+          FROM learning_admitted_occurrence AS occurrence
+          JOIN turn_input AS input ON input.occurrence_id = occurrence.id
+          JOIN turn ON turn.id = input.turn_id
+          JOIN turn_model_operation AS operation
+            ON operation.assistant_message_id = ${condition.registration.assistantMessageID}
+          JOIN turn_model_presentation AS presentation
+            ON presentation.assistant_message_id = operation.assistant_message_id
+          WHERE occurrence.id = ${response.occurrenceID}
+        `),
+      ).toMatchObject({
+        sourceOrder: expect.any(Number),
+        admissionKind: "learner",
+        depth: 0,
+        inputSource: "learner_root",
+        conditionState: "completed",
+        conditionTime: expect.any(Number),
+        presentationMessage: condition.registration.assistantMessageID,
+      })
+      expect(
+        Exit.isSuccess(
+          yield* db
+            .transaction((tx) =>
+              MaterialMap.prepareEvidenceTargetProof(tx, {
+                alignmentID: exactTarget.alignmentID as MaterialMap.AlignmentID,
+                mapID: exactTarget.mapID as MaterialMap.MapID,
+                selectorID: exactTarget.selectorID as MaterialMap.SelectorID,
+                course: {
+                  courseID: exactTarget.courseID as Course.CourseID,
+                  viewID: exactTarget.viewID as Course.ViewID,
+                  revisionID: exactTarget.revisionID as Course.RevisionID,
+                  itemID: exactTarget.itemID as Course.ItemID,
+                },
+              }),
+            )
+            .pipe(Effect.exit),
+        ),
+      ).toBe(true)
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        createInput,
+        response.registration,
+      )
+      const created = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        createInput,
+        context(
+          response.registration,
+          "allow",
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          [],
+          LearnerResponseEvidence.PERMISSION_PATTERN,
+        ),
+      )
+      const createdOutput = JSON.parse(created.output)
+      expect(createdOutput).toMatchObject({
+        disposition: "candidate_v1",
+        capabilityOutcome: "policy_allow",
+        settlement: {
+          outcome: "applied",
+          evidenceKind: "learner_response_evidence",
+          version: 0,
+          operation: "create",
+          relation: "supports",
+          basis: "tutor_interpretation",
+          disposition: "active",
+        },
+      })
+      expect(created.metadata).toMatchObject({
+        command: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        commandVersion: 1,
+        outcome: "applied",
+        durablySettled: true,
+        semanticPresentationRequired: true,
+        semanticPresentationBasis: { basis: { kind: "learner_response_evidence_result" } },
+      })
+      expect(yield* exactPartResult(db, response.registration.partID)).toEqual(created)
+      const evidenceRequests = permissionRequests.filter(
+        (request) => request.permission === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+      )
+      expect(evidenceRequests).toHaveLength(1)
+      expect(evidenceRequests[0]).toMatchObject({
+        patterns: [LearnerResponseEvidence.PERMISSION_PATTERN],
+        always: [LearnerResponseEvidence.PERMISSION_PATTERN],
+        requirePrompt: false,
+        metadata: {
+          evidenceKind: "learner_response_evidence",
+          scope: {
+            subject: {
+              occurrenceID: response.occurrenceID,
+              sessionID: response.sessionID,
+              turnID: response.turnID,
+              inputID: response.inputID,
+            },
+            target: {
+              mapID: exactTarget.mapID,
+              selectorID: exactTarget.selectorID,
+              courseID: exactTarget.courseID,
+              viewID: exactTarget.viewID,
+              revisionID: exactTarget.revisionID,
+              itemID: exactTarget.itemID,
+              alignmentID: exactTarget.alignmentID,
+            },
+            assessmentScope: "entire_exact_selector",
+            programBasis: "tutor_interpretation",
+            programDisposition: "active",
+            assessmentSourcePolicy: "current_response_and_disclosure",
+          },
+        },
+      })
+      expect(createdOutput.settlement).toMatchObject({
+        subject: {
+          occurrenceID: response.occurrenceID,
+          sessionID: response.sessionID,
+          turnID: response.turnID,
+          inputID: response.inputID,
+        },
+        target: {
+          mapID: exactTarget.mapID,
+          selectorID: exactTarget.selectorID,
+          courseID: exactTarget.courseID,
+          viewID: exactTarget.viewID,
+          revisionID: exactTarget.revisionID,
+          itemID: exactTarget.itemID,
+          alignmentID: exactTarget.alignmentID,
+        },
+      })
+      expect(JSON.stringify({ created, request: evidenceRequests[0] })).not.toContain(sourceBody)
+      expect(JSON.stringify({ created, request: evidenceRequests[0] })).not.toContain(
+        "A semaphore limits how many tasks enter the protected region simultaneously.",
+      )
+      expect(
+        yield* db.get<Record<string, number>>(sql`
+          SELECT
+            (SELECT count(*) FROM learner_response_evidence_record) AS records,
+            (SELECT count(*) FROM learner_response_evidence_revision) AS revisions,
+            (SELECT count(*) FROM learner_response_evidence_commit_seal) AS seals,
+            (SELECT count(*) FROM learner_response_evidence_commit_seal AS seal
+              JOIN learning_command_receipt AS receipt ON receipt.id = seal.receipt_id) AS receipts
+        `),
+      ).toEqual({ records: 1, revisions: 1, seals: 1, receipts: 1 })
+
+      const replay = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        createInput,
+        context(
+          response.registration,
+          "deny",
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          [],
+          LearnerResponseEvidence.PERMISSION_PATTERN,
+        ),
+      )
+      expect(replay).toEqual(created)
+      expect(
+        permissionRequests.filter(
+          (request) => request.permission === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        ),
+      ).toHaveLength(1)
+      yield* settleInteractionTurn(db, response, base + 30)
+
+      const recordID = createdOutput.settlement.recordID as LearnerResponseEvidence.RecordID
+      const retractInput = { operation: "retract", recordID, expectedVersion: 0 } as const
+      const delegated = yield* seedDelegatedLearningCommandInteraction(
+        db,
+        "learner-evidence-runtime-retract",
+        retractInput,
+        {
+          version: 2,
+          parent: [],
+          inherited: [],
+          profile: [],
+          explicit: [
+            {
+              permission: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+              pattern: LearnerResponseEvidence.PERMISSION_PATTERN,
+              action: "allow",
+            },
+          ],
+        },
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        retractInput,
+        delegated.registration,
+      )
+      const retracted = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        retractInput,
+        context(
+          delegated.registration,
+          "allow",
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          [],
+          LearnerResponseEvidence.PERMISSION_PATTERN,
+        ),
+      )
+      expect(JSON.parse(retracted.output)).toMatchObject({
+        agentAction: { kind: "delegated" },
+        settlement: {
+          outcome: "applied",
+          version: 1,
+          operation: "retract",
+          relation: "supports",
+          basis: "tutor_interpretation",
+          disposition: "retracted",
+        },
+      })
+      yield* settleInteractionTurn(
+        db,
+        { turnID: delegated.child.turnID, registration: delegated.registration },
+        base + 40,
+      )
+
+      const tutorRevisionInput = {
+        operation: "revise_from_tutor_interpretation",
+        recordID,
+        expectedVersion: 1,
+        relation: "does_not_support",
+        exposure: "tutor_disclosure_before_learner_response",
+      } as const
+      const tutorRevision = yield* seedFollowupInteraction(
+        db,
+        condition,
+        "learner-evidence-runtime-tutor-revision",
+        tutorRevisionInput,
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        { text: "Re-check the same still-readable response and exact selector.", time: base + 50 },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        tutorRevisionInput,
+        tutorRevision.registration,
+      )
+      const revised = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        tutorRevisionInput,
+        context(
+          tutorRevision.registration,
+          "ask",
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          [],
+          LearnerResponseEvidence.PERMISSION_PATTERN,
+        ),
+      )
+      expect(JSON.parse(revised.output)).toMatchObject({
+        capabilityOutcome: "prompted_allow",
+        settlement: {
+          outcome: "applied",
+          version: 2,
+          operation: "revise_from_tutor_interpretation",
+          relation: "does_not_support",
+          basis: "tutor_interpretation",
+          disposition: "active",
+        },
+      })
+      yield* settleInteractionTurn(db, tutorRevision, base + 60)
+
+      const deniedInput = { ...tutorRevisionInput, expectedVersion: 2, relation: "supports" as const }
+      const denied = yield* seedFollowupInteraction(
+        db,
+        condition,
+        "learner-evidence-runtime-denied",
+        deniedInput,
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        { text: "This candidate must remain only a denied proposal.", time: base + 70 },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        deniedInput,
+        denied.registration,
+      )
+      const deniedResult = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        deniedInput,
+        context(
+          denied.registration,
+          "deny",
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          [],
+          LearnerResponseEvidence.PERMISSION_PATTERN,
+        ),
+      )
+      expect(JSON.parse(deniedResult.output)).toMatchObject({
+        capabilityOutcome: "policy_deny",
+        settlement: { outcome: "error", code: "permission_rejected" },
+      })
+      expect(
+        yield* db.get<{ revisions: number }>(
+          sql`SELECT count(*) AS revisions FROM learner_response_evidence_revision WHERE record_id = ${recordID}`,
+        ),
+      ).toEqual({ revisions: 3 })
+      yield* settleInteractionTurn(db, denied, base + 80)
+
+      const delegatedReportInput = {
+        operation: "revise_from_learner_report",
+        recordID,
+        expectedVersion: 2,
+        relation: "supports",
+        exposure: "learner_response_before_tutor_disclosure",
+      } as const
+      const delegatedReport = yield* seedDelegatedLearningCommandInteraction(
+        db,
+        "learner-evidence-runtime-delegated-report",
+        delegatedReportInput,
+        {
+          version: 2,
+          parent: [],
+          inherited: [],
+          profile: [],
+          explicit: [
+            {
+              permission: LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+              pattern: LearnerResponseEvidence.PERMISSION_PATTERN,
+              action: "allow",
+            },
+          ],
+        },
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        delegatedReportInput,
+        delegatedReport.registration,
+      )
+      expect(JSON.parse((yield* exactPartResult(db, delegatedReport.registration.partID)).output)).toMatchObject({
+        settlement: { outcome: "error", code: "source_unavailable" },
+      })
+      expect(
+        yield* db.get<{ revisions: number }>(
+          sql`SELECT count(*) AS revisions FROM learner_response_evidence_revision WHERE record_id = ${recordID}`,
+        ),
+      ).toEqual({ revisions: 3 })
+      yield* settleInteractionTurn(
+        db,
+        { turnID: delegatedReport.child.turnID, registration: delegatedReport.registration },
+        base + 85,
+      )
+
+      const wideInput = {
+        ...createInput,
+        target: {
+          mapID: wideTarget.mapID,
+          selectorID: wideTarget.selectorID,
+          courseID: wideTarget.courseID,
+          viewID: wideTarget.viewID,
+          revisionID: wideTarget.revisionID,
+          itemID: wideTarget.itemID,
+        },
+        alignmentID: wideTarget.alignmentID,
+      }
+      const wide = yield* seedFollowupInteraction(
+        db,
+        condition,
+        "learner-evidence-runtime-wide",
+        wideInput,
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        { text: "Do not turn the over-wide selector into a stored assessment.", time: Date.now() },
+      )
+      const beforeWide = yield* db.get<Record<string, number>>(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation) AS invocations,
+            (SELECT count(*) FROM learner_response_evidence_disposition) AS dispositions,
+            (SELECT count(*) FROM learner_response_evidence_capability_issue) AS issues,
+            (SELECT count(*) FROM learner_response_evidence_capability_settlement) AS capabilitySettlements,
+            (SELECT count(*) FROM learner_response_evidence_record) AS records,
+            (SELECT count(*) FROM learner_response_evidence_revision) AS revisions,
+            (SELECT count(*) FROM learner_response_evidence_commit_seal) AS seals,
+            (SELECT count(*) FROM turn_model_source_retention) AS sourceRetentions,
+            (SELECT sequence FROM learning_shared_frontier WHERE singleton = 1) AS frontierSequence,
+            (SELECT time_committed FROM learning_shared_frontier WHERE singleton = 1) AS frontierTime
+        `)
+      const wideExit = yield* runtime
+        .prepareCommand(
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          wideInput,
+          wide.registration,
+        )
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(wideExit)).toBe(true)
+      expect(
+        yield* db.get<Record<string, number>>(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation) AS invocations,
+            (SELECT count(*) FROM learner_response_evidence_disposition) AS dispositions,
+            (SELECT count(*) FROM learner_response_evidence_capability_issue) AS issues,
+            (SELECT count(*) FROM learner_response_evidence_capability_settlement) AS capabilitySettlements,
+            (SELECT count(*) FROM learner_response_evidence_record) AS records,
+            (SELECT count(*) FROM learner_response_evidence_revision) AS revisions,
+            (SELECT count(*) FROM learner_response_evidence_commit_seal) AS seals,
+            (SELECT count(*) FROM turn_model_source_retention) AS sourceRetentions,
+            (SELECT sequence FROM learning_shared_frontier WHERE singleton = 1) AS frontierSequence,
+            (SELECT time_committed FROM learning_shared_frontier WHERE singleton = 1) AS frontierTime
+        `),
+      ).toEqual(beforeWide)
+      expect(
+        yield* db.get<{ invocations: number }>(sql`
+          SELECT count(*) AS invocations FROM learning_command_invocation
+          WHERE part_id = ${wide.registration.partID}
+        `),
+      ).toEqual({ invocations: 0 })
+      yield* settleInteractionTurn(db, wide, base + 100)
+
+      const malformedInput = { ...createInput, basis: "learner_report" }
+      const malformed = yield* seedFollowupInteraction(
+        db,
+        condition,
+        "learner-evidence-runtime-malformed",
+        malformedInput,
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        { text: "A caller-selected basis must be rejected.", time: base + 110 },
+      )
+      const malformedExit = yield* runtime
+        .prepareCommand(
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          malformedInput,
+          malformed.registration,
+        )
+        .pipe(Effect.exit)
+      expect(Exit.isFailure(malformedExit)).toBe(true)
+      expect(
+        yield* db.get<Record<string, number>>(sql`
+          SELECT
+            (SELECT count(*) FROM learner_response_evidence_record) AS records,
+            (SELECT count(*) FROM learner_response_evidence_revision) AS revisions,
+            (SELECT count(*) FROM learner_response_evidence_disposition
+              WHERE invocation_part_id = ${malformed.registration.partID}) AS malformedDispositions
+        `),
+      ).toEqual({ records: 1, revisions: 3, malformedDispositions: 0 })
+      yield* settleInteractionTurn(db, malformed, base + 120)
+
+      const interruptedInput = {
+        operation: "revise_from_tutor_interpretation",
+        recordID,
+        expectedVersion: 2,
+        relation: "supports",
+        exposure: "tutor_disclosure_before_learner_response",
+      } as const
+      const interrupted = yield* seedFollowupInteraction(
+        db,
+        condition,
+        "learner-evidence-runtime-interrupted",
+        interruptedInput,
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        { text: "Prepare this exact revision, then interrupt before semantic commit.", time: base + 130 },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        interruptedInput,
+        interrupted.registration,
+      )
+      expect(yield* runtime.interrupt(interrupted.registration)).toBe(true)
+      const interruptedResult = yield* exactPartResult(db, interrupted.registration.partID)
+      expect(JSON.parse(interruptedResult.output)).toMatchObject({
+        settlement: { outcome: "error", code: "interrupted" },
+      })
+      expect(
+        yield* runtime.executeCommand(
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          interruptedInput,
+          context(
+            interrupted.registration,
+            "allow",
+            LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+            [],
+            LearnerResponseEvidence.PERMISSION_PATTERN,
+          ),
+        ),
+      ).toEqual(interruptedResult)
+      yield* settleInteractionTurn(db, interrupted, base + 140)
+
+      const recovered = yield* seedFollowupInteraction(
+        db,
+        condition,
+        "learner-evidence-runtime-recovered",
+        interruptedInput,
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        { text: "Leave this exact candidate admitted across startup recovery.", time: base + 150 },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+        interruptedInput,
+        recovered.registration,
+      )
+      expect(
+        yield* db.get<{ revisions: number }>(
+          sql`SELECT count(*) AS revisions FROM learner_response_evidence_revision WHERE record_id = ${recordID}`,
+        ),
+      ).toEqual({ revisions: 3 })
+      return {
+        registration: recovered.registration,
+        input: interruptedInput,
+        recordID,
+        committedPartID: response.registration.partID,
+        committed: created,
+      }
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const events = yield* EventV2Bridge.Service
+      expect(yield* exactPartResult(db, reopened.committedPartID)).toEqual(reopened.committed)
+      yield* LearningCommandRuntime.recoverAdmitted(events)
+      const recoveredResult = yield* exactPartResult(db, reopened.registration.partID)
+      expect(JSON.parse(recoveredResult.output)).toMatchObject({
+        settlement: { outcome: "error", code: "interrupted" },
+      })
+      yield* LearningCommandRuntime.recoverAdmitted(events)
+      expect(yield* exactPartResult(db, reopened.registration.partID)).toEqual(recoveredResult)
+      expect(
+        yield* runtime.executeCommand(
+          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+          reopened.input,
+          context(
+            reopened.registration,
+            "allow",
+            LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+            [],
+            LearnerResponseEvidence.PERMISSION_PATTERN,
+          ),
+        ),
+      ).toEqual(recoveredResult)
+      expect(
+        yield* db.get<{ revisions: number }>(
+          sql`SELECT count(*) AS revisions FROM learner_response_evidence_revision WHERE record_id = ${reopened.recordID}`,
+        ),
+      ).toEqual({ revisions: 3 })
+      yield* settleInteractionTurn(
+        db,
+        { turnID: reopened.registration.turnID, registration: reopened.registration },
+        Date.now(),
+      )
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+})
 
 function defaultCourseDirectInput(
   course: Course.CourseInfo,

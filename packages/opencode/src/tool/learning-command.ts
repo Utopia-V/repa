@@ -73,6 +73,7 @@ export function isLearningCommandToolID(id: string) {
     id === LearningCommand.SET_COURSE_ROUTE_ANCHOR_CAPABILITY ||
     id === LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY ||
     id === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY ||
-    id === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
+    id === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
+    id === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
   )
 }

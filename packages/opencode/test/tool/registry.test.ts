@@ -433,6 +433,12 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("learning_material_query", "mcp")).toThrow(
         "mcp tool ID learning_material_query is reserved by Repa's learning-context authority",
       )
+      expect(() => assertExternalToolID("learner_response_evidence_read", "custom")).toThrow(
+        "custom tool ID learner_response_evidence_read is reserved by Repa's learning-context authority",
+      )
+      expect(() => assertExternalToolID("update_learner_response_evidence", "mcp")).toThrow(
+        "mcp tool ID update_learner_response_evidence is reserved by the learning-command runtime",
+      )
       expect(() => assertExternalToolID("invalid", "custom")).toThrow(
         "custom tool ID invalid is reserved for Repa's program-owned invalid-tool fallback",
       )
@@ -463,6 +469,8 @@ describe("tool.registry", () => {
       expect(ids).toContain("learning_navigation_query")
       expect(ids).toContain("learner_goal_query")
       expect(ids).toContain("learning_material_query")
+      expect(ids).toContain("learner_response_evidence_read")
+      expect(ids).toContain("update_learner_response_evidence")
       expect(ids).toContain("update_learning_course")
       expect(ids).not.toContain("learn")
       expect(ids).not.toContain("/learn")
@@ -654,6 +662,7 @@ describe("tool.registry", () => {
         "set_course_route_anchor",
         "update_retained_learning_steering",
         "update_learner_goals",
+        "update_learner_response_evidence",
         "update_learning_course",
       ]) {
         const tool = tools.find((item) => item.id === id)
@@ -675,6 +684,8 @@ describe("tool.registry", () => {
       expect(defaults).toContain("learning_navigation_query")
       expect(defaults).toContain("learner_goal_query")
       expect(defaults).toContain("learning_material_query")
+      expect(defaults).toContain("learner_response_evidence_read")
+      expect(defaults).toContain("update_learner_response_evidence")
       expect(defaults).toContain("update_learning_course")
       expect(gate18Reads.filter((id) => defaults.includes(id))).toEqual(gate18Reads)
 
@@ -690,6 +701,8 @@ describe("tool.registry", () => {
       expect(restricted).not.toContain("set_default_course_preference")
       expect(restricted).not.toContain("learner_goal_query")
       expect(restricted).not.toContain("learning_material_query")
+      expect(restricted).not.toContain("learner_response_evidence_read")
+      expect(restricted).not.toContain("update_learner_response_evidence")
       expect(restricted).not.toContain("update_learning_course")
       expect(restricted.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -725,6 +738,26 @@ describe("tool.registry", () => {
       })).map((tool) => tool.id)
       expect(materialReader).toContain("learning_material_query")
       expect(materialReader).not.toContain("update_learning_course")
+
+      const evidenceReader = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", learner_response_evidence_read: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(evidenceReader).toContain("learner_response_evidence_read")
+      expect(evidenceReader).not.toContain("update_learner_response_evidence")
+
+      const evidenceWriter = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", update_learner_response_evidence: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(evidenceWriter).toContain("update_learner_response_evidence")
+      expect(evidenceWriter).not.toContain("learner_response_evidence_read")
 
       const delegated = (yield* registry.tools({
         ...model,

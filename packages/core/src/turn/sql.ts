@@ -1,7 +1,7 @@
 import { LearningOccurrence } from "@opencode-ai/schema/learning-occurrence"
 import { Turn } from "@opencode-ai/schema/turn"
 import { sql } from "drizzle-orm"
-import { check, foreignKey, index, integer, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core"
+import { check, foreignKey, index, integer, primaryKey, sqliteTable, text, unique, uniqueIndex } from "drizzle-orm/sqlite-core"
 import { AdmittedLearnerOccurrenceTable } from "../learning-command/occurrence.sql"
 import { MessageTable, PartTable, SessionTable } from "../session/sql"
 import type { SessionSchema } from "../session/schema"
@@ -482,6 +482,31 @@ export const TurnChildResultTable = sqliteTable(
       sql`(${table.requested_output_state} = 'complete' AND ${table.requested_output} IS NOT NULL AND ${table.reason} IS NULL) OR (${table.requested_output_state} = 'incomplete' AND ${table.reason} IS NOT NULL)`,
     ),
     check("turn_child_result_time_nonnegative", sql`${table.time_settled} >= 0`),
+  ],
+)
+
+export const TurnModelSourceRetentionTable = sqliteTable(
+  "turn_model_source_retention",
+  {
+    owner: text().notNull(),
+    owner_reference_id: text().notNull(),
+    source_turn_id: text().$type<Turn.ID>().notNull(),
+    source_assistant_message_id: text().$type<MessageID>().notNull(),
+    source_time_settled: integer().notNull(),
+    time_registered: integer().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.owner, table.owner_reference_id] }),
+    index("turn_model_source_retention_source_idx").on(
+      table.source_turn_id,
+      table.source_assistant_message_id,
+    ),
+    check(
+      "turn_model_source_retention_shape",
+      sql`length(${table.owner}) > 0 AND length(${table.owner_reference_id}) > 0
+        AND length(${table.source_turn_id}) > 0 AND length(${table.source_assistant_message_id}) > 0
+        AND ${table.source_time_settled} >= 0 AND ${table.time_registered} >= ${table.source_time_settled}`,
+    ),
   ],
 )
 

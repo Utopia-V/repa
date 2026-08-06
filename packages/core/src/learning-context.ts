@@ -8,6 +8,7 @@ import { Course } from "./course"
 import type { Database } from "./database/database"
 import { LearnerGoal } from "./learner-goal"
 import { LearnerNavigation } from "./learner-navigation"
+import { LearnerResponseEvidence } from "./learner-response-evidence"
 import { MaterialMap } from "./material-map"
 import type { RetainedSteering } from "./retained-steering"
 import type { SessionSchema } from "./session/schema"
@@ -19,6 +20,10 @@ import {
   CutCapacityError,
   CutIntegrityError,
   LAZY_READ_CAPABILITY_IDS,
+  LEGACY_CAPABILITY_CATALOG_VERSION,
+  LEGACY_LAZY_READ_CAPABILITY_IDS,
+  LEGACY_POLICY_VERSION,
+  LEGACY_RENDERER_VERSION,
   MAX_CANONICAL_BYTES,
   MAX_CANDIDATES_PER_FAMILY,
   MAX_ENTRY_BYTES,
@@ -55,9 +60,11 @@ export type PrepareInput = Readonly<{
   operation: Operation
   retainedSteering: RetainedSteering.Cut
   capabilityBasis: CapabilityBasis
+  learnerResponseEvidenceMaterials?: readonly LearnerResponseEvidence.ContextMaterialResolution[]
 }>
 
-const owners = ["course", "learner_navigation", "learner_goal", "material", "interaction"] as const
+const legacyOwners = ["course", "learner_navigation", "learner_goal", "material", "interaction"] as const
+const currentOwners = [...legacyOwners, "learner_response_evidence"] as const
 const sectionPolicy = {
   course: {
     scope: "eligible_courses_and_structurally_referenced_default",
@@ -79,6 +86,10 @@ const sectionPolicy = {
   interaction: {
     scope: "terminal_root_turns_outside_current_session",
     selectionBasis: "terminal_time_desc_then_turn_id_desc_not_priority",
+  },
+  learner_response_evidence: {
+    scope: "active_source_deleted_heads_for_structurally_included_course_membership",
+    selectionBasis: "subject_source_order_then_record_id_not_priority",
   },
 } as const
 const withheldSelectionBasis = "automatic_context_capability_withheld" as const
@@ -228,46 +239,25 @@ export function decodeStored(canonicalCut: string, renderedBlock: string, assist
   return validateStored(canonicalCut, renderedBlock, assistantMessageID)
 }
 
+export function listLearnerResponseEvidenceRequirements(
+  tx: Transaction,
+  input: Readonly<{ cutAsOf: number }>,
+) {
+  return Effect.gen(function* () {
+    const structural = yield* structuralContext(tx, input.cutAsOf)
+    return yield* LearnerResponseEvidence.listContextRequirements(tx, { endpoints: structural.endpoints })
+  })
+}
+
 function projectSections(tx: Transaction, input: PrepareInput) {
   return Effect.gen(function* () {
-    const defaultContext = yield* LearnerNavigation.projectLearningContextDefault(tx, input.retainedSteering.cutAsOf)
-    const currentDefault = defaultContext.projection
-    const courses = yield* Course.projectLearningContext(tx, {
-      limit: MAX_CANDIDATES_PER_FAMILY,
-      includeCourseIDs: currentDefault.courseID ? [currentDefault.courseID] : [],
-    })
-    const defaultCourse = courses.entries.find(
-      (entry) => (entry.status === "available" ? entry.course.id : entry.courseID) === currentDefault.courseID,
-    )
-    const orderedCourses = [
-      ...(defaultCourse ? [defaultCourse] : []),
-      ...courses.entries
-        .filter((entry) => entry !== defaultCourse)
-        .slice(0, MAX_CANDIDATES_PER_FAMILY - (defaultCourse ? 1 : 0)),
-    ]
-    const anchorContexts = yield* Effect.forEach(
-      orderedCourses.flatMap((entry) => (entry.status === "available" ? [entry.course.id] : [])),
-      (courseID) => LearnerNavigation.projectLearningContextAnchor(tx, courseID, input.retainedSteering.cutAsOf),
-    )
-    const anchors = anchorContexts.map((context) => context.projection)
+    const { defaultContext, currentDefault, courses, orderedCourses, anchorContexts, anchors, endpoints } =
+      yield* structuralContext(tx, input.retainedSteering.cutAsOf)
     const goals = yield* LearnerGoal.projectLearningContext(
       tx,
       input.retainedSteering.cutAsOf,
       MAX_CANDIDATES_PER_FAMILY,
     )
-    const endpoints = uniqueEndpoints([
-      ...orderedCourses.flatMap((entry) =>
-        entry.status === "available" && entry.working
-          ? entry.working.items.map((item) => ({
-              courseID: entry.course.id,
-              viewID: entry.working!.view.id,
-              revisionID: entry.working!.revision.id,
-              itemID: item.itemID,
-            }))
-          : [],
-      ),
-      ...anchors.flatMap((anchor) => (anchor.target ? [anchor.target] : [])),
-    ])
     const materials = yield* MaterialMap.projectLearningContext(tx, {
       endpoints,
       limit: MAX_CANDIDATES_PER_FAMILY,
@@ -277,6 +267,11 @@ function projectSections(tx: Transaction, input: PrepareInput) {
       limit: MAX_INTERACTION_CANDIDATES,
     })
     const lazy = new Set(input.capabilityBasis.effectiveLazyReadCapabilities)
+    const learnerResponseEvidence = yield* LearnerResponseEvidence.projectLearningContext(tx, {
+      endpoints,
+      materials: input.learnerResponseEvidenceMaterials ?? [],
+      lazyReadAvailable: lazy.has("learner_response_evidence_read"),
+    })
     const courseEntries = orderedCourses.map((value) =>
       value.status === "unavailable"
         ? entry("course", {
@@ -389,6 +384,9 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         "navigationHint" in value ? { navigationHint: value.navigationHint } : undefined,
       ),
     )
+    const learnerResponseEvidenceEntries = learnerResponseEvidence.entries.map((value) =>
+      entry("learner_response_evidence", value.locator, value.semantic),
+    )
     return [
       section(
         "course",
@@ -435,12 +433,58 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         interactions.countAtCut,
         interactionEntries,
       ),
+      section(
+        "learner_response_evidence",
+        sectionPolicy.learner_response_evidence.scope,
+        sectionPolicy.learner_response_evidence.selectionBasis,
+        learnerResponseEvidence.countAtCut,
+        learnerResponseEvidenceEntries,
+      ),
     ] satisfies Section[]
   })
 }
 
+function structuralContext(tx: Transaction, cutAsOf: number) {
+  return Effect.gen(function* () {
+    const defaultContext = yield* LearnerNavigation.projectLearningContextDefault(tx, cutAsOf)
+    const currentDefault = defaultContext.projection
+    const courses = yield* Course.projectLearningContext(tx, {
+      limit: MAX_CANDIDATES_PER_FAMILY,
+      includeCourseIDs: currentDefault.courseID ? [currentDefault.courseID] : [],
+    })
+    const defaultCourse = courses.entries.find(
+      (entry) => (entry.status === "available" ? entry.course.id : entry.courseID) === currentDefault.courseID,
+    )
+    const orderedCourses = [
+      ...(defaultCourse ? [defaultCourse] : []),
+      ...courses.entries
+        .filter((entry) => entry !== defaultCourse)
+        .slice(0, MAX_CANDIDATES_PER_FAMILY - (defaultCourse ? 1 : 0)),
+    ]
+    const anchorContexts = yield* Effect.forEach(
+      orderedCourses.flatMap((entry) => (entry.status === "available" ? [entry.course.id] : [])),
+      (courseID) => LearnerNavigation.projectLearningContextAnchor(tx, courseID, cutAsOf),
+    )
+    const anchors = anchorContexts.map((context) => context.projection)
+    const endpoints = uniqueEndpoints([
+      ...orderedCourses.flatMap((entry) =>
+        entry.status === "available" && entry.working
+          ? entry.working.items.map((item) => ({
+              courseID: entry.course.id,
+              viewID: entry.working!.view.id,
+              revisionID: entry.working!.revision.id,
+              itemID: item.itemID,
+            }))
+          : [],
+      ),
+      ...anchors.flatMap((anchor) => (anchor.target ? [anchor.target] : [])),
+    ])
+    return { defaultContext, currentDefault, courses, orderedCourses, anchorContexts, anchors, endpoints }
+  })
+}
+
 function unauthorizedSections(): readonly Section[] {
-  return owners.map((owner) => ({
+  return currentOwners.map((owner) => ({
     owner,
     scope: sectionPolicy[owner].scope,
     selectionBasis: withheldSelectionBasis,
@@ -587,12 +631,16 @@ function fit(base: CutBase): Preparation {
 function removableEntry(sections: MutableSection[]) {
   const candidates = sections.flatMap((section, ownerOrder) =>
     section.entries.flatMap((_, index) => {
-      if (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0) return []
+      if (
+        section.owner !== "learner_response_evidence" &&
+        (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0)
+      )
+        return []
       return [
         {
           section,
           index,
-          tier: section.owner === "learner_navigation" ? 1 : 2,
+          tier: section.owner === "learner_response_evidence" ? 3 : section.owner === "learner_navigation" ? 1 : 2,
           ownerOrder,
         },
       ]
@@ -622,6 +670,7 @@ function exactOmission(
 
 function lastSemanticValue(sections: MutableSection[]) {
   for (const section of [...sections].reverse()) {
+    if (section.owner === "learner_response_evidence") continue
     for (let index = section.entries.length - 1; index >= 0; index--) {
       if (section.entries[index]?.semantic?.state === "value") return { section, index }
     }
@@ -630,7 +679,7 @@ function lastSemanticValue(sections: MutableSection[]) {
 
 function finalize(base: CutBase): Preparation {
   const counts = Object.fromEntries(
-    owners.map((owner) => [owner, base.sections.find((section) => section.owner === owner)!.entries.length]),
+    currentOwners.map((owner) => [owner, base.sections.find((section) => section.owner === owner)!.entries.length]),
   ) as Record<Section["owner"], number>
   let canonicalBytes = 0
   let renderedBytes = 0
@@ -741,6 +790,12 @@ function validateStored(canonicalCut: string, renderedBlock: string, assistantMe
 
 function validateCut(cut: Cut) {
   const id = typeof cut?.operation?.assistantMessageID === "string" ? cut.operation.assistantMessageID : "unknown"
+  const expectedOwners =
+    cut.policyVersion === LEGACY_POLICY_VERSION && cut.rendererVersion === LEGACY_RENDERER_VERSION
+      ? legacyOwners
+      : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
+        ? currentOwners
+        : undefined
   if (
     !record(cut) ||
     !keys(cut, [
@@ -758,8 +813,7 @@ function validateCut(cut: Cut) {
       "renderedFingerprint",
     ]) ||
     cut.schemaVersion !== SCHEMA_VERSION ||
-    cut.policyVersion !== POLICY_VERSION ||
-    cut.rendererVersion !== RENDERER_VERSION ||
+    !expectedOwners ||
     !integer(cut.cutAsOf) ||
     !digest(cut.fingerprint) ||
     !digest(cut.renderedFingerprint) ||
@@ -767,13 +821,18 @@ function validateCut(cut: Cut) {
     !frontier(cut.throughSharedFrontier) ||
     cut.cutAsOf < cut.throughSharedFrontier.time ||
     !retained(cut.retainedSteering, cut) ||
-    !capability(cut.capabilityBasis) ||
+    !capability(
+      cut.capabilityBasis,
+      cut.policyVersion === LEGACY_POLICY_VERSION
+        ? LEGACY_CAPABILITY_CATALOG_VERSION
+        : CAPABILITY_CATALOG_VERSION,
+    ) ||
     !Array.isArray(cut.sections) ||
-    cut.sections.length !== owners.length ||
-    cut.sections.some((section, index) => !sectionShape(section, owners[index]!)) ||
+    cut.sections.length !== expectedOwners.length ||
+    cut.sections.some((section, index) => !sectionShape(section, expectedOwners[index]!)) ||
     !sectionSetSemantics(cut) ||
     !capabilitySectionRelations(cut) ||
-    !budgetShape(cut)
+    !budgetShape(cut, expectedOwners)
   ) {
     throw new CutIntegrityError({ assistantMessageID: id, reason: "malformed_cut" })
   }
@@ -785,7 +844,7 @@ function validateInput(input: PrepareInput) {
   if (
     input.retainedSteering.assistantMessageID !== input.operation.assistantMessageID ||
     input.retainedSteering.cutAsOf < input.retainedSteering.throughSharedFrontier.time ||
-    !capability(input.capabilityBasis)
+    !capability(input.capabilityBasis, CAPABILITY_CATALOG_VERSION)
   ) {
     throw new CutIntegrityError({ assistantMessageID: input.operation.assistantMessageID, reason: "basis_invalid" })
   }
@@ -825,7 +884,14 @@ function retained(value: unknown, cut: Cut) {
   )
 }
 
-function capability(value: unknown): value is CapabilityBasis {
+function capability(
+  value: unknown,
+  expectedCatalogVersion: typeof LEGACY_CAPABILITY_CATALOG_VERSION | typeof CAPABILITY_CATALOG_VERSION,
+): value is CapabilityBasis {
+  const catalog =
+    expectedCatalogVersion === LEGACY_CAPABILITY_CATALOG_VERSION
+      ? LEGACY_LAZY_READ_CAPABILITY_IDS
+      : LAZY_READ_CAPABILITY_IDS
   if (
     !record(value) ||
     !keys(value, [
@@ -835,14 +901,12 @@ function capability(value: unknown): value is CapabilityBasis {
       "effectiveLazyReadCapabilities",
       "effectiveProviderToolSurfaceBinding",
     ]) ||
-    value.catalogVersion !== CAPABILITY_CATALOG_VERSION ||
+    value.catalogVersion !== expectedCatalogVersion ||
     !digest(value.policyFingerprint) ||
     typeof value.effectiveAutomaticContext !== "boolean" ||
     !Array.isArray(value.effectiveLazyReadCapabilities) ||
-    !value.effectiveLazyReadCapabilities.every((item) =>
-      LAZY_READ_CAPABILITY_IDS.includes(item as (typeof LAZY_READ_CAPABILITY_IDS)[number]),
-    ) ||
-    !catalogOrderedSubset(value.effectiveLazyReadCapabilities)
+    !value.effectiveLazyReadCapabilities.every((item) => catalog.some((id) => id === item)) ||
+    !catalogOrderedSubset(value.effectiveLazyReadCapabilities, catalog)
   )
     return false
   const surface = value.effectiveProviderToolSurfaceBinding
@@ -851,7 +915,7 @@ function capability(value: unknown): value is CapabilityBasis {
     record(surface) && Array.isArray(surface.definitions)
       ? new Set(surface.definitions.flatMap((item) => (record(item) && typeof item.id === "string" ? [item.id] : [])))
       : new Set<string>()
-  const effectiveLazyReadCapabilities = LAZY_READ_CAPABILITY_IDS.filter((id) => definitionIDs.has(id))
+  const effectiveLazyReadCapabilities = catalog.filter((id) => definitionIDs.has(id))
   return (
     record(surface) &&
     keys(surface, [
@@ -1032,6 +1096,9 @@ function capabilitySectionRelations(cut: Cut) {
           entry.locator.metadataReadAvailable === capabilities.has("learning_material_query") &&
           entry.locator.tutorReadAvailable === capabilities.has("learning_material_read")
         )
+      if (entry.kind === "learner_response_evidence") {
+        return entry.locator.lazyReadAvailable === capabilities.has("learner_response_evidence_read")
+      }
       return entry.locator.lazyReadAvailable === capabilities.has("learning_interaction_read")
     }),
   )
@@ -1081,14 +1148,23 @@ function entryShape(value: unknown): value is Entry {
   return (
     record(value) &&
     keys(value, ["kind", "locator", ...(value.semantic === undefined ? [] : ["semantic"])]) &&
-    ["course", "navigation_default", "navigation_anchor", "goal", "material", "interaction"].includes(
+    [
+      "course",
+      "navigation_default",
+      "navigation_anchor",
+      "goal",
+      "material",
+      "interaction",
+      "learner_response_evidence",
+    ].includes(
       String(value.kind),
     ) &&
     record(value.locator) &&
     json(value.locator) &&
     locatorShape(value.kind as Entry["kind"], value.locator) &&
     (value.semantic === undefined || bounded(value.semantic)) &&
-    interactionSemantic(value.kind as Entry["kind"], value.semantic)
+    interactionSemantic(value.kind as Entry["kind"], value.semantic) &&
+    learnerResponseEvidenceSemantic(value.kind as Entry["kind"], value.semantic)
   )
 }
 
@@ -1097,6 +1173,7 @@ function locatorShape(kind: Entry["kind"], value: Record<string, unknown>) {
   if (kind === "navigation_default" || kind === "navigation_anchor") return navigationLocator(kind, value)
   if (kind === "goal") return goalLocator(value)
   if (kind === "material") return materialLocator(value)
+  if (kind === "learner_response_evidence") return learnerResponseEvidenceLocator(value)
   return interactionLocator(value)
 }
 
@@ -1629,6 +1706,36 @@ function contentRootReceipt(value: unknown) {
   )
 }
 
+function learnerResponseEvidenceLocator(value: Record<string, unknown>) {
+  return (
+    keys(value, [
+      "recordID",
+      "revisionID",
+      "version",
+      "subjectOccurrenceID",
+      "subjectSourceOrder",
+      "target",
+      "lazyReadAvailable",
+    ]) &&
+    [value.recordID, value.revisionID, value.subjectOccurrenceID].every(nonempty) &&
+    integer(value.version) &&
+    integer(value.subjectSourceOrder) &&
+    Number(value.subjectSourceOrder) > 0 &&
+    typeof value.lazyReadAvailable === "boolean" &&
+    record(value.target) &&
+    keys(value.target, ["mapID", "selectorID", "courseID", "viewID", "revisionID", "itemID", "alignmentID"]) &&
+    [
+      value.target.mapID,
+      value.target.selectorID,
+      value.target.courseID,
+      value.target.viewID,
+      value.target.revisionID,
+      value.target.itemID,
+      value.target.alignmentID,
+    ].every(nonempty)
+  )
+}
+
 function interactionLocator(value: Record<string, unknown>) {
   const optional = [
     "inputID",
@@ -1713,6 +1820,53 @@ function interactionSemantic(kind: Entry["kind"], value: unknown) {
     keys(hint, ["sessionTitle", "trust"]) &&
     typeof hint.sessionTitle === "string" &&
     hint.trust === "untrusted_navigation_hint"
+  )
+}
+
+function learnerResponseEvidenceSemantic(kind: Entry["kind"], value: unknown) {
+  if (kind !== "learner_response_evidence") return true
+  if (!record(value) || value.state !== "value" || !record(value.value)) return false
+  const semantic = value.value
+  const nonImplications = semantic.nonImplications
+  return (
+    keys(semantic, [
+      "assessmentScope",
+      "relation",
+      "basis",
+      "exposure",
+      "disposition",
+      "sourceAvailability",
+      "targetRelation",
+      "selectorByteLength",
+      "interpretation",
+      "nonImplications",
+    ]) &&
+    semantic.assessmentScope === "entire_exact_selector" &&
+    ["supports", "does_not_support"].includes(String(semantic.relation)) &&
+    ["tutor_interpretation", "learner_report"].includes(String(semantic.basis)) &&
+    ["learner_response_before_tutor_disclosure", "tutor_disclosure_before_learner_response"].includes(
+      String(semantic.exposure),
+    ) &&
+    semantic.disposition === "active" &&
+    record(semantic.sourceAvailability) &&
+    keys(semantic.sourceAvailability, ["subject", "condition", "basis"]) &&
+    Object.values(semantic.sourceAvailability).every((item) => item === "source_deleted") &&
+    record(semantic.targetRelation) &&
+    keys(semantic.targetRelation, ["alignment", "map", "course", "selector"]) &&
+    Object.values(semantic.targetRelation).every((item) => item === "current") &&
+    integer(semantic.selectorByteLength) &&
+    semantic.selectorByteLength > 0 &&
+    semantic.selectorByteLength <= LearnerResponseEvidence.MAX_SELECTOR_BYTES &&
+    nonempty(semantic.interpretation) &&
+    Array.isArray(nonImplications) &&
+    nonImplications.length === 5 &&
+    [
+      "mastery",
+      "understanding",
+      "retention",
+      "correctness_beyond_this_selector_bound_occurrence",
+      "required_next_action",
+    ].every((item, index) => nonImplications[index] === item)
   )
 }
 
@@ -1860,7 +2014,7 @@ function omission(value: unknown) {
   return value.type === "unknown" && keys(value, ["type", "reason"]) && nonempty(value.reason)
 }
 
-function budgetShape(cut: Cut) {
+function budgetShape(cut: Cut, expectedOwners: readonly Section["owner"][]) {
   const value = cut.budget
   return (
     record(value) &&
@@ -1870,8 +2024,8 @@ function budgetShape(cut: Cut) {
     integer(value.renderedBytes) &&
     value.renderedBytes <= MAX_RENDERED_BYTES &&
     record(value.entryCounts) &&
-    keys(value.entryCounts, [...owners]) &&
-    owners.every(
+    keys(value.entryCounts, [...expectedOwners]) &&
+    expectedOwners.every(
       (owner) => value.entryCounts[owner] === cut.sections.find((section) => section.owner === owner)?.entries.length,
     ) &&
     canonicalJson(toJsonValue(value.hardLimits)) === canonicalJson(toJsonValue(hardLimits))
@@ -1900,11 +2054,10 @@ function digest(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{64}$/.test(value)
 }
 
-function catalogOrderedSubset(value: readonly string[]) {
+function catalogOrderedSubset(value: readonly string[], catalog: readonly string[]) {
   return value.every((item, index) => {
-    const position = LAZY_READ_CAPABILITY_IDS.indexOf(item as (typeof LAZY_READ_CAPABILITY_IDS)[number])
-    const previous =
-      index === 0 ? -1 : LAZY_READ_CAPABILITY_IDS.indexOf(value[index - 1] as (typeof LAZY_READ_CAPABILITY_IDS)[number])
+    const position = catalog.indexOf(item)
+    const previous = index === 0 ? -1 : catalog.indexOf(value[index - 1]!)
     return position > previous
   })
 }

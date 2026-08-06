@@ -3,6 +3,7 @@ export * as LearningCommandPresentation from "./presentation"
 import { Course } from "@opencode-ai/core/course"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
+import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import type {
@@ -26,6 +27,7 @@ type Capability =
   | typeof LearningCommand.UPDATE_RETAINED_LEARNING_STEERING_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
+  | typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
 
 type BindingInput = Readonly<{
   sessionID: string
@@ -228,6 +230,98 @@ export function learningBootstrapScope(candidate: LearningBootstrap.Candidate) {
       alignments: command.alignments ?? [],
       anchor: command.anchor ?? { type: "preserve" as const },
     }),
+  }
+}
+
+export function learnerResponseEvidenceCapability(
+  candidate: LearnerResponseEvidence.Candidate,
+  envelope: BindingInput,
+) {
+  return SemanticPresentation.proposal({
+    kind: "learner_response_evidence_capability",
+    binding: binding(envelope),
+    commandFingerprint: candidate.commandFingerprint,
+    issuance: candidate.agentAction.kind,
+    scope: learnerResponseEvidenceScope(candidate),
+  })
+}
+
+export function learnerResponseEvidenceScope(candidate: LearnerResponseEvidence.Candidate) {
+  const command = candidate.canonicalCommand
+  const operation = command.operation
+  const target = candidate.materialized.target ?? candidate.materialized.current?.target
+  if (!target) throw new Error("Learner-response-evidence candidate has no exact target scope")
+  return {
+    command: structuredClone(command),
+    subject: structuredClone(candidate.materialized.subject),
+    target: structuredClone(target),
+    assessmentScope: "entire_exact_selector" as const,
+    programBasis:
+      operation === "create" || operation === "revise_from_tutor_interpretation"
+        ? ("tutor_interpretation" as const)
+        : operation === "revise_from_learner_report"
+          ? ("learner_report" as const)
+          : ("preserve" as const),
+    programDisposition: operation === "retract" ? ("retracted" as const) : ("active" as const),
+    assessmentSourcePolicy:
+      operation === "create"
+        ? ("current_response_and_disclosure" as const)
+        : operation === "revise_from_tutor_interpretation"
+          ? ("original_response_and_disclosure" as const)
+          : operation === "revise_from_learner_report"
+            ? ("current_learner_correction" as const)
+            : ("preserve_existing_basis" as const),
+    nonImplications: ["mastery", "understanding", "retention", "required_next_action"],
+  }
+}
+
+export function learnerResponseEvidenceSettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  state: LearnerResponseEvidence.InvocationVersion,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed learner-response-evidence settlement has no exact error code")
+  }
+  const effect = learnerResponseEvidenceEffect(settlement)
+  return SemanticPresentation.result({
+    kind: "learner_response_evidence_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition: state.disposition,
+    ...(state.semanticTerminal ? { semanticOutcome: state.semanticTerminal.outcome } : {}),
+    ...(state.candidate ? { issuance: state.candidate.agentAction.kind } : {}),
+    ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+    ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+    ...(effect ? { effect } : {}),
+  })
+}
+
+function learnerResponseEvidenceEffect(settlement: LearningCommand.PhysicalSettlement) {
+  if (
+    settlement.outcome === "error" ||
+    !("evidenceKind" in settlement) ||
+    settlement.evidenceKind !== "learner_response_evidence"
+  ) {
+    return undefined
+  }
+  const value = settlement as unknown as
+    | LearnerResponseEvidence.AppliedSettlement
+    | LearnerResponseEvidence.AlreadyAppliedSettlement
+  return {
+    recordID: value.recordID,
+    revisionID: value.revisionID,
+    version: value.version,
+    subject: structuredClone(value.subject),
+    target: structuredClone(value.target),
+    operation: value.operation,
+    relation: value.relation,
+    exposure: value.exposure,
+    basis: value.basis,
+    disposition: value.disposition,
   }
 }
 

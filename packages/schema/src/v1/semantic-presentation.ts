@@ -873,6 +873,85 @@ const LearningBootstrapCapabilityProposal = Schema.Struct({
   scope: LearningBootstrapScope,
 })
 
+const LearnerResponseEvidenceAssessment = {
+  relation: Schema.Literals(["supports", "does_not_support"]),
+  exposure: Schema.Literals([
+    "learner_response_before_tutor_disclosure",
+    "tutor_disclosure_before_learner_response",
+  ]),
+}
+const LearnerResponseEvidenceTarget = Schema.Struct({
+  mapID: StringValue,
+  selectorID: StringValue,
+  courseID: StringValue,
+  viewID: StringValue,
+  revisionID: StringValue,
+  itemID: StringValue,
+})
+const LearnerResponseEvidenceTargetSnapshot = Schema.Struct({
+  ...LearnerResponseEvidenceTarget.fields,
+  alignmentID: StringValue,
+  alignmentDispositionVersion: PositiveVersion,
+  mapDispositionVersion: PositiveVersion,
+  courseVersion: PositiveVersion,
+  viewVersion: PositiveVersion,
+  revisionVersion: PositiveVersion,
+})
+const LearnerResponseEvidenceSubject = Schema.Struct({
+  occurrenceID: StringValue,
+  sourceOrder: PositiveVersion,
+  sessionID: StringValue,
+  messageID: StringValue,
+  turnID: StringValue,
+  inputID: StringValue,
+  timeAdmitted: PositiveVersion,
+})
+const LearnerResponseEvidenceCommand = Schema.Union([
+  Schema.Struct({
+    schemaVersion: Schema.Literal(1),
+    operation: Schema.Literal("create"),
+    ...LearnerResponseEvidenceAssessment,
+    conditionAssistantMessageID: StringValue,
+    target: LearnerResponseEvidenceTarget,
+    alignmentID: StringValue,
+  }),
+  Schema.Struct({
+    schemaVersion: Schema.Literals([1]),
+    operation: Schema.Literals(["revise_from_tutor_interpretation", "revise_from_learner_report"]),
+    recordID: StringValue,
+    expectedVersion: PositiveVersion,
+    ...LearnerResponseEvidenceAssessment,
+  }),
+  Schema.Struct({
+    schemaVersion: Schema.Literal(1),
+    operation: Schema.Literal("retract"),
+    recordID: StringValue,
+    expectedVersion: PositiveVersion,
+  }),
+])
+const LearnerResponseEvidenceScope = Schema.Struct({
+  command: LearnerResponseEvidenceCommand,
+  subject: LearnerResponseEvidenceSubject,
+  target: LearnerResponseEvidenceTargetSnapshot,
+  assessmentScope: Schema.Literal("entire_exact_selector"),
+  programBasis: Schema.Literals(["tutor_interpretation", "learner_report", "preserve"]),
+  programDisposition: Schema.Literals(["active", "retracted"]),
+  assessmentSourcePolicy: Schema.Literals([
+    "current_response_and_disclosure",
+    "original_response_and_disclosure",
+    "current_learner_correction",
+    "preserve_existing_basis",
+  ]),
+  nonImplications: Schema.Array(StringValue),
+})
+const LearnerResponseEvidenceCapabilityProposal = Schema.Struct({
+  kind: Schema.Literal("learner_response_evidence_capability"),
+  ...ProposalBinding,
+  commandFingerprint: StringValue,
+  issuance: Schema.Literals(["root", "delegated"]),
+  scope: LearnerResponseEvidenceScope,
+})
+
 export const ProposalBasis = Schema.Union([
   AcceptCourseProposal,
   RepresentationProposal,
@@ -886,6 +965,7 @@ export const ProposalBasis = Schema.Union([
   LearnerGoalProposal,
   LearnerGoalV2CapabilityProposal,
   LearningBootstrapCapabilityProposal,
+  LearnerResponseEvidenceCapabilityProposal,
 ]).annotate({
   discriminator: "kind",
   identifier: "SemanticProposalBasisV1",
@@ -1235,6 +1315,44 @@ const LearningBootstrapResult = Schema.Struct({
   acknowledgement: optional(LearningBootstrapAcknowledgement),
 })
 
+const LearnerResponseEvidenceEffect = Schema.Struct({
+  recordID: StringValue,
+  revisionID: StringValue,
+  version: PositiveVersion,
+  subject: LearnerResponseEvidenceSubject,
+  target: LearnerResponseEvidenceTargetSnapshot,
+  operation: Schema.Literals([
+    "create",
+    "revise_from_tutor_interpretation",
+    "revise_from_learner_report",
+    "retract",
+  ]),
+  ...LearnerResponseEvidenceAssessment,
+  basis: Schema.Literals(["tutor_interpretation", "learner_report"]),
+  disposition: Schema.Literals(["active", "retracted"]),
+})
+const LearnerResponseEvidenceResult = Schema.Struct({
+  kind: Schema.Literal("learner_response_evidence_result"),
+  ...ResultCommon,
+  disposition: Schema.Literals(["candidate_v1", "semantic_terminal_v1", "physical_no_effect"]),
+  semanticOutcome: optional(Schema.Literals(["already_applied", "semantic_conflict"])),
+  issuance: optional(Schema.Literals(["root", "delegated"])),
+  capabilityOutcome: optional(
+    Schema.Literals([
+      "not_evaluated",
+      "policy_allow",
+      "policy_deny",
+      "prompted_abort",
+      "prompted_allow",
+      "prompted_deny",
+      "prompted_correct",
+      "prompted_cancel",
+    ]),
+  ),
+  permissionRequestID: optional(StringValue),
+  effect: optional(LearnerResponseEvidenceEffect),
+})
+
 const ContentWriteResult = Schema.Struct({
   kind: Schema.Literal("content_write_result"),
   ...ResultCommon,
@@ -1263,6 +1381,7 @@ export const ResultBasis = Schema.Union([
   LearnerGoalResult,
   LearnerGoalV2Result,
   LearningBootstrapResult,
+  LearnerResponseEvidenceResult,
   ContentWriteResult,
 ]).annotate({
   discriminator: "kind",

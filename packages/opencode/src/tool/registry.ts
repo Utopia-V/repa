@@ -64,6 +64,8 @@ import { RepresentationConvertTool } from "./representation-convert"
 import { UpdateRetainedLearningSteeringTool } from "./retained-learning-steering"
 import { UpdateLearnerGoalsTool } from "./learner-goal"
 import { UpdateLearningCourseTool } from "./update-learning-course"
+import { UpdateLearnerResponseEvidenceTool } from "./update-learner-response-evidence"
+import { LearnerResponseEvidenceReadTool } from "./learner-response-evidence-read"
 import {
   ContentInventoryTool,
   ContentReadTool,
@@ -166,6 +168,8 @@ const layer = Layer.effect(
     const updateRetainedLearningSteering = yield* UpdateRetainedLearningSteeringTool
     const updateLearnerGoals = yield* UpdateLearnerGoalsTool
     const updateLearningCourse = yield* UpdateLearningCourseTool
+    const updateLearnerResponseEvidence = yield* UpdateLearnerResponseEvidenceTool
+    const learnerResponseEvidenceRead = yield* LearnerResponseEvidenceReadTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
     const contentSearch = yield* ContentSearchTool
@@ -298,6 +302,8 @@ const layer = Layer.effect(
           updateRetainedLearningSteering: Tool.init(updateRetainedLearningSteering),
           updateLearnerGoals: Tool.init(updateLearnerGoals),
           updateLearningCourse: Tool.init(updateLearningCourse),
+          updateLearnerResponseEvidence: Tool.init(updateLearnerResponseEvidence),
+          learnerResponseEvidenceRead: Tool.init(learnerResponseEvidenceRead),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
           contentSearch: Tool.init(contentSearch),
@@ -324,6 +330,8 @@ const layer = Layer.effect(
             tool.updateRetainedLearningSteering,
             tool.updateLearnerGoals,
             tool.updateLearningCourse,
+            tool.updateLearnerResponseEvidence,
+            tool.learnerResponseEvidenceRead,
             tool.contentRoots,
             tool.contentInventory,
             tool.contentSearch,

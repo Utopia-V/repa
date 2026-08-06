@@ -188,7 +188,14 @@ describe("LearningContext", () => {
       }),
     )
 
-    expect(prepared.cut.sections).toHaveLength(5)
+    expect(prepared.cut.sections.map((section) => section.owner)).toEqual([
+      "course",
+      "learner_navigation",
+      "learner_goal",
+      "material",
+      "interaction",
+      "learner_response_evidence",
+    ])
     expect(
       prepared.cut.sections.every(
         (section) =>

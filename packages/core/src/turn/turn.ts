@@ -28,6 +28,7 @@ import {
   TurnInputTable,
   TurnModelOperationTable,
   TurnModelPresentationTable,
+  TurnModelSourceRetentionTable,
   TurnTable,
   TurnTranscriptRedactionTable,
   TurnToolCandidateTable,
@@ -105,6 +106,9 @@ export type ModelAdmission = {
   readonly snapshotFrontier: LearningFrontier.Snapshot
   readonly timeAdmitted: number
   readonly learningContextBasis: LearningContext.CapabilityBasis
+  readonly learnerResponseEvidenceMaterials?: NonNullable<
+    LearningContext.PrepareInput["learnerResponseEvidenceMaterials"]
+  >
 }
 
 export type ModelAdmissionResult =
@@ -583,6 +587,7 @@ export function admitModel(tx: Transaction, input: ModelAdmission): Effect.Effec
       },
       retainedSteering: cut,
       capabilityBasis: learningContextBasis,
+      learnerResponseEvidenceMaterials: input.learnerResponseEvidenceMaterials,
     }).pipe(
       Effect.mapError(
         (error) =>
@@ -1957,6 +1962,7 @@ export function deleteSessionTree(
     }
 
     const turnIDs = turns.map((turn) => turn.id)
+    const consumedFrontier = yield* LearningFrontier.read(tx)
     const references = yield* deletionReferences(tx, turnIDs, selected)
     const timeDeleted = Math.max(input.timeDeleted, ...turns.map((turn) => turn.time_terminal ?? turn.causal_time))
     yield* retainUnavailableSources(tx, turns, references, timeDeleted)
@@ -1976,6 +1982,7 @@ export function deleteSessionTree(
       tx,
       references.presentations.map((presentation) => presentation.occurrence_id),
     )
+    yield* LearningFrontier.advance(tx, { time: timeDeleted, consumed: [consumedFrontier] })
     return { sessionIDs, turnIDs }
   })
 }
@@ -2062,6 +2069,12 @@ export function garbageCollectUnavailableSources(tx: Transaction, turnIDs: reado
               .where(eq(TurnChildLineageTable.parent_turn_id, turnID))
               .get()
               .pipe(Effect.orDie),
+            tx
+              .select({ id: TurnModelSourceRetentionTable.owner_reference_id })
+              .from(TurnModelSourceRetentionTable)
+              .where(eq(TurnModelSourceRetentionTable.source_turn_id, turnID))
+              .get()
+              .pipe(Effect.orDie),
           ])
           if (learningReference || references.some(Boolean)) return undefined
           const occurrenceIDs = [
@@ -2106,6 +2119,7 @@ function deletionReferences(tx: Transaction, turnIDs: readonly Turn.ID[], select
         candidates: [],
         inputs: [],
         lineages: [],
+        modelSourceRetentions: [],
         removedReferenceTurnIDs: [] as Turn.ID[],
       }
     }
@@ -2119,6 +2133,7 @@ function deletionReferences(tx: Transaction, turnIDs: readonly Turn.ID[], select
       candidates,
       inputs,
       lineages,
+      modelSourceRetentions,
     ] = yield* Effect.all([
       tx
         .select()
@@ -2167,6 +2182,16 @@ function deletionReferences(tx: Transaction, turnIDs: readonly Turn.ID[], select
         .select()
         .from(TurnChildLineageTable)
         .where(inArray(TurnChildLineageTable.child_turn_id, turnIDs))
+        .all()
+        .pipe(Effect.orDie),
+      tx
+        .select({
+          turnID: TurnModelSourceRetentionTable.source_turn_id,
+          assistantMessageID: TurnModelSourceRetentionTable.source_assistant_message_id,
+          timeSettled: TurnModelSourceRetentionTable.source_time_settled,
+        })
+        .from(TurnModelSourceRetentionTable)
+        .where(inArray(TurnModelSourceRetentionTable.source_turn_id, turnIDs))
         .all()
         .pipe(Effect.orDie),
     ])
@@ -2226,6 +2251,7 @@ function deletionReferences(tx: Transaction, turnIDs: readonly Turn.ID[], select
       candidates,
       inputs,
       lineages,
+      modelSourceRetentions,
       removedReferenceTurnIDs: [
         ...targetHistoricalInputs.map((row) => row.turnID),
         ...targetHistoricalModels.map((row) => row.turnID),
@@ -2255,6 +2281,7 @@ function retainUnavailableSources(
       ...references.survivingChildReceipts
         .map((row) => row.parent_turn_id)
         .filter((turnID): turnID is Turn.ID => turnID !== null),
+      ...references.modelSourceRetentions.map((row) => row.turnID),
     ])
     for (const receipt of references.learningReceipts) {
       const model = modelByMessage.get(receipt.assistant_message_id)
@@ -2312,6 +2339,18 @@ function retainUnavailableSources(
       }
       citedModels.set(model.assistant_message_id, model)
       citedTools.set(candidate.part_id, candidate)
+    }
+    for (const retention of references.modelSourceRetentions) {
+      const model = modelByMessage.get(retention.assistantMessageID)
+      if (
+        !model ||
+        model.turn_id !== retention.turnID ||
+        model.state !== "completed" ||
+        model.time_settled !== retention.timeSettled
+      ) {
+        return yield* integrity(retention.turnID, "Retained model source has no exact completed operation")
+      }
+      citedModels.set(model.assistant_message_id, model)
     }
     for (const receipt of references.learningReceipts) {
       const model = modelByMessage.get(receipt.assistant_message_id)!
