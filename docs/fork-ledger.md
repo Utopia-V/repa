@@ -3098,14 +3098,48 @@ After separate maintainer publication authorization, exact commit
 `1f92169840559b63eb8f96c31a67985c814a86f0` recorded the accepted 71-file
 production/test projection together with its contract, evidence, architecture,
 roadmap, and review records on branch `codex/gate-20-future-attention`. The
-package projection remains byte-identical to reviewer-accepted manifest
-`1507DAF44F5B48A430C2491694C5A4547B9E9B2D5CF3D4D2E1A3190B995C6CB0`.
+reviewer-accepted pre-integration raw working-tree projection was bound by
+manifest `1507DAF44F5B48A430C2491694C5A4547B9E9B2D5CF3D4D2E1A3190B995C6CB0`.
 
 This docs-only successor records that integration identity without altering the
 accepted package projection. The pre-existing maintainer-owned `AGENTS.md`
-change remains uncommitted and excluded. `main` has not advanced; merge,
-release, credentialed provider use, Gate 21, and Gate 21A remain outside this
-integration record.
+change remains uncommitted and excluded. At this feature-branch cut, `main` had
+not advanced; release, credentialed provider use, Gate 21, and Gate 21A remained
+outside this integration record.
+
+### 2026-08-08 Gate 20 mainline integration
+
+The maintainer subsequently corrected the publication route: this private
+maintainer-owned repository uses direct mainline integration rather than a pull
+request as its governing path. Draft pull request `#1`, which had been opened
+under the inapplicable external-collaboration assumption, was closed without
+merging. Local `main` was fast-forwarded through feature-branch integration
+commit `e1857d00d33d3e6829b1b3b49b5f87cfdcf882df` and this docs-only mainline
+status successor. Direct publication to `origin/main` is authorized and
+pending.
+
+Reviewer acceptance bound the pre-integration raw working-tree projection at 71
+files / 8,314 manifest bytes / SHA-256
+`1507DAF44F5B48A430C2491694C5A4547B9E9B2D5CF3D4D2E1A3190B995C6CB0`.
+System-owned `core.autocrlf=true` stored its LF-clean Git-tree projection at
+implementation commit `1f92169840559b63eb8f96c31a67985c814a86f0`: 71 files
+/ 8,314 manifest bytes / SHA-256
+`1F185B1944A5B89AFE7A8FBBEEBE2B0165A86AB4D3C3BFF97BF562923AD5D3F6`.
+A fresh checkout expands that tree to a CRLF working projection: 71 files /
+8,314 manifest bytes / SHA-256
+`CB5114543DB5419DD5C338D57CEE995FD8D65651843E5322CB1E82C6FDEA5032`.
+All 71 files are valid UTF-8; every checkout/blob byte difference is CRLF versus
+LF, CRLF-to-LF comparison yields zero content differences, and no lone CR
+exists. These are distinct byte identities of one semantically unchanged source
+projection; the former byte-identical wording is withdrawn. Retained reviewer
+finding `G20-INT-001` classified the discrepancy as a Medium provenance/status
+correction and did not reopen `G20-CR-001..010` or `G20-IR-001..011`.
+
+The intervening successors change documentation only. The pre-existing
+maintainer-owned `AGENTS.md` modification remains uncommitted and excluded. The
+redundant feature-branch ref may remain as provenance; it does not own current
+Gate status. No release, credentialed provider use, Gate 21, or Gate 21A action
+follows.
 
 ## Historical evidence locators
 

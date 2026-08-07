@@ -1,23 +1,24 @@
 # Gate 20 source-linked future attention implementation/evidence record
 
-Status: **implementation/evidence accepted and committed on a feature branch;
-mainline merge awaits separate action.** Gate 20's contract/theory and
+Status: **implementation/evidence accepted and integrated into local `main`;
+direct `origin/main` publication is authorized and pending.** Gate 20's
+contract/theory and
 implementation/evidence layers are both accepted under whole-Gate review run
 `G20-WG-20260806-019fd69a-01`. Retained reviewer task
 `019fd773-84c3-7841-9fc5-45f1b18d4a9f` closed `G20-CR-001..010` and
 `G20-IR-001..011`, returned final `Accept`, and reported no owner blocker or
-material unknown. This establishes readiness only for the separately governed
-integration step. Exact implementation commit
-`1f92169840559b63eb8f96c31a67985c814a86f0` records the accepted candidate on
-`codex/gate-20-future-attention`; it is not merged into `main`. No release,
-credentialed provider call, Gate 21 entry, or Gate 21A entry follows.
+material unknown. A separately authorized direct integration subsequently
+fast-forwarded the accepted candidate into `main`. Exact implementation commit
+`1f92169840559b63eb8f96c31a67985c814a86f0` records the accepted candidate;
+local `main` includes it through docs-only integration/status successors. No
+release, credentialed provider call, Gate 21 entry, or Gate 21A entry follows.
 
 Date: 2026-08-07
 Accepted: 2026-08-08
 
 ## Exact authority and candidate binding
 
-- implementation base, `HEAD`, `main`, and `origin/main`:
+- implementation base and acceptance-time `HEAD`, `main`, and `origin/main`:
   `3317525aeb242dfcf3cec49c0dd627cd38ee8144`;
 - accepted Gate 20 contract/theory SHA-256:
   `0BE73ABB75D0957273FF5C5F986735491C1EEAF38072B9D7A82020073A318A7F`;
@@ -29,7 +30,7 @@ Accepted: 2026-08-08
 - implementation/evidence disposition: **Accept**, with `G20-IR-001..011`
   closed, no new acceptance-changing finding, and no owner blocker or execution
   failure remaining;
-- accepted production/test manifest: **71 files / 8,314
+- accepted pre-integration raw working-tree production/test manifest: **71 files / 8,314
   canonical manifest bytes**, SHA-256
   `1507DAF44F5B48A430C2491694C5A4547B9E9B2D5CF3D4D2E1A3190B995C6CB0`;
   this replaces the superseded 71-file / 8,314-byte second closure manifest
@@ -38,32 +39,49 @@ Accepted: 2026-08-08
   `4E2ED6F94F8D2DB602FCFD785BEA75578E3DA714F73627F6F7E160925EB6FC5D`
   and 52-file / 6,022-byte first-pass manifest
   `3BB19A5103EBC5F5A4CB1ACEFEFE16933B3B2FF0661666A4E6C6D9851C73A026`;
+- committed LF Git-tree/blob production/test manifest at
+  `1f92169840559b63eb8f96c31a67985c814a86f0`: **71 files / 8,314 canonical
+  manifest bytes**, SHA-256
+  `1F185B1944A5B89AFE7A8FBBEEBE2B0165A86AB4D3C3BFF97BF562923AD5D3F6`;
+- fresh `core.autocrlf=true` CRLF checkout production/test manifest: **71 files
+  / 8,314 canonical manifest bytes**, SHA-256
+  `CB5114543DB5419DD5C338D57CEE995FD8D65651843E5322CB1E82C6FDEA5032`;
 - accepted review-record SHA-256 for this file before status-only
   reconciliation:
   `E86AA8B386CF613F0AF5E7CEE7D7844ED893944D0B36AE4D63450192FDE3DE00`;
-- feature-branch implementation commit:
+- accepted implementation commit:
   `1f92169840559b63eb8f96c31a67985c814a86f0`;
   and
 - excluded pre-existing maintainer change: `AGENTS.md`.
 
-The repair-closure production/test manifest contains every modified or
-untracked `packages/**` file and no documentation or `AGENTS.md` file. Its
-canonical form sorts repository-relative forward-slash paths ordinally and
-emits one `path<TAB>actual-file-byte-length<TAB>uppercase-file-SHA-256<LF>`
-line per file, encoded as UTF-8 without BOM and with a final LF. Its digest is
-the SHA-256 of those exact 8,314 manifest bytes. The retained reviewer
-independently reconstructed and accepted that exact package path set, manifest,
-and pre-reconciliation evidence-record hash. The status-only documentation
-reconciliation that records the verdict does not alter the accepted package
-manifest.
+Each production/test manifest contains the same 71 `packages/**` paths and no
+documentation or `AGENTS.md` file. Its canonical form sorts repository-relative
+forward-slash paths ordinally and emits one
+`path<TAB>actual-file-byte-length<TAB>uppercase-file-SHA-256<LF>` line per file,
+encoded as UTF-8 without BOM and with a final LF. The retained reviewer
+independently reconstructed and accepted the pre-integration raw working-tree
+path set, manifest, and pre-reconciliation evidence-record hash.
+
+Integration under the system-owned `core.autocrlf=true` setting stores the LF
+Git-tree projection above and expands it to the CRLF checkout projection above.
+All 71 checkout files are valid UTF-8; every checkout/blob byte difference is
+CRLF versus LF, CRLF-to-LF comparison yields zero content differences, and no
+lone CR exists. These are distinct byte identities of one semantically
+unchanged source projection. The former claim that commit `1f9216984` was
+byte-identical to raw manifest `1507DAF4...` is withdrawn. Retained reviewer
+integration finding `G20-INT-001` classified this as a provenance/status repair,
+not an acceptance-changing implementation drift; `G20-CR-001..010` and
+`G20-IR-001..011` remain closed.
 
 The working tree retained the pre-existing maintainer-owned `AGENTS.md`
 modification throughout implementation and review. The executor did not edit,
 revert, stage, or include that path. At acceptance the Git index remained empty
 and no branch movement, commit, merge, push, release, credential use, paid call,
 or external durable effect had occurred. After separate publication authority,
-the accepted candidate was committed on the feature branch at the exact commit
-above; `AGENTS.md` remains outside it and `main` remains unchanged.
+the accepted candidate was committed at the exact implementation commit above
+and then fast-forwarded into local `main` through docs-only integration/status
+successors. Direct publication to `origin/main` is authorized and pending;
+`AGENTS.md` remains outside every Gate 20 commit.
 
 ## First implementation/evidence review disposition
 
@@ -215,8 +233,8 @@ acceptance-changing finding, material unknown, owner blocker, contract
 contradiction, or checkout drift. It independently reconstructed the exact
 accepted 71-file package manifest and confirmed the accepted contract and
 pre-reconciliation implementation/evidence record hashes. Both Gate 20 review
-layers are therefore accepted; only separately authorized local integration
-remains.
+layers are therefore accepted. The separately authorized direct mainline
+integration is recorded below.
 
 ## Implemented production boundary
 
@@ -625,7 +643,7 @@ also passed after the public HttpApi and event schemas changed.
 The candidate remained unstaged, with `HEAD` and `origin/main` unchanged at the
 implementation base.
 
-## Accepted boundary and pending mainline integration
+## Accepted and integrated boundary
 
 The accepted deterministic and reviewer-reproduced evidence does not prove
 that an arbitrary external model will always notice the right concern, choose
@@ -644,6 +662,7 @@ No maintainer-owned product choice, material unknown, or executor blocker
 remains inside Gate 20's reviewed boundary. The retained reviewer accepted the
 exact 71-file production/test candidate with `G20-IR-001..011` closed, while
 contract/theory remains accepted with `G20-CR-001..010` closed. Exact commit
-`1f92169840559b63eb8f96c31a67985c814a86f0` records that candidate on
-`codex/gate-20-future-attention`; `main` merge remains pending. No release,
-Gate 21, or Gate 21A authority exists in this record.
+`1f92169840559b63eb8f96c31a67985c814a86f0` records that candidate, and local
+`main` includes it through docs-only integration/status successors. Direct
+`origin/main` publication is authorized and pending. No release, Gate 21, or
+Gate 21A authority exists in this record.
