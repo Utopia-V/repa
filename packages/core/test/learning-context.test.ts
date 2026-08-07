@@ -4,6 +4,9 @@ import {
   CAPABILITY_CATALOG_VERSION,
   CapacityIntegrityError,
   CutIntegrityError,
+  GATE19_CAPABILITY_CATALOG_VERSION,
+  GATE19_POLICY_VERSION,
+  GATE19_RENDERER_VERSION,
   MAX_CANONICAL_BYTES,
   MAX_ENTRY_BYTES,
   MAX_RENDERED_BYTES,
@@ -19,6 +22,7 @@ import {
   toJsonValue,
   utf8Bytes,
   type CapabilityBasis,
+  type Cut,
 } from "@opencode-ai/core/learning-context"
 import type { Database } from "@opencode-ai/core/database/database"
 import type { RetainedSteering } from "@opencode-ai/core/retained-steering"
@@ -195,6 +199,7 @@ describe("LearningContext", () => {
       "material",
       "interaction",
       "learner_response_evidence",
+      "future_attention",
     ])
     expect(
       prepared.cut.sections.every(
@@ -210,6 +215,21 @@ describe("LearningContext", () => {
     expect(prepared.cut.budget.canonicalBytes).toBeLessThanOrEqual(MAX_CANONICAL_BYTES)
     expect(prepared.cut.budget.renderedBytes).toBeLessThanOrEqual(MAX_RENDERED_BYTES)
     expect(decodeStored(prepared.canonicalCut, prepared.renderedBlock, assistantMessageID)).toEqual(prepared.cut)
+  })
+
+  test("keeps a frozen Gate 19 policy-2 cut byte-exact and readable", async () => {
+    const current = await Effect.runPromise(
+      prepareCut({} as Transaction, {
+        operation: { sessionID, turnID, inputID, assistantMessageID, ordinal: 0 },
+        retainedSteering: retainedSteering(),
+        capabilityBasis: basis(),
+      }),
+    )
+    const frozen = freezeGate19Cut(current.cut)
+
+    expect(decodeStored(frozen.canonicalCut, frozen.renderedBlock, assistantMessageID)).toEqual(frozen.cut)
+    expect(sha256(frozen.canonicalCut)).toBe("58fab29a2ca49bb82d9af69ef0f609483751f7232c113d01a2926aed9c7ad6d1")
+    expect(sha256(frozen.renderedBlock)).toBe("32f54b768588967c9cace8e49b4d2b7ddae0cd965257df331c07e181b7b80cda")
   })
 
   test("rejects a stored cut whose capability catalog contains an unknown lazy-read ID", async () => {
@@ -429,3 +449,62 @@ describe("LearningContext", () => {
     expect(() => decodeCapacity(canonicalJson(toJsonValue(parsed)), assistantMessageID)).toThrow(CapacityIntegrityError)
   })
 })
+
+function freezeGate19Cut(current: Cut) {
+  const base = {
+    schemaVersion: current.schemaVersion,
+    policyVersion: GATE19_POLICY_VERSION,
+    rendererVersion: GATE19_RENDERER_VERSION,
+    operation: current.operation,
+    cutAsOf: current.cutAsOf,
+    throughSharedFrontier: current.throughSharedFrontier,
+    retainedSteering: current.retainedSteering,
+    capabilityBasis: {
+      ...current.capabilityBasis,
+      catalogVersion: GATE19_CAPABILITY_CATALOG_VERSION,
+    },
+    sections: current.sections.filter((section) => section.owner !== "future_attention"),
+  } as const
+  const entryCounts = Object.fromEntries(base.sections.map((section) => [section.owner, section.entries.length]))
+  let canonicalBytes = 0
+  let renderedBytes = 0
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const budget = { ...current.budget, canonicalBytes, renderedBytes, entryCounts }
+    const fingerprint = canonicalFingerprint(toJsonValue({ ...base, budget }))
+    const draft = { ...base, budget, fingerprint, renderedFingerprint: "0".repeat(64) } as unknown as Cut
+    const renderedBlock = renderGate19Cut(draft)
+    renderedBytes = utf8Bytes(renderedBlock)
+    const cut = {
+      ...draft,
+      budget: { ...budget, renderedBytes },
+      renderedFingerprint: sha256(renderedBlock),
+    } as unknown as Cut
+    const canonicalCut = canonicalJson(toJsonValue(cut))
+    const nextCanonicalBytes = utf8Bytes(canonicalCut)
+    if (nextCanonicalBytes === canonicalBytes) return { cut, canonicalCut, renderedBlock }
+    canonicalBytes = nextCanonicalBytes
+  }
+  throw new Error("Frozen Gate 19 cut byte accounting did not converge")
+}
+
+function renderGate19Cut(cut: Cut) {
+  return [
+    "[Repa learning context — protected]",
+    `schemaVersion: ${cut.schemaVersion}; policyVersion: ${cut.policyVersion}; rendererVersion: ${cut.rendererVersion}`,
+    `cutFingerprint: ${cut.fingerprint}`,
+    `cutAsOf: ${cut.cutAsOf}; throughSharedFrontier: ${canonicalJson(toJsonValue(cut.throughSharedFrontier))}`,
+    `retainedSteering: ${canonicalJson(toJsonValue(cut.retainedSteering))}`,
+    `capabilityBasis: ${canonicalJson(
+      toJsonValue({
+        catalogVersion: cut.capabilityBasis.catalogVersion,
+        policyFingerprint: cut.capabilityBasis.policyFingerprint,
+        effectiveAutomaticContext: cut.capabilityBasis.effectiveAutomaticContext,
+        effectiveLazyReadCapabilities: cut.capabilityBasis.effectiveLazyReadCapabilities,
+        providerToolSurface: cut.capabilityBasis.effectiveProviderToolSurfaceBinding,
+      }),
+    )}`,
+    `sections (canonical order is not priority): ${canonicalJson(toJsonValue(cut.sections))}`,
+    "This is a bounded observation condition for this sample, not learning truth, priority, mastery, progress, or a selected Tutor move. Use exact owner reads when available; never infer missing detail or authorization from a locator.",
+    "[/Repa learning context]",
+  ].join("\n")
+}

@@ -12,6 +12,10 @@ const snapshot = path.join(root, "packages/core/schema.json")
 const tsDir = path.join(root, "packages/core/src/database/migration/repa")
 const registry = path.join(root, "packages/core/src/database/migration.gen.ts")
 const schema = path.join(root, "packages/core/src/database/schema.gen.ts")
+const drizzleKit = path.join(
+  path.dirname(Bun.resolveSync("drizzle-kit", path.join(root, "packages/core"))),
+  "bin.cjs",
+)
 // These text-keyed append-only authorities must not expose SQLite's hidden replacement-conflict key.
 const withoutRowidTables = new Set([
   "course_state_history",
@@ -50,6 +54,16 @@ const withoutRowidTables = new Set([
   "learner_response_evidence_record",
   "learner_response_evidence_revision",
   "learner_response_evidence_commit_seal",
+  "future_attention_disposition",
+  "future_attention_capability_issue",
+  "future_attention_capability_settlement",
+  "future_attention_change_set",
+  "future_attention_concern",
+  "future_attention_transition",
+  "future_attention_service_receipt",
+  "future_attention_claim_group",
+  "future_attention_claim_member",
+  "future_attention_claim_finalization",
 ])
 const args = parseArgs({
   args: process.argv.slice(2),
@@ -146,7 +160,7 @@ async function drizzle(temporary: string, output: string, name?: string) {
 export default { ...config, out: ${JSON.stringify(output)} }
 `,
   )
-  await $`bun drizzle-kit generate --config ${config} ${name ? ["--name", name] : []}`.cwd(
+  await $`node --stack-size=8192 ${drizzleKit} generate --config ${config} ${name ? ["--name", name] : []}`.cwd(
     path.join(root, "packages/core"),
   )
 }

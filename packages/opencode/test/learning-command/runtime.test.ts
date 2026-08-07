@@ -9,6 +9,7 @@ import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { EventV2 } from "@opencode-ai/core/event"
+import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import {
@@ -71,6 +72,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { Permission } from "@/permission"
 import { Session } from "@/session/session"
+import { recoverStartup } from "@/session/turn-recovery"
 import { expect, test } from "bun:test"
 import { eq, sql } from "drizzle-orm"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema } from "effect"
@@ -195,6 +197,719 @@ const it = testEffect(
   ]),
 )
 const model = { modelID: ModelV2.ID.make("model"), providerID: ProviderV2.ID.make("provider") }
+
+it.effect("runs FutureAttention admission, immutable pending result, and exact-Assistant finalization", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const events = yield* EventV2Bridge.Service
+    const courses = yield* Course.Service
+    const seeded = yield* seedCourse(courses, "Semaphore follow-up", "Main")
+    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id)).items[0]
+    if (!item) return yield* Effect.die("FutureAttention runtime fixture has no target item")
+    const base = Date.now()
+    const notBefore = new Date(base + 1_000 + 480 * 60_000).toISOString().slice(0, 19)
+    const learnerSource = "Explain the Semaphore follow-up item later."
+    const target = {
+      endpoint: {
+        courseID: seeded.course.id,
+        viewID: seeded.view.view.id,
+        revisionID: seeded.view.revision.id,
+        itemID: item.itemID,
+      },
+      selection: { type: "explicit_exact" as const },
+    }
+    const createInput = {
+      operations: [
+        {
+          type: "create" as const,
+          concern: {
+            purpose: "Explain how a semaphore bounds simultaneous entrants",
+            source: {
+              type: "interpreted_learner_request" as const,
+              excerpt: {
+                text: learnerSource,
+                startByte: 0,
+                endByte: new TextEncoder().encode(learnerSource).byteLength,
+              },
+            },
+            target,
+            notBefore: {
+              sourceExpression: "after this turn",
+              localDateTime: notBefore,
+              timeZone: { type: "fixed_offset" as const, offsetMinutes: 480 },
+            },
+            serviceTiming: "after_creation" as const,
+          },
+        },
+      ],
+    }
+    const createdInteraction = yield* seedInteraction(
+      db,
+      "future-attention-create",
+      createInput,
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      { text: learnerSource, time: base, timeZone: "Asia/Shanghai" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      createInput,
+      createdInteraction.registration,
+    )
+    const created = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      createInput,
+      context(
+        createdInteraction.registration,
+        "allow",
+        LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+        [],
+        FutureAttention.PERMISSION_PATTERN,
+      ),
+    )
+    const createdOutput = JSON.parse(created.output)
+    expect(createdOutput).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "policy_allow",
+      settlement: {
+        outcome: "applied",
+        futureAttentionKind: "change_set",
+        changes: [{ operation: "create", disposition: "open" }],
+      },
+    })
+    expect(created.metadata).toMatchObject({
+      command: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      outcome: "applied",
+      durablySettled: true,
+      semanticPresentationBasis: { basis: { kind: "future_attention_result" } },
+    })
+    const request = permissionRequests.filter(
+      (item) => item.permission === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+    )
+    expect(request).toHaveLength(1)
+    expect(request[0]).toMatchObject({
+      patterns: [FutureAttention.PERMISSION_PATTERN],
+      always: [FutureAttention.PERMISSION_PATTERN],
+      metadata: {
+        futureAttentionKind: "change_set",
+        issuance: "root",
+        scope: {
+          operationCount: 1,
+          completionClaimCount: 0,
+          sourceRelations: ["interpreted_learner_request"],
+        },
+      },
+    })
+    const physicalReplay = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      createInput,
+      context(
+        createdInteraction.registration,
+        "deny",
+        LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+        [],
+        FutureAttention.PERMISSION_PATTERN,
+      ),
+    )
+    expect(physicalReplay).toEqual(created)
+    expect(
+      permissionRequests.filter((item) => item.permission === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY),
+    ).toHaveLength(1)
+    yield* settleInteractionTurn(db, createdInteraction, base + 5_000)
+
+    const concernID = createdOutput.settlement.changes[0].concernID as FutureAttention.ConcernID
+    const serviceInput = {
+      operations: [
+        {
+          type: "serve" as const,
+          concernID,
+          expectedVersion: 0,
+          service: {
+            source: { type: "current_assistant_when_complete" as const },
+            rationale: "This exact Assistant will provide the complete semaphore explanation.",
+          },
+        },
+      ],
+    }
+    const serviceInteraction = yield* seedFollowupInteraction(
+      db,
+      createdInteraction,
+      "future-attention-service",
+      serviceInput,
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      { text: "Explain that semaphore point now.", time: base + 10_000, timeZone: "Asia/Shanghai" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      serviceInput,
+      serviceInteraction.registration,
+    )
+    const admitted = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      serviceInput,
+      context(
+        serviceInteraction.registration,
+        "allow",
+        LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+        [],
+        FutureAttention.PERMISSION_PATTERN,
+      ),
+    )
+    const admittedOutput = JSON.parse(admitted.output)
+    expect(admittedOutput).toMatchObject({
+      settlement: {
+        outcome: "applied",
+        claim: { claimStateAtAdmission: "pending", claimState: "pending" },
+      },
+    })
+    const groupID = admittedOutput.settlement.claim.groupID as FutureAttention.ClaimGroupID
+    const completedAt = base + 15_000
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* TurnLifecycle.settleTool(tx, {
+          turnID: serviceInteraction.turnID,
+          partID: serviceInteraction.registration.partID,
+          state: "completed",
+          time: completedAt,
+        })
+        yield* tx
+          .insert(PartTable)
+          .values({
+            id: SessionV1.PartID.ascending("prt_future_attention_explanation"),
+            session_id: serviceInteraction.sessionID,
+            message_id: serviceInteraction.registration.assistantMessageID,
+            data: {
+              type: "text",
+              text: "A semaphore bounds simultaneous entrants by requiring each entrant to acquire one of a fixed number of permits.",
+              time: { start: base + 10_001, end: completedAt },
+            } as (typeof PartTable.$inferInsert)["data"],
+            time_created: completedAt,
+            time_updated: completedAt,
+          })
+          .run()
+        yield* tx
+          .update(MessageTable)
+          .set({
+            data: {
+              ...assistantData(serviceInteraction.userMessageID, base + 10_000),
+              time: { created: base + 10_000, completed: completedAt },
+            },
+            time_updated: completedAt,
+          })
+          .where(eq(MessageTable.id, serviceInteraction.registration.assistantMessageID))
+          .run()
+      }),
+    )
+    const finalized = yield* LearningCommandRuntime.finalizeFutureAttentionClaims(events, {
+      assistantMessageID: serviceInteraction.registration.assistantMessageID,
+      observationCut: "live_presentation_finalized",
+      time: completedAt + 1,
+    })
+    expect(finalized).toMatchObject([
+      { groupID, outcome: "served", members: [{ concernID, outcome: "served" }] },
+    ])
+    expect(yield* exactPartResult(db, serviceInteraction.registration.partID)).toEqual(admitted)
+    const current = yield* db.transaction((tx) =>
+      FutureAttention.read(tx, { type: "claim_group", groupID }, { now: completedAt + 2 }),
+    )
+    expect(current.items[0]).toMatchObject({
+      group: { id: groupID },
+      receipt: { id: finalized[0]!.id, outcome: "served" },
+    })
+    expect(
+      yield* LearningCommandRuntime.finalizeFutureAttentionClaims(events, {
+        assistantMessageID: serviceInteraction.registration.assistantMessageID,
+        observationCut: "live_presentation_finalized",
+        time: completedAt + 2,
+      }),
+    ).toEqual([])
+  }),
+)
+
+it.effect("finalizes committed and uncommitted FutureAttention claims only after startup Turn recovery", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const events = yield* EventV2Bridge.Service
+    const courses = yield* Course.Service
+    const seeded = yield* seedCourse(courses, "Startup FutureAttention recovery", "Main")
+    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id)).items[0]
+    if (!item) return yield* Effect.die("FutureAttention startup fixture has no target item")
+    const base = Date.now()
+    const notBefore = new Date(base + 1_000 + 480 * 60_000).toISOString().slice(0, 19)
+    const learnerSource = "Keep both follow-up explanations for the Startup FutureAttention recovery item."
+    const target = {
+      endpoint: {
+        courseID: seeded.course.id,
+        viewID: seeded.view.view.id,
+        revisionID: seeded.view.revision.id,
+        itemID: item.itemID,
+      },
+      selection: { type: "explicit_exact" as const },
+    }
+    const concern = (purpose: string) => ({
+      purpose,
+      source: {
+        type: "interpreted_learner_request" as const,
+        excerpt: {
+          text: learnerSource,
+          startByte: 0,
+          endByte: new TextEncoder().encode(learnerSource).byteLength,
+        },
+      },
+      target,
+      notBefore: {
+        sourceExpression: "after this turn",
+        localDateTime: notBefore,
+        timeZone: { type: "fixed_offset" as const, offsetMinutes: 480 },
+      },
+      serviceTiming: "after_creation" as const,
+    })
+    const completedPurpose = "Serve only from the durable startup-complete Assistant"
+    const uncommittedPurpose = "Remain open after an uncommitted startup Assistant"
+    const createInput = {
+      operations: [
+        { type: "create" as const, concern: concern(completedPurpose) },
+        { type: "create" as const, concern: concern(uncommittedPurpose) },
+      ],
+    }
+    const createdInteraction = yield* seedInteraction(
+      db,
+      "future-attention-startup-create",
+      createInput,
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      { text: learnerSource, time: base, timeZone: "Asia/Shanghai" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      createInput,
+      createdInteraction.registration,
+    )
+    yield* runtime.executeCommand(
+      LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      createInput,
+      context(
+        createdInteraction.registration,
+        "allow",
+        LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+        [],
+        FutureAttention.PERMISSION_PATTERN,
+      ),
+    )
+    yield* settleInteractionTurn(db, createdInteraction, base + 5_000)
+    const concerns = yield* db.transaction((tx) =>
+      FutureAttention.read(tx, { type: "list" }, { now: base + 5_001, limit: 64 }),
+    )
+    const completedConcern = concerns.items.find(
+      (value) => "concern" in value && value.concern.payload.purpose === completedPurpose,
+    )
+    const uncommittedConcern = concerns.items.find(
+      (value) => "concern" in value && value.concern.payload.purpose === uncommittedPurpose,
+    )
+    if (!completedConcern || !("concern" in completedConcern) || !uncommittedConcern || !("concern" in uncommittedConcern)) {
+      return yield* Effect.die("Expected both startup FutureAttention concerns")
+    }
+
+    const admitClaim = (suffix: string, concernID: FutureAttention.ConcernID, time: number) =>
+      Effect.gen(function* () {
+        const input = {
+          operations: [
+            {
+              type: "serve" as const,
+              concernID,
+              expectedVersion: 0,
+              service: {
+                source: { type: "current_assistant_when_complete" as const },
+                rationale: "Only this exact durable Assistant presentation may serve the retained purpose.",
+              },
+            },
+          ],
+        }
+        const interaction = yield* seedInteraction(
+          db,
+          suffix,
+          input,
+          LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+          { text: `Continue ${suffix}.`, time, timeZone: "Asia/Shanghai" },
+        )
+        yield* runtime.prepareCommand(
+          LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+          input,
+          interaction.registration,
+        )
+        const exact = yield* runtime.executeCommand(
+          LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+          input,
+          context(
+            interaction.registration,
+            "allow",
+            LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+            [],
+            FutureAttention.PERMISSION_PATTERN,
+          ),
+        )
+        const output = JSON.parse(exact.output)
+        if (!output.settlement.claim?.groupID) return yield* Effect.die("Expected a pending startup claim")
+        return {
+          interaction,
+          exact,
+          groupID: output.settlement.claim.groupID as FutureAttention.ClaimGroupID,
+        }
+      })
+
+    const completed = yield* admitClaim(
+      "future-attention-startup-completed",
+      completedConcern.concern.id,
+      base + 10_000,
+    )
+    const uncommitted = yield* admitClaim(
+      "future-attention-startup-uncommitted",
+      uncommittedConcern.concern.id,
+      base + 20_000,
+    )
+    const completedAt = base + 15_000
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* TurnLifecycle.settleTool(tx, {
+          turnID: completed.interaction.turnID,
+          partID: completed.interaction.registration.partID,
+          state: "completed",
+          time: completedAt - 1,
+        })
+        yield* tx
+          .insert(PartTable)
+          .values({
+            id: SessionV1.PartID.ascending("prt_future_attention_startup_explanation"),
+            session_id: completed.interaction.sessionID,
+            message_id: completed.interaction.registration.assistantMessageID,
+            data: {
+              type: "text",
+              text: "The committed startup presentation supplies the complete retained explanation.",
+              time: { start: base + 10_001, end: completedAt },
+            } as (typeof PartTable.$inferInsert)["data"],
+            time_created: completedAt,
+            time_updated: completedAt,
+          })
+          .run()
+        yield* tx
+          .update(MessageTable)
+          .set({
+            data: {
+              ...assistantData(completed.interaction.userMessageID, base + 10_000),
+              time: { created: base + 10_000, completed: completedAt },
+            },
+            time_updated: completedAt,
+          })
+          .where(eq(MessageTable.id, completed.interaction.registration.assistantMessageID))
+          .run()
+      }),
+    )
+    const completedPartBeforeRecovery = yield* exactPartResult(
+      db,
+      completed.interaction.registration.partID,
+    )
+    const uncommittedPartBeforeRecovery = yield* exactPartResult(
+      db,
+      uncommitted.interaction.registration.partID,
+    )
+
+    const recovered = yield* recoverStartup(events, base + 30_000)
+    expect(recovered.map((turn) => turn.id)).toEqual([
+      completed.interaction.turnID,
+      uncommitted.interaction.turnID,
+    ])
+    const completedGroup = yield* db.transaction((tx) =>
+      FutureAttention.read(tx, { type: "claim_group", groupID: completed.groupID }, { now: base + 30_001 }),
+    )
+    const uncommittedGroup = yield* db.transaction((tx) =>
+      FutureAttention.read(tx, { type: "claim_group", groupID: uncommitted.groupID }, { now: base + 30_001 }),
+    )
+    expect(completedGroup.items[0]).toMatchObject({
+      receipt: {
+        outcome: "served",
+        completion: { observationCut: "startup_reconciled" },
+        members: [{ concernID: completedConcern.concern.id, outcome: "served" }],
+      },
+    })
+    expect(uncommittedGroup.items[0]).toMatchObject({
+      receipt: {
+        outcome: "not_served",
+        completion: { observationCut: "startup_reconciled", presentationCommitted: false },
+        members: [
+          {
+            concernID: uncommittedConcern.concern.id,
+            outcome: "not_served",
+            reason: "presentation_uncommitted",
+          },
+        ],
+      },
+    })
+    expect(yield* exactPartResult(db, completed.interaction.registration.partID)).toEqual(completedPartBeforeRecovery)
+    expect(yield* exactPartResult(db, uncommitted.interaction.registration.partID)).toEqual(
+      uncommittedPartBeforeRecovery,
+    )
+    expect(yield* recoverStartup(events, base + 31_000)).toEqual([])
+  }),
+)
+
+it.effect("enforces delegated FutureAttention membership and root-only semantic arms", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const courses = yield* Course.Service
+    const seeded = yield* seedCourse(courses, "Delegated FutureAttention", "Main")
+    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id)).items[0]
+    if (!item) return yield* Effect.die("Delegated FutureAttention fixture has no target item")
+    const selection = yield* courses.select({
+      courseID: seeded.course.id,
+      revisionID: seeded.view.revision.id,
+      expectedCourseVersion: 0,
+      expectedSelectionVersion: 0,
+      expectedViewVersion: 0,
+      expectedRevisionVersion: 0,
+    })
+    const target = {
+      endpoint: {
+        courseID: seeded.course.id,
+        viewID: seeded.view.view.id,
+        revisionID: seeded.view.revision.id,
+        itemID: item.itemID,
+      },
+      selection: {
+        type: "observed_working" as const,
+        revisionID: seeded.view.revision.id,
+        version: selection.version,
+      },
+    }
+    const concern = (purpose: string, source: FutureAttention.CreationSourceIntent = { type: "tutor_initiated" }) => ({
+      purpose,
+      source,
+      target,
+      notBefore: {
+        sourceExpression: "during a later lesson",
+        localDateTime: "2036-08-07T10:00:00",
+        timeZone: { type: "fixed_offset" as const, offsetMinutes: 0 },
+      },
+      serviceTiming: "after_creation" as const,
+    })
+    const capability = (allow: boolean) => ({
+      version: 2,
+      parent: [],
+      inherited: [],
+      profile: [],
+      explicit: allow
+        ? [
+            {
+              permission: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+              pattern: FutureAttention.PERMISSION_PATTERN,
+              action: "allow",
+            },
+          ]
+        : [],
+    })
+    const execute = (
+      suffix: string,
+      input: Record<string, unknown>,
+      delegatedCapability: ReturnType<typeof capability>,
+    ) =>
+      Effect.gen(function* () {
+        const delegated = yield* seedDelegatedLearningCommandInteraction(
+          db,
+          suffix,
+          input,
+          delegatedCapability,
+          LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+        )
+        yield* runtime.prepareCommand(
+          LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+          input,
+          delegated.registration,
+        )
+        const exact = yield* runtime.executeCommand(
+          LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+          input,
+          context(
+            delegated.registration,
+            "allow",
+            LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+            [],
+            FutureAttention.PERMISSION_PATTERN,
+          ),
+        )
+        return { delegated, exact, output: JSON.parse(exact.output) }
+      })
+
+    const createdPurpose = "Correct this Tutor-authored follow-up if its retained meaning proves wrong"
+    const servicePurpose = "Keep this second concern open unless a root Agent binds a complete source"
+    const createInput = {
+      operations: [
+        { type: "create" as const, concern: concern(createdPurpose) },
+        { type: "create" as const, concern: concern(servicePurpose) },
+      ],
+    }
+    const created = yield* execute("future-attention-delegated-create", createInput, capability(true))
+    expect(created.output).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "policy_allow",
+      agentAction: {
+        kind: "delegated",
+        occurrenceID: created.delegated.registration.causalOccurrenceID,
+        lineage: [{ delegatedCapability: capability(true) }],
+      },
+      settlement: {
+        outcome: "applied",
+        changes: [
+          { operation: "create", disposition: "open" },
+          { operation: "create", disposition: "open" },
+        ],
+      },
+    })
+    const initial = yield* db.transaction((tx) =>
+      FutureAttention.read(tx, { type: "list" }, { now: Date.now(), limit: 64 }),
+    )
+    const corrected = initial.items.find(
+      (value) => "concern" in value && value.concern.payload.purpose === createdPurpose,
+    )
+    const service = initial.items.find(
+      (value) => "concern" in value && value.concern.payload.purpose === servicePurpose,
+    )
+    if (!corrected || !("concern" in corrected) || !service || !("concern" in service)) {
+      return yield* Effect.die("Delegated FutureAttention creation did not retain both exact concerns")
+    }
+
+    const correctionInput = {
+      operations: [
+        {
+          type: "dismiss" as const,
+          concernID: corrected.concern.id,
+          expectedVersion: corrected.concern.current.version,
+          mutation: {
+            type: "agent_correction" as const,
+            rationale: "The Tutor found that its own retained follow-up was based on the wrong premise.",
+            ownerRead: {
+              concernID: corrected.concern.id,
+              expectedVersion: corrected.concern.current.version,
+              headTransitionID: corrected.concern.current.id,
+              cutFingerprint: corrected.ownerCut.fingerprint,
+            },
+          },
+        },
+      ],
+    }
+    const correctedResult = yield* execute(
+      "future-attention-delegated-agent-correction",
+      correctionInput,
+      capability(true),
+    )
+    expect(correctedResult.output).toMatchObject({
+      disposition: "candidate_v1",
+      agentAction: { kind: "delegated" },
+      settlement: { outcome: "applied", changes: [{ operation: "dismiss", disposition: "dismissed" }] },
+    })
+    expect(
+      permissionRequests.filter(
+        (request) => request.permission === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      ).at(-1),
+    ).toMatchObject({
+      metadata: {
+        issuance: "delegated",
+        scope: { operationCount: 1, sourceRelations: ["agent_correction"] },
+      },
+    })
+
+    const deniedRequests = permissionRequests.length
+    const directionSuffix = "future-attention-delegated-learner-direction"
+    const directionSource = `Delegate ${directionSuffix}`
+    const directionInput = {
+      operations: [
+        {
+          type: "reopen" as const,
+          concernID: corrected.concern.id,
+          expectedVersion: 1,
+          mutation: {
+            type: "interpreted_learner_direction" as const,
+            excerpt: { text: directionSource, startByte: 0, endByte: new TextEncoder().encode(directionSource).byteLength },
+          },
+        },
+      ],
+    }
+    const direction = yield* execute(directionSuffix, directionInput, capability(true))
+    expect(direction.output).toMatchObject({
+      disposition: "physical_no_effect",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+
+    const serviceInput = {
+      operations: [
+        {
+          type: "serve" as const,
+          concernID: service.concern.id,
+          expectedVersion: 0,
+          service: {
+            source: { type: "current_assistant_when_complete" as const },
+            rationale: "A delegated child must not bind its own presentation as learner-visible service.",
+          },
+        },
+      ],
+    }
+    const deniedService = yield* execute("future-attention-delegated-service", serviceInput, capability(true))
+    expect(deniedService.output).toMatchObject({
+      disposition: "physical_no_effect",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+
+    const requestSuffix = "future-attention-delegated-learner-request"
+    const requestSource = `Delegate ${requestSuffix}`
+    const learnerRequestInput = {
+      operations: [
+        {
+          type: "create" as const,
+          concern: concern("Do not attribute this delegated interpretation to the learner", {
+            type: "interpreted_learner_request",
+            excerpt: {
+              text: requestSource,
+              startByte: 0,
+              endByte: new TextEncoder().encode(requestSource).byteLength,
+            },
+          }),
+        },
+      ],
+    }
+    const deniedRequest = yield* execute(requestSuffix, learnerRequestInput, capability(true))
+    expect(deniedRequest.output).toMatchObject({
+      disposition: "physical_no_effect",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+
+    const missingMembershipInput = {
+      operations: [{ type: "create" as const, concern: concern("Do not write without exact delegated membership") }],
+    }
+    const missingMembership = yield* execute(
+      "future-attention-delegated-missing-membership",
+      missingMembershipInput,
+      capability(false),
+    )
+    expect(missingMembership.output).toMatchObject({
+      disposition: "physical_no_effect",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+    expect(permissionRequests).toHaveLength(deniedRequests)
+
+    const final = yield* db.transaction((tx) =>
+      FutureAttention.read(tx, { type: "list" }, { now: Date.now(), limit: 64 }),
+    )
+    expect(final.items).toHaveLength(2)
+    expect(
+      final.items.find((value) => "concern" in value && value.concern.id === corrected.concern.id),
+    ).toMatchObject({ concern: { current: { disposition: "dismissed", version: 1 } } })
+    expect(final.items.find((value) => "concern" in value && value.concern.id === service.concern.id)).toMatchObject({
+      concern: { current: { disposition: "open", version: 0 } },
+    })
+  }),
+)
 
 it.effect("applies one Agent-native learner Goal change without a Goal-specific confirmation", () =>
   Effect.gen(function* () {

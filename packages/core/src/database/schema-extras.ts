@@ -1,3 +1,3 @@
 export * as DatabaseSchemaExtras from "./schema-extras"
 
-export { install, triggerNames, triggerStatements, viewStatements } from "./schema-extras-v19"
+export { install, triggerNames, triggerStatements, viewStatements } from "./schema-extras-v20"

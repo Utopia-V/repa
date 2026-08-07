@@ -3,6 +3,7 @@ export * as SemanticPresentation from "./semantic-presentation"
 import { SemanticPresentationV1 } from "@opencode-ai/schema/semantic-presentation-v1"
 import { Option, Schema } from "effect"
 import { LearningBootstrap } from "./learning-bootstrap"
+import { FutureAttention } from "./future-attention"
 import { LearnerResponseEvidence } from "./learner-response-evidence"
 import { PermissionV1 } from "./v1/permission"
 
@@ -23,6 +24,7 @@ const consequentialPermissionCapabilities = new Set([
   "update_learner_goals",
   "update_learning_course",
   "update_learner_response_evidence",
+  "update_future_attention",
 ])
 
 const consequentialResultTools = new Set([
@@ -35,6 +37,7 @@ const consequentialResultTools = new Set([
   "update_learner_goals",
   "update_learning_course",
   "update_learner_response_evidence",
+  "update_future_attention",
 ])
 
 export type Fact = Readonly<{ label: string; value: string }>
@@ -76,6 +79,10 @@ type LearningBootstrapScope = Extract<
 type LearnerResponseEvidenceScope = Extract<
   SemanticPresentationV1.ProposalBasis,
   { readonly kind: "learner_response_evidence_capability" }
+>["scope"]
+type FutureAttentionScope = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "future_attention_capability" }
 >["scope"]
 
 export type ProposalProjection = Readonly<{
@@ -447,6 +454,30 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       },
     })
   }
+  if (basis.kind === "future_attention_capability") {
+    const command = canonicalFutureAttentionCommand(basis.scope)
+    if (
+      !command ||
+      !same(command, basis.scope.command) ||
+      !same(futureAttentionScope(command), basis.scope) ||
+      FutureAttention.commandFingerprint(command) !== basis.commandFingerprint
+    ) {
+      return undefined
+    }
+    return expected(value, {
+      capability: FutureAttention.UPDATE_CAPABILITY,
+      patterns: [FutureAttention.PERMISSION_PATTERN],
+      always: [FutureAttention.PERMISSION_PATTERN],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        futureAttentionKind: "change_set",
+        commandFingerprint: basis.commandFingerprint,
+        issuance: basis.issuance,
+        scope: basis.scope,
+      },
+    })
+  }
   if (basis.kind === "course_route_anchor") {
     if (
       (basis.target === null && basis.locator !== undefined) ||
@@ -571,6 +602,56 @@ function canonicalLearnerResponseEvidenceCommand(scope: LearnerResponseEvidenceS
     )
   } catch {
     return undefined
+  }
+}
+
+function canonicalFutureAttentionCommand(scope: FutureAttentionScope) {
+  try {
+    if (
+      !isRecord(scope.command) ||
+      scope.command.schemaVersion !== 1 ||
+      !Array.isArray(scope.command.operations) ||
+      Object.keys(scope.command).sort().join(",") !== "operations,schemaVersion"
+    ) {
+      return undefined
+    }
+    const command = FutureAttention.canonicalizeCommand({
+      operations: scope.command.operations as FutureAttention.Operation[],
+    })
+    return same(command, scope.command) ? command : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function futureAttentionScope(command: FutureAttention.CanonicalChangeSet) {
+  const sourceRelations = [
+    ...command.operations.flatMap((operation) =>
+      operation.type === "create"
+        ? [operation.concern.source.type]
+        : operation.type === "replace"
+          ? [
+              operation.mutation.type,
+              ...(operation.successorSource.type === "rebind_current_source"
+                ? [operation.successorSource.source.type]
+                : []),
+            ]
+          : operation.type === "dismiss" || operation.type === "reopen"
+            ? [operation.mutation.type]
+            : [],
+    ),
+  ].filter((value, index, values) => values.indexOf(value) === index)
+  return {
+    command: structuredClone(command),
+    operationCount: command.operations.length,
+    completionClaimCount: command.operations.filter(
+      (operation) =>
+        (operation.type === "serve" && operation.service.source.type === "current_assistant_when_complete") ||
+        (operation.type === "replace" &&
+          operation.successorDisposition.type === "serve_current_assistant_when_complete"),
+    ).length,
+    sourceRelations,
+    nonImplications: ["task", "reminder", "priority", "mastery", "required_next_action"],
   }
 }
 
@@ -818,6 +899,26 @@ function projectProposal(
         ),
         fact("Expected View version", basis.expectedViewVersion),
         fact("Expected Revision version", basis.expectedRevisionVersion),
+      ],
+    )
+  }
+  if (basis.kind === "future_attention_capability") {
+    const command = canonicalFutureAttentionCommand(basis.scope)
+    return proposalProjection(
+      basis,
+      approval,
+      FutureAttention.UPDATE_CAPABILITY,
+      "Update future attention",
+      "This configured capability approval is bound to one exact learner occurrence and one atomic, source-linked change set. Open-language relations remain fallible Agent interpretations; current-Assistant service remains pending until this exact presentation finalizes.",
+      [
+        fact("Issuance", basis.issuance),
+        fact("Operations", basis.scope.operationCount),
+        fact("Completion-conditioned claims", basis.scope.completionClaimCount),
+        fact("Source relations", basis.scope.sourceRelations.join(", ") || "none"),
+        ...(command?.operations.map((operation, index) =>
+          fact(`Future-attention change ${index + 1}`, futureAttentionOperationText(operation)),
+        ) ?? []),
+        fact("Does not imply", basis.scope.nonImplications.join(", ")),
       ],
     )
   }
@@ -1793,6 +1894,70 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       ],
     )
   }
+  if (basis.kind === "future_attention_result") {
+    const semanticTerminal = basis.disposition === "semantic_terminal_v1"
+    const candidate = basis.disposition === "candidate_v1"
+    const projected = settlement.outcome !== "error"
+    if (
+      semanticTerminal !== (basis.semanticOutcome !== undefined) ||
+      candidate !== (basis.issuance !== undefined) ||
+      candidate !== (basis.capabilityOutcome !== undefined) ||
+      (!candidate && basis.permissionRequestID !== undefined) ||
+      projected !== (basis.effect !== undefined) ||
+      (settlement.outcome === "no_change" && basis.effect?.effectID !== undefined) ||
+      ((settlement.outcome === "applied" || settlement.outcome === "already_applied") &&
+        basis.effect?.effectID === undefined) ||
+      (semanticTerminal &&
+        (basis.semanticOutcome === "already_applied"
+          ? settlement.outcome !== "already_applied"
+          : settlement.outcome !== "error" || settlement.code !== "semantic_conflict")) ||
+      (basis.effect?.claim?.currentClaimState === "pending" &&
+        basis.effect.claim.finalizationReceiptID !== undefined) ||
+      (basis.effect?.claim?.currentClaimState !== undefined &&
+        basis.effect.claim.currentClaimState !== "pending" &&
+        basis.effect.claim.finalizationReceiptID === undefined)
+    ) {
+      return undefined
+    }
+    return resultProjection(
+      basis,
+      FutureAttention.UPDATE_CAPABILITY,
+      "Future-attention settlement",
+      resultSummary("Future attention", outcome),
+      [
+        ...failure,
+        fact("Disposition", basis.disposition),
+        ...(basis.issuance ? [fact("Issuance", basis.issuance)] : []),
+        ...(basis.capabilityOutcome ? [fact("Capability", basis.capabilityOutcome)] : []),
+        ...(basis.permissionRequestID ? [fact("Permission request", basis.permissionRequestID)] : []),
+        ...(basis.effect
+          ? [
+              ...basis.effect.changes.map((change, index) =>
+                fact(
+                  `Future-attention result ${index + 1}`,
+                  change.operation === "replace"
+                    ? `replacement ${change.outcome}; predecessor ${change.disposition}; corrected concern ${change.successorDisposition}; version ${change.successorVersion}`
+                    : `${change.operation} ${change.outcome}; ${change.disposition}; version ${change.version}`,
+                ),
+              ),
+              ...(basis.effect.claim
+                ? [
+                    fact("Claim at this physical settlement", basis.effect.claim.claimStateAtAdmission),
+                    fact("Current claim observation", basis.effect.claim.currentClaimState),
+                    ...(basis.effect.claim.finalizationReceiptID
+                      ? [fact("Finalization", "append-only receipt recorded")]
+                      : []),
+                  ]
+                : []),
+              fact(
+                "Observation rule",
+                "Exact physical replay preserves this settlement cut; later current truth is a separate receipt/event, owner read, or new physical duplicate.",
+              ),
+            ]
+          : []),
+      ],
+    )
+  }
   if (settlement.outcome !== "applied") return undefined
   return resultProjection(
     basis,
@@ -1826,6 +1991,21 @@ function learningBootstrapChildText(child: LearningBootstrapChild) {
     return `${child.outcome}: ${child.detail}; ${learningBootstrapMaterialText(child.materialTarget)}${identity}`
   }
   return `${child.outcome}: ${child.detail}${identity}`
+}
+
+function futureAttentionOperationText(operation: FutureAttention.Operation) {
+  if (operation.type === "create") {
+    const target = operation.concern.target.endpoint
+    return `create \"${operation.concern.purpose}\"; ${operation.concern.source.type}; target ${target.courseID}/${target.viewID}/${target.revisionID}/${target.itemID}; not before ${operation.concern.notBefore.sourceExpression}; service ${operation.concern.serviceTiming}`
+  }
+  if (operation.type === "replace") {
+    const target = operation.concern.target.endpoint
+    return `replace selected concern at version ${operation.expectedVersion}; ${operation.mutation.type}; successor ${operation.successorDisposition.type}; purpose \"${operation.concern.purpose}\"; target ${target.courseID}/${target.viewID}/${target.revisionID}/${target.itemID}; not before ${operation.concern.notBefore.sourceExpression}`
+  }
+  if (operation.type === "serve") {
+    return `serve selected concern at version ${operation.expectedVersion} from ${operation.service.source.type}; rationale \"${operation.service.rationale}\"`
+  }
+  return `${operation.type} selected concern at version ${operation.expectedVersion}; ${operation.mutation.type}`
 }
 
 function learningBootstrapMaterialText(target: LearningBootstrapMaterialTarget) {

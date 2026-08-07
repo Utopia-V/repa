@@ -5,11 +5,14 @@ import type { MessageID } from "../v1/session"
 
 export const SCHEMA_VERSION = 1 as const
 export const LEGACY_POLICY_VERSION = 1 as const
-export const POLICY_VERSION = 2 as const
+export const GATE19_POLICY_VERSION = 2 as const
+export const POLICY_VERSION = 3 as const
 export const LEGACY_RENDERER_VERSION = 1 as const
-export const RENDERER_VERSION = 2 as const
+export const GATE19_RENDERER_VERSION = 2 as const
+export const RENDERER_VERSION = 3 as const
 export const LEGACY_CAPABILITY_CATALOG_VERSION = 1 as const
-export const CAPABILITY_CATALOG_VERSION = 2 as const
+export const GATE19_CAPABILITY_CATALOG_VERSION = 2 as const
+export const CAPABILITY_CATALOG_VERSION = 3 as const
 
 export const MAX_CANONICAL_BYTES = 32_768
 export const MAX_RENDERED_BYTES = 16_384
@@ -28,10 +31,11 @@ export const LEGACY_LAZY_READ_CAPABILITY_IDS = [
   "learning_material_read",
   "learning_interaction_read",
 ] as const
-export const LAZY_READ_CAPABILITY_IDS = [
+export const GATE19_LAZY_READ_CAPABILITY_IDS = [
   ...LEGACY_LAZY_READ_CAPABILITY_IDS,
   "learner_response_evidence_read",
 ] as const
+export const LAZY_READ_CAPABILITY_IDS = [...GATE19_LAZY_READ_CAPABILITY_IDS, "future_attention_read"] as const
 
 export type LazyReadCapabilityID = (typeof LAZY_READ_CAPABILITY_IDS)[number]
 
@@ -161,6 +165,7 @@ export type Entry = Readonly<{
     | "material"
     | "interaction"
     | "learner_response_evidence"
+    | "future_attention"
   locator: Readonly<Record<string, JsonValue>>
   semantic?: BoundedValue
 }>
@@ -173,6 +178,7 @@ export type Section = Readonly<{
     | "material"
     | "interaction"
     | "learner_response_evidence"
+    | "future_attention"
   scope: string
   selectionBasis: string
   coverage: Coverage
@@ -209,8 +215,8 @@ export type Operation = Readonly<{
 
 export type Cut = Readonly<{
   schemaVersion: typeof SCHEMA_VERSION
-  policyVersion: typeof LEGACY_POLICY_VERSION | typeof POLICY_VERSION
-  rendererVersion: typeof LEGACY_RENDERER_VERSION | typeof RENDERER_VERSION
+  policyVersion: typeof LEGACY_POLICY_VERSION | typeof GATE19_POLICY_VERSION | typeof POLICY_VERSION
+  rendererVersion: typeof LEGACY_RENDERER_VERSION | typeof GATE19_RENDERER_VERSION | typeof RENDERER_VERSION
   operation: Operation
   cutAsOf: number
   throughSharedFrontier: LearningFrontier.Snapshot

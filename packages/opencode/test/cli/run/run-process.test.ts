@@ -4,9 +4,109 @@
 // `opencode.run(message, opts?)` to spawn `bun src/index.ts run ...` with
 // `REPA_CONFIG_CONTENT` providing the test provider config inline.
 import { describe, expect } from "bun:test"
+import { Database } from "bun:sqlite"
+import { EventV2 } from "@opencode-ai/core/event"
+import { FutureAttentionEvent } from "@opencode-ai/schema/future-attention-event"
+import { LearningOccurrence } from "@opencode-ai/schema/learning-occurrence"
+import { Turn } from "@opencode-ai/schema/turn"
 import { Effect } from "effect"
+import path from "node:path"
+import { MessageID, PartID } from "../../../src/session/schema"
 import { reply } from "../../lib/llm-server"
 import { cliIt } from "../../lib/cli-process"
+
+function detachedFutureAttentionFinalization(sessionID: string, marker: number) {
+  const suffix = marker.toString(36).padStart(26, "0")
+  const turnID = Turn.ID.create()
+  const assistantMessageID = MessageID.ascending()
+  const invocationPartID = PartID.ascending()
+  return {
+    sessionID,
+    turnID,
+    assistantMessageID,
+    invocationPartID,
+    groupID: `fag_${suffix}`,
+    receipt: {
+      id: `far_${suffix}`,
+      groupID: `fag_${suffix}`,
+      outcome: "served",
+      completion: {
+        observationCut: "live_presentation_finalized",
+        sessionID,
+        turnID,
+        occurrenceID: LearningOccurrence.ID.create(),
+        assistantMessageID,
+        modelOperationID: assistantMessageID,
+        invocationPartID,
+        modelOutcome: "completed",
+        localToolPartsTerminal: true,
+        presentationCommitted: true,
+        presentationUnavailable: false,
+        timeCompleted: marker + 1,
+        completionOrder: marker + 1,
+        partManifestFingerprint: "a".repeat(64),
+        eligibleOutputFingerprint: "b".repeat(64),
+        eligibleOutputBytes: 32,
+      },
+      members: [
+        {
+          ordinal: 0,
+          concernID: `fac_${suffix}`,
+          outcome: "served",
+          transitionID: `fat_${suffix}`,
+          serviceReceiptID: `fas_${suffix}`,
+        },
+      ],
+      timeFinalized: marker + 2,
+      finalizationOrder: marker + 2,
+    },
+  }
+}
+
+// Non-interactive attach catch-up intentionally begins from durable history
+// committed while no carrier was attached, so this fixture writes only that
+// detached EventV2 projection into the isolated subprocess database.
+function insertDetachedFutureAttentionFinalizations(databasePath: string, sessionID: string) {
+  const database = new Database(databasePath)
+  const session = database.query("SELECT id, directory FROM session WHERE id = ?").get(sessionID) as
+    | { id: string; directory: string }
+    | undefined
+  if (!session) {
+    database.close()
+    throw new Error(`Missing retained Session ${sessionID}`)
+  }
+  const current = database.query("SELECT seq FROM event_sequence WHERE aggregate_id = ?").get(sessionID) as
+    | { seq: number }
+    | undefined
+  if (!current) {
+    database.close()
+    throw new Error(`Missing event sequence for ${sessionID}`)
+  }
+  const unique = Array.from({ length: 101 }, (_, index) => detachedFutureAttentionFinalization(sessionID, index + 1))
+  const finalizations = [...unique, unique[0]!]
+  const insert = database.prepare(
+    "INSERT INTO event (id, aggregate_id, seq, type, data) VALUES (?, ?, ?, ?, ?)",
+  )
+  const update = database.prepare("UPDATE event_sequence SET seq = ? WHERE aggregate_id = ?")
+  const append = database.transaction(() => {
+    finalizations.forEach((properties, index) =>
+      insert.run(
+        EventV2.ID.create(),
+        sessionID,
+        current.seq + index + 1,
+        EventV2.versionedType(FutureAttentionEvent.Finalized.type, 1),
+        JSON.stringify(properties),
+      ),
+    )
+    update.run(current.seq + finalizations.length, sessionID)
+  })
+  append()
+  database.close()
+  return {
+    directory: session.directory,
+    receiptIDs: unique.map((properties) => properties.receipt.id),
+  }
+}
 
 describe("opencode run (non-interactive subprocess)", () => {
   cliIt.concurrent(
@@ -156,6 +256,44 @@ describe("opencode run (non-interactive subprocess)", () => {
         ).toBe(true)
       }),
     60_000,
+  )
+
+  cliIt.live(
+    "catches up detached FutureAttention finalizations before a new non-interactive Turn",
+    ({ home, llm, opencode }) =>
+      Effect.gen(function* () {
+        yield* llm.text("seed the retained session")
+        const seeded = yield* opencode.run("create a retained session", { format: "json" })
+        opencode.expectExit(seeded, 0)
+        const sessionID = String(opencode.parseJsonEvents(seeded.stdout)[0]?.sessionID)
+
+        const retained = insertDetachedFutureAttentionFinalizations(path.join(home, "repa.db"), sessionID)
+
+        yield* llm.text("continue after durable catch-up")
+        const result = yield* opencode.run("continue the retained session", {
+          format: "json",
+          timeoutMs: 60_000,
+          extraArgs: ["--dir", retained.directory, "--session", sessionID],
+        })
+        opencode.expectExit(result, 0)
+
+        const events = opencode.parseJsonEvents(result.stdout)
+        const finalizations = events.filter((event) => event.type === "future_attention_finalized")
+        expect(finalizations).toHaveLength(101)
+        expect(finalizations.map((event) => event.finalization)).toEqual(
+          expect.arrayContaining(
+            retained.receiptIDs.map((receiptID) =>
+              expect.objectContaining({ receipt: expect.objectContaining({ id: receiptID }) }),
+            ),
+          ),
+        )
+        expect(new Set(finalizations.map((event) => JSON.stringify(event.finalization))).size).toBe(101)
+        expect(events.findIndex((event) => event.type === "step_start")).toBeGreaterThan(
+          events.findLastIndex((event) => event.type === "future_attention_finalized"),
+        )
+        expect(events.some((event) => event.type === "tool_use")).toBe(false)
+      }),
+    120_000,
   )
 
   cliIt.concurrent(

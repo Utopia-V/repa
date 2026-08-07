@@ -2681,6 +2681,417 @@ content changed after reviewer acceptance, and no release, Gate 20+, production
 move-selection, representative-model-quality, or educational-efficacy claim
 follows.
 
+## 2026-08-06 Gate 20 opening and contract/theory candidate
+
+The maintainer authorized the complete Gate 20 horizon against exact base
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144`, while withholding commit, push,
+release, credentialed provider, and later-Gate authority. The pre-existing
+maintainer-owned `AGENTS.md` modification is excluded. Review run
+`G20-WG-20260806-019fd69a-01` uses one fresh top-level reviewer for both the
+contract/theory and later implementation/evidence layers; implementation may
+begin only after that reviewer accepts the contract layer.
+
+The opening correction withdraws all proof claims based on historical
+ALS-021/022 aggregate results. Tracked prompt-injection code, a runner, and
+shallow mechanical checks remain reachable, but the raw `.runs` behind the
+published aggregates are absent from the current repository and immutable
+oracle tag. Those documents remain unqualified design provenance. The current
+[Gate 20 contract candidate](research/repa-gate-20-source-linked-future-attention-2026-08-06.md)
+instead derives target, time, authorship, change-set identity, lifecycle,
+conditional/multiple composition, truthful service, and evidence from accepted
+owners, first-principles counterexamples, and current-fork qualification.
+
+Retained reviewer task `019fd773-84c3-7841-9fc5-45f1b18d4a9f` returned first-pass
+`Revise` at the contract/theory layer with five acceptance-changing findings:
+
+- `G20-CR-001`: learner-occurrence-only service could not truthfully bind a
+  complete explanation or returned delegated result;
+- `G20-CR-002`: universal IANA/release provenance fabricated a zone for valid
+  fixed-offset instants;
+- `G20-CR-003`: exact excerpt binding did not assign fallible open-language
+  source-relation interpretation to the ordinary Agent;
+- `G20-CR-004`: replacement always reopened served/dismissed concerns and could
+  invent future pressure during record correction; and
+- `G20-CR-005`: a 2,048-byte purpose could not fit Gate 18's 2,048-byte
+  canonical semantic-entry ceiling with the other mandatory meaning.
+
+The production checkout remained unchanged by that reviewer, exact base/HEAD
+and `origin/main` remained `3317525aeb242dfcf3cec49c0dd627cd38ee8144`, and
+the disclosed maintainer-owned `AGENTS.md` modification remained excluded.
+
+The executor repaired those five findings with a closed purpose-appropriate
+complete Interaction source union and root-only completion-conditioned
+Assistant finalization; Goal-compatible tagged fixed-offset versus IANA/release
+provenance; Agent-authored semantic source relations separated from runtime-
+proven source/identity/permission facts; explicit successor arms including
+served/dismissed terminal carry; and a 768-byte purpose within Gate 18's
+2,048-byte semantic-entry ceiling plus maximum-value and comparative-cost
+oracles.
+
+On the first closure pass, the same reviewer closed `G20-CR-001..005` and
+returned `Revise` with two new acceptance-changing findings:
+
+- `G20-CR-006`: Tutor-initiated creation remained uncorrectable without falsely
+  presenting a generic current learner occurrence as learner direction; and
+- `G20-CR-007`: one input could not truthfully replace open A with B and bind
+  the completed current Assistant explanation to the generated B successor.
+
+The reviewer made no candidate, production, index, history, or external-system
+mutation. `HEAD` and `origin/main` remained
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144`. The excluded maintainer-owned
+`AGENTS.md` hash had changed before the closure pass began but remained stable
+during that pass and did not affect the verdict.
+
+The executor repaired those findings with `agent_correction`: an authorized
+root or capability-bounded delegated Agent may replace, dismiss, or reopen its
+earlier fallible durable interpretation without borrowing learner assent, while
+learner direction and service remain root-only. Root-only nested
+`serve_complete_source` and `serve_current_assistant_when_complete` replacement
+arms let one atomic admission supersede A and create B without exposing its
+generated ID; an already-complete source may serve B immediately under strict
+chronology, while failed Assistant completion leaves B open.
+
+On the second closure pass, the same reviewer kept `G20-CR-001..005` closed,
+closed `G20-CR-006..007`, and returned `Revise` with one new
+acceptance-changing finding:
+
+- `G20-CR-008`: the candidate required exact replay of the original physical
+  invocation to refresh its pending claim into the later current
+  `served | not_served` state, contradicting Gate 8's immutable stored-result,
+  no-domain-read replay boundary and the current LearningCommand substrate.
+
+The reviewer made no repository, index, history, or external-system mutation.
+`HEAD` and `origin/main` remained
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144`, the index remained empty, all target
+and dependency hashes/status entries remained stable, and the excluded
+maintainer-owned `AGENTS.md` remained at SHA-256
+`540417b5b646a3232452004482237166d79a418e790de7ff363f088b15bb5421`.
+
+The third closure pass closed `G20-CR-008` and returned `Accept` for the then-
+current contract/theory candidate. The reviewer independently confirmed that
+the phase-one Gate 8 physical settlement and completed Tool Part remain exact,
+while the unique append-only FutureAttention finalization receipt/event owns
+later truth. Exact physical replay remains byte-identical and performs no
+domain read; a bounded owner read or physically new semantic duplicate exposes
+current state. `G20-CR-001..007` remained closed and no new finding was reported
+in that reviewed candidate. The reviewer made no repository, index, history, or
+external-system mutation; `HEAD` and `origin/main` remained
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144`, the index remained empty, and all
+frozen target/dependency hashes and status entries matched its dispatch
+baseline.
+
+Before production implementation began, read-only current-fork mapping exposed
+a distinct released-v1 execution identity that the accepted wording had not
+made explicit. `SessionPrompt` creates a new Assistant message for each provider
+loop; the Assistant A1 that owns the local claim tool call is settled together
+with its tools and committed as one durable presentation, while continuation
+after `tool-calls` may create a later Assistant A2. Returning the last Assistant
+from the Turn therefore cannot identify A1. This reopened the layer as
+`G20-CR-009`: binding A1's pending claim to A2 would record service against the
+wrong model operation, while excluding every byte streamed before A1's tool
+call would make an otherwise complete same-message explanation impossible to
+serve.
+
+The current repair binds a completion-conditioned claim only to the exact root
+Assistant message/model operation that owns its local tool call. Text Parts
+streamed before that call are not independently complete; they and any final
+Assistant-level structured output may contribute only after the whole same
+presentation, all local tools, all terminal Parts, and the final Assistant
+projection commit. Reasoning, tool results, patches, provider deltas, and later
+Assistant messages are excluded from its eligible output fingerprint. Live
+finalization occurs at that exact full-presentation cut and before another
+interactive model admission; startup finalization follows Turn recovery. If A1
+has no eligible output, its claim finalizes `not_served`; A2 cannot silently
+substitute.
+
+The closed `G20-CR-009` repair preserves the phase-one Gate 8 physical
+settlement and completed Tool Part exactly. It records only that the admission
+committed and observed the new claim pending at that immutable cut. Later
+`served | not_served` truth belongs to a unique append-only FutureAttention
+finalization receipt/event; current observation comes through that event,
+`future_attention_read`, or a physically new `already_applied` semantic
+duplicate. Recovery finalizes pending domain groups without reopening or
+rewriting terminal physical invocations, and retained carriers present the
+historical admission separately from the later finalization/current projection.
+Roadmap and status projections carry the same boundary.
+
+The fourth closure pass closed `G20-CR-009` but opened `G20-CR-010`. The reviewer
+confirmed that every later released-v1 Assistant/model operation under the same
+current Turn input copies the same runtime-bound learner occurrence. A1 has
+therefore already consumed its `occurrenceID` plus
+`future_attention_change_set` slot: a same-input A2 physical invocation that
+reproduces A1's full canonical payload is `already_applied`; an A2-bound source
+or other changed service/rebind intent is `semantic_conflict`; and the
+unique terminal group cannot be finalized or rebound again. The rejected
+fallback would require a fabricated occurrence, weaker identity, mutable group,
+or a new continuation/service-retry slot that the closed operation union does
+not define.
+
+The current repair removes that fallback instead of adding another identity.
+If A1 finalizes `not_served` and A2 first contains the explanation, A2 may answer
+the learner but cannot record service under the already-settled occurrence; the
+concern remains open. Only a genuinely new runtime-bound learner occurrence may
+issue another legal change set and serve through its own legal source. The
+negative A1/A2 trace now proves this terminal truth rather than promising
+no-new-message recovery. The reviewer made no candidate, production, index,
+history, or external-system mutation; `HEAD` and `origin/main` remained
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144`, the index remained empty, and all
+frozen target/dependency hashes and status entries matched.
+
+The fifth closure pass closed `G20-CR-010` and returned `Accept` for the complete
+contract/theory layer. The reviewer confirmed that a real learner steer is
+separately admitted as a learner occurrence and atomically becomes the current
+Turn input, while ordinary A2/A3 continuation retains the earlier occurrence.
+All owning projections contain no positive residual A2/no-new-message fallback;
+`G20-CR-001..009` remained closed and no new acceptance-changing finding was
+reported. The reviewer made no candidate, production, index, history,
+credentialed-provider, or external-system mutation. `HEAD` and `origin/main`
+remained `3317525aeb242dfcf3cec49c0dd627cd38ee8144`, the index remained empty,
+and all frozen target/dependency hashes and path entries matched.
+
+Gate 20 contract/theory is therefore accepted with `G20-CR-001..010` closed.
+The prior Whole-Gate authorization permits implementation/evidence to begin;
+reviewer task `019fd773-84c3-7841-9fc5-45f1b18d4a9f` remains reserved for that
+separate layer. No implementation/evidence acceptance, integration, commit,
+push, release, or Gate 21+ transition follows from this verdict.
+
+## Gate 20 implementation/evidence candidate — 2026-08-07
+
+The top-level executor implemented the accepted source-linked FutureAttention
+boundary against unchanged base
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144`. The candidate adds the native Core
+authority, tagged civil-time computation, V20 migration and generated schema,
+Learning Context v3 projection, strict OpenCode write/read tools, exact-
+Assistant completion finalizer and startup recovery, typed finalization event,
+semantic presentation, generated SDK projection, and TUI/direct-run/ACP
+carrier delivery. The implementation does not rename the todo tool, create a
+universal Agenda, add a continuation/service-retry occurrence, or treat
+historical ALS aggregates as current evidence.
+
+The production/test manifest contains all 52 modified or untracked
+`packages/**` files and no documentation or `AGENTS.md` path. Its 6,022-byte
+canonical manifest has SHA-256
+`3BB19A5103EBC5F5A4CB1ACEFEFE16933B3B2FF0661666A4E6C6D9851C73A026`.
+The exact manifest algorithm and causal evidence are recorded in
+[the Gate 20 implementation/evidence record](research/repa-gate-20-source-linked-future-attention-implementation-evidence-2026-08-07.md).
+
+Focused current-fork evidence includes 15/15 Core FutureAttention cases,
+12/12 Learning Context cases, 45/45 migration cases, all 54 enabled shared
+LearningCommand runtime cases with 13 pre-existing skips at a proportionate
+20-second timeout, two real released-v1 prompt traces, 86/86 registry/
+presentation/direct-run/ACP/recovery cases, 15/15 TUI sync cases, event-manifest
+checks, migration generation parity, SDK regeneration, and typechecks in Core,
+Schema, OpenCode, TUI, and SDK packages. The positive prompt trace additionally
+deletes the exact A1 service Session and proves that the concern remains served,
+the service receipt reports `source_deleted`, a body-free Turn tombstone
+remains, the Session row is gone, and the owner read contains no explanation
+body. The negative A1/A2 trace proves one shared occurrence/address,
+`not_served`, identical `already_applied`, changed `semantic_conflict`, one
+terminal group, and an open concern until a genuinely new learner occurrence.
+
+The retained reviewer returned `Revise` for this first implementation/evidence
+candidate with `G20-IR-001..011` open. The findings cover phase-one rollback,
+Gate 8 no-effect settlement, exact-target authority, learner-first lineage,
+complete Tool source eligibility, live interruption and deletion recovery,
+detached-carrier catch-up, stale-head presentation truth, temporal-expression
+consistency, and the maximum-valid bound oracle. Contract/theory remains
+accepted, no maintainer-owned blocker was exposed, and the recorded 52-file
+manifest and green checks are superseded as acceptance evidence while the
+top-level executor repairs the implementation.
+
+### 2026-08-07 Gate 20 executor repair-closure candidate
+
+The top-level executor accepted all eleven findings without reopening the
+accepted contract. `G20-IR-001..005` are addressed by nested transactional
+rollback for late domain validation, a receipt-free redundant-dismiss
+`no_change`, root-current-learner-only `explicit_exact`, same-root-lineage
+learner-first witnesses, and a program-owned
+`learner_usable | internal_control` Tool-source classification with non-empty
+complete output. `G20-IR-006..007` are addressed by an uninterruptible exact-A1
+finalizer installed as prompt-operation cleanup and exact unavailable
+model/tool/source tombstone observation after supported Session deletion.
+`G20-IR-008..009` are addressed by a paged durable finalization owner endpoint,
+history/live receipt-ID dedupe across TUI, direct interactive and
+noninteractive run, attach/local-server, and ACP load/resume, plus one shared
+truthful stale-head presenter. `G20-IR-010..011` are addressed by exact-offset
+source-expression consistency and a domain-admitted maximum-valid Context
+oracle using only safe integers and real source-unavailable projection.
+
+The repair also changes V20's new Turn constraints to additive columns plus
+versioned triggers rather than rebuilding referenced tables. Frozen V16/V17/
+V18/V19 upgrades and staged V13→V14→V15→V16 constructors converge on the
+current schema. The migration generator now invokes the pinned Drizzle CLI
+with an 8,192 KiB Node stack because the unmodified default stack overflows on
+the current generated schema; full generation and `--check` both complete.
+
+The final repair production/test manifest contains every modified or untracked
+`packages/**` path and excludes documentation and `AGENTS.md`. Its canonical
+form is the ordinally sorted UTF-8/no-BOM sequence
+`path<TAB>actual-byte-length<TAB>uppercase-SHA-256<LF>`, including the final LF.
+It contains **68 files / 7,942 bytes** and has SHA-256
+`4E2ED6F94F8D2DB602FCFD785BEA75578E3DA714F73627F6F7E160925EB6FC5D`.
+The accepted contract remains
+`0BE73ABB75D0957273FF5C5F986735491C1EEAF38072B9D7A82020073A318A7F`.
+
+Fresh causal evidence includes Core FutureAttention **20/20 with 183
+expectations**, Learning Context **12/12 with 40**, civil-time qualification
+**3/3 with 33**, and the complete migration suite **45/45 with 424**. Focused
+OpenCode evidence includes the three Gate 20 runtime cases (**28
+expectations**), exact-A1 success plus live-interruption prompt cases (**35**),
+the negative A1/A2 case (**14**), tool registration (**2/2, 7**), presentation/
+hook/manifest cases (**5/5, 32**), the real server/ACP/noninteractive process/
+direct-run/interactive-stream carrier group (**6/6, 29**), and ACP load/resume
+catch-up (**2/2, 7**). TUI two-page history/live dedupe passed **1/1**, Schema
+event manifest passed **2/2 with 28**, Core/Schema/OpenCode/TUI/SDK typechecks
+passed, generated client/SDK parity passed, and `git diff --check` reported no
+whitespace error.
+
+The maximum real semantic value is **1,877 bytes**, leaving **171 bytes** under
+Gate 18's 2,048-byte ceiling; without optional order it is 1,815 bytes. Measured
+whole cuts are zero **6,394/6,160**, minimum **7,393/7,446**, maximum
+**9,048/9,073**, and ten-eligible/eight-projected **14,763/14,855** canonical/
+rendered bytes. One-byte-over purpose admission still fails.
+
+At that first closure dispatch, the repair candidate remained subject to the
+original retained reviewer. Those facts were executor closure evidence, not
+reviewer closure: `G20-IR-001..011` remained open until task
+`019fd773-84c3-7841-9fc5-45f1b18d4a9f` returned a new implementation/evidence
+disposition under
+`G20-WG-20260806-019fd69a-01`.
+
+This remains uncommitted implementation/evidence work, not a Gate verdict.
+The index remains empty; `HEAD` and `origin/main` remain at the implementation
+base; the pre-existing maintainer-owned `AGENTS.md` change remains excluded;
+and no credentialed provider, external durable action, Git integration, push,
+release, Gate 21, or Gate 21A transition occurred. Retained independent reviewer
+task `019fd773-84c3-7841-9fc5-45f1b18d4a9f` remains retained for closure under
+`G20-WG-20260806-019fd69a-01` after causal repair evidence is complete.
+
+### 2026-08-07 Gate 20 first closure review and second repair candidate
+
+The retained reviewer returned implementation/evidence `Revise` again. It
+independently closed `G20-IR-001..007`, `G20-IR-009`, and `G20-IR-011` without
+reopening contract/theory, and kept two High findings open. `G20-IR-008` showed
+that initial attach/load/resume paging did not repair a finalization committed
+during a later TUI or ACP SSE gap; ACP also marked the receipt seen before either
+client update was acknowledged. `G20-IR-010` showed that four-or-more fractional
+digits could bypass exact parsing and that RFC-3339 `-00:00` was fabricated as a
+known zero offset. No maintainer-owned blocker was exposed. The reviewer left
+the production checkout, index, history, credentials, and external systems
+unmodified; `HEAD` and `origin/main` remained at the implementation base.
+
+The top-level executor accepted both findings. Every physical global-SSE
+connection already emits `server.connected`; TUI and ACP now use that exact
+epoch to request durable owner history for each retained exact Session/directory.
+The global route registers its live listener before emitting the epoch. Per-key
+owner reads are single-flight and generation-counted, so another reconnect or
+load/resume request arriving in flight queues a fresh scan from `-1` rather than
+being swallowed or run concurrently. ACP delivery records only the client-
+acknowledged `pending` and `completed` phases; failure before either acknowledgement
+leaves exactly the unfinished phase retryable under the same receipt identity.
+
+The civil-time parser now recognizes lowercase `t/z` and arbitrary nonempty
+fractional seconds, rejects nonzero precision beyond the integer-millisecond
+domain, preserves zero-only extra precision, rejects unknown `-00:00`, validates
+calendar/clock/offset bounds, and fails closed only for compact exact-looking
+tokens. Full descriptive expressions are not scanned or silently promoted to an
+exact source.
+
+Fresh closure evidence includes the complete civil-time/FutureAttention/Goal
+group (**40 passed / 262 expectations**), ACP event plus global HttpApi group
+(**26 passed / 61 expectations**), complete TUI sync file (**16 passed / 60
+expectations**), ACP load/resume wiring (**2 passed / 7 expectations**), and
+Core/OpenCode/TUI typechecks. The decisive sub-oracles prove TUI and ACP
+non-overlapping queued generations, exact retained-directory binding across an
+active-directory change, multiple `server.connected` epochs inside one ACP
+outer subscription, ACP first/second-phase failure retry, an event queued before
+global response-body consumption, 13 pure parser cases, and 23 transactional
+temporal assertions.
+
+The second production/test manifest includes every modified or untracked
+`packages/**` path and excludes documentation and `AGENTS.md`. Under the same
+ordinal UTF-8/no-BOM
+`path<TAB>actual-byte-length<TAB>uppercase-SHA-256<LF>` algorithm it contains
+**71 files / 8,314 bytes** and has SHA-256
+`29338349F95579E70119E726A5145D433E01AAC3F6D04618639C935F1221DC2A`.
+The accepted contract remains byte-identical at
+`0BE73ABB75D0957273FF5C5F986735491C1EEAF38072B9D7A82020073A318A7F`.
+
+These repairs remain executor evidence. `G20-IR-008` and `G20-IR-010` stay open
+until the same reviewer closes them and returns implementation/evidence
+`Accept`; the other nine findings remain closed. The index is empty, the
+pre-existing maintainer-owned `AGENTS.md` change remains excluded, and no
+commit, push, release, credentialed call, Gate 21, or Gate 21A transition has
+occurred.
+
+### 2026-08-07 Gate 20 second closure review and third repair candidate
+
+The retained reviewer closed `G20-IR-010` after independently checking the
+arbitrary-fraction, lowercase-marker, exact-offset, `-00:00`, malformed-token,
+and descriptive-expression boundary. Every earlier implementation finding
+remained closed. It kept only `G20-IR-008` open and narrowed its original
+missed-finalization impact to TUI reconnect failure recovery: a rejected owner
+read was swallowed while the full-sync marker remained, so no retry occurred
+unless an unrelated later reconnect or process restart happened. Contract/theory
+remained accepted and no maintainer-owned blocker appeared. Review was read-only;
+the exact 81-path checkout, 71-file package set, empty index, base, contract, and
+excluded `AGENTS.md` hash remained stable throughout that pass.
+
+The top-level executor retained the existing exact Session/directory,
+generation, and single-flight boundary, and added one reconnect-recovery task per
+key. A rejected read leaves its generation pending and retries after bounded
+delay without requiring another SSE epoch; another epoch arriving in flight
+still queues a fresh scan. The task stops after exact mapping deletion/rebind or
+TUI-provider disposal, and Session deletion explicitly removes the mapping.
+
+The new TUI regression emits one `server.connected`, rejects the first owner
+read, invokes ordinary Session sync while its full marker still short-circuits,
+and then observes the automatic retry publish the durable receipt. It proves two
+exact-directory reads, maximum concurrency one, and one stored receipt without a
+second connection epoch. The complete TUI sync file passes **17/17 tests with 65
+expectations** and the TUI typecheck passes.
+
+The third production/test manifest still contains **71 files / 8,314 canonical
+bytes** under the recorded ordinal UTF-8/no-BOM algorithm, now with SHA-256
+`1507DAF44F5B48A430C2491694C5A4547B9E9B2D5CF3D4D2E1A3190B995C6CB0`.
+The accepted contract remains byte-identical at
+`0BE73ABB75D0957273FF5C5F986735491C1EEAF38072B9D7A82020073A318A7F`.
+This third repair remains executor evidence: only the retained reviewer can
+close `G20-IR-008` and return implementation/evidence `Accept`. The index is
+empty, the maintainer-owned `AGENTS.md` change remains excluded, and no Git
+integration, credentialed call, release, Gate 21, or Gate 21A transition has
+occurred.
+
+### 2026-08-08 Gate 20 whole-Gate review acceptance
+
+Retained reviewer task `019fd773-84c3-7841-9fc5-45f1b18d4a9f` returned final
+**Accept** for the implementation/evidence layer under
+`G20-WG-20260806-019fd69a-01`. It independently reproduced the exact TUI
+reconnect-failure regression (**1 test / 5 expectations**), closed
+`G20-IR-008`, and found no neighboring generation, single-flight,
+exact-directory, deletion/rebind, provider-disposal, or evidence regression.
+`G20-IR-001..011` are all closed; no new acceptance-changing finding, material
+unknown, owner blocker, contract contradiction, or execution failure remains.
+
+The reviewer independently reconstructed the accepted production/test
+projection as **71 files / 8,314 canonical manifest bytes** with SHA-256
+`1507DAF44F5B48A430C2491694C5A4547B9E9B2D5CF3D4D2E1A3190B995C6CB0`.
+The accepted contract remained
+`0BE73ABB75D0957273FF5C5F986735491C1EEAF38072B9D7A82020073A318A7F`;
+the accepted implementation/evidence record before this status-only
+reconciliation remained
+`E86AA8B386CF613F0AF5E7CEE7D7844ED893944D0B36AE4D63450192FDE3DE00`.
+Review left `HEAD` and `origin/main` at
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144`, the index empty, the 81-path
+working tree unchanged, and excluded maintainer-owned `AGENTS.md` at
+`540417B5B646A3232452004482237166D79A418E790DE7FF363F088B15BB5421`.
+
+Gate 20's contract/theory and implementation/evidence review layers are both
+accepted. This establishes readiness only for the separately governed local
+integration step. The acceptance callback and this status reconciliation do
+not authorize or perform staging, commit, merge, push, release, credentialed
+provider use, Gate 21, or Gate 21A work.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit
@@ -2695,7 +3106,9 @@ follows.
 ### Experiment ledger
 
 `docs/research/experiment-ledger.md` at the oracle tag. This is the locator for
-the ALS evidence cited by current architecture and ADRs.
+historical ALS reports. The raw run artifacts behind reported aggregates are
+not retained; the reports are unqualified provenance and cannot satisfy a
+current Gate acceptance claim.
 
 ### Superseded decisions
 
@@ -2705,8 +3118,10 @@ oracle tag.
 
 ### Conditional-purpose evidence
 
-ADR-0013's experiment and result packets remain under `docs/research/` at the
-oracle tag. They are behavioral evidence, not production modules.
+ADR-0013's experiment and result documents remain under `docs/research/` at the
+oracle tag. Their tracked code and prose are historical design provenance, not
+production modules or current acceptance evidence; the raw `.runs` required to
+reproduce their aggregate claims are not retained.
 
 ### Identity-isolation evidence
 

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Course } from "@opencode-ai/core/course"
+import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
@@ -1467,5 +1468,155 @@ describe("learner-response-evidence semantic presentation", () => {
     if (result.basis.kind !== "learner_response_evidence_result") throw new Error("Unexpected presentation basis")
     const forged = { ...result.basis, effect: { ...result.basis.effect!, basis: "learner_report" as const } }
     expect(SemanticPresentation.projectResultBasis(forged)).toBeUndefined()
+  })
+})
+
+describe("future-attention semantic presentation", () => {
+  test("binds exact permission scope while keeping concern identities out of default learner-visible prose", () => {
+    const concernID = "fac_00000000000000000000000000" as FutureAttention.ConcernID
+    const command = FutureAttention.canonicalizeCommand({
+      operations: [
+        {
+          type: "serve",
+          concernID,
+          expectedVersion: 2,
+          service: {
+            source: { type: "current_assistant_when_complete" },
+            rationale: "This exact committed Assistant presentation realizes the retained explanation purpose.",
+          },
+        },
+      ],
+    })
+    const candidate = {
+      commandFingerprint: FutureAttention.commandFingerprint(command),
+      canonicalCommand: command,
+      agentAction: { kind: "root" },
+    } as unknown as FutureAttention.Candidate
+    const proposal = LearningCommandPresentation.futureAttentionCapability(candidate, envelope)
+    const scope = SemanticPresentation.futureAttentionScope(command)
+    const exact = request({
+      permission: FutureAttention.UPDATE_CAPABILITY,
+      patterns: [FutureAttention.PERMISSION_PATTERN],
+      always: [FutureAttention.PERMISSION_PATTERN],
+      metadata: {
+        futureAttentionKind: "change_set",
+        commandFingerprint: candidate.commandFingerprint,
+        issuance: "root",
+        scope,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+    const read = SemanticPresentation.readProposal(exact)
+    expect(read).toMatchObject({
+      type: "valid",
+      value: {
+        capability: FutureAttention.UPDATE_CAPABILITY,
+        title: "Update future attention",
+        approval: "policy",
+        facts: expect.arrayContaining([
+          { label: "Operations", value: "1" },
+          { label: "Completion-conditioned claims", value: "1" },
+        ]),
+      },
+    })
+    expect(JSON.stringify(read)).not.toContain(concernID)
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: {
+          ...exact.metadata,
+          scope: { ...scope, completionClaimCount: 0 },
+        },
+      }),
+    ).toEqual({ type: "invalid" })
+  })
+
+  test("separates immutable pending admission wording from a later current claim observation", () => {
+    const concernID = "fac_00000000000000000000000000" as FutureAttention.ConcernID
+    const successorID = "fac_11111111111111111111111111" as FutureAttention.ConcernID
+    const groupID = "fag_00000000000000000000000000" as FutureAttention.ClaimGroupID
+    const receiptID = "far_00000000000000000000000000" as FutureAttention.FinalizationReceiptID
+    const settlement = {
+      outcome: "applied" as const,
+      futureAttentionKind: "change_set" as const,
+      receiptID: "fap_00000000000000000000000000",
+      effectID: "fas_00000000000000000000000000",
+      occurrenceID: "lco_00000000000000000000000000",
+      changes: [
+        {
+          operation: "replace" as const,
+          outcome: "changed" as const,
+          concernID,
+          version: 1,
+          disposition: "superseded" as const,
+          transitionID: "fat_00000000000000000000000000",
+          successorConcernID: successorID,
+          successorVersion: 0,
+          successorDisposition: "open" as const,
+          successorTransitionID: "fat_11111111111111111111111111",
+        },
+      ],
+      claim: {
+        groupID,
+        claimStateAtAdmission: "pending" as const,
+        claimState: "pending" as const,
+      },
+      settlementTime: 2,
+      settlementOrder: 1,
+    }
+    const state = {
+      disposition: "candidate_v1" as const,
+      candidate: { agentAction: { kind: "root" as const } },
+      capabilityOutcome: "policy_allow" as const,
+    } as unknown as FutureAttention.InvocationVersion
+    const pending = LearningCommandPresentation.futureAttentionSettlementResult(
+      settlement as unknown as LearningCommand.PhysicalSettlement,
+      state,
+      envelope,
+    )
+    const projection = SemanticPresentation.projectResultBasis(pending.basis)
+    const rendered = JSON.stringify(projection)
+    expect(projection).toMatchObject({
+      capability: FutureAttention.UPDATE_CAPABILITY,
+      outcome: "committed",
+      facts: expect.arrayContaining([
+        { label: "Claim at this physical settlement", value: "pending" },
+        { label: "Current claim observation", value: "pending" },
+      ]),
+    })
+    expect(rendered).toContain("Exact physical replay preserves this settlement cut")
+    expect(rendered).not.toContain(concernID)
+    expect(rendered).not.toContain(successorID)
+    expect(rendered).not.toContain(groupID)
+    expect(rendered).not.toContain(settlement.effectID)
+    expect(rendered).not.toContain(settlement.occurrenceID)
+
+    if (pending.basis.kind !== "future_attention_result" || !pending.basis.effect?.claim) {
+      throw new Error("Expected the pending FutureAttention result basis")
+    }
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...pending.basis,
+        effect: {
+          ...pending.basis.effect,
+          claim: { ...pending.basis.effect.claim, currentClaimState: "served" },
+        },
+      }),
+    ).toBeUndefined()
+    const finalized = SemanticPresentation.projectResultBasis({
+      ...pending.basis,
+      effect: {
+        ...pending.basis.effect,
+        claim: {
+          ...pending.basis.effect.claim,
+          currentClaimState: "served",
+          finalizationReceiptID: receiptID,
+        },
+      },
+    })
+    expect(finalized).toMatchObject({
+      facts: expect.arrayContaining([{ label: "Finalization", value: "append-only receipt recorded" }]),
+    })
+    expect(JSON.stringify(finalized)).not.toContain(receiptID)
   })
 })

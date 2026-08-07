@@ -19,7 +19,8 @@ import path from "node:path"
 import { mkdir, writeFile } from "node:fs/promises"
 import { useRoute, useRouteData } from "../../context/route"
 import { useProject } from "../../context/project"
-import { useSync } from "../../context/sync"
+import { useSync, type FutureAttentionFinalization } from "../../context/sync"
+import { FutureAttentionPresentation } from "@opencode-ai/core/future-attention-presentation"
 import { useEvent } from "../../context/event"
 import { SplitBorder } from "../../ui/border"
 import { useTuiPaths, useTuiTerminalEnvironment } from "../../context/runtime"
@@ -1136,11 +1137,20 @@ export function Session() {
                         />
                       </Match>
                       <Match when={message.role === "assistant"}>
-                        <AssistantMessage
-                          last={lastAssistant()?.id === message.id}
-                          message={message as AssistantMessage}
-                          parts={sync.data.part[message.id] ?? []}
-                        />
+                        <>
+                          <AssistantMessage
+                            last={lastAssistant()?.id === message.id}
+                            message={message as AssistantMessage}
+                            parts={sync.data.part[message.id] ?? []}
+                          />
+                          <For
+                            each={(sync.data.future_attention_finalization[route.sessionID] ?? []).filter(
+                              (item) => item.assistantMessageID === message.id,
+                            )}
+                          >
+                            {(item) => <FutureAttentionFinalizationNotice value={item} />}
+                          </For>
+                        </>
                       </Match>
                     </Switch>
                   )}
@@ -1319,6 +1329,27 @@ function UserMessage(props: {
         />
       </Show>
     </>
+  )
+}
+
+function FutureAttentionFinalizationNotice(props: { value: FutureAttentionFinalization }) {
+  const { theme } = useTheme()
+  const presentation = () => FutureAttentionPresentation.finalization(props.value.receipt)
+  return (
+    <box
+      marginTop={1}
+      marginLeft={3}
+      paddingLeft={2}
+      flexShrink={0}
+      border={["left"]}
+      customBorderChars={SplitBorder.customBorderChars}
+      borderColor={props.value.receipt.outcome === "served" ? theme.success : theme.warning}
+    >
+      <text fg={theme.text}>
+        {presentation().title}
+      </text>
+      <text fg={theme.textMuted}>{presentation().detail}</text>
+    </box>
   )
 }
 

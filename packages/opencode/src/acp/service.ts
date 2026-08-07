@@ -215,6 +215,7 @@ export function make(input: {
     yield* registerMcpServers(input.sdk, registeredMcp, params.cwd, state.id, params.mcpServers)
     yield* sendAvailableCommands(input.connection, state.id, snapshot)
     yield* replayMessages(events, messages)
+    if (events) yield* request(() => events.catchUp(state.id, state.cwd), "session")
 
     return {
       configOptions: configOptions(snapshot, {
@@ -299,6 +300,7 @@ export function make(input: {
 
     yield* registerMcpServers(input.sdk, registeredMcp, params.cwd, state.id, params.mcpServers ?? [])
     yield* sendAvailableCommands(input.connection, state.id, snapshot)
+    if (events) yield* request(() => events.catchUp(state.id, state.cwd), "session")
 
     return {
       configOptions: configOptions(snapshot, {

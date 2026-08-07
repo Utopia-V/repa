@@ -70,6 +70,55 @@ function idle(sessionID = "session-1") {
   } satisfies SdkEvent
 }
 
+function futureAttentionFinalized(marker: string) {
+  const suffix = marker.repeat(26)
+  return {
+    id: `evt-future-attention-${marker}`,
+    type: "future_attention.finalized",
+    properties: {
+      sessionID: "session-1",
+      turnID: `trn_future_attention_${marker}`,
+      groupID: `fag_${suffix}`,
+      assistantMessageID: `msg_future_attention_${marker}`,
+      invocationPartID: `prt_future_attention_${marker}`,
+      receipt: {
+        id: `far_${suffix}`,
+        groupID: `fag_${suffix}`,
+        outcome: "served",
+        completion: {
+          observationCut: "live_presentation_finalized",
+          sessionID: "session-1",
+          turnID: `trn_future_attention_${marker}`,
+          occurrenceID: `lco_future_attention_${marker}`,
+          assistantMessageID: `msg_future_attention_${marker}`,
+          modelOperationID: `msg_future_attention_${marker}`,
+          invocationPartID: `prt_future_attention_${marker}`,
+          modelOutcome: "completed",
+          localToolPartsTerminal: true,
+          presentationCommitted: true,
+          presentationUnavailable: false,
+          timeCompleted: 2,
+          completionOrder: 1,
+          partManifestFingerprint: "a".repeat(64),
+          eligibleOutputFingerprint: "b".repeat(64),
+          eligibleOutputBytes: 32,
+        },
+        members: [
+          {
+            ordinal: 0,
+            concernID: `fac_${suffix}`,
+            outcome: "served",
+            transitionID: `fat_${suffix}`,
+            serviceReceiptID: `fas_${suffix}`,
+          },
+        ],
+        timeFinalized: 3,
+        finalizationOrder: 2,
+      },
+    },
+  } satisfies SdkEvent
+}
+
 function retry(sessionID: string, attempt: number, message: string) {
   return {
     id: `evt-${sessionID}-retry-${attempt}`,
@@ -104,7 +153,7 @@ function assistant(id: string) {
 const StreamClosed = undefined as never
 
 function feed<T, R = never>(returnValue: R = StreamClosed) {
-  const list: T[] = []
+  const list: Array<{ value: T; consumed: () => void }> = []
   let done = false
   let wake: (() => void) | undefined
 
@@ -117,12 +166,9 @@ function feed<T, R = never>(returnValue: R = StreamClosed) {
         continue
       }
 
-      const next = list.shift()
-      if (!next) {
-        continue
-      }
-
-      yield next
+      const next = list.shift()!
+      yield next.value
+      next.consumed()
     }
     return returnValue as R
   })()
@@ -130,9 +176,11 @@ function feed<T, R = never>(returnValue: R = StreamClosed) {
   return {
     stream: wrapped,
     push(value: T) {
-      list.push(value)
-      wake?.()
-      wake = undefined
+      return new Promise<void>((resolve) => {
+        list.push({ value, consumed: resolve })
+        wake?.()
+        wake = undefined
+      })
     },
     close() {
       done = true
@@ -440,6 +488,7 @@ function sdk(
     start?: OpencodeClient["session"]["start"]
     status?: OpencodeClient["session"]["status"]
     messages?: OpencodeClient["session"]["messages"]
+    futureAttentionFinalizations?: OpencodeClient["session"]["futureAttentionFinalizations"]
     children?: OpencodeClient["session"]["children"]
     permissions?: OpencodeClient["permission"]["list"]
     questions?: OpencodeClient["question"]["list"]
@@ -453,6 +502,8 @@ function sdk(
   const start: OpencodeClient["session"]["start"] = input.start ?? ((parameters) => ok(admittedTurn(parameters)))
   const status: OpencodeClient["session"]["status"] = input.status ?? (() => ok({}))
   const messages: OpencodeClient["session"]["messages"] = input.messages ?? (() => ok([]))
+  const futureAttentionFinalizations: OpencodeClient["session"]["futureAttentionFinalizations"] =
+    input.futureAttentionFinalizations ?? (() => ok({ events: [], hasMore: false }))
   const children: OpencodeClient["session"]["children"] = input.children ?? (() => ok([]))
   const permissions: OpencodeClient["permission"]["list"] = input.permissions ?? (() => ok([]))
   const questions: OpencodeClient["question"]["list"] = input.questions ?? (() => ok([]))
@@ -462,6 +513,7 @@ function sdk(
   spyOn(client.session, "start").mockImplementation(start)
   spyOn(client.session, "status").mockImplementation(status)
   spyOn(client.session, "messages").mockImplementation(messages)
+  spyOn(client.session, "futureAttentionFinalizations").mockImplementation(futureAttentionFinalizations)
   spyOn(client.session, "children").mockImplementation(children)
   spyOn(client.permission, "list").mockImplementation(permissions)
   spyOn(client.question, "list").mockImplementation(questions)
@@ -470,6 +522,54 @@ function sdk(
 }
 
 describe("run stream transport", () => {
+  test("pages durable FutureAttention finalizations and dedupes the same later live receipt", async () => {
+    const src = eventFeed()
+    const ui = footer()
+    const first = futureAttentionFinalized("1")
+    const second = futureAttentionFinalized("2")
+    const requests: Array<{ sessionID: string; after?: string; limit?: string }> = []
+    const transport = await createSessionTransport({
+      sdk: sdk({
+        stream: src.stream,
+        futureAttentionFinalizations: (request) => {
+          requests.push(request)
+          const { after } = request
+          if (after === "-1") {
+            return ok({
+              events: [{ ...first, sequence: 4 }],
+              hasMore: true,
+            })
+          }
+          return ok({
+            events: [{ ...second, sequence: 9 }],
+            hasMore: false,
+          })
+        },
+      }),
+      sessionID: "session-1",
+      thinking: true,
+      limits: () => ({}),
+      footer: ui.api,
+    })
+
+    try {
+      expect(requests).toEqual([
+        { sessionID: "session-1", after: "-1", limit: "100" },
+        { sessionID: "session-1", after: "4", limit: "100" },
+      ])
+      expect(ui.commits.map((commit) => commit.text)).toEqual([
+        "Future attention served: This completed response addressed 1 retained follow-up.",
+        "Future attention served: This completed response addressed 1 retained follow-up.",
+      ])
+
+      await src.push(first)
+      expect(ui.commits).toHaveLength(2)
+    } finally {
+      src.close()
+      await transport.close()
+    }
+  })
+
   test("does not replay persisted main-session history during bootstrap by default", async () => {
     const src = eventFeed()
     const ui = footer()

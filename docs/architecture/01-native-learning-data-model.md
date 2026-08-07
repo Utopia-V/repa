@@ -16,11 +16,12 @@ Authority: [Product origin](../foundation/00-product-origin.md),
 [ADR-0014](../decisions/0014-one-time-opencode-fork.md), and the
 [system architecture](./00-system-architecture.md).
 
-Historical evidence: the immutable pre-fork Course, material, Agenda, Tutor,
-and Interaction behavior oracles identified by the
-[asset audit](../research/pre-fork-repa-asset-audit-2026-07-13.md). Their
-meanings and counterexamples are evidence; their tables and APIs are not a
-migration target.
+Historical provenance: the immutable pre-fork Course, material, Agenda, Tutor,
+and Interaction documents identified by the
+[asset audit](../research/pre-fork-repa-asset-audit-2026-07-13.md). They supply
+reopenable hypotheses and counterexamples, not automatic acceptance evidence;
+current decisions and Gate evidence must qualify any carried meaning. Their
+tables and APIs are not a migration target.
 
 ## Purpose
 
@@ -222,7 +223,11 @@ does not own semantic learning effects. Course, source/material, learner, Goal,
 future-attention, Assignment, planning, and policy commands define their own
 effect addresses, transitions, preconditions, and corrections and commit them
 with the shared settlement in one SQLite transaction where all effects are
-local.
+local. A terminal physical settlement is immutable and exact replay performs no
+domain read. If a domain has a later completion condition, that domain appends a
+separate finalization receipt/event and exposes current state through its owner
+read or a new physical semantic duplicate; it never refreshes the original Tool
+Part settlement.
 
 ### Course
 
@@ -475,11 +480,47 @@ target into a V2 successor projects only its immutable value; the V1
 source-expression, normalization basis, raw bytes, and field provenance remain
 historical and are neither copied nor promoted into current semantic proof.
 
-The source-linked future-attention loop remains the first experimentally
-settled future-attention topology: eligible does not mean mandatory, begun, served,
+The source-linked future-attention loop remains the first admitted
+future-attention topology: eligible does not mean mandatory, begun, served,
 correct, or mastered. Its native lifecycle is admitted together with
 conditional Tutor purpose and truthful service through the teach-adapt-return
-path, not as an empty storage Gate.
+path, not as an empty storage Gate. Historical ALS reports do not settle this
+behavior; Gate 20 must qualify it against the current fork. A current-Assistant
+service claim therefore has an immutable command-time admission settlement
+bound to the exact tool-calling Assistant message/model operation and, only
+after that same full learner-visible presentation commits, an optional
+append-only FutureAttention finalization receipt. A later post-tool Assistant is
+a distinct source but inherits the same current learner occurrence. It cannot
+substitute, mint another FutureAttention effect address, or rebind the terminal
+claim group. A `not_served` group leaves the concern open until a genuinely new
+runtime-bound learner occurrence. Pending/current/final claim state is a domain
+projection, not a mutable field of the physical invocation settlement.
+
+The finalization receipt/event is an independently readable append-only owner
+projection with durable sequence order. Retained carriers page it after attach
+and every physical `server.connected` reconnect epoch, queue another
+non-overlapping generation when an owner read is already running, and
+deduplicate history/live overlap by receipt identity. A rejected TUI reconnect
+read leaves its recovery generation pending and retries while the exact retained
+Session/directory remains live, without waiting for another connection epoch.
+ACP records only
+acknowledged pending/completed presentation phases, so failed delivery can be
+retried without suppressing the receipt or duplicating an acknowledged pending
+phase. Its source Session may already be deleted. In that case exact unavailable
+model/tool/source tombstones—not reconstructed presentation bodies—supply the
+bound completion facts. Tool-result service additionally consumes the exact
+candidate's runtime-owned `learner_usable | internal_control` classification;
+historical or internal candidates default conservatively and cannot become
+service merely because their Parts completed.
+
+FutureAttention preserves both the Agent's bounded temporal expression and the
+program-normalized instant/basis. When that expression itself denotes an exact
+`Z` or offset instant, including lowercase `t/z` and an arbitrary nonempty
+fraction, admission requires it to equal the normalized instant and offset.
+Precision beyond the stored millisecond is legal only when the discarded suffix
+is all zero; `-00:00` remains unknown and cannot become a known fixed-zero
+basis. A descriptive or named-zone expression retains its tagged basis without
+pretending to be an independently parsed exact offset.
 
 Cross-day planning waits for representative Goal-driven and Assignment-driven
 multi-day workload, capacity, allocation, correction, and recomputation
@@ -527,7 +568,7 @@ but each family first appears only with a demonstrated consumer:
 | exact continuation, if required | context cut                                | exact bounded manifest when existing Interaction records cannot express it honestly                                                                                         |
 | cross-Session learner intent    | Goal identity and revision                 | learner-owned source, scope, correction, and supersession; no automatic attainment inference                                                                                |
 | retained learner direction      | scoped steering policy                     | source-linked applicability and correction projected through an exact policy revision                                                                                       |
-| future return                   | future-attention concern and service       | eligibility, conditional purpose, and complete source-aligned service remain distinct                                                                                       |
+| future return                   | future-attention concern, claim finalization, and service | Agent-authored source/correction provenance, eligibility, conditional purpose, immutable claim admission, append-only finalization, and service through a purpose-appropriate complete Interaction occurrence/outcome remain distinct from physical replay |
 | substantial obligation          | Assignment identity and revision           | obligation and its correction remain distinct from Goal identity and planning arithmetic                                                                                    |
 | substantial cross-day work      | planning demand and allocation              | references an exact Goal or Assignment revision; accepted workload, capacity, progress, infeasibility, learner override, and recomputation use program-owned arithmetic      |
 

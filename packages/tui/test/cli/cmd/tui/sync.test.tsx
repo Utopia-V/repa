@@ -47,6 +47,67 @@ function turnInput(sessionID: string, turnID: string): TurnInput {
   }
 }
 
+function futureAttentionFinalizedEvent(sessionID: string, marker: string) {
+  const suffix = marker.repeat(26)
+  return {
+    directory,
+    project: "proj_test",
+    payload: {
+      id: `evt_future_attention_finalized_${marker}`,
+      type: "future_attention.finalized",
+      properties: {
+        sessionID,
+        turnID: `trn_future_attention_${marker}`,
+        groupID: `fag_${suffix}`,
+        assistantMessageID: `msg_future_attention_${marker}`,
+        invocationPartID: `prt_original_claim_tool_${marker}`,
+        receipt: {
+          id: `far_${suffix}`,
+          groupID: `fag_${suffix}`,
+          outcome: "served",
+          completion: {
+            observationCut: "live_presentation_finalized",
+            sessionID,
+            turnID: `trn_future_attention_${marker}`,
+            occurrenceID: `lco_${suffix}`,
+            assistantMessageID: `msg_future_attention_${marker}`,
+            modelOperationID: `msg_future_attention_${marker}`,
+            invocationPartID: `prt_original_claim_tool_${marker}`,
+            modelOutcome: "completed",
+            localToolPartsTerminal: true,
+            presentationCommitted: true,
+            presentationUnavailable: false,
+            timeCompleted: 2,
+            completionOrder: 1,
+            partManifestFingerprint: "a".repeat(64),
+            eligibleOutputFingerprint: "b".repeat(64),
+            eligibleOutputBytes: 32,
+          },
+          members: [
+            {
+              ordinal: 0,
+              concernID: `fac_${suffix}`,
+              outcome: "served",
+              transitionID: `fat_${suffix}`,
+              serviceReceiptID: `fas_${suffix}`,
+            },
+          ],
+          timeFinalized: 3,
+          finalizationOrder: 2,
+        },
+      },
+    },
+  } satisfies GlobalEvent
+}
+
+function serverConnected(marker: string): GlobalEvent {
+  return {
+    directory,
+    project: "proj_test",
+    payload: { id: `evt_server_connected_${marker}`, type: "server.connected", properties: {} },
+  }
+}
+
 describe("tui sync", () => {
   test("refresh scopes sessions by default and lists project sessions when disabled", async () => {
     await using tmp = await tmpdir()
@@ -495,8 +556,7 @@ describe("tui sync", () => {
               relativePath: "notes\\lesson.md",
               lifetime: "this physical tool invocation",
               rights: ["modify"],
-              warning:
-                "This allows one direct file change only. It does not allow Shell, network, or sibling paths.",
+              warning: "This allows one direct file change only. It does not allow Shell, network, or sibling paths.",
               permissionPromptRequired: true,
               ...SemanticPresentation.metadata(
                 SemanticPresentation.proposal({
@@ -680,6 +740,280 @@ describe("tui sync", () => {
       })
       await Bun.sleep(20)
       expect(sync.data.active_turn[sessionID]).toBe(turnB)
+    } finally {
+      app.renderer.destroy()
+    }
+  })
+
+  test("stores one separately typed FutureAttention finalization per receipt", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/kv.json`, "{}")
+    const sessionID = "ses_future_attention"
+    const first = futureAttentionFinalizedEvent(sessionID, "1")
+    const second = futureAttentionFinalizedEvent(sessionID, "2")
+    const after: string[] = []
+    const catchupStarted = deferred<void>()
+    const catchup = deferred<Response>()
+    const { app, emit, sync } = await mount((url) => {
+      if (url.pathname === `/session/${sessionID}/future-attention/finalization`) {
+        after.push(url.searchParams.get("after") ?? "")
+        if (url.searchParams.get("after") === "4") {
+          return json({
+            events: [
+              {
+                id: second.payload.id,
+                type: second.payload.type,
+                sequence: 9,
+                properties: second.payload.properties,
+              },
+            ],
+            hasMore: false,
+          })
+        }
+        catchupStarted.resolve()
+        return catchup.promise
+      }
+      if (url.pathname === `/session/${sessionID}`) {
+        return json({
+          id: sessionID,
+          slug: sessionID,
+          projectID: "proj_test",
+          directory,
+          title: "FutureAttention catch-up",
+          version: "test",
+          time: { created: 1, updated: 1 },
+        })
+      }
+      if (
+        url.pathname === `/session/${sessionID}/message` ||
+        url.pathname === `/session/${sessionID}/todo` ||
+        url.pathname === `/session/${sessionID}/diff`
+      ) {
+        return json([])
+      }
+      return undefined
+    }, tmp.path)
+
+    try {
+      const syncing = sync.session.sync(sessionID)
+      await catchupStarted.promise
+      emit(first)
+      await wait(() => sync.data.future_attention_finalization[sessionID]?.length === 1)
+      catchup.resolve(
+        json({
+          events: [
+            {
+              id: first.payload.id,
+              type: first.payload.type,
+              sequence: 4,
+              properties: first.payload.properties,
+            },
+          ],
+          hasMore: true,
+        }),
+      )
+      await syncing
+      emit(first)
+
+      expect(after).toEqual(["-1", "4"])
+      expect(sync.data.future_attention_finalization[sessionID]).toEqual([
+        expect.objectContaining({
+          assistantMessageID: "msg_future_attention_1",
+          invocationPartID: "prt_original_claim_tool_1",
+          receipt: expect.objectContaining({
+            id: `far_${"1".repeat(26)}`,
+            outcome: "served",
+          }),
+        }),
+        expect.objectContaining({
+          assistantMessageID: "msg_future_attention_2",
+          invocationPartID: "prt_original_claim_tool_2",
+          receipt: expect.objectContaining({
+            id: `far_${"2".repeat(26)}`,
+            outcome: "served",
+          }),
+        }),
+      ])
+    } finally {
+      app.renderer.destroy()
+    }
+  })
+
+  test("catches up every TUI reconnect epoch including one received during an in-flight catch-up", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/kv.json`, "{}")
+    const sessionID = "ses_future_attention_reconnect"
+    const selectedDirectory = `${worktree}/course-b`
+    const first = futureAttentionFinalizedEvent(sessionID, "3")
+    const second = futureAttentionFinalizedEvent(sessionID, "4")
+    const firstReconnectStarted = deferred<void>()
+    const firstReconnect = deferred<Response>()
+    let reconnecting = false
+    let reconnectRequests = 0
+    let activeReconnectRequests = 0
+    let maxActiveReconnectRequests = 0
+    const reconnectDirectories: string[] = []
+    const { app, emit, project, sync } = await mount((url) => {
+      if (url.pathname === "/path") {
+        return json({
+          home: "/tmp",
+          state: "",
+          config: "",
+          worktree,
+          directory: url.searchParams.get("directory") ?? directory,
+        })
+      }
+      if (url.pathname === "/project/current") return json({ id: "proj_test", worktree })
+      if (url.pathname === "/project/proj_test/directories") {
+        return json([{ directory: worktree }, { directory: selectedDirectory, strategy: "git_worktree" }])
+      }
+      if (url.pathname === `/session/${sessionID}/future-attention/finalization`) {
+        if (!reconnecting) return json({ events: [], hasMore: false })
+        reconnectRequests++
+        activeReconnectRequests++
+        maxActiveReconnectRequests = Math.max(maxActiveReconnectRequests, activeReconnectRequests)
+        reconnectDirectories.push(url.searchParams.get("directory") ?? "")
+        if (reconnectRequests === 1) {
+          firstReconnectStarted.resolve()
+          return firstReconnect.promise.finally(() => activeReconnectRequests--)
+        }
+        return Promise.resolve(
+          json({
+            events: [
+              { id: first.payload.id, type: first.payload.type, sequence: 4, properties: first.payload.properties },
+              { id: second.payload.id, type: second.payload.type, sequence: 9, properties: second.payload.properties },
+            ],
+            hasMore: false,
+          }),
+        ).finally(() => activeReconnectRequests--)
+      }
+      if (url.pathname === `/session/${sessionID}`) {
+        return json({
+          id: sessionID,
+          slug: sessionID,
+          projectID: "proj_test",
+          directory,
+          title: "FutureAttention reconnect catch-up",
+          version: "test",
+          time: { created: 1, updated: 1 },
+        })
+      }
+      if (
+        url.pathname === `/session/${sessionID}/message` ||
+        url.pathname === `/session/${sessionID}/todo` ||
+        url.pathname === `/session/${sessionID}/diff`
+      ) {
+        return json([])
+      }
+      return undefined
+    }, tmp.path)
+
+    try {
+      await sync.session.sync(sessionID)
+      await sync.bootstrap({ fatal: false, directory: selectedDirectory })
+      expect(project.instance.directory()).toBe(selectedDirectory)
+      reconnecting = true
+      emit(serverConnected("1"))
+      await firstReconnectStarted.promise
+      emit(serverConnected("2"))
+      firstReconnect.resolve(
+        json({
+          events: [
+            { id: first.payload.id, type: first.payload.type, sequence: 4, properties: first.payload.properties },
+          ],
+          hasMore: false,
+        }),
+      )
+
+      await wait(() => sync.data.future_attention_finalization[sessionID]?.length === 2)
+      expect(reconnectRequests).toBe(2)
+      expect(maxActiveReconnectRequests).toBe(1)
+      expect(reconnectDirectories).toEqual([directory, directory])
+      expect(sync.data.future_attention_finalization[sessionID]?.map((item) => item.receipt.id)).toEqual([
+        first.payload.properties.receipt.id,
+        second.payload.properties.receipt.id,
+      ])
+    } finally {
+      app.renderer.destroy()
+    }
+  })
+
+  test("retries a failed TUI reconnect catch-up without requiring another connection epoch", async () => {
+    await using tmp = await tmpdir()
+    await Bun.write(`${tmp.path}/kv.json`, "{}")
+    const sessionID = "ses_future_attention_reconnect_retry"
+    const finalization = futureAttentionFinalizedEvent(sessionID, "5")
+    const firstReconnectFinished = deferred<void>()
+    let reconnecting = false
+    let reconnectRequests = 0
+    let activeReconnectRequests = 0
+    let maxActiveReconnectRequests = 0
+    let sessionReads = 0
+    const reconnectDirectories: string[] = []
+    const { app, emit, sync } = await mount((url) => {
+      if (url.pathname === `/session/${sessionID}/future-attention/finalization`) {
+        if (!reconnecting) return json({ events: [], hasMore: false })
+        reconnectRequests++
+        activeReconnectRequests++
+        maxActiveReconnectRequests = Math.max(maxActiveReconnectRequests, activeReconnectRequests)
+        reconnectDirectories.push(url.searchParams.get("directory") ?? "")
+        if (reconnectRequests === 1) {
+          return Promise.reject(new Error("transient finalization history failure")).finally(() => {
+            activeReconnectRequests--
+            firstReconnectFinished.resolve()
+          })
+        }
+        return Promise.resolve(
+          json({
+            events: [
+              {
+                id: finalization.payload.id,
+                type: finalization.payload.type,
+                sequence: 4,
+                properties: finalization.payload.properties,
+              },
+            ],
+            hasMore: false,
+          }),
+        ).finally(() => activeReconnectRequests--)
+      }
+      if (url.pathname === `/session/${sessionID}`) {
+        sessionReads++
+        return json({
+          id: sessionID,
+          slug: sessionID,
+          projectID: "proj_test",
+          directory,
+          title: "FutureAttention reconnect retry",
+          version: "test",
+          time: { created: 1, updated: 1 },
+        })
+      }
+      if (
+        url.pathname === `/session/${sessionID}/message` ||
+        url.pathname === `/session/${sessionID}/todo` ||
+        url.pathname === `/session/${sessionID}/diff`
+      ) {
+        return json([])
+      }
+      return undefined
+    }, tmp.path)
+
+    try {
+      await sync.session.sync(sessionID)
+      reconnecting = true
+      emit(serverConnected("retry"))
+      await firstReconnectFinished.promise
+      await sync.session.sync(sessionID)
+      expect(sessionReads).toBe(1)
+
+      await wait(() => sync.data.future_attention_finalization[sessionID]?.length === 1, 3_000)
+      expect(reconnectRequests).toBe(2)
+      expect(maxActiveReconnectRequests).toBe(1)
+      expect(reconnectDirectories).toEqual([directory, directory])
+      expect(sync.data.future_attention_finalization[sessionID]?.map((item) => item.receipt.id)).toEqual([
+        finalization.payload.properties.receipt.id,
+      ])
     } finally {
       app.renderer.destroy()
     }

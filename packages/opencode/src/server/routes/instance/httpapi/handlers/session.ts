@@ -1,7 +1,10 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import { EventV2 } from "@opencode-ai/core/event"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
+import { Database } from "@opencode-ai/core/database/database"
+import { FutureAttentionDurable } from "@opencode-ai/schema/durable-event-manifest"
 import { Permission } from "@/permission"
 import { Session } from "@/session/session"
 import { MessageV2 } from "@/session/message-v2"
@@ -19,6 +22,7 @@ import { HttpApiBuilder, HttpApiError } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import {
   DiffQuery,
+  FutureAttentionFinalizationsQuery,
   ListQuery,
   MessagesQuery,
   PermissionResponsePayload,
@@ -44,6 +48,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     const todoSvc = yield* Todo.Service
     const summary = yield* SessionSummary.Service
     const events = yield* EventV2Bridge.Service
+    const db = (yield* Database.Service).db
 
     const list = Effect.fn("SessionHttpApi.list")(function* (ctx: { query: typeof ListQuery.Type }) {
       const directory = ctx.query.directory ? yield* InstanceState.directory : undefined
@@ -134,6 +139,27 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       return yield* mapStorageNotFound(
         MessageV2.get({ sessionID: ctx.params.sessionID, messageID: ctx.params.messageID }),
       )
+    })
+
+    const futureAttentionFinalizations = Effect.fn("SessionHttpApi.futureAttentionFinalizations")(function* (ctx: {
+      params: { sessionID: SessionID }
+      query: typeof FutureAttentionFinalizationsQuery.Type
+    }) {
+      const result = yield* EventV2.readAggregate(db, {
+        aggregateID: ctx.params.sessionID,
+        after: ctx.query.after,
+        limit: ctx.query.limit ?? 100,
+        manifest: FutureAttentionDurable,
+      })
+      return {
+        events: result.events.map((event) => ({
+          id: event.id,
+          type: event.type,
+          sequence: event.durable!.seq,
+          properties: event.data,
+        })),
+        hasMore: result.hasMore,
+      }
     })
 
     const remove = Effect.fn("SessionHttpApi.remove")(function* (ctx: { params: { sessionID: SessionID } }) {
@@ -317,6 +343,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       .handle("todo", todo)
       .handle("diff", diff)
       .handle("messages", messages)
+      .handle("futureAttentionFinalizations", futureAttentionFinalizations)
       .handle("message", message)
       .handle("remove", remove)
       .handle("update", update)

@@ -171,6 +171,7 @@ function sid(event: Event): string | undefined {
     event.type === "question.asked" ||
     event.type === "question.replied" ||
     event.type === "question.rejected" ||
+    event.type === "future_attention.finalized" ||
     event.type === "session.error" ||
     event.type === "session.status"
   ) {
@@ -651,6 +652,38 @@ function createLayer(input: StreamInput) {
             { concurrency: "unbounded" },
           )
 
+        const futureAttentionFinalizations = Effect.fn("RunStreamTransport.futureAttentionFinalizations")(
+          function* () {
+            const result: Event[] = []
+            let after = -1
+            while (true) {
+              const response = yield* Effect.promise(() =>
+                input.sdk.session.futureAttentionFinalizations({
+                  sessionID: input.sessionID,
+                  after: after.toString(),
+                  limit: "100",
+                }),
+              )
+              if (response.error || !response.data) {
+                return yield* Effect.fail(response.error ?? new Error("FutureAttention finalization history unavailable"))
+              }
+              result.push(
+                ...response.data.events.map((event) => ({
+                  id: event.id,
+                  type: event.type,
+                  properties: event.properties,
+                }) as Event),
+              )
+              if (!response.data.hasMore) return result
+              const next = response.data.events.at(-1)?.sequence
+              if (next === undefined || next <= after) {
+                return yield* Effect.fail(new Error("FutureAttention finalization history did not advance"))
+              }
+              after = next
+            }
+          },
+        )
+
         const markReplayedParts = (data: SessionData) => {
           replayedParts.clear()
           for (const [partID] of data.text) {
@@ -693,7 +726,7 @@ function createLayer(input: StreamInput) {
         })
 
         const bootstrap = Effect.fn("RunStreamTransport.bootstrap")(function* () {
-          const [messagesList, children, permissions, questions] = yield* Effect.all(
+          const [messagesList, children, permissions, questions, finalizations] = yield* Effect.all(
             [
               messages(
                 input.sessionID,
@@ -719,6 +752,7 @@ function createLayer(input: StreamInput) {
                 Effect.map((item) => item.data ?? []),
                 Effect.orElseSucceed(() => []),
               ),
+              futureAttentionFinalizations(),
             ],
             {
               concurrency: "unbounded",
@@ -796,6 +830,8 @@ function createLayer(input: StreamInput) {
               yield* Effect.promise(() => input.footer.idle()).pipe(Effect.orElseSucceed(() => undefined))
             }
           }
+
+          for (const finalization of finalizations) yield* applyEvent(finalization)
 
           const snapshot = currentSubagentState()
           traceTabs(input.trace, [], snapshot.tabs)

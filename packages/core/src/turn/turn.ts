@@ -126,6 +126,7 @@ export type CandidateInput = {
   readonly partID: PartID
   readonly callID: string
   readonly tool: string
+  readonly futureAttentionServiceSource?: "learner_usable" | "internal_control"
   readonly envelope: Json
 }
 
@@ -725,6 +726,7 @@ export function sealCandidateSet(
               assistant_message_id: input.assistantMessageID,
               call_id: candidate.callID,
               tool: candidate.tool,
+              future_attention_service_source: candidate.futureAttentionServiceSource ?? "internal_control",
               emission_ordinal: emissionOrdinal,
               state: "pending_admission",
               normalized_envelope: candidate.envelope,
@@ -2367,6 +2369,8 @@ function retainUnavailableSources(
             turn_id: model.turn_id,
             assistant_message_id: model.assistant_message_id,
             causal_occurrence_id: model.causal_occurrence_id,
+            state: model.state as Exclude<typeof model.state, "running">,
+            time_settled: model.time_settled!,
           })
           .run()
           .pipe(Effect.orDie),
@@ -2826,6 +2830,7 @@ function candidateInfo(row: typeof TurnToolCandidateTable.$inferSelect): Turn.To
     partID: row.part_id,
     callID: row.call_id,
     tool: row.tool,
+    futureAttentionServiceSource: row.future_attention_service_source,
     emissionOrdinal: row.emission_ordinal,
     state: row.state,
     envelopeFingerprint: row.envelope_fingerprint,
@@ -2906,6 +2911,8 @@ function unavailableModelInfo(row: typeof TurnUnavailableModelTable.$inferSelect
     turnID: row.turn_id,
     assistantMessageID: row.assistant_message_id,
     ...(row.causal_occurrence_id ? { causalOccurrenceID: row.causal_occurrence_id } : {}),
+    ...(row.state ? { state: row.state } : {}),
+    ...(row.time_settled === null ? {} : { timeSettled: DateTime.makeUnsafe(row.time_settled) }),
   }
 }
 
@@ -2932,6 +2939,7 @@ function exactCandidateSet(
         row.part_id === input.partID &&
         row.call_id === input.callID &&
         row.tool === input.tool &&
+        row.future_attention_service_source === (input.futureAttentionServiceSource ?? "internal_control") &&
         row.envelope_fingerprint === envelopeFingerprint(input.envelope) &&
         isDeepStrictEqual(row.normalized_envelope, input.envelope)
       )

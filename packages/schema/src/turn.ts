@@ -126,6 +126,7 @@ export const ToolCandidate = Schema.Struct({
   partID: SessionV1.PartID,
   callID: Schema.String,
   tool: Schema.String,
+  futureAttentionServiceSource: Schema.Literals(["learner_usable", "internal_control"]),
   emissionOrdinal: NonNegativeInt,
   state: CandidateState,
   envelopeFingerprint: Schema.String,
@@ -226,6 +227,8 @@ export const UnavailableModelMapping = Schema.Struct({
   turnID: ID,
   assistantMessageID: SessionV1.MessageID,
   causalOccurrenceID: LearningOccurrence.ID.pipe(optional),
+  state: Schema.Literals(["completed", "failed", "interrupted"]).pipe(optional),
+  timeSettled: DateTimeUtcFromMillis.pipe(optional),
 }).annotate({ identifier: "Turn.UnavailableModelMapping" })
 export type UnavailableModelMapping = typeof UnavailableModelMapping.Type
 

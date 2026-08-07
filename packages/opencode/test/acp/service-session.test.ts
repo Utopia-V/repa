@@ -157,6 +157,12 @@ describe("ACP service sessions", () => {
     const commands: unknown[] = []
     const summarizes: unknown[] = []
     const usageUpdates: string[] = []
+    const finalizationCatchups: Array<{
+      sessionID: string
+      directory?: string
+      after?: string
+      limit?: string
+    }> = []
     const delivered: { info: Record<string, unknown>; parts: readonly unknown[] }[] = []
     const sessions = Array.from({ length: 102 }, (_, index) => ({
       id: `ses_${index + 1}`,
@@ -196,6 +202,15 @@ describe("ACP service sessions", () => {
             data: input.directory ? sessions.filter((session) => session.directory === input.directory) : sessions,
           }),
         messages: () => Promise.resolve({ data: [...messages, ...delivered] }),
+        futureAttentionFinalizations: (input: {
+          sessionID: string
+          directory?: string
+          after?: string
+          limit?: string
+        }) => {
+          finalizationCatchups.push(input)
+          return Promise.resolve({ data: { events: [], hasMore: false } })
+        },
         start: async (request: Record<string, unknown>) => {
           prompts.push(request)
           const response = options?.prompt
@@ -298,6 +313,7 @@ describe("ACP service sessions", () => {
       commands,
       summarizes,
       usageUpdates,
+      finalizationCatchups,
     }
   }
 
@@ -346,7 +362,7 @@ describe("ACP service sessions", () => {
   })
 
   it("loads a session and restores model variant and mode from messages", async () => {
-    const { service } = makeService([
+    const { service, finalizationCatchups } = makeService([
       {
         info: {
           role: "assistant",
@@ -364,6 +380,9 @@ describe("ACP service sessions", () => {
 
     expect(result.configOptions?.find((option) => option.id === "effort")?.currentValue).toBe("high")
     expect(result.configOptions?.find((option) => option.id === "mode")?.currentValue).toBe("plan")
+    expect(finalizationCatchups).toEqual([
+      { sessionID: "ses_loaded", directory: "/workspace", after: "-1", limit: "100" },
+    ])
   })
 
   it("replays loaded session transcript chunks", async () => {
@@ -440,7 +459,7 @@ describe("ACP service sessions", () => {
   })
 
   it("resumes a session and stores restored state without replaying transcript chunks", async () => {
-    const { service, updates } = makeService([
+    const { service, updates, finalizationCatchups } = makeService([
       {
         info: {
           id: "msg_user",
@@ -473,6 +492,9 @@ describe("ACP service sessions", () => {
 
     expect(select(resumed, "effort")?.currentValue).toBe("high")
     expect(select(updated, "effort")?.currentValue).toBe("default")
+    expect(finalizationCatchups).toEqual([
+      { sessionID: "ses_resume", directory: "/workspace", after: "-1", limit: "100" },
+    ])
     expect(
       updates
         .map((item) => item.update)

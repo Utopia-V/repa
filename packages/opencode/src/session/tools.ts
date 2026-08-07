@@ -33,6 +33,7 @@ import {
 } from "@/tool/learning-command"
 import { assertExternalContentToolID } from "@/tool/content-root"
 import { INVALID_TOOL_ID } from "@/tool/invalid"
+import { FutureAttentionServiceSource } from "@/tool/future-attention-service-source"
 
 const MCP_RESOURCE_TOOLS = {
   list: "list_mcp_resources",
@@ -195,6 +196,10 @@ export const resolve = Effect.fn("SessionTools.resolve")(function* (input: {
         )
       },
     })
+    const classified = local as AITool & {
+      [SessionProcessor.FutureAttentionServiceSourceUse]: FutureAttentionServiceSource.Use
+    }
+    classified[SessionProcessor.FutureAttentionServiceSourceUse] = FutureAttentionServiceSource.classify(item.id)
     if (prepareToolCall) {
       const prepared = local as AITool & {
         [SessionProcessor.ToolCallPreparation]: SessionProcessor.ToolCallPreparation

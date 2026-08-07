@@ -135,6 +135,14 @@ export type {
 } from "./learner-response-evidence"
 
 export {
+  PERMISSION_PATTERN as FUTURE_ATTENTION_PERMISSION_PATTERN,
+  READ_CAPABILITY as FUTURE_ATTENTION_READ_CAPABILITY,
+  READ_VERSION as FUTURE_ATTENTION_READ_VERSION,
+  UPDATE_CAPABILITY as UPDATE_FUTURE_ATTENTION_CAPABILITY,
+  UPDATE_VERSION as UPDATE_FUTURE_ATTENTION_VERSION,
+} from "./future-attention"
+
+export {
   assertAssistantDeletable,
   assertPartDeletable,
   exactSettlement,

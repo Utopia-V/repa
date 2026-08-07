@@ -158,6 +158,8 @@ import type {
   SessionDiffResponses,
   SessionForkBasisErrors,
   SessionForkBasisResponses,
+  SessionFutureAttentionFinalizationsErrors,
+  SessionFutureAttentionFinalizationsResponses,
   SessionGetErrors,
   SessionGetResponses,
   SessionGetTurnErrors,
@@ -2684,6 +2686,44 @@ export class Session2 extends HeyApiClient {
     )
     return (options?.client ?? this.client).get<SessionMessagesResponses, SessionMessagesErrors, ThrowOnError>({
       url: "/session/{sessionID}/message",
+      ...options,
+      ...params,
+    })
+  }
+
+  /**
+   * List FutureAttention finalizations
+   *
+   * Read the durable, paginated finalization history used to catch up retained session carriers.
+   */
+  public futureAttentionFinalizations<ThrowOnError extends boolean = false>(
+    parameters: {
+      sessionID: string
+      directory?: string
+      after?: string
+      limit?: string
+    },
+    options?: Options<never, ThrowOnError>,
+  ) {
+    const params = buildClientParams(
+      [parameters],
+      [
+        {
+          args: [
+            { in: "path", key: "sessionID" },
+            { in: "query", key: "directory" },
+            { in: "query", key: "after" },
+            { in: "query", key: "limit" },
+          ],
+        },
+      ],
+    )
+    return (options?.client ?? this.client).get<
+      SessionFutureAttentionFinalizationsResponses,
+      SessionFutureAttentionFinalizationsErrors,
+      ThrowOnError
+    >({
+      url: "/session/{sessionID}/future-attention/finalization",
       ...options,
       ...params,
     })

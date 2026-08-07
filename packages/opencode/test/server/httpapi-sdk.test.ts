@@ -30,6 +30,11 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Database } from "@opencode-ai/core/database/database"
+import { eq } from "drizzle-orm"
+import { EventV2 } from "@opencode-ai/core/event"
+import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
+import { FutureAttentionEvent } from "@opencode-ai/schema/future-attention-event"
+import { LearningOccurrence } from "@opencode-ai/schema/learning-occurrence"
 import { httpApiLayer } from "./httpapi-layer"
 
 const noopBootstrapLayer = Layer.succeed(InstanceBootstrap.Service, InstanceBootstrap.Service.of({ run: Effect.void }))
@@ -56,6 +61,7 @@ type TestServices =
   | FSUtil.Service
   | ChildProcessSpawner.ChildProcessSpawner
   | InstanceStore.Service
+  | Database.Service
   | SessionNs.Service
   | HttpServer.HttpServer
 type TestScope = Scope.Scope | TestServices
@@ -96,6 +102,49 @@ function startSession(
         parts: [{ type: "text", text: input?.text ?? "SDK test admission" }],
       }),
   }
+}
+
+// Carrier catch-up intentionally starts from durable history that predates
+// attachment, so this fixture writes only that detached EventV2 projection.
+function insertDetachedFutureAttentionFinalizations(
+  db: Database.Interface["db"],
+  sessionID: string,
+  finalizations: readonly Record<string, unknown>[],
+) {
+  return Effect.gen(function* () {
+    const current = yield* db
+      .select({ seq: EventSequenceTable.seq })
+      .from(EventSequenceTable)
+      .where(eq(EventSequenceTable.aggregate_id, sessionID))
+      .get()
+    const sequences = finalizations.map((_, index) => (current?.seq ?? -1) + index + 1)
+    yield* db.transaction((tx) =>
+      Effect.gen(function* () {
+        if (current) {
+          yield* tx
+            .update(EventSequenceTable)
+            .set({ seq: sequences.at(-1)! })
+            .where(eq(EventSequenceTable.aggregate_id, sessionID))
+            .run()
+        } else {
+          yield* tx.insert(EventSequenceTable).values({ aggregate_id: sessionID, seq: sequences.at(-1)! }).run()
+        }
+        yield* tx
+          .insert(EventTable)
+          .values(
+            finalizations.map((data, index) => ({
+              id: EventV2.ID.create(),
+              aggregate_id: sessionID,
+              seq: sequences[index]!,
+              type: EventV2.versionedType(FutureAttentionEvent.Finalized.type, 1),
+              data,
+            })),
+          )
+          .run()
+      }),
+    )
+    return sequences
+  })
 }
 
 function client(
@@ -672,6 +721,106 @@ describe("HttpApi SDK", () => {
           todoCount: array(todo.data).length,
           messageCount: array(messages.data).length,
         }
+      }),
+    ),
+  )
+
+  serverPathParity("pages durable FutureAttention finalizations through the generated SDK", (serverPath) =>
+    withStandardProject(serverPath, ({ sdk }) =>
+      Effect.gen(function* () {
+        const started = startSession(sdk, { title: "future-attention-finalization-history" })
+        const session = yield* capture(started.request)
+        expect(session.status, JSON.stringify(session.error)).toBe(200)
+        const db = (yield* Database.Service).db
+        const finalized = (marker: string) => {
+          const suffix = marker.repeat(26)
+          const turnID = Turn.ID.create()
+          const assistantMessageID = MessageID.ascending()
+          const invocationPartID = PartID.ascending()
+          return {
+            sessionID: started.sessionID,
+            turnID,
+            assistantMessageID,
+            invocationPartID,
+            groupID: `fag_${suffix}`,
+            receipt: {
+              id: `far_${suffix}`,
+              groupID: `fag_${suffix}`,
+              outcome: "served",
+              completion: {
+                observationCut: "live_presentation_finalized",
+                sessionID: started.sessionID,
+                turnID,
+                occurrenceID: LearningOccurrence.ID.create(),
+                assistantMessageID,
+                modelOperationID: assistantMessageID,
+                invocationPartID,
+                modelOutcome: "completed",
+                localToolPartsTerminal: true,
+                presentationCommitted: true,
+                presentationUnavailable: false,
+                timeCompleted: 2,
+                completionOrder: 1,
+                partManifestFingerprint: "a".repeat(64),
+                eligibleOutputFingerprint: "b".repeat(64),
+                eligibleOutputBytes: 32,
+              },
+              members: [
+                {
+                  ordinal: 0,
+                  concernID: `fac_${suffix}`,
+                  outcome: "served",
+                  transitionID: `fat_${suffix}`,
+                  serviceReceiptID: `fas_${suffix}`,
+                },
+              ],
+              timeFinalized: 3,
+              finalizationOrder: 2,
+            },
+          }
+        }
+        const first = finalized("1")
+        const second = finalized("2")
+        const sequences = yield* insertDetachedFutureAttentionFinalizations(db, started.sessionID, [first, second])
+        const firstSequence = sequences[0]!
+        const secondSequence = sequences[1]!
+
+        const firstPage = yield* call(() =>
+          sdk.session.futureAttentionFinalizations({
+            sessionID: started.sessionID,
+            after: (firstSequence - 1).toString(),
+            limit: "1",
+          }),
+        )
+        const secondPage = yield* call(() =>
+          sdk.session.futureAttentionFinalizations({
+            sessionID: started.sessionID,
+            after: firstSequence.toString(),
+            limit: "1",
+          }),
+        )
+        expect(firstPage.response.status, JSON.stringify(firstPage.error)).toBe(200)
+        expect(secondPage.response.status, JSON.stringify(secondPage.error)).toBe(200)
+        expect(firstPage.data).toMatchObject({
+          events: [
+            {
+              type: "future_attention.finalized",
+              sequence: firstSequence,
+              properties: { receipt: { id: first.receipt.id } },
+            },
+          ],
+          hasMore: true,
+        })
+        expect(secondPage.data).toMatchObject({
+          events: [
+            {
+              type: "future_attention.finalized",
+              sequence: secondSequence,
+              properties: { receipt: { id: second.receipt.id } },
+            },
+          ],
+          hasMore: false,
+        })
       }),
     ),
   )

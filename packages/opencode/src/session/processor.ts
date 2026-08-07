@@ -77,6 +77,7 @@ export type RegisteredToolCall = Readonly<{
 }>
 
 export const ToolCallPreparation = Symbol("SessionProcessor.ToolCallPreparation")
+export const FutureAttentionServiceSourceUse = Symbol("SessionProcessor.FutureAttentionServiceSourceUse")
 
 export type ToolCallPreparation = (input: unknown, registration: RegisteredToolCall) => void | PromiseLike<void>
 
@@ -147,6 +148,7 @@ function assertProviderDoesNotExecuteHostPreparedTool(
 
 type LocalTool = LLM.StreamInput["tools"][string] & {
   [ToolCallPreparation]?: ToolCallPreparation
+  [FutureAttentionServiceSourceUse]?: Turn.ToolCandidate["futureAttentionServiceSource"]
 }
 
 interface ProcessorContext extends Input {
@@ -646,6 +648,8 @@ const layer = Layer.effect(
           partID: call.partID,
           callID: call.callID,
           tool: call.name,
+          futureAttentionServiceSource:
+            (activeTools[call.name] as LocalTool | undefined)?.[FutureAttentionServiceSourceUse] ?? "internal_control",
           envelope: {
             input: call.input ?? {},
             ...(call.finalized ? {} : { incomplete: true, raw: call.raw }),

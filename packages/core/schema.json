@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "481db513-d3bc-4bc3-97fa-089735ad6b11",
+  "id": "d2258d13-2479-433d-bd76-a44822a4071c",
   "prevIds": [
-    "ef1fc4d0-56a5-4c97-bf0e-fdcd865f70ca"
+    "481db513-d3bc-4bc3-97fa-089735ad6b11"
   ],
   "ddl": [
     {
@@ -172,6 +172,46 @@
     },
     {
       "name": "event",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_capability_issue",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_capability_settlement",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_change_set",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_claim_finalization",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_claim_group",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_claim_member",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_concern",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_disposition",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_service_receipt",
+      "entityType": "tables"
+    },
+    {
+      "name": "future_attention_transition",
       "entityType": "tables"
     },
     {
@@ -3775,6 +3815,1086 @@
       "name": "data",
       "entityType": "columns",
       "table": "event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_basis",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shown_scope",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shown_scope_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_issued",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "issue_order",
+      "entityType": "columns",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_order",
+      "entityType": "columns",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "slot",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_command",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "physical_receipt_id",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admission_projection",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "future_attention_change_set"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "group_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "completion",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "member_results",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_finalized",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "finalization_order",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "change_set_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "physical_receipt_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "turn_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "assistant_message_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model_operation_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_admitted",
+      "entityType": "columns",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "group_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "concern_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "expected_version",
+      "entityType": "columns",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "expected_transition_id",
+      "entityType": "columns",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rationale",
+      "entityType": "columns",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "learner_response_witness",
+      "entityType": "columns",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_concern_id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "create_change_set_id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "purpose",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source_relation",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "view_id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_revision_id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "course_item_id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "selection",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "membership_receipt",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "not_before_instant",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "temporal_source_expression",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effective_utc_offset_minutes",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "resolved_zone",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "service_timing",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "interaction_order",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_value",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_bytes",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_transition_id",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "current_version",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "future_attention_concern"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_command",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_address_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_outcome",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "existing_change_set_id",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action_fingerprint",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "materialized_candidate",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_disposed",
+      "entityType": "columns",
+      "table": "future_attention_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "transition_id",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "source",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rationale",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "learner_response_witness",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "carried_from_service_receipt_id",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "claim_group_id",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_recorded",
+      "entityType": "columns",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "concern_id",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_transition_id",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "mutation",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rationale",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "service_receipt_id",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "change_set_id",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "future_attention_transition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "future_attention_transition"
     },
     {
       "type": "text",
@@ -13678,6 +14798,16 @@
     },
     {
       "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "'internal_control'",
+      "generated": null,
+      "name": "future_attention_service_source",
+      "entityType": "columns",
+      "table": "turn_tool_candidate"
+    },
+    {
+      "type": "text",
       "notNull": false,
       "autoincrement": false,
       "default": null,
@@ -13873,6 +15003,26 @@
       "default": null,
       "generated": null,
       "name": "causal_occurrence_id",
+      "entityType": "columns",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "state",
+      "entityType": "columns",
+      "table": "turn_unavailable_model"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
       "entityType": "columns",
       "table": "turn_unavailable_model"
     },
@@ -15300,6 +16450,374 @@
       "name": "fk_event_aggregate_id_event_sequence_aggregate_id_fk",
       "entityType": "fks",
       "table": "event"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "future_attention_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_future_attention_capability_issue_invocation_part_id_future_attention_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "future_attention_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_future_attention_capability_settlement_invocation_part_id_future_attention_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "columns": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "tableTo": "future_attention_capability_issue",
+      "columnsTo": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_future_attention_capability_settlement_invocation_part_id_permission_request_id_future_attention_capability_issue_invocation_part_id_permission_request_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_change_set_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_change_set"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_change_set_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_change_set"
+    },
+    {
+      "columns": [
+        "physical_receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_change_set_physical_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_change_set"
+    },
+    {
+      "columns": [
+        "group_id"
+      ],
+      "tableTo": "future_attention_claim_group",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_finalization_group_id_future_attention_claim_group_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "columns": [
+        "change_set_id"
+      ],
+      "tableTo": "future_attention_change_set",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_group_change_set_id_future_attention_change_set_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "columns": [
+        "physical_receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_group_physical_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_group_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_group_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "columns": [
+        "group_id"
+      ],
+      "tableTo": "future_attention_claim_group",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_member_group_id_future_attention_claim_group_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "columns": [
+        "concern_id"
+      ],
+      "tableTo": "future_attention_concern",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_member_concern_id_future_attention_concern_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "columns": [
+        "expected_transition_id"
+      ],
+      "tableTo": "future_attention_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_claim_member_expected_transition_id_future_attention_transition_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "columns": [
+        "predecessor_concern_id"
+      ],
+      "tableTo": "future_attention_concern",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_concern_predecessor_concern_id_future_attention_concern_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_concern"
+    },
+    {
+      "columns": [
+        "create_change_set_id"
+      ],
+      "tableTo": "future_attention_change_set",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_concern_create_change_set_id_future_attention_change_set_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_concern"
+    },
+    {
+      "columns": [
+        "course_id",
+        "view_id",
+        "course_revision_id",
+        "course_item_id"
+      ],
+      "tableTo": "course_view_revision_item",
+      "columnsTo": [
+        "course_id",
+        "view_id",
+        "revision_id",
+        "item_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_concern_course_id_view_id_course_revision_id_course_item_id_course_view_revision_item_course_id_view_id_revision_id_item_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_concern"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_future_attention_disposition_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_disposition"
+    },
+    {
+      "columns": [
+        "existing_change_set_id"
+      ],
+      "tableTo": "future_attention_change_set",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_disposition_existing_change_set_id_future_attention_change_set_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_disposition"
+    },
+    {
+      "columns": [
+        "transition_id"
+      ],
+      "tableTo": "future_attention_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_service_receipt_transition_id_future_attention_transition_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "columns": [
+        "carried_from_service_receipt_id"
+      ],
+      "tableTo": "future_attention_service_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_service_receipt_carried_from_service_receipt_id_future_attention_service_receipt_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "columns": [
+        "concern_id"
+      ],
+      "tableTo": "future_attention_concern",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_transition_concern_id_future_attention_concern_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_transition"
+    },
+    {
+      "columns": [
+        "predecessor_transition_id"
+      ],
+      "tableTo": "future_attention_transition",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_transition_predecessor_transition_id_future_attention_transition_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_transition"
+    },
+    {
+      "columns": [
+        "change_set_id"
+      ],
+      "tableTo": "future_attention_change_set",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_future_attention_transition_change_set_id_future_attention_change_set_id_fk",
+      "entityType": "fks",
+      "table": "future_attention_transition"
     },
     {
       "columns": [
@@ -18818,6 +20336,16 @@
     },
     {
       "columns": [
+        "group_id",
+        "ordinal"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_claim_member_pk",
+      "entityType": "pks",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "columns": [
         "revision_id",
         "ordinal"
       ],
@@ -19257,6 +20785,87 @@
       "nameExplicit": false,
       "name": "event_pk",
       "table": "event",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_capability_issue_pk",
+      "table": "future_attention_capability_issue",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_capability_settlement_pk",
+      "table": "future_attention_capability_settlement",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_change_set_pk",
+      "table": "future_attention_change_set",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_claim_finalization_pk",
+      "table": "future_attention_claim_finalization",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_claim_group_pk",
+      "table": "future_attention_claim_group",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_concern_pk",
+      "table": "future_attention_concern",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_disposition_pk",
+      "table": "future_attention_disposition",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_service_receipt_pk",
+      "table": "future_attention_service_receipt",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_transition_pk",
+      "table": "future_attention_transition",
       "entityType": "pks"
     },
     {
@@ -20906,6 +22515,102 @@
       "name": "event_aggregate_type_seq_idx",
       "entityType": "indexes",
       "table": "event"
+    },
+    {
+      "columns": [
+        {
+          "value": "time_admitted",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "future_attention_claim_group_pending_idx",
+      "entityType": "indexes",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "columns": [
+        {
+          "value": "course_id",
+          "isExpression": false
+        },
+        {
+          "value": "view_id",
+          "isExpression": false
+        },
+        {
+          "value": "course_revision_id",
+          "isExpression": false
+        },
+        {
+          "value": "course_item_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "future_attention_concern_target_idx",
+      "entityType": "indexes",
+      "table": "future_attention_concern"
+    },
+    {
+      "columns": [
+        {
+          "value": "not_before_instant",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "future_attention_concern_activation_idx",
+      "entityType": "indexes",
+      "table": "future_attention_concern"
+    },
+    {
+      "columns": [
+        {
+          "value": "concern_id",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "future_attention_transition_history_idx",
+      "entityType": "indexes",
+      "table": "future_attention_transition"
     },
     {
       "columns": [
@@ -22741,6 +24446,45 @@
         "permission_request_id"
       ],
       "nameExplicit": true,
+      "name": "future_attention_capability_issue_exact",
+      "entityType": "uniques",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "columns": [
+        "group_id",
+        "concern_id"
+      ],
+      "nameExplicit": true,
+      "name": "future_attention_claim_member_concern_unique",
+      "entityType": "uniques",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "columns": [
+        "current_transition_id"
+      ],
+      "nameExplicit": true,
+      "name": "future_attention_concern_current_transition_unique",
+      "entityType": "uniques",
+      "table": "future_attention_concern"
+    },
+    {
+      "columns": [
+        "concern_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "future_attention_transition_concern_version_unique",
+      "entityType": "uniques",
+      "table": "future_attention_transition"
+    },
+    {
+      "columns": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "nameExplicit": true,
       "name": "learner_goal_capability_issue_v2_invocation_request_unique",
       "entityType": "uniques",
       "table": "learner_goal_capability_issue_v2"
@@ -23525,6 +25269,96 @@
         "permission_request_id"
       ],
       "nameExplicit": false,
+      "name": "future_attention_capability_issue_permission_request_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_change_set_occurrence_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_change_set"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_change_set_invocation_part_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_change_set"
+    },
+    {
+      "columns": [
+        "physical_receipt_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_change_set_physical_receipt_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_change_set"
+    },
+    {
+      "columns": [
+        "group_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_claim_finalization_group_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "columns": [
+        "change_set_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_claim_group_change_set_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_claim_group_invocation_part_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "columns": [
+        "predecessor_concern_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_concern_predecessor_concern_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_concern"
+    },
+    {
+      "columns": [
+        "transition_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_service_receipt_transition_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "columns": [
+        "predecessor_transition_id"
+      ],
+      "nameExplicit": false,
+      "name": "future_attention_transition_predecessor_transition_id_unique",
+      "entityType": "uniques",
+      "table": "future_attention_transition"
+    },
+    {
+      "columns": [
+        "permission_request_id"
+      ],
+      "nameExplicit": false,
       "name": "learner_goal_capability_issue_v2_permission_request_id_unique",
       "entityType": "uniques",
       "table": "learner_goal_capability_issue_v2"
@@ -24197,6 +26031,78 @@
       "name": "course_working_selection_version_nonnegative",
       "entityType": "checks",
       "table": "course_working_selection"
+    },
+    {
+      "value": "length(\"agent_action_fingerprint\") = 64 AND length(\"policy_fingerprint\") = 64\n        AND length(\"shown_scope_fingerprint\") = 64 AND json_valid(\"policy_basis\")\n        AND json_valid(\"shown_scope\") AND \"time_issued\" >= 0 AND \"issue_order\" >= 0",
+      "name": "future_attention_capability_issue_shape",
+      "entityType": "checks",
+      "table": "future_attention_capability_issue"
+    },
+    {
+      "value": "length(\"agent_action_fingerprint\") = 64\n        AND (\"basis_fingerprint\" IS NULL OR length(\"basis_fingerprint\") = 64)\n        AND \"time_settled\" >= 0 AND \"settlement_order\" >= 0\n        AND ((\"outcome\" = 'not_evaluated' AND \"permission_request_id\" IS NULL AND \"basis\" IS NULL)\n          OR (\"outcome\" IN ('policy_allow', 'policy_deny') AND \"permission_request_id\" IS NULL\n            AND json_valid(\"basis\"))\n          OR (\"outcome\" = 'prompted_abort' AND \"permission_request_id\" IS NOT NULL\n            AND \"basis\" IS NULL)\n          OR (\"outcome\" IN ('prompted_allow', 'prompted_deny', 'prompted_correct', 'prompted_cancel')\n            AND \"permission_request_id\" IS NOT NULL AND json_valid(\"basis\")))",
+      "name": "future_attention_capability_settlement_shape",
+      "entityType": "checks",
+      "table": "future_attention_capability_settlement"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'fae_'\n        AND \"slot\" = 'future_attention_change_set' AND json_valid(\"canonical_command\")\n        AND json_extract(\"canonical_command\", '$.schemaVersion') = 1\n        AND length(\"command_fingerprint\") = 64 AND \"command_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND json_valid(\"admission_projection\") AND \"time_committed\" >= 0\n        AND \"commit_order\" >= 0 AND \"frontier_sequence\" >= 1",
+      "name": "future_attention_change_set_shape",
+      "entityType": "checks",
+      "table": "future_attention_change_set"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'far_'\n        AND \"outcome\" IN ('served', 'not_served') AND json_valid(\"completion\")\n        AND json_valid(\"member_results\") AND json_type(\"member_results\") = 'array'\n        AND \"time_finalized\" >= 0 AND \"finalization_order\" >= 0\n        AND (\"outcome\" = 'served' AND \"frontier_sequence\" IS NOT NULL AND \"frontier_sequence\" >= 1\n          OR \"outcome\" = 'not_served' AND \"frontier_sequence\" IS NULL)",
+      "name": "future_attention_claim_finalization_shape",
+      "entityType": "checks",
+      "table": "future_attention_claim_finalization"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'fag_'\n        AND length(\"session_id\") > 0 AND length(\"turn_id\") > 0\n        AND length(\"assistant_message_id\") > 0 AND \"model_operation_id\" = \"assistant_message_id\"\n        AND \"time_admitted\" >= 0",
+      "name": "future_attention_claim_group_shape",
+      "entityType": "checks",
+      "table": "future_attention_claim_group"
+    },
+    {
+      "value": "\"ordinal\" >= 0 AND \"expected_version\" >= 0\n        AND length(CAST(\"rationale\" AS BLOB)) BETWEEN 1 AND 1024\n        AND (\"learner_response_witness\" IS NULL OR json_valid(\"learner_response_witness\"))",
+      "name": "future_attention_claim_member_shape",
+      "entityType": "checks",
+      "table": "future_attention_claim_member"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'fac_'\n        AND (\"predecessor_concern_id\" IS NULL OR \"predecessor_concern_id\" <> \"id\")\n        AND length(CAST(\"purpose\" AS BLOB)) BETWEEN 1 AND 768\n        AND \"source_relation\" IN ('interpreted_learner_request', 'tutor_initiated')\n        AND json_valid(\"source\") AND json_extract(\"source\", '$.type') = \"source_relation\"\n        AND json_valid(\"selection\") AND json_valid(\"membership_receipt\")\n        AND \"not_before_instant\" >= 0 AND length(CAST(\"temporal_source_expression\" AS BLOB)) BETWEEN 1 AND 256\n        AND \"effective_utc_offset_minutes\" BETWEEN -840 AND 840 AND json_valid(\"resolved_zone\")\n        AND json_extract(\"resolved_zone\", '$.type') IN ('iana', 'fixed_offset')\n        AND \"service_timing\" IN ('after_creation', 'at_or_after_not_before')\n        AND (\"interaction_order\" IS NULL OR \"interaction_order\" = 'learner_response_before_tutor_disclosure')\n        AND json_valid(\"semantic_value\") AND \"semantic_bytes\" = length(CAST(\"semantic_value\" AS BLOB))\n        AND \"semantic_bytes\" BETWEEN 1 AND 2048 AND \"current_version\" >= 0 AND \"time_created\" >= 0",
+      "name": "future_attention_concern_identity",
+      "entityType": "checks",
+      "table": "future_attention_concern"
+    },
+    {
+      "value": "length(\"command_fingerprint\") = 64 AND \"command_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"semantic_address_fingerprint\") = 64 AND \"semantic_address_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND (\"agent_action_fingerprint\" IS NULL OR (length(\"agent_action_fingerprint\") = 64\n          AND \"agent_action_fingerprint\" NOT GLOB '*[^0-9a-f]*'))",
+      "name": "future_attention_disposition_fingerprints",
+      "entityType": "checks",
+      "table": "future_attention_disposition"
+    },
+    {
+      "value": "(\"disposition\" = 'candidate_v1' AND \"semantic_outcome\" IS NULL\n          AND \"existing_change_set_id\" IS NULL AND \"agent_action_fingerprint\" IS NOT NULL\n          AND json_valid(\"agent_action\") AND json_valid(\"materialized_candidate\"))\n        OR (\"disposition\" = 'semantic_terminal_v1'\n          AND \"semantic_outcome\" IN ('already_applied', 'semantic_conflict')\n          AND \"existing_change_set_id\" IS NOT NULL AND \"agent_action_fingerprint\" IS NULL\n          AND \"agent_action\" IS NULL AND \"materialized_candidate\" IS NULL)",
+      "name": "future_attention_disposition_closed",
+      "entityType": "checks",
+      "table": "future_attention_disposition"
+    },
+    {
+      "value": "json_valid(\"canonical_command\") AND json_extract(\"canonical_command\", '$.schemaVersion') = 1\n        AND \"time_disposed\" >= 0",
+      "name": "future_attention_disposition_shape",
+      "entityType": "checks",
+      "table": "future_attention_disposition"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'fas_' AND json_valid(\"source\")\n        AND length(CAST(\"rationale\" AS BLOB)) BETWEEN 1 AND 1024\n        AND (\"learner_response_witness\" IS NULL OR json_valid(\"learner_response_witness\"))\n        AND \"time_recorded\" >= 0",
+      "name": "future_attention_service_receipt_shape",
+      "entityType": "checks",
+      "table": "future_attention_service_receipt"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'fat_' AND \"version\" >= 0\n        AND \"kind\" IN ('created', 'superseded', 'served', 'dismissed', 'reopened', 'served_by_correction', 'dismissed_by_correction')\n        AND \"disposition\" IN ('open', 'served', 'dismissed', 'superseded')\n        AND (\"mutation\" IS NULL OR json_valid(\"mutation\"))\n        AND (\"rationale\" IS NULL OR length(CAST(\"rationale\" AS BLOB)) BETWEEN 1 AND 1024)\n        AND \"time_committed\" >= 0 AND \"commit_order\" >= 0 AND \"frontier_sequence\" >= 1",
+      "name": "future_attention_transition_shape",
+      "entityType": "checks",
+      "table": "future_attention_transition"
     },
     {
       "value": "length(\"agent_action_fingerprint\") = 64 AND \"agent_action_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"policy_fingerprint\") = 64 AND \"policy_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"shown_scope_fingerprint\") = 64 AND \"shown_scope_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
@@ -24907,7 +26813,7 @@
       "table": "learning_command_receipt"
     },
     {
-      "value": "json_valid(\"canonical_cut\")\n        AND json_type(\"canonical_cut\") = 'object'\n        AND json_extract(\"canonical_cut\", '$.schemaVersion') = 1\n        AND ((json_extract(\"canonical_cut\", '$.policyVersion') = 1\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 1)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 2\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 2))\n        AND json_extract(\"canonical_cut\", '$.operation.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_cut\", '$.cutAsOf') = \"cut_as_of\"\n        AND json_extract(\"canonical_cut\", '$.budget.canonicalBytes') = \"canonical_bytes\"\n        AND json_extract(\"canonical_cut\", '$.budget.renderedBytes') = \"rendered_bytes\"\n        AND json_extract(\"canonical_cut\", '$.fingerprint') = \"cut_fingerprint\"\n        AND json_extract(\"canonical_cut\", '$.renderedFingerprint') = \"rendered_fingerprint\"",
+      "value": "json_valid(\"canonical_cut\")\n        AND json_type(\"canonical_cut\") = 'object'\n        AND json_extract(\"canonical_cut\", '$.schemaVersion') = 1\n        AND ((json_extract(\"canonical_cut\", '$.policyVersion') = 1\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 1)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 2\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 2)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 3\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 3))\n        AND json_extract(\"canonical_cut\", '$.operation.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_cut\", '$.cutAsOf') = \"cut_as_of\"\n        AND json_extract(\"canonical_cut\", '$.budget.canonicalBytes') = \"canonical_bytes\"\n        AND json_extract(\"canonical_cut\", '$.budget.renderedBytes') = \"rendered_bytes\"\n        AND json_extract(\"canonical_cut\", '$.fingerprint') = \"cut_fingerprint\"\n        AND json_extract(\"canonical_cut\", '$.renderedFingerprint') = \"rendered_fingerprint\"",
       "name": "turn_learning_context_cut_canonical_shape",
       "entityType": "checks",
       "table": "turn_learning_context_cut"

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect } from "bun:test"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Effect, Layer, Queue, Schema, Stream } from "effect"
+import { GlobalBus } from "../../src/bus/global"
 import { EventPaths } from "../../src/server/routes/instance/httpapi/groups/event"
+import { GlobalPaths } from "../../src/server/routes/instance/httpapi/groups/global"
 import { MessageID, SessionID } from "../../src/session/schema"
 import { resetDatabase } from "../fixture/db"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
@@ -12,6 +14,10 @@ const EventData = Schema.Struct({
   id: Schema.optional(Schema.String),
   type: Schema.String,
   properties: Schema.Record(Schema.String, Schema.Any),
+})
+const GlobalEventData = Schema.Struct({
+  directory: Schema.optional(Schema.String),
+  payload: EventData,
 })
 
 const readEvent = (reader: Queue.Dequeue<Uint8Array>): Effect.Effect<typeof EventData.Type, Error> =>
@@ -28,6 +34,22 @@ const readEvent = (reader: Queue.Dequeue<Uint8Array>): Effect.Effect<typeof Even
       .find((line) => line.startsWith("data: "))
     if (!data) return yield* readEvent(reader)
     return Schema.decodeUnknownSync(EventData)(JSON.parse(data.slice("data: ".length)))
+  })
+
+const readGlobalEvent = (reader: Queue.Dequeue<Uint8Array>): Effect.Effect<typeof GlobalEventData.Type, Error> =>
+  Effect.gen(function* () {
+    const value = yield* Queue.take(reader).pipe(
+      Effect.timeoutOrElse({
+        duration: "5 seconds",
+        orElse: () => Effect.fail(new Error("timed out waiting for global event")),
+      }),
+    )
+    const data = new TextDecoder()
+      .decode(value)
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("data: "))
+    if (!data) return yield* readGlobalEvent(reader)
+    return Schema.decodeUnknownSync(GlobalEventData)(JSON.parse(data.slice("data: ".length)))
   })
 
 const openEventStream = (directory: string) =>
@@ -49,6 +71,34 @@ afterEach(async () => {
 const it = testEffect(httpApiLayer)
 
 describe("event HttpApi", () => {
+  it.instance(
+    "registers the global listener before emitting its connection epoch",
+    () =>
+      Effect.gen(function* () {
+        const { directory } = yield* TestInstance
+        const listeners = GlobalBus.listenerCount("event")
+        const response = yield* requestInDirectory(GlobalPaths.event, directory)
+        expect(GlobalBus.listenerCount("event")).toBe(listeners + 1)
+
+        GlobalBus.emit("event", {
+          directory,
+          payload: { type: "server.heartbeat", properties: {} },
+        })
+        const reader = yield* Queue.unbounded<Uint8Array>()
+        yield* response.stream.pipe(
+          Stream.runForEach((value) => Queue.offer(reader, value)),
+          Effect.forkScoped,
+        )
+
+        expect(yield* readGlobalEvent(reader)).toMatchObject({ payload: { type: "server.connected" } })
+        expect(yield* readGlobalEvent(reader)).toMatchObject({
+          directory,
+          payload: { type: "server.heartbeat", properties: {} },
+        })
+      }),
+    { git: true, config: { formatter: false, lsp: false } },
+  )
+
   it.instance(
     "serves event stream",
     () =>

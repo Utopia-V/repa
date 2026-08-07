@@ -439,6 +439,12 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("update_learner_response_evidence", "mcp")).toThrow(
         "mcp tool ID update_learner_response_evidence is reserved by the learning-command runtime",
       )
+      expect(() => assertExternalToolID("future_attention_read", "custom")).toThrow(
+        "custom tool ID future_attention_read is reserved by Repa's learning-context authority",
+      )
+      expect(() => assertExternalToolID("update_future_attention", "mcp")).toThrow(
+        "mcp tool ID update_future_attention is reserved by the learning-command runtime",
+      )
       expect(() => assertExternalToolID("invalid", "custom")).toThrow(
         "custom tool ID invalid is reserved for Repa's program-owned invalid-tool fallback",
       )
@@ -471,6 +477,8 @@ describe("tool.registry", () => {
       expect(ids).toContain("learning_material_query")
       expect(ids).toContain("learner_response_evidence_read")
       expect(ids).toContain("update_learner_response_evidence")
+      expect(ids).toContain("future_attention_read")
+      expect(ids).toContain("update_future_attention")
       expect(ids).toContain("update_learning_course")
       expect(ids).not.toContain("learn")
       expect(ids).not.toContain("/learn")
@@ -663,6 +671,7 @@ describe("tool.registry", () => {
         "update_retained_learning_steering",
         "update_learner_goals",
         "update_learner_response_evidence",
+        "update_future_attention",
         "update_learning_course",
       ]) {
         const tool = tools.find((item) => item.id === id)
@@ -686,6 +695,8 @@ describe("tool.registry", () => {
       expect(defaults).toContain("learning_material_query")
       expect(defaults).toContain("learner_response_evidence_read")
       expect(defaults).toContain("update_learner_response_evidence")
+      expect(defaults).toContain("future_attention_read")
+      expect(defaults).toContain("update_future_attention")
       expect(defaults).toContain("update_learning_course")
       expect(gate18Reads.filter((id) => defaults.includes(id))).toEqual(gate18Reads)
 
@@ -703,6 +714,8 @@ describe("tool.registry", () => {
       expect(restricted).not.toContain("learning_material_query")
       expect(restricted).not.toContain("learner_response_evidence_read")
       expect(restricted).not.toContain("update_learner_response_evidence")
+      expect(restricted).not.toContain("future_attention_read")
+      expect(restricted).not.toContain("update_future_attention")
       expect(restricted).not.toContain("update_learning_course")
       expect(restricted.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -773,6 +786,8 @@ describe("tool.registry", () => {
       expect(delegated).not.toContain("set_default_course_preference")
       expect(delegated).not.toContain("learner_goal_query")
       expect(delegated).not.toContain("learning_material_query")
+      expect(delegated).not.toContain("future_attention_read")
+      expect(delegated).not.toContain("update_future_attention")
       expect(delegated).not.toContain("update_learning_course")
       expect(delegated.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -1096,6 +1111,57 @@ describe("tool.registry", () => {
     }),
   )
 
+  it.instance("publishes closed FutureAttention write/read tools and keeps owner reads non-mutating", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const db = (yield* Database.Service).db
+      const agent = yield* agents.defaultInfo()
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })
+      const command = tools.find((tool) => tool.id === "update_future_attention")
+      const query = tools.find((tool) => tool.id === "future_attention_read")
+      if (!command || !query) return yield* Effect.die("FutureAttention command/read tools are unavailable")
+
+      expect((command.jsonSchema as { additionalProperties?: boolean }).additionalProperties).toBe(false)
+      expect(
+        (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
+          (branch) => branch.additionalProperties,
+        ),
+      ).toEqual([false, false, false])
+      const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+      const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+      const result = JSON.parse(
+        (yield* query.execute(
+          { action: "list", limit: 3 },
+          {
+            sessionID: SessionID.descending(),
+            messageID: MessageID.ascending(),
+            agent: agent.name,
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )).output,
+      )
+      expect(result).toMatchObject({
+        page: {
+          items: [],
+          countAtCut: 0,
+          returnedCount: 0,
+          omittedCount: 0,
+          order: "storage_non_priority",
+        },
+      })
+      expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(before)
+      expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontier)
+    }),
+  )
+
   it.instance("derives one permission catalog from active tools", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
@@ -1104,6 +1170,8 @@ describe("tool.registry", () => {
       expect(catalog).toEqual([...catalog].sort())
       expect(catalog).toContain("accept_course_view_revision")
       expect(catalog).toContain("update_learner_goals")
+      expect(catalog).toContain("update_future_attention")
+      expect(catalog).toContain("future_attention_read")
       expect(catalog).toContain("content_mutation")
       expect(catalog).not.toContain("content_write")
       expect(catalog).not.toContain("invalid")

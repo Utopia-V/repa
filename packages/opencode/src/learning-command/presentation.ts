@@ -1,6 +1,7 @@
 export * as LearningCommandPresentation from "./presentation"
 
 import { Course } from "@opencode-ai/core/course"
+import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
@@ -28,6 +29,7 @@ type Capability =
   | typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
+  | typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
 
 type BindingInput = Readonly<{
   sessionID: string
@@ -298,6 +300,72 @@ export function learnerResponseEvidenceSettlementResult(
     ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
     ...(effect ? { effect } : {}),
   })
+}
+
+export function futureAttentionCapability(candidate: FutureAttention.Candidate, envelope: BindingInput) {
+  return SemanticPresentation.proposal({
+    kind: "future_attention_capability",
+    binding: binding(envelope),
+    commandFingerprint: candidate.commandFingerprint,
+    issuance: candidate.agentAction.kind,
+    scope: SemanticPresentation.futureAttentionScope(candidate.canonicalCommand),
+  })
+}
+
+export function futureAttentionSettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  state: FutureAttention.InvocationVersion,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed FutureAttention settlement has no exact error code")
+  }
+  const effect = futureAttentionEffect(settlement)
+  return SemanticPresentation.result({
+    kind: "future_attention_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition: state.disposition,
+    ...(state.semanticTerminal ? { semanticOutcome: state.semanticTerminal.outcome } : {}),
+    ...(state.candidate ? { issuance: state.candidate.agentAction.kind } : {}),
+    ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+    ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+    ...(effect ? { effect } : {}),
+  })
+}
+
+function futureAttentionEffect(settlement: LearningCommand.PhysicalSettlement) {
+  if (
+    settlement.outcome === "error" ||
+    !("futureAttentionKind" in settlement) ||
+    settlement.futureAttentionKind !== "change_set"
+  ) {
+    return undefined
+  }
+  const value = settlement as unknown as
+    | FutureAttention.AppliedSettlement
+    | FutureAttention.AlreadyAppliedSettlement
+    | FutureAttention.NoChangeSettlement
+  return {
+    ...(value.outcome === "no_change" ? {} : { effectID: value.effectID }),
+    occurrenceID: value.occurrenceID,
+    changes: structuredClone(value.changes),
+    ...("claim" in value && value.claim
+      ? {
+          claim: {
+            groupID: value.claim.groupID,
+            claimStateAtAdmission: value.claim.claimStateAtAdmission,
+            currentClaimState: value.claim.claimState,
+            ...(value.claim.finalizationReceiptID
+              ? { finalizationReceiptID: value.claim.finalizationReceiptID }
+              : {}),
+          },
+        }
+      : {}),
+  }
 }
 
 function learnerResponseEvidenceEffect(settlement: LearningCommand.PhysicalSettlement) {

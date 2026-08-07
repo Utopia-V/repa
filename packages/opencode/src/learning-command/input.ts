@@ -1,6 +1,7 @@
 import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
+import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
@@ -619,6 +620,152 @@ export const UpdateLearnerResponseEvidenceInput = Schema.Union([
 
 export type UpdateLearnerResponseEvidenceInput = typeof UpdateLearnerResponseEvidenceInput.Type
 
+const FutureAttentionText = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(2_048))
+const FutureAttentionExcerpt = Schema.Struct({
+  text: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(FutureAttention.MAX_EXCERPT_BYTES)),
+  startByte: NonNegativeInt,
+  endByte: NonNegativeInt,
+})
+const FutureAttentionCreationSource = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("interpreted_learner_request"), excerpt: FutureAttentionExcerpt }),
+  Schema.Struct({ type: Schema.Literal("tutor_initiated") }),
+])
+const FutureAttentionOwnerRead = Schema.Struct({
+  concernID: FutureAttention.ConcernID,
+  expectedVersion: NonNegativeInt,
+  headTransitionID: FutureAttention.TransitionID,
+  cutFingerprint: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
+})
+const FutureAttentionMutation = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("interpreted_learner_direction"), excerpt: FutureAttentionExcerpt }),
+  Schema.Struct({
+    type: Schema.Literal("agent_correction"),
+    rationale: FutureAttentionText,
+    ownerRead: FutureAttentionOwnerRead,
+  }),
+])
+const FutureAttentionEndpoint = Schema.Struct({
+  courseID: Course.CourseID,
+  viewID: Course.ViewID,
+  revisionID: Course.RevisionID,
+  itemID: Course.ItemID,
+})
+const FutureAttentionSelection = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("explicit_exact") }),
+  Schema.Struct({
+    type: Schema.Literal("observed_working"),
+    revisionID: Course.RevisionID,
+    version: NonNegativeInt,
+  }),
+])
+const FutureAttentionTarget = Schema.Struct({
+  endpoint: FutureAttentionEndpoint,
+  selection: FutureAttentionSelection,
+})
+const FutureAttentionTimeZone = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("source") }),
+  Schema.Struct({ type: Schema.Literal("iana"), name: FutureAttentionText }),
+  Schema.Struct({ type: Schema.Literal("fixed_offset"), offsetMinutes: Schema.Int }),
+])
+const FutureAttentionNotBefore = Schema.Struct({
+  sourceExpression: Schema.String.check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(FutureAttention.MAX_TEMPORAL_EXPRESSION_BYTES),
+  ),
+  localDateTime: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(128)),
+  timeZone: FutureAttentionTimeZone,
+})
+const FutureAttentionConcern = Schema.Struct({
+  purpose: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(FutureAttention.MAX_PURPOSE_BYTES)),
+  source: FutureAttentionCreationSource,
+  target: FutureAttentionTarget,
+  notBefore: FutureAttentionNotBefore,
+  serviceTiming: Schema.Literals(["after_creation", "at_or_after_not_before"]),
+  interactionOrder: Schema.optional(Schema.Literal("learner_response_before_tutor_disclosure")),
+})
+const FutureAttentionServiceSource = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("learner_occurrence") }),
+  Schema.Struct({ type: Schema.Literal("assistant_completion"), assistantMessageID: SessionV1.MessageID }),
+  Schema.Struct({ type: Schema.Literal("tool_result"), partID: SessionV1.PartID }),
+  Schema.Struct({ type: Schema.Literal("child_result"), parentTaskPartID: SessionV1.PartID }),
+  Schema.Struct({ type: Schema.Literal("current_assistant_when_complete") }),
+])
+const FutureAttentionService = Schema.Struct({
+  source: FutureAttentionServiceSource,
+  rationale: FutureAttentionText,
+  learnerResponseWitness: Schema.optional(
+    Schema.Struct({ occurrenceID: LearningCommand.OccurrenceID }),
+  ),
+})
+const FutureAttentionCurrentAssistantService = Schema.Struct({
+  rationale: FutureAttentionText,
+  learnerResponseWitness: Schema.optional(
+    Schema.Struct({ occurrenceID: LearningCommand.OccurrenceID }),
+  ),
+})
+const FutureAttentionSuccessorSource = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("preserve_predecessor_source") }),
+  Schema.Struct({
+    type: Schema.Literal("rebind_current_source"),
+    source: FutureAttentionCreationSource,
+  }),
+])
+const FutureAttentionSuccessorDisposition = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("open") }),
+  Schema.Struct({ type: Schema.Literal("dismissed_by_mutation"), rationale: FutureAttentionText }),
+  Schema.Struct({ type: Schema.Literal("carry_served"), rationale: FutureAttentionText }),
+  Schema.Struct({ type: Schema.Literal("carry_dismissed"), rationale: FutureAttentionText }),
+  Schema.Struct({ type: Schema.Literal("serve_complete_source"), service: FutureAttentionService }),
+  Schema.Struct({
+    type: Schema.Literal("serve_current_assistant_when_complete"),
+    service: FutureAttentionCurrentAssistantService,
+  }),
+])
+const FutureAttentionReplacementConcern = Schema.Struct({
+  purpose: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(FutureAttention.MAX_PURPOSE_BYTES)),
+  target: FutureAttentionTarget,
+  notBefore: FutureAttentionNotBefore,
+  serviceTiming: Schema.Literals(["after_creation", "at_or_after_not_before"]),
+  interactionOrder: Schema.optional(Schema.Literal("learner_response_before_tutor_disclosure")),
+})
+
+export const UpdateFutureAttentionInput = Schema.Struct({
+  operations: Schema.Array(
+    Schema.Union([
+      Schema.Struct({ type: Schema.Literal("create"), concern: FutureAttentionConcern }),
+      Schema.Struct({
+        type: Schema.Literal("replace"),
+        concernID: FutureAttention.ConcernID,
+        expectedVersion: NonNegativeInt,
+        mutation: FutureAttentionMutation,
+        successorSource: FutureAttentionSuccessorSource,
+        concern: FutureAttentionReplacementConcern,
+        successorDisposition: FutureAttentionSuccessorDisposition,
+      }),
+      Schema.Struct({
+        type: Schema.Literal("serve"),
+        concernID: FutureAttention.ConcernID,
+        expectedVersion: NonNegativeInt,
+        service: FutureAttentionService,
+      }),
+      Schema.Struct({
+        type: Schema.Literal("dismiss"),
+        concernID: FutureAttention.ConcernID,
+        expectedVersion: NonNegativeInt,
+        mutation: FutureAttentionMutation,
+      }),
+      Schema.Struct({
+        type: Schema.Literal("reopen"),
+        concernID: FutureAttention.ConcernID,
+        expectedVersion: NonNegativeInt,
+        mutation: FutureAttentionMutation,
+      }),
+    ]),
+  ).check(Schema.isLengthBetween(1, FutureAttention.MAX_OPERATIONS)),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export type UpdateFutureAttentionInput = typeof UpdateFutureAttentionInput.Type
+
 const decode = Schema.decodeUnknownSync(AcceptCourseViewRevisionInput)
 const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput)
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
@@ -631,6 +778,7 @@ const decodeLegacyGoals = Schema.decodeUnknownSync(LegacyUpdateLearnerGoalsInput
 const decodeGoalsV2 = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
 const decodeLearningBootstrap = Schema.decodeUnknownSync(UpdateLearningCourseInput)
 const decodeLearnerResponseEvidence = Schema.decodeUnknownSync(UpdateLearnerResponseEvidenceInput)
+const decodeFutureAttention = Schema.decodeUnknownSync(UpdateFutureAttentionInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
   const value = decode(input)
@@ -738,6 +886,12 @@ export function normalizeLearnerResponseEvidence(input: unknown): UpdateLearnerR
   return value
 }
 
+export function normalizeFutureAttention(input: unknown): UpdateFutureAttentionInput {
+  const value = decodeFutureAttention(input)
+  FutureAttention.canonicalizeCommand(value)
+  return value
+}
+
 function normalizeBoundary(input: string) {
   const value = input.trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(value)
@@ -758,6 +912,7 @@ export function normalizeCommand(toolID: string, input: unknown) {
   if (toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
     return normalizeLearnerResponseEvidence(input)
   }
+  if (toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) return normalizeFutureAttention(input)
   throw new Error(`Unknown reserved learning command ${toolID}`)
 }
 

@@ -590,4 +590,103 @@ describe("run session data", () => {
       }),
     ])
   })
+
+  test("appends one FutureAttention finalization without rewriting an earlier Tool commit", () => {
+    let data = reduce(createSessionData(), assistant("msg-1")).data
+    const toolOutput = '{"settlement":{"outcome":"applied","claim":{"claimStateAtAdmission":"pending"}}}'
+    const toolResult = reduce(
+      data,
+      tool({
+        id: "tool-future-attention",
+        messageID: "msg-1",
+        tool: "update_future_attention",
+        state: {
+          status: "completed",
+          input: { operations: [] },
+          output: toolOutput,
+          title: "Future-attention settlement",
+          metadata: { outcome: "applied" },
+          time: { start: 1, end: 2 },
+        },
+      }),
+    )
+    data = toolResult.data
+    expect(toolResult.commits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "tool",
+          phase: "final",
+          partID: "tool-future-attention",
+          tool: "update_future_attention",
+        }),
+      ]),
+    )
+
+    const event = {
+      type: "future_attention.finalized",
+      properties: {
+        sessionID: "session-1",
+        turnID: "turn-1",
+        groupID: "fag_00000000000000000000000000",
+        assistantMessageID: "msg-1",
+        invocationPartID: "tool-future-attention",
+        receipt: {
+          id: "far_00000000000000000000000000",
+          groupID: "fag_00000000000000000000000000",
+          outcome: "not_served",
+          completion: {
+            observationCut: "startup_reconciled",
+            sessionID: "session-1",
+            turnID: "turn-1",
+            occurrenceID: "occurrence-1",
+            assistantMessageID: "msg-1",
+            modelOperationID: "msg-1",
+            invocationPartID: "tool-future-attention",
+            modelOutcome: "completed",
+            localToolPartsTerminal: true,
+            presentationCommitted: false,
+            presentationUnavailable: false,
+            timeCompleted: 3,
+            completionOrder: 1,
+            eligibleOutputBytes: 0,
+          },
+          members: [
+            {
+              ordinal: 0,
+              concernID: "fac_00000000000000000000000000",
+              outcome: "not_served",
+              reason: "stale_head",
+            },
+          ],
+          timeFinalized: 4,
+          finalizationOrder: 2,
+        },
+      },
+    }
+    const finalized = reduce(data, event)
+    expect(finalized.commits).toEqual([
+      {
+        kind: "system",
+        text: "Future attention not served: 1 claim was not served (1: the claimed FutureAttention head changed before finalization). Check current FutureAttention state to see what remains open.",
+        phase: "final",
+        source: "system",
+      },
+    ])
+    expect(finalized.commits[0]?.text).not.toContain(event.properties.groupID)
+    expect(finalized.commits[0]?.text).not.toContain(event.properties.receipt.id)
+    expect(finalized.commits[0]?.text).not.toContain("stale_head")
+    expect(finalized.commits[0]?.text).not.toContain("retained follow-up remains open")
+    expect(finalized.commits[0]?.kind).not.toBe("tool")
+    expect(toolResult.commits).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "tool",
+          phase: "progress",
+          partID: "tool-future-attention",
+          text: toolOutput,
+        }),
+      ]),
+    )
+    expect(reduce(finalized.data, event).commits).toEqual([])
+  })
 })

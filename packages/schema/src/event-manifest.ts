@@ -5,6 +5,7 @@ import { Durable } from "./durable-event-manifest"
 import { Event } from "./event"
 import { FileSystem } from "./filesystem"
 import { FileSystemWatcher } from "./filesystem-watcher"
+import { FutureAttentionEvent } from "./future-attention-event"
 import { Integration } from "./integration"
 import { LegacyEvent } from "./legacy-event"
 import { LspEvent } from "./lsp-event"
@@ -38,6 +39,7 @@ const coreDefinitions = Event.inventory(
   ...sessionV1DurableDefinitions,
   ...SessionEvent.Definitions,
   ...TurnEvent.Definitions,
+  ...FutureAttentionEvent.Definitions,
 )
 
 const foundationDefinitions = Event.inventory(

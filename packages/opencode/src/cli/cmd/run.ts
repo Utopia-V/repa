@@ -1,5 +1,6 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { FutureAttentionPresentation } from "@opencode-ai/core/future-attention-presentation"
 // CLI entry point for `opencode run` and `opencode --mini`.
 //
 // Handles three modes:
@@ -22,7 +23,7 @@ import { UI } from "../ui"
 import { effectCmd } from "../effect-cmd"
 import { EOL } from "os"
 import { Filesystem } from "@/util/filesystem"
-import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencode-ai/sdk/v2"
+import { createOpencodeClient, type Event, type OpencodeClient, type ToolPart } from "@opencode-ai/sdk/v2"
 import { Identifier } from "@opencode-ai/core/id/id"
 import { FormatError, FormatUnknownError } from "../error"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./run/runtime.stdin"
@@ -660,6 +661,37 @@ export const RunCommand = effectCmd({
           return false
         }
 
+        const finalizationIDs = new Set<string>()
+        function presentFutureAttentionFinalization(
+          props: Extract<Event, { type: "future_attention.finalized" }>["properties"],
+        ) {
+          if (finalizationIDs.has(props.receipt.id)) return
+          finalizationIDs.add(props.receipt.id)
+          if (emit("future_attention_finalized", { finalization: props })) return
+          const presentation = FutureAttentionPresentation.finalization(props.receipt)
+          UI.println(presentation.title, presentation.detail)
+        }
+
+        async function catchUpFutureAttentionFinalizations(client: OpencodeClient, directory: string) {
+          let after = -1
+          while (true) {
+            const response = await client.session.futureAttentionFinalizations(
+              { sessionID, directory, after: after.toString(), limit: "100" },
+            )
+            if (response.error) {
+              throw new Error(`FutureAttention finalization history unavailable: ${JSON.stringify(response.error)}`)
+            }
+            if (!response.data) throw new Error("FutureAttention finalization history unavailable")
+            for (const event of response.data.events) presentFutureAttentionFinalization(event.properties)
+            if (!response.data.hasMore) return
+            const next = response.data.events.at(-1)?.sequence
+            if (next === undefined || next <= after) {
+              throw new Error("FutureAttention finalization history did not advance")
+            }
+            after = next
+          }
+        }
+
         // Consume one subscribed event stream for the active session and mirror it
         // to stdout/UI. `client` is passed explicitly because attach mode may
         // rebind the SDK to the session's directory after the subscription is
@@ -759,6 +791,12 @@ export const RunCommand = effectCmd({
               UI.error(err)
             }
 
+            if (event.type === "future_attention.finalized") {
+              const props = event.properties
+              if (props.sessionID !== sessionID) continue
+              presentFutureAttentionFinalization(props)
+            }
+
             if (
               event.type === "session.status" &&
               event.properties.sessionID === sessionID &&
@@ -818,6 +856,7 @@ export const RunCommand = effectCmd({
             console.error(e)
             process.exitCode = 1
           })
+          await catchUpFutureAttentionFinalizations(client, cwd)
           async function finish() {
             if (args.attach) return
             const error = await completed

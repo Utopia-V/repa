@@ -17,6 +17,12 @@ type GlobalEventEnvelope = {
   payload?: Event
 }
 type DeltaPartType = Extract<Part, { type: "text" | "reasoning" }>["type"]
+type DurableFutureAttentionFinalization = Readonly<{
+  id: string
+  type: "future_attention.finalized"
+  sequence: number
+  properties: Extract<Event, { type: "future_attention.finalized" }>["properties"]
+}>
 
 const pollUntil = async (
   check: () => boolean | Promise<boolean>,
@@ -79,13 +85,36 @@ function createEventStream() {
   return { push, close, stream }
 }
 
-function createHarness(messages: Record<string, SessionMessageResponse> = {}) {
+function createHarness(
+  messages: Record<string, SessionMessageResponse> = {},
+  finalizations: readonly DurableFutureAttentionFinalization[] = [],
+  onSessionUpdate?: (params: SessionUpdateParams, attempt: number) => Promise<void>,
+  onFinalizationRead?: (call: number) => Promise<void>,
+) {
   const updates: SessionUpdateParams[] = []
+  const updateAttempts: SessionUpdateParams[] = []
   const calls = {
     eventSubscribe: 0,
     message: 0,
+    futureAttentionFinalizations: 0,
   }
-  const events = createEventStream()
+  let activeEvents = createEventStream()
+  const events = {
+    push(event: GlobalEventEnvelope) {
+      activeEvents.push(event)
+    },
+    close() {
+      activeEvents.close()
+      activeEvents = createEventStream()
+    },
+    stream(signal?: AbortSignal) {
+      return activeEvents.stream(signal)
+    },
+  }
+  const finalizationRequests: Array<{
+    input: { sessionID: string; directory?: string; after?: string; limit?: string }
+    options?: { throwOnError?: boolean }
+  }> = []
   const sdk = {
     global: {
       event: (options?: { signal?: AbortSignal }) => {
@@ -100,18 +129,31 @@ function createHarness(messages: Record<string, SessionMessageResponse> = {}) {
       },
       get: () => Promise.resolve({ data: { id: "ses_loaded" } }),
       messages: () => Promise.resolve({ data: [] }),
+      futureAttentionFinalizations: (
+        input: { sessionID: string; directory?: string; after?: string; limit?: string },
+        options?: { throwOnError?: boolean },
+      ) => {
+        calls.futureAttentionFinalizations++
+        finalizationRequests.push({ input, options })
+        const after = Number(input.after ?? -1)
+        const remaining = finalizations.filter((event) => event.sequence > after)
+        return (onFinalizationRead?.(calls.futureAttentionFinalizations) ?? Promise.resolve()).then(() => ({
+          data: { events: remaining.slice(0, 1), hasMore: remaining.length > 1 },
+        }))
+      },
     },
   } as unknown as OpencodeClient
   const connection = {
-    sessionUpdate: (params: SessionUpdateParams) => {
+    sessionUpdate: async (params: SessionUpdateParams) => {
+      updateAttempts.push(params)
+      await onSessionUpdate?.(params, updateAttempts.length)
       updates.push(params)
-      return Promise.resolve()
     },
   } satisfies Pick<AgentSideConnection, "sessionUpdate">
   const session = makeSessionService()
   const subscription = new ACPEvent.Subscription({ sdk, connection, session })
 
-  return { calls, connection, events, sdk, session, subscription, updates }
+  return { calls, connection, events, finalizationRequests, sdk, session, subscription, updateAttempts, updates }
 }
 
 function textDelta(sessionID: string, messageID: string, partID: string, delta: string): Event {
@@ -166,6 +208,59 @@ function toolUpdated(part: ToolPart): Event {
       part,
     },
   }
+}
+
+function futureAttentionFinalized(sessionID: string, marker: string) {
+  const suffix = marker.repeat(26)
+  return {
+    id: `evt_future_attention_finalized_${marker}`,
+    type: "future_attention.finalized",
+    properties: {
+      sessionID,
+      turnID: `trn_future_attention_${marker}`,
+      groupID: `fag_${suffix}`,
+      assistantMessageID: `msg_future_attention_${marker}`,
+      invocationPartID: `prt_original_claim_tool_${marker}`,
+      receipt: {
+        id: `far_${suffix}`,
+        groupID: `fag_${suffix}`,
+        outcome: "served",
+        completion: {
+          observationCut: "live_presentation_finalized",
+          sessionID,
+          turnID: `trn_future_attention_${marker}`,
+          occurrenceID: `lco_future_attention_${marker}`,
+          assistantMessageID: `msg_future_attention_${marker}`,
+          modelOperationID: `msg_future_attention_${marker}`,
+          invocationPartID: `prt_original_claim_tool_${marker}`,
+          modelOutcome: "completed",
+          localToolPartsTerminal: true,
+          presentationCommitted: true,
+          presentationUnavailable: false,
+          timeCompleted: 2,
+          completionOrder: 1,
+          partManifestFingerprint: "a".repeat(64),
+          eligibleOutputFingerprint: "b".repeat(64),
+          eligibleOutputBytes: 32,
+        },
+        members: [
+          {
+            ordinal: 0,
+            concernID: `fac_${suffix}`,
+            outcome: "served",
+            transitionID: `fat_${suffix}`,
+            serviceReceiptID: `fas_${suffix}`,
+          },
+        ],
+        timeFinalized: 3,
+        finalizationOrder: 2,
+      },
+    },
+  } satisfies Extract<Event, { type: "future_attention.finalized" }>
+}
+
+function serverConnected(marker: string) {
+  return { id: `evt_server_connected_${marker}`, type: "server.connected", properties: {} } satisfies Event
 }
 
 function assistantMessage(sessionID: string, messageID: string, partID: string, type: DeltaPartType) {
@@ -462,6 +557,7 @@ describe("acp event routing", () => {
                 assistantToolMessage(completedTool("ses_loaded", "call_after", "after")),
               ],
             }),
+          futureAttentionFinalizations: () => Promise.resolve({ data: { events: [], hasMore: false } }),
         },
       } as unknown as OpencodeClient,
       connection,
@@ -857,5 +953,206 @@ describe("acp event routing", () => {
         { type: "content", content: { type: "image", mimeType: "image/png", data: image } },
       ],
     ])
+  })
+
+  it("publishes FutureAttention finalization under a receipt identity without rewriting the claim Tool call", async () => {
+    const harness = createHarness()
+    await Effect.runPromise(harness.session.create({ id: "ses_future_attention", cwd: "/workspace" }))
+    const event = futureAttentionFinalized("ses_future_attention", "0")
+
+    await harness.subscription.handle(event)
+    await harness.subscription.handle(event)
+
+    const updates = toolUpdates(harness.updates)
+    expect(updates.map((item) => item.update)).toEqual([
+      expect.objectContaining({
+        sessionUpdate: "tool_call",
+        toolCallId: event.properties.receipt.id,
+        title: "Future attention served",
+      }),
+      expect.objectContaining({
+        sessionUpdate: "tool_call_update",
+        toolCallId: event.properties.receipt.id,
+        status: "completed",
+        rawOutput: expect.objectContaining({
+          metadata: expect.objectContaining({
+            futureAttentionFinalization: event.properties,
+          }),
+        }),
+      }),
+    ])
+    const completed = updates.find((item) => item.update.sessionUpdate === "tool_call_update")
+    expect(JSON.stringify(completed?.update.content)).not.toContain(event.properties.groupID)
+    expect(JSON.stringify(completed?.update.content)).not.toContain(event.properties.receipt.id)
+    expect(updates.some((item) => item.update.toolCallId === event.properties.invocationPartID)).toBe(false)
+  })
+
+  it("pages durable FutureAttention finalizations after attachment and dedupes a later live receipt", async () => {
+    const first = futureAttentionFinalized("ses_future_attention_catchup", "1")
+    const second = futureAttentionFinalized("ses_future_attention_catchup", "2")
+    const harness = createHarness({}, [
+      { ...first, sequence: 4 },
+      { ...second, sequence: 9 },
+    ])
+    await Effect.runPromise(harness.session.create({ id: "ses_future_attention_catchup", cwd: "/workspace" }))
+
+    await harness.subscription.catchUp("ses_future_attention_catchup", "/workspace")
+    await harness.subscription.handle(first)
+
+    expect(harness.calls.futureAttentionFinalizations).toBe(2)
+    expect(harness.finalizationRequests).toEqual([
+      {
+        input: {
+          sessionID: "ses_future_attention_catchup",
+          directory: "/workspace",
+          after: "-1",
+          limit: "100",
+        },
+        options: { throwOnError: true },
+      },
+      {
+        input: {
+          sessionID: "ses_future_attention_catchup",
+          directory: "/workspace",
+          after: "4",
+          limit: "100",
+        },
+        options: { throwOnError: true },
+      },
+    ])
+    expect(toolUpdates(harness.updates).map((item) => item.update.toolCallId)).toEqual([
+      first.properties.receipt.id,
+      first.properties.receipt.id,
+      second.properties.receipt.id,
+      second.properties.receipt.id,
+    ])
+  })
+
+  it("queues a second ACP catch-up generation without overlapping the in-flight owner read", async () => {
+    const sessionID = "ses_future_attention_dirty_catchup"
+    const first = futureAttentionFinalized(sessionID, "7")
+    const second = futureAttentionFinalized(sessionID, "8")
+    const durable: DurableFutureAttentionFinalization[] = [{ ...first, sequence: 4 }]
+    let activeReads = 0
+    let maxActiveReads = 0
+    let firstReadStarted!: () => void
+    const started = new Promise<void>((resolve) => {
+      firstReadStarted = resolve
+    })
+    let releaseFirstRead!: () => void
+    const released = new Promise<void>((resolve) => {
+      releaseFirstRead = resolve
+    })
+    const harness = createHarness({}, durable, undefined, async (call) => {
+      activeReads++
+      maxActiveReads = Math.max(maxActiveReads, activeReads)
+      try {
+        if (call !== 1) return
+        firstReadStarted()
+        await released
+      } finally {
+        activeReads--
+      }
+    })
+    await Effect.runPromise(harness.session.create({ id: sessionID, cwd: "/workspace" }))
+
+    const firstCatchUp = harness.subscription.catchUp(sessionID, "/workspace")
+    await started
+    durable.push({ ...second, sequence: 9 })
+    const secondCatchUp = harness.subscription.catchUp(sessionID, "/workspace")
+    releaseFirstRead()
+    await Promise.all([firstCatchUp, secondCatchUp])
+
+    expect(maxActiveReads).toBe(1)
+    expect(harness.calls.futureAttentionFinalizations).toBe(3)
+    expect(toolUpdates(harness.updates).map((item) => item.update.toolCallId)).toEqual([
+      first.properties.receipt.id,
+      first.properties.receipt.id,
+      second.properties.receipt.id,
+      second.properties.receipt.id,
+    ])
+  })
+
+  it("retries only the unfinished FutureAttention presentation stage after an ACP client update failure", async () => {
+    for (const [failedStage, marker] of [
+      ["tool_call", "3"],
+      ["tool_call_update", "4"],
+    ] as const) {
+      let failed = false
+      const harness = createHarness({}, [], async (params) => {
+        if (params.update.sessionUpdate !== failedStage || failed) return
+        failed = true
+        throw new Error(`fail ${failedStage}`)
+      })
+      const sessionID = `ses_future_attention_retry_${marker}`
+      const event = futureAttentionFinalized(sessionID, marker)
+      await Effect.runPromise(harness.session.create({ id: sessionID, cwd: "/workspace" }))
+
+      await expect(harness.subscription.handle(event)).rejects.toThrow(`fail ${failedStage}`)
+      await harness.subscription.handle(event)
+      await harness.subscription.handle(event)
+
+      expect(toolUpdates(harness.updates).map((item) => item.update.sessionUpdate)).toEqual([
+        "tool_call",
+        "tool_call_update",
+      ])
+      expect(toolUpdates(harness.updateAttempts).map((item) => item.update.sessionUpdate)).toEqual(
+        failedStage === "tool_call"
+          ? ["tool_call", "tool_call", "tool_call_update"]
+          : ["tool_call", "tool_call_update", "tool_call_update"],
+      )
+    }
+  })
+
+  it("catches up a durable FutureAttention finalization committed during an ACP reconnect gap", async () => {
+    const durable: DurableFutureAttentionFinalization[] = []
+    let blockReconnect = false
+    let releaseReconnect!: () => void
+    const reconnectReleased = new Promise<void>((resolve) => {
+      releaseReconnect = resolve
+    })
+    const harness = createHarness({}, durable, undefined, (call) => {
+      if (!blockReconnect || call !== 2) return Promise.resolve()
+      return reconnectReleased
+    })
+    const sessionID = "ses_future_attention_reconnect"
+    const first = futureAttentionFinalized(sessionID, "5")
+    const second = futureAttentionFinalized(sessionID, "6")
+    await Effect.runPromise(harness.session.create({ id: sessionID, cwd: "/workspace" }))
+    harness.subscription.start()
+
+    try {
+      harness.events.push({ payload: serverConnected("1") })
+      await pollUntil(
+        () => harness.calls.eventSubscribe === 1 && harness.calls.futureAttentionFinalizations === 1,
+        "initial ACP FutureAttention catch-up did not complete",
+      )
+      durable.push({ ...first, sequence: 4 })
+      blockReconnect = true
+      harness.events.push({ payload: serverConnected("2") })
+      await pollUntil(
+        () => harness.calls.futureAttentionFinalizations === 2,
+        "first ACP reconnect catch-up did not start",
+      )
+      durable.push({ ...second, sequence: 9 })
+      harness.events.push({ payload: serverConnected("3") })
+      releaseReconnect()
+
+      await pollUntil(
+        () => toolUpdates(harness.updates).length === 4,
+        "ACP reconnect generations did not catch up the detached FutureAttention finalizations",
+      )
+
+      expect(harness.calls.eventSubscribe).toBe(1)
+      expect(harness.calls.futureAttentionFinalizations).toBe(4)
+      expect(toolUpdates(harness.updates).map((item) => item.update.toolCallId)).toEqual([
+        first.properties.receipt.id,
+        first.properties.receipt.id,
+        second.properties.receipt.id,
+        second.properties.receipt.id,
+      ])
+    } finally {
+      harness.subscription.stop()
+    }
   })
 })

@@ -195,6 +195,10 @@ export const TurnToolCandidateTable = sqliteTable(
     time_registered: integer().notNull(),
     time_terminal: integer(),
     exhaustion_turn_id: text().$type<Turn.ID>(),
+    future_attention_service_source: text()
+      .$type<"learner_usable" | "internal_control">()
+      .notNull()
+      .default("internal_control"),
   },
   (table) => [
     unique("turn_candidate_turn_part_unique").on(table.turn_id, table.part_id),
@@ -552,6 +556,8 @@ export const TurnUnavailableModelTable = sqliteTable(
       .references(() => TurnUnavailableSourceTable.turn_id, { onDelete: "cascade" }),
     assistant_message_id: text().$type<MessageID>().notNull(),
     causal_occurrence_id: text().$type<LearningOccurrence.ID>(),
+    state: text().$type<Exclude<Turn.ModelState, "running">>(),
+    time_settled: integer(),
   },
   (table) => [
     unique("turn_unavailable_model_identity_unique").on(table.turn_id, table.assistant_message_id),

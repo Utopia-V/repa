@@ -1,8 +1,12 @@
+import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
+import { ContentRootSchema } from "@opencode-ai/core/content-root/schema"
 import { Course } from "@opencode-ai/core/course"
+import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Plugin } from "@/plugin"
+import { normalizeFutureAttention } from "@/learning-command/input"
 import { MessageID, SessionID } from "@/session/schema"
 import { observeLearningCommandResult, prepareLearningCommandCall } from "@/session/tools"
 import { SessionProcessor } from "@/session/processor"
@@ -10,7 +14,9 @@ import { describe, expect, test } from "bun:test"
 import { Effect, Schema } from "effect"
 
 const courseID = Schema.decodeUnknownSync(Course.CourseID)("crs_00000000000000000000000000")
+const viewID = Schema.decodeUnknownSync(Course.ViewID)("cvw_00000000000000000000000000")
 const revisionID = Schema.decodeUnknownSync(Course.RevisionID)("cvr_00000000000000000000000000")
+const itemID = Schema.decodeUnknownSync(Course.ItemID)("cit_00000000000000000000000000")
 const canonical = {
   courseID,
   revisionID,
@@ -125,6 +131,26 @@ describe("learning-command hooks", () => {
     expect(prepared).toEqual({ ...input, relativePath: "folder\\lecture.pdf" })
     expect(input.relativePath).toBe("folder/lecture.pdf")
   })
+
+  test("keeps the FutureAttention model input recursively closed and UTF-8 bounded", () => {
+    const input = futureAttentionInput("Explain the semaphore invariant")
+    expect(normalizeFutureAttention(input)).toEqual(input)
+
+    expect(() =>
+      normalizeFutureAttention({
+        ...input,
+        operations: [
+          {
+            ...input.operations[0],
+            concern: { ...input.operations[0].concern, unsupportedControl: true },
+          },
+        ],
+      }),
+    ).toThrow()
+    expect(() => normalizeFutureAttention(futureAttentionInput("界".repeat(257)))).toThrow()
+    expect(new TextEncoder().encode("界".repeat(256))).toHaveLength(FutureAttention.MAX_PURPOSE_BYTES)
+    expect(normalizeFutureAttention(futureAttentionInput("界".repeat(256))).operations).toHaveLength(1)
+  })
 })
 
 function mockPlugin(trigger: Plugin.Interface["trigger"]): Plugin.Interface {
@@ -134,5 +160,27 @@ function mockPlugin(trigger: Plugin.Interface["trigger"]): Plugin.Interface {
     list: () => Effect.succeed([]),
   }
 }
-import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
-import { ContentRootSchema } from "@opencode-ai/core/content-root/schema"
+
+function futureAttentionInput(purpose: string) {
+  return {
+    operations: [
+      {
+        type: "create" as const,
+        concern: {
+          purpose,
+          source: { type: "tutor_initiated" as const },
+          target: {
+            endpoint: { courseID, viewID, revisionID, itemID },
+            selection: { type: "explicit_exact" as const },
+          },
+          notBefore: {
+            sourceExpression: "tomorrow morning",
+            localDateTime: "2026-08-08T09:00:00",
+            timeZone: { type: "fixed_offset" as const, offsetMinutes: 480 },
+          },
+          serviceTiming: "after_creation" as const,
+        },
+      },
+    ],
+  }
+}

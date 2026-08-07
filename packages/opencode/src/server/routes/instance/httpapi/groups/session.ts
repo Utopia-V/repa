@@ -40,6 +40,8 @@ import {
 import { described } from "./metadata"
 import { QueryBoolean } from "./query"
 import { Turn } from "@opencode-ai/schema/turn"
+import { FutureAttentionEvent } from "@opencode-ai/schema/future-attention-event"
+import { EventV2 } from "@opencode-ai/core/event"
 
 const root = "/session"
 export const ListQuery = Schema.Struct({
@@ -59,6 +61,23 @@ export const MessagesQuery = Schema.Struct({
   ...WorkspaceRoutingQueryFields,
   limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))),
   before: Schema.optional(Schema.String),
+})
+export const FutureAttentionFinalizationsQuery = Schema.Struct({
+  ...WorkspaceRoutingQueryFields,
+  after: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(-1))),
+  limit: Schema.optional(
+    Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1), Schema.isLessThanOrEqualTo(100)),
+  ),
+})
+export const FutureAttentionFinalizationHistoryEvent = Schema.Struct({
+  id: EventV2.ID,
+  type: Schema.Literal(FutureAttentionEvent.Finalized.type),
+  sequence: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  properties: FutureAttentionEvent.Finalized.data,
+})
+export const FutureAttentionFinalizationsPage = Schema.Struct({
+  events: Schema.Array(FutureAttentionFinalizationHistoryEvent),
+  hasMore: Schema.Boolean,
 })
 export const StatusMap = Schema.Record(Schema.String, SessionStatus.Info)
 export const UpdatePayload = Schema.Struct({
@@ -105,6 +124,7 @@ export const SessionPaths = {
   todo: `${root}/:sessionID/todo`,
   diff: `${root}/:sessionID/diff`,
   messages: `${root}/:sessionID/message`,
+  futureAttentionFinalizations: `${root}/:sessionID/future-attention/finalization`,
   message: `${root}/:sessionID/message/:messageID`,
   remove: `${root}/:sessionID`,
   update: `${root}/:sessionID`,
@@ -207,6 +227,19 @@ export const SessionApi = HttpApi.make("session")
             identifier: "session.messages",
             summary: "Get session messages",
             description: "Retrieve all messages in a session, including user prompts and AI responses.",
+          }),
+        ),
+        HttpApiEndpoint.get("futureAttentionFinalizations", SessionPaths.futureAttentionFinalizations, {
+          params: { sessionID: SessionID },
+          query: FutureAttentionFinalizationsQuery,
+          success: described(FutureAttentionFinalizationsPage, "Durable FutureAttention finalizations"),
+          error: [HttpApiError.BadRequest, ApiNotFoundError],
+        }).annotateMerge(
+          OpenApi.annotations({
+            identifier: "session.futureAttentionFinalizations",
+            summary: "List FutureAttention finalizations",
+            description:
+              "Read the durable, paginated finalization history used to catch up retained session carriers.",
           }),
         ),
         HttpApiEndpoint.get("message", SessionPaths.message, {

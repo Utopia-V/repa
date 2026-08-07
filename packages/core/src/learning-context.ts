@@ -6,6 +6,7 @@ import { Effect, Schema } from "effect"
 import type { Turn } from "@opencode-ai/schema/turn"
 import { Course } from "./course"
 import type { Database } from "./database/database"
+import { FutureAttention } from "./future-attention"
 import { LearnerGoal } from "./learner-goal"
 import { LearnerNavigation } from "./learner-navigation"
 import { LearnerResponseEvidence } from "./learner-response-evidence"
@@ -19,6 +20,10 @@ import {
   CAPABILITY_CATALOG_VERSION,
   CutCapacityError,
   CutIntegrityError,
+  GATE19_CAPABILITY_CATALOG_VERSION,
+  GATE19_LAZY_READ_CAPABILITY_IDS,
+  GATE19_POLICY_VERSION,
+  GATE19_RENDERER_VERSION,
   LAZY_READ_CAPABILITY_IDS,
   LEGACY_CAPABILITY_CATALOG_VERSION,
   LEGACY_LAZY_READ_CAPABILITY_IDS,
@@ -64,7 +69,8 @@ export type PrepareInput = Readonly<{
 }>
 
 const legacyOwners = ["course", "learner_navigation", "learner_goal", "material", "interaction"] as const
-const currentOwners = [...legacyOwners, "learner_response_evidence"] as const
+const gate19Owners = [...legacyOwners, "learner_response_evidence"] as const
+const currentOwners = [...gate19Owners, "future_attention"] as const
 const sectionPolicy = {
   course: {
     scope: "eligible_courses_and_structurally_referenced_default",
@@ -90,6 +96,10 @@ const sectionPolicy = {
   learner_response_evidence: {
     scope: "active_source_deleted_heads_for_structurally_included_course_membership",
     selectionBasis: "subject_source_order_then_record_id_not_priority",
+  },
+  future_attention: {
+    scope: "all_due_open_target_current_concerns_in_learner_home",
+    selectionBasis: "not_before_then_created_then_id_non_priority",
   },
 } as const
 const withheldSelectionBasis = "automatic_context_capability_withheld" as const
@@ -272,6 +282,10 @@ function projectSections(tx: Transaction, input: PrepareInput) {
       materials: input.learnerResponseEvidenceMaterials ?? [],
       lazyReadAvailable: lazy.has("learner_response_evidence_read"),
     })
+    const futureAttention = yield* FutureAttention.listEligibleForContext(tx, {
+      now: input.retainedSteering.cutAsOf,
+      limit: MAX_CANDIDATES_PER_FAMILY,
+    })
     const courseEntries = orderedCourses.map((value) =>
       value.status === "unavailable"
         ? entry("course", {
@@ -387,6 +401,18 @@ function projectSections(tx: Transaction, input: PrepareInput) {
     const learnerResponseEvidenceEntries = learnerResponseEvidence.entries.map((value) =>
       entry("learner_response_evidence", value.locator, value.semantic),
     )
+    const futureAttentionEntries = futureAttention.entries.map((value) =>
+      futureAttentionEntry(
+        {
+          concernID: value.concern.id,
+          version: value.concern.current.version,
+          headTransitionID: value.concern.current.id,
+          lazyReadAvailable: lazy.has("future_attention_read"),
+        },
+        FutureAttention.semanticValueFor(value.concern.payload, value.sourceAvailability),
+        input.operation.assistantMessageID,
+      ),
+    )
     return [
       section(
         "course",
@@ -439,6 +465,13 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         sectionPolicy.learner_response_evidence.selectionBasis,
         learnerResponseEvidence.countAtCut,
         learnerResponseEvidenceEntries,
+      ),
+      section(
+        "future_attention",
+        sectionPolicy.future_attention.scope,
+        sectionPolicy.future_attention.selectionBasis,
+        futureAttention.countAtCut,
+        futureAttentionEntries,
       ),
     ] satisfies Section[]
   })
@@ -631,8 +664,10 @@ function fit(base: CutBase): Preparation {
 function removableEntry(sections: MutableSection[]) {
   const candidates = sections.flatMap((section, ownerOrder) =>
     section.entries.flatMap((_, index) => {
+      if (section.owner === "future_attention" && section.countAtCut === 1) return []
       if (
         section.owner !== "learner_response_evidence" &&
+        section.owner !== "future_attention" &&
         (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0)
       )
         return []
@@ -640,7 +675,14 @@ function removableEntry(sections: MutableSection[]) {
         {
           section,
           index,
-          tier: section.owner === "learner_response_evidence" ? 3 : section.owner === "learner_navigation" ? 1 : 2,
+          tier:
+            section.owner === "future_attention"
+              ? 4
+              : section.owner === "learner_response_evidence"
+                ? 3
+                : section.owner === "learner_navigation"
+                  ? 1
+                  : 2,
           ownerOrder,
         },
       ]
@@ -671,6 +713,7 @@ function exactOmission(
 function lastSemanticValue(sections: MutableSection[]) {
   for (const section of [...sections].reverse()) {
     if (section.owner === "learner_response_evidence") continue
+    if (section.owner === "future_attention" && section.countAtCut === 1) continue
     for (let index = section.entries.length - 1; index >= 0; index--) {
       if (section.entries[index]?.semantic?.state === "value") return { section, index }
     }
@@ -725,6 +768,13 @@ function finalize(base: CutBase): Preparation {
 }
 
 function renderValue(cut: Cut) {
+  if (cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION) {
+    return renderGate20Value(cut)
+  }
+  return renderFrozenValue(cut)
+}
+
+function renderFrozenValue(cut: Cut) {
   return [
     "[Repa learning context — protected]",
     `schemaVersion: ${cut.schemaVersion}; policyVersion: ${cut.policyVersion}; rendererVersion: ${cut.rendererVersion}`,
@@ -740,6 +790,39 @@ function renderValue(cut: Cut) {
         providerToolSurface: cut.capabilityBasis.effectiveProviderToolSurfaceBinding,
       }),
     )}`,
+    `sections (canonical order is not priority): ${canonicalJson(toJsonValue(cut.sections))}`,
+    "This is a bounded observation condition for this sample, not learning truth, priority, mastery, progress, or a selected Tutor move. Use exact owner reads when available; never infer missing detail or authorization from a locator.",
+    "[/Repa learning context]",
+  ].join("\n")
+}
+
+function renderGate20Value(cut: Cut) {
+  const section = cut.sections.find((item) => item.owner === "future_attention")!
+  const futureAttention =
+    section.coverage === "not_authorized"
+      ? "futureAttention: automatic contribution withheld by the effective capability basis."
+      : section.countAtCut === 0
+        ? "futureAttention: none eligible at this immutable cut."
+        : section.countAtCut === 1
+          ? "futureAttention: conditional_default. The exact current learner request overrides an overlapping present action; otherwise realize the sole complete concern naturally. Do not narrate concern IDs, lifecycle labels, precedence machinery, or internal control vocabulary. Override alone does not serve, dismiss, or otherwise mutate the concern."
+          : `futureAttention: multiple_unresolved; exactEligibleCount=${section.countAtCut}. Candidate order is deterministic storage order, never priority. Honor an exact current learner request; otherwise make a transparent reversible local choice or ask a learning-level clarification when the difference matters. Do not claim the program selected the first row or ask the learner to manage internal IDs/state.`
+  return [
+    "[Repa learning context — protected]",
+    `schemaVersion: ${cut.schemaVersion}; policyVersion: ${cut.policyVersion}; rendererVersion: ${cut.rendererVersion}`,
+    `cutFingerprint: ${cut.fingerprint}`,
+    `cutAsOf: ${cut.cutAsOf}; throughSharedFrontier: ${canonicalJson(toJsonValue(cut.throughSharedFrontier))}`,
+    `retainedSteering: ${canonicalJson(toJsonValue(cut.retainedSteering))}`,
+    `capabilityBasis: ${canonicalJson(
+      toJsonValue({
+        catalogVersion: cut.capabilityBasis.catalogVersion,
+        policyFingerprint: cut.capabilityBasis.policyFingerprint,
+        effectiveAutomaticContext: cut.capabilityBasis.effectiveAutomaticContext,
+        effectiveLazyReadCapabilities: cut.capabilityBasis.effectiveLazyReadCapabilities,
+        providerToolSurface: cut.capabilityBasis.effectiveProviderToolSurfaceBinding,
+      }),
+    )}`,
+    futureAttention,
+    "Future attention is a conditional default, not service, evidence, mastery, progress, priority, or a durable selected Tutor move.",
     `sections (canonical order is not priority): ${canonicalJson(toJsonValue(cut.sections))}`,
     "This is a bounded observation condition for this sample, not learning truth, priority, mastery, progress, or a selected Tutor move. Use exact owner reads when available; never infer missing detail or authorization from a locator.",
     "[/Repa learning context]",
@@ -793,9 +876,11 @@ function validateCut(cut: Cut) {
   const expectedOwners =
     cut.policyVersion === LEGACY_POLICY_VERSION && cut.rendererVersion === LEGACY_RENDERER_VERSION
       ? legacyOwners
-      : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
-        ? currentOwners
-        : undefined
+      : cut.policyVersion === GATE19_POLICY_VERSION && cut.rendererVersion === GATE19_RENDERER_VERSION
+        ? gate19Owners
+        : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
+          ? currentOwners
+          : undefined
   if (
     !record(cut) ||
     !keys(cut, [
@@ -825,7 +910,9 @@ function validateCut(cut: Cut) {
       cut.capabilityBasis,
       cut.policyVersion === LEGACY_POLICY_VERSION
         ? LEGACY_CAPABILITY_CATALOG_VERSION
-        : CAPABILITY_CATALOG_VERSION,
+        : cut.policyVersion === GATE19_POLICY_VERSION
+          ? GATE19_CAPABILITY_CATALOG_VERSION
+          : CAPABILITY_CATALOG_VERSION,
     ) ||
     !Array.isArray(cut.sections) ||
     cut.sections.length !== expectedOwners.length ||
@@ -886,12 +973,17 @@ function retained(value: unknown, cut: Cut) {
 
 function capability(
   value: unknown,
-  expectedCatalogVersion: typeof LEGACY_CAPABILITY_CATALOG_VERSION | typeof CAPABILITY_CATALOG_VERSION,
+  expectedCatalogVersion:
+    | typeof LEGACY_CAPABILITY_CATALOG_VERSION
+    | typeof GATE19_CAPABILITY_CATALOG_VERSION
+    | typeof CAPABILITY_CATALOG_VERSION,
 ): value is CapabilityBasis {
   const catalog =
     expectedCatalogVersion === LEGACY_CAPABILITY_CATALOG_VERSION
       ? LEGACY_LAZY_READ_CAPABILITY_IDS
-      : LAZY_READ_CAPABILITY_IDS
+      : expectedCatalogVersion === GATE19_CAPABILITY_CATALOG_VERSION
+        ? GATE19_LAZY_READ_CAPABILITY_IDS
+        : LAZY_READ_CAPABILITY_IDS
   if (
     !record(value) ||
     !keys(value, [
@@ -1080,7 +1172,20 @@ function sectionSetSemantics(cut: Cut) {
         section.omission.reason === "automatic_context_capability_withheld",
     )
   }
-  return cut.sections.every((section) => section.coverage !== "not_authorized")
+  return (
+    cut.sections.every((section) => section.coverage !== "not_authorized") &&
+    (cut.policyVersion !== POLICY_VERSION || futureAttentionSectionSemantics(cut))
+  )
+}
+
+function futureAttentionSectionSemantics(cut: Cut) {
+  const section = cut.sections.find((item) => item.owner === "future_attention")
+  if (!section || typeof section.countAtCut !== "number") return false
+  if (section.countAtCut === 0) return section.entries.length === 0
+  if (section.countAtCut === 1) {
+    return section.coverage === "complete" && section.entries.length === 1 && section.entries[0]?.semantic?.state === "value"
+  }
+  return section.entries.length <= section.countAtCut
 }
 
 function capabilitySectionRelations(cut: Cut) {
@@ -1098,6 +1203,9 @@ function capabilitySectionRelations(cut: Cut) {
         )
       if (entry.kind === "learner_response_evidence") {
         return entry.locator.lazyReadAvailable === capabilities.has("learner_response_evidence_read")
+      }
+      if (entry.kind === "future_attention") {
+        return entry.locator.lazyReadAvailable === capabilities.has("future_attention_read")
       }
       return entry.locator.lazyReadAvailable === capabilities.has("learning_interaction_read")
     }),
@@ -1156,6 +1264,7 @@ function entryShape(value: unknown): value is Entry {
       "material",
       "interaction",
       "learner_response_evidence",
+      "future_attention",
     ].includes(
       String(value.kind),
     ) &&
@@ -1164,7 +1273,8 @@ function entryShape(value: unknown): value is Entry {
     locatorShape(value.kind as Entry["kind"], value.locator) &&
     (value.semantic === undefined || bounded(value.semantic)) &&
     interactionSemantic(value.kind as Entry["kind"], value.semantic) &&
-    learnerResponseEvidenceSemantic(value.kind as Entry["kind"], value.semantic)
+    learnerResponseEvidenceSemantic(value.kind as Entry["kind"], value.semantic) &&
+    futureAttentionSemantic(value.kind as Entry["kind"], value.semantic)
   )
 }
 
@@ -1174,7 +1284,20 @@ function locatorShape(kind: Entry["kind"], value: Record<string, unknown>) {
   if (kind === "goal") return goalLocator(value)
   if (kind === "material") return materialLocator(value)
   if (kind === "learner_response_evidence") return learnerResponseEvidenceLocator(value)
+  if (kind === "future_attention") return futureAttentionLocator(value)
   return interactionLocator(value)
+}
+
+function futureAttentionLocator(value: Record<string, unknown>) {
+  return (
+    keys(value, ["concernID", "version", "headTransitionID", "lazyReadAvailable"]) &&
+    typeof value.concernID === "string" &&
+    /^fac_[0-9A-Za-z]{26}$/.test(value.concernID) &&
+    integer(value.version) &&
+    typeof value.headTransitionID === "string" &&
+    /^fat_[0-9A-Za-z]{26}$/.test(value.headTransitionID) &&
+    typeof value.lazyReadAvailable === "boolean"
+  )
 }
 
 function courseLocator(value: Record<string, unknown>) {
@@ -1736,6 +1859,17 @@ function learnerResponseEvidenceLocator(value: Record<string, unknown>) {
   )
 }
 
+function futureAttentionEntry(locator: unknown, semantic: unknown, assistantMessageID: MessageID): Entry {
+  const result = entry("future_attention", locator, semantic)
+  if (result.semantic?.state === "value") return result
+  throw new CutCapacityError({
+    assistantMessageID,
+    boundary: "mandatory",
+    observedBytes: result.semantic?.canonicalBytes ?? 0,
+    ceilingBytes: MAX_ENTRY_BYTES,
+  })
+}
+
 function interactionLocator(value: Record<string, unknown>) {
   const optional = [
     "inputID",
@@ -1867,6 +2001,78 @@ function learnerResponseEvidenceSemantic(kind: Entry["kind"], value: unknown) {
       "correctness_beyond_this_selector_bound_occurrence",
       "required_next_action",
     ].every((item, index) => nonImplications[index] === item)
+  )
+}
+
+function futureAttentionSemantic(kind: Entry["kind"], value: unknown) {
+  if (kind !== "future_attention") return true
+  if (!record(value)) return false
+  if (value.state === "locator_only") return bounded(value)
+  if (value.state !== "value" || !record(value.value)) return false
+  const semantic = value.value
+  const optional = semantic.interactionOrder === undefined ? [] : ["interactionOrder"]
+  return (
+    keys(semantic, [
+      "schemaVersion",
+      "purpose",
+      "authorship",
+      "sourceAvailability",
+      "target",
+      "notBefore",
+      "serviceTiming",
+      ...optional,
+    ]) &&
+    semantic.schemaVersion === 1 &&
+    nonempty(semantic.purpose) &&
+    utf8Bytes(semantic.purpose as string) <= FutureAttention.MAX_PURPOSE_BYTES &&
+    ["interpreted_learner_request", "tutor_initiated"].includes(String(semantic.authorship)) &&
+    ["available", "source_unavailable"].includes(String(semantic.sourceAvailability)) &&
+    futureAttentionTarget(semantic.target) &&
+    futureAttentionNotBefore(semantic.notBefore) &&
+    ["after_creation", "at_or_after_not_before"].includes(String(semantic.serviceTiming)) &&
+    (semantic.interactionOrder === undefined ||
+      semantic.interactionOrder === "learner_response_before_tutor_disclosure")
+  )
+}
+
+function futureAttentionTarget(value: unknown) {
+  if (!record(value) || !keys(value, ["endpoint", "selection", "receipt"]) || !courseMembership(value.endpoint)) {
+    return false
+  }
+  if (!membershipSelection(value.selection, value.endpoint) || !record(value.receipt)) return false
+  return (
+    keys(value.receipt, ["endpoint", "selection", "courseVersion", "viewVersion", "revisionVersion"]) &&
+    courseMembership(value.receipt.endpoint) &&
+    membershipSelection(value.receipt.selection, value.receipt.endpoint) &&
+    canonicalJson(toJsonValue(value.receipt.endpoint)) === canonicalJson(toJsonValue(value.endpoint)) &&
+    canonicalJson(toJsonValue(value.receipt.selection)) === canonicalJson(toJsonValue(value.selection)) &&
+    [value.receipt.courseVersion, value.receipt.viewVersion, value.receipt.revisionVersion].every(integer)
+  )
+}
+
+function futureAttentionNotBefore(value: unknown) {
+  if (
+    !record(value) ||
+    !keys(value, ["instant", "utcOffsetMinutes", "resolvedZone"]) ||
+    !integer(value.instant) ||
+    !Number.isSafeInteger(value.utcOffsetMinutes) ||
+    Number(value.utcOffsetMinutes) < -840 ||
+    Number(value.utcOffsetMinutes) > 840 ||
+    !record(value.resolvedZone)
+  ) {
+    return false
+  }
+  if (value.resolvedZone.type === "fixed_offset") {
+    return (
+      keys(value.resolvedZone, ["type", "offsetMinutes"]) &&
+      value.resolvedZone.offsetMinutes === value.utcOffsetMinutes
+    )
+  }
+  return (
+    value.resolvedZone.type === "iana" &&
+    keys(value.resolvedZone, ["type", "name", "releaseID"]) &&
+    nonempty(value.resolvedZone.name) &&
+    nonempty(value.resolvedZone.releaseID)
   )
 }
 

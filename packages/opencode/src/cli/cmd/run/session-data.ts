@@ -27,6 +27,7 @@
 import type { Event, Part, PermissionRequest, QuestionRequest, ToolPart } from "@opencode-ai/sdk/v2"
 import * as Locale from "@/util/locale"
 import { toolView } from "./tool"
+import { FutureAttentionPresentation } from "@opencode-ai/core/future-attention-presentation"
 import type { FooterOutput, FooterPatch, FooterView, StreamCommit } from "./types"
 
 const money = new Intl.NumberFormat("en-US", {
@@ -1093,6 +1094,21 @@ export function reduceSessionData(input: SessionDataInput): SessionDataOutput {
     }
 
     return queueOut(data, commits)
+  }
+
+  if (event.type === "future_attention.finalized") {
+    if (event.properties.sessionID !== input.sessionID) return out(data, commits)
+    const receipt = event.properties.receipt
+    if (data.ids.has(receipt.id)) return out(data, commits)
+    data.ids.add(receipt.id)
+    const presentation = FutureAttentionPresentation.finalization(receipt)
+    commits.push({
+      kind: "system",
+      text: `${presentation.title}: ${presentation.detail}`,
+      phase: "final",
+      source: "system",
+    })
+    return out(data, commits)
   }
 
   if (event.type === "session.error") {

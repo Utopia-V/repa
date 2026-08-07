@@ -24,7 +24,7 @@ const layer = Layer.effect(
     yield* LearningCommandRuntime.Service
     yield* RepresentationCommandRuntime.Service
     const events = yield* EventV2Bridge.Service
-    yield* recover(events, Date.now()).pipe(Effect.orDie)
+    yield* recoverStartup(events, Date.now()).pipe(Effect.orDie)
     return true as const
   }),
 )
@@ -34,6 +34,17 @@ export const node = LayerNode.make({
   layer,
   deps: [EventV2Bridge.node, LearningCommandRuntime.node, RepresentationCommandRuntime.node],
 })
+
+export function recoverStartup(events: EventV2.Interface, time: number) {
+  return Effect.gen(function* () {
+    const recovered = yield* recover(events, time)
+    yield* LearningCommandRuntime.finalizeFutureAttentionClaims(events, {
+      observationCut: "startup_reconciled",
+      time,
+    })
+    return recovered
+  })
+}
 
 export function recover(events: EventV2.Interface, time: number) {
   return events

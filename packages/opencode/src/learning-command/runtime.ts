@@ -4,6 +4,7 @@ import { Course } from "@opencode-ai/core/course"
 import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
+import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
@@ -65,6 +66,7 @@ import {
   normalizeLegacyGoals,
   normalizeLearningBootstrap,
   normalizeLearnerResponseEvidence,
+  normalizeFutureAttention,
   normalizeSteering,
   retainedSteeringCommand,
   type AcceptCourseViewRevisionInput,
@@ -76,6 +78,7 @@ import {
   type UpdateLearnerGoalsInput,
   type UpdateLearningCourseInput,
   type UpdateLearnerResponseEvidenceInput,
+  type UpdateFutureAttentionInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
 import { LearningCommandPermission } from "./permission"
@@ -123,6 +126,7 @@ export type PrimaryCapability =
   | typeof LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
+  | typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
 
 type Canonical =
   | Readonly<{
@@ -252,6 +256,21 @@ type ResponseEvidenceExecutionPreparation =
   | Readonly<{ type: "candidate"; candidate: LearnerResponseEvidence.Candidate }>
   | Readonly<{ type: "settled"; exact: ExactResult }>
 
+type FutureAttentionCanonical = Readonly<{
+  toolID: typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
+  input: UpdateFutureAttentionInput
+}>
+
+type FutureAttentionActive = Readonly<{
+  canonical: FutureAttentionCanonical
+  registration: Registration
+  deferred: Deferred.Deferred<ExactResult, unknown>
+}>
+
+type FutureAttentionExecutionPreparation =
+  | Readonly<{ type: "candidate"; candidate: FutureAttention.Candidate }>
+  | Readonly<{ type: "settled"; exact: ExactResult }>
+
 export interface Interface {
   readonly prepare: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly execute: (input: unknown, context: ExecuteContext) => Effect.Effect<ExactResult, unknown>
@@ -289,6 +308,7 @@ const layer = Layer.effect(
     const goalV2Inflight = new Map<SessionV1.PartID, GoalV2Active>()
     const bootstrapInflight = new Map<SessionV1.PartID, BootstrapActive>()
     const responseEvidenceInflight = new Map<SessionV1.PartID, ResponseEvidenceActive>()
+    const futureAttentionInflight = new Map<SessionV1.PartID, FutureAttentionActive>()
 
     yield* recoverAdmitted(events)
 
@@ -308,6 +328,9 @@ const layer = Layer.effect(
       }
       if (toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
         return yield* prepareLearnerResponseEvidence(events, modelInput, registration)
+      }
+      if (toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) {
+        return yield* prepareFutureAttention(events, modelInput, registration)
       }
       const canonical = canonicalInput(toolID, modelInput)
       const transaction = events.transaction((tx) =>
@@ -401,6 +424,15 @@ const layer = Layer.effect(
           permission,
           responseEvidenceInflight,
           { database, contentRoots, maps, tutorMaterials },
+          modelInput,
+          context,
+        )
+      }
+      if (toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) {
+        return yield* executeFutureAttention(
+          events,
+          permission,
+          futureAttentionInflight,
           modelInput,
           context,
         )
@@ -2168,6 +2200,495 @@ function loadCommittedLearnerResponseEvidenceResult(
     .pipe(Effect.map((result) => result.result))
 }
 
+function prepareFutureAttention(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const canonical = {
+          toolID: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+          input: normalizeFutureAttention(modelInput),
+        } satisfies FutureAttentionCanonical
+        const existing = yield* readFutureAttentionState(tx, registration)
+        if (existing) {
+          const state = yield* requireFutureAttentionState(tx, canonical, registration)
+          if (state.status !== "admitted") yield* assertFutureAttentionTerminalPart(tx, canonical, registration, state)
+          return noEvent(undefined)
+        }
+
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const row = yield* readPartRow(tx, registration.partID)
+        if (!row) {
+          return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+        }
+        const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+          turnID: registration.turnID,
+          inputID: registration.inputID,
+          causalOccurrenceID: registration.causalOccurrenceID,
+          partID: registration.partID,
+          callID: registration.callID,
+          emissionOrdinal: registration.emissionOrdinal,
+          sessionID: registration.sessionID,
+          assistantMessageID: registration.assistantMessageID,
+          capabilityIdentity: canonical.toolID,
+        })
+        const timeAdmitted = Math.max(
+          row.time_created,
+          trusted.modelTimeAdmitted,
+          trusted.candidateTimeRegistered,
+          trusted.toolTimeAdmitted,
+        )
+        yield* assertFutureAttentionAdmittedPart(tx, canonical, registration)
+        const reserved = yield* FutureAttention.reserve(tx, {
+          envelope: futureAttentionEnvelope(registration, timeAdmitted),
+          command: canonical.input,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, timeAdmitted),
+        })
+        if (reserved.type === "admitted") return noEvent(undefined)
+        if (reserved.type === "replay") return yield* Effect.die("New FutureAttention admission unexpectedly replayed")
+        const state = yield* requireFutureAttentionState(tx, canonical, registration)
+        const part = futureAttentionTerminalPart(canonical, registration, state)
+        return withPartEvent(undefined, part, requirePhysicalSettlement(state.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function executeFutureAttention(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  inflight: Map<SessionV1.PartID, FutureAttentionActive>,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      input: normalizeFutureAttention(modelInput),
+    } satisfies FutureAttentionCanonical
+    const active = inflight.get(registration.partID)
+    if (active) {
+      if (!isDeepStrictEqual(active.registration, registration) || !isDeepStrictEqual(active.canonical, canonical)) {
+        return yield* invocationConflict(registration)
+      }
+      return yield* Deferred.await(active.deferred)
+    }
+
+    const deferred = Deferred.makeUnsafe<ExactResult, unknown>()
+    const token = { canonical, registration, deferred } satisfies FutureAttentionActive
+    inflight.set(registration.partID, token)
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const exit = yield* restore(
+          executeFutureAttentionOnce(events, permission, canonical, registration, context),
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(exit)) {
+          const reconciled = yield* loadCommittedFutureAttentionResult(events, canonical, registration).pipe(Effect.exit)
+          if (Exit.isSuccess(reconciled) && reconciled.value) {
+            yield* Deferred.succeed(deferred, reconciled.value).pipe(Effect.ignore)
+            if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+            return reconciled.value
+          }
+          const cause = Exit.isFailure(reconciled) ? reconciled.cause : exit.cause
+          yield* Deferred.failCause(deferred, cause).pipe(Effect.ignore)
+          if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+          return yield* Effect.failCause(cause)
+        }
+        yield* Deferred.succeed(deferred, exit.value).pipe(Effect.ignore)
+        if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+        return exit.value
+      }),
+    )
+  })
+}
+
+function executeFutureAttentionOnce(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* events.transaction<FutureAttentionExecutionPreparation, typeof SessionV1.Event.PartUpdated>(
+      (tx) =>
+        Effect.gen(function* () {
+          const state = yield* requireFutureAttentionState(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            return noEvent({
+              type: "settled" as const,
+              exact: exactFromPart(yield* assertFutureAttentionTerminalPart(tx, canonical, registration, state)),
+            })
+          }
+          if (state.disposition !== "candidate_v1" || !state.candidate) {
+            return yield* Effect.die("Admitted FutureAttention invocation is not a complete candidate")
+          }
+          return noEvent({ type: "candidate" as const, candidate: state.candidate })
+        }).pipe(Effect.orDie),
+    )
+    if (prepared.result.type === "settled") return prepared.result.exact
+
+    const authority = requirePermissionContext(context)
+    const candidate = prepared.result.candidate
+    const scope = SemanticPresentation.futureAttentionScope(candidate.canonicalCommand)
+    const presentation = LearningCommandPresentation.futureAttentionCapability(candidate, {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    })
+    const shownScope = {
+      patterns: [FutureAttention.PERMISSION_PATTERN],
+      agentAction: candidate.agentAction,
+      scope,
+      semanticPresentation: presentation,
+    }
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        sessionID: registration.sessionID,
+        permission: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+        patterns: [FutureAttention.PERMISSION_PATTERN],
+        always: [FutureAttention.PERMISSION_PATTERN],
+        requirePrompt: false,
+        metadata: {
+          futureAttentionKind: "change_set",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: candidate.agentAction.kind,
+          scope,
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: { messageID: registration.assistantMessageID, callID: registration.callID },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+        lifecycle: {
+          resolution: "request_exact",
+          selected: (selection) => persistFutureAttentionSelection(events, registration, selection, shownScope),
+          replied: (input) => persistFutureAttentionReply(events, registration, input),
+        },
+      },
+      context.abort,
+    )
+    if (permissionOutcome.type !== "allow" || context.abort.aborted) {
+      return yield* completeFutureAttention(events, canonical, registration)
+    }
+    return yield* completeFutureAttention(events, canonical, registration)
+  })
+}
+
+function persistFutureAttentionSelection(
+  events: EventV2.Interface,
+  registration: Registration,
+  selection: Permission.Selection,
+  shownScope: Readonly<Record<string, unknown>>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        if (selection.action === "ask") {
+          yield* FutureAttention.issueCapabilityPrompt(tx, {
+            partID: registration.partID,
+            requestID: selection.request.id,
+            policyBasis: { ...selection.basis },
+            shownScope,
+            time: metadata.time,
+            order: metadata.order,
+          })
+          return noEvent(undefined)
+        }
+        yield* FutureAttention.settlePolicy(tx, {
+          partID: registration.partID,
+          outcome: selection.action === "allow" ? "policy_allow" : "policy_deny",
+          policyBasis: { ...selection.basis },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function persistFutureAttentionReply(
+  events: EventV2.Interface,
+  registration: Registration,
+  input: Readonly<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        yield* FutureAttention.settlePrompt(tx, {
+          partID: registration.partID,
+          requestID: input.request.id,
+          outcome:
+            input.reply.reply === "once" || input.reply.reply === "always"
+              ? "prompted_allow"
+              : input.reply.reply === "cancel"
+                ? "prompted_cancel"
+                : input.reply.message
+                  ? "prompted_correct"
+                  : "prompted_deny",
+          reply: { ...input.reply },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function completeFutureAttention(
+  events: EventV2.Interface,
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireFutureAttentionState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(exactFromPart(yield* assertFutureAttentionTerminalPart(tx, canonical, registration, state)))
+        }
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const settled = yield* FutureAttention.settle(tx, {
+          partID: registration.partID,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        if (settled.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: registration.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        const terminal = yield* requireFutureAttentionState(tx, canonical, registration)
+        const part = futureAttentionTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function failFutureAttention(
+  events: EventV2.Interface,
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+  error: unknown,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireFutureAttentionState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(exactFromPart(yield* assertFutureAttentionTerminalPart(tx, canonical, registration, state)))
+        }
+        yield* FutureAttention.settleFailure(tx, {
+          partID: registration.partID,
+          error,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        const terminal = yield* requireFutureAttentionState(tx, canonical, registration)
+        const part = futureAttentionTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function readFutureAttentionState(tx: EventV2.Transaction, registration: Registration) {
+  return FutureAttention.readInvocationVersion(tx, {
+    partID: registration.partID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+  })
+}
+
+function requireFutureAttentionState(
+  tx: EventV2.Transaction,
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+) {
+  return Effect.gen(function* () {
+    const state = yield* readFutureAttentionState(tx, registration)
+    if (!state) return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    const storedCommand = state.disposition === "candidate_v1" ? state.candidate?.canonicalCommand : undefined
+    if (storedCommand && !isDeepStrictEqual(storedCommand, FutureAttention.canonicalizeCommand(canonical.input))) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted" && (state.disposition !== "candidate_v1" || !state.candidate)) {
+      return yield* Effect.die("Admitted FutureAttention invocation is not a complete candidate")
+    }
+    const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!physical || !physical.turn_id || !physical.input_id) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const envelope = futureAttentionEnvelope(registration, physical.time_admitted)
+    if (
+      physical.turn_id !== envelope.turnID ||
+      physical.input_id !== envelope.inputID ||
+      physical.occurrence_id !== envelope.occurrenceID ||
+      physical.session_id !== envelope.sessionID ||
+      physical.parent_user_message_id !== envelope.parentUserMessageID ||
+      physical.assistant_message_id !== envelope.assistantMessageID ||
+      physical.emission_ordinal !== envelope.emissionOrdinal ||
+      physical.capability_identity !== envelope.capabilityIdentity ||
+      physical.capability_version !== envelope.capabilityVersion ||
+      physical.authorization_basis !== envelope.authorizationBasis
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted") yield* assertFutureAttentionAdmittedPart(tx, canonical, registration)
+    return state
+  })
+}
+
+function futureAttentionEnvelope(
+  registration: Registration,
+  timeAdmitted: number,
+): LearningCommand.InvocationEnvelope & Readonly<{ authorizationBasis: "agent_action"; capabilityVersion: 1 }> {
+  return {
+    occurrenceID: registration.causalOccurrenceID!,
+    turnID: registration.turnID,
+    inputID: registration.inputID,
+    sessionID: registration.sessionID,
+    parentUserMessageID: registration.parentUserMessageID,
+    assistantMessageID: registration.assistantMessageID,
+    partID: registration.partID,
+    providerCallID: registration.callID,
+    emissionOrdinal: registration.emissionOrdinal,
+    capabilityIdentity: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+    capabilityVersion: 1,
+    authorizationBasis: "agent_action",
+    timeAdmitted,
+  }
+}
+
+function assertFutureAttentionAdmittedPart(
+  tx: EventV2.Transaction,
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+) {
+  return readPart(tx, registration.partID).pipe(
+    Effect.flatMap((part) =>
+      part.id === registration.partID &&
+      part.messageID === registration.assistantMessageID &&
+      part.sessionID === registration.sessionID &&
+      part.type === "tool" &&
+      part.tool === canonical.toolID &&
+      part.callID === registration.callID &&
+      part.state.status === "pending" &&
+      isDeepStrictEqual(part.state.input, canonical.input)
+        ? Effect.void
+        : invocationConflict(registration),
+    ),
+  )
+}
+
+function assertFutureAttentionTerminalPart(
+  tx: EventV2.Transaction,
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+  state: FutureAttention.InvocationVersion,
+) {
+  return Effect.gen(function* () {
+    const expected = futureAttentionTerminalPart(canonical, registration, state)
+    const part = yield* readPart(tx, registration.partID)
+    if (
+      !isDeepStrictEqual(invocationPart(part), invocationPart(expected)) ||
+      SemanticPresentation.readResult(part, true).type !== "valid"
+    ) {
+      return yield* Effect.die(`Terminal FutureAttention Part ${registration.partID} diverged from its settlement`)
+    }
+    return part
+  })
+}
+
+function futureAttentionTerminalPart(
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+  state: FutureAttention.InvocationVersion,
+) {
+  const settlement = requirePhysicalSettlement(state.settlement)
+  const presentation = LearningCommandPresentation.futureAttentionSettlementResult(settlement, state, {
+    sessionID: registration.sessionID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+    partID: registration.partID,
+  })
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("FutureAttention settlement has no valid semantic projection")
+  const exact = {
+    title: projected.title,
+    metadata: {
+      command: canonical.toolID,
+      commandVersion: 1,
+      outcome: settlement.outcome,
+      ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+      durablySettled: projected.durablySettled,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    },
+    output: JSON.stringify({
+      settlement,
+      disposition: state.disposition,
+      ...(state.disposition === "candidate_v1" && state.candidate
+        ? {
+            agentAction: state.candidate.agentAction,
+            ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+            ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+          }
+        : {}),
+      ...(state.disposition === "semantic_terminal_v1" && state.semanticTerminal
+        ? { semanticTerminal: state.semanticTerminal }
+        : {}),
+    }),
+  }
+  const part = {
+    id: registration.partID,
+    messageID: registration.assistantMessageID,
+    sessionID: registration.sessionID,
+    type: "tool",
+    tool: canonical.toolID,
+    callID: registration.callID,
+    state: {
+      status: "completed",
+      input: canonical.input,
+      output: exact.output,
+      title: exact.title,
+      metadata: exact.metadata,
+      time: { start: state.timeAdmitted, end: settlement.settlementTime },
+    },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal FutureAttention Part ${registration.partID} is invalid`)
+  }
+  return part
+}
+
+function loadCommittedFutureAttentionResult(
+  events: EventV2.Interface,
+  canonical: FutureAttentionCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* readFutureAttentionState(tx, registration)
+        if (!state || state.status === "admitted") return noEvent(undefined)
+        return noEvent(exactFromPart(yield* assertFutureAttentionTerminalPart(tx, canonical, registration, state)))
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
 function prepareDefaultCourse(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
   return Effect.gen(function* () {
     const state = yield* readStoredDefaultCourseState(events, registration)
@@ -3578,6 +4099,27 @@ function loadCommittedExactResult(
             )
           }
         }
+        if (physical?.command_name === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) {
+          const state = yield* readFutureAttentionState(tx, registration)
+          if (state) {
+            if (state.status === "admitted") return undefined
+            const row = yield* readPartRow(tx, registration.partID)
+            if (!row) {
+              return yield* new LearningCommand.InvocationTranscriptUnavailableError({
+                partID: registration.partID,
+              })
+            }
+            const part = partFromRow(row)
+            if (part.tool !== LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) {
+              return yield* Effect.die(`FutureAttention Part ${registration.partID} changed tool identity`)
+            }
+            const canonical = {
+              toolID: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+              input: normalizeFutureAttention(part.state.input),
+            } satisfies FutureAttentionCanonical
+            return exactFromPart(yield* assertFutureAttentionTerminalPart(tx, canonical, registration, state))
+          }
+        }
         const canonical = attemptedCanonical ?? (yield* canonicalFromStoredPart(tx, registration.partID))
         if (!canonical) return undefined
         const prepared = yield* loadPhysicalPrepared(tx, canonical, registration)
@@ -4163,7 +4705,8 @@ export function recoverAdmitted(events: EventV2.Interface) {
               (row) =>
                 isPrimaryCapability(row.command_name) ||
                 row.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
-                row.command_name === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
+                row.command_name === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
+                row.command_name === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
             ),
           ),
         ),
@@ -4271,6 +4814,9 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
     if (physical.command_name === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY) {
       return yield* interruptLearnerResponseEvidenceTransaction(tx, registration)
     }
+    if (physical.command_name === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) {
+      return yield* interruptFutureAttentionTransaction(tx, registration)
+    }
     const row = yield* readPartRow(tx, registration.partID)
     if (!row) {
       return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
@@ -4368,6 +4914,35 @@ function interruptLearningBootstrapTransaction(tx: EventV2.Transaction, registra
   })
 }
 
+export function finalizeFutureAttentionClaims(
+  events: EventV2.Interface,
+  input: Readonly<{
+    assistantMessageID?: SessionV1.MessageID
+    observationCut: FutureAttention.CompletionFacts["observationCut"]
+    time: number
+  }>,
+) {
+  return Effect.gen(function* () {
+    const pending = yield* events
+      .transaction((tx) =>
+        FutureAttention.listPendingClaimGroups(tx, {
+          ...(input.assistantMessageID ? { assistantMessageID: input.assistantMessageID } : {}),
+        }).pipe(Effect.map((groups) => noEvent(groups.map((group) => group.id))), Effect.orDie),
+      )
+      .pipe(Effect.map((result) => result.result))
+    return yield* Effect.forEach(
+      pending,
+      (groupID) =>
+        FutureAttention.finalizeObservedClaimGroup(events, {
+          groupID,
+          observationCut: input.observationCut,
+          time: input.time,
+        }).pipe(Effect.orDie),
+      { concurrency: 1 },
+    )
+  })
+}
+
 function interruptLearnerResponseEvidenceTransaction(tx: EventV2.Transaction, registration: Registration) {
   return Effect.gen(function* () {
     const row = yield* readPartRow(tx, registration.partID)
@@ -4393,6 +4968,35 @@ function interruptLearnerResponseEvidenceTransaction(tx: EventV2.Transaction, re
       return yield* Effect.die(`Recovered learner-response-evidence invocation ${registration.partID} remained admitted`)
     }
     const completed = learnerResponseEvidenceTerminalPart(canonical, registration, terminal)
+    return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
+  })
+}
+
+function interruptFutureAttentionTransaction(tx: EventV2.Transaction, registration: Registration) {
+  return Effect.gen(function* () {
+    const row = yield* readPartRow(tx, registration.partID)
+    if (!row) {
+      return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+    }
+    const part = partFromRow(row)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+      input: normalizeFutureAttention(part.state.input),
+    } satisfies FutureAttentionCanonical
+    const state = yield* requireFutureAttentionState(tx, canonical, registration)
+    if (state.status !== "admitted") {
+      yield* assertFutureAttentionTerminalPart(tx, canonical, registration, state)
+      return noEvent(true)
+    }
+    yield* FutureAttention.recover(tx, {
+      partID: registration.partID,
+      settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+    })
+    const terminal = yield* requireFutureAttentionState(tx, canonical, registration)
+    if (terminal.status === "admitted") {
+      return yield* Effect.die(`Recovered FutureAttention invocation ${registration.partID} remained admitted`)
+    }
+    const completed = futureAttentionTerminalPart(canonical, registration, terminal)
     return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
   })
 }
@@ -4991,7 +5595,8 @@ function isRegistration(value: unknown): value is Registration {
 function canonicalInput(toolID: PrimaryCapability, input: unknown): Canonical {
   if (
     toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
-    toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
+    toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
+    toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
   ) {
     throw new Error("This command uses its dedicated Agent-action admission path")
   }

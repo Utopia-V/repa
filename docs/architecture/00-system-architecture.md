@@ -1033,12 +1033,13 @@ A Goal change creates or supersedes Goal state and causes the current view to
 be recompiled. It does not mutate a generic Agenda record, rewrite Course
 structure, or invent learner evidence.
 
-ALS-021 demonstrates that making a durable reason visible is not equivalent to
-selecting it as the purpose of the current move. In all eight tested
-independent-prediction returns, the eligible future-attention reason survived into the
-fresh Session, yet the Tutor disclosed the answer before the unaided
-opportunity that the reason required. Candidate state and selected control
-intent therefore need distinct representation in composition.
+Making a durable reason visible is not equivalent to selecting it as the
+purpose of the current move. Candidate state can be present as background while
+the Tutor realizes a different purpose, and a learner-first return can be
+invalidated by disclosure even though its durable reason was visible. Candidate
+state and selected control intent therefore need distinct representation in
+composition. Historical ALS-021 described this failure shape but does not
+supply current acceptance evidence.
 
 When the Learning System chooses to let durable state govern a model sample,
 the context cut must make that selection inspectable and preserve any
@@ -1050,12 +1051,14 @@ research. The exact projection is deliberately open; it need not be durable on
 every Turn and does not authorize a mode, pedagogy enum, second runtime, or
 universal action record.
 
-ALS-022A supplies the first direct realization evidence for that distinction.
-Under the same return trace and production model, explicit selected-purpose
-binding produced 7/8 purpose-valid independent predictions and no answer
-leakage in 8/8; candidate exposure alone had produced 0/8. When durable state
-is chosen to govern a move, selected purpose is therefore a real composition
-meaning, not an optional wording convention.
+Historical ALS-021/022 documents explored that distinction, but their raw run
+artifacts are not retained and their published aggregates are not current
+acceptance evidence. The architectural distinction instead follows from the
+owned meanings: exposing a candidate does not say whether it is background,
+one legal current default, or one of several unresolved concerns. When durable
+state is chosen to govern a move, selected purpose is therefore a real
+composition meaning rather than an optional wording convention. Gate 20 must
+qualify the concrete projection against the current fork.
 
 The selection is bounded to the current control interval. The
 future-attention authority continues to own the candidate; Tutor composition
@@ -1065,45 +1068,46 @@ Turn merely because the candidate remains durable. Material reads and other
 non-mutating continuation may preserve the selection in a newly compiled cut.
 Failure or interruption ends it without inventing service.
 
-ALS-022B/C reject a mandatory universal model selector as the baseline.
-`Agenda candidate | none` produced false provenance and only 12/22 strict
-passes; an exact `current request | candidate | unresolved` source choice still
-passed only 10/18 and ignored the candidate in every generic continuation. The
-production-default model is not the sole authority for that general control
-decision.
+Program-known legality, exact candidate count, target freshness, and source
+provenance do not belong to a mandatory model selector. The ordinary
+interactive Agent remains the first open-semantic boundary; an additional
+control sample requires a separately owned invariant and a causal failure that
+survives the simpler path.
 
-ALS-022D supports a simpler bounded topology for the demonstrated
-one-candidate case. Composition filters eligibility and target freshness,
-preserves exact source meaning, and may bind one legal future-attention concern as a
-**conditional default** inside the ordinary realizing sample. The exact
-admitted learner request remains higher priority. An incompatible direct
-request, requested form, completed occurrence, or redirection overrides the
-default without rewriting or closing the concern; generic continuation lets
-the default govern. This passed 10/10 tested behavior/state contrasts without
-an extra selector sample.
+For the one-candidate case, composition filters eligibility and target
+freshness, preserves exact source meaning, and may bind one legal
+future-attention concern as a **conditional default** inside the ordinary
+realizing sample. The exact admitted learner request remains higher priority.
+An incompatible direct request, requested form, completed occurrence, or
+redirection overrides the default without rewriting or closing the concern;
+generic continuation may let the default govern. Gate 20 owns current-fork
+causal evidence for that behavior without an extra selector sample.
 
 Several materially different candidates remain unresolved unless an accepted
 deterministic rule, reversible ordinary model choice, or learner clarification
 settles them. Do not hide a universal scheduler or classifier behind the word
-selection. The tested conditional default also restated one known
-independent-prediction constraint. ALS-022E removed that restatement and strict
-validity fell to 3/8: exact source reason plus default status did not reliably
-stop answer or decisive-rule disclosure. For this demonstrated concern, the
-future-attention authority must preserve an explicit source-bound learner-role
+selection. “Explain this later” and “later, let me answer before you explain”
+remain different purpose and service meanings independent of any historical
+prompt score. When the exact admitted concern requires the latter, the
+future-attention authority preserves an optional source-bound interaction-order
 constraint equivalent to
 `learner response before Tutor disclosure of answer or decisive hint`, and
 Tutor composition renders it as operative. It affects both realization and
-whether a guided occurrence can truthfully serve the concern. This one earned
-constraint does not authorize a general compiler, registry, or pedagogy enum.
+whether a guided occurrence can truthfully serve the concern. It is not the
+default for every concern, and code does not claim to prove whether arbitrary
+prose was a decisive hint. This narrow constraint does not authorize a general
+compiler, registry, or pedagogy enum.
 
 If a future model-assisted control sample is justified for another boundary,
 it is control-only: it cannot mutate learning state, emit learner-visible
 teaching, or share incidental prose with the persisted assistant answer before
 the program validates and binds source/version/scope. This remains a phase in
-the same finite loop, not another runtime. ALS-022A/D/E also expose a presentation
-defect: current pre-tool and control-rationale text can enter learner-visible
-`outcome.text`; production Tutor prose must not reveal internal selection/control
-vocabulary merely because the model narrated it.
+the same finite loop, not another runtime. Current-fork Gate 20 evidence must
+also inspect the known presentation boundary: text emitted before a local tool
+call can become part of the exact same Assistant's final learner-visible
+presentation, although the partial fragment is never independently complete.
+Production Tutor prose must not reveal internal selection or control vocabulary
+merely because the model narrated it.
 
 A conversational move such as explaining an idea may happen without a domain
 transition. Only a move that creates useful long-term meaning, a commitment,
@@ -1139,14 +1143,85 @@ class name or a generic record shared by all future work in the agenda family.
 
 Beginning the return does not settle the concern. A later recall, explanation,
 comparison, application, or real task may serve it only through an explicit,
-inspectable transition whose legal, complete later occurrence, target revision,
-and purpose align. A partial provider delta or interrupted, uncommitted
-assistant item cannot supply that occurrence. Assistance, result, artifact
-state, and evidence meaning remain with their owning authorities. Serving the
-concern means that the intended future attention occurred; it does not mean the
-learner answered correctly, retained the knowledge, or mastered the target.
-Cancellation or dismissal is a future-attention decision and does not pretend
-that the purpose was served.
+inspectable transition whose legal, complete later Interaction occurrence or
+outcome, target revision, and purpose align. The ordinary root Agent authors
+that fallible alignment; program checks bind the exact source, completion,
+lineage, target, permission, and transition without proving semantic
+entailment. A complete committed root Assistant presentation may therefore
+serve an explanation purpose, while the learner input that triggered it is not
+a proxy for the explanation. A delegated child cannot turn its root cause into
+service before its exact complete result returns to the root boundary. A
+partial provider delta or interrupted, uncommitted Assistant item cannot supply
+the source. Assistance, result, artifact state, and evidence meaning remain with
+their owning authorities. Serving the concern means that the intended future
+attention occurred; it does not mean the learner answered correctly, retained
+the knowledge, or mastered the target. Cancellation or dismissal is a
+future-attention decision and does not pretend that the purpose was served.
+
+Every stored future-attention purpose and source relation is an Agent-authored,
+fallible interpretation, including one initially attributed to current learner
+language. A later authorized root or delegated Agent may therefore correct,
+dismiss, or reopen an erroneous model-initiated interpretation without
+fabricating a new learner direction. That transition preserves its exact Agent
+issuance/lineage, prior head, rationale, capability result, and visible
+correction provenance. A real current learner direction remains a distinct
+root-only semantic relation and cannot be silently overridden or borrowed by a
+child. The exact Gate contract owns the closed relation names and permission
+matrix.
+
+When one root learner input both corrects a concern and realizes the corrected
+purpose or asks the Tutor to realize it now, the learner must not send another
+message merely so the runtime can reveal and then target a generated successor
+ID. One bounded replacement may atomically create the corrected successor and
+bind either an exact already-complete current service source or a pending claim
+directly to that program-owned successor. An already-complete source must
+postdate the predecessor's current state and receives a new successor-specific
+alignment; an old source cannot be recycled. A pending-claim replacement
+survives an interrupted or failed return and remains open; service occurs only
+if the exact full presentation of the same root Assistant message that owns the
+claim's local tool call later completes and the claim still validates. A text
+fragment emitted before the call is not service by itself, but it may contribute
+after that whole message, all terminal Parts, and any final Assistant-level
+structured projection commit. Released-v1 may then
+sample another post-tool Assistant; that later durable operation cannot silently
+substitute for the bound message. It also inherits the same current learner
+occurrence, so its new Assistant ID does not create another FutureAttention
+effect address or permit a terminal claim-group rebind. If the bound message
+finalizes `not_served`, the concern remains open until a genuinely new
+runtime-bound learner occurrence; this architecture adds no continuation/retry
+slot. The bound-message finalizer appends a FutureAttention-owned finalization
+receipt/event; it never refreshes or rewrites the already-terminal
+learning-command physical settlement. The original physical replay remains the
+exact admission-time result. Current claim/service state is observed through
+the finalization projection, a bounded owner read, or a new physical semantic
+duplicate. These successor-relative arms are not a general local-reference
+language or workflow engine.
+
+The exact bound-message finalizer is terminal cleanup for the model operation,
+not a best-effort callback: live interruption cannot return while an admitted
+claim remains merely pending. If supported Session deletion removes the live
+model or Tool rows before recovery, exact body-free Turn tombstones supply the
+same completion identity and force one truthful terminal result. A completed
+Tool result is service-eligible only when the runtime-owned candidate
+classification is learner-usable and the terminal output is non-empty;
+internal control tools cannot self-certify as Tutor return.
+
+Append-only finalization remains independently readable after detachment or
+supported Session deletion. Every physical global-SSE connection emits a
+`server.connected` epoch only after its live listener is registered. TUI and ACP
+use that epoch, plus attach/load/resume, to request the paged FutureAttention
+owner projection for each retained exact Session/directory. One owner read runs
+per exact key; a request that arrives during it queues another generation from
+sequence `-1`. A rejected TUI reconnect read leaves that recovery generation
+pending and retries after bounded delay while the exact Session/directory
+remains retained; it does not require another reconnect epoch. History and live
+delivery meet at one receipt-identity dedupe boundary. ACP advances its
+pending/completed presentation phase only after the corresponding client update
+is acknowledged, so a failed phase remains retryable. Carrier liveness therefore
+does not decide whether a durable receipt
+is observable, and catch-up never refreshes physical replay or rewrites the
+completed claim Tool Part. This is stable-identity redelivery and reconciliation,
+not an exactly-once transport claim.
 
 Time can make a concern eligible or due without selecting it, beginning it,
 settling it, or claiming that the learner forgot. A failed explanation can also
@@ -1266,6 +1341,17 @@ Each domain authority separately owns the semantic effect address, legal
 transition, entity preconditions, correction, and durable payload. Shared
 settlement therefore does not become a universal learning event or a second
 owner of domain meaning.
+
+An exact replay of a terminal physical invocation returns that invocation's
+stored settlement byte-for-byte and performs no domain read, even when later
+domain state has changed. A new physical invocation for the same canonical
+semantic effect may settle `already_applied` with a transaction-current domain
+projection. When a domain has a real completion condition that occurs after the
+physical command settles, the domain owns a separately identified append-only
+finalization receipt/event and current read projection. Retained carriers may
+present that later typed event beside the original result, but they cannot
+mutate the completed Tool Part or present physical replay as a refreshed current
+observation.
 
 Physical dependencies must preserve that direction. Generic invocation and
 receipt storage does not enumerate every command kind, import every domain

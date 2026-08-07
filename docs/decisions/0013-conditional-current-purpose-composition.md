@@ -4,14 +4,15 @@ Status: Accepted
 
 Date: 2026-07-13
 
-Amendment (2026-07-17): the pre-fork experiments settled the ownership and
-control topology, not a production Agenda schema in the fork. The active
-roadmap therefore admits the source-linked future-attention lifecycle together
-with its Tutor composition and truthful service consumer rather than creating
-an empty Agenda authority first.
+Amendment (2026-07-17, corrected 2026-08-06): the pre-fork experiment documents
+motivated an ownership and control topology but do not prove it or define a
+production Agenda schema in the fork. The active roadmap admits the
+source-linked future-attention lifecycle together with its Tutor composition
+and truthful service consumer because that vertical boundary has independent
+product meaning, rather than creating an empty Agenda authority first.
 
 Amendment (2026-07-27): `Agenda` is only a family/composition label. The
-demonstrated concern belongs to the future-attention authority; this ADR does
+admitted concern belongs to the future-attention authority; this ADR does
 not create one shared Goal/Assignment/planning/future-attention lifecycle.
 
 Amendment (2026-07-29): a follow-up product-flow audit showed that the planned
@@ -32,6 +33,16 @@ selector architectures. It first tests the ordinary Agent with trustworthy
 context, exact constraints, and lazy owner tools. Another controller shape is
 considered only if a representative failure survives repair of that simpler
 boundary and demonstrates a separately owned invariant.
+
+Amendment (2026-08-06): the maintainer withdrew any presumption that historical
+ALS-021/022 aggregate reports are trustworthy acceptance evidence. Their raw
+`.runs` are not retained in the current repository or immutable oracle tag, so
+published pass counts and the ALS-022E `3/8` result are unqualified historical
+reports, not proofs. This ADR's current topology remains an accepted product
+decision because its distinctions and counterexamples are independently
+meaningful; Gate 20 must qualify their concrete projection, interaction-order,
+and service behavior against the current fork. No historical ALS result may be
+used to waive that review or evidence.
 
 ## Plain-language decision
 
@@ -54,36 +65,25 @@ came from, how long the default lasts, and what durable effects are allowed.
 
 ## Context
 
-Pre-fork Roadmap 07 established what it then called an Agenda-owned,
-source-linked future-attention concern in the behavioral oracle.
-ALS-021 then showed that durable visibility is not control: the exact reason
-survived a fresh Session, but all eight independent-prediction returns revealed
-the answer before the learner predicted.
+Pre-fork Roadmap 07 and ALS-021/022 documents described what was then called an
+Agenda-owned, source-linked future-attention concern and compared several prompt
+or selector shapes. The tracked oracle contains prompt-injection code, a runner,
+and shallow mechanical checks, but not the raw `.runs` needed to reproduce the
+published aggregates. Those documents remain design provenance only.
 
-Four focused experiments separated the boundary:
+The current decision rests on semantic counterexamples that do not require the
+historical scores. Merely exposing a candidate does not specify whether it is
+background information or the current learning purpose. A mandatory selector
+cannot become the authority for program-known legality or source provenance.
+Conversely, when exactly one legal concern is intentionally made operative, the
+context must preserve that fact, its exact source meaning, and its priority
+relation to the learner's exact current request. Multiple legal concerns cannot
+be silently reduced to whichever row happened to render first.
 
-- ALS-022A explicitly bound the purpose and changed the behavior from 0/8 to
-  7/8 purpose-valid predictions, with no answer leakage in 8/8.
-- ALS-022B asked DeepSeek-V4-Flash to choose `Agenda candidate | none` and
-  author an operative meaning. It passed 12/22 and sometimes attached an
-  incompatible current-request meaning to a valid concern ID.
-- ALS-022C filtered illegal choices and bound exact sources, then asked the
-  model to choose `current_request | agenda_candidate | unresolved`. It passed
-  10/18, ignored Agenda in every generic continuation, and did not recognize
-  multiple-candidate ambiguity.
-- ALS-022D removed the selector sample. A sole legal concern became a
-  conditional default inside the ordinary realizing sample. Generic
-  continuation, direct help, requested comparison form, completed occurrence,
-  and learner redirection passed 10/10 with truthful source-concern state
-  (then labeled Agenda).
-- ALS-022E removed ALS-022D's explicit learner-role restatement and retained
-  only exact Agenda reason plus conditional-default status. Strict inspection
-  fell to 3/8: historical reason alone did not reliably prevent answer or
-  decisive-rule disclosure before the learner response.
-
-The evidence rejects both candidate-only background prose and a mandatory
-universal selector. It supports a priority-bearing composition contribution
-for the demonstrated one-candidate control relationship.
+Gate 20 owns current-fork qualification of this one-candidate conditional
+default, truthful multiple-candidate fallback, and any purpose-specific
+interaction-order meaning. Gate 21A retains representative arbitration among
+different domain pressures.
 
 ## Decision
 
@@ -145,9 +145,11 @@ cannot replace the authoritative source reason or borrow the source's
 provenance for an incompatible current request. Any model-authored operative
 interpretation is untrusted, scoped, and shown beside the exact source.
 
-ALS-022E shows that exact reason plus selected status is insufficient for the
-demonstrated independent-prediction concern. That concern therefore requires a
-separate operative learner-role constraint equivalent to:
+“Explain this later” and “later, let me answer before you explain” have
+different interaction and service meaning even when they share an exact target
+and activation time. When the admitted source purpose contains the latter
+meaning, the future-attention concern therefore preserves one explicit
+operative constraint equivalent to:
 
 ```text
 learner response before Tutor disclosure of answer or decisive hint
@@ -155,10 +157,13 @@ learner response before Tutor disclosure of answer or decisive hint
 
 The future-attention authority is the durable owner because the boundary
 affects both later realization and whether a guided occurrence can truthfully
-serve that exact concern; Tutor composition projects it as operative. This ADR
-does not define a general compiler from arbitrary concern `reason` text or
-authorize a universal pedagogy enum. The first production contract remains
-narrow to the demonstrated constraint, source-bound and correctable.
+serve that exact concern; Tutor composition projects it as operative. The
+constraint is optional and source-bound, not a universal learner role. This ADR
+does not define a general compiler from arbitrary concern `reason` text,
+authorize a universal pedagogy enum, or claim that deterministic code can prove
+whether natural-language prose contained a decisive hint. Gate 20 owns the
+narrow stored form, source matrix, current-fork realization, and service
+qualification.
 
 ### 5. Multiple material candidates require an owned later boundary
 
@@ -204,15 +209,65 @@ state.
 
 The model owns compatible realization: explanation, example, question,
 representation, research, and tool use. Asking a question or beginning an
-explanation does not address the concern. Only a complete, source-aligned
-occurrence and the existing domain command may change future-attention
-disposition.
+explanation does not address the concern. Only a purpose-appropriate complete
+Interaction occurrence or outcome plus the existing domain command may change
+future-attention disposition; a complete committed root Assistant presentation
+can serve an explanation purpose, while its triggering learner input cannot
+stand in for that output. If the same current input corrects the concern and
+requests that output, the bounded replacement may bind its program-created
+successor to a completion-conditioned claim on the exact same Assistant
+message/model operation that owns the local tool call. Text Parts streamed
+before that call are not independently complete, but may contribute after the
+whole message, all terminal Parts, and any final Assistant-level structured
+output commit. A later post-tool Assistant is a
+different source but inherits the same runtime-bound learner occurrence. It
+cannot silently satisfy the earlier claim, retry the occurrence-scoped effect,
+or rebind a terminal claim group. If the same current learner occurrence already
+contains the purpose-appropriate response, the replacement may instead bind
+that exact complete source with a new successor-specific alignment; it may not
+recycle an older source. The corrected successor exists even if a requested
+output fails; only the exact legal complete source can serve it. The successful
+same-message composition needs neither a second learner message nor a
+learner-visible internal ID. If the output first appears in later A2 after A1
+finalizes `not_served`, the concern remains open until a genuinely new runtime-bound
+learner occurrence. This ADR adds no continuation/service-retry identity.
 
-Internal control terms, concern IDs, precedence reasoning, and pre-tool
-preambles are not Tutor prose merely because a model emitted them. The current
-runner/prompt has demonstrated leakage of that narration. Presentation work
-must preserve natural reminders while keeping architecture/control traces out
-of the persisted learner-visible answer.
+The model-issued replacement command settles once under Gate 8. Its exact
+physical replay remains the immutable admission-time result and cannot refresh
+after the bound Assistant presentation resolves. Future-attention owns a separate
+append-only finalization receipt/event for the later `served | not_served`
+decision; current state is available through that event, a bounded owner read,
+or a new physical semantic duplicate. Carrier presentation may correlate those
+truths but may not rewrite the completed Tool Part or present historical replay
+as a current observation.
+
+The bound-operation finalizer is terminal cleanup under live interruption, and
+startup recovery uses exact unavailable Turn tombstones when supported Session
+deletion has removed the live model or Tool rows. The append-only finalization
+projection remains independently pageable after detachment or deletion. Every
+retained carrier catches up on attach/load/resume and on every physical
+`server.connected` reconnect epoch. The live listener exists before that epoch;
+per-Session owner reads are non-overlapping and queue a new generation when an
+epoch arrives in flight. A rejected TUI reconnect read remains a pending
+recovery generation and retries while the exact Session/directory is retained,
+without requiring another connection epoch. History/live overlap deduplicates
+by receipt identity, and ACP advances only acknowledged presentation phases.
+Event subscription timing, a transient owner-read rejection, or a failed client
+update therefore cannot erase or permanently suppress a committed finalization,
+or turn physical replay into a current-state read.
+
+A completed Tool result is a legal service source only when the runtime-owned
+candidate classification says `learner_usable` and the terminal output is
+non-empty. FutureAttention, finalization, interruption, and other internal
+control tools remain ineligible even if their Tool Parts completed normally.
+
+Internal control terms, concern IDs, precedence reasoning, and tool preambles
+do not become purpose-appropriate Tutor prose merely because a complete message
+contains them. The current runner/prompt has demonstrated leakage of that
+narration. Presentation work must preserve natural reminders while keeping
+architecture/control traces out of the persisted learner-visible answer; a
+partial fragment never supplies service merely because it was already visible
+when the tool executed.
 
 ## Ownership and dependency consequences
 
@@ -220,6 +275,9 @@ of the persisted learner-visible answer.
 - Tutor composition owns conditional purpose contributions and priority.
 - Interaction owns admitted requests, model-operation context cuts, and
   completed occurrences.
+- The issuing Agent owns fallible source and correction interpretation, while
+  runtime-owned provenance distinguishes learner-direction, root Agent, and
+  delegated Agent issuance without proving any interpretation.
 - Runtime owns finite sampling, continuation, failure, and process-local active
   coordination.
 - Models own open semantic realization and may propose interpretations, never
@@ -250,14 +308,16 @@ decision.
 
 ### Candidate-only prompt background
 
-Rejected by ALS-021. Visibility preserved memory but not the learner-role
-constraint.
+Rejected as an underspecified baseline. Visibility alone does not say whether a
+concern is background, one legal current default, or one of several unresolved
+options, and therefore cannot carry the accepted priority relation.
 
 ### Mandatory model-assisted selector
 
-Rejected as the baseline by ALS-022B/C. Improving transport and option labels
-did not make the production-default model a reliable arbiter, and one shape
-allowed false provenance.
+Rejected as the baseline because program-known legality, exact candidate count,
+and source provenance already have deterministic owners, while general semantic
+arbitration belongs first to the ordinary interactive Agent. No accepted
+invariant currently earns an extra mandatory sample.
 
 ### Separate stronger selector model
 
@@ -279,15 +339,14 @@ lifecycles without a restart consumer.
 
 ### Model-authored replacement purpose
 
-Rejected by ALS-022B's false-provenance counterexamples. Interpretation may be
-scoped; authoritative source meaning remains exact.
+Rejected because model-authored interpretation cannot borrow learner or owner
+provenance. Interpretation may be scoped and explicitly authored; authoritative
+source meaning remains exact and correctable.
 
 ## Deferred contract details
 
 This ADR accepts the ownership and priority topology, not a complete production
-field list. ALS-022E has decided that one explicit operative constraint is
-required for the demonstrated consumer. Before implementation, a focused
-contract must decide:
+field list. Gate 20 must decide and independently qualify:
 
 - the narrow stored and projected form of
   `learner response before Tutor disclosure`;
@@ -298,13 +357,18 @@ contract must decide:
   prose.
 
 These details do not reopen the rejected universal selector or authorize a
-general pedagogy schema.
+general pedagogy schema. The Gate 20 contract records the current candidate;
+it is not implementation authority until its independent contract/theory review
+closes.
 
 ## Evidence
 
-The formal experiment and result packets remain in the immutable pre-fork
-oracle. Their exact paths and retrieval rule are recorded under
+Historical experiment documents remain reachable as unqualified provenance
+under
 [conditional-purpose evidence](../fork-ledger.md#conditional-purpose-evidence).
+Their raw run artifacts are not retained and their aggregate results are not
+current acceptance evidence. Gate 20 must produce current-fork causal evidence
+for every behavior it claims.
 
 ## Reconsideration triggers
 
@@ -312,8 +376,9 @@ Reconsider this topology only when one of these appears:
 
 - two or more real eligible candidates require a stable decision that
   clarification/reversible choice cannot supply;
-- exact reason plus bounded selected status repeatedly fails across distinct
-  purposes and a validated structured constraint has real consumers;
+- a current-fork causal trace shows exact reason plus bounded selected status
+  cannot realize a purpose whose independently meaningful structured constraint
+  has real context and service consumers;
 - a model/provider-qualified arbitration mechanism materially outperforms the
   conditional default while retaining truthful fallback and provenance;
 - a real Turn must resume after process restart; or

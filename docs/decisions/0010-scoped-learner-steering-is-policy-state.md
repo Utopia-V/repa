@@ -68,9 +68,10 @@ An already-operative constraint such as “do not quiz me today” is steering. 
 one-time request or Tutor-authored reason to return to learning work at or
 after a later time belongs to the separate future-attention authority. It is
 not encoded as steering that happens to expire when the requested work should
-begin. ALS-021's first excluded pilot exposed this model-facing ambiguity; the
-distinction follows the policy-versus-future-attention boundary rather than
-adding an action taxonomy or a universal Agenda owner.
+begin. The historical ALS-021 document described this model-facing ambiguity
+but is not current acceptance evidence; the distinction follows the
+policy-versus-future-attention boundary rather than adding an action taxonomy or
+a universal Agenda owner.
 
 The first implementation may retain one time-bounded steering contribution per
 admitted source item. An identical new physical invocation reuses that effect;

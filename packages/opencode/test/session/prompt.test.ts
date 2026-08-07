@@ -73,10 +73,16 @@ import { TestConsole } from "effect/testing"
 import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
+import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
-import { TurnInputTable, TurnModelOperationTable, TurnTable } from "@opencode-ai/core/turn/sql"
+import {
+  TurnInputTable,
+  TurnModelOperationTable,
+  TurnTable,
+  TurnUnavailableSourceTable,
+} from "@opencode-ai/core/turn/sql"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningContext } from "@opencode-ai/core/learning-context"
 import { MaterialMap } from "@opencode-ai/core/material-map"
@@ -267,6 +273,7 @@ const promptRoot = LayerNode.group([
   Todo.node,
   ToolRegistry.node,
   ContentRoot.node,
+  Course.node,
   Skill.node,
   Git.node,
   Ripgrep.node,
@@ -2778,7 +2785,9 @@ projectOriginIt(
         .get()
         .pipe(Effect.orDie)
       if (!laterOperation) return yield* Effect.die("Missing admitted Gate 19 provider operation")
-      const firstCut = yield* database.db.transaction((tx) => LearningContext.readCut(tx, laterOperation.assistantMessageID))
+      const firstCut = yield* database.db.transaction((tx) =>
+        LearningContext.readCut(tx, laterOperation.assistantMessageID),
+      )
       if (firstCut.type !== "available") return yield* Effect.die("Missing stored Gate 19 production cut")
       expect(firstCut.cut.sections.find((section) => section.owner === "learner_response_evidence")).toMatchObject({
         countAtCut: 1,
@@ -2826,7 +2835,9 @@ projectOriginIt(
       expect(yield* prompt.start(laterStart)).toEqual(laterTerminal)
       expect((yield* llm.hits).length).toBe(hitsBeforeReplay)
       expect(
-        JSON.stringify(yield* database.db.transaction((tx) => LearningContext.readCut(tx, laterOperation.assistantMessageID))),
+        JSON.stringify(
+          yield* database.db.transaction((tx) => LearningContext.readCut(tx, laterOperation.assistantMessageID)),
+        ),
       ).toContain(immutableFirstCut)
 
       const readableCorrectionSessionID = SessionID.create()
@@ -2883,9 +2894,7 @@ projectOriginIt(
       if (!correctedBlock) return yield* Effect.die("Corrected provider request omitted production context")
       expect(correctedBlock).toContain('"relation":"does_not_support"')
       expect(
-        correctedBlock.includes('"relation":"does_not_support"')
-          ? "correction_only"
-          : "underdetermined_without_record",
+        correctedBlock.includes('"relation":"does_not_support"') ? "correction_only" : "underdetermined_without_record",
       ).toBe("correction_only")
 
       const disclosureCorrectionSessionID = SessionID.create()
@@ -2966,6 +2975,757 @@ projectOriginIt(
       yield* sessions.remove(readableCorrectionSessionID)
       yield* sessions.remove(correctedLaterSessionID)
       yield* sessions.remove(disclosureLaterSessionID)
+    }),
+  { config: cfg },
+  60_000,
+)
+
+it.instance(
+  "serves FutureAttention only from the exact completed tool-calling Assistant in the released-v1 loop",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const courses = yield* Course.Service
+      const base = Math.floor(Date.now() / 1_000) * 1_000
+      setSystemTime(new Date(base))
+      yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
+
+      const course = yield* courses.createCourse({ title: "Future-attention prompt trace" })
+      const view = yield* courses.createView({
+        courseID: course.id,
+        name: "Main",
+        expectedCourseVersion: 0,
+        authorship: Course.Authorship.learnerAuthored(),
+        revision: { items: [{ key: "semaphore", title: "Semaphore concurrency bound" }] },
+      })
+      const item = (yield* courses.listRevisionItems(course.id, view.view.id, view.revision.id)).items[0]
+      if (!item) return yield* Effect.die("FutureAttention prompt trace has no exact Course item")
+      const dueAt = base + 60_000
+      const purpose = "Explain how a semaphore bounds simultaneous entrants"
+      const creationRequest = "Remember the exact semaphore concurrency-bound explanation for the next lesson."
+      const createInput = {
+        operations: [
+          {
+            type: "create" as const,
+            concern: {
+              purpose,
+              source: {
+                type: "interpreted_learner_request" as const,
+                excerpt: {
+                  text: creationRequest,
+                  startByte: 0,
+                  endByte: new TextEncoder().encode(creationRequest).byteLength,
+                },
+              },
+              target: {
+                endpoint: {
+                  courseID: course.id,
+                  viewID: view.view.id,
+                  revisionID: view.revision.id,
+                  itemID: item.itemID,
+                },
+                selection: { type: "explicit_exact" as const },
+              },
+              notBefore: {
+                sourceExpression: "in the next lesson",
+                localDateTime: new Date(dueAt).toISOString().slice(0, 19),
+                timeZone: { type: "fixed_offset" as const, offsetMinutes: 0 },
+              },
+              serviceTiming: "at_or_after_not_before" as const,
+            },
+          },
+        ],
+      }
+      const creationSessionID = SessionID.create()
+      const creationTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, createInput)
+      yield* llm.text("I retained the later explanation without exposing internal lifecycle state.")
+      yield* prompt.start({
+        sessionID: creationSessionID,
+        turnID: creationTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "FutureAttention creation",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: creationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(creationSessionID, creationTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const created = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "list" }, { now: base, limit: 64 }),
+      )
+      const createdView = created.items.find((value) => "concern" in value && value.concern.payload.purpose === purpose)
+      if (!createdView || !("concern" in createdView)) {
+        return yield* Effect.die("Released-v1 creation did not commit the exact FutureAttention concern")
+      }
+      expect(createdView).toMatchObject({ eligible: false, concern: { current: { disposition: "open", version: 0 } } })
+
+      setSystemTime(new Date(dueAt - 1))
+      const beforeSessionID = SessionID.create()
+      const beforeTurnID = Turn.ID.create()
+      const beforeHits = (yield* llm.hits).length
+      yield* llm.text("Continue without anticipating a not-yet-due follow-up.")
+      yield* prompt.start({
+        sessionID: beforeSessionID,
+        turnID: beforeTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "FutureAttention before due", permission: [] },
+        parts: [{ type: "text", text: "Continue." }],
+      })
+      expect((yield* prompt.awaitTurn(beforeSessionID, beforeTurnID)).terminal).toMatchObject({ outcome: "completed" })
+      const beforeBlock = providerText((yield* llm.hits)[beforeHits]?.body).find((value) =>
+        value.includes("[Repa learning context — protected]"),
+      )
+      if (!beforeBlock) return yield* Effect.die("Before-due provider request omitted Learning Context")
+      expect(beforeBlock).toContain("futureAttention: none eligible at this immutable cut")
+      expect(beforeBlock).not.toContain(purpose)
+
+      setSystemTime(new Date(dueAt + 1))
+      const serviceSessionID = SessionID.create()
+      const serviceTurnID = Turn.ID.create()
+      const explanation =
+        "A semaphore bounds simultaneous entrants because each entrant must acquire one of a fixed number of permits before entering."
+      const serviceInput = {
+        operations: [
+          {
+            type: "serve" as const,
+            concernID: createdView.concern.id,
+            expectedVersion: 0,
+            service: {
+              source: { type: "current_assistant_when_complete" as const },
+              rationale:
+                "The exact full committed tool-calling Assistant presentation supplies the retained explanation.",
+            },
+          },
+        ],
+      }
+      const serviceHits = (yield* llm.hits).length
+      yield* llm.push(reply().text(explanation).tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, serviceInput))
+      yield* llm.text("Post-tool continuation A2 remains a distinct Assistant and does not substitute for A1.")
+      yield* prompt.start({
+        sessionID: serviceSessionID,
+        turnID: serviceTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "FutureAttention exact A1 service",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Continue with the explanation now." }],
+      })
+      expect((yield* prompt.awaitTurn(serviceSessionID, serviceTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const serviceBlock = providerText((yield* llm.hits)[serviceHits]?.body).find((value) =>
+        value.includes("[Repa learning context — protected]"),
+      )
+      if (!serviceBlock) return yield* Effect.die("Due provider request omitted Learning Context")
+      expect(serviceBlock).toContain("futureAttention: conditional_default")
+      expect(serviceBlock).toContain(purpose)
+
+      const operations = yield* database.db
+        .select({ assistantMessageID: TurnModelOperationTable.assistant_message_id })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, serviceTurnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      expect(operations).toHaveLength(2)
+      const a1 = operations[0]?.assistantMessageID
+      const a2 = operations[1]?.assistantMessageID
+      if (!a1 || !a2) return yield* Effect.die("FutureAttention trace omitted A1 or A2")
+      expect(a1).not.toBe(a2)
+      const serviceMessages = yield* sessions.messages({ sessionID: serviceSessionID })
+      const claimPart = serviceMessages
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
+        )
+      if (!claimPart || claimPart.state.status !== "completed") {
+        return yield* Effect.die("FutureAttention trace omitted the completed claim Tool Part")
+      }
+      expect(claimPart.messageID).toBe(a1)
+      const admission = JSON.parse(claimPart.state.output)
+      expect(admission).toMatchObject({
+        settlement: { outcome: "applied", claim: { claimStateAtAdmission: "pending", claimState: "pending" } },
+      })
+      const groupID = admission.settlement.claim.groupID as FutureAttention.ClaimGroupID
+      const group = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "claim_group", groupID }, { now: dueAt + 2, limit: 64 }),
+      )
+      expect(group.items[0]).toMatchObject({
+        group: { assistantMessageID: a1, modelOperationID: a1, invocationPartID: claimPart.id },
+        receipt: {
+          outcome: "served",
+          completion: {
+            assistantMessageID: a1,
+            modelOperationID: a1,
+            invocationPartID: claimPart.id,
+            presentationCommitted: true,
+            eligibleOutputBytes: expect.any(Number),
+          },
+          members: [{ concernID: createdView.concern.id, outcome: "served" }],
+        },
+      })
+      expect(JSON.parse(claimPart.state.output)).toEqual(admission)
+      const served = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "concern", concernID: createdView.concern.id }, { now: dueAt + 2 }),
+      )
+      expect(served.items[0]).toMatchObject({ concern: { current: { disposition: "served", version: 1 } } })
+
+      const afterSessionID = SessionID.create()
+      const afterTurnID = Turn.ID.create()
+      const afterHits = (yield* llm.hits).length
+      yield* llm.text("Continue after the retained follow-up has been served.")
+      yield* prompt.start({
+        sessionID: afterSessionID,
+        turnID: afterTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 0 },
+        session: { title: "FutureAttention after service", permission: [] },
+        parts: [{ type: "text", text: "Continue." }],
+      })
+      expect((yield* prompt.awaitTurn(afterSessionID, afterTurnID)).terminal).toMatchObject({ outcome: "completed" })
+      const afterBlock = providerText((yield* llm.hits)[afterHits]?.body).find((value) =>
+        value.includes("[Repa learning context — protected]"),
+      )
+      if (!afterBlock) return yield* Effect.die("After-service provider request omitted Learning Context")
+      expect(afterBlock).toContain("futureAttention: none eligible at this immutable cut")
+      expect(afterBlock).not.toContain(purpose)
+
+      yield* sessions.remove(serviceSessionID)
+      const afterSourceDeletion = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "concern", concernID: createdView.concern.id }, { now: dueAt + 3 }),
+      )
+      expect(afterSourceDeletion.items[0]).toMatchObject({
+        concern: { current: { disposition: "served", version: 1 } },
+        serviceReceipt: {
+          source: { type: "assistant_completion", assistantMessageID: a1 },
+          sourceAvailability: { state: "source_unavailable", reason: "source_deleted" },
+        },
+      })
+      expect(
+        yield* database.db
+          .select({ turnID: TurnUnavailableSourceTable.turn_id, sessionID: TurnUnavailableSourceTable.session_id })
+          .from(TurnUnavailableSourceTable)
+          .where(eq(TurnUnavailableSourceTable.turn_id, serviceTurnID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toEqual({ turnID: serviceTurnID, sessionID: serviceSessionID })
+      expect(
+        yield* database.db
+          .select({ id: SessionTable.id })
+          .from(SessionTable)
+          .where(eq(SessionTable.id, serviceSessionID))
+          .get()
+          .pipe(Effect.orDie),
+      ).toBeUndefined()
+      expect(JSON.stringify(afterSourceDeletion)).not.toContain(explanation)
+    }),
+  { config: cfg },
+  60_000,
+)
+
+it.instance(
+  "finalizes an admitted FutureAttention A1 claim when its live Turn is interrupted",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const courses = yield* Course.Service
+      const events = yield* EventV2Bridge.Service
+      const base = Math.floor(Date.now() / 1_000) * 1_000
+      setSystemTime(new Date(base))
+      yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
+
+      const course = yield* courses.createCourse({ title: "Future-attention interruption" })
+      const view = yield* courses.createView({
+        courseID: course.id,
+        name: "Main",
+        expectedCourseVersion: 0,
+        authorship: Course.Authorship.learnerAuthored(),
+        revision: { items: [{ key: "barrier", title: "Barrier release condition" }] },
+      })
+      const item = (yield* courses.listRevisionItems(course.id, view.view.id, view.revision.id)).items[0]
+      if (!item) return yield* Effect.die("FutureAttention interruption trace has no exact Course item")
+      const dueAt = base + 60_000
+      const purpose = "Explain how a barrier releases a waiting cohort"
+      const creationRequest = "Remember the exact barrier-release explanation for the next lesson."
+      const createInput = {
+        operations: [
+          {
+            type: "create" as const,
+            concern: {
+              purpose,
+              source: {
+                type: "interpreted_learner_request" as const,
+                excerpt: {
+                  text: creationRequest,
+                  startByte: 0,
+                  endByte: new TextEncoder().encode(creationRequest).byteLength,
+                },
+              },
+              target: {
+                endpoint: {
+                  courseID: course.id,
+                  viewID: view.view.id,
+                  revisionID: view.revision.id,
+                  itemID: item.itemID,
+                },
+                selection: { type: "explicit_exact" as const },
+              },
+              notBefore: {
+                sourceExpression: "in the next lesson",
+                localDateTime: new Date(dueAt).toISOString().slice(0, 19),
+                timeZone: { type: "fixed_offset" as const, offsetMinutes: 0 },
+              },
+              serviceTiming: "at_or_after_not_before" as const,
+            },
+          },
+        ],
+      }
+      const creationSessionID = SessionID.create()
+      const creationTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, createInput)
+      yield* llm.text("The barrier explanation is retained for its due interaction.")
+      yield* prompt.start({
+        sessionID: creationSessionID,
+        turnID: creationTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "FutureAttention interrupted-claim creation",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: creationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(creationSessionID, creationTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+      })
+      const created = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "list" }, { now: base, limit: 64 }),
+      )
+      const createdView = created.items.find((value) => "concern" in value && value.concern.payload.purpose === purpose)
+      if (!createdView || !("concern" in createdView)) {
+        return yield* Effect.die("FutureAttention interruption trace did not create its exact concern")
+      }
+
+      setSystemTime(new Date(dueAt + 1))
+      const serviceSessionID = SessionID.create()
+      const serviceTurnID = Turn.ID.create()
+      const explanation =
+        "A barrier releases the waiting cohort only after the configured number of participants has arrived."
+      const serviceInput = {
+        operations: [
+          {
+            type: "serve" as const,
+            concernID: createdView.concern.id,
+            expectedVersion: 0,
+            service: {
+              source: { type: "current_assistant_when_complete" as const },
+              rationale: "Only the exact fully committed A1 presentation may serve the retained explanation.",
+            },
+          },
+        ],
+      }
+      const toolSettled = yield* Deferred.make<SessionV1.PartID>()
+      const release = yield* Deferred.make<void>()
+      yield* Effect.addFinalizer(() => Deferred.succeed(release, undefined).pipe(Effect.asVoid))
+      const unsubscribe = yield* events.listen((event) => {
+        if (event.type !== TurnEvent.ToolSettled.type) return Effect.void
+        const data = event.data as typeof TurnEvent.ToolSettled.data.Type
+        if (data.turnID !== serviceTurnID || data.state !== "completed") return Effect.void
+        return Deferred.succeed(toolSettled, data.partID).pipe(Effect.andThen(Deferred.await(release)))
+      })
+      yield* Effect.addFinalizer(() => unsubscribe)
+
+      yield* llm.push(reply().text(explanation).tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, serviceInput))
+      yield* prompt.start({
+        sessionID: serviceSessionID,
+        turnID: serviceTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "FutureAttention interrupted A1",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Continue with the barrier explanation now." }],
+      })
+      const partID = yield* awaitWithTimeout(
+        Deferred.await(toolSettled),
+        "A1 completion claim did not reach committed ToolSettled",
+        "5 seconds",
+      )
+      const beforeMessages = yield* sessions.messages({ sessionID: serviceSessionID })
+      const claimPart = beforeMessages
+        .flatMap((message) => message.parts)
+        .find(
+          (
+            part,
+          ): part is SessionV1.ToolPart & {
+            state: Extract<SessionV1.ToolPart["state"], { status: "completed" }>
+          } =>
+            part.id === partID &&
+            part.type === "tool" &&
+            part.tool === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY &&
+            part.state.status === "completed",
+        )
+      if (!claimPart) return yield* Effect.die("Interrupted A1 omitted its committed claim Tool Part")
+      expect(
+        beforeMessages
+          .flatMap((message) => message.parts)
+          .find((part): part is SessionV1.TextPart => part.type === "text" && part.messageID === claimPart.messageID),
+      ).toMatchObject({ text: explanation })
+      const admission = JSON.parse(claimPart.state.output)
+      expect(admission).toMatchObject({
+        settlement: { outcome: "applied", claim: { claimStateAtAdmission: "pending", claimState: "pending" } },
+      })
+      const groupID = admission.settlement.claim.groupID as FutureAttention.ClaimGroupID
+      const before = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "claim_group", groupID }, { now: dueAt + 2, limit: 64 }),
+      )
+      expect(before.items[0]).toMatchObject({
+        group: {
+          turnID: serviceTurnID,
+          assistantMessageID: claimPart.messageID,
+          invocationPartID: claimPart.id,
+        },
+      })
+      expect(before.items[0] && "receipt" in before.items[0] ? before.items[0].receipt : undefined).toBeUndefined()
+      expect(
+        yield* database.db.transaction((tx) =>
+          FutureAttention.listPendingClaimGroups(tx, { assistantMessageID: claimPart.messageID }),
+        ),
+      ).toMatchObject([{ id: groupID }])
+
+      const interrupted = yield* prompt.interruptTurn(serviceSessionID, serviceTurnID)
+      expect(interrupted.terminal).toMatchObject({ outcome: "interrupted", reason: "learner_interrupt" })
+      const after = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "claim_group", groupID }, { now: dueAt + 3, limit: 64 }),
+      )
+      expect(after.items[0]).toMatchObject({
+        group: {
+          turnID: serviceTurnID,
+          assistantMessageID: claimPart.messageID,
+          invocationPartID: claimPart.id,
+        },
+        receipt: {
+          outcome: "not_served",
+          completion: {
+            observationCut: "live_presentation_finalized",
+            modelOutcome: "completed",
+            presentationCommitted: false,
+            invocationPartID: claimPart.id,
+          },
+          members: [
+            {
+              concernID: createdView.concern.id,
+              outcome: "not_served",
+              reason: "presentation_uncommitted",
+            },
+          ],
+        },
+      })
+      const receipt = after.items[0] && "receipt" in after.items[0] ? after.items[0].receipt : undefined
+      if (!receipt) return yield* Effect.die("Interrupted A1 omitted its live finalization receipt")
+      expect(receipt.completion.eligibleOutputBytes).toBe(0)
+      expect(
+        yield* database.db.get<{ count: number }>(sql`
+          SELECT count(*) AS count FROM future_attention_claim_finalization
+          WHERE group_id = ${groupID}
+        `),
+      ).toEqual({ count: 1 })
+      expect(
+        yield* database.db.transaction((tx) =>
+          FutureAttention.listPendingClaimGroups(tx, { assistantMessageID: claimPart.messageID }),
+        ),
+      ).toEqual([])
+      const terminalClaimPart = (yield* sessions.messages({ sessionID: serviceSessionID }))
+        .flatMap((message) => message.parts)
+        .find((part): part is SessionV1.ToolPart => part.id === claimPart.id && part.type === "tool")
+      if (!terminalClaimPart || terminalClaimPart.state.status !== "completed") {
+        return yield* Effect.die("Interrupted A1 rewrote or removed its completed claim Tool Part")
+      }
+      expect(JSON.parse(terminalClaimPart.state.output)).toEqual(admission)
+      const concern = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "concern", concernID: createdView.concern.id }, { now: dueAt + 3 }),
+      )
+      expect(concern.items[0]).toMatchObject({
+        concern: { current: { disposition: "open", version: 0 } },
+        claim: { groupID, claimState: "not_served", finalizationReceiptID: receipt.id },
+      })
+    }),
+  { config: cfg },
+  60_000,
+)
+
+it.instance(
+  "keeps a no-output A1 claim terminal when same-input A2 explains and retries",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const courses = yield* Course.Service
+      const base = Math.floor(Date.now() / 1_000) * 1_000
+      setSystemTime(new Date(base))
+      yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
+
+      const course = yield* courses.createCourse({ title: "Future-attention no-output continuation" })
+      const view = yield* courses.createView({
+        courseID: course.id,
+        name: "Main",
+        expectedCourseVersion: 0,
+        authorship: Course.Authorship.learnerAuthored(),
+        revision: { items: [{ key: "mutex", title: "Mutex ownership" }] },
+      })
+      const item = (yield* courses.listRevisionItems(course.id, view.view.id, view.revision.id)).items[0]
+      if (!item) return yield* Effect.die("FutureAttention negative prompt trace has no exact Course item")
+      const dueAt = base + 60_000
+      const purpose = "Explain why a mutex has one owner at a time"
+      const creationRequest = "Remember the exact mutex-ownership explanation for the next lesson."
+      const createInput = {
+        operations: [
+          {
+            type: "create" as const,
+            concern: {
+              purpose,
+              source: {
+                type: "interpreted_learner_request" as const,
+                excerpt: {
+                  text: creationRequest,
+                  startByte: 0,
+                  endByte: new TextEncoder().encode(creationRequest).byteLength,
+                },
+              },
+              target: {
+                endpoint: {
+                  courseID: course.id,
+                  viewID: view.view.id,
+                  revisionID: view.revision.id,
+                  itemID: item.itemID,
+                },
+                selection: { type: "explicit_exact" as const },
+              },
+              notBefore: {
+                sourceExpression: "in the next lesson",
+                localDateTime: new Date(dueAt).toISOString().slice(0, 19),
+                timeZone: { type: "fixed_offset" as const, offsetMinutes: 0 },
+              },
+              serviceTiming: "at_or_after_not_before" as const,
+            },
+          },
+        ],
+      }
+      const creationSessionID = SessionID.create()
+      const creationTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, createInput)
+      yield* llm.text("The later mutex explanation remains available.")
+      yield* prompt.start({
+        sessionID: creationSessionID,
+        turnID: creationTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "FutureAttention negative creation",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: creationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(creationSessionID, creationTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+      })
+      const created = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "list" }, { now: base, limit: 64 }),
+      )
+      const createdView = created.items.find((value) => "concern" in value && value.concern.payload.purpose === purpose)
+      if (!createdView || !("concern" in createdView)) {
+        return yield* Effect.die("Released-v1 negative trace did not create its exact FutureAttention concern")
+      }
+
+      setSystemTime(new Date(dueAt + 1))
+      const serviceInput = {
+        operations: [
+          {
+            type: "serve" as const,
+            concernID: createdView.concern.id,
+            expectedVersion: 0,
+            service: {
+              source: { type: "current_assistant_when_complete" as const },
+              rationale: "Only the exact full tool-calling Assistant presentation may supply the mutex explanation.",
+            },
+          },
+        ],
+      }
+      const changedInput = {
+        operations: [
+          {
+            ...serviceInput.operations[0],
+            service: {
+              ...serviceInput.operations[0]!.service,
+              rationale: "A changed same-occurrence rationale cannot rebind the terminal A1 claim group.",
+            },
+          },
+        ],
+      }
+      const serviceSessionID = SessionID.create()
+      const serviceTurnID = Turn.ID.create()
+      const explanation =
+        "A mutex permits one owner at a time because acquiring it excludes every other contender until that owner releases it."
+      const serviceHits = (yield* llm.hits).length
+      yield* llm.tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, serviceInput)
+      yield* llm.push(reply().text(explanation).tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, serviceInput))
+      yield* llm.tool(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, changedInput)
+      yield* llm.text("The same-input continuation cannot alter the terminal claim bookkeeping.")
+      yield* prompt.start({
+        sessionID: serviceSessionID,
+        turnID: serviceTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 4, tool: 3 },
+        session: {
+          title: "FutureAttention no-output A1",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: "Continue with the mutex explanation now." }],
+      })
+      expect((yield* prompt.awaitTurn(serviceSessionID, serviceTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 4, tool: 3 },
+      })
+
+      const operations = yield* database.db
+        .select({
+          assistantMessageID: TurnModelOperationTable.assistant_message_id,
+          inputID: TurnModelOperationTable.input_id,
+          occurrenceID: TurnModelOperationTable.causal_occurrence_id,
+        })
+        .from(TurnModelOperationTable)
+        .where(eq(TurnModelOperationTable.turn_id, serviceTurnID))
+        .orderBy(TurnModelOperationTable.ordinal)
+        .all()
+        .pipe(Effect.orDie)
+      expect(operations).toHaveLength(4)
+      expect(new Set(operations.map((operation) => operation.inputID)).size).toBe(1)
+      expect(new Set(operations.map((operation) => operation.occurrenceID)).size).toBe(1)
+      const a1 = operations[0]?.assistantMessageID
+      const a2 = operations[1]?.assistantMessageID
+      const a3 = operations[2]?.assistantMessageID
+      if (!a1 || !a2 || !a3) return yield* Effect.die("Negative FutureAttention trace omitted A1, A2, or A3")
+
+      const toolParts = (yield* sessions.messages({ sessionID: serviceSessionID }))
+        .flatMap((message) => message.parts)
+        .filter(
+          (
+            part,
+          ): part is SessionV1.ToolPart & {
+            state: Extract<SessionV1.ToolPart["state"], { status: "completed" }>
+          } =>
+            part.type === "tool" &&
+            part.tool === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY &&
+            part.state.status === "completed",
+        )
+      const a1Part = toolParts.find((part) => part.messageID === a1)
+      const a2Part = toolParts.find((part) => part.messageID === a2)
+      const a3Part = toolParts.find((part) => part.messageID === a3)
+      if (!a1Part || !a2Part || !a3Part) {
+        return yield* Effect.die("Negative FutureAttention trace omitted a terminal claim Tool Part")
+      }
+      const admission = JSON.parse(a1Part.state.output)
+      expect(admission).toMatchObject({
+        settlement: { outcome: "applied", claim: { claimStateAtAdmission: "pending", claimState: "pending" } },
+      })
+      const groupID = admission.settlement.claim.groupID as FutureAttention.ClaimGroupID
+      expect(JSON.parse(a2Part.state.output)).toMatchObject({
+        settlement: {
+          outcome: "already_applied",
+          claim: { groupID, claimStateAtAdmission: "pending", claimState: "not_served" },
+        },
+      })
+      expect(JSON.parse(a3Part.state.output)).toMatchObject({
+        settlement: { outcome: "error", code: "semantic_conflict" },
+      })
+      expect(JSON.parse(a1Part.state.output)).toEqual(admission)
+      const a2Block = providerText((yield* llm.hits)[serviceHits + 1]?.body).find((value) =>
+        value.includes("[Repa learning context — protected]"),
+      )
+      if (!a2Block) return yield* Effect.die("Negative FutureAttention A2 request omitted Learning Context")
+      expect(a2Block).toContain(purpose)
+
+      const group = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "claim_group", groupID }, { now: dueAt + 2, limit: 64 }),
+      )
+      expect(group.items[0]).toMatchObject({
+        group: { assistantMessageID: a1, modelOperationID: a1, invocationPartID: a1Part.id },
+        receipt: {
+          outcome: "not_served",
+          completion: {
+            assistantMessageID: a1,
+            modelOperationID: a1,
+            invocationPartID: a1Part.id,
+            presentationCommitted: true,
+            eligibleOutputBytes: 0,
+          },
+          members: [{ concernID: createdView.concern.id, outcome: "not_served", reason: "no_eligible_output" }],
+        },
+      })
+      const receipt = group.items[0] && "receipt" in group.items[0] ? group.items[0].receipt : undefined
+      if (!receipt) return yield* Effect.die("Negative FutureAttention trace omitted its finalization receipt")
+      expect(
+        yield* database.db.get<{ count: number }>(sql`
+          SELECT count(*) AS count FROM future_attention_claim_group
+          WHERE turn_id = ${serviceTurnID}
+        `),
+      ).toEqual({ count: 1 })
+      expect(
+        yield* database.db.get<{ count: number }>(sql`
+          SELECT count(*) AS count FROM future_attention_claim_finalization
+          WHERE group_id = ${groupID}
+        `),
+      ).toEqual({ count: 1 })
+      const concern = yield* database.db.transaction((tx) =>
+        FutureAttention.read(tx, { type: "concern", concernID: createdView.concern.id }, { now: dueAt + 2 }),
+      )
+      expect(concern.items[0]).toMatchObject({
+        concern: { current: { disposition: "open", version: 0 } },
+        claim: { groupID, claimState: "not_served", finalizationReceiptID: receipt.id },
+      })
     }),
   { config: cfg },
   60_000,

@@ -18,6 +18,7 @@ import type {
   ProviderAuthMethod,
   VcsInfo,
   SnapshotFileDiff,
+  Event,
 } from "@opencode-ai/sdk/v2"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { useProject } from "./project"
@@ -45,6 +46,8 @@ function search<T>(items: T[], target: string, key: (item: T) => string) {
   }
   return { found: false, index: left }
 }
+
+export type FutureAttentionFinalization = Extract<Event, { type: "future_attention.finalized" }>["properties"]
 
 export const {
   context: SyncContext,
@@ -92,6 +95,9 @@ export const {
       part: {
         [messageID: string]: Part[]
       }
+      future_attention_finalization: {
+        [sessionID: string]: FutureAttentionFinalization[]
+      }
       lsp: LspStatus[]
       mcp: {
         [key: string]: McpStatus
@@ -125,6 +131,7 @@ export const {
       todo: {},
       message: {},
       part: {},
+      future_attention_finalization: {},
       lsp: [],
       mcp: {},
       mcp_resource: {},
@@ -136,11 +143,16 @@ export const {
     const project = useProject()
     const sdk = useSDK()
 
-    const fullSyncedSessions = new Set<string>()
+    const fullSyncedSessions = new Map<string, string>()
     const syncingSessions = new Map<string, Promise<void>>()
+    const futureAttentionSyncGenerations = new Map<string, number>()
+    const futureAttentionSyncs = new Map<string, Promise<void>>()
+    const futureAttentionRecoveryGenerations = new Map<string, number>()
+    const futureAttentionRecoveries = new Map<string, Promise<void>>()
     const hydratingSessions = new Map<string, { messages: Set<string>; parts: Set<string> }>()
     const activeTurnRevision = new Map<string, number>()
     const activeTurnHydration = new Map<string, Promise<string | undefined>>()
+    let disposed = false
 
     function publishActiveTurn(sessionID: string, turnID?: string) {
       activeTurnRevision.set(sessionID, (activeTurnRevision.get(sessionID) ?? 0) + 1)
@@ -151,6 +163,99 @@ export const {
     }
     const touchPart = (sessionID: string, partID: string) => {
       hydratingSessions.get(sessionID)?.parts.add(partID)
+    }
+
+    function publishFutureAttentionFinalization(value: FutureAttentionFinalization) {
+      const items = store.future_attention_finalization[value.sessionID]
+      if (!items) {
+        setStore("future_attention_finalization", value.sessionID, [value])
+        return
+      }
+      const match = search(items, value.receipt.id, (item) => item.receipt.id)
+      if (match.found) {
+        setStore("future_attention_finalization", value.sessionID, match.index, reconcile(value))
+        return
+      }
+      setStore(
+        "future_attention_finalization",
+        value.sessionID,
+        produce((draft) => {
+          draft.splice(match.index, 0, value)
+        }),
+      )
+    }
+
+    async function listFutureAttentionFinalizations(sessionID: string, directory: string) {
+      const result: FutureAttentionFinalization[] = []
+      let after = -1
+      while (true) {
+        const response = await sdk.client.session.futureAttentionFinalizations(
+          {
+            sessionID,
+            directory,
+            after: after.toString(),
+            limit: "100",
+          },
+          { throwOnError: true },
+        )
+        const page = response.data
+        if (!page) throw new Error(`FutureAttention finalization history was unavailable for ${sessionID}`)
+        result.push(...page.events.map((item) => item.properties))
+        if (!page.hasMore) return result
+        const next = page.events.at(-1)?.sequence
+        if (next === undefined || next <= after) {
+          throw new Error(`FutureAttention finalization history did not advance for ${sessionID}`)
+        }
+        after = next
+      }
+    }
+
+    function syncFutureAttentionFinalizations(sessionID: string, directory: string) {
+      const key = `${directory}\0${sessionID}`
+      futureAttentionSyncGenerations.set(key, (futureAttentionSyncGenerations.get(key) ?? 0) + 1)
+      const current = futureAttentionSyncs.get(key)
+      if (current) return current
+      const task = (async () => {
+        let completed = -1
+        while (completed !== futureAttentionSyncGenerations.get(key)) {
+          const generation = futureAttentionSyncGenerations.get(key)!
+          for (const finalization of await listFutureAttentionFinalizations(sessionID, directory)) {
+            publishFutureAttentionFinalization(finalization)
+          }
+          completed = generation
+        }
+      })().finally(() => {
+        if (futureAttentionSyncs.get(key) === task) futureAttentionSyncs.delete(key)
+      })
+      futureAttentionSyncs.set(key, task)
+      return task
+    }
+
+    function recoverFutureAttentionFinalizations(sessionID: string, directory: string) {
+      const key = `${directory}\0${sessionID}`
+      futureAttentionRecoveryGenerations.set(key, (futureAttentionRecoveryGenerations.get(key) ?? 0) + 1)
+      const current = futureAttentionRecoveries.get(key)
+      if (current) return current
+      const task = (async () => {
+        let completed = -1
+        while (
+          !disposed &&
+          fullSyncedSessions.get(sessionID) === directory &&
+          completed !== futureAttentionRecoveryGenerations.get(key)
+        ) {
+          const generation = futureAttentionRecoveryGenerations.get(key)!
+          try {
+            await syncFutureAttentionFinalizations(sessionID, directory)
+            completed = generation
+          } catch {
+            await new Promise((resolve) => setTimeout(resolve, 1_000))
+          }
+        }
+      })().finally(() => {
+        if (futureAttentionRecoveries.get(key) === task) futureAttentionRecoveries.delete(key)
+      })
+      futureAttentionRecoveries.set(key, task)
+      return task
     }
 
     function sessionListQuery(instancePath = project.data.instance.path): { scope?: "project"; path?: string } {
@@ -178,6 +283,11 @@ export const {
       const activeProject = project.project()
       if (eventProject !== undefined && activeProject !== undefined && eventProject !== activeProject) return
       switch (event.type) {
+        case "server.connected":
+          for (const [sessionID, directory] of fullSyncedSessions) {
+            void recoverFutureAttentionFinalizations(sessionID, directory)
+          }
+          break
         case "server.instance.disposed":
           void bootstrap()
           break
@@ -278,6 +388,11 @@ export const {
           break
         }
 
+        case "future_attention.finalized": {
+          publishFutureAttentionFinalization(event.properties)
+          break
+        }
+
         case "todo.updated":
           setStore("todo", event.properties.sessionID, event.properties.todos)
           break
@@ -287,6 +402,7 @@ export const {
           break
 
         case "session.deleted": {
+          fullSyncedSessions.delete(event.properties.info.id)
           publishActiveTurn(event.properties.info.id)
           const result = search(store.session, event.properties.info.id, (s) => s.id)
           if (result.found) {
@@ -624,6 +740,7 @@ export const {
       void bootstrap()
     })
     onCleanup(() => {
+      disposed = true
       bootstrapGeneration += 1
     })
 
@@ -697,9 +814,10 @@ export const {
           return task
         },
         async sync(sessionID: string) {
-          if (fullSyncedSessions.has(sessionID)) return
           const syncing = syncingSessions.get(sessionID)
           if (syncing) return syncing
+          const directory = project.instance.directory()
+          if (fullSyncedSessions.get(sessionID) === directory) return
           const tracker = { messages: new Set<string>(), parts: new Set<string>() }
           hydratingSessions.set(sessionID, tracker)
           const task = (async () => {
@@ -761,7 +879,13 @@ export const {
                 draft.session_diff[sessionID] = diff.data ?? []
               }),
             )
-            fullSyncedSessions.add(sessionID)
+            fullSyncedSessions.set(sessionID, directory)
+            try {
+              await syncFutureAttentionFinalizations(sessionID, directory)
+            } catch (error) {
+              if (fullSyncedSessions.get(sessionID) === directory) fullSyncedSessions.delete(sessionID)
+              throw error
+            }
           })().finally(() => {
             syncingSessions.delete(sessionID)
             hydratingSessions.delete(sessionID)

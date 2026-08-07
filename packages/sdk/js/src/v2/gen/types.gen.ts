@@ -57,6 +57,7 @@ export type Event =
   | EventTurnToolAdmitted
   | EventTurnToolSettled
   | EventTurnTerminal
+  | EventFutureAttentionFinalized
   | EventMessagePartDelta
   | EventSessionDiff
   | EventSessionError
@@ -622,6 +623,11 @@ export type CompactionPart = {
   auto: boolean
   overflow?: boolean
   tail_start_id?: string
+  capacity_history?: {
+    source_assistant_message_id: string
+    removable_message_count: number
+    removable_message_ids_fingerprint: string
+  }
 }
 
 export type Part =
@@ -642,6 +648,56 @@ export type Prompt = {
   text: string
   files?: Array<PromptFileAttachment>
   agents?: Array<PromptAgentAttachment>
+}
+
+export type FutureAttentionCompletionFacts = {
+  observationCut: "live_presentation_finalized" | "startup_reconciled"
+  sessionID: string
+  turnID: string
+  occurrenceID: string
+  assistantMessageID: string
+  modelOperationID: string
+  invocationPartID: string
+  modelOutcome: "completed" | "failed" | "interrupted"
+  localToolPartsTerminal: boolean
+  presentationCommitted: boolean
+  presentationUnavailable: boolean
+  timeCompleted: number
+  completionOrder: number
+  partManifestFingerprint?: string
+  eligibleOutputFingerprint?: string
+  eligibleOutputBytes: number
+  finalStructuredOutputFingerprint?: string
+}
+
+export type FutureAttentionFinalizationMember = {
+  ordinal: number
+  concernID: string
+  outcome: "served" | "not_served"
+  transitionID?: string
+  serviceReceiptID?: string
+  reason?:
+    | "model_not_completed"
+    | "tool_parts_incomplete"
+    | "presentation_uncommitted"
+    | "presentation_unavailable"
+    | "no_eligible_output"
+    | "stale_head"
+    | "target_not_current"
+    | "too_early"
+    | "source_unavailable"
+    | "binding_mismatch"
+}
+
+export type FutureAttentionFinalizationReceipt = {
+  id: string
+  groupID: string
+  outcome: "served" | "not_served"
+  completion: FutureAttentionCompletionFacts
+  members: Array<FutureAttentionFinalizationMember>
+  timeFinalized: number
+  finalizationOrder: number
+  frontierSequence?: number
 }
 
 export type Pty = {
@@ -1278,6 +1334,18 @@ export type GlobalEvent = {
       }
     | {
         id: string
+        type: "future_attention.finalized"
+        properties: {
+          sessionID: string
+          turnID: string
+          assistantMessageID: string
+          invocationPartID: string
+          groupID: string
+          receipt: FutureAttentionFinalizationReceipt
+        }
+      }
+    | {
+        id: string
         type: "message.part.delta"
         properties: {
           sessionID: string
@@ -1716,6 +1784,7 @@ export type GlobalEvent = {
     | SyncEventTurnToolAdmitted
     | SyncEventTurnToolSettled
     | SyncEventTurnTerminal
+    | SyncEventFutureAttentionFinalized
 }
 
 /**
@@ -3008,6 +3077,7 @@ export type V2Event =
   | TurnToolAdmitted
   | TurnToolSettled
   | TurnTerminal
+  | FutureAttentionFinalized
   | MessagePartDelta
   | SessionDiff
   | SessionError
@@ -3336,6 +3406,7 @@ export type TurnToolCandidate = {
   partID: string
   callID: string
   tool: string
+  futureAttentionServiceSource: "learner_usable" | "internal_control"
   emissionOrdinal: number
   state:
     | "pending_admission"
@@ -4224,6 +4295,25 @@ export type SyncEventTurnTerminal = {
   }
 }
 
+export type SyncEventFutureAttentionFinalized = {
+  type: "sync"
+  id: string
+  syncEvent: {
+    type: "future_attention.finalized.1"
+    id: string
+    seq: number
+    aggregateID: string
+    data: {
+      sessionID: string
+      turnID: string
+      assistantMessageID: string
+      invocationPartID: string
+      groupID: string
+      receipt: FutureAttentionFinalizationReceipt
+    }
+  }
+}
+
 export type ConfigV2ReferenceGit = {
   repository: string
   branch?: string
@@ -4275,6 +4365,8 @@ export type TurnUnavailableModelMapping = {
   turnID: string
   assistantMessageID: string
   causalOccurrenceID?: string
+  state?: "completed" | "failed" | "interrupted"
+  timeSettled?: number
 }
 
 export type TurnUnavailableToolMapping = {
@@ -5878,6 +5970,28 @@ export type TurnToolSettled = {
   }
 }
 
+export type FutureAttentionFinalized = {
+  id: string
+  metadata?: {
+    [key: string]: unknown
+  }
+  type: "future_attention.finalized"
+  durable?: {
+    aggregateID: string
+    seq: number
+    version: number
+  }
+  location?: LocationRef
+  data: {
+    sessionID: string
+    turnID: string
+    assistantMessageID: string
+    invocationPartID: string
+    groupID: string
+    receipt: FutureAttentionFinalizationReceipt
+  }
+}
+
 export type MessagePartDelta = {
   id: string
   metadata?: {
@@ -7295,6 +7409,19 @@ export type EventTurnTerminal = {
     turnID: string
     timestamp: number
     terminal: TurnTerminal2
+  }
+}
+
+export type EventFutureAttentionFinalized = {
+  id: string
+  type: "future_attention.finalized"
+  properties: {
+    sessionID: string
+    turnID: string
+    assistantMessageID: string
+    invocationPartID: string
+    groupID: string
+    receipt: FutureAttentionFinalizationReceipt
   }
 }
 
@@ -10091,6 +10218,58 @@ export type SessionMessagesResponses = {
 }
 
 export type SessionMessagesResponse2 = SessionMessagesResponses[keyof SessionMessagesResponses]
+
+export type SessionFutureAttentionFinalizationsData = {
+  body?: never
+  path: {
+    sessionID: string
+  }
+  query?: {
+    directory?: string
+    after?: string
+    limit?: string
+  }
+  url: "/session/{sessionID}/future-attention/finalization"
+}
+
+export type SessionFutureAttentionFinalizationsErrors = {
+  /**
+   * BadRequest | InvalidRequestError
+   */
+  400: EffectHttpApiErrorBadRequest | InvalidRequestError
+  /**
+   * NotFoundError
+   */
+  404: NotFoundError
+}
+
+export type SessionFutureAttentionFinalizationsError =
+  SessionFutureAttentionFinalizationsErrors[keyof SessionFutureAttentionFinalizationsErrors]
+
+export type SessionFutureAttentionFinalizationsResponses = {
+  /**
+   * Durable FutureAttention finalizations
+   */
+  200: {
+    events: Array<{
+      id: string
+      type: "future_attention.finalized"
+      sequence: number
+      properties: {
+        sessionID: string
+        turnID: string
+        assistantMessageID: string
+        invocationPartID: string
+        groupID: string
+        receipt: FutureAttentionFinalizationReceipt
+      }
+    }>
+    hasMore: boolean
+  }
+}
+
+export type SessionFutureAttentionFinalizationsResponse =
+  SessionFutureAttentionFinalizationsResponses[keyof SessionFutureAttentionFinalizationsResponses]
 
 export type SessionDeleteMessageData = {
   body?: never

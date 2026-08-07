@@ -66,6 +66,8 @@ import { UpdateLearnerGoalsTool } from "./learner-goal"
 import { UpdateLearningCourseTool } from "./update-learning-course"
 import { UpdateLearnerResponseEvidenceTool } from "./update-learner-response-evidence"
 import { LearnerResponseEvidenceReadTool } from "./learner-response-evidence-read"
+import { UpdateFutureAttentionTool } from "./update-future-attention"
+import { FutureAttentionReadTool } from "./future-attention-read"
 import {
   ContentInventoryTool,
   ContentReadTool,
@@ -170,6 +172,8 @@ const layer = Layer.effect(
     const updateLearningCourse = yield* UpdateLearningCourseTool
     const updateLearnerResponseEvidence = yield* UpdateLearnerResponseEvidenceTool
     const learnerResponseEvidenceRead = yield* LearnerResponseEvidenceReadTool
+    const updateFutureAttention = yield* UpdateFutureAttentionTool
+    const futureAttentionRead = yield* FutureAttentionReadTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
     const contentSearch = yield* ContentSearchTool
@@ -304,6 +308,8 @@ const layer = Layer.effect(
           updateLearningCourse: Tool.init(updateLearningCourse),
           updateLearnerResponseEvidence: Tool.init(updateLearnerResponseEvidence),
           learnerResponseEvidenceRead: Tool.init(learnerResponseEvidenceRead),
+          updateFutureAttention: Tool.init(updateFutureAttention),
+          futureAttentionRead: Tool.init(futureAttentionRead),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
           contentSearch: Tool.init(contentSearch),
@@ -332,6 +338,8 @@ const layer = Layer.effect(
             tool.updateLearningCourse,
             tool.updateLearnerResponseEvidence,
             tool.learnerResponseEvidenceRead,
+            tool.updateFutureAttention,
+            tool.futureAttentionRead,
             tool.contentRoots,
             tool.contentInventory,
             tool.contentSearch,

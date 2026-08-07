@@ -1,6 +1,12 @@
 # Repa documentation
 
-Status: Gates 17 through 19 are closed at their exact accepted boundaries.
+Status: Gates 17 through 19 are closed at their exact accepted boundaries. Gate
+20's contract/theory and implementation/evidence layers are accepted under
+`G20-WG-20260806-019fd69a-01`: retained reviewer
+`019fd773-84c3-7841-9fc5-45f1b18d4a9f` closed `G20-CR-001..010` and
+`G20-IR-001..011`, with no owner blocker or material unknown. The exact 71-file
+production/test candidate is ready only for separately authorized local
+integration. No staging, commit, push, release, or Gate 21+ transition exists.
 Gate 17 is fixed at implementation/evidence commit `39a8c2f4`. The baseline
 omits `/learn`; the accepted ordinary-Agent bootstrap
 preserves Gate 10's local-read union and one-new-Artifact ceiling, uses the
@@ -41,7 +47,42 @@ contains the reviewed production/test projection and review records; `main`
 includes it through this docs-only closure/status successor. The disclosed Bun
 1.3.14 Windows aggregate native instability limits one-shot execution claims
 but did not produce a semantic assertion failure in the independently selected
-isolated oracles. No release or Gate 20+ transition is implied.
+isolated oracles. No release follows. Gate 20's accepted
+[contract/theory](research/repa-gate-20-source-linked-future-attention-2026-08-06.md)
+and
+[implementation/evidence record](research/repa-gate-20-source-linked-future-attention-implementation-evidence-2026-08-07.md)
+remain in Whole-Gate run `G20-WG-20260806-019fd69a-01`. Retained fresh
+reviewer task `019fd773-84c3-7841-9fc5-45f1b18d4a9f` closed
+`G20-CR-001..010` and returned `Accept` for contract/theory. The accepted
+`G20-CR-009` repair binds a
+completion-conditioned claim only to the exact full committed presentation of
+the same tool-calling Assistant; partial fragments cannot serve, and a later
+Assistant cannot silently substitute. Its closure exposed `G20-CR-010`: later same-input
+Assistants inherit the original learner-occurrence effect address, so identical
+reissue is `already_applied`, changed service/rebind intent conflicts, and a
+terminal `not_served` group leaves the concern open until a genuinely new
+runtime-bound learner occurrence. Gate 20 adds no continuation/service-retry
+identity. The already-accepted CR-008 repair still keeps Gate 8 physical
+admission replay immutable and exposes later
+`served | not_served` truth through a FutureAttention-owned append-only
+finalization receipt/event, bounded owner read, or new physical semantic
+duplicate. Historical ALS-021/022 aggregates remain unqualified provenance
+rather than acceptance evidence. The first implementation/evidence pass found
+eleven atomicity, authority, recovery, carrier-truth, temporal-provenance, and
+bounded-evidence defects. The retained closure pass independently closed
+`G20-IR-001..007`, `G20-IR-009`, and `G20-IR-011`, but kept `G20-IR-008` and
+`G20-IR-010` open for lossy TUI/ACP reconnect and alternate exact-time spellings.
+The next pass closed `G20-IR-010` and narrowed `G20-IR-008` to a transient TUI
+owner-read failure that could be abandoned without another reconnect. The
+current 71-file third repair candidate binds catch-up to every physical
+`server.connected` epoch behind an eager live listener, queues non-overlapping
+owner-read generations, advances ACP delivery only after phase acknowledgement,
+retries a rejected TUI reconnect read while its exact Session/directory remains
+retained, and recognizes arbitrary RFC-3339 fractions while rejecting unknown
+`-00:00` offset provenance. The final pass independently reproduced that
+rejected-read recovery, closed `G20-IR-008`, kept every earlier finding closed,
+and returned `Accept` with no new finding or blocker. Both review layers are
+accepted; local integration, release, and Gate 21+ remain separately governed.
 The accepted Agent-native Gate 14/16, retained OAuth, and Gate 8 corrections are
 integrated. The pre-Gate-17 audit remains falsifiable hazard provenance rather
 than the current control point or a permanent project-health verdict. The
@@ -313,6 +354,7 @@ in the [inherited-material index](inherited/README.md).
 | 17. [Natural-language learning bootstrap](research/repa-gate-17-natural-language-learning-bootstrap-2026-07-22.md)         | Accepted contract boundary for the ordinary Agent to create or revise only the Course/View/material state needed and teach in the same Turn.                                                  | **Closed at exact implementation/evidence commit `39a8c2f4`.** Contract `cf0cfbd0` omits built-in `/learn`; the implementation preserves Gate 10's exact local-read union and one-new-Artifact ceiling, composes one closed request-bound Course/View/material/selection/anchor set through owner-private seams, uses Gate 8 settlement/recovery, and projects one typed TUI/direct-run/ACP truth. Original fresh reviewer `019fc311-9714-7eb3-a5f7-045ecf66a1a7` closed `G17-IE-001..005` and accepted the deterministic evidence, passing seven-Turn released-v1 trace, honest interrupted/no-partial-write negative trace, and internal diagnostics correction. The accepted implementation is in mainline through closure/status commit `506b420cf`; subsequent changes are documentation-only. This closure does not claim exhaustive interpretation, pedagogical efficacy, reliability, release readiness, or Gate 23 product-loop behavior. |
 | 18. [Learning context and Session continuation](research/repa-gate-18-learning-context-session-continuation-2026-08-03.md) | Accepted contract for one bounded, immutable, operation-exact learning-context cut with owner-specific lazy exact reads and no cross-Session transcript import.                               | **Closed and integrated locally at implementation commit `284d2a4ae` plus its docs-only closure/status successor.** Same top-level reviewer `019fc874-72ee-75b3-92e9-0b923b85efb2` accepted semantic contract candidate `2DDAA563...` and the exact implementation/evidence candidate under `G18-WG-20260804-019fc837-01`, with `G18-CR-001..004` and `G18-IR-001..008` closed. The accepted evidence includes the separately authorized isolated `openai/gpt-5.6-luna` qualification and deterministic SDK-repair-provenance/MCP-collision closure. No push, release, or later-Gate authority is established.                                                                                                                                                                                                                                                                                                                                     |
 | 19. [First learner-record adaptation](research/repa-gate-19-first-learner-record-adaptation-2026-08-05.md)                 | Preserves one source-linked, occurrence-bound, correctable learner-response assessment against an exact immutable selector only where source deletion creates a later-action collision.       | **Closed and integrated at implementation commit `9027b45a4` plus this docs-only closure/status successor.** Retained reviewer `019fd269-e042-7423-85a9-bce7121f9b6e` accepted contract/theory and implementation/evidence under `G19-WG-20260805-019fd20c-01`, closing `G19-CR-001..005` and `G19-IR-001..010`. The boundary preserves ordinary zero-write teaching, uses source-readable data instead of cached pressure, and establishes neither mastery/understanding nor aggregation, planning, future attention, production move selection, or Gate 20+. Bun 1.3.14 Windows aggregate native instability remains an explicitly bounded execution-reliability unknown.                                                                                                                                                                                                                                  |
+| 20. [Source-linked future attention and Tutor return](research/repa-gate-20-source-linked-future-attention-2026-08-06.md) | Accepted contract for one source-bound concern authority whose target/time-derived eligibility, conditional current-purpose projection, and purpose-appropriate complete-occurrence/outcome service remain distinct. | **Contract/theory and [implementation/evidence](research/repa-gate-20-source-linked-future-attention-implementation-evidence-2026-08-07.md) accepted; exact 71-file candidate ready for separately authorized local integration.** Reviewer `019fd773-84c3-7841-9fc5-45f1b18d4a9f` closed `G20-CR-001..010` and `G20-IR-001..011` under `G20-WG-20260806-019fd69a-01`, with no new finding, material unknown, or owner blocker. Accepted behavior includes physical-epoch durable catch-up, failure-retained TUI reconnect recovery, queued owner-read generations, acknowledged ACP redelivery, eager global event registration, and complete exact-time spelling/provenance checks. Historical ALS aggregates are not acceptance evidence. No staging, commit, push, release, or Gate 21+ transition exists. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,
@@ -349,6 +391,8 @@ reopen chains, and evidence qualifications live in the
 - [Gate 19 first learner-record adaptation contract](research/repa-gate-19-first-learner-record-adaptation-2026-08-05.md)
 - [Gate 19 source-unavailable collision result](research/repa-gate-19-source-unavailable-collision-result-2026-08-05.md)
 - [Gate 19 implementation/evidence record](research/repa-gate-19-first-learner-record-adaptation-implementation-evidence-2026-08-06.md)
+- [Gate 20 source-linked future attention and Tutor return contract](research/repa-gate-20-source-linked-future-attention-2026-08-06.md)
+- [Gate 20 implementation/evidence candidate](research/repa-gate-20-source-linked-future-attention-implementation-evidence-2026-08-07.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

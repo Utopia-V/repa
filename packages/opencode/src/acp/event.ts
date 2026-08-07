@@ -1,5 +1,6 @@
 import type { AgentSideConnection } from "@agentclientprotocol/sdk"
 import { SemanticPresentation } from "@opencode-ai/core/semantic-presentation"
+import { FutureAttentionPresentation } from "@opencode-ai/core/future-attention-presentation"
 import type {
   Event,
   EventMessagePartDelta,
@@ -42,6 +43,10 @@ export class Subscription {
   private readonly shellSnapshots = new Map<string, string>()
   private readonly toolStarts = new Set<string>()
   private readonly permission: ACPPermission.Handler
+  private readonly futureAttentionFinalizations = new Map<string, "pending" | "completed">()
+  private readonly futureAttentionDeliveries = new Map<string, Promise<void>>()
+  private readonly futureAttentionCatchUpGenerations = new Map<string, number>()
+  private readonly futureAttentionCatchUps = new Map<string, Promise<void>>()
   private started = false
 
   constructor(
@@ -66,6 +71,45 @@ export class Subscription {
     this.abort.abort()
   }
 
+  async catchUp(sessionID: string, directory: string) {
+    const key = `${directory}\0${sessionID}`
+    this.futureAttentionCatchUpGenerations.set(key, (this.futureAttentionCatchUpGenerations.get(key) ?? 0) + 1)
+    const current = this.futureAttentionCatchUps.get(key)
+    if (current) return current
+    const task = (async () => {
+      let completed = -1
+      while (completed !== this.futureAttentionCatchUpGenerations.get(key)) {
+        const generation = this.futureAttentionCatchUpGenerations.get(key)!
+        await this.readFutureAttentionFinalizations(sessionID, directory)
+        completed = generation
+      }
+    })().finally(() => {
+      if (this.futureAttentionCatchUps.get(key) === task) this.futureAttentionCatchUps.delete(key)
+    })
+    this.futureAttentionCatchUps.set(key, task)
+    return task
+  }
+
+  private async readFutureAttentionFinalizations(sessionID: string, directory: string) {
+    let after = -1
+    while (true) {
+      const response = await this.input.sdk.session.futureAttentionFinalizations(
+        { sessionID, directory, after: after.toString(), limit: "100" },
+        { throwOnError: true },
+      )
+      if (!response.data) throw new Error("FutureAttention finalization history unavailable")
+      for (const event of response.data.events) {
+        await this.handle({ id: event.id, type: event.type, properties: event.properties } as Event)
+      }
+      if (!response.data.hasMore) return
+      const next = response.data.events.at(-1)?.sequence
+      if (next === undefined || next <= after) {
+        throw new Error("FutureAttention finalization history did not advance")
+      }
+      after = next
+    }
+  }
+
   async handle(event: Event) {
     switch (event.type) {
       case "permission.asked":
@@ -75,7 +119,74 @@ export class Subscription {
         return this.handlePartUpdated(event)
       case "message.part.delta":
         return this.handlePartDelta(event)
+      case "future_attention.finalized":
+        return this.handleFutureAttentionFinalized(event)
+      case "server.connected": {
+        const sessions = await Effect.runPromise(this.input.session.list())
+        await Promise.all(sessions.map((session) => this.catchUp(session.id, session.cwd)))
+        return
+      }
     }
+  }
+
+  private async handleFutureAttentionFinalized(event: Extract<Event, { type: "future_attention.finalized" }>) {
+    const props = event.properties
+    if (this.futureAttentionFinalizations.get(props.receipt.id) === "completed") return
+    const current = this.futureAttentionDeliveries.get(props.receipt.id)
+    if (current) return current
+    const task = this.deliverFutureAttentionFinalization(props).finally(() => {
+      if (this.futureAttentionDeliveries.get(props.receipt.id) === task) {
+        this.futureAttentionDeliveries.delete(props.receipt.id)
+      }
+    })
+    this.futureAttentionDeliveries.set(props.receipt.id, task)
+    return task
+  }
+
+  private async deliverFutureAttentionFinalization(
+    props: Extract<Event, { type: "future_attention.finalized" }>["properties"],
+  ) {
+    const session = await Effect.runPromise(this.input.session.tryGet(props.sessionID))
+    if (!session || this.futureAttentionFinalizations.get(props.receipt.id) === "completed") return
+    const toolName = "future_attention.finalization"
+    const presentation = FutureAttentionPresentation.finalization(props.receipt)
+    const state = {
+      input: {
+        groupID: props.groupID,
+        assistantMessageID: props.assistantMessageID,
+        invocationPartID: props.invocationPartID,
+      },
+      title: presentation.title,
+    }
+    if (!this.futureAttentionFinalizations.has(props.receipt.id)) {
+      await this.input.connection.sessionUpdate({
+        sessionId: session.id,
+        update: {
+          sessionUpdate: "tool_call",
+          ...pendingToolCall({ toolCallId: props.receipt.id, toolName, state, cwd: session.cwd }),
+        },
+      })
+      this.futureAttentionFinalizations.set(props.receipt.id, "pending")
+    }
+    await this.input.connection.sessionUpdate({
+      sessionId: session.id,
+      update: {
+        sessionUpdate: "tool_call_update",
+        ...completedToolUpdate({
+          toolCallId: props.receipt.id,
+          toolName,
+          cwd: session.cwd,
+          state: {
+            status: "completed",
+            input: state.input,
+            title: state.title,
+            output: `${presentation.title}: ${presentation.detail}`,
+            metadata: { futureAttentionFinalization: props },
+          },
+        }),
+      },
+    })
+    this.futureAttentionFinalizations.set(props.receipt.id, "completed")
   }
 
   async replayMessage(message: SessionMessageResponse) {
@@ -116,14 +227,22 @@ export class Subscription {
 
   private async run() {
     while (!this.abort.signal.aborted) {
-      const events = (await this.input.sdk.global.event({
-        signal: this.abort.signal,
-      })) as GlobalEventStream
+      try {
+        const events = (await this.input.sdk.global.event({
+          signal: this.abort.signal,
+        })) as GlobalEventStream
 
-      for await (const event of events.stream) {
+        for await (const event of events.stream) {
+          if (this.abort.signal.aborted) return
+          if (!event.payload) continue
+          if (event.payload.type === "future_attention.finalized" || event.payload.type === "server.connected") {
+            await this.handle(event.payload)
+            continue
+          }
+          await this.handle(event.payload).catch(() => {})
+        }
+      } catch {
         if (this.abort.signal.aborted) return
-        if (!event.payload) continue
-        await this.handle(event.payload).catch(() => {})
       }
       if (!this.abort.signal.aborted) await new Promise((resolve) => setTimeout(resolve, 1000))
     }

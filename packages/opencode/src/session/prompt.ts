@@ -48,6 +48,7 @@ import { SessionTurnRecovery } from "./turn-recovery"
 import { SessionTurnEvents } from "./turn-events"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
+import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Database } from "@opencode-ai/core/database/database"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
@@ -2031,6 +2032,13 @@ const layer = Layer.effect(
         }).pipe(
           Effect.ensuring(instruction.clear(handle.message.id)),
           Effect.onInterrupt(() => finalizeInterruptedAssistant),
+          Effect.ensuring(
+            LearningCommandRuntime.finalizeFutureAttentionClaims(events, {
+              assistantMessageID: msg.id,
+              observationCut: "live_presentation_finalized",
+              time: Date.now(),
+            }).pipe(Effect.uninterruptible),
+          ),
         )
         if (outcome === "break") break
         if (outcome === "exhausted") {
