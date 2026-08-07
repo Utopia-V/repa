@@ -1,14 +1,16 @@
 # Gate 20 source-linked future attention implementation/evidence record
 
-Status: **implementation/evidence accepted; local integration awaits separate
-authorization.** Gate 20's contract/theory and implementation/evidence layers
-are both accepted under whole-Gate review run
+Status: **implementation/evidence accepted and committed on a feature branch;
+mainline merge awaits separate action.** Gate 20's contract/theory and
+implementation/evidence layers are both accepted under whole-Gate review run
 `G20-WG-20260806-019fd69a-01`. Retained reviewer task
 `019fd773-84c3-7841-9fc5-45f1b18d4a9f` closed `G20-CR-001..010` and
 `G20-IR-001..011`, returned final `Accept`, and reported no owner blocker or
 material unknown. This establishes readiness only for the separately governed
-integration step. No staging, commit, push, release, credentialed provider
-call, Gate 21 entry, or Gate 21A entry follows.
+integration step. Exact implementation commit
+`1f92169840559b63eb8f96c31a67985c814a86f0` records the accepted candidate on
+`codex/gate-20-future-attention`; it is not merged into `main`. No release,
+credentialed provider call, Gate 21 entry, or Gate 21A entry follows.
 
 Date: 2026-08-07
 Accepted: 2026-08-08
@@ -39,6 +41,8 @@ Accepted: 2026-08-08
 - accepted review-record SHA-256 for this file before status-only
   reconciliation:
   `E86AA8B386CF613F0AF5E7CEE7D7844ED893944D0B36AE4D63450192FDE3DE00`;
+- feature-branch implementation commit:
+  `1f92169840559b63eb8f96c31a67985c814a86f0`;
   and
 - excluded pre-existing maintainer change: `AGENTS.md`.
 
@@ -54,10 +58,12 @@ reconciliation that records the verdict does not alter the accepted package
 manifest.
 
 The working tree retained the pre-existing maintainer-owned `AGENTS.md`
-modification throughout implementation. The executor did not edit, revert,
-stage, or include that path. The Git index remained empty; no branch movement,
-commit, merge, push, release, credential use, paid call, or external durable
-effect occurred.
+modification throughout implementation and review. The executor did not edit,
+revert, stage, or include that path. At acceptance the Git index remained empty
+and no branch movement, commit, merge, push, release, credential use, paid call,
+or external durable effect had occurred. After separate publication authority,
+the accepted candidate was committed on the feature branch at the exact commit
+above; `AGENTS.md` remains outside it and `main` remains unchanged.
 
 ## First implementation/evidence review disposition
 
@@ -619,7 +625,7 @@ also passed after the public HttpApi and event schemas changed.
 The candidate remained unstaged, with `HEAD` and `origin/main` unchanged at the
 implementation base.
 
-## Accepted boundary and pending integration
+## Accepted boundary and pending mainline integration
 
 The accepted deterministic and reviewer-reproduced evidence does not prove
 that an arbitrary external model will always notice the right concern, choose
@@ -637,7 +643,7 @@ qualification, not a replacement for these deterministic oracles.
 No maintainer-owned product choice, material unknown, or executor blocker
 remains inside Gate 20's reviewed boundary. The retained reviewer accepted the
 exact 71-file production/test candidate with `G20-IR-001..011` closed, while
-contract/theory remains accepted with `G20-CR-001..010` closed. The candidate is
-ready only for a separately governed local integration step. No staging,
-commit, merge, push, release, Gate 21, or Gate 21A authority exists in this
-record.
+contract/theory remains accepted with `G20-CR-001..010` closed. Exact commit
+`1f92169840559b63eb8f96c31a67985c814a86f0` records that candidate on
+`codex/gate-20-future-attention`; `main` merge remains pending. No release,
+Gate 21, or Gate 21A authority exists in this record.

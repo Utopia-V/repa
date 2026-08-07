@@ -3092,6 +3092,21 @@ integration step. The acceptance callback and this status reconciliation do
 not authorize or perform staging, commit, merge, push, release, credentialed
 provider use, Gate 21, or Gate 21A work.
 
+### 2026-08-08 Gate 20 feature-branch integration
+
+After separate maintainer publication authorization, exact commit
+`1f92169840559b63eb8f96c31a67985c814a86f0` recorded the accepted 71-file
+production/test projection together with its contract, evidence, architecture,
+roadmap, and review records on branch `codex/gate-20-future-attention`. The
+package projection remains byte-identical to reviewer-accepted manifest
+`1507DAF44F5B48A430C2491694C5A4547B9E9B2D5CF3D4D2E1A3190B995C6CB0`.
+
+This docs-only successor records that integration identity without altering the
+accepted package projection. The pre-existing maintainer-owned `AGENTS.md`
+change remains uncommitted and excluded. `main` has not advanced; merge,
+release, credentialed provider use, Gate 21, and Gate 21A remain outside this
+integration record.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit
