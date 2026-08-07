@@ -3141,6 +3141,21 @@ redundant feature-branch ref may remain as provenance; it does not own current
 Gate status. No release, credentialed provider use, Gate 21, or Gate 21A action
 follows.
 
+### 2026-08-08 Gate 20 direct `origin/main` publication
+
+After the event-truthful local integration/status record was committed at
+`228126535619a70d172e17e6f6b56b27cf86fbb6`, direct publication succeeded:
+`origin/main` fast-forwarded from
+`3317525aeb242dfcf3cec49c0dd627cd38ee8144` through that commit. This docs-only
+successor records the completed remote fact; it changes no package blob or Gate
+20 acceptance boundary. Draft pull request `#1` remains closed without merge,
+and no pull request participates in the integration identity.
+
+The pre-existing maintainer-owned `AGENTS.md` modification remains local,
+uncommitted, and excluded. The redundant remote feature branch remains only as
+provenance. No release, credentialed provider use, Gate 21, or Gate 21A action
+follows.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

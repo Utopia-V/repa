@@ -1,7 +1,8 @@
 # Gate 20 source-linked future attention implementation/evidence record
 
-Status: **implementation/evidence accepted and integrated into local `main`;
-direct `origin/main` publication is authorized and pending.** Gate 20's
+Status: **implementation/evidence accepted and published on `origin/main`
+through integration/status commit
+`228126535619a70d172e17e6f6b56b27cf86fbb6`.** Gate 20's
 contract/theory and
 implementation/evidence layers are both accepted under whole-Gate review run
 `G20-WG-20260806-019fd69a-01`. Retained reviewer task
@@ -10,7 +11,7 @@ implementation/evidence layers are both accepted under whole-Gate review run
 material unknown. A separately authorized direct integration subsequently
 fast-forwarded the accepted candidate into `main`. Exact implementation commit
 `1f92169840559b63eb8f96c31a67985c814a86f0` records the accepted candidate;
-local `main` includes it through docs-only integration/status successors. No
+`origin/main` includes it through the integration/status commit above. No
 release, credentialed provider call, Gate 21 entry, or Gate 21A entry follows.
 
 Date: 2026-08-07
@@ -79,9 +80,10 @@ revert, stage, or include that path. At acceptance the Git index remained empty
 and no branch movement, commit, merge, push, release, credential use, paid call,
 or external durable effect had occurred. After separate publication authority,
 the accepted candidate was committed at the exact implementation commit above
-and then fast-forwarded into local `main` through docs-only integration/status
-successors. Direct publication to `origin/main` is authorized and pending;
-`AGENTS.md` remains outside every Gate 20 commit.
+and then fast-forwarded into `main` through docs-only integration/status
+successors. Direct publication succeeded through commit
+`228126535619a70d172e17e6f6b56b27cf86fbb6`; `AGENTS.md` remains outside every
+Gate 20 commit.
 
 ## First implementation/evidence review disposition
 
@@ -662,7 +664,7 @@ No maintainer-owned product choice, material unknown, or executor blocker
 remains inside Gate 20's reviewed boundary. The retained reviewer accepted the
 exact 71-file production/test candidate with `G20-IR-001..011` closed, while
 contract/theory remains accepted with `G20-CR-001..010` closed. Exact commit
-`1f92169840559b63eb8f96c31a67985c814a86f0` records that candidate, and local
-`main` includes it through docs-only integration/status successors. Direct
-`origin/main` publication is authorized and pending. No release, Gate 21, or
-Gate 21A authority exists in this record.
+`1f92169840559b63eb8f96c31a67985c814a86f0` records that candidate, and
+`origin/main` includes it through integration/status commit
+`228126535619a70d172e17e6f6b56b27cf86fbb6`. No release, Gate 21, or Gate 21A
+authority exists in this record.
