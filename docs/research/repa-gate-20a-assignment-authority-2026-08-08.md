@@ -1,8 +1,8 @@
 # Repa Gate 20A: learning-relevant Assignment authority
 
-Status: **Contract/theory and implementation/evidence accepted; the Whole Gate
-is ready only for its separately governed integration step.** Current
-implementation/integration truth is owned by the [status map](../README.md) and the
+Status: **Contract/theory and implementation/evidence accepted; the exact
+accepted implementation is published on its feature branch.** Current
+integration truth is owned by the [status map](../README.md) and the
 [implementation/evidence record](repa-gate-20a-assignment-authority-implementation-evidence-2026-08-09.md),
 not by this accepted semantic contract.
 Review run `G20A-WG-20260808-019fe065-01`, reviewer task
@@ -1335,5 +1335,9 @@ migration, Representation cursor/source-drift, and Artifact-drift evidence
 confirmed the repaired counterexamples while leaving the checkout unchanged.
 The earlier broad name-filtered OpenCode runtime stall remains disclosed as a
 nonblocking Bun/layer-teardown or scheduling unknown for later release
-qualification. Both Gate layers are accepted; integration, publication, Gate
-21 review, and every later Gate remain separately governed.
+qualification. Both Gate layers are accepted. The maintainer subsequently
+authorized feature-branch publication; exact implementation commit
+`5099ecc642390cf7bae0f980098edd5267a75874` on
+`origin/codex/gate-20a-assignment-authority` contains the accepted package
+projection. Mainline merge, release, Gate 21 review, and every later Gate remain
+separately governed.

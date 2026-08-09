@@ -3346,6 +3346,24 @@ for the separately governed local integration step. It does not itself commit,
 push, release, review Gate 21, or begin a later Gate; the reviewer remains
 visible as durable Gate 20A evidence and is not reusable for another Gate.
 
+### 2026-08-09 Gate 20A feature-branch integration
+
+After separate maintainer publication authorization, exact implementation
+commit `5099ecc642390cf7bae0f980098edd5267a75874` recorded the accepted 41-file
+package production/test projection together with its product-owner,
+architecture, roadmap, contract, evidence, and review records on branch
+`codex/gate-20a-assignment-authority`. Recomputing that commit against base
+`c100b431fe174d1993b2baa89a7d1b133300b579` reproduced **41 files / 4,521
+canonical manifest bytes / SHA-256
+`D00E8DB84C968A46E304A8F03FCFD1CC719EE2573BACE2CB9FA83D3D7D80078B`**.
+The branch was published as `origin/codex/gate-20a-assignment-authority` before
+this docs-only closure/status successor.
+
+The pre-existing maintainer-owned `AGENTS.md` modification remains uncommitted
+and excluded. This feature-branch publication does not merge `main`, create a
+release or pull request, authorize credentialed provider or external-system
+work, review Gate 21, or begin Gate 21A or a later Gate.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

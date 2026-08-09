@@ -1,10 +1,13 @@
 # Gate 20A learning-relevant Assignment authority implementation/evidence candidate
 
-Status: **implementation/evidence accepted.** The retained independent reviewer
-closed `G20A-IR-001..009` against the exact repaired candidate and found no new
-or replacement finding, owner blocker, or contract reopen condition. Gate 20A
-contract/theory and implementation/evidence are both accepted; integration,
-publication, Gate 21 review, and later Gates remain separately governed.
+Status: **implementation/evidence accepted and published on the Gate 20A feature
+branch.** The retained independent reviewer closed `G20A-IR-001..009` against
+the exact repaired candidate and found no new or replacement finding, owner
+blocker, or contract reopen condition. Exact implementation commit
+`5099ecc642390cf7bae0f980098edd5267a75874` on
+`origin/codex/gate-20a-assignment-authority` preserves the accepted package
+projection. Mainline merge, release, Gate 21 review, and later Gates remain
+separately governed.
 
 Date: 2026-08-09
 
@@ -376,6 +379,10 @@ It independently reran repair-focused Core, frozen-migration,
 Representation-cursor/source-drift, and exact Artifact-drift evidence; all
 original acceptance impacts were restored, and no new or replacement finding,
 owner blocker, or contract reopen condition appeared. The reviewer left the
-checkout and Git state unchanged. This closes Gate 20A review and establishes
-readiness only for separately authorized integration; it does not itself
-commit, push, release, review Gate 21, or begin a later Gate.
+checkout and Git state unchanged. This closed Gate 20A review and established
+readiness for separately authorized integration. The maintainer subsequently
+authorized feature-branch publication, and exact implementation commit
+`5099ecc642390cf7bae0f980098edd5267a75874` was published to
+`origin/codex/gate-20a-assignment-authority`; this docs-only successor changes no
+package content. No mainline merge, release, Gate 21 review, or later-Gate work
+is claimed.
