@@ -44,6 +44,15 @@ meaningful; Gate 20 must qualify their concrete projection, interaction-order,
 and service behavior against the current fork. No historical ALS result may be
 used to waive that review or evidence.
 
+Amendment (2026-08-08): Roadmap 09 now inserts Gate 20A Assignment authority
+before retaining Gate 21 Planning. Gate 21A observes their exact state as two
+separate candidate pressures: Assignment is a learning-relevant obligation;
+Planning is a correctable working allocation. Neither is current activity,
+adherence, learning, or product success, and neither silently outranks the
+learner's exact request. Gate 21A must preserve that distinction when selecting
+a helpful teaching or learning move, including after intermittent absence where
+Repa has no observation of what occurred.
+
 ## Plain-language decision
 
 Repa will not ask a separate classifier model to decide what the Tutor should

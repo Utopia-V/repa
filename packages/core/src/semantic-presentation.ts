@@ -2,6 +2,7 @@ export * as SemanticPresentation from "./semantic-presentation"
 
 import { SemanticPresentationV1 } from "@opencode-ai/schema/semantic-presentation-v1"
 import { Option, Schema } from "effect"
+import { Assignment } from "./assignment"
 import { LearningBootstrap } from "./learning-bootstrap"
 import { FutureAttention } from "./future-attention"
 import { LearnerResponseEvidence } from "./learner-response-evidence"
@@ -25,6 +26,7 @@ const consequentialPermissionCapabilities = new Set([
   "update_learning_course",
   "update_learner_response_evidence",
   "update_future_attention",
+  "update_assignment",
 ])
 
 const consequentialResultTools = new Set([
@@ -38,6 +40,7 @@ const consequentialResultTools = new Set([
   "update_learning_course",
   "update_learner_response_evidence",
   "update_future_attention",
+  "update_assignment",
 ])
 
 export type Fact = Readonly<{ label: string; value: string }>
@@ -83,6 +86,10 @@ type LearnerResponseEvidenceScope = Extract<
 type FutureAttentionScope = Extract<
   SemanticPresentationV1.ProposalBasis,
   { readonly kind: "future_attention_capability" }
+>["scope"]
+type AssignmentScope = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "assignment_capability" }
 >["scope"]
 
 export type ProposalProjection = Readonly<{
@@ -478,6 +485,32 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       },
     })
   }
+  if (basis.kind === "assignment_capability") {
+    const command = canonicalAssignmentCommand(basis.scope)
+    if (
+      !command ||
+      !same(command, basis.scope.command) ||
+      !validAssignmentSourceBasis(command, basis.scope.sourceBasis) ||
+      !validAssignmentMaterialized(command, basis.scope.materialized) ||
+      !same(assignmentScopeValue(command, basis.scope.sourceBasis, basis.scope.materialized), basis.scope) ||
+      Assignment.commandFingerprint(command) !== basis.commandFingerprint
+    ) {
+      return undefined
+    }
+    return expected(value, {
+      capability: Assignment.UPDATE_CAPABILITY,
+      patterns: [Assignment.PERMISSION_PATTERN],
+      always: [Assignment.PERMISSION_PATTERN],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        assignmentKind: "change_set",
+        commandFingerprint: basis.commandFingerprint,
+        issuance: basis.issuance,
+        scope: basis.scope,
+      },
+    })
+  }
   if (basis.kind === "course_route_anchor") {
     if (
       (basis.target === null && basis.locator !== undefined) ||
@@ -653,6 +686,296 @@ export function futureAttentionScope(command: FutureAttention.CanonicalChangeSet
     sourceRelations,
     nonImplications: ["task", "reminder", "priority", "mastery", "required_next_action"],
   }
+}
+
+function canonicalAssignmentCommand(scope: AssignmentScope) {
+  try {
+    if (
+      !isRecord(scope.command) ||
+      scope.command.schemaVersion !== 1 ||
+      !Array.isArray(scope.command.intents) ||
+      Object.keys(scope.command).sort().join(",") !== "cause,intents,schemaVersion"
+    ) {
+      return undefined
+    }
+    const command = Assignment.canonicalizeCommand({
+      cause: scope.command.cause as Assignment.CanonicalChangeSet["cause"],
+      intents: scope.command.intents as Assignment.CanonicalChangeSet["intents"],
+    })
+    return same(command, scope.command) ? command : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function assignmentScope(
+  candidate: Pick<Assignment.Candidate, "canonicalCommand" | "causeBasis" | "materialized">,
+) {
+  const command = candidate.canonicalCommand
+  const materialized = candidate.materialized.map((item) => ({
+    outcome: item.outcome,
+    ordinal: item.ordinal,
+    operation: item.intent.type,
+    assignmentID: item.assignmentID,
+    revisionID: item.revisionID,
+    finalDisposition: item.finalDisposition,
+    ...(item.relationTarget ? { relationTarget: item.relationTarget } : {}),
+    ...(item.successorAssignmentID ? { successorAssignmentID: item.successorAssignmentID } : {}),
+    ...(item.successorRevisionID ? { successorRevisionID: item.successorRevisionID } : {}),
+  }))
+  return assignmentScopeValue(command, candidate.causeBasis, materialized)
+}
+
+function assignmentScopeValue(
+  command: Assignment.CanonicalChangeSet,
+  sourceBasis: unknown,
+  materialized: AssignmentScope["materialized"],
+) {
+  const targetedAssignmentIDs = command.intents.flatMap((intent) =>
+    "assignmentID" in intent ? [intent.assignmentID] : [],
+  )
+  const expectedHeads = command.intents.flatMap((intent) =>
+    "expectedHead" in intent
+      ? [
+          {
+            assignmentID: intent.assignmentID,
+            revisionID: intent.expectedHead.revisionID,
+            version: intent.expectedHead.version,
+            ownerCutFingerprint: intent.expectedHead.ownerCutFingerprint,
+          },
+        ]
+      : [],
+  )
+  const sourceActions = command.intents.flatMap((intent) =>
+    "sourceAction" in intent ? [intent.sourceAction.type] : [],
+  )
+  const finalDispositions = command.intents.flatMap((intent) => {
+    if (intent.type === "create") return ["open" as const]
+    if (intent.type === "replace") return ["superseded" as const]
+    return intent.finalDisposition ? [intent.finalDisposition] : []
+  })
+  const replacementTargets = command.intents.flatMap((intent) => {
+    if (intent.type === "replace" && intent.successor.type === "bind") return [intent.successor.target]
+    if (intent.type !== "create" && intent.type !== "replace" && intent.relationAction.type === "set_or_retarget") {
+      return [intent.relationAction.target]
+    }
+    return []
+  })
+  return {
+    command: structuredClone(command),
+    sourceBasis: structuredClone(sourceBasis),
+    materialized: structuredClone(materialized),
+    operationCount: command.intents.length,
+    causeType: command.cause.type,
+    targetedAssignmentIDs,
+    expectedHeads,
+    sourceActions,
+    finalDispositions,
+    replacementTargets,
+    nonImplications: [
+      "activity",
+      "progress",
+      "mastery",
+      "learner_commitment",
+      "study_plan",
+      "selected_tutor_move",
+    ],
+  }
+}
+
+function assignmentOperationText(
+  intent: Assignment.CanonicalChangeSet["intents"][number],
+  materialized: AssignmentScope["materialized"][number] | undefined,
+) {
+  const identity = materialized
+    ? materialized.outcome === "no_change"
+      ? `${materialized.assignmentID}/${materialized.revisionID}; unchanged; disposition ${materialized.finalDisposition}`
+      : `${materialized.assignmentID}/${materialized.revisionID}; disposition ${materialized.finalDisposition}`
+    : "materialized identity unavailable"
+  if (intent.type === "create") {
+    return `create #${intent.createOrdinal}; ${identity}; ${assignmentSnapshotText(intent.snapshot)}`
+  }
+  if (intent.type === "replace") {
+    const successor =
+      intent.successor.type === "create"
+        ? `new successor #${intent.successor.createOrdinal} ${materialized?.successorAssignmentID ?? "identity unavailable"}/${materialized?.successorRevisionID ?? "revision unavailable"}; ${assignmentSnapshotText(intent.successor.snapshot)}`
+        : `existing successor ${intent.successor.target.assignmentID}/${intent.successor.target.revisionID} v${intent.successor.target.version}`
+    return `replace ${intent.assignmentID}/${intent.expectedHead.revisionID} v${intent.expectedHead.version}; result ${identity}; ${successor}; source ${intent.sourceAction.type}; rationale ${intent.rationale}`
+  }
+  return `${intent.type} ${intent.assignmentID}/${intent.expectedHead.revisionID} v${intent.expectedHead.version}; result ${identity}; relation ${intent.relationAction.type}${materialized?.relationTarget ? ` -> ${materialized.relationTarget.assignmentID}/${materialized.relationTarget.revisionID} v${materialized.relationTarget.version}` : ""}; source ${intent.sourceAction.type}; ${intent.snapshot ? assignmentSnapshotText(intent.snapshot) : "semantic snapshot preserved"}; rationale ${intent.rationale}`
+}
+
+function assignmentSourceFacts(value: unknown): readonly Fact[] {
+  if (!isRecord(value) || typeof value.type !== "string") return [fact("Exact source", "invalid")]
+  if (value.type === "learner_occurrence" && isRecord(value.excerpt)) {
+    return [
+      fact(
+        "Exact learner source",
+        `${String(value.occurrenceID)}; session ${String(value.sessionID)}; message ${String(value.messageID)}; turn ${String(value.turnID)}; input ${String(value.inputID)}; source order ${String(value.sourceOrder)}`,
+      ),
+      fact(
+        "Source excerpt",
+        `${String(value.excerpt.startByte)}..${String(value.excerpt.endByte)} bytes; sha256 ${String(value.excerpt.sha256)}; ${String(value.excerpt.text)}`,
+      ),
+    ]
+  }
+  if (value.type === "artifact_revision" && isRecord(value.selector)) {
+    return [
+      fact(
+        "Exact Artifact source",
+        `${String(value.artifactID)}/${String(value.revisionID)}; attribution ${JSON.stringify(value.attribution)}; selector ${String(value.selector.locator)}; locator digest ${String(value.selector.locatorDigest)}${value.selector.excerptSha256 ? `; excerpt sha256 ${String(value.selector.excerptSha256)}` : ""}`,
+      ),
+      fact("Source admission", JSON.stringify(value.admission) ?? "unavailable"),
+    ]
+  }
+  if (value.type === "representation_revision" && isRecord(value.selector)) {
+    return [
+      fact(
+        "Exact Representation source",
+        `${String(value.representationRevisionID)}; selector ${String(value.selector.locator)}; locator digest ${String(value.selector.locatorDigest)}`,
+      ),
+      fact("Source admission", JSON.stringify(value.admission) ?? "unavailable"),
+    ]
+  }
+  if (value.type === "assignment_owner_read" && Array.isArray(value.ownerReads)) {
+    return [
+      fact(
+        "Exact Assignment owner reads",
+        value.ownerReads
+          .map((read) =>
+            isRecord(read)
+              ? `${String(read.assignmentID)}/${String(read.revisionID)} v${String(read.version)} at ${String(read.ownerCutFingerprint)}`
+              : "invalid",
+          )
+          .join(", "),
+      ),
+    ]
+  }
+  return [fact("Exact source", "invalid")]
+}
+
+function assignmentSnapshotText(
+  snapshot: Extract<Assignment.CanonicalChangeSet["intents"][number], { type: "create" }>["snapshot"],
+) {
+  const scope =
+    snapshot.scope.type === "learner_home"
+      ? "LearnerHome"
+      : `Courses ${(snapshot.scope.courseIDs ?? []).join(", ") || "none"}`
+  return `summary ${snapshot.obligationSummary}; learning context ${snapshot.learningContext}; scope ${scope}; due ${assignmentDueText(snapshot.dueBasis)}; expiry ${snapshot.expiryBoundary ? assignmentDueText(snapshot.expiryBoundary) : "none"}`
+}
+
+function assignmentDueText(due: unknown) {
+  if (!isRecord(due) || typeof due.type !== "string") return "invalid"
+  if (due.type === "unresolved" || due.type === "explicitly_no_deadline") return due.type
+  if (due.type === "local_date" && typeof due.civilDate === "string") return `${due.civilDate} (${due.comparator})`
+  if (due.type === "instant" && typeof due.sourceExpression === "string") {
+    return `${due.sourceExpression} (${due.comparator})`
+  }
+  return "invalid"
+}
+
+function validAssignmentSourceBasis(command: Assignment.CanonicalChangeSet, value: unknown) {
+  if (!isRecord(value) || typeof value.type !== "string") return false
+  const cause = command.cause
+  if (cause.type === "agent_correction") {
+    return value.type === "assignment_owner_read" && same(value.ownerReads, cause.ownerReads)
+  }
+  if (cause.type === "interpreted_learner_report" || cause.type === "interpreted_learner_direction") {
+    if (value.type !== "learner_occurrence" || !isRecord(value.excerpt)) return false
+    return (
+      value.excerpt.text === cause.excerpt.text &&
+      value.excerpt.startByte === cause.excerpt.startByte &&
+      value.excerpt.endByte === cause.excerpt.endByte &&
+      typeof value.excerpt.sha256 === "string" &&
+      value.excerpt.sha256 === new Bun.CryptoHasher("sha256").update(cause.excerpt.text).digest("hex")
+    )
+  }
+  const source = cause.source
+  if (source.type === "artifact_revision") {
+    if (
+      value.type !== "artifact_revision" ||
+      value.artifactID !== source.artifactID ||
+      value.revisionID !== source.revisionID ||
+      !same(value.attribution, source.attribution) ||
+      !isRecord(value.selector)
+    ) {
+      return false
+    }
+    return (
+      value.selector.locator === source.selector.locator &&
+      same(value.selector.excerpt, source.selector.excerpt) &&
+      typeof value.selector.locatorDigest === "string"
+    )
+  }
+  return (
+    value.type === "representation_revision" &&
+    value.representationRevisionID === source.representationRevisionID &&
+    isRecord(value.selector) &&
+    value.selector.locator === source.selector.locator &&
+    typeof value.selector.locatorDigest === "string"
+  )
+}
+
+function validAssignmentMaterialized(
+  command: Assignment.CanonicalChangeSet,
+  values: AssignmentScope["materialized"],
+) {
+  if (new Set(values.map((value) => value.ordinal)).size !== values.length) return false
+  return values.every((value) => {
+    const intent = command.intents[value.ordinal]
+    if (
+      !intent ||
+      intent.type !== value.operation ||
+      !/^asn_[0-9A-Za-z]{26}$/.test(value.assignmentID) ||
+      !/^asr_[0-9A-Za-z]{26}$/.test(value.revisionID)
+    ) {
+      return false
+    }
+    if (value.outcome === "no_change" && intent.type !== "revise") return false
+    if (intent.type === "create") {
+      return (
+        value.finalDisposition === "open" &&
+        value.relationTarget === undefined &&
+        value.successorAssignmentID === undefined &&
+        value.successorRevisionID === undefined
+      )
+    }
+    if (value.assignmentID !== intent.assignmentID) return false
+    if (intent.type === "replace") {
+      if (value.finalDisposition !== "superseded" || !value.relationTarget || !value.successorAssignmentID) {
+        return false
+      }
+      if (value.relationTarget.assignmentID !== value.successorAssignmentID) return false
+      if (intent.successor.type === "bind") {
+        return same(value.relationTarget, intent.successor.target) && value.successorRevisionID === undefined
+      }
+      return (
+        typeof value.successorRevisionID === "string" &&
+        /^asr_[0-9A-Za-z]{26}$/.test(value.successorRevisionID) &&
+        value.relationTarget.revisionID === value.successorRevisionID &&
+        value.relationTarget.version === 1
+      )
+    }
+    if (value.successorAssignmentID !== undefined || value.successorRevisionID !== undefined) return false
+    const expectedDisposition =
+      intent.type === "correct"
+        ? intent.finalDisposition
+        : intent.type === "complete"
+          ? "completed"
+          : intent.type === "cancel"
+            ? "cancelled"
+            : intent.type === "dismiss"
+              ? "dismissed"
+              : intent.type === "reopen"
+                ? "open"
+                : undefined
+    if (expectedDisposition && value.finalDisposition !== expectedDisposition) return false
+    if (intent.relationAction.type === "set_or_retarget") {
+      return same(value.relationTarget, intent.relationAction.target)
+    }
+    if (intent.relationAction.type === "clear") return value.relationTarget === undefined
+    return true
+  })
 }
 
 function learnerResponseEvidenceScope(
@@ -917,6 +1240,42 @@ function projectProposal(
         fact("Source relations", basis.scope.sourceRelations.join(", ") || "none"),
         ...(command?.operations.map((operation, index) =>
           fact(`Future-attention change ${index + 1}`, futureAttentionOperationText(operation)),
+        ) ?? []),
+        fact("Does not imply", basis.scope.nonImplications.join(", ")),
+      ],
+    )
+  }
+  if (basis.kind === "assignment_capability") {
+    const command = canonicalAssignmentCommand(basis.scope)
+    return proposalProjection(
+      basis,
+      approval,
+      Assignment.UPDATE_CAPABILITY,
+      "Update Assignment records",
+      "This configured capability approval is bound to one exact, source-bearing correction set. Assignment state records an obligation; it does not prove activity, progress, mastery, commitment, or completion outside the explicit transition.",
+      [
+        fact("Issuance", basis.issuance),
+        fact("Cause", basis.scope.causeType),
+        ...assignmentSourceFacts(basis.scope.sourceBasis),
+        fact("Operations", basis.scope.operationCount),
+        ...(basis.scope.expectedHeads.length > 0
+          ? [
+              fact(
+                "Expected heads",
+                basis.scope.expectedHeads
+                  .map((head) => `${head.assignmentID}/${head.revisionID} v${head.version}`)
+                  .join(", "),
+              ),
+            ]
+          : []),
+        ...(command?.intents.map((intent, index) =>
+          fact(
+            `Assignment change ${index + 1}`,
+            assignmentOperationText(
+              intent,
+              basis.scope.materialized.find((materialized) => materialized.ordinal === index),
+            ),
+          ),
         ) ?? []),
         fact("Does not imply", basis.scope.nonImplications.join(", ")),
       ],
@@ -1958,6 +2317,80 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
       ],
     )
   }
+  if (basis.kind === "assignment_result") {
+    const semanticTerminal = basis.disposition === "semantic_terminal_v1"
+    const candidate = basis.disposition === "candidate_v1"
+    const projected = settlement.outcome !== "error"
+    if (
+      semanticTerminal !== (basis.semanticOutcome !== undefined) ||
+      candidate !== (basis.issuance !== undefined) ||
+      candidate !== (basis.capabilityOutcome !== undefined) ||
+      (!candidate && basis.permissionRequestID !== undefined) ||
+      projected !== (basis.effect !== undefined) ||
+      (settlement.outcome === "no_change" &&
+        (basis.effect?.existingOutcome !== undefined ||
+          basis.effect?.effectID !== undefined ||
+          basis.effect?.changes.length !== 0 ||
+          basis.effect?.intentResults.length === 0 ||
+          basis.effect?.intentResults.some((result) => result.outcome !== "no_change"))) ||
+      (settlement.outcome === "applied" &&
+        (basis.effect?.existingOutcome !== undefined ||
+          !basis.effect?.effectID ||
+          basis.effect.changes.length === 0 ||
+          basis.effect.intentResults.length === 0 ||
+          basis.effect.intentResults.every((result) => result.outcome === "no_change"))) ||
+      (settlement.outcome === "already_applied" &&
+        (basis.effect?.existingOutcome === "applied"
+          ? !basis.effect.effectID ||
+            basis.effect.changes.length === 0 ||
+            basis.effect.intentResults.length === 0 ||
+            basis.effect.intentResults.every((result) => result.outcome === "no_change")
+          : basis.effect?.existingOutcome === "no_change"
+            ? basis.effect.effectID !== undefined ||
+              basis.effect.changes.length !== 0 ||
+              basis.effect.intentResults.length === 0 ||
+              basis.effect.intentResults.some((result) => result.outcome !== "no_change")
+            : true)) ||
+      (semanticTerminal &&
+        (basis.semanticOutcome === "already_applied"
+          ? settlement.outcome !== "already_applied"
+          : settlement.outcome !== "error" || settlement.code !== "semantic_conflict"))
+    ) {
+      return undefined
+    }
+    return resultProjection(
+      basis,
+      Assignment.UPDATE_CAPABILITY,
+      "Assignment settlement",
+      assignmentResultSummary(basis, outcome),
+      [
+        ...failure,
+        fact("Disposition", basis.disposition),
+        ...(basis.issuance ? [fact("Issuance", basis.issuance)] : []),
+        ...(basis.capabilityOutcome ? [fact("Capability", basis.capabilityOutcome)] : []),
+        ...(basis.permissionRequestID ? [fact("Permission request", basis.permissionRequestID)] : []),
+        ...(basis.effect
+          ? [
+              ...(basis.effect.existingOutcome
+                ? [fact("Existing semantic outcome", basis.effect.existingOutcome)]
+                : []),
+              ...basis.effect.intentResults.map((result, index) =>
+                fact(
+                  `Assignment result ${index + 1}`,
+                  result.outcome === "no_change"
+                    ? `${result.operation}; ${result.assignmentID} unchanged at ${result.currentRevision.revisionID} v${result.currentRevision.version}`
+                    : `${result.operation}; ${result.assignmentID} -> ${result.committedRevision.revisionID} v${result.committedRevision.version}${result.successorAssignmentID ? `; successor ${result.successorAssignmentID}` : ""}`,
+                ),
+              ),
+              fact(
+                "Does not imply",
+                "activity, elapsed-work progress, mastery, learner commitment, a study plan, or an automatically selected Tutor move",
+              ),
+            ]
+          : []),
+      ],
+    )
+  }
   if (settlement.outcome !== "applied") return undefined
   return resultProjection(
     basis,
@@ -2077,6 +2510,16 @@ function resultSummary(title: string, outcome: ResultProjection["outcome"]) {
   if (outcome === "no_effect") return `${title} made no durable change.`
   if (outcome === "outcome_unknown") return `${title} has an unknown outcome; no success is claimed.`
   return `${title} failed; no success is claimed.`
+}
+
+function assignmentResultSummary(
+  basis: Extract<SemanticPresentationV1.ResultBasis, { kind: "assignment_result" }>,
+  outcome: ResultProjection["outcome"],
+) {
+  if (outcome === "already_applied" && basis.effect?.existingOutcome === "no_change") {
+    return "The exact Assignment command was already settled as no change; no Assignment effect was created."
+  }
+  return resultSummary("Assignment records", outcome)
 }
 
 function goalV2MaterializedText(

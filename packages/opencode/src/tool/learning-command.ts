@@ -75,6 +75,7 @@ export function isLearningCommandToolID(id: string) {
     id === LearningCommand.UPDATE_LEARNER_GOALS_CAPABILITY ||
     id === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
     id === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
-    id === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
+    id === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY ||
+    id === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
   )
 }

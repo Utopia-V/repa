@@ -974,6 +974,62 @@ const FutureAttentionCapabilityProposal = Schema.Struct({
   scope: FutureAttentionScope,
 })
 
+const AssignmentRevisionRef = Schema.Struct({
+  assignmentID: StringValue,
+  revisionID: StringValue,
+  version: PositiveVersion,
+})
+const AssignmentMaterializedOperation = Schema.Struct({
+  outcome: Schema.Literals(["changed", "no_change"]),
+  ordinal: PositiveVersion,
+  operation: Schema.Literals(["create", "revise", "correct", "complete", "cancel", "dismiss", "reopen", "replace"]),
+  assignmentID: StringValue,
+  revisionID: StringValue,
+  finalDisposition: Schema.Literals(["open", "completed", "cancelled", "dismissed", "superseded"]),
+  relationTarget: optional(AssignmentRevisionRef),
+  successorAssignmentID: optional(StringValue),
+  successorRevisionID: optional(StringValue),
+})
+const AssignmentScope = Schema.Struct({
+  command: Schema.Unknown,
+  sourceBasis: Schema.Unknown,
+  materialized: Schema.Array(AssignmentMaterializedOperation),
+  operationCount: PositiveVersion,
+  causeType: Schema.Literals([
+    "interpreted_learner_report",
+    "interpreted_learner_direction",
+    "interpreted_source_observation",
+    "interpreted_source_change",
+    "agent_correction",
+  ]),
+  targetedAssignmentIDs: Schema.Array(StringValue),
+  expectedHeads: Schema.Array(
+    Schema.Struct({
+      assignmentID: StringValue,
+      revisionID: StringValue,
+      version: PositiveVersion,
+      ownerCutFingerprint: StringValue,
+    }),
+  ),
+  sourceActions: Schema.Array(
+    Schema.Literals(["preserve_predecessor_source", "rebind_current_source_to_cause"]),
+  ),
+  finalDispositions: Schema.Array(
+    Schema.Literals(["open", "completed", "cancelled", "dismissed", "superseded"]),
+  ),
+  replacementTargets: Schema.Array(
+    Schema.Struct({ assignmentID: StringValue, revisionID: StringValue, version: PositiveVersion }),
+  ),
+  nonImplications: Schema.Array(StringValue),
+})
+const AssignmentCapabilityProposal = Schema.Struct({
+  kind: Schema.Literal("assignment_capability"),
+  ...ProposalBinding,
+  commandFingerprint: StringValue,
+  issuance: Schema.Literal("root"),
+  scope: AssignmentScope,
+})
+
 export const ProposalBasis = Schema.Union([
   AcceptCourseProposal,
   RepresentationProposal,
@@ -989,6 +1045,7 @@ export const ProposalBasis = Schema.Union([
   LearningBootstrapCapabilityProposal,
   LearnerResponseEvidenceCapabilityProposal,
   FutureAttentionCapabilityProposal,
+  AssignmentCapabilityProposal,
 ]).annotate({
   discriminator: "kind",
   identifier: "SemanticProposalBasisV1",
@@ -1423,6 +1480,61 @@ const FutureAttentionResult = Schema.Struct({
   effect: optional(FutureAttentionEffect),
 })
 
+const AssignmentChange = Schema.Struct({
+  ordinal: PositiveVersion,
+  operation: Schema.Literals(["create", "revise", "correct", "complete", "cancel", "dismiss", "reopen", "replace"]),
+  assignmentID: StringValue,
+  previousRevision: optional(AssignmentRevisionRef),
+  committedRevision: AssignmentRevisionRef,
+  successorAssignmentID: optional(StringValue),
+})
+const AssignmentIntentResult = Schema.Union([
+  Schema.Struct({
+    outcome: Schema.Literal("changed"),
+    ordinal: PositiveVersion,
+    operation: Schema.Literals(["create", "revise", "correct", "complete", "cancel", "dismiss", "reopen", "replace"]),
+    assignmentID: StringValue,
+    previousRevision: optional(AssignmentRevisionRef),
+    committedRevision: AssignmentRevisionRef,
+    successorAssignmentID: optional(StringValue),
+    successorRevision: optional(AssignmentRevisionRef),
+  }),
+  Schema.Struct({
+    outcome: Schema.Literal("no_change"),
+    ordinal: PositiveVersion,
+    operation: Schema.Literal("revise"),
+    assignmentID: StringValue,
+    currentRevision: AssignmentRevisionRef,
+  }),
+])
+const AssignmentEffect = Schema.Struct({
+  existingOutcome: optional(Schema.Literals(["applied", "no_change"])),
+  effectID: optional(StringValue),
+  changes: Schema.Array(AssignmentChange),
+  intentResults: Schema.Array(AssignmentIntentResult),
+})
+const AssignmentResult = Schema.Struct({
+  kind: Schema.Literal("assignment_result"),
+  ...ResultCommon,
+  disposition: Schema.Literals(["candidate_v1", "semantic_terminal_v1", "physical_no_effect"]),
+  semanticOutcome: optional(Schema.Literals(["already_applied", "semantic_conflict"])),
+  issuance: optional(Schema.Literal("root")),
+  capabilityOutcome: optional(
+    Schema.Literals([
+      "not_evaluated",
+      "policy_allow",
+      "policy_deny",
+      "prompted_abort",
+      "prompted_allow",
+      "prompted_deny",
+      "prompted_correct",
+      "prompted_cancel",
+    ]),
+  ),
+  permissionRequestID: optional(StringValue),
+  effect: optional(AssignmentEffect),
+})
+
 const ContentWriteResult = Schema.Struct({
   kind: Schema.Literal("content_write_result"),
   ...ResultCommon,
@@ -1453,6 +1565,7 @@ export const ResultBasis = Schema.Union([
   LearningBootstrapResult,
   LearnerResponseEvidenceResult,
   FutureAttentionResult,
+  AssignmentResult,
   ContentWriteResult,
 ]).annotate({
   discriminator: "kind",

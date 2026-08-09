@@ -54,9 +54,17 @@ export function resolveZone(intent: ZoneIntent, source: SourceZone, owner: strin
   return { type: "iana", name, releaseID: TIME_ZONE_RELEASE_ID }
 }
 
-export function resolveLocalInstant(localDateTime: string, zone: ResolvedZone, owner: string) {
+export function resolveLocalInstant(
+  localDateTime: string,
+  zone: ResolvedZone,
+  owner: string,
+  disambiguatingOffsetMinutes?: number,
+) {
   const local = localEpoch(localDateTime, owner)
   if (zone.type === "fixed_offset") {
+    if (disambiguatingOffsetMinutes !== undefined && disambiguatingOffsetMinutes !== zone.offsetMinutes) {
+      throw new RangeError(`${owner} disambiguating offset contradicts the fixed-offset basis`)
+    }
     const instant = local - zone.offsetMinutes * 60_000
     if (instant < 0) throw new RangeError(`${owner} instant target predates the supported epoch`)
     return { instant, utcOffsetMinutes: zone.offsetMinutes }
@@ -75,9 +83,13 @@ export function resolveLocalInstant(localDateTime: string, zone: ResolvedZone, o
       ? [{ instant, utcOffsetMinutes: offsetMinutes }]
       : []
   })
-  if (candidates.length !== 1) throw new RangeError(`${owner} local time is ambiguous or does not exist`)
-  if (candidates[0]!.instant < 0) throw new RangeError(`${owner} instant target predates the supported epoch`)
-  return candidates[0]!
+  const resolved =
+    disambiguatingOffsetMinutes === undefined
+      ? candidates
+      : candidates.filter((candidate) => candidate.utcOffsetMinutes === disambiguatingOffsetMinutes)
+  if (resolved.length !== 1) throw new RangeError(`${owner} local time is ambiguous or does not exist`)
+  if (resolved[0]!.instant < 0) throw new RangeError(`${owner} instant target predates the supported epoch`)
+  return resolved[0]!
 }
 
 export function validateSourceExpression(

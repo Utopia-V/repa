@@ -17,6 +17,28 @@ their own sources, legal transitions, correction, and failure semantics.
 Semantic separation does not require one package, table, service, or Gate per
 meaning.
 
+Amendment (2026-08-08): an Assignment is an independently valid substantial
+learning-relevant obligation; a planning allocation is a source-bearing,
+correctable working plan. Neither is automatically a generic learner
+commitment or activity record, and neither makes completing countable tasks the
+product objective. Assignment state enters ordinary behavior only through a
+real teaching, guided-work, review, or Planning consumer.
+Repa may be used intermittently or alongside learning outside the program, so
+clock passage, an elapsed allocation, silence, or absence cannot create
+progress, non-progress, completion, cancellation, breach, or abandonment.
+Assignment lifecycle changes require an explicit Assignment-owned transition;
+planning re-entry preserves exact prior inputs, exposes stale or unknown truth,
+and recomputes only from newly accepted facts. This semantic separation does
+justify distinct acceptance boundaries when their migrations, recovery,
+evidence, and reopen conditions are independently useful; Roadmap 09 owns the
+resulting Gate topology.
+
+Inside Planning, accepted portfolio input, deterministic assessment, and
+source-bearing allocation also settle as staged facts under one authority. An
+accepted correction survives later assessment or proposal failure, and an
+assessment survives an invalid allocation; this recovery distinction does not
+create three domain authorities or a second runtime.
+
 ## Context
 
 The initial ADR-0011 runner established a real single-process Tutor loop and
@@ -59,7 +81,8 @@ One local `LearnerHome` is the logical authority for one learner across
 LearningSpaces, courses, workspaces, and Sessions. SQLite is the sole machine
 state authority. One process owns state-changing execution for a LearnerHome at
 a time. No background daemon is part of the product baseline; time-dependent
-state is derived when the application wakes.
+state is derived when the application wakes. A wake or later interaction does
+not imply that Repa observed the interval while it was not running.
 
 Courses belong directly to LearnerHome. Several Courses may remain ongoing at
 once, and a Course may use material from several LearningSpaces or approved
@@ -87,6 +110,19 @@ The architecture keeps these meanings separate:
 
 They use typed references and explicit revisions. They are not stored in one
 generic graph, event, fact, or mastery model.
+
+Assignment owns obligation identity, exact revisions, source-bearing
+correction, optional due meaning, and explicit lifecycle. Planning may consume
+an exact Assignment or Goal revision but owns accepted workload/capacity facts,
+feasibility, allocation, staleness, feedback, and recomputation instead. A
+valid Assignment may exist without a plan, and planning failure does not roll
+it back. Cross-owner create-and-plan therefore settles in stages unless a later
+application operation demonstrates a genuine all-or-none learner invariant.
+Within Planning, input, assessment, and allocation likewise have separate
+settlement so downstream failure cannot restore obsolete inputs.
+The ordinary Tutor still owns the open semantic choice of how to help the
+learner; neither Assignment disposition nor Planning arithmetic is a substitute
+for explanation, demonstration, guided work, practice, review, or adaptation.
 
 A course view uses a versioned ordered hierarchy with sparse, module-owned,
 typed and provenance-bearing relations. Material structure, learner state, and

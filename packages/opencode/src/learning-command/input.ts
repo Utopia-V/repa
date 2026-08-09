@@ -1,4 +1,5 @@
 import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
+import { Assignment } from "@opencode-ai/core/assignment"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
@@ -766,6 +767,157 @@ export const UpdateFutureAttentionInput = Schema.Struct({
 
 export type UpdateFutureAttentionInput = typeof UpdateFutureAttentionInput.Type
 
+const AssignmentText = (maximum: number) => Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(maximum))
+const AssignmentExcerpt = Schema.Struct({
+  text: AssignmentText(Assignment.MAX_EXCERPT_BYTES),
+  startByte: NonNegativeInt,
+  endByte: NonNegativeInt,
+})
+const AssignmentZone = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("source") }),
+  Schema.Struct({ type: Schema.Literal("iana"), name: AssignmentText(256) }),
+  Schema.Struct({ type: Schema.Literal("fixed_offset"), offsetMinutes: Schema.Int }),
+])
+const AssignmentBoundary = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("local_date"),
+    civilDate: AssignmentText(64),
+    comparator: Schema.Literals(["inclusive", "exclusive"]),
+    timeZone: AssignmentZone,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("instant"),
+    sourceExpression: AssignmentText(256),
+    localDateTime: AssignmentText(128),
+    comparator: Schema.Literals(["inclusive", "exclusive"]),
+    timeZone: AssignmentZone,
+    disambiguatingOffsetMinutes: Schema.optional(Schema.Int),
+  }),
+])
+const AssignmentDueBasis = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("unresolved") }),
+  Schema.Struct({ type: Schema.Literal("explicitly_no_deadline") }),
+  AssignmentBoundary,
+])
+const AssignmentScope = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("learner_home") }),
+  Schema.Struct({
+    type: Schema.Literal("courses"),
+    courseIDs: Schema.Array(Course.CourseID).check(Schema.isLengthBetween(1, Assignment.MAX_SCOPE_COURSES)),
+  }),
+])
+const AssignmentSnapshot = Schema.Struct({
+  obligationSummary: AssignmentText(Assignment.MAX_SUMMARY_BYTES),
+  learningContext: AssignmentText(Assignment.MAX_LEARNING_CONTEXT_BYTES),
+  scope: AssignmentScope,
+  dueBasis: AssignmentDueBasis,
+  expiryBoundary: Schema.optional(AssignmentBoundary),
+})
+const AssignmentOwnerRead = Schema.Struct({
+  assignmentID: Assignment.AssignmentID,
+  revisionID: Assignment.RevisionID,
+  version: NonNegativeInt,
+  ownerCutFingerprint: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
+})
+const AssignmentExpectedHead = Schema.Struct({
+  revisionID: Assignment.RevisionID,
+  version: NonNegativeInt,
+  ownerCutFingerprint: Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/)),
+})
+const AssignmentRevisionRef = Schema.Struct({
+  assignmentID: Assignment.AssignmentID,
+  revisionID: Assignment.RevisionID,
+  version: NonNegativeInt,
+})
+const AssignmentSelector = Schema.Struct({
+  locator: AssignmentText(2_048),
+  excerpt: Schema.optional(AssignmentExcerpt),
+})
+const AssignmentAttribution = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("recorded") }),
+  Schema.Struct({ type: Schema.Literal("lineage_correction"), memberID: ArtifactSchema.LineageCorrectionMemberID }),
+])
+const AssignmentObservedSource = Schema.Union([
+  Schema.Struct({
+    type: Schema.Literal("artifact_revision"),
+    artifactID: ArtifactSchema.ArtifactID,
+    revisionID: ArtifactSchema.RevisionID,
+    attribution: AssignmentAttribution,
+    selector: AssignmentSelector,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("representation_revision"),
+    representationRevisionID: Representation.RevisionID,
+    selector: AssignmentSelector,
+  }),
+])
+const AssignmentCause = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("interpreted_learner_report"), excerpt: AssignmentExcerpt }),
+  Schema.Struct({ type: Schema.Literal("interpreted_learner_direction"), excerpt: AssignmentExcerpt }),
+  Schema.Struct({ type: Schema.Literal("interpreted_source_observation"), source: AssignmentObservedSource }),
+  Schema.Struct({ type: Schema.Literal("interpreted_source_change"), source: AssignmentObservedSource }),
+  Schema.Struct({
+    type: Schema.Literal("agent_correction"),
+    rationale: AssignmentText(Assignment.MAX_RATIONALE_BYTES),
+    ownerReads: Schema.Array(AssignmentOwnerRead).check(Schema.isLengthBetween(1, Assignment.MAX_INTENTS)),
+  }),
+])
+const AssignmentSourceAction = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("preserve_predecessor_source") }),
+  Schema.Struct({ type: Schema.Literal("rebind_current_source_to_cause") }),
+])
+const AssignmentRelationAction = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("preserve") }),
+  Schema.Struct({ type: Schema.Literal("set_or_retarget"), target: AssignmentRevisionRef }),
+  Schema.Struct({
+    type: Schema.Literal("clear"),
+    finalDisposition: Schema.Literals(["open", "completed", "cancelled", "dismissed"]),
+  }),
+])
+const AssignmentUpdate = Schema.Struct({
+  type: Schema.Literals(["revise", "correct", "complete", "cancel", "dismiss", "reopen"]),
+  assignmentID: Assignment.AssignmentID,
+  expectedHead: AssignmentExpectedHead,
+  snapshot: Schema.optional(AssignmentSnapshot),
+  finalDisposition: Schema.optional(
+    Schema.Literals(["open", "completed", "cancelled", "dismissed", "superseded"]),
+  ),
+  sourceAction: AssignmentSourceAction,
+  relationAction: AssignmentRelationAction,
+  rationale: AssignmentText(Assignment.MAX_RATIONALE_BYTES),
+})
+
+export const UpdateAssignmentInput = Schema.Struct({
+  cause: AssignmentCause,
+  intents: Schema.Array(
+    Schema.Union([
+      Schema.Struct({
+        type: Schema.Literal("create"),
+        createOrdinal: NonNegativeInt,
+        snapshot: AssignmentSnapshot,
+      }),
+      AssignmentUpdate,
+      Schema.Struct({
+        type: Schema.Literal("replace"),
+        assignmentID: Assignment.AssignmentID,
+        expectedHead: AssignmentExpectedHead,
+        sourceAction: AssignmentSourceAction,
+        rationale: AssignmentText(Assignment.MAX_RATIONALE_BYTES),
+        successor: Schema.Union([
+          Schema.Struct({
+            type: Schema.Literal("create"),
+            createOrdinal: NonNegativeInt,
+            snapshot: AssignmentSnapshot,
+          }),
+          Schema.Struct({ type: Schema.Literal("bind"), target: AssignmentRevisionRef }),
+        ]),
+      }),
+    ]),
+  ).check(Schema.isLengthBetween(1, Assignment.MAX_INTENTS)),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export type UpdateAssignmentInput = typeof UpdateAssignmentInput.Type
+
 const decode = Schema.decodeUnknownSync(AcceptCourseViewRevisionInput)
 const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput)
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
@@ -779,6 +931,7 @@ const decodeGoalsV2 = Schema.decodeUnknownSync(UpdateLearnerGoalsInput)
 const decodeLearningBootstrap = Schema.decodeUnknownSync(UpdateLearningCourseInput)
 const decodeLearnerResponseEvidence = Schema.decodeUnknownSync(UpdateLearnerResponseEvidenceInput)
 const decodeFutureAttention = Schema.decodeUnknownSync(UpdateFutureAttentionInput)
+const decodeAssignment = Schema.decodeUnknownSync(UpdateAssignmentInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
   const value = decode(input)
@@ -892,6 +1045,12 @@ export function normalizeFutureAttention(input: unknown): UpdateFutureAttentionI
   return value
 }
 
+export function normalizeAssignment(input: unknown): UpdateAssignmentInput {
+  const value = decodeAssignment(input)
+  Assignment.canonicalizeCommand(value)
+  return value
+}
+
 function normalizeBoundary(input: string) {
   const value = input.trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(value)
@@ -913,6 +1072,7 @@ export function normalizeCommand(toolID: string, input: unknown) {
     return normalizeLearnerResponseEvidence(input)
   }
   if (toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) return normalizeFutureAttention(input)
+  if (toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) return normalizeAssignment(input)
   throw new Error(`Unknown reserved learning command ${toolID}`)
 }
 

@@ -64,6 +64,15 @@ const withoutRowidTables = new Set([
   "future_attention_claim_group",
   "future_attention_claim_member",
   "future_attention_claim_finalization",
+  "assignment",
+  "assignment_disposition",
+  "assignment_capability_issue",
+  "assignment_capability_settlement",
+  "assignment_effect",
+  "assignment_no_change_seal",
+  "assignment_revision",
+  "assignment_revision_scope",
+  "assignment_commit_seal",
 ])
 const args = parseArgs({
   args: process.argv.slice(2),
@@ -81,7 +90,7 @@ if (args.values.check) {
 await generate()
 
 async function generate() {
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "repa-core-migration-"))
+  const temporary = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "repa-core-migration-")))
   const incremental = path.join(temporary, "incremental")
   const full = path.join(temporary, "full")
   try {
@@ -116,7 +125,7 @@ async function generate() {
 }
 
 async function check() {
-  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "repa-core-migration-check-"))
+  const temporary = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "repa-core-migration-check-")))
   const incremental = path.join(temporary, "incremental")
   const full = path.join(temporary, "full")
   try {

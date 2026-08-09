@@ -444,6 +444,45 @@ revision without merging their identities or lifecycles. Generic commitment,
 deferral, and durable detour/rejoin remain recorded, consumer-earned future
 meanings rather than empty baseline record families.
 
+Assignment is the independently useful substantial learning-obligation
+producer. Its identity survives Planning failure and owns immutable revisions
+of a bounded obligation meaning, the learning subject/context that earns a
+teaching or Planning consumer, source basis, optional due boundary, and explicit
+lifecycle. It is not a generic registry of administrative obligations merely
+because they have deadlines. An Assignment is also not a Goal, todo, current
+task, plan line, learner promise, submission connector, or evidence that work
+occurred. Completion, cancellation, dismissal, reopening, and supersession are
+source-bearing Assignment transitions used to keep later learning decisions
+truthful; they are not product success metrics. Due/overdue relation is derived
+at read time and cannot perform a transition.
+
+Each exact Assignment revision retains immutable effective source and
+admission-at-commit bases. Current occurrence/Artifact/Representation
+availability, exact cited-revision resolvability, Course relation, and clock
+relation are separate cut-bound projections with owner-native dependencies; a
+source change cannot rewrite the revision or make an exact reference change
+payload. A source-preserving Agent correction may use the exact issuing root
+model operation as its Assignment-domain causal occurrence only when it binds an
+exact existing head and cannot create an unanchored Assignment.
+
+Planning consumes exact Goal or Assignment revisions and owns accepted
+remaining-work/capacity/progress inputs, declared shared-capacity scope,
+omission truth, feasibility, working allocation, override, feedback, staleness,
+and recomputation. A plan is conditional on those exact inputs. It is not a
+commitment or activity ledger, and time passage, silence, or absence never
+means that an allocation was followed or ignored. Re-entry keeps the old plan
+immutable, asks only for future-relevant reconciliation, and creates a
+successor from newly accepted facts. Planning supplies hard feasibility and
+trade-off facts to the ordinary Tutor; it does not optimize task-count closure
+or replace the open semantic choice of a useful teaching or learning move.
+
+Within the Planning owner, a complete immutable input revision, its
+objective-free deterministic assessment, and an optional source-bearing
+validated allocation are staged facts. A current input correction is not
+rolled back when assessment or proposal fails; a valid assessment is not lost
+when an allocation proposal is invalid. Exact head relations make older
+downstream revisions stale without rewriting them.
+
 Goals may be LearnerHome-wide, Course-scoped, or span several Courses. A Course
 therefore has no mandatory single `goal` field. Immediate Turn intent remains
 Interaction meaning unless it must survive the Session and alter later action.
@@ -522,8 +561,11 @@ is all zero; `-00:00` remains unknown and cannot become a known fixed-zero
 basis. A descriptive or named-zone expression retains its tagged basis without
 pretending to be an independently parsed exact offset.
 
-Cross-day planning waits for representative Goal-driven and Assignment-driven
-multi-day workload, capacity, allocation, correction, and recomputation
+Assignment admission and cross-day Planning now have distinct acceptance
+boundaries. Assignment first proves obligation identity/revision/lifecycle and
+an exact consumer handoff without importing workload or allocation. Planning
+then proves representative Goal-driven and Assignment-driven multi-day
+workload, shared capacity, allocation, correction, staleness, and recomputation
 behavior. The withdrawn minute-scale emergency schema and its compatibility
 tombstone are not design inputs.
 
@@ -531,9 +573,18 @@ tombstone are not design inputs.
 
 Tutor composition queries bounded projections from the authorities above. One
 context cut records the exact Interaction position, Course/View revisions,
-material/representation revisions, learner, Goal, future-attention,
-Assignment, planning and policy revisions, trusted time, and granted
-capabilities actually shown to one model sample.
+material/representation revisions, learner, Goal, future-attention, Assignment,
+planning and policy revisions, trusted time, and granted capabilities actually
+shown to one model sample. The cut distinguishes an exact Assignment revision
+from exact Planning input, assessment, and allocation revisions and records
+pending/stale/unknown/omitted truth; it never turns clock passage or visibility
+into Assignment lifecycle, activity, or plan adherence.
+
+For Assignment, the cut records the immutable revision reference and any
+current source/scope/time projection as distinct entries in its dependency
+manifest. Provider retry preserves both at the admitted cut; only a fresh cut
+may bind a later source-owner status, while current byte access still performs
+owner admission rather than treating the old projection as a live guarantee.
 
 The cut is an audit manifest and records candidate dependencies for
 command-specific stale checks. It is not itself a universal stale-write
@@ -569,8 +620,8 @@ but each family first appears only with a demonstrated consumer:
 | cross-Session learner intent    | Goal identity and revision                 | learner-owned source, scope, correction, and supersession; no automatic attainment inference                                                                                |
 | retained learner direction      | scoped steering policy                     | source-linked applicability and correction projected through an exact policy revision                                                                                       |
 | future return                   | future-attention concern, claim finalization, and service | Agent-authored source/correction provenance, eligibility, conditional purpose, immutable claim admission, append-only finalization, and service through a purpose-appropriate complete Interaction occurrence/outcome remain distinct from physical replay |
-| substantial obligation          | Assignment identity and revision           | obligation and its correction remain distinct from Goal identity and planning arithmetic                                                                                    |
-| substantial cross-day work      | planning demand and allocation              | references an exact Goal or Assignment revision; accepted workload, capacity, progress, infeasibility, learner override, and recomputation use program-owned arithmetic      |
+| substantial learning obligation | Assignment identity and immutable revision | bounded obligation plus learning context, source basis, optional due meaning, explicit lifecycle, and correction remain distinct from Goal, planning, commitment, activity, administrative task tracking, and submission effects |
+| substantial cross-day work      | Planning input, assessment, and allocation revisions | references exact Goal/Assignment and accepted-input revisions; staged shared-capacity scope, omission/staleness, feasibility, source-bearing validated allocation, override, and recomputation use program-owned arithmetic without inferring adherence |
 
 An accepted Gate may establish any causally sound subset whose invariants and
 integration boundary are real. This document neither authorizes empty future
@@ -642,7 +693,8 @@ does not select one answer yet:
   continuity; and
 - retention, evidence aggregation, review scheduling, and long-horizon planning
   algorithms;
-- cross-day planning-demand encoding across exact Goal and Assignment revisions;
+- production representation and bounded widening rules for cross-day planning
+  after its accepted owner contract and experiment falsifiers;
 - additional steering scopes and multiple-candidate future-attention
   arbitration;
 - whether a future consumer earns generic commitment, deferral, or durable

@@ -1,6 +1,7 @@
 export * as LearningCommandPresentation from "./presentation"
 
 import { Course } from "@opencode-ai/core/course"
+import { Assignment } from "@opencode-ai/core/assignment"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
@@ -30,6 +31,7 @@ type Capability =
   | typeof LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY
   | typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
   | typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
+  | typeof LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
 
 type BindingInput = Readonly<{
   sessionID: string
@@ -335,6 +337,63 @@ export function futureAttentionSettlementResult(
     ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
     ...(effect ? { effect } : {}),
   })
+}
+
+export function assignmentCapability(candidate: Assignment.Candidate, envelope: BindingInput) {
+  if (candidate.agentAction.kind !== "root") throw new Error("Assignment capability requires a root Agent action")
+  return SemanticPresentation.proposal({
+    kind: "assignment_capability",
+    binding: binding(envelope),
+    commandFingerprint: candidate.commandFingerprint,
+    issuance: "root",
+    scope: SemanticPresentation.assignmentScope(candidate),
+  })
+}
+
+export function assignmentSettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  state: Assignment.InvocationVersion,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed Assignment settlement has no exact error code")
+  }
+  const effect = assignmentEffect(settlement)
+  if (state.candidate?.agentAction.kind === "delegated") {
+    throw new Error("Assignment settlement contains an illegal delegated Agent action")
+  }
+  return SemanticPresentation.result({
+    kind: "assignment_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition: state.disposition,
+    ...(state.semanticTerminal ? { semanticOutcome: state.semanticTerminal.outcome } : {}),
+    ...(state.candidate ? { issuance: "root" as const } : {}),
+    ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+    ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+    ...(effect ? { effect } : {}),
+  })
+}
+
+function assignmentEffect(settlement: LearningCommand.PhysicalSettlement) {
+  if (settlement.outcome === "error" || !("assignmentKind" in settlement) || settlement.assignmentKind !== "change_set") {
+    return undefined
+  }
+  const value = settlement as unknown as
+    | Assignment.AppliedSettlement
+    | Assignment.AlreadyAppliedSettlement
+    | Assignment.NoChangeSettlement
+  return {
+    ...(value.outcome === "already_applied" ? { existingOutcome: value.existingOutcome } : {}),
+    ...(value.outcome === "applied" || (value.outcome === "already_applied" && value.existingOutcome === "applied")
+      ? { effectID: value.effectID }
+      : {}),
+    changes: value.outcome === "no_change" ? [] : structuredClone(value.changes),
+    intentResults: structuredClone(value.intentResults),
+  }
 }
 
 function futureAttentionEffect(settlement: LearningCommand.PhysicalSettlement) {

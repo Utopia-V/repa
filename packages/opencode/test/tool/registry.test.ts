@@ -24,6 +24,7 @@ import type { Tool as MCPToolDef } from "@modelcontextprotocol/sdk/types.js"
 import { assertExternalToolID, toolCallPreparation } from "@/tool/learning-command"
 import { Permission } from "@/permission"
 import { Course } from "@opencode-ai/core/course"
+import { Assignment } from "@opencode-ai/core/assignment"
 import { Database } from "@opencode-ai/core/database/database"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
@@ -672,6 +673,7 @@ describe("tool.registry", () => {
         "update_learner_goals",
         "update_learner_response_evidence",
         "update_future_attention",
+        "update_assignment",
         "update_learning_course",
       ]) {
         const tool = tools.find((item) => item.id === id)
@@ -697,6 +699,8 @@ describe("tool.registry", () => {
       expect(defaults).toContain("update_learner_response_evidence")
       expect(defaults).toContain("future_attention_read")
       expect(defaults).toContain("update_future_attention")
+      expect(defaults).toContain("assignment_read")
+      expect(defaults).toContain("update_assignment")
       expect(defaults).toContain("update_learning_course")
       expect(gate18Reads.filter((id) => defaults.includes(id))).toEqual(gate18Reads)
 
@@ -716,6 +720,8 @@ describe("tool.registry", () => {
       expect(restricted).not.toContain("update_learner_response_evidence")
       expect(restricted).not.toContain("future_attention_read")
       expect(restricted).not.toContain("update_future_attention")
+      expect(restricted).not.toContain("assignment_read")
+      expect(restricted).not.toContain("update_assignment")
       expect(restricted).not.toContain("update_learning_course")
       expect(restricted.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -772,6 +778,26 @@ describe("tool.registry", () => {
       expect(evidenceWriter).toContain("update_learner_response_evidence")
       expect(evidenceWriter).not.toContain("learner_response_evidence_read")
 
+      const assignmentReader = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", assignment_read: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(assignmentReader).toContain("assignment_read")
+      expect(assignmentReader).not.toContain("update_assignment")
+
+      const assignmentWriter = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", update_assignment: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(assignmentWriter).toContain("update_assignment")
+      expect(assignmentWriter).not.toContain("assignment_read")
+
       const delegated = (yield* registry.tools({
         ...model,
         authority: [
@@ -788,6 +814,8 @@ describe("tool.registry", () => {
       expect(delegated).not.toContain("learning_material_query")
       expect(delegated).not.toContain("future_attention_read")
       expect(delegated).not.toContain("update_future_attention")
+      expect(delegated).not.toContain("assignment_read")
+      expect(delegated).not.toContain("update_assignment")
       expect(delegated).not.toContain("update_learning_course")
       expect(delegated.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -802,6 +830,18 @@ describe("tool.registry", () => {
       })).map((tool) => tool.id)
       expect(delegatedGoalReader).toContain("learner_goal_query")
       expect(delegatedGoalReader).not.toContain("update_learner_goals")
+
+      const delegatedAssignmentReader = (yield* registry.tools({
+        ...model,
+        authority: [
+          {
+            ruleset: Permission.fromConfig({ assignment_read: "allow", update_assignment: "allow" }),
+            absence: "deny",
+          },
+        ],
+      })).map((tool) => tool.id)
+      expect(delegatedAssignmentReader).toContain("assignment_read")
+      expect(delegatedAssignmentReader).not.toContain("update_assignment")
 
       const delegatedBootstrap = (yield* registry.tools({
         ...model,
@@ -1162,6 +1202,86 @@ describe("tool.registry", () => {
     }),
   )
 
+  it.instance("publishes closed Assignment write/read tools and keeps exact owner reads non-mutating", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const db = (yield* Database.Service).db
+      const agent = yield* agents.defaultInfo()
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })
+      const command = tools.find((tool) => tool.id === Assignment.UPDATE_CAPABILITY)
+      const query = tools.find((tool) => tool.id === Assignment.READ_CAPABILITY)
+      if (!command || !query) return yield* Effect.die("Assignment command/read tools are unavailable")
+
+      expect(command.description).toContain(
+        "existing, source-relative, substantial learning obligation",
+      )
+      expect(command.description).toContain("real later teaching, guided-work, review, or Planning consumer")
+      for (const exclusion of [
+        "self-promise",
+        "dated Goal",
+        "Tutor-proposed practice",
+        "administrative deadline",
+        "no-consumer obligation",
+      ]) {
+        expect(command.description).toContain(exclusion)
+      }
+      expect(command.description).toContain(
+        "interpreted_learner_report and interpreted_source_observation are the only creation causes",
+      )
+      expect(command.description).toContain("a learner direction may only dismiss or reactivate")
+      expect(command.description).toContain("agent_correction requires exact current Assignment owner reads")
+      expect((command.jsonSchema as { additionalProperties?: boolean }).additionalProperties).toBe(false)
+      expect(
+        (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
+          (branch) => branch.additionalProperties,
+        ),
+      ).toEqual([false, false, false, false, false])
+      const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+      const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+      const result = JSON.parse(
+        (yield* query.execute(
+          { action: "discover", disposition: "open", limit: 3 },
+          {
+            sessionID: SessionID.descending(),
+            messageID: MessageID.ascending(),
+            agent: agent.name,
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )).output,
+      )
+      expect(result).toMatchObject({
+        page: {
+          items: [],
+          countAtCut: 0,
+          returnedCount: 0,
+          omittedCount: 0,
+          order: "identity_creation_then_assignment_id_non_priority",
+        },
+      })
+      expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(before)
+      expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontier)
+      expect(
+        yield* db.get(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation) AS invocations,
+            (SELECT count(*) FROM assignment_disposition) AS dispositions,
+            (SELECT count(*) FROM assignment_capability_issue) AS issues,
+            (SELECT count(*) FROM assignment_capability_settlement) AS settlements,
+            (SELECT count(*) FROM assignment_effect) AS effects
+        `),
+      ).toEqual({ invocations: 0, dispositions: 0, issues: 0, settlements: 0, effects: 0 })
+      expect(Assignment.PERMISSION_PATTERN).toBe("assignment")
+    }),
+  )
+
   it.instance("derives one permission catalog from active tools", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
@@ -1172,6 +1292,8 @@ describe("tool.registry", () => {
       expect(catalog).toContain("update_learner_goals")
       expect(catalog).toContain("update_future_attention")
       expect(catalog).toContain("future_attention_read")
+      expect(catalog).toContain("update_assignment")
+      expect(catalog).toContain("assignment_read")
       expect(catalog).toContain("content_mutation")
       expect(catalog).not.toContain("content_write")
       expect(catalog).not.toContain("invalid")

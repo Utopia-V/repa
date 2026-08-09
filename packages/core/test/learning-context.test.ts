@@ -200,6 +200,7 @@ describe("LearningContext", () => {
       "interaction",
       "learner_response_evidence",
       "future_attention",
+      "assignment",
     ])
     expect(
       prepared.cut.sections.every(
@@ -463,7 +464,9 @@ function freezeGate19Cut(current: Cut) {
       ...current.capabilityBasis,
       catalogVersion: GATE19_CAPABILITY_CATALOG_VERSION,
     },
-    sections: current.sections.filter((section) => section.owner !== "future_attention"),
+    sections: current.sections.filter(
+      (section) => section.owner !== "future_attention" && section.owner !== "assignment",
+    ),
   } as const
   const entryCounts = Object.fromEntries(base.sections.map((section) => [section.owner, section.entries.length]))
   let canonicalBytes = 0

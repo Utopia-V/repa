@@ -571,6 +571,68 @@ export function prepareRevisionReferenceInTransaction(
   })
 }
 
+/**
+ * Metadata-only status for an exact cited Artifact revision. Active source
+ * availability and exact revision resolvability are independent facts; this
+ * read never requires current bytes and performs no storage I/O or write.
+ */
+export function inspectRevisionStatusAtCut(
+  tx: Transaction,
+  input: {
+    readonly artifactID: ArtifactID
+    readonly revisionID: RevisionID
+    readonly attribution: AttributionBasis
+    readonly asOf: number
+  },
+) {
+  return Effect.gen(function* () {
+    const artifact = yield* getArtifactInfo(tx, input.artifactID).pipe(
+      Effect.map((value) => ({ type: "available" as const, value })),
+      Effect.catch((error) => {
+        if (error instanceof NotFoundError) return Effect.succeed({ type: "missing" as const })
+        return Effect.fail(error)
+      }),
+    )
+    const revision = yield* exactRevision(tx, input.artifactID, input.revisionID, input.attribution).pipe(
+      Effect.map((value) => ({ type: "resolvable" as const, value })),
+      Effect.catch((error) => {
+        if (error instanceof NotFoundError) return Effect.succeed({ type: "unavailable" as const })
+        return Effect.fail(error)
+      }),
+    )
+    return {
+      owner: "artifact" as const,
+      artifactID: input.artifactID,
+      revisionID: input.revisionID,
+      attribution: input.attribution,
+      asOf: input.asOf,
+      activeSource:
+        artifact.type !== "available"
+          ? { state: "artifact_not_found" as const }
+          : Math.max(artifact.value.timeUpdated, artifact.value.source.timeUpdated) > input.asOf
+            ? {
+                state: "changed_after_as_of" as const,
+                latestTimeUpdated: Math.max(artifact.value.timeUpdated, artifact.value.source.timeUpdated),
+              }
+            : expectedSource(artifact.value),
+      exactRevision:
+        revision.type === "resolvable" && revision.value.timeFirstObserved <= input.asOf
+          ? {
+              state: "resolvable" as const,
+              id: revision.value.id,
+              recordedArtifactID: revision.value.recordedArtifactID,
+              effectiveArtifactID: revision.value.effectiveArtifactID,
+              attribution: revision.value.attribution,
+              fingerprint: revision.value.fingerprint,
+              timeFirstObserved: revision.value.timeFirstObserved,
+            }
+          : revision.type === "resolvable"
+            ? { state: "observed_after_as_of" as const, timeFirstObserved: revision.value.timeFirstObserved }
+            : { state: "unavailable" as const },
+    }
+  })
+}
+
 export function requireRevisionReference(tx: Transaction, proof: RevisionReferenceProof) {
   return Effect.gen(function* () {
     const expected = proof instanceof RevisionReferenceProof ? proof.expectation(revisionReferenceToken) : undefined

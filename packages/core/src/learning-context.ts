@@ -4,6 +4,7 @@ export * from "./learning-context/capacity"
 import { eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import type { Turn } from "@opencode-ai/schema/turn"
+import { Assignment } from "./assignment"
 import { Course } from "./course"
 import type { Database } from "./database/database"
 import { FutureAttention } from "./future-attention"
@@ -20,6 +21,10 @@ import {
   CAPABILITY_CATALOG_VERSION,
   CutCapacityError,
   CutIntegrityError,
+  GATE20_CAPABILITY_CATALOG_VERSION,
+  GATE20_LAZY_READ_CAPABILITY_IDS,
+  GATE20_POLICY_VERSION,
+  GATE20_RENDERER_VERSION,
   GATE19_CAPABILITY_CATALOG_VERSION,
   GATE19_LAZY_READ_CAPABILITY_IDS,
   GATE19_POLICY_VERSION,
@@ -30,6 +35,7 @@ import {
   LEGACY_POLICY_VERSION,
   LEGACY_RENDERER_VERSION,
   MAX_CANONICAL_BYTES,
+  MAX_ASSIGNMENT_CONTEXT_ENTRIES,
   MAX_CANDIDATES_PER_FAMILY,
   MAX_ENTRY_BYTES,
   MAX_INTERACTION_CANDIDATES,
@@ -49,6 +55,8 @@ import {
   type Cut,
   type CutRead,
   type Entry,
+  type AssignmentContextMode,
+  type AssignmentContextOwnerCut,
   type JsonValue,
   type Operation,
   type Section,
@@ -70,7 +78,8 @@ export type PrepareInput = Readonly<{
 
 const legacyOwners = ["course", "learner_navigation", "learner_goal", "material", "interaction"] as const
 const gate19Owners = [...legacyOwners, "learner_response_evidence"] as const
-const currentOwners = [...gate19Owners, "future_attention"] as const
+const gate20Owners = [...gate19Owners, "future_attention"] as const
+const currentOwners = [...gate20Owners, "assignment"] as const
 const sectionPolicy = {
   course: {
     scope: "eligible_courses_and_structurally_referenced_default",
@@ -100,6 +109,10 @@ const sectionPolicy = {
   future_attention: {
     scope: "all_due_open_target_current_concerns_in_learner_home",
     selectionBasis: "not_before_then_created_then_id_non_priority",
+  },
+  assignment: {
+    scope: "all_current_open_assignment_heads_in_learner_home",
+    selectionBasis: "identity_creation_then_assignment_id_audit_order_not_priority",
   },
 } as const
 const withheldSelectionBasis = "automatic_context_capability_withheld" as const
@@ -286,6 +299,10 @@ function projectSections(tx: Transaction, input: PrepareInput) {
       now: input.retainedSteering.cutAsOf,
       limit: MAX_CANDIDATES_PER_FAMILY,
     })
+    const assignments = yield* Assignment.listOpenForContext(tx, {
+      asOf: input.retainedSteering.cutAsOf,
+      limit: MAX_ASSIGNMENT_CONTEXT_ENTRIES,
+    })
     const courseEntries = orderedCourses.map((value) =>
       value.status === "unavailable"
         ? entry("course", {
@@ -413,6 +430,30 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         input.operation.assistantMessageID,
       ),
     )
+    const assignmentEntries = assignments.candidates.map(({ assignment, projection }) =>
+      assignmentEntry(
+        {
+          assignmentID: assignment.id,
+          timeCreated: assignment.timeCreated,
+          revisionID: projection.revision.id,
+          version: projection.revision.version,
+          timeCommitted: projection.revision.timeCommitted,
+          commitOrder: projection.revision.commitOrder,
+          frontierSequence: projection.revision.frontierSequence,
+          immutableSourceBasisAtCommit: assignmentSourceBasisReference(
+            projection.revision.effectiveSourceBasisAtCommit,
+          ),
+          sourceAdmissionBasisAtCommit: assignmentSourceAdmissionReference(
+            projection.revision.sourceAdmissionBasisAtCommit,
+          ),
+          sourceStatusAtCut: assignmentSourceStatusReference(projection.sourceStatusAtCut),
+          scopeCurrentRelationsAtCut: projection.scopeCurrentRelationsAtCut,
+          lazyReadAvailable: lazy.has("assignment_read"),
+        },
+        Assignment.semanticValueFor(projection),
+        input.operation.assistantMessageID,
+      ),
+    )
     return [
       section(
         "course",
@@ -473,6 +514,7 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         futureAttention.countAtCut,
         futureAttentionEntries,
       ),
+      assignmentSection(assignments, assignmentEntries),
     ] satisfies Section[]
   })
 }
@@ -541,7 +583,7 @@ function entry(kind: Entry["kind"], locator: unknown, semantic?: unknown): Entry
 }
 
 function section(
-  owner: Section["owner"],
+  owner: Exclude<Section["owner"], "assignment">,
   scope: string,
   selectionBasis: string,
   countAtCut: number,
@@ -573,6 +615,45 @@ function section(
   }
 }
 
+function assignmentSection(
+  projection: Assignment.ContextProjection,
+  entries: readonly Entry[],
+): Extract<Section, { owner: "assignment"; countAtCut: number }> {
+  const coverage =
+    projection.countAtCut === 0
+      ? "empty"
+      : entries.length < projection.countAtCut
+        ? "truncated"
+        : entries.some((item) => item.semantic?.state === "locator_only")
+          ? "locator_only"
+          : "complete"
+  return {
+    owner: "assignment",
+    scope: sectionPolicy.assignment.scope,
+    selectionBasis: sectionPolicy.assignment.selectionBasis,
+    coverage,
+    countAtCut: projection.countAtCut,
+    omission:
+      entries.length < projection.countAtCut
+        ? {
+            type: "exact",
+            omitted: projection.countAtCut - entries.length,
+            reasons: [{ reason: "candidate_limit", omitted: projection.countAtCut - entries.length }],
+          }
+        : { type: "none" },
+    entries,
+    assignmentOwnerCut: projection.ownerCut,
+    asOf: projection.asOf,
+    mode: assignmentMode(projection.countAtCut),
+  }
+}
+
+function assignmentMode(countAtCut: number): AssignmentContextMode {
+  if (countAtCut === 0) return "none"
+  if (countAtCut === 1) return "sole_candidate_pressure"
+  return "multiple_candidate_pressure"
+}
+
 function uniqueEndpoints(input: readonly Course.MembershipEndpoint[]) {
   return [...new Map(input.map((item) => [canonicalJson(toJsonValue(item)), item])).values()].toSorted((left, right) =>
     ordinal(canonicalJson(toJsonValue(left)), canonicalJson(toJsonValue(right))),
@@ -582,6 +663,77 @@ function uniqueEndpoints(input: readonly Course.MembershipEndpoint[]) {
 function exactFieldReference(value: unknown) {
   const canonical = canonicalJson(toJsonValue(value))
   return { canonicalBytes: utf8Bytes(canonical), fingerprint: sha256(canonical) }
+}
+
+function assignmentSourceBasisReference(value: Assignment.EffectiveSourceBasis) {
+  const reference = exactFieldReference(value)
+  if (value.type === "learner_occurrence") return { type: value.type, occurrenceID: value.occurrenceID, reference }
+  if (value.type === "artifact_revision") {
+    return {
+      type: value.type,
+      artifactID: value.artifactID,
+      revisionID: value.revisionID,
+      attribution: value.attribution,
+      locatorDigest: value.selector.locatorDigest,
+      reference,
+    }
+  }
+  return {
+    type: value.type,
+    representationRevisionID: value.representationRevisionID,
+    locatorDigest: value.selector.locatorDigest,
+    reference,
+  }
+}
+
+function assignmentSourceAdmissionReference(value: Assignment.SourceAdmissionBasis) {
+  return {
+    type: value.type,
+    ...(value.type === "assignment_owner_read" ? { ownerReadCount: value.ownerReads.length } : {}),
+    reference: exactFieldReference(value),
+  }
+}
+
+function assignmentSourceStatusReference(value: Assignment.SourceStatusAtCut) {
+  return {
+    sourceOwner: value.sourceOwner,
+    exactSourceLocator: value.exactSourceLocator,
+    ownerRecordedState: assignmentOwnerStateReference(value.ownerRecordedState),
+    exactOwnerDependency: value.exactOwnerDependency,
+    asOf: value.asOf,
+  }
+}
+
+function assignmentOwnerStateReference(value: Readonly<{ readonly [key: string]: unknown }>) {
+  const reference = exactFieldReference(value)
+  if (typeof value.state === "string") return { state: value.state, reference }
+  if (record(value.activeSource) || record(value.exactRevision)) {
+    return {
+      ...(record(value.activeSource) ? { activeSource: assignmentStatusFields(value.activeSource) } : {}),
+      ...(record(value.exactRevision) ? { exactRevision: assignmentStatusFields(value.exactRevision) } : {}),
+      reference,
+    }
+  }
+  const representation = record(value.representation) ? value.representation : undefined
+  return {
+    ...(representation && record(representation.availability)
+      ? {
+          representation: {
+            ...(typeof representation.id === "string" ? { id: representation.id } : {}),
+            availability: assignmentStatusFields(representation.availability),
+          },
+        }
+      : {}),
+    ...(record(value.currentUse) ? { currentUse: assignmentStatusFields(value.currentUse) } : {}),
+    currentArtifactAvailable: value.currentArtifact !== undefined,
+    continuedUseGrantAvailable: value.activeContinuedUseGrant !== undefined,
+    reference,
+  }
+}
+
+function assignmentStatusFields(value: Record<string, unknown>) {
+  const names = ["state", "status", "cause", "availability", "disposition", "reason", "version", "id"]
+  return Object.fromEntries(names.flatMap((name) => (value[name] === undefined ? [] : [[name, value[name]]])))
 }
 
 function compactCourseDependency(value: Course.PreferenceTargetStatus | undefined) {
@@ -615,6 +767,9 @@ type MutableSection = {
   omission: Section["omission"]
   entries: Entry[]
   candidateCount: number
+  assignmentOwnerCut?: AssignmentContextOwnerCut
+  asOf?: number
+  mode?: AssignmentContextMode
 }
 
 function fit(base: CutBase): Preparation {
@@ -627,7 +782,7 @@ function fit(base: CutBase): Preparation {
     try {
       return finalize({
         ...base,
-        sections: sections.map(({ candidateCount: _, ...section }) => section),
+        sections: sections.map(({ candidateCount: _, ...section }) => section as Section),
       })
     } catch (error) {
       if (!(error instanceof CutCapacityError)) throw error
@@ -664,10 +819,13 @@ function fit(base: CutBase): Preparation {
 function removableEntry(sections: MutableSection[]) {
   const candidates = sections.flatMap((section, ownerOrder) =>
     section.entries.flatMap((_, index) => {
-      if (section.owner === "future_attention" && section.countAtCut === 1) return []
+      if ((section.owner === "future_attention" || section.owner === "assignment") && section.countAtCut === 1) {
+        return []
+      }
       if (
         section.owner !== "learner_response_evidence" &&
         section.owner !== "future_attention" &&
+        section.owner !== "assignment" &&
         (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0)
       )
         return []
@@ -676,8 +834,10 @@ function removableEntry(sections: MutableSection[]) {
           section,
           index,
           tier:
-            section.owner === "future_attention"
-              ? 4
+            section.owner === "assignment"
+              ? 5
+              : section.owner === "future_attention"
+                ? 4
               : section.owner === "learner_response_evidence"
                 ? 3
                 : section.owner === "learner_navigation"
@@ -714,6 +874,7 @@ function lastSemanticValue(sections: MutableSection[]) {
   for (const section of [...sections].reverse()) {
     if (section.owner === "learner_response_evidence") continue
     if (section.owner === "future_attention" && section.countAtCut === 1) continue
+    if (section.owner === "assignment" && section.countAtCut === 1) continue
     for (let index = section.entries.length - 1; index >= 0; index--) {
       if (section.entries[index]?.semantic?.state === "value") return { section, index }
     }
@@ -769,6 +930,9 @@ function finalize(base: CutBase): Preparation {
 
 function renderValue(cut: Cut) {
   if (cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION) {
+    return renderGate20AValue(cut)
+  }
+  if (cut.policyVersion === GATE20_POLICY_VERSION && cut.rendererVersion === GATE20_RENDERER_VERSION) {
     return renderGate20Value(cut)
   }
   return renderFrozenValue(cut)
@@ -829,6 +993,50 @@ function renderGate20Value(cut: Cut) {
   ].join("\n")
 }
 
+function renderGate20AValue(cut: Cut) {
+  const futureAttentionSection = cut.sections.find((item) => item.owner === "future_attention")!
+  const futureAttention =
+    futureAttentionSection.coverage === "not_authorized"
+      ? "futureAttention: automatic contribution withheld by the effective capability basis."
+      : futureAttentionSection.countAtCut === 0
+        ? "futureAttention: none eligible at this immutable cut."
+        : futureAttentionSection.countAtCut === 1
+          ? "futureAttention: conditional_default. The exact current learner request overrides an overlapping present action; otherwise realize the sole complete concern naturally. Do not narrate concern IDs, lifecycle labels, precedence machinery, or internal control vocabulary. Override alone does not serve, dismiss, or otherwise mutate the concern."
+          : `futureAttention: multiple_unresolved; exactEligibleCount=${futureAttentionSection.countAtCut}. Candidate order is deterministic storage order, never priority. Honor an exact current learner request; otherwise make a transparent reversible local choice or ask a learning-level clarification when the difference matters. Do not claim the program selected the first row or ask the learner to manage internal IDs/state.`
+  const assignmentSection = cut.sections.find((item) => item.owner === "assignment")!
+  const assignment =
+    assignmentSection.coverage === "not_authorized"
+      ? "assignment: automatic contribution withheld by the effective capability basis."
+      : assignmentSection.mode === "none"
+        ? "assignment: no current open Assignment pressure at this immutable cut."
+        : assignmentSection.mode === "sole_candidate_pressure"
+          ? "assignment: sole_candidate_pressure. One complete learning-related obligation is visible, but it is not the current/default task, a priority, a plan, a commitment, activity, progress, a learning result, or a selected Tutor move. Honor the exact learner request and use the exact owner read when detail matters."
+          : `assignment: multiple_candidate_pressure; exactOpenCount=${assignmentSection.countAtCut}; omission=${canonicalJson(toJsonValue(assignmentSection.omission))}. Candidate order is deterministic audit/pagination order, never priority. Honor an exact learner request; otherwise make only a transparent reversible local learning choice or ask a learning-level clarification when the difference matters. No retained row is a program-selected winner.`
+  return [
+    "[Repa learning context — protected]",
+    `schemaVersion: ${cut.schemaVersion}; policyVersion: ${cut.policyVersion}; rendererVersion: ${cut.rendererVersion}`,
+    `cutFingerprint: ${cut.fingerprint}`,
+    `cutAsOf: ${cut.cutAsOf}; throughSharedFrontier: ${canonicalJson(toJsonValue(cut.throughSharedFrontier))}`,
+    `retainedSteering: ${canonicalJson(toJsonValue(cut.retainedSteering))}`,
+    `capabilityBasis: ${canonicalJson(
+      toJsonValue({
+        catalogVersion: cut.capabilityBasis.catalogVersion,
+        policyFingerprint: cut.capabilityBasis.policyFingerprint,
+        effectiveAutomaticContext: cut.capabilityBasis.effectiveAutomaticContext,
+        effectiveLazyReadCapabilities: cut.capabilityBasis.effectiveLazyReadCapabilities,
+        providerToolSurface: cut.capabilityBasis.effectiveProviderToolSurfaceBinding,
+      }),
+    )}`,
+    futureAttention,
+    "Future attention is a conditional default, not service, evidence, mastery, progress, priority, or a durable selected Tutor move.",
+    assignment,
+    "Assignment context is obligation pressure for learning help, not task administration or evidence that work happened. Time, silence, absence, and elapsed due periods imply no activity, zero progress, breach, completion, or lifecycle transition.",
+    `sections (canonical order is not priority): ${canonicalJson(toJsonValue(cut.sections))}`,
+    "This is a bounded observation condition for this sample, not learning truth, priority, mastery, progress, or a selected Tutor move. Use exact owner reads when available; never infer missing detail or authorization from a locator.",
+    "[/Repa learning context]",
+  ].join("\n")
+}
+
 function validateStored(canonicalCut: string, renderedBlock: string, assistantMessageID: MessageID) {
   let parsed: unknown
   try {
@@ -878,9 +1086,11 @@ function validateCut(cut: Cut) {
       ? legacyOwners
       : cut.policyVersion === GATE19_POLICY_VERSION && cut.rendererVersion === GATE19_RENDERER_VERSION
         ? gate19Owners
-        : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
-          ? currentOwners
-          : undefined
+        : cut.policyVersion === GATE20_POLICY_VERSION && cut.rendererVersion === GATE20_RENDERER_VERSION
+          ? gate20Owners
+          : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
+            ? currentOwners
+            : undefined
   if (
     !record(cut) ||
     !keys(cut, [
@@ -912,7 +1122,9 @@ function validateCut(cut: Cut) {
         ? LEGACY_CAPABILITY_CATALOG_VERSION
         : cut.policyVersion === GATE19_POLICY_VERSION
           ? GATE19_CAPABILITY_CATALOG_VERSION
-          : CAPABILITY_CATALOG_VERSION,
+          : cut.policyVersion === GATE20_POLICY_VERSION
+            ? GATE20_CAPABILITY_CATALOG_VERSION
+            : CAPABILITY_CATALOG_VERSION,
     ) ||
     !Array.isArray(cut.sections) ||
     cut.sections.length !== expectedOwners.length ||
@@ -976,6 +1188,7 @@ function capability(
   expectedCatalogVersion:
     | typeof LEGACY_CAPABILITY_CATALOG_VERSION
     | typeof GATE19_CAPABILITY_CATALOG_VERSION
+    | typeof GATE20_CAPABILITY_CATALOG_VERSION
     | typeof CAPABILITY_CATALOG_VERSION,
 ): value is CapabilityBasis {
   const catalog =
@@ -983,7 +1196,9 @@ function capability(
       ? LEGACY_LAZY_READ_CAPABILITY_IDS
       : expectedCatalogVersion === GATE19_CAPABILITY_CATALOG_VERSION
         ? GATE19_LAZY_READ_CAPABILITY_IDS
-        : LAZY_READ_CAPABILITY_IDS
+        : expectedCatalogVersion === GATE20_CAPABILITY_CATALOG_VERSION
+          ? GATE20_LAZY_READ_CAPABILITY_IDS
+          : LAZY_READ_CAPABILITY_IDS
   if (
     !record(value) ||
     !keys(value, [
@@ -1134,9 +1349,19 @@ function transportIdentity(value: unknown) {
 }
 
 function sectionShape(value: unknown, owner: Section["owner"]): value is Section {
+  const assignmentAuthorized = record(value) && owner === "assignment" && value.coverage !== "not_authorized"
   return (
     record(value) &&
-    keys(value, ["owner", "scope", "selectionBasis", "coverage", "countAtCut", "omission", "entries"]) &&
+    keys(value, [
+      "owner",
+      "scope",
+      "selectionBasis",
+      "coverage",
+      "countAtCut",
+      "omission",
+      "entries",
+      ...(assignmentAuthorized ? ["assignmentOwnerCut", "asOf", "mode"] : []),
+    ]) &&
     value.owner === owner &&
     value.scope === sectionPolicy[owner].scope &&
     sectionSelectionBasis(value, owner) &&
@@ -1149,7 +1374,21 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
     value.entries.every(entryShape) &&
     value.entries.every((entry) => entryOwner(entry, owner)) &&
     sectionAlgebra(value as unknown as Section) &&
-    value.entries.length <= sectionLimit(owner)
+    value.entries.length <= sectionLimit(owner) &&
+    (!assignmentAuthorized || assignmentSectionHeader(value))
+  )
+}
+
+function assignmentSectionHeader(value: Record<string, unknown>) {
+  return (
+    record(value.assignmentOwnerCut) &&
+    keys(value.assignmentOwnerCut, ["frontierSequence", "frontierTime", "headCount", "fingerprint"]) &&
+    integer(value.assignmentOwnerCut.frontierSequence) &&
+    integer(value.assignmentOwnerCut.frontierTime) &&
+    integer(value.assignmentOwnerCut.headCount) &&
+    digest(value.assignmentOwnerCut.fingerprint) &&
+    integer(value.asOf) &&
+    ["none", "sole_candidate_pressure", "multiple_candidate_pressure"].includes(String(value.mode))
   )
 }
 
@@ -1174,7 +1413,10 @@ function sectionSetSemantics(cut: Cut) {
   }
   return (
     cut.sections.every((section) => section.coverage !== "not_authorized") &&
-    (cut.policyVersion !== POLICY_VERSION || futureAttentionSectionSemantics(cut))
+    (cut.policyVersion === LEGACY_POLICY_VERSION ||
+      cut.policyVersion === GATE19_POLICY_VERSION ||
+      futureAttentionSectionSemantics(cut)) &&
+    (cut.policyVersion !== POLICY_VERSION || assignmentSectionSemantics(cut))
   )
 }
 
@@ -1186,6 +1428,36 @@ function futureAttentionSectionSemantics(cut: Cut) {
     return section.coverage === "complete" && section.entries.length === 1 && section.entries[0]?.semantic?.state === "value"
   }
   return section.entries.length <= section.countAtCut
+}
+
+function assignmentSectionSemantics(cut: Cut) {
+  const section = cut.sections.find((item) => item.owner === "assignment")
+  if (!section || section.coverage === "not_authorized" || typeof section.countAtCut !== "number") return false
+  if (section.asOf !== cut.cutAsOf) return false
+  if (section.assignmentOwnerCut.frontierTime > section.asOf) return false
+  if (section.mode !== assignmentMode(section.countAtCut)) return false
+  if (section.countAtCut === 0) return section.coverage === "empty" && section.entries.length === 0
+  if (
+    !section.entries.every(
+      (item) =>
+        item.kind === "assignment" &&
+        record(item.locator.sourceStatusAtCut) &&
+        item.locator.sourceStatusAtCut.asOf === section.asOf &&
+        (!record(item.semantic) ||
+          item.semantic.state !== "value" ||
+          (record(item.semantic.value) &&
+            record(item.semantic.value.assignmentRevisionRef) &&
+            item.semantic.value.assignmentRevisionRef.assignmentID === item.locator.assignmentID &&
+            item.semantic.value.assignmentRevisionRef.revisionID === item.locator.revisionID &&
+            item.semantic.value.assignmentRevisionRef.version === item.locator.version)),
+    )
+  ) {
+    return false
+  }
+  if (section.countAtCut === 1) {
+    return section.coverage === "complete" && section.entries.length === 1 && section.entries[0]?.semantic?.state === "value"
+  }
+  return section.entries.length <= Math.min(section.countAtCut, MAX_ASSIGNMENT_CONTEXT_ENTRIES)
 }
 
 function capabilitySectionRelations(cut: Cut) {
@@ -1206,6 +1478,9 @@ function capabilitySectionRelations(cut: Cut) {
       }
       if (entry.kind === "future_attention") {
         return entry.locator.lazyReadAvailable === capabilities.has("future_attention_read")
+      }
+      if (entry.kind === "assignment") {
+        return entry.locator.lazyReadAvailable === capabilities.has("assignment_read")
       }
       return entry.locator.lazyReadAvailable === capabilities.has("learning_interaction_read")
     }),
@@ -1249,6 +1524,7 @@ function entryOwner(entry: Entry, owner: Section["owner"]) {
 function sectionLimit(owner: Section["owner"]) {
   if (owner === "interaction") return MAX_INTERACTION_CANDIDATES
   if (owner === "learner_navigation") return MAX_CANDIDATES_PER_FAMILY + 1
+  if (owner === "assignment") return MAX_ASSIGNMENT_CONTEXT_ENTRIES
   return MAX_CANDIDATES_PER_FAMILY
 }
 
@@ -1265,6 +1541,7 @@ function entryShape(value: unknown): value is Entry {
       "interaction",
       "learner_response_evidence",
       "future_attention",
+      "assignment",
     ].includes(
       String(value.kind),
     ) &&
@@ -1274,7 +1551,8 @@ function entryShape(value: unknown): value is Entry {
     (value.semantic === undefined || bounded(value.semantic)) &&
     interactionSemantic(value.kind as Entry["kind"], value.semantic) &&
     learnerResponseEvidenceSemantic(value.kind as Entry["kind"], value.semantic) &&
-    futureAttentionSemantic(value.kind as Entry["kind"], value.semantic)
+    futureAttentionSemantic(value.kind as Entry["kind"], value.semantic) &&
+    assignmentSemantic(value.kind as Entry["kind"], value.semantic)
   )
 }
 
@@ -1285,7 +1563,44 @@ function locatorShape(kind: Entry["kind"], value: Record<string, unknown>) {
   if (kind === "material") return materialLocator(value)
   if (kind === "learner_response_evidence") return learnerResponseEvidenceLocator(value)
   if (kind === "future_attention") return futureAttentionLocator(value)
+  if (kind === "assignment") return assignmentLocator(value)
   return interactionLocator(value)
+}
+
+function assignmentLocator(value: Record<string, unknown>) {
+  return (
+    keys(value, [
+      "assignmentID",
+      "timeCreated",
+      "revisionID",
+      "version",
+      "timeCommitted",
+      "commitOrder",
+      "frontierSequence",
+      "immutableSourceBasisAtCommit",
+      "sourceAdmissionBasisAtCommit",
+      "sourceStatusAtCut",
+      "scopeCurrentRelationsAtCut",
+      "lazyReadAvailable",
+    ]) &&
+    Schema.is(Assignment.AssignmentID)(value.assignmentID) &&
+    Schema.is(Assignment.RevisionID)(value.revisionID) &&
+    integer(value.timeCreated) &&
+    integer(value.version) &&
+    Number(value.version) > 0 &&
+    integer(value.timeCommitted) &&
+    integer(value.commitOrder) &&
+    integer(value.frontierSequence) &&
+    record(value.immutableSourceBasisAtCommit) &&
+    ["learner_occurrence", "artifact_revision", "representation_revision"].includes(
+      String(value.immutableSourceBasisAtCommit.type),
+    ) &&
+    record(value.sourceAdmissionBasisAtCommit) &&
+    record(value.sourceStatusAtCut) &&
+    integer(value.sourceStatusAtCut.asOf) &&
+    Array.isArray(value.scopeCurrentRelationsAtCut) &&
+    typeof value.lazyReadAvailable === "boolean"
+  )
 }
 
 function futureAttentionLocator(value: Record<string, unknown>) {
@@ -1870,6 +2185,17 @@ function futureAttentionEntry(locator: unknown, semantic: unknown, assistantMess
   })
 }
 
+function assignmentEntry(locator: unknown, semantic: unknown, assistantMessageID: MessageID): Entry {
+  const result = entry("assignment", locator, semantic)
+  if (result.semantic?.state === "value") return result
+  throw new CutCapacityError({
+    assistantMessageID,
+    boundary: "mandatory",
+    observedBytes: result.semantic?.canonicalBytes ?? 0,
+    ceilingBytes: MAX_ENTRY_BYTES,
+  })
+}
+
 function interactionLocator(value: Record<string, unknown>) {
   const optional = [
     "inputID",
@@ -2032,6 +2358,51 @@ function futureAttentionSemantic(kind: Entry["kind"], value: unknown) {
     ["after_creation", "at_or_after_not_before"].includes(String(semantic.serviceTiming)) &&
     (semantic.interactionOrder === undefined ||
       semantic.interactionOrder === "learner_response_before_tutor_disclosure")
+  )
+}
+
+function assignmentSemantic(kind: Entry["kind"], value: unknown) {
+  if (kind !== "assignment") return true
+  if (!record(value)) return false
+  if (value.state === "locator_only") return bounded(value)
+  if (value.state !== "value" || !record(value.value)) return false
+  const semantic = value.value
+  return (
+    keys(semantic, [
+      "schemaVersion",
+      "assignmentRevisionRef",
+      "obligationSummary",
+      "learningContext",
+      "scope",
+      "dueBasis",
+      "expiryBoundary",
+      "dueRelationAtCut",
+      "expiryRelationAtCut",
+      "disposition",
+      "currentHeadRelation",
+      "supersessionTarget",
+    ]) &&
+    semantic.schemaVersion === 1 &&
+    record(semantic.assignmentRevisionRef) &&
+    keys(semantic.assignmentRevisionRef, ["assignmentID", "revisionID", "version"]) &&
+    Schema.is(Assignment.AssignmentID)(semantic.assignmentRevisionRef.assignmentID) &&
+    Schema.is(Assignment.RevisionID)(semantic.assignmentRevisionRef.revisionID) &&
+    integer(semantic.assignmentRevisionRef.version) &&
+    Number(semantic.assignmentRevisionRef.version) > 0 &&
+    typeof semantic.obligationSummary === "string" &&
+    semantic.obligationSummary.length > 0 &&
+    utf8Bytes(semantic.obligationSummary) <= Assignment.MAX_SUMMARY_BYTES &&
+    typeof semantic.learningContext === "string" &&
+    semantic.learningContext.length > 0 &&
+    utf8Bytes(semantic.learningContext) <= Assignment.MAX_LEARNING_CONTEXT_BYTES &&
+    record(semantic.scope) &&
+    record(semantic.dueBasis) &&
+    (semantic.expiryBoundary === null || record(semantic.expiryBoundary)) &&
+    record(semantic.dueRelationAtCut) &&
+    record(semantic.expiryRelationAtCut) &&
+    semantic.disposition === "open" &&
+    semantic.currentHeadRelation === "current" &&
+    semantic.supersessionTarget === null
   )
 }
 

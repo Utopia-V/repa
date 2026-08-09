@@ -143,6 +143,14 @@ export {
 } from "./future-attention"
 
 export {
+  PERMISSION_PATTERN as ASSIGNMENT_PERMISSION_PATTERN,
+  READ_CAPABILITY as ASSIGNMENT_READ_CAPABILITY,
+  READ_VERSION as ASSIGNMENT_READ_VERSION,
+  UPDATE_CAPABILITY as UPDATE_ASSIGNMENT_CAPABILITY,
+  UPDATE_VERSION as UPDATE_ASSIGNMENT_VERSION,
+} from "./assignment"
+
+export {
   assertAssistantDeletable,
   assertPartDeletable,
   exactSettlement,

@@ -3156,6 +3156,196 @@ uncommitted, and excluded. The redundant remote feature branch remains only as
 provenance. No release, credentialed provider use, Gate 21, or Gate 21A action
 follows.
 
+## 2026-08-08 Gate 21 experiment, Assignment split, and contract candidates
+
+Current disposition remains owned only by `docs/README.md`. Derivation opened
+from exact `HEAD = main = origin/main`
+`c100b431fe174d1993b2baa89a7d1b133300b579`; Gate 20 implementation
+`1f92169840559b63eb8f96c31a67985c814a86f0` and integration/status
+`228126535619a70d172e17e6f6b56b27cf86fbb6` are ancestors. The pre-existing
+maintainer-owned `AGENTS.md` collaboration-rule modification remains preserved;
+the current documentation candidate also reconciles the settled-constraint
+checksum without claiming ownership of that earlier edit.
+
+The required Gate 21 pre-contract experiment is recorded in
+`docs/research/repa-gate-21-cross-day-planning-boundary-experiment-2026-08-08.md`.
+It used one objective-free integer time-expanded transportation/max-flow
+feasibility kernel, an independent source-bearing allocation validator, and an
+exhaustive dynamic-programming oracle over bounded fixtures. The experiment
+established:
+
+- the same exact OS and DS Goal revisions, with separate accepted Planning
+  inputs of work 6 / deadline Aug 18 and work 8 / deadline Aug 20, are feasible
+  with materially different slack and allocation shape from Aug 6 versus Aug
+  16;
+- per-demand feasibility is unsound when two proposals spend the same shared
+  daily capacity;
+- correcting Aug 17 capacity from 3 to 1 makes the late portfolio short by one;
+- total capacity can exceed total work while an earlier local deadline remains
+  infeasible;
+- an exact Assignment revision and an exact Goal revision are interchangeable
+  only as tagged Planning producers, never as identities/lifecycles;
+- interval inputs can yield guaranteed-feasible, guaranteed-infeasible, or
+  indeterminate truth without invented point estimates;
+- silence/intermittent absence produces no activity fact or historical plan
+  mutation; and
+- divisible flow misclassifies one contiguous four-quantum block spread over
+  two two-quantum days, preserving indivisibility/contiguity as the explicit
+  algorithm-widening falsifier.
+
+The experiment returned the split condition reserved by the 2026-07-21 Gate 16
+planning correction. Assignment has independently valid obligation identity,
+revision, source, lifecycle, Context/read behavior, migration, recovery, and
+reopen conditions. Planning has independently valid accepted-input,
+shared-capacity, feasibility, working-allocation, staleness, feedback,
+recomputation, and exact-consumption behavior. A valid Assignment remains true
+when Planning is unknown, infeasible, denied, interrupted, or failed; therefore
+no all-or-none create-Assignment-and-plan invariant exists.
+
+Roadmap 09 now inserts **Gate 20A — learning-relevant Assignment authority** and
+retains **Gate 21 — substantial cross-day Planning authority** plus published
+Gate 21A/22/23 numbering. Gate 20A is not a child of Gate 20 and does not make
+every plan require an Assignment; Goal-driven Planning remains first-class.
+The earlier Gate 16 provenance statement “No new numbered Gate is introduced
+now” was correct before its reserved experiment ran and is now superseded by
+this roadmap-owner result rather than rewritten as historical evidence.
+
+The maintainer additionally corrected the product framing: Repa's purpose is
+helping learning, not mechanically completing measurable tasks. The owner
+documents therefore now make Assignment a source-relative **learning-relevant**
+obligation with a real teaching, guided-work, review, or Planning consumer. Its
+`completed` disposition only prevents closed pressure from contaminating later
+learning decisions; it is not learning, mastery, submission, grade, activity,
+or product success. Planning produces a correctable working allocation and
+hard feasibility/trade-off facts, not a commitment, adherence ledger, or
+task-closure objective. Intermittent/non-exclusive use, silence, and elapsed
+allocations create no progress or non-progress inference.
+
+The first reviewable successor is
+`docs/research/repa-gate-20a-assignment-authority-2026-08-08.md`. Its current
+status is contract/theory candidate only. It admits exact learner-report or
+exact source-observation interpretation, generated Assignment identity,
+immutable linear revisions, bounded obligation/learning context, optional
+unresolved/no-deadline/date/instant due and separate expiry meaning, explicit
+`open | completed | cancelled | dismissed | superseded` lifecycle, exact owner reads,
+Gate 18 Context/lazy-read projection, root-Agent capability/permission,
+Gate 8 settlement/recovery, and an exact immutable Planning handoff. It excludes
+Tutor-issued obligations, self-promises, generic tasks/todos, Planning
+arithmetic, inferred activity/progress, administrative obligation tracking,
+external submission, and completion-as-product-success.
+
+The separate Planning successor is
+`docs/research/repa-gate-21-cross-day-planning-authority-2026-08-08.md`. It is
+also a contract/theory candidate only. It admits one current LearnerHome
+portfolio with exact Goal/Gate-20A Assignment producers, source-bearing point/
+interval/unknown workload and shared-capacity inputs, an exact civil-time
+horizon, staged immutable input/assessment/allocation revisions, program-owned
+maximum-flow feasibility and independent portfolio validation, source-bearing
+allocation proposals, failure-preserved correction/recomputation, qualified
+unknown/unsupported truth, intermittent re-entry
+without inferred activity, exact Context/lazy reads, and one narrow changed-
+plan/changed-Tutor-move consumer. It rejects a solver tie as pedagogy, multiple
+double-spending current plans, plan adherence/commitment, automatic progress,
+task-closure optimization, unsupported contiguity, producer lifecycle mutation,
+and a background planner runtime.
+
+Gate 20A whole-Gate review run `G20A-WG-20260808-019fe065-01` uses fresh
+top-level reviewer task `019fe134-5860-7ed3-a754-ca22c9689b18`. Its first
+contract/theory pass returned `Revise` and left the production checkout
+unchanged. It preserved the Assignment/Planning split but opened five High,
+acceptance-blocking findings:
+
+- `G20A-CR-001`: terminal-to-terminal correction required a knowingly false
+  `open` revision;
+- `G20A-CR-002`: a superseded head could not correct its own meaning while
+  preserving, retargeting, or truthfully clearing its current exact relation;
+- `G20A-CR-003`: admitted `agent_correction` had no semantic address after the
+  learner/source change-set address settled;
+- `G20A-CR-004`: automatic Assignment Context had no closed eligibility,
+  cardinality, ordering, omission, or mandatory-fit contract; and
+- `G20A-CR-005`: exact immutable Assignment source basis was conflated with
+  current source-owner availability and lacked the consuming dependency cut.
+
+The executor repair replaces false intermediate reopening with one truthful
+final successor, makes supersession relation action explicit, gives only an
+exact-head-anchored Agent correction an exact issuing-root-model-operation
+address, closes all-current-open zero/sole/multiple Context cardinality and fit,
+and separates immutable source/admission basis from owner-native current status
+at each read/Context/Planning cut. Architecture projections, Roadmap 09, and the
+provisional Gate 21 Assignment handoff are reconciled only where those findings
+invalidate predecessor assumptions.
+
+On the first repair-closure pass, the same reviewer accepted exact Gate 20A
+contract/theory candidate SHA-256
+`3E6BC18FB930EFB0BF22014C9E3C944DEABFB1119F6814BC4109D161829E3A7F`.
+`G20A-CR-001..005` are closed; no new finding, owner blocker, or material unknown
+remains. The reviewer independently inspected the corrected lifecycle,
+supersession, Agent-correction address, Context cardinality/fit, and source-cut
+semantics, treated executor oracles as supporting evidence rather than
+authority, and left the checkout unchanged. This accepts only the
+contract/theory layer. The maintainer's Whole-Gate authorization now permits one
+executor to build Gate 20A; the same reviewer remains idle for its later
+implementation/evidence review. Gate 21 remains an unreviewed candidate pending
+that implementation closure and exact handoff reconciliation. Integration,
+commit, push, release, credentialed provider use, and Gate 21A work remain
+unstarted.
+
+The retained reviewer's first Gate 20A implementation/evidence pass bound a
+37-file / 4,094-byte package manifest at SHA-256
+`AA3D2C030A872025C3BD0193BBD5463682385F9EEF2730DE34BD40276E1CC527`
+and returned **Revise**. It opened `G20A-IR-001..009`: an unsealed no-change
+semantic address; an unterminalizable pre-admitted source-address loser; learner
+direction able to create replacement truth; non-learner source time borrowing
+the issuing occurrence's zone; historical Representation reads joining later
+owner state; Course withdrawal blocking correction; missing provider-visible
+non-Assignment boundaries and negative traces; invalid civil dates passing the
+database trigger; and a status map that falsely said the candidate did not
+exist. The reviewer left the production checkout and Git state unchanged.
+
+The executor's unstaged repair candidate now binds 41 package production/test
+files, 4,521 canonical manifest bytes, SHA-256
+`D00E8DB84C968A46E304A8F03FCFD1CC719EE2573BACE2CB9FA83D3D7D80078B`.
+It gives no-change its own immutable semantic owner, closes both pre-admitted
+race paths and recovery, restricts learner direction, binds source-relative time
+to the effective source, makes old Representation reads/cursors typed-stale
+without later payload, carries only existing exact Course scope after
+withdrawal, exposes the semantic boundary to the ordinary Agent, validates real
+civil dates, and reconciles current status. Focused package typechecks and
+causal suites pass, including Core Assignment 26/26, the complete migration file
+46/46, OpenCode Assignment runtime 10/10, presentation 15/15, registry 36/36,
+and positive-plus-negative released-v1 prompt traces 2/2. These are executor
+claims and supporting evidence only until retained-reviewer closure.
+
+### 2026-08-09 Gate 20A whole-Gate review acceptance
+
+The same retained reviewer returned final implementation/evidence **Accept**
+for the exact 41-file / 4,521 canonical-manifest-byte package candidate at
+SHA-256
+`D00E8DB84C968A46E304A8F03FCFD1CC719EE2573BACE2CB9FA83D3D7D80078B`.
+`G20A-IR-001..009` are all closed; no new or replacement finding, owner blocker,
+material contract contradiction, or contract reopen condition remains. Gate
+20A's contract/theory and implementation/evidence layers are therefore both
+accepted under `G20A-WG-20260808-019fe065-01`.
+
+The reviewer independently reran the repair-focused Core cases, the frozen
+Gate-20-to-20A migration oracle, the real NTFS Representation drift/grant/
+missing-Artifact cursor case, and the exact Artifact-drift case. These
+verdict-changing checks corroborated the candidate-bound executor typechecks,
+migration-generation check, complete Assignment and migration suites, OpenCode
+runtime/presentation/registry tests, and positive-plus-negative released-v1
+prompt traces. The earlier broad name-filtered OpenCode runtime stall remains a
+disclosed, nonblocking Bun test-runner/layer-teardown or scheduling unknown for
+later release qualification; no individual Assignment scenario reproduced it.
+
+At acceptance callback, `HEAD`, `main`, and `origin/main` remained
+`c100b431fe174d1993b2baa89a7d1b133300b579`, the index was empty, the exact
+candidate manifest and verdict-bearing document hashes were unchanged, and the
+reviewer had made no production, documentation, Git, release, credentialed, or
+external durable-system mutation. This acceptance establishes readiness only
+for the separately governed local integration step. It does not itself commit,
+push, release, review Gate 21, or begin a later Gate; the reviewer remains
+visible as durable Gate 20A evidence and is not reusable for another Gate.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

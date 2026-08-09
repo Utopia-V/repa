@@ -12,6 +12,7 @@ import { install as installSchemaExtrasV10 } from "@opencode-ai/core/database/sc
 import { install as installSchemaExtrasV11 } from "@opencode-ai/core/database/schema-extras-v11"
 import { install as installSchemaExtrasV12 } from "@opencode-ai/core/database/schema-extras-v12"
 import { install as installSchemaExtrasV13 } from "@opencode-ai/core/database/schema-extras-v13"
+import { install } from "@opencode-ai/core/database/schema-extras-v20"
 import sessionUsageMigration from "@opencode-ai/core/database/migration/20260510033149_session_usage"
 import normalizeStoragePathsMigration from "@opencode-ai/core/database/migration/20260601010001_normalize_storage_paths"
 import sessionMessageProjectionOrderMigration from "@opencode-ai/core/database/migration/20260603040000_session_message_projection_order"
@@ -38,6 +39,7 @@ import learningBootstrapMigration from "@opencode-ai/core/database/migration/rep
 import learningContextMigration from "@opencode-ai/core/database/migration/repa/20260803182615_gate18_learning_context"
 import learnerResponseEvidenceMigration from "@opencode-ai/core/database/migration/repa/20260806041450_gate19_learner_response_evidence"
 import futureAttentionMigration from "@opencode-ai/core/database/migration/repa/20260806181133_gate20_future_attention"
+import assignmentAuthorityMigration from "@opencode-ai/core/database/migration/repa/20260808141417_gate20a_assignment_authority"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventV2 } from "@opencode-ai/core/event"
@@ -48,6 +50,7 @@ import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { MessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
 import { Database } from "@opencode-ai/core/database/database"
+import { Assignment } from "@opencode-ai/core/assignment"
 import { Artifact } from "@opencode-ai/core/artifact"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
@@ -68,6 +71,7 @@ import { tmpdir } from "./fixture/tmpdir"
 import databaseV11Schema from "./fixture/database-v11-schema"
 import databaseV12Schema from "./fixture/database-v12-schema"
 import databaseV13Schema from "./fixture/database-v13-schema"
+import { prepareFrozenGate20LearningContextCut } from "./fixture/frozen-v20-learning-context"
 
 setDefaultTimeout(20_000)
 
@@ -176,6 +180,17 @@ const materialTables = [
   "material_map_representation_target",
   "material_map",
 ] as const
+const assignmentTables = [
+  "assignment_revision_scope",
+  "assignment_revision",
+  "assignment_capability_issue",
+  "assignment_capability_settlement",
+  "assignment_disposition",
+  "assignment_commit_seal",
+  "assignment_no_change_seal",
+  "assignment_effect",
+  "assignment",
+] as const
 
 function applyHistorical(db: TestDatabase, input: readonly DatabaseMigration.Migration[]) {
   return Effect.forEach(input, (migration) => db.transaction((tx) => migration.up(tx)), { discard: true })
@@ -217,6 +232,7 @@ const databaseV16Migrations = [
 const databaseV17Migrations = [...databaseV16Migrations, learningBootstrapMigration] as const
 const databaseV18Migrations = [...databaseV17Migrations, learningContextMigration] as const
 const databaseV19Migrations = [...databaseV18Migrations, learnerResponseEvidenceMigration] as const
+const databaseV20Migrations = [...databaseV19Migrations, futureAttentionMigration] as const
 
 function schemaManifestDigest(db: TestDatabase) {
   return db
@@ -486,6 +502,16 @@ function initializeDatabaseV19(db: TestDatabase) {
     yield* DatabaseMigration.apply(db, {
       path: "frozen-gate19.db",
       migrations: databaseV19Migrations,
+    })
+  })
+}
+
+function initializeDatabaseV20(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* initializeDatabaseV11(db)
+    yield* DatabaseMigration.apply(db, {
+      path: "frozen-gate20.db",
+      migrations: databaseV20Migrations,
     })
   })
 }
@@ -1603,8 +1629,9 @@ function prepareLegacyLearningContextCut(input: {
         },
         sections: prepared.cut.sections.filter(
           (section) =>
+            section.owner !== "assignment" &&
             section.owner !== "future_attention" &&
-            (generation === 2 || section.owner !== "learner_response_evidence"),
+            (generation !== 1 || section.owner !== "learner_response_evidence"),
         ),
       }
       const entryCounts = Object.fromEntries(base.sections.map((section) => [section.owner, section.entries.length]))
@@ -1628,7 +1655,7 @@ function prepareLegacyLearningContextCut(input: {
         }
         canonicalBytes = nextCanonicalBytes
       }
-      throw new Error(`Frozen Gate ${generation === 1 ? 18 : 19} learning-context byte accounting did not converge`)
+      throw new Error(`Frozen learning-context generation ${generation} byte accounting did not converge`)
     }),
   )
 }
@@ -1655,7 +1682,7 @@ function renderLegacyLearningContext(cut: LearningContext.Cut) {
   ].join("\n")
 }
 
-function seedFrozenGate19LearningContextCut(db: TestDatabase) {
+function seedFrozenLearningContextCut(db: TestDatabase, generation: 2 | 3 = 2) {
   return Effect.gen(function* () {
     const sessionID = SessionSchema.ID.create()
     const turnID = Turn.ID.create()
@@ -1669,7 +1696,7 @@ function seedFrozenGate19LearningContextCut(db: TestDatabase) {
     `)
     yield* db.run(sql`
       INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated)
-      VALUES (${sessionID}, ${ProjectV2.ID.global}, ${sessionID}, '/', 'Frozen Gate 19', 'test', 100, 100)
+      VALUES (${sessionID}, ${ProjectV2.ID.global}, ${sessionID}, '/', ${`Frozen learning context v${generation}`}, 'test', 100, 100)
     `)
     yield* db.run(sql`
       INSERT INTO message (id, session_id, time_created, time_updated, data)
@@ -1677,7 +1704,7 @@ function seedFrozenGate19LearningContextCut(db: TestDatabase) {
     `)
     yield* db.run(sql`
       INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
-      VALUES (${occurrencePartID}, ${occurrenceMessageID}, ${sessionID}, 100, 100, '{"type":"text","text":"frozen Gate 19"}')
+      VALUES (${occurrencePartID}, ${occurrenceMessageID}, ${sessionID}, 100, 100, ${JSON.stringify({ type: "text", text: `frozen learning context v${generation}` })})
     `)
     const occurrence = yield* db.transaction((tx) =>
       Occurrence.admit(tx, {
@@ -1725,7 +1752,7 @@ function seedFrozenGate19LearningContextCut(db: TestDatabase) {
         turnID,
         sessionID,
         assistantMessageID,
-        requestEnvelope: { prompt: "frozen Gate 19 request" },
+        requestEnvelope: { prompt: `frozen learning context v${generation} request` },
         contextFingerprint: "2".repeat(64),
         snapshotFrontier: frontier,
         timeAdmitted: 101,
@@ -1747,20 +1774,33 @@ function seedFrozenGate19LearningContextCut(db: TestDatabase) {
       FROM turn_model_operation
       WHERE assistant_message_id = ${assistantMessageID}
     `)
-    if (!operation) return yield* Effect.die("Expected frozen Gate 19 model operation")
-    const legacy = yield* prepareLegacyLearningContextCut({
-      sessionID,
-      turnID,
-      inputID,
-      occurrenceID: occurrence.id,
-      assistantMessageID,
-      ordinal: operation.ordinal,
-      cutAsOf: operation.timeAdmitted,
-      throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
-      retainedSteeringFingerprint: operation.retainedFingerprint,
-      generation: 2,
-      collideWithFutureLazyReadID: true,
-    })
+    if (!operation) return yield* Effect.die(`Expected frozen learning-context v${generation} model operation`)
+    const legacy =
+      generation === 3
+        ? (prepareFrozenGate20LearningContextCut({
+            sessionID,
+            turnID,
+            inputID,
+            occurrenceID: occurrence.id,
+            assistantMessageID,
+            ordinal: operation.ordinal,
+            cutAsOf: operation.timeAdmitted,
+            throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
+            retainedSteeringFingerprint: operation.retainedFingerprint,
+          }) as unknown as LearningContext.Preparation)
+        : yield* prepareLegacyLearningContextCut({
+            sessionID,
+            turnID,
+            inputID,
+            occurrenceID: occurrence.id,
+            assistantMessageID,
+            ordinal: operation.ordinal,
+            cutAsOf: operation.timeAdmitted,
+            throughSharedFrontier: { sequence: operation.observedSequence, time: operation.observedTime },
+            retainedSteeringFingerprint: operation.retainedFingerprint,
+            generation,
+            collideWithFutureLazyReadID: true,
+          })
     yield* db.run(sql`
       INSERT INTO turn_learning_context_cut (
         assistant_message_id, canonical_cut, canonical_bytes, cut_fingerprint, cut_as_of,
@@ -1775,8 +1815,29 @@ function seedFrozenGate19LearningContextCut(db: TestDatabase) {
   })
 }
 
+function dropGate20A(db: TestDatabase) {
+  return Effect.gen(function* () {
+    yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
+    yield* db.run(sql`DROP TRIGGER IF EXISTS learning_command_invocation_terminal_validate_v21`)
+    const triggers = yield* db.all<{ name: string }>(sql`
+      SELECT name FROM sqlite_master
+      WHERE type = 'trigger' AND name LIKE 'assignment_%'
+    `)
+    yield* Effect.forEach(triggers, (trigger) => db.run(sql`DROP TRIGGER ${sql.identifier(trigger.name)}`), {
+      discard: true,
+    })
+    yield* Effect.forEach(assignmentTables, (table) => db.run(sql`DROP TABLE IF EXISTS ${sql.identifier(table)}`), {
+      discard: true,
+    })
+    yield* db.transaction((tx) => install(tx))
+    yield* db.run(sql`DELETE FROM repa_migration WHERE version = ${BASELINE_VERSION + 20}`)
+    yield* db.run(sql.raw("PRAGMA foreign_keys = ON"))
+  })
+}
+
 function dropGate20(db: TestDatabase) {
   return Effect.gen(function* () {
+    yield* dropGate20A(db)
     yield* db.run(sql.raw("PRAGMA foreign_keys = OFF"))
     const triggers = yield* db.all<{ name: string }>(sql`
       SELECT name FROM sqlite_master
@@ -2409,6 +2470,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 17, id: learningContextMigration.id },
           { version: BASELINE_VERSION + 18, id: learnerResponseEvidenceMigration.id },
           { version: BASELINE_VERSION + 19, id: futureAttentionMigration.id },
+          { version: BASELINE_VERSION + 20, id: assignmentAuthorityMigration.id },
         ])
         expect(
           yield* db.all(sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'course%' ORDER BY name`),
@@ -3077,7 +3139,7 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV19Migrations.length + 1, id: futureAttentionMigration.id },
+      { version: BASELINE_VERSION + databaseV20Migrations.length + 1, id: assignmentAuthorityMigration.id },
     ])
     expect(upgraded.target).toEqual({
       authority_kind: "content_root",
@@ -3170,7 +3232,7 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV19Migrations.length + 1, id: futureAttentionMigration.id },
+      { version: BASELINE_VERSION + databaseV20Migrations.length + 1, id: assignmentAuthorityMigration.id },
     ])
     expect(upgraded.table?.definition).toContain("WITHOUT ROWID")
     expect(upgraded.trigger?.definition).toContain("BEFORE UPDATE ON turn_learning_context_cut")
@@ -3409,7 +3471,7 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV18Migrations.length + 2, id: futureAttentionMigration.id },
+      { version: BASELINE_VERSION + databaseV20Migrations.length + 1, id: assignmentAuthorityMigration.id },
     ])
     expect(upgraded.before).toEqual(upgraded.after)
     expect(upgraded.after.type).toBe("available")
@@ -3434,7 +3496,7 @@ describe("DatabaseMigration", () => {
     expect(upgraded.foreignKeys).toEqual([])
   })
 
-  test("upgrades a frozen Gate 19 database through the single Gate 20 migration without rewriting its v2 cut", async () => {
+  test("upgrades a frozen Gate 19 database through current migrations without rewriting its v2 cut", async () => {
     const fresh = await run(
       Effect.gen(function* () {
         const db = yield* makeDb
@@ -3456,7 +3518,7 @@ describe("DatabaseMigration", () => {
           `),
         ).toBeUndefined()
 
-        const seeded = yield* seedFrozenGate19LearningContextCut(db)
+        const seeded = yield* seedFrozenLearningContextCut(db)
         yield* DatabaseMigration.apply(db, { path: "frozen-gate19.db" })
 
         return {
@@ -3489,7 +3551,7 @@ describe("DatabaseMigration", () => {
 
     expect(upgraded.manifest).toEqual(fresh)
     expect(upgraded.journal).toEqual([
-      { version: BASELINE_VERSION + databaseV19Migrations.length + 1, id: futureAttentionMigration.id },
+      { version: BASELINE_VERSION + databaseV20Migrations.length + 1, id: assignmentAuthorityMigration.id },
     ])
     expect(upgraded.before).toEqual(upgraded.after)
     expect(upgraded.after.type).toBe("available")
@@ -3516,6 +3578,163 @@ describe("DatabaseMigration", () => {
     ])
     expect(upgraded.triggers).toHaveLength(15)
     expect(upgraded.rows).toEqual({ changeSets: 0, concerns: 0, transitions: 0, claimGroups: 0, finalizations: 0 })
+    expect(upgraded.foreignKeys).toEqual([])
+  })
+
+  test("upgrades a frozen Gate 20 database through Gate 20A without rewriting its v3 cut or fabricating Assignments", async () => {
+    const fresh = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* DatabaseMigration.apply(db)
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          assignmentBehavior: yield* db.transaction((tx) => Assignment.listOpenForContext(tx, { asOf: 200 })),
+        }
+      }),
+    )
+    const upgraded = await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* initializeDatabaseV20(db)
+        expect(yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version"))).toEqual({
+          user_version: BASELINE_VERSION + databaseV20Migrations.length,
+        })
+        expect(
+          yield* db.get(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND name = 'assignment'
+          `),
+        ).toBeUndefined()
+
+        const beforeJournal = yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`)
+        const seeded = yield* seedFrozenLearningContextCut(db, 3)
+        const beforeStored = yield* db.get(sql`
+          SELECT
+            canonical_cut AS canonicalCut,
+            canonical_bytes AS canonicalBytes,
+            cut_fingerprint AS cutFingerprint,
+            rendered_block AS renderedBlock,
+            rendered_bytes AS renderedBytes,
+            rendered_fingerprint AS renderedFingerprint
+          FROM turn_learning_context_cut
+          WHERE assistant_message_id = ${seeded.assistantMessageID}
+        `)
+        yield* DatabaseMigration.apply(db, { path: "frozen-gate20.db" })
+
+        return {
+          manifest: yield* completeSchemaManifest(db),
+          beforeJournal,
+          journal: yield* db.all(sql`SELECT version, id FROM repa_migration ORDER BY version`),
+          before: seeded.before,
+          after: yield* db.transaction((tx) => LearningContext.readCut(tx, seeded.assistantMessageID)),
+          beforeStored,
+          afterStored: yield* db.get(sql`
+            SELECT
+              canonical_cut AS canonicalCut,
+              canonical_bytes AS canonicalBytes,
+              cut_fingerprint AS cutFingerprint,
+              rendered_block AS renderedBlock,
+              rendered_bytes AS renderedBytes,
+              rendered_fingerprint AS renderedFingerprint
+            FROM turn_learning_context_cut
+            WHERE assistant_message_id = ${seeded.assistantMessageID}
+          `),
+          assignmentBehavior: yield* db.transaction((tx) => Assignment.listOpenForContext(tx, { asOf: 200 })),
+          tables: yield* db.all<{ name: string }>(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'table' AND (name = 'assignment' OR name LIKE 'assignment_%')
+            ORDER BY name
+          `),
+          triggers: yield* db.all<{ name: string }>(sql`
+            SELECT name FROM sqlite_schema
+            WHERE type = 'trigger' AND name LIKE 'assignment_%'
+            ORDER BY name
+          `),
+          rows: yield* db.get(sql`
+            SELECT
+              (SELECT count(*) FROM assignment) AS assignments,
+              (SELECT count(*) FROM assignment_revision) AS revisions,
+              (SELECT count(*) FROM assignment_effect) AS effects,
+              (SELECT count(*) FROM assignment_no_change_seal) AS noChangeSeals,
+              (SELECT count(*) FROM assignment_commit_seal) AS seals
+          `),
+          revisionValidationTrigger: yield* db.get<{ definition: string }>(sql`
+            SELECT sql AS definition
+            FROM sqlite_schema
+            WHERE type = 'trigger' AND name = 'assignment_revision_insert_validate'
+          `),
+          userVersion: yield* db.get<Record<string, number>>(sql.raw("PRAGMA user_version")),
+          foreignKeysEnabled: yield* db.get<Record<string, number>>(sql.raw("PRAGMA foreign_keys")),
+          foreignKeys: yield* db.all(sql.raw("PRAGMA foreign_key_check")),
+        }
+      }),
+    )
+
+    expect(upgraded.manifest).toEqual(fresh.manifest)
+    expect(upgraded.assignmentBehavior).toEqual(fresh.assignmentBehavior)
+    expect(upgraded.assignmentBehavior).toMatchObject({
+      ownerCut: { frontierSequence: 0, frontierTime: 0, headCount: 0 },
+      asOf: 200,
+      countAtCut: 0,
+      order: "identity_creation_then_assignment_id_non_priority",
+      candidates: [],
+    })
+    expect(upgraded.beforeJournal).toEqual([
+      { version: BASELINE_VERSION, id: BASELINE_ID },
+      ...databaseV20Migrations.map((migration, index) => ({
+        version: BASELINE_VERSION + index + 1,
+        id: migration.id,
+      })),
+    ])
+    expect(upgraded.journal.slice(0, -1)).toEqual(upgraded.beforeJournal)
+    expect(upgraded.journal.at(-1)).toEqual({
+      version: BASELINE_VERSION + databaseV20Migrations.length + 1,
+      id: assignmentAuthorityMigration.id,
+    })
+    expect(upgraded.beforeStored).toEqual(upgraded.afterStored)
+    expect(upgraded.before).toEqual(upgraded.after)
+    expect(upgraded.after.type).toBe("available")
+    if (upgraded.after.type !== "available") throw new Error("Expected preserved Gate 20 cut")
+    expect(upgraded.after.cut.policyVersion).toBe(3)
+    expect(upgraded.after.cut.rendererVersion).toBe(3)
+    expect(upgraded.after.cut.capabilityBasis.catalogVersion).toBe(3)
+    expect(upgraded.after.cut.capabilityBasis.effectiveLazyReadCapabilities).toEqual([])
+    expect(
+      upgraded.after.cut.capabilityBasis.effectiveProviderToolSurfaceBinding.definitions.map((definition) => definition.id),
+    ).toEqual(["assignment_read"])
+    expect(upgraded.after.cut.sections.map((section) => section.owner)).toEqual([
+      "course",
+      "learner_navigation",
+      "learner_goal",
+      "material",
+      "interaction",
+      "learner_response_evidence",
+      "future_attention",
+    ])
+    expect(upgraded.after.cut.sections.some((section) => section.owner === "assignment")).toBe(false)
+    expect(upgraded.tables.map((row) => row.name)).toEqual([
+      "assignment",
+      "assignment_capability_issue",
+      "assignment_capability_settlement",
+      "assignment_commit_seal",
+      "assignment_disposition",
+      "assignment_effect",
+      "assignment_no_change_seal",
+      "assignment_revision",
+      "assignment_revision_scope",
+    ])
+    expect(upgraded.triggers).toHaveLength(26)
+    expect(upgraded.rows).toEqual({ assignments: 0, revisions: 0, effects: 0, noChangeSeals: 0, seals: 0 })
+    expect(upgraded.revisionValidationTrigger?.definition).toContain(
+      "date(json_extract(NEW.due_basis, '$.civilDate'), '+0 days')",
+    )
+    expect(upgraded.revisionValidationTrigger?.definition).toContain(
+      "date(json_extract(NEW.expiry_boundary, '$.civilDate'), '+0 days')",
+    )
+    expect(upgraded.userVersion).toEqual({
+      user_version: BASELINE_VERSION + databaseV20Migrations.length + 1,
+    })
+    expect(upgraded.foreignKeysEnabled).toEqual({ foreign_keys: 1 })
     expect(upgraded.foreignKeys).toEqual([])
   })
 
@@ -3565,6 +3784,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => learningContextMigration.up(tx))
         yield* db.transaction((tx) => learnerResponseEvidenceMigration.up(tx))
         yield* db.transaction((tx) => futureAttentionMigration.up(tx))
+        yield* db.transaction((tx) => assignmentAuthorityMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
         return {
           structures: yield* structuralManifest(db),
@@ -3705,6 +3925,7 @@ describe("DatabaseMigration", () => {
         yield* db.transaction((tx) => learningContextMigration.up(tx))
         yield* db.transaction((tx) => learnerResponseEvidenceMigration.up(tx))
         yield* db.transaction((tx) => futureAttentionMigration.up(tx))
+        yield* db.transaction((tx) => assignmentAuthorityMigration.up(tx))
         yield* db.run("PRAGMA foreign_keys = ON")
 
         const after = yield* snapshot(db, columns)
@@ -7438,6 +7659,7 @@ describe("DatabaseMigration", () => {
           { version: BASELINE_VERSION + 17, id: learningContextMigration.id },
           { version: BASELINE_VERSION + 18, id: learnerResponseEvidenceMigration.id },
           { version: BASELINE_VERSION + 19, id: futureAttentionMigration.id },
+          { version: BASELINE_VERSION + 20, id: assignmentAuthorityMigration.id },
         ])
       }),
     )

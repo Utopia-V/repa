@@ -81,6 +81,41 @@ not merge the Goal or Assignment that gives it meaning. This is not a fixed
 program/model percentage. It prevents a language model from becoming the only
 place where five hours of work and six days of capacity are compared.
 
+The resulting allocation is a correctable **working plan**, not a learner
+promise, an activity ledger, or evidence that scheduled work happened. Repa
+must remain truthful when it is used intermittently, when the learner also
+studies elsewhere, or when no progress update arrives. Trusted time may age an
+allocation or make an accepted input stale, but elapsed slots, silence, and
+absence cannot imply work, zero progress, breach, completion, or abandonment.
+On re-entry the system reuses exact accepted facts, asks only for the minimum
+future-relevant reconciliation that the next plan actually needs, and records
+any corrected input and recomputed allocation as successors. Planning never
+changes Goal, Assignment, FutureAttention, or learner-evidence lifecycle by
+implication. Its arithmetic constrains a useful learning decision; maximizing
+completed rows, occupied capacity, or deadline compliance is not the Tutor's
+objective. The later consumer must still choose how to explain, demonstrate,
+guide, practice, review, or work with the learner.
+
+Accepted Planning input, program assessment, and a source-bearing working
+allocation are staged facts under one authority. A valid learner/source
+correction remains current if later arithmetic execution or allocation
+proposal fails; a valid assessment likewise survives an invalid proposal.
+Downstream failure must not restore an obsolete input or silently make an old
+allocation current again.
+
+An Assignment is the separate durable meaning that a substantial
+**learning-relevant** obligation exists. It enters the Learning System only
+when its subject, source, or pressure can change later teaching, guided work,
+review, or cross-day learning allocation; Repa does not import every
+administrative obligation merely because it has a deadline. Its bounded
+obligation and learning context, source, optional due boundary, correction, and
+explicit lifecycle belong to Assignment authority. Due or overdue relation may
+be derived from the trusted clock, but time, a plan, planning failure, Tutor
+narration, and learner silence cannot fulfill or cancel the obligation. A
+source-bearing learner report or exact source observation may support an
+explicit lifecycle transition without making Repa an external submission
+system, independent certifier, homework-completion robot, or metric tracker.
+
 ## Core loop
 
 ```text
@@ -124,11 +159,19 @@ not blindly replay ambiguous work. The learner is not the application's manual
 synchronization mechanism or the routine arbiter among Course, Goal, review,
 plan, and recent-Interaction records.
 
+Returning after a gap is the same product boundary, not an exceptional recovery
+mode. Repa does not assume that it observed the interval, reconstruct a daily
+history from an old plan, or require the learner to account for every missed
+day before continuing. It distinguishes what was last accepted, what the clock
+alone can derive, what is now stale or unknown, and what one current move or
+future allocation must actually clarify.
+
 The system must be able to distinguish at least these categories conceptually, even if their final data model is not yet settled:
 
 - What happened: observed or reported learning activity.
 - What the evidence supports: a fallible inference about current ability or retention.
-- What is intended: goals, deadlines, plans, and commitments.
+- What is intended or owed: Goals, Assignments, working plans, and any
+  separately earned commitments. These are not interchangeable.
 - What was produced: notes, cards, code, reports, and other artifacts.
 
 These categories must not collapse into a single `mastery` field or an undifferentiated chat transcript.
@@ -164,7 +207,10 @@ Learning is native when it changes the agent's normal behavior rather than appea
   an exam; those authorities remain distinct. Its subject or learning context,
   source/nature, deadline, estimated remaining work, known capacity, and
   relation to learning determine which facts matter. The behavior is advance
-  allocation and later replanning over days.
+  allocation and later replanning over days. The allocation remains conditional
+  on its accepted inputs: passage of an allocated day or absence from Repa does
+  not create progress, failure, or adherence evidence. Re-entry reconciles only
+  information that can change the future suffix of the plan.
   Last-minute rescue after a task has collapsed to a minute-scale deadline
   window is outside Repa's product scope.
 - When a Session produces a relevant durable change, the learner can inspect
@@ -251,9 +297,9 @@ outcome boundary; those decisions are not reopened here.
   mechanism remains open.
 - Persistence and correction shapes for learning authorities not yet
   implemented. Course/View, Artifact, ContentRoot, readable Representation,
-  Material Map/alignment, navigation continuity, retained steering, and Goal
-  are already native; learner record, future attention, Assignment, and
-  planning remain consumer-earned.
+  Material Map/alignment, navigation continuity, retained steering, Goal,
+  first learner record, and source-linked future attention are already native;
+  Assignment and planning remain consumer-earned.
 - The exact learning-native context projection and inspect/correct interaction
   design over the inherited Agent mechanics.
 

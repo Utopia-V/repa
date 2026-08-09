@@ -6,19 +6,23 @@ import type { MessageID } from "../v1/session"
 export const SCHEMA_VERSION = 1 as const
 export const LEGACY_POLICY_VERSION = 1 as const
 export const GATE19_POLICY_VERSION = 2 as const
-export const POLICY_VERSION = 3 as const
+export const GATE20_POLICY_VERSION = 3 as const
+export const POLICY_VERSION = 4 as const
 export const LEGACY_RENDERER_VERSION = 1 as const
 export const GATE19_RENDERER_VERSION = 2 as const
-export const RENDERER_VERSION = 3 as const
+export const GATE20_RENDERER_VERSION = 3 as const
+export const RENDERER_VERSION = 4 as const
 export const LEGACY_CAPABILITY_CATALOG_VERSION = 1 as const
 export const GATE19_CAPABILITY_CATALOG_VERSION = 2 as const
-export const CAPABILITY_CATALOG_VERSION = 3 as const
+export const GATE20_CAPABILITY_CATALOG_VERSION = 3 as const
+export const CAPABILITY_CATALOG_VERSION = 4 as const
 
 export const MAX_CANONICAL_BYTES = 32_768
 export const MAX_RENDERED_BYTES = 16_384
 export const MAX_ENTRY_BYTES = 2_048
 export const MAX_CANDIDATES_PER_FAMILY = 8
 export const MAX_INTERACTION_CANDIDATES = 4
+export const MAX_ASSIGNMENT_CONTEXT_ENTRIES = 8
 export const MAX_LAZY_BYTES = 32_768
 export const MAX_LAZY_ITEMS = 64
 
@@ -35,7 +39,11 @@ export const GATE19_LAZY_READ_CAPABILITY_IDS = [
   ...LEGACY_LAZY_READ_CAPABILITY_IDS,
   "learner_response_evidence_read",
 ] as const
-export const LAZY_READ_CAPABILITY_IDS = [...GATE19_LAZY_READ_CAPABILITY_IDS, "future_attention_read"] as const
+export const GATE20_LAZY_READ_CAPABILITY_IDS = [
+  ...GATE19_LAZY_READ_CAPABILITY_IDS,
+  "future_attention_read",
+] as const
+export const LAZY_READ_CAPABILITY_IDS = [...GATE20_LAZY_READ_CAPABILITY_IDS, "assignment_read"] as const
 
 export type LazyReadCapabilityID = (typeof LAZY_READ_CAPABILITY_IDS)[number]
 
@@ -166,11 +174,31 @@ export type Entry = Readonly<{
     | "interaction"
     | "learner_response_evidence"
     | "future_attention"
+    | "assignment"
   locator: Readonly<Record<string, JsonValue>>
   semantic?: BoundedValue
 }>
 
-export type Section = Readonly<{
+type SectionBase = Readonly<{
+  scope: string
+  selectionBasis: string
+  coverage: Coverage
+  countAtCut: number | "unknown"
+  omission: Omission
+  entries: readonly Entry[]
+}>
+
+export type AssignmentContextMode = "none" | "sole_candidate_pressure" | "multiple_candidate_pressure"
+
+export type AssignmentContextOwnerCut = Readonly<{
+  frontierSequence: number
+  frontierTime: number
+  headCount: number
+  fingerprint: string
+}>
+
+type LegacySection = SectionBase &
+  Readonly<{
   owner:
     | "course"
     | "learner_navigation"
@@ -179,13 +207,26 @@ export type Section = Readonly<{
     | "interaction"
     | "learner_response_evidence"
     | "future_attention"
-  scope: string
-  selectionBasis: string
-  coverage: Coverage
-  countAtCut: number | "unknown"
-  omission: Omission
-  entries: readonly Entry[]
-}>
+  }>
+
+export type AssignmentAuthorizedSection = SectionBase &
+  Readonly<{
+    owner: "assignment"
+    coverage: Exclude<Coverage, "not_authorized">
+    countAtCut: number
+    assignmentOwnerCut: AssignmentContextOwnerCut
+    asOf: number
+    mode: AssignmentContextMode
+  }>
+
+export type AssignmentWithheldSection = SectionBase &
+  Readonly<{
+    owner: "assignment"
+    coverage: "not_authorized"
+    countAtCut: "unknown"
+  }>
+
+export type Section = LegacySection | AssignmentAuthorizedSection | AssignmentWithheldSection
 
 export type HardLimits = Readonly<{
   canonicalBytes: typeof MAX_CANONICAL_BYTES
@@ -215,8 +256,16 @@ export type Operation = Readonly<{
 
 export type Cut = Readonly<{
   schemaVersion: typeof SCHEMA_VERSION
-  policyVersion: typeof LEGACY_POLICY_VERSION | typeof GATE19_POLICY_VERSION | typeof POLICY_VERSION
-  rendererVersion: typeof LEGACY_RENDERER_VERSION | typeof GATE19_RENDERER_VERSION | typeof RENDERER_VERSION
+  policyVersion:
+    | typeof LEGACY_POLICY_VERSION
+    | typeof GATE19_POLICY_VERSION
+    | typeof GATE20_POLICY_VERSION
+    | typeof POLICY_VERSION
+  rendererVersion:
+    | typeof LEGACY_RENDERER_VERSION
+    | typeof GATE19_RENDERER_VERSION
+    | typeof GATE20_RENDERER_VERSION
+    | typeof RENDERER_VERSION
   operation: Operation
   cutAsOf: number
   throughSharedFrontier: LearningFrontier.Snapshot

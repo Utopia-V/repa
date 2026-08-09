@@ -1,7 +1,7 @@
 export * as Representation from "./representation"
 
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
-import { and, asc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { Context, Effect, Exit, Layer, Scope, Semaphore } from "effect"
 import { Artifact } from "./artifact"
 import { ContentRoot } from "./content-root"
@@ -1224,6 +1224,75 @@ export function inspectLearningContextMetadata(tx: Transaction, representationRe
       currentUse,
       admittedReceipt,
       activeContinuedUseGrant: admittedReceipt?.continuedUseGrant,
+    }
+  })
+}
+
+/**
+ * Metadata-only current projection with a conservative historical-cut guard.
+ * The owner never labels a later availability, Artifact source, or continued-
+ * use change as though it already existed at an earlier `asOf`.
+ */
+export function inspectLearningContextMetadataAtCut(
+  tx: Transaction,
+  representationRevisionID: RevisionID,
+  asOf: number,
+) {
+  return Effect.gen(function* () {
+    const metadata = yield* inspectLearningContextMetadata(tx, representationRevisionID)
+    const latestGrant = yield* tx
+      .select({
+        id: RepresentationContinuedUseGrantTable.id,
+        version: RepresentationContinuedUseGrantTable.version,
+        disposition: RepresentationContinuedUseGrantTable.disposition,
+        timeAuthorized: RepresentationContinuedUseGrantTable.time_authorized,
+        timeRevoked: RepresentationContinuedUseGrantTable.time_revoked,
+        timeUpdated: RepresentationContinuedUseGrantTable.time_updated,
+      })
+      .from(RepresentationContinuedUseGrantTable)
+      .where(eq(RepresentationContinuedUseGrantTable.representation_revision_id, representationRevisionID))
+      .orderBy(desc(RepresentationContinuedUseGrantTable.time_updated), desc(RepresentationContinuedUseGrantTable.id))
+      .get()
+      .pipe(Effect.orDie)
+    const artifactAtCut = metadata.currentArtifact ?? metadata.representation.sourceProof.ordinary
+    const artifactDependency = yield* Artifact.inspectRevisionStatusAtCut(tx, {
+      artifactID: artifactAtCut.effectiveArtifactID,
+      revisionID: artifactAtCut.currentRevisionID,
+      attribution: artifactAtCut.attribution,
+      asOf,
+    })
+    const artifactChangedAt =
+      artifactDependency &&
+      "state" in artifactDependency.activeSource &&
+      artifactDependency.activeSource.state === "changed_after_as_of"
+        ? artifactDependency.activeSource.latestTimeUpdated
+        : undefined
+    const latestTime = Math.max(
+      metadata.representation.timeAccepted,
+      metadata.representation.availability.timeUpdated,
+      latestGrant?.timeUpdated ?? 0,
+      artifactChangedAt ?? 0,
+    )
+    if (latestTime > asOf) {
+      return {
+        representationRevisionID,
+        dependencyAtCut: { state: "changed_after_as_of" as const, latestTime },
+      }
+    }
+    return {
+      ...metadata,
+      dependencyAtCut: { state: "current" as const },
+      artifactDependency,
+      latestGrant: latestGrant
+        ? {
+            id: latestGrant.id,
+            version: latestGrant.version,
+            disposition: latestGrant.disposition,
+            timeAuthorized: latestGrant.timeAuthorized,
+            timeRevoked: latestGrant.timeRevoked ?? undefined,
+            timeUpdated: latestGrant.timeUpdated,
+          }
+        : undefined,
     }
   })
 }

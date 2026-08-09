@@ -253,6 +253,61 @@ export function requireAvailableSource(
   })
 }
 
+/**
+ * Read-only owner-native status for a durable learner occurrence. The admitted
+ * occurrence and its tombstone are deliberately returned separately: deletion
+ * changes current availability without rewriting the admitted source basis.
+ */
+export function inspectSourceStatusAtCut(
+  tx: Transaction,
+  input: { readonly occurrenceID: OccurrenceID; readonly asOf: number },
+) {
+  return Effect.gen(function* () {
+    const occurrence = yield* tx
+      .select()
+      .from(AdmittedLearnerOccurrenceTable)
+      .where(eq(AdmittedLearnerOccurrenceTable.id, input.occurrenceID))
+      .get()
+      .pipe(Effect.orDie)
+    const tombstone = yield* tx
+      .select()
+      .from(LearnerOccurrenceTombstoneTable)
+      .where(eq(LearnerOccurrenceTombstoneTable.occurrence_id, input.occurrenceID))
+      .get()
+      .pipe(Effect.orDie)
+    const admitted = occurrence && occurrence.time_admitted <= input.asOf ? occurrence : undefined
+    const deleted = tombstone && tombstone.time_deleted <= input.asOf ? tombstone : undefined
+    return {
+      owner: "learner_occurrence" as const,
+      occurrenceID: input.occurrenceID,
+      asOf: input.asOf,
+      state: !admitted
+        ? ("missing" as const)
+        : deleted
+          ? ("source_unavailable" as const)
+          : ("available" as const),
+      admitted: admitted
+        ? {
+            originSessionID: admitted.origin_session_id,
+            originMessageID: admitted.origin_message_id,
+            sourceOrder: admitted.source_order,
+            timeAdmitted: admitted.time_admitted,
+            sourceTemporalState: admitted.source_temporal_state,
+            sourceTimeZone: admitted.source_timezone ?? undefined,
+            sourceUTCOffsetMinutes: admitted.source_utc_offset_minutes ?? undefined,
+            sourceTemporalUnavailableReason: admitted.source_temporal_unavailable_reason ?? undefined,
+          }
+        : undefined,
+      tombstone: deleted
+        ? {
+            reason: deleted.reason,
+            timeDeleted: deleted.time_deleted,
+          }
+        : undefined,
+    }
+  })
+}
+
 export function markSourceUnavailable(
   tx: Transaction,
   input: { readonly occurrenceID: OccurrenceID; readonly timeDeleted: number },

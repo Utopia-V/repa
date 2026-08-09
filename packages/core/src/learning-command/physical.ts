@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, or } from "drizzle-orm"
+import { and, asc, eq, ne, notExists, or } from "drizzle-orm"
 import { Effect } from "effect"
 import { SessionSchema } from "../session/schema"
 import { MessageTable, PartTable } from "../session/sql"
@@ -319,6 +319,12 @@ export function removeNoEffectInvocationsForAssistant(tx: Transaction, assistant
         and(
           eq(LearningCommandInvocationTable.assistant_message_id, assistantMessageID),
           ne(LearningCommandInvocationTable.status, "applied"),
+          notExists(
+            tx
+              .select({ id: LearningCommandReceiptTable.id })
+              .from(LearningCommandReceiptTable)
+              .where(eq(LearningCommandReceiptTable.invocation_part_id, LearningCommandInvocationTable.part_id)),
+          ),
         ),
       )
       .all()
@@ -329,6 +335,12 @@ export function removeNoEffectInvocationsForAssistant(tx: Transaction, assistant
         and(
           eq(LearningCommandInvocationTable.assistant_message_id, assistantMessageID),
           ne(LearningCommandInvocationTable.status, "applied"),
+          notExists(
+            tx
+              .select({ id: LearningCommandReceiptTable.id })
+              .from(LearningCommandReceiptTable)
+              .where(eq(LearningCommandReceiptTable.invocation_part_id, LearningCommandInvocationTable.part_id)),
+          ),
         ),
       )
       .run()
@@ -349,6 +361,12 @@ export function removeNoEffectInvocationsForSession(tx: Transaction, sessionID: 
         and(
           eq(LearningCommandInvocationTable.session_id, sessionID),
           ne(LearningCommandInvocationTable.status, "applied"),
+          notExists(
+            tx
+              .select({ id: LearningCommandReceiptTable.id })
+              .from(LearningCommandReceiptTable)
+              .where(eq(LearningCommandReceiptTable.invocation_part_id, LearningCommandInvocationTable.part_id)),
+          ),
         ),
       )
       .all()
@@ -359,6 +377,12 @@ export function removeNoEffectInvocationsForSession(tx: Transaction, sessionID: 
         and(
           eq(LearningCommandInvocationTable.session_id, sessionID),
           ne(LearningCommandInvocationTable.status, "applied"),
+          notExists(
+            tx
+              .select({ id: LearningCommandReceiptTable.id })
+              .from(LearningCommandReceiptTable)
+              .where(eq(LearningCommandReceiptTable.invocation_part_id, LearningCommandInvocationTable.part_id)),
+          ),
         ),
       )
       .run()

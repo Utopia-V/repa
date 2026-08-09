@@ -74,6 +74,7 @@ import { LearningCommand, Occurrence } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
+import { Assignment } from "@opencode-ai/core/assignment"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
@@ -3243,6 +3244,299 @@ it.instance(
           .pipe(Effect.orDie),
       ).toBeUndefined()
       expect(JSON.stringify(afterSourceDeletion)).not.toContain(explanation)
+    }),
+  { config: cfg },
+  60_000,
+)
+
+it.instance(
+  "keeps non-Assignment obligations out of durable Assignment state in the released-v1 Agent loop",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const base = Math.floor(Date.now() / 1_000) * 1_000
+      setSystemTime(new Date(base))
+      yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
+
+      const cases = [
+        {
+          label: "self promise",
+          request: "I promise myself I'll review chapter 3 by Friday.",
+          response: "That is your self-commitment, not an externally existing Assignment record.",
+        },
+        {
+          label: "dated goal",
+          request: "I want to understand linear algebra by December.",
+          response: "That is a dated learning Goal, not an Assignment obligation.",
+        },
+        {
+          label: "Tutor proposed practice",
+          request: "Give me one short induction exercise to try now.",
+          response: "Try proving that the sum of the first n odd numbers is n squared.",
+        },
+        {
+          label: "administrative deadline",
+          request: "Course registration closes Friday; just tell me what that means.",
+          response: "That is an administrative deadline, not a learning-relevant Assignment.",
+        },
+        {
+          label: "no learning consumer",
+          request: "The library says I must return the textbook Friday; do not teach, guide, review, or plan around it.",
+          response: "That return obligation has no teaching, guided-work, review, or Planning consumer here.",
+        },
+      ] as const
+
+      for (const [index, item] of cases.entries()) {
+        const before = yield* database.db.get(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation
+              WHERE command_name = ${Assignment.UPDATE_CAPABILITY}) AS invocations,
+            (SELECT count(*) FROM assignment) AS assignments,
+            (SELECT count(*) FROM assignment_revision) AS revisions,
+            (SELECT count(*) FROM assignment_effect) AS effects,
+            (SELECT count(*) FROM assignment_commit_seal) AS seals
+        `)
+        const hitIndex = (yield* llm.hits).length
+        yield* llm.text(item.response)
+        const sessionID = SessionID.create()
+        const turnID = Turn.ID.create()
+        yield* prompt.start({
+          sessionID,
+          turnID,
+          inputID: Turn.InputID.create(),
+          messageID: MessageID.ascending(),
+          agent: "repa",
+          model: ref,
+          limits: { model: 1, tool: 1 },
+          session: { title: `Assignment exclusion ${index + 1}: ${item.label}` },
+          parts: [{ type: "text", text: item.request }],
+        })
+        expect((yield* prompt.awaitTurn(sessionID, turnID)).terminal).toMatchObject({
+          outcome: "completed",
+          counters: { model: 1, tool: 0 },
+        })
+
+        const providerSurface = providerText((yield* llm.hits)[hitIndex]?.body).join("\n")
+        expect(providerSurface).toContain(item.request)
+        expect(providerSurface).toContain(
+          "Use update_assignment only for an existing, source-relative, substantial learning obligation",
+        )
+        expect(providerSurface).toContain(
+          "A learner self-promise, dated Goal, Tutor-proposed exercise or practice move, administrative deadline, or obligation with no real learning consumer is not an Assignment",
+        )
+        expect(providerSurface).toContain(
+          "interpreted_learner_report and interpreted_source_observation are the only creation causes",
+        )
+
+        const messages = yield* sessions.messages({ sessionID })
+        expect(
+          messages
+            .flatMap((message) => message.parts)
+            .some((part) => part.type === "tool" && part.tool === Assignment.UPDATE_CAPABILITY),
+        ).toBe(false)
+        expect(
+          messages
+            .flatMap((message) => message.parts)
+            .some((part) => part.type === "text" && part.text === item.response),
+        ).toBe(true)
+        expect(
+          yield* database.db.get(sql`
+            SELECT
+              (SELECT count(*) FROM learning_command_invocation
+                WHERE command_name = ${Assignment.UPDATE_CAPABILITY}) AS invocations,
+              (SELECT count(*) FROM assignment) AS assignments,
+              (SELECT count(*) FROM assignment_revision) AS revisions,
+              (SELECT count(*) FROM assignment_effect) AS effects,
+              (SELECT count(*) FROM assignment_commit_seal) AS seals
+          `),
+        ).toEqual(before)
+        yield* sessions.remove(sessionID)
+      }
+    }),
+  { config: cfg },
+  60_000,
+)
+
+it.instance(
+  "uses one exact Assignment lazy read for explicit teaching without turning obligation pressure into task activity",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
+      const base = Math.floor(Date.now() / 1_000) * 1_000
+      setSystemTime(new Date(base))
+      yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
+
+      const report =
+        "My algorithms course problem set 4 requires me to explain why binary search maintains its loop invariant."
+      const summary = "Explain the binary-search loop invariant for problem set 4"
+      const createInput = {
+        cause: {
+          type: "interpreted_learner_report" as const,
+          excerpt: {
+            text: report,
+            startByte: 0,
+            endByte: new TextEncoder().encode(report).byteLength,
+          },
+        },
+        intents: [
+          {
+            type: "create" as const,
+            createOrdinal: 0,
+            snapshot: {
+              obligationSummary: summary,
+              learningContext: "Teach the invariant before guided binary-search work",
+              scope: { type: "learner_home" as const },
+              dueBasis: { type: "unresolved" as const },
+            },
+          },
+        ],
+      }
+      const creationSessionID = SessionID.create()
+      const creationTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, createInput)
+      yield* llm.text("I retained the learning-related obligation without treating it as completed work.")
+      yield* prompt.start({
+        sessionID: creationSessionID,
+        turnID: creationTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Assignment teaching trace creation",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: report }],
+      })
+      const creationTerminal = (yield* prompt.awaitTurn(creationSessionID, creationTurnID)).terminal
+      expect(creationTerminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+
+      const discovered = yield* database.db.transaction((tx) =>
+        Assignment.read(tx, { type: "discover", disposition: "open" }, { asOf: base + 1, limit: 8 }),
+      )
+      const created = discovered.items.find(
+        (item) => "revision" in item && item.revision.snapshot.obligationSummary === summary,
+      )
+      if (!created || !("revision" in created)) {
+        return yield* Effect.die("Released-v1 creation did not commit the exact Assignment revision")
+      }
+      expect(created).toMatchObject({
+        assignmentRevisionRef: {
+          assignmentID: created.revision.assignmentID,
+          revisionID: created.revision.id,
+          version: 1,
+        },
+        currentHeadRelation: "current",
+        revision: { disposition: "open" },
+      })
+      const assignmentID = created.revision.assignmentID
+      const revisionID = created.revision.id
+      const writesBeforeTeaching = yield* database.db
+        .get(sql`
+          SELECT
+            (SELECT count(*) FROM assignment_revision) AS revisions,
+            (SELECT count(*) FROM assignment_effect) AS effects,
+            (SELECT count(*) FROM assignment_commit_seal) AS seals
+        `)
+        .pipe(Effect.orDie)
+
+      const helpSessionID = SessionID.create()
+      const helpTurnID = Turn.ID.create()
+      const helpRequest =
+        "Use the exact Assignment detail, then teach me the binary-search invariant now. Do not manage or complete my task."
+      const explanation =
+        "Binary search keeps the target, if present, inside the current interval. Each comparison removes only the half that cannot contain it, so the invariant remains true while the interval shrinks."
+      const helpHits = (yield* llm.hits).length
+      yield* llm.tool(Assignment.READ_CAPABILITY, { action: "revision", assignmentID, revisionID })
+      yield* llm.text(explanation)
+      yield* prompt.start({
+        sessionID: helpSessionID,
+        turnID: helpTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Assignment explicit teaching consumer",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: helpRequest }],
+      })
+      expect((yield* prompt.awaitTurn(helpSessionID, helpTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+
+      const contextBlock = providerText((yield* llm.hits)[helpHits]?.body).find((value) =>
+        value.includes("[Repa learning context — protected]"),
+      )
+      if (!contextBlock) return yield* Effect.die("Explicit teaching request omitted Assignment Learning Context")
+      expect(contextBlock).toContain("assignment: sole_candidate_pressure")
+      expect(contextBlock).toContain(summary)
+      expect(contextBlock).toContain(created.revision.id)
+      expect(contextBlock).toContain("not the current/default task, a priority, a plan, a commitment, activity")
+
+      const messages = yield* sessions.messages({ sessionID: helpSessionID })
+      const readPart = messages
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === Assignment.READ_CAPABILITY,
+        )
+      if (!readPart || readPart.state.status !== "completed") {
+        return yield* Effect.die("Explicit teaching request omitted the completed exact Assignment read")
+      }
+      expect(JSON.parse(readPart.state.output)).toMatchObject({
+        page: {
+          returnedCount: 1,
+          items: [
+            {
+              id: revisionID,
+              assignmentID,
+              version: 1,
+              snapshot: { obligationSummary: summary },
+              disposition: "open",
+            },
+          ],
+        },
+      })
+      const postReadProviderBody = providerText((yield* llm.hits)[helpHits + 1]?.body).join("\n")
+      expect(postReadProviderBody).toContain(revisionID)
+      expect(postReadProviderBody).toContain(summary)
+      expect(
+        messages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === explanation),
+      ).toBe(true)
+
+      expect(
+        yield* database.db
+          .get(sql`
+            SELECT
+              (SELECT count(*) FROM assignment_revision) AS revisions,
+              (SELECT count(*) FROM assignment_effect) AS effects,
+              (SELECT count(*) FROM assignment_commit_seal) AS seals
+          `)
+          .pipe(Effect.orDie),
+      ).toEqual(writesBeforeTeaching)
+      const afterTeaching = yield* database.db.transaction((tx) =>
+        Assignment.read(tx, { type: "revision", assignmentID, revisionID }, { asOf: base + 2 }),
+      )
+      expect(afterTeaching.items[0]).toMatchObject({ id: revisionID, disposition: "open" })
+
+      yield* sessions.remove(creationSessionID)
+      yield* sessions.remove(helpSessionID)
     }),
   { config: cfg },
   60_000,

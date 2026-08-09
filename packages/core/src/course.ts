@@ -1,7 +1,7 @@
 export * as Course from "./course"
 
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
-import { and, asc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, isNull, lte, or, sql } from "drizzle-orm"
 import { Context, Effect, Layer, Schema } from "effect"
 import { isDeepStrictEqual } from "node:util"
 import { Database } from "./database/database"
@@ -42,6 +42,7 @@ import {
   CourseItemTable,
   CourseSelectionAcceptanceCommitSealTable,
   CourseSelectionAcceptanceEffectTable,
+  CourseStateHistoryTable,
   CourseTable,
   CourseViewRevisionItemTable,
   CourseViewRevisionMappingGroupTable,
@@ -2096,6 +2097,42 @@ export function inspectPreferenceTarget(tx: Transaction, courseID: CourseID) {
       courseID,
       title: course.title,
       stateVersion: course.state_version,
+      timeUpdated: course.time_updated,
+    } satisfies PreferenceTargetStatus
+  })
+}
+
+export function inspectPreferenceTargetAtCut(tx: Transaction, courseID: CourseID, asOf: number) {
+  return Effect.gen(function* () {
+    const course = yield* tx
+      .select()
+      .from(CourseStateHistoryTable)
+      .where(and(eq(CourseStateHistoryTable.course_id, courseID), lte(CourseStateHistoryTable.time_updated, asOf)))
+      .orderBy(desc(CourseStateHistoryTable.time_updated), desc(CourseStateHistoryTable.version))
+      .get()
+      .pipe(Effect.orDie)
+    if (!course) {
+      return {
+        status: "unavailable",
+        courseID,
+        cause: "course_not_found",
+      } satisfies PreferenceTargetStatus
+    }
+    if (course.withdrawal_reason) {
+      return {
+        status: "unavailable",
+        courseID,
+        cause: "course_withdrawn",
+        title: course.title,
+        stateVersion: course.version,
+        timeUpdated: course.time_updated,
+      } satisfies PreferenceTargetStatus
+    }
+    return {
+      status: "available",
+      courseID,
+      title: course.title,
+      stateVersion: course.version,
       timeUpdated: course.time_updated,
     } satisfies PreferenceTargetStatus
   })

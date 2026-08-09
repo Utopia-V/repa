@@ -68,6 +68,8 @@ import { UpdateLearnerResponseEvidenceTool } from "./update-learner-response-evi
 import { LearnerResponseEvidenceReadTool } from "./learner-response-evidence-read"
 import { UpdateFutureAttentionTool } from "./update-future-attention"
 import { FutureAttentionReadTool } from "./future-attention-read"
+import { UpdateAssignmentTool } from "./update-assignment"
+import { AssignmentReadTool } from "./assignment-read"
 import {
   ContentInventoryTool,
   ContentReadTool,
@@ -89,6 +91,7 @@ import { Artifact } from "@opencode-ai/core/artifact"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import { Representation } from "@opencode-ai/core/representation"
 import { LearningContext } from "@opencode-ai/core/learning-context"
+import { Assignment } from "@opencode-ai/core/assignment"
 
 export function webSearchEnabled(_providerID: ProviderV2.ID, flags = { exa: false, parallel: false }) {
   return flags.exa || flags.parallel
@@ -174,6 +177,8 @@ const layer = Layer.effect(
     const learnerResponseEvidenceRead = yield* LearnerResponseEvidenceReadTool
     const updateFutureAttention = yield* UpdateFutureAttentionTool
     const futureAttentionRead = yield* FutureAttentionReadTool
+    const updateAssignment = yield* UpdateAssignmentTool
+    const assignmentRead = yield* AssignmentReadTool
     const contentRoots = yield* ContentRootsTool
     const contentInventory = yield* ContentInventoryTool
     const contentSearch = yield* ContentSearchTool
@@ -310,6 +315,8 @@ const layer = Layer.effect(
           learnerResponseEvidenceRead: Tool.init(learnerResponseEvidenceRead),
           updateFutureAttention: Tool.init(updateFutureAttention),
           futureAttentionRead: Tool.init(futureAttentionRead),
+          updateAssignment: Tool.init(updateAssignment),
+          assignmentRead: Tool.init(assignmentRead),
           contentRoots: Tool.init(contentRoots),
           contentInventory: Tool.init(contentInventory),
           contentSearch: Tool.init(contentSearch),
@@ -340,6 +347,8 @@ const layer = Layer.effect(
             tool.learnerResponseEvidenceRead,
             tool.updateFutureAttention,
             tool.futureAttentionRead,
+            tool.updateAssignment,
+            tool.assignmentRead,
             tool.contentRoots,
             tool.contentInventory,
             tool.contentSearch,
@@ -426,6 +435,7 @@ const layer = Layer.effect(
 
     const tools: Interface["tools"] = Effect.fn("ToolRegistry.tools")(function* (input) {
       const filtered = (yield* all()).filter((tool) => {
+        if (tool.id === UpdateAssignmentTool.id && (input.authority?.length ?? 0) > 0) return false
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
         }
@@ -601,6 +611,7 @@ export const node = LayerNode.make({
     MaterialMap.node,
     MaterialMap.tutorCurrentUseReaderNode,
     Representation.node,
+    Assignment.readNode,
   ],
 })
 

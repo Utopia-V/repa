@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { Assignment } from "@opencode-ai/core/assignment"
 import type { Course } from "@opencode-ai/core/course"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
@@ -1620,3 +1621,483 @@ describe("future-attention semantic presentation", () => {
     expect(JSON.stringify(finalized)).not.toContain(receiptID)
   })
 })
+
+describe("assignment semantic presentation", () => {
+  test("binds exact source, generated identities, obligation meaning, and non-implications into approval", () => {
+    const candidate = assignmentCandidate()
+    const proposal = LearningCommandPresentation.assignmentCapability(candidate, envelope)
+    const scope = SemanticPresentation.assignmentScope(candidate)
+    const exact = request({
+      permission: Assignment.UPDATE_CAPABILITY,
+      patterns: [Assignment.PERMISSION_PATTERN],
+      always: [Assignment.PERMISSION_PATTERN],
+      metadata: {
+        assignmentKind: "change_set",
+        commandFingerprint: candidate.commandFingerprint,
+        issuance: "root",
+        scope,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+
+    expect(SemanticPresentation.readProposal(exact)).toMatchObject({
+      type: "valid",
+      value: {
+        capability: Assignment.UPDATE_CAPABILITY,
+        title: "Update Assignment records",
+        approval: "policy",
+        facts: expect.arrayContaining([
+          { label: "Issuance", value: "root" },
+          { label: "Cause", value: "interpreted_learner_report" },
+          {
+            label: "Exact learner source",
+            value: expect.stringContaining("lco_assignment_presentation; session ses_test; message msg_parent"),
+          },
+          {
+            label: "Source excerpt",
+            value: expect.stringMatching(/^0\.\.\d+ bytes; sha256 [0-9a-f]{64}; Analyze the semaphore proof/),
+          },
+          {
+            label: "Assignment change 1",
+            value: expect.stringContaining(
+              "create #0; asn_00000000000000000000000000/asr_00000000000000000000000000; disposition open",
+            ),
+          },
+          {
+            label: "Assignment change 1",
+            value: expect.stringContaining(
+              "summary Analyze the semaphore proof; learning context Teach the invariant before guided work; scope LearnerHome; due 2037-07-03 (inclusive); expiry none",
+            ),
+          },
+          {
+            label: "Does not imply",
+            value: "activity, progress, mastery, learner_commitment, study_plan, selected_tutor_move",
+          },
+        ]),
+      },
+    })
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: {
+          ...exact.metadata,
+          scope: {
+            ...scope,
+            sourceBasis: {
+              ...(scope.sourceBasis as Record<string, unknown>),
+              excerpt: { ...(scope.sourceBasis as { excerpt: Record<string, unknown> }).excerpt, sha256: "0".repeat(64) },
+            },
+          },
+        },
+      }),
+    ).toEqual({ type: "invalid" })
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: {
+          ...exact.metadata,
+          scope: {
+            ...scope,
+            materialized: [{ ...scope.materialized[0]!, assignmentID: "asn_11111111111111111111111111" }],
+          },
+        },
+      }),
+    ).toEqual({ type: "invalid" })
+    expect(() =>
+      LearningCommandPresentation.assignmentCapability(
+        { ...candidate, agentAction: { ...candidate.agentAction, kind: "delegated" } },
+        envelope,
+      ),
+    ).toThrow("Assignment capability requires a root Agent action")
+  })
+
+  test("shows the complete generated successor meaning before approving an Assignment replacement", () => {
+    const candidate = assignmentReplacementCandidate()
+    const proposal = LearningCommandPresentation.assignmentCapability(candidate, envelope)
+    const scope = SemanticPresentation.assignmentScope(candidate)
+    const exact = request({
+      permission: Assignment.UPDATE_CAPABILITY,
+      patterns: [Assignment.PERMISSION_PATTERN],
+      always: [Assignment.PERMISSION_PATTERN],
+      metadata: {
+        assignmentKind: "change_set",
+        commandFingerprint: candidate.commandFingerprint,
+        issuance: "root",
+        scope,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+
+    expect(SemanticPresentation.readProposal(exact)).toMatchObject({
+      type: "valid",
+      value: {
+        facts: expect.arrayContaining([
+          {
+            label: "Assignment change 1",
+            value: expect.stringContaining(
+              "new successor #1 asn_11111111111111111111111111/asr_22222222222222222222222222",
+            ),
+          },
+          {
+            label: "Assignment change 1",
+            value: expect.stringContaining(
+              "summary Explain the binary-search invariant for problem set 4; learning context Teach the invariant before guided proof work; scope LearnerHome; due 2037-07-10 (inclusive); expiry 2037-07-11 (exclusive)",
+            ),
+          },
+        ]),
+      },
+    })
+  })
+
+  test("projects a truthful committed Assignment result through the retained typed Tool carrier", () => {
+    const candidate = assignmentCandidate()
+    const settlement = {
+      outcome: "applied" as const,
+      assignmentKind: "change_set" as const,
+      receiptID: "lcr_assignment_presentation",
+      effectID: candidate.effectID,
+      changes: [
+        {
+          ordinal: 0,
+          operation: "create" as const,
+          assignmentID: candidate.materialized[0]!.assignmentID,
+          committedRevision: {
+            assignmentID: candidate.materialized[0]!.assignmentID,
+            revisionID: candidate.materialized[0]!.revisionID,
+            version: 1,
+          },
+        },
+      ],
+      intentResults: [
+        {
+          outcome: "changed" as const,
+          ordinal: 0,
+          operation: "create" as const,
+          assignmentID: candidate.materialized[0]!.assignmentID,
+          committedRevision: {
+            assignmentID: candidate.materialized[0]!.assignmentID,
+            revisionID: candidate.materialized[0]!.revisionID,
+            version: 1,
+          },
+        },
+      ],
+      settlementTime: 2,
+      settlementOrder: 1,
+    }
+    const result = LearningCommandPresentation.assignmentSettlementResult(
+      settlement as unknown as LearningCommand.PhysicalSettlement,
+      {
+        version: 1,
+        disposition: "candidate_v1",
+        status: "applied",
+        settlement,
+        candidate,
+        capabilityOutcome: "policy_allow",
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    const projection = SemanticPresentation.projectResultBasis(result.basis)
+    expect(projection).toMatchObject({
+      capability: Assignment.UPDATE_CAPABILITY,
+      title: "Assignment settlement",
+      outcome: "committed",
+      facts: expect.arrayContaining([
+        {
+          label: "Assignment result 1",
+          value:
+            "create; asn_00000000000000000000000000 -> asr_00000000000000000000000000 v1",
+        },
+        {
+          label: "Does not imply",
+          value:
+            "activity, elapsed-work progress, mastery, learner commitment, a study plan, or an automatically selected Tutor move",
+        },
+      ]),
+    })
+    const part = {
+      id: envelope.partID,
+      sessionID: envelope.sessionID,
+      messageID: envelope.assistantMessageID,
+      type: "tool",
+      tool: Assignment.UPDATE_CAPABILITY,
+      callID: envelope.providerCallID,
+      state: {
+        status: "completed",
+        input: candidate.canonicalCommand,
+        output: "{}",
+        title: projection!.title,
+        metadata: {
+          command: Assignment.UPDATE_CAPABILITY,
+          commandVersion: Assignment.UPDATE_VERSION,
+          outcome: settlement.outcome,
+          durablySettled: true,
+          truncated: false,
+          ...SemanticPresentation.metadata(result),
+        },
+        time: { start: 1, end: 2 },
+      },
+    } as SessionV1.ToolPart
+    expect(SemanticPresentation.readResult(part)).toMatchObject({
+      type: "valid",
+      value: { capability: Assignment.UPDATE_CAPABILITY, outcome: "committed" },
+    })
+    if (result.basis.kind !== "assignment_result" || !result.basis.effect) {
+      throw new Error("Expected an Assignment result basis")
+    }
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...result.basis,
+        effect: { ...result.basis.effect, changes: [] },
+      }),
+    ).toBeUndefined()
+  })
+
+  test("projects an already-settled Assignment no-change result without inventing an effect", () => {
+    const candidate = assignmentCandidate()
+    const receiptID = LearningCommand.createReceiptID()
+    const currentRevision = {
+      assignmentID: candidate.materialized[0]!.assignmentID,
+      revisionID: candidate.materialized[0]!.revisionID,
+      version: 1,
+    }
+    const settlement = {
+      outcome: "already_applied" as const,
+      assignmentKind: "change_set" as const,
+      existingOutcome: "no_change" as const,
+      receiptID,
+      changes: [] as const,
+      intentResults: [
+        {
+          outcome: "no_change" as const,
+          ordinal: 0,
+          operation: "revise" as const,
+          assignmentID: currentRevision.assignmentID,
+          currentRevision,
+        },
+      ],
+      settlementTime: 2,
+      settlementOrder: 1,
+    }
+    const state = {
+      version: 1 as const,
+      disposition: "semantic_terminal_v1" as const,
+      status: "already_applied" as const,
+      settlement,
+      semanticTerminal: {
+        kind: "semantic_terminal_v1" as const,
+        outcome: "already_applied" as const,
+        commandFingerprint: candidate.commandFingerprint,
+        semanticAddressFingerprint: candidate.semanticAddressFingerprint,
+        existingOwner: { type: "no_change" as const, receiptID: settlement.receiptID },
+      },
+      timeAdmitted: 1,
+    }
+    const result = LearningCommandPresentation.assignmentSettlementResult(
+      settlement as unknown as LearningCommand.PhysicalSettlement,
+      state,
+      envelope,
+    )
+    const projection = SemanticPresentation.projectResultBasis(result.basis)
+    expect(projection).toMatchObject({
+      capability: Assignment.UPDATE_CAPABILITY,
+      title: "Assignment settlement",
+      outcome: "already_applied",
+      summary: "The exact Assignment command was already settled as no change; no Assignment effect was created.",
+      facts: expect.arrayContaining([
+        { label: "Existing semantic outcome", value: "no_change" },
+        {
+          label: "Assignment result 1",
+          value: `revise; ${currentRevision.assignmentID} unchanged at ${currentRevision.revisionID} v1`,
+        },
+      ]),
+    })
+    if (result.basis.kind !== "assignment_result" || !result.basis.effect) {
+      throw new Error("Expected an Assignment no-change result basis")
+    }
+    const changedResult = {
+      outcome: "changed" as const,
+      ordinal: 0,
+      operation: "revise" as const,
+      assignmentID: currentRevision.assignmentID,
+      previousRevision: currentRevision,
+      committedRevision: { ...currentRevision, version: 2 },
+    }
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...result.basis,
+        effect: { ...result.basis.effect, effectID: candidate.effectID },
+      }),
+    ).toBeUndefined()
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...result.basis,
+        effect: { ...result.basis.effect, changes: [changedResult] },
+      }),
+    ).toBeUndefined()
+    expect(
+      SemanticPresentation.projectResultBasis({
+        ...result.basis,
+        effect: { ...result.basis.effect, intentResults: [changedResult] },
+      }),
+    ).toBeUndefined()
+  })
+})
+
+function assignmentCandidate(): Assignment.Candidate {
+  const source = "Analyze the semaphore proof by Friday."
+  const excerpt = { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength }
+  const command = Assignment.canonicalizeCommand({
+    cause: {
+      type: "interpreted_learner_report",
+      excerpt,
+    },
+    intents: [
+      {
+        type: "create",
+        createOrdinal: 0,
+        snapshot: {
+          obligationSummary: "Analyze the semaphore proof",
+          learningContext: "Teach the invariant before guided work",
+          scope: { type: "learner_home" },
+          dueBasis: {
+            type: "local_date",
+            civilDate: "2037-07-03",
+            comparator: "inclusive",
+            timeZone: { type: "fixed_offset", offsetMinutes: 0 },
+          },
+        },
+      },
+    ],
+  })
+  const causeBasis = {
+    type: "learner_occurrence" as const,
+    occurrenceID: "lco_assignment_presentation",
+    sourceOrder: 1,
+    sessionID: envelope.sessionID,
+    messageID: envelope.parentUserMessageID,
+    turnID: envelope.turnID,
+    inputID: envelope.inputID,
+    timeAdmitted: 1,
+    sourceTemporalContext: { timeZone: "UTC" },
+    excerpt: {
+      ...excerpt,
+      sha256: new Bun.CryptoHasher("sha256").update(source).digest("hex"),
+    },
+  }
+  const intent = command.intents[0]!
+  if (intent.type !== "create") throw new Error("Expected the Assignment presentation create intent")
+  return {
+    kind: "candidate_v1",
+    effectID: "ase_00000000000000000000000000" as Assignment.EffectID,
+    commandFingerprint: Assignment.commandFingerprint(command),
+    semanticAddressFingerprint: "1".repeat(64),
+    agentActionFingerprint: "2".repeat(64),
+    canonicalCommand: command,
+    agentAction: {
+      schemaVersion: 1,
+      kind: "root",
+      occurrenceID: causeBasis.occurrenceID,
+      sessionID: envelope.sessionID,
+      turnID: envelope.turnID,
+      inputID: envelope.inputID,
+      assistantMessageID: envelope.assistantMessageID,
+      invocationPartID: envelope.partID,
+      providerCallID: envelope.providerCallID,
+      emissionOrdinal: 0,
+      capabilityIdentity: Assignment.UPDATE_CAPABILITY,
+      capabilityVersion: Assignment.UPDATE_VERSION,
+      lineage: [],
+    },
+    causeBasis,
+    materialized: [
+      {
+        outcome: "changed",
+        ordinal: 0,
+        intent,
+        assignmentID: "asn_00000000000000000000000000" as Assignment.AssignmentID,
+        revisionID: "asr_00000000000000000000000000" as Assignment.RevisionID,
+        snapshot: intent.snapshot,
+        finalDisposition: "open",
+        creationSourceBasis: causeBasis,
+        effectiveSourceBasis: causeBasis,
+        sourceAdmissionBasis: { type: "learner_occurrence", basis: causeBasis },
+        sourceBasisRelation: "corrected_with_new_exact_source",
+      },
+    ],
+  } as unknown as Assignment.Candidate
+}
+
+function assignmentReplacementCandidate(): Assignment.Candidate {
+  const base = assignmentCandidate()
+  const command = Assignment.canonicalizeCommand({
+    cause: base.canonicalCommand.cause,
+    intents: [
+      {
+        type: "replace",
+        assignmentID: base.materialized[0]!.assignmentID,
+        expectedHead: {
+          revisionID: base.materialized[0]!.revisionID,
+          version: 1,
+          ownerCutFingerprint: "3".repeat(64),
+        },
+        sourceAction: { type: "rebind_current_source_to_cause" },
+        rationale: "Problem set 4 replaced the earlier proof obligation.",
+        successor: {
+          type: "create",
+          createOrdinal: 1,
+          snapshot: {
+            obligationSummary: "Explain the binary-search invariant for problem set 4",
+            learningContext: "Teach the invariant before guided proof work",
+            scope: { type: "learner_home" },
+            dueBasis: {
+              type: "local_date",
+              civilDate: "2037-07-10",
+              comparator: "inclusive",
+              timeZone: { type: "fixed_offset", offsetMinutes: 0 },
+            },
+            expiryBoundary: {
+              type: "local_date",
+              civilDate: "2037-07-11",
+              comparator: "exclusive",
+              timeZone: { type: "fixed_offset", offsetMinutes: 0 },
+            },
+          },
+        },
+      },
+    ],
+  })
+  const intent = command.intents[0]!
+  if (intent.type !== "replace" || intent.successor.type !== "create") {
+    throw new Error("Expected the Assignment presentation replacement intent")
+  }
+  const successor = {
+    assignmentID: "asn_11111111111111111111111111" as Assignment.AssignmentID,
+    revisionID: "asr_22222222222222222222222222" as Assignment.RevisionID,
+    version: 1,
+  }
+  return {
+    ...base,
+    commandFingerprint: Assignment.commandFingerprint(command),
+    canonicalCommand: command,
+    materialized: [
+      {
+        outcome: "changed",
+        ordinal: 0,
+        intent,
+        assignmentID: base.materialized[0]!.assignmentID,
+        revisionID: "asr_11111111111111111111111111" as Assignment.RevisionID,
+        successorAssignmentID: successor.assignmentID,
+        successorRevisionID: successor.revisionID,
+        successorSnapshot: intent.successor.snapshot,
+        snapshot: base.materialized[0]!.snapshot,
+        finalDisposition: "superseded",
+        relationTarget: successor,
+        creationSourceBasis: base.materialized[0]!.creationSourceBasis,
+        effectiveSourceBasis: base.materialized[0]!.effectiveSourceBasis,
+        sourceAdmissionBasis: base.materialized[0]!.sourceAdmissionBasis,
+        sourceBasisRelation: "corrected_with_new_exact_source",
+      },
+    ],
+  } as unknown as Assignment.Candidate
+}

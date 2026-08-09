@@ -10,6 +10,12 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { EventV2 } from "@opencode-ai/core/event"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
+import { Assignment } from "@opencode-ai/core/assignment"
+import {
+  AssignmentCapabilityIssueTable,
+  AssignmentCapabilitySettlementTable,
+  AssignmentEffectTable,
+} from "@opencode-ai/core/assignment/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import {
@@ -68,11 +74,14 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
 import { TurnModelOperationTable } from "@opencode-ai/core/turn/sql"
 import { Turn } from "@opencode-ai/schema/turn"
+import { Agent } from "@/agent/agent"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { LearningCommandRuntime } from "@/learning-command/runtime"
 import { Permission } from "@/permission"
 import { Session } from "@/session/session"
 import { recoverStartup } from "@/session/turn-recovery"
+import { AssignmentReadTool } from "@/tool/assignment-read"
+import { Truncate } from "@/tool/truncate"
 import { expect, test } from "bun:test"
 import { eq, sql } from "drizzle-orm"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer, Schema } from "effect"
@@ -1144,6 +1153,830 @@ it.effect("settles a live Agent-native Goal permission abort without inventing a
     expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
     expect(yield* db.select().from(LearnerGoalEffectTable).all()).toEqual([])
     expect(permissionRequests).toHaveLength(1)
+  }),
+)
+
+it.effect("runs one root Assignment through exact proposal, settlement, presentation, and physical replay", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const source = "Analyze the semaphore proof by Friday."
+    const input = assignmentCreateInput(source, "Analyze the semaphore proof")
+    const interaction = yield* seedInteraction(
+      db,
+      "assignment-root-runtime",
+      input,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      { text: source, timeZone: "UTC" },
+    )
+
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, interaction.registration)
+    const result = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      input,
+      context(
+        interaction.registration,
+        "allow",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+
+    expect(permissionRequests).toHaveLength(1)
+    const request = permissionRequests[0]!
+    expect(
+      SemanticPresentation.readProposal(
+        { ...request, id: request.id ?? PermissionV1.ID.ascending() },
+        true,
+      ).type,
+    ).toBe("valid")
+    expect(request).toMatchObject({
+      permission: LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      patterns: [Assignment.PERMISSION_PATTERN],
+      always: [Assignment.PERMISSION_PATTERN],
+      metadata: {
+        assignmentKind: "change_set",
+        issuance: "root",
+        scope: {
+          sourceBasis: {
+            type: "learner_occurrence",
+            occurrenceID: interaction.occurrenceID,
+            sessionID: interaction.registration.sessionID,
+            messageID: interaction.registration.parentUserMessageID,
+            turnID: interaction.registration.turnID,
+            inputID: interaction.registration.inputID,
+            excerpt: {
+              text: source,
+              startByte: 0,
+              endByte: new TextEncoder().encode(source).byteLength,
+              sha256: new Bun.CryptoHasher("sha256").update(source).digest("hex"),
+            },
+          },
+          materialized: [
+            {
+              outcome: "changed",
+              operation: "create",
+              assignmentID: expect.stringMatching(/^asn_[0-9A-Za-z]{26}$/),
+              revisionID: expect.stringMatching(/^asr_[0-9A-Za-z]{26}$/),
+              finalDisposition: "open",
+            },
+          ],
+        },
+      },
+    })
+    const output = JSON.parse(result.output)
+    expect(output).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "policy_allow",
+      settlement: {
+        outcome: "applied",
+        assignmentKind: "change_set",
+        changes: [{ operation: "create", committedRevision: { version: 1 } }],
+        intentResults: [{ outcome: "changed", operation: "create" }],
+      },
+    })
+    expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(1)
+
+    const replay = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      input,
+      context(
+        interaction.registration,
+        "deny",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(replay).toEqual(result)
+    expect(permissionRequests).toHaveLength(1)
+  }),
+)
+
+it.effect("settles Assignment semantic duplicate and conflicting reuse before live source or permission", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const time = Date.parse("2026-08-08T07:30:00.000Z")
+    const source = "Record the semaphore proof obligation."
+    const input = assignmentCreateInput(source, "Analyze the semaphore proof")
+    const conflictInput = assignmentCreateInput(source, "Memorize the semaphore proof")
+    const interaction = yield* seedInteraction(
+      db,
+      "assignment-semantic-origin",
+      input,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      { text: source, time, timeZone: "UTC" },
+    )
+    const duplicate = yield* insertAssistant(
+      db,
+      interaction,
+      "assignment-semantic-duplicate",
+      input,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      time + 1,
+    )
+    const conflict = yield* insertAssistant(
+      db,
+      interaction,
+      "assignment-semantic-conflict",
+      conflictInput,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      time + 2,
+    )
+
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, interaction.registration)
+    const applied = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      input,
+      context(
+        interaction.registration,
+        "allow",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+    const requestsAfterApply = permissionRequests.length
+    yield* db
+      .insert(LearnerOccurrenceTombstoneTable)
+      .values({ occurrence_id: interaction.occurrenceID, reason: "source_unavailable", time_deleted: time + 3 })
+      .run()
+
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, duplicate)
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, conflictInput, conflict)
+    const duplicateResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      input,
+      context(
+        duplicate,
+        "deny",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [{ ruleset: [], absence: "deny" }],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+    const conflictResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      conflictInput,
+      context(
+        conflict,
+        "deny",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [{ ruleset: [], absence: "deny" }],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+
+    expect(duplicateResult.metadata).toMatchObject({ outcome: "already_applied", durablySettled: true })
+    expect(JSON.parse(duplicateResult.output)).toMatchObject({
+      settlement: { outcome: "already_applied", assignmentKind: "change_set" },
+      disposition: "semantic_terminal_v1",
+      semanticTerminal: { outcome: "already_applied" },
+    })
+    expect(conflictResult.metadata).toMatchObject({
+      outcome: "error",
+      code: "semantic_conflict",
+      durablySettled: true,
+    })
+    expect(JSON.parse(conflictResult.output)).toMatchObject({
+      settlement: { outcome: "error", code: "semantic_conflict" },
+      disposition: "semantic_terminal_v1",
+      semanticTerminal: { outcome: "semantic_conflict" },
+    })
+    expect(permissionRequests).toHaveLength(requestsAfterApply)
+    expect(yield* exactPartResult(db, duplicate.partID)).toEqual(duplicateResult)
+    expect(yield* exactPartResult(db, conflict.partID)).toEqual(conflictResult)
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(1)
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(applied)
+  }),
+)
+
+it.effect("uses a later root model operation for exact Assignment self-correction and serializes a head race", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const time = Date.parse("2026-08-08T08:00:00.000Z")
+    const source = "Record the semaphore analysis obligation."
+    const createInput = assignmentCreateInput(source, "Analyze the semaphore proof")
+    const interaction = yield* seedInteraction(
+      db,
+      "assignment-agent-correction-origin",
+      createInput,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      { text: source, time, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      createInput,
+      interaction.registration,
+    )
+    const created = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      createInput,
+      context(
+        interaction.registration,
+        "allow",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+    const createdOutput = JSON.parse(created.output) as {
+      settlement: Assignment.AppliedSettlement
+    }
+    const assignmentID = createdOutput.settlement.changes[0]!.assignmentID
+    const beforePage = yield* db.transaction((tx) =>
+      Assignment.read(tx, { type: "current", assignmentID }, { asOf: time + 10 }),
+    )
+    const before = beforePage.items[0]
+    if (!before || !("current" in before)) return yield* Effect.die("Expected an Assignment head for correction")
+    const ownerRead = Assignment.ownerReadReference(before)
+    const expectedHead = {
+      revisionID: ownerRead.revisionID,
+      version: ownerRead.version,
+      ownerCutFingerprint: ownerRead.ownerCutFingerprint,
+    }
+    const correctionInput = (summary: string) => ({
+      cause: {
+        type: "agent_correction" as const,
+        rationale: "Correct the root Agent's earlier interpretation without claiming a new learner report.",
+        ownerReads: [ownerRead],
+      },
+      intents: [
+        {
+          type: "correct" as const,
+          assignmentID,
+          expectedHead,
+          snapshot: {
+            obligationSummary: summary,
+            learningContext: "Explain the invariant before guided proof work",
+            scope: { type: "learner_home" as const },
+            dueBasis: { type: "unresolved" as const },
+          },
+          finalDisposition: "open" as const,
+          sourceAction: { type: "preserve_predecessor_source" as const },
+          relationAction: { type: "preserve" as const },
+          rationale: "Preserve the obligation identity while correcting its semantic wording.",
+        },
+      ],
+    })
+    const firstCorrectionInput = correctionInput("Analyze the semaphore safety invariant")
+    const racingCorrectionInput = correctionInput("Analyze only the semaphore syntax")
+    const firstCorrection = yield* insertAssistant(
+      db,
+      interaction,
+      "assignment-agent-correction-first",
+      firstCorrectionInput,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      time + 20,
+    )
+    const racingCorrection = yield* insertAssistant(
+      db,
+      interaction,
+      "assignment-agent-correction-race",
+      racingCorrectionInput,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      time + 21,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      firstCorrectionInput,
+      firstCorrection,
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      racingCorrectionInput,
+      racingCorrection,
+    )
+
+    const corrected = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      firstCorrectionInput,
+      context(
+        firstCorrection,
+        "allow",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(corrected.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    const raced = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      racingCorrectionInput,
+      context(
+        racingCorrection,
+        "allow",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(raced.metadata).toMatchObject({ outcome: "error", code: "stale", durablySettled: true })
+    expect(firstCorrection.causalOccurrenceID).toBe(interaction.occurrenceID)
+    expect(firstCorrection.parentUserMessageID).toBe(interaction.userMessageID)
+    expect(firstCorrection.assistantMessageID).not.toBe(interaction.registration.assistantMessageID)
+
+    const history = yield* db.transaction((tx) =>
+      Assignment.read(tx, { type: "history", assignmentID }, { asOf: time + 40 }),
+    )
+    expect(history.items).toHaveLength(2)
+    expect(history.items[0]).toMatchObject({
+      id: ownerRead.revisionID,
+      operation: "create",
+      mutationAuthorshipBasis: { type: "interpreted_learner_report" },
+    })
+    expect(history.items[1]).toMatchObject({
+      operation: "correct",
+      snapshot: { obligationSummary: "Analyze the semaphore safety invariant" },
+      effectiveSourceBasisAtCommit: before.current.effectiveSourceBasisAtCommit,
+      mutationAuthorshipBasis: {
+        type: "agent_correction",
+        assistantMessageID: firstCorrection.assistantMessageID,
+        occurrenceID: interaction.occurrenceID,
+      },
+    })
+    const requestsAfterRace = permissionRequests.length
+    expect(
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        firstCorrectionInput,
+        context(
+          firstCorrection,
+          "deny",
+          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+          [{ ruleset: [], absence: "deny" }],
+          Assignment.PERMISSION_PATTERN,
+        ),
+      ),
+    ).toEqual(corrected)
+    expect(permissionRequests).toHaveLength(requestsAfterRace)
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(2)
+
+    const unanchoredInput = {
+      cause: {
+        type: "agent_correction" as const,
+        rationale: "This must not authorize a new obligation identity.",
+        ownerReads: [ownerRead],
+      },
+      intents: [
+        {
+          type: "create" as const,
+          createOrdinal: 0,
+          snapshot: {
+            obligationSummary: "Invented obligation",
+            learningContext: "No accepted source",
+            scope: { type: "learner_home" as const },
+            dueBasis: { type: "unresolved" as const },
+          },
+        },
+      ],
+    }
+    const unanchored = yield* insertAssistant(
+      db,
+      interaction,
+      "assignment-agent-correction-unanchored",
+      unanchoredInput,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      time + 50,
+    )
+    const rejected = yield* runtime
+      .prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, unanchoredInput, unanchored)
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(rejected)).toBe(true)
+    expect(
+      yield* db.get(sql`
+        SELECT count(*) AS count
+        FROM learning_command_invocation
+        WHERE part_id = ${unanchored.partID}
+      `),
+    ).toEqual({ count: 0 })
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(2)
+  }),
+)
+
+it.effect("resumes populated Assignment discovery through the tool with its cursor-bound cut and clock", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    yield* Effect.forEach(
+      [
+        ["assignment-read-first", "Read the first proof obligation."],
+        ["assignment-read-second", "Read the second proof obligation."],
+      ] as const,
+      ([suffix, source]) =>
+        Effect.gen(function* () {
+          const input = assignmentCreateInput(source, `Analyze ${suffix}`)
+          const interaction = yield* seedInteraction(
+            db,
+            suffix,
+            input,
+            LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+            { text: source, timeZone: "UTC" },
+          )
+          yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, interaction.registration)
+          yield* runtime.executeCommand(
+            LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+            input,
+            context(
+              interaction.registration,
+              "allow",
+              LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+              [],
+              Assignment.PERMISSION_PATTERN,
+            ),
+          )
+        }),
+      { discard: true },
+    )
+
+    const toolInfo = yield* AssignmentReadTool.pipe(
+      Effect.provideService(
+        Assignment.ReadService,
+        Assignment.ReadService.of({
+          read: (query, options) => db.transaction((tx) => Assignment.read(tx, query, options)),
+        }),
+      ),
+      Effect.provideService(
+        Truncate.Service,
+        Truncate.Service.of({
+          cleanup: () => Effect.void,
+          write: () => Effect.succeed("unused"),
+          output: (text) => Effect.succeed({ content: text, truncated: false }),
+          limits: () => Effect.succeed({ maxLines: Truncate.MAX_LINES, maxBytes: Truncate.MAX_BYTES }),
+        }),
+      ),
+      Effect.provideService(
+        Agent.Service,
+        Agent.Service.of({
+          get: () => Effect.succeed(undefined),
+          list: () => Effect.succeed([]),
+          identifiers: () => Effect.succeed([]),
+          defaultInfo: () => Effect.die("Assignment read test does not request a default Agent"),
+          defaultAgent: () => Effect.die("Assignment read test does not request a default Agent"),
+          generate: () => Effect.die("Assignment read test does not generate an Agent"),
+        }),
+      ),
+    )
+    const query = yield* toolInfo.init()
+    const toolContext = {
+      sessionID: SessionSchema.ID.descending(),
+      messageID: SessionV1.MessageID.ascending(),
+      agent: "assignment-read-test",
+      abort: new AbortController().signal,
+      messages: [],
+      metadata: () => Effect.void,
+      ask: () => Effect.void,
+    }
+    const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+    const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+    const first = JSON.parse(
+      (yield* query.execute({ action: "discover", disposition: "open", limit: 1 }, toolContext)).output,
+    ) as { asOf: number; page: Assignment.ReadPage }
+    expect(first.page).toMatchObject({ countAtCut: 2, returnedCount: 1, omittedCount: 1 })
+    expect(first.page.nextCursor).toBeString()
+    while (Date.now() <= first.asOf) {
+      // Exercise a real later clock sample without changing any durable owner state.
+    }
+    const second = JSON.parse(
+      (yield* query.execute(
+        {
+          action: "discover",
+          disposition: "open",
+          limit: 1,
+          cursor: first.page.nextCursor,
+        },
+        toolContext,
+      )).output,
+    ) as { asOf: number; page: Assignment.ReadPage }
+
+    expect(second.asOf).toBe(first.asOf)
+    expect(second.page.asOf).toBe(first.page.asOf)
+    expect(second.page.ownerCut).toEqual(first.page.ownerCut)
+    expect(second.page.items).toHaveLength(1)
+    expect(second.page.items[0]).not.toEqual(first.page.items[0])
+    expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(before)
+    expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontier)
+  }),
+)
+
+it.effect("returns typed stale-cursor truth instead of failing the Assignment read tool", () =>
+  Effect.gen(function* () {
+    const toolInfo = yield* AssignmentReadTool.pipe(
+      Effect.provideService(
+        Assignment.ReadService,
+        Assignment.ReadService.of({
+          read: () => Effect.fail(new Assignment.InvalidCommandError({ reason: "stale" })),
+        }),
+      ),
+      Effect.provideService(
+        Truncate.Service,
+        Truncate.Service.of({
+          cleanup: () => Effect.void,
+          write: () => Effect.succeed("unused"),
+          output: (text) => Effect.succeed({ content: text, truncated: false }),
+          limits: () => Effect.succeed({ maxLines: Truncate.MAX_LINES, maxBytes: Truncate.MAX_BYTES }),
+        }),
+      ),
+      Effect.provideService(
+        Agent.Service,
+        Agent.Service.of({
+          get: () => Effect.succeed(undefined),
+          list: () => Effect.succeed([]),
+          identifiers: () => Effect.succeed([]),
+          defaultInfo: () => Effect.die("Assignment stale read test does not request a default Agent"),
+          defaultAgent: () => Effect.die("Assignment stale read test does not request a default Agent"),
+          generate: () => Effect.die("Assignment stale read test does not generate an Agent"),
+        }),
+      ),
+    )
+    const query = yield* toolInfo.init()
+    const result = yield* query.execute(
+      { action: "discover", disposition: "open", limit: 1, cursor: "bound-stale-cursor" },
+      {
+        sessionID: SessionSchema.ID.descending(),
+        messageID: SessionV1.MessageID.ascending(),
+        agent: "assignment-stale-read-test",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => Effect.void,
+        ask: () => Effect.void,
+      },
+    )
+    expect(result).toMatchObject({
+      title: "Assignment cursor stale",
+      metadata: { action: "discover", status: "stale_cursor", truncated: false },
+    })
+    expect(JSON.parse(result.output)).toEqual({
+      status: "stale_cursor",
+      reason: "A bound Assignment or source dependency changed after this read began.",
+      recovery: "Restart the Assignment read without the old cursor.",
+    })
+  }),
+)
+
+it.effect("settles a live Assignment permission abort as prompted_abort without creating an effect", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    permissionWaits.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const source = "Record this obligation only if approval completes."
+    const input = assignmentCreateInput(source, "Analyze the abort-safe proof")
+    const interaction = yield* seedInteraction(
+      db,
+      "assignment-live-permission-abort",
+      input,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      { text: source, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, interaction.registration)
+
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    permissionWaits.push({ entered, release })
+    const controller = new AbortController()
+    const execution = yield* runtime
+      .executeCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, {
+        ...context(
+          interaction.registration,
+          "ask",
+          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+          [],
+          Assignment.PERMISSION_PATTERN,
+        ),
+        abort: controller.signal,
+      })
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+
+    const issued = yield* db
+      .select()
+      .from(AssignmentCapabilityIssueTable)
+      .where(eq(AssignmentCapabilityIssueTable.invocation_part_id, interaction.registration.partID))
+      .get()
+    expect(issued?.permission_request_id).toBeString()
+    expect(yield* db.select().from(AssignmentCapabilitySettlementTable).all()).toEqual([])
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toEqual([])
+
+    controller.abort()
+    const result = yield* Fiber.join(execution)
+    yield* Deferred.succeed(release, undefined).pipe(Effect.ignore)
+    expect(result.metadata).toMatchObject({ outcome: "error", code: "interrupted", durablySettled: true })
+    expect(JSON.parse(result.output)).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "prompted_abort",
+      permissionRequestID: issued!.permission_request_id,
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toEqual([])
+    expect(permissionRequests).toHaveLength(1)
+  }),
+)
+
+it.effect("settles Assignment policy and prompt denial without creating a revision or effect", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const policySource = "My systems course requires a semaphore safety proof, but do not retain it now."
+    const policyInput = assignmentCreateInput(policySource, "Analyze the semaphore safety proof")
+    const policy = yield* seedInteraction(
+      db,
+      "assignment-policy-deny",
+      policyInput,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      { text: policySource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, policyInput, policy.registration)
+    const policyResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      policyInput,
+      context(
+        policy.registration,
+        "deny",
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        [],
+        Assignment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(JSON.parse(policyResult.output)).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "policy_deny",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+    expect(policyResult.metadata).toMatchObject({
+      outcome: "error",
+      code: "permission_rejected",
+      durablySettled: true,
+    })
+
+    const promptSource = "My algorithms course requires a recurrence proof, but reject this retention proposal."
+    const promptInput = assignmentCreateInput(promptSource, "Prove the recurrence bound")
+    const prompted = yield* seedInteraction(
+      db,
+      "assignment-prompt-deny",
+      promptInput,
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      { text: promptSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, promptInput, prompted.registration)
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    permissionWaits.push({ entered, release, failure: new PermissionV1.RejectedError() })
+    const execution = yield* runtime
+      .executeCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        promptInput,
+        context(
+          prompted.registration,
+          "ask",
+          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+          [],
+          Assignment.PERMISSION_PATTERN,
+        ),
+      )
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+    yield* Deferred.succeed(release, undefined)
+    const promptResult = yield* Fiber.join(execution)
+    expect(JSON.parse(promptResult.output)).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "prompted_deny",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+    expect(promptResult.metadata).toMatchObject({
+      outcome: "error",
+      code: "permission_rejected",
+      durablySettled: true,
+    })
+    expect(yield* exactPartResult(db, policy.registration.partID)).toEqual(policyResult)
+    expect(yield* exactPartResult(db, prompted.registration.partID)).toEqual(promptResult)
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM assignment) AS assignments,
+          (SELECT count(*) FROM assignment_revision) AS revisions,
+          (SELECT count(*) FROM assignment_effect) AS effects,
+          (SELECT count(*) FROM assignment_commit_seal) AS seals
+      `),
+    ).toEqual({ assignments: 0, revisions: 0, effects: 0, seals: 0 })
+    expect(permissionRequests).toHaveLength(2)
+  }),
+)
+
+it.effect("rejects delegated Assignment admission before candidate, permission, or effect", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const suffix = "assignment-delegated-root-only"
+    const source = `Delegate ${suffix}`
+    const input = assignmentCreateInput(source, "Do not admit this delegated obligation")
+    const delegated = yield* seedDelegatedLearningCommandInteraction(
+      db,
+      suffix,
+      input,
+      {
+        version: 2,
+        parent: [],
+        inherited: [],
+        profile: [],
+        explicit: [
+          {
+            permission: LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+            pattern: Assignment.PERMISSION_PATTERN,
+            action: "allow",
+          },
+        ],
+      },
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+    )
+    const rejected = yield* runtime
+      .prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, delegated.registration)
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(rejected)).toBe(true)
+    if (Exit.isFailure(rejected)) {
+      expect(Cause.squash(rejected.cause)).toMatchObject({
+        _tag: "Assignment.IntegrityError",
+        detail: "Assignment mutation is restricted to the ordinary interactive root Agent",
+      })
+    }
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learning_command_invocation
+            WHERE part_id = ${delegated.registration.partID}) AS invocations,
+          (SELECT count(*) FROM assignment_disposition
+            WHERE invocation_part_id = ${delegated.registration.partID}) AS dispositions,
+          (SELECT count(*) FROM assignment_effect) AS effects
+      `),
+    ).toEqual({ invocations: 0, dispositions: 0, effects: 0 })
+    expect(permissionRequests).toHaveLength(0)
+  }),
+)
+
+it.effect("rejects delegated Assignment admission before replaying an occupied semantic address", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const suffix = "assignment-delegated-occupied-address"
+    const source = "My operating-systems course requires me to analyze the semaphore safety proof."
+    const input = assignmentCreateInput(source, "Analyze the semaphore safety proof")
+    const delegated = yield* seedDelegatedLearningCommandInteraction(
+      db,
+      suffix,
+      input,
+      {
+        version: 2,
+        parent: [],
+        inherited: [],
+        profile: [],
+        explicit: [
+          {
+            permission: LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+            pattern: Assignment.PERMISSION_PATTERN,
+            action: "allow",
+          },
+        ],
+      },
+      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+      { parentText: source, rootAssignmentInput: input },
+    )
+    const requestsAfterRoot = permissionRequests.length
+    expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(1)
+
+    const rejected = yield* runtime
+      .prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, delegated.registration)
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(rejected)).toBe(true)
+    if (Exit.isFailure(rejected)) {
+      expect(Cause.squash(rejected.cause)).toMatchObject({
+        _tag: "Assignment.IntegrityError",
+        detail: "Assignment mutation is restricted to the ordinary interactive root Agent",
+      })
+    }
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learning_command_invocation
+            WHERE part_id = ${delegated.registration.partID}) AS invocations,
+          (SELECT count(*) FROM assignment_disposition
+            WHERE invocation_part_id = ${delegated.registration.partID}) AS dispositions,
+          (SELECT count(*) FROM assignment_effect) AS effects
+      `),
+    ).toEqual({ invocations: 0, dispositions: 0, effects: 1 })
+    expect(permissionRequests).toHaveLength(requestsAfterRoot)
   }),
 )
 
@@ -8114,6 +8947,136 @@ test("reopens stored success and recovers admitted work without re-execution", a
   )
 })
 
+test("reopens exact Assignment success and interrupts admitted Assignment work without semantic replay", async () => {
+  await using tmp = await tmpdir()
+  const filename = join(tmp.path, "assignment-reopen.sqlite")
+  permissionRequests.length = 0
+  const persisted = await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const appliedSource = "Persist the semaphore proof obligation."
+      const appliedInput = assignmentCreateInput(appliedSource, "Analyze the persistent semaphore proof")
+      const appliedInteraction = yield* seedInteraction(
+        db,
+        "assignment-reopen-applied",
+        appliedInput,
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        { text: appliedSource, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        appliedInput,
+        appliedInteraction.registration,
+      )
+      const applied = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        appliedInput,
+        context(
+          appliedInteraction.registration,
+          "allow",
+          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+          [],
+          Assignment.PERMISSION_PATTERN,
+        ),
+      )
+
+      const admittedSource = "Persist admission, but do not apply this interrupted obligation."
+      const admittedInput = assignmentCreateInput(admittedSource, "Analyze the interrupted proof")
+      const admittedInteraction = yield* seedInteraction(
+        db,
+        "assignment-reopen-admitted",
+        admittedInput,
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        { text: admittedSource, timeZone: "UTC" },
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        admittedInput,
+        admittedInteraction.registration,
+      )
+      expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(1)
+      expect(
+        yield* db.get(sql`
+          SELECT
+            (SELECT count(*) FROM assignment_revision) AS revisions,
+            (SELECT count(*) FROM assignment_commit_seal) AS seals
+        `),
+      ).toEqual({ revisions: 1, seals: 1 })
+      return {
+        applied,
+        appliedInput,
+        appliedRegistration: appliedInteraction.registration,
+        admittedInput,
+        admittedRegistration: admittedInteraction.registration,
+      }
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+
+  permissionRequests.length = 0
+  await Effect.runPromise(
+    Effect.gen(function* () {
+      const db = (yield* Database.Service).db
+      const runtime = yield* LearningCommandRuntime.Service
+      const appliedBefore = yield* exactPartResult(db, persisted.appliedRegistration.partID)
+      expect(appliedBefore).toEqual(persisted.applied)
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        persisted.appliedInput,
+        persisted.appliedRegistration,
+      )
+      expect(
+        yield* runtime.executeCommand(
+          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+          persisted.appliedInput,
+          context(
+            persisted.appliedRegistration,
+            "deny",
+            LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+            [{ ruleset: [], absence: "deny" }],
+            Assignment.PERMISSION_PATTERN,
+          ),
+        ),
+      ).toEqual(persisted.applied)
+
+      const interrupted = yield* exactPartResult(db, persisted.admittedRegistration.partID)
+      expect(interrupted.metadata).toMatchObject({ outcome: "error", code: "interrupted", durablySettled: true })
+      expect(JSON.parse(interrupted.output)).toMatchObject({
+        disposition: "candidate_v1",
+        capabilityOutcome: "not_evaluated",
+        settlement: { outcome: "error", code: "interrupted" },
+      })
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        persisted.admittedInput,
+        persisted.admittedRegistration,
+      )
+      expect(
+        yield* runtime.executeCommand(
+          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+          persisted.admittedInput,
+          context(
+            persisted.admittedRegistration,
+            "allow",
+            LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+            [],
+            Assignment.PERMISSION_PATTERN,
+          ),
+        ),
+      ).toEqual(interrupted)
+      expect(permissionRequests).toHaveLength(0)
+      expect(yield* db.select().from(AssignmentEffectTable).all()).toHaveLength(1)
+      expect(
+        yield* db.get(sql`
+          SELECT
+            (SELECT count(*) FROM assignment_revision) AS revisions,
+            (SELECT count(*) FROM assignment_commit_seal) AS seals
+        `),
+      ).toEqual({ revisions: 1, seals: 1 })
+    }).pipe(Effect.provide(runtimeLayer(filename)), Effect.scoped),
+  )
+})
+
 test("reopens retained steering lineage, cuts, pagination, expiry, acknowledgement, and global sample time", async () => {
   await using tmp = await tmpdir()
   const filename = join(tmp.path, "retained-steering-reopen.sqlite")
@@ -9921,6 +10884,27 @@ function directGoalCreate(
   }
 }
 
+function assignmentCreateInput(source: string, obligationSummary: string) {
+  return {
+    cause: {
+      type: "interpreted_learner_report" as const,
+      excerpt: { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength },
+    },
+    intents: [
+      {
+        type: "create" as const,
+        createOrdinal: 0,
+        snapshot: {
+          obligationSummary,
+          learningContext: "Teach the underlying concept before guided work",
+          scope: { type: "learner_home" as const },
+          dueBasis: { type: "unresolved" as const },
+        },
+      },
+    ],
+  }
+}
+
 function context(
   registration: LearningCommandRuntime.Registration,
   action: "allow" | "deny" | "ask",
@@ -10634,6 +11618,10 @@ function seedDelegatedLearningCommandInteraction(
   input: Record<string, unknown>,
   delegatedCapability: Record<string, unknown>,
   toolID: LearningCommandRuntime.PrimaryCapability = LearningCommand.SET_DEFAULT_COURSE_PREFERENCE_CAPABILITY,
+  options: {
+    readonly parentText?: string
+    readonly rootAssignmentInput?: Record<string, unknown>
+  } = {},
 ) {
   return Effect.gen(function* () {
     const time = Date.now()
@@ -10685,7 +11673,10 @@ function seedDelegatedLearningCommandInteraction(
         id: parentUserPartID,
         session_id: parentSessionID,
         message_id: parentUserMessageID,
-        data: { type: "text", text: `Delegate ${suffix}` } as (typeof PartTable.$inferInsert)["data"],
+        data: {
+          type: "text",
+          text: options.parentText ?? `Delegate ${suffix}`,
+        } as (typeof PartTable.$inferInsert)["data"],
         time_created: time,
         time_updated: time,
       })
@@ -10705,7 +11696,7 @@ function seedDelegatedLearningCommandInteraction(
           inputID: parentInputID,
           messageID: parentUserMessageID,
           occurrenceID: occurrence.id,
-          limits: { model: 1, tool: 1 },
+          limits: options.rootAssignmentInput ? { model: 2, tool: 2 } : { model: 1, tool: 1 },
           envelope: { input: { task: `delegate ${suffix}` } },
           policyBasis: { source: "delegated-default-course-test" },
           timeAdmitted: time,
@@ -10713,6 +11704,43 @@ function seedDelegatedLearningCommandInteraction(
         return occurrence.id
       }),
     )
+    if (options.rootAssignmentInput) {
+      const runtime = yield* LearningCommandRuntime.Service
+      const registration = yield* insertAssistant(
+        db,
+        {
+          sessionID: parentSessionID,
+          userMessageID: parentUserMessageID,
+          turnID: parentTurnID,
+          inputID: parentInputID,
+          occurrenceID,
+        },
+        `delegation-root-assignment-${suffix}`,
+        options.rootAssignmentInput,
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        time + 1,
+      )
+      yield* runtime.prepareCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        options.rootAssignmentInput,
+        registration,
+      )
+      const result = yield* runtime.executeCommand(
+        LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+        options.rootAssignmentInput,
+        context(
+          registration,
+          "allow",
+          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+          [],
+          Assignment.PERMISSION_PATTERN,
+        ),
+      )
+      if (result.metadata.outcome !== "applied") {
+        return yield* Effect.die("Expected the root Assignment semantic address fixture to apply")
+      }
+    }
+    const parentTaskTime = options.rootAssignmentInput ? Date.now() + 1 : time + 1
     yield* db.transaction((tx) =>
       Effect.gen(function* () {
         yield* tx
@@ -10720,9 +11748,9 @@ function seedDelegatedLearningCommandInteraction(
           .values({
             id: parentAssistantMessageID,
             session_id: parentSessionID,
-            data: assistantData(parentUserMessageID, time + 1),
-            time_created: time + 1,
-            time_updated: time + 1,
+            data: assistantData(parentUserMessageID, parentTaskTime),
+            time_created: parentTaskTime,
+            time_updated: parentTaskTime,
           })
           .run()
         yield* tx
@@ -10741,8 +11769,8 @@ function seedDelegatedLearningCommandInteraction(
                 raw: JSON.stringify({ description: `Delegate ${suffix}` }),
               },
             } as (typeof PartTable.$inferInsert)["data"],
-            time_created: time + 1,
-            time_updated: time + 1,
+            time_created: parentTaskTime,
+            time_updated: parentTaskTime,
           })
           .run()
         yield* admitModelWithLearningContext(tx, {
@@ -10752,7 +11780,7 @@ function seedDelegatedLearningCommandInteraction(
           requestEnvelope: { task: `delegate ${suffix}` },
           contextFingerprint: new Bun.CryptoHasher("sha256").update(`delegation-parent:${suffix}`).digest("hex"),
           snapshotFrontier: { sequence: 0, time: 0 },
-          timeAdmitted: time + 1,
+          timeAdmitted: parentTaskTime,
         })
         yield* TurnLifecycle.sealCandidateSet(tx, {
           turnID: parentTurnID,
@@ -10766,20 +11794,20 @@ function seedDelegatedLearningCommandInteraction(
               envelope: { description: `Delegate ${suffix}` },
             },
           ],
-          timeSealed: time + 1,
+          timeSealed: parentTaskTime,
         })
         yield* TurnLifecycle.settleModel(tx, {
           turnID: parentTurnID,
           assistantMessageID: parentAssistantMessageID,
           state: "completed",
-          time: time + 1,
+          time: parentTaskTime,
         })
         yield* TurnLifecycle.admitTool(tx, {
           turnID: parentTurnID,
           sessionID: parentSessionID,
           assistantMessageID: parentAssistantMessageID,
           partID: parentTaskPartID,
-          timeAdmitted: time + 1,
+          timeAdmitted: parentTaskTime,
         })
       }),
     )
@@ -10799,8 +11827,8 @@ function seedDelegatedLearningCommandInteraction(
         directory: "C:\\project",
         title: `Delegated default Course ${suffix}`,
         version: "test",
-        time_created: time + 2,
-        time_updated: time + 2,
+        time_created: parentTaskTime + 1,
+        time_updated: parentTaskTime + 1,
       })
       .run()
     yield* db
@@ -10808,9 +11836,9 @@ function seedDelegatedLearningCommandInteraction(
       .values({
         id: childUserMessageID,
         session_id: childSessionID,
-        data: userData(time + 2),
-        time_created: time + 2,
-        time_updated: time + 2,
+        data: userData(parentTaskTime + 1),
+        time_created: parentTaskTime + 1,
+        time_updated: parentTaskTime + 1,
       })
       .run()
     yield* db
@@ -10823,8 +11851,8 @@ function seedDelegatedLearningCommandInteraction(
           type: "text",
           text: `Apply delegated default Course action ${suffix}`,
         } as (typeof PartTable.$inferInsert)["data"],
-        time_created: time + 2,
-        time_updated: time + 2,
+        time_created: parentTaskTime + 1,
+        time_updated: parentTaskTime + 1,
       })
       .run()
     yield* db.transaction((tx) =>
@@ -10842,7 +11870,7 @@ function seedDelegatedLearningCommandInteraction(
         parentTaskPartID,
         parentModelMessageID: parentAssistantMessageID,
         depthLimit: 1,
-        timeAdmitted: time + 2,
+        timeAdmitted: parentTaskTime + 1,
       }),
     )
     const registration = yield* insertAssistant(

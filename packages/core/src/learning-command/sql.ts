@@ -39,6 +39,7 @@ export const LearningCommandInvocationTable = sqliteTable(
       "restrict",
     ),
     unique("learning_command_invocation_assistant_call_unique").on(table.assistant_message_id, table.provider_call_id),
+    uniqueIndex("learning_command_invocation_part_status_unique").on(table.part_id, table.status),
     unique("learning_command_invocation_assistant_ordinal_unique").on(
       table.assistant_message_id,
       table.emission_ordinal,
