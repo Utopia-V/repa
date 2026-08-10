@@ -8,17 +8,18 @@ authority.
 
 Date: 2026-08-09
 
-Exact derivation base: feature branch
-`codex/gate-20a-assignment-authority` at
-`28f045eb6d51375f69da080685a394de65903f9a`, containing accepted Gate 20A
-implementation commit `5099ecc642390cf7bae0f980098edd5267a75874` and its
-docs-only closure/status successor. `main` and `origin/main` remained
-`c100b431fe174d1993b2baa89a7d1b133300b579` at derivation opening. Existing
-maintainer edits in `AGENTS.md` are preserved; this candidate changes no
-production package.
+Exact predecessor integration: feature branch
+`codex/gate-20a-assignment-authority` contains accepted Gate 20A implementation
+commit `5099ecc642390cf7bae0f980098edd5267a75874` and accepted Gate 20B
+implementation commit `b040518591a2f065aec9b82214496a113c81ed35`, each followed
+by its documentation status successor. `main` and `origin/main` remain
+`c100b431fe174d1993b2baa89a7d1b133300b579`. Existing maintainer edits in
+`AGENTS.md` are preserved; this Gate 21 candidate changes no production package.
 
-Review run: **not assigned**. Gate 20B contract/theory and
-implementation/evidence are now accepted, so this candidate may bind its exact
+Review run reserved for fresh dispatch:
+**`G21-WG-20260810-019fe065-01`**. Gate 20B contract/theory and
+implementation/evidence are accepted and published on the feature branch, so
+this candidate may bind its exact
 learner-state judgment handoff and proceed to a fresh independent review. A suggestion may still arise directly from the current
 learner occurrence, Goal, Assignment, Course, material, or evidence without a
 stored learner-state judgment. Gate 20B and Gate 21 remain separate acceptance

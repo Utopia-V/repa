@@ -3516,10 +3516,20 @@ Both Gate 20B layers are accepted, and reviewer
 It also amended the product origin, ADR-0003, ADR-0012, architecture, native data
 model, Roadmap 09, current status map, repository execution checksum, and the
 two historical Gate 21 records. These are product/contract documentation
-changes only. Gate 20B is accepted and has entered its separately governed
-local integration step; Gate 21 remains an unreviewed candidate. No integration
-commit, push, pull request, release, credentialed-provider work, Gate 21A, or
-later-Gate authority follows from the review verdict alone.
+changes only. Gate 20B was then integrated and published on
+`origin/codex/gate-20a-assignment-authority` at implementation commit
+`b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
+publication/status successor. Gate 21 remains an unreviewed candidate. No
+mainline merge, pull request, release, credentialed-provider work, Gate 21A, or
+later-Gate authority follows from that publication.
+
+The independent review bound exact Windows working-tree bytes at package
+manifest SHA-256 `1F5CCB66...052146A`. Git's existing clean filter normalized
+CRLF to LF in 18 of the 42 package files at commit time; a byte-for-byte check
+found no difference beyond line endings. The exact 42-file / 4,791-byte Git-tree
+manifest at `b0405185...` is SHA-256 `601F4C64...CCA304F`. Both identities are
+retained so review provenance and published-tree provenance remain
+reproducible rather than silently conflated.
 
 Derivation opened and remained on branch
 `codex/gate-20a-assignment-authority` at
@@ -3530,7 +3540,8 @@ maintainer-owned `AGENTS.md` edits; the user explicitly asked that the new reuse
 and audit posture be reflected there, so the top-level executor revised that
 same file while preserving unrelated prior content. Read-only scouts changed no
 files. The exact documentation diff remained uncommitted through independent
-acceptance and then entered the separately authorized local integration step.
+acceptance and was included in the separately authorized implementation commit
+and its publication/status successor.
 
 ## Historical evidence locators
 

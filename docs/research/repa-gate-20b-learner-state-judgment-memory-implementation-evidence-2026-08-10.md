@@ -1,12 +1,15 @@
 # Gate 20B learner-state judgment memory implementation/evidence candidate
 
-Status: **implementation/evidence accepted; Gate 20B Whole Gate is ready for its
-separately governed local integration step.** Under whole-Gate review run
+Status: **implementation/evidence accepted and published on
+`origin/codex/gate-20a-assignment-authority` at implementation commit
+`b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
+publication/status successor.** Under whole-Gate review run
 `G20B-WG-20260809-019fe065-01`, retained reviewer
 `019fe6da-d33f-71f1-b405-1cf240c7862a` accepted this exact first-repair package
-candidate and closed `G20B-IE-001..004`. This record does not itself integrate,
-commit, push, release, qualify a credentialed provider, authorize Gate 21
-merits, or authorize a later Gate.
+candidate and closed `G20B-IE-001..004`. The later integration and publication
+were separately authorized; neither the review nor publication releases the
+product, qualifies a credentialed provider, accepts Gate 21 merits, or
+authorizes a later Gate.
 
 Date: 2026-08-10
 
@@ -37,6 +40,15 @@ the manifest itself is then SHA-256 hashed. Product, architecture, roadmap, stat
 Gate-contract, and root `AGENTS.md` changes are intentionally outside this
 package implementation/test binding. The retained reviewer independently
 recomputed and matched this manifest before acceptance.
+
+Integration commit `b040518591a2f065aec9b82214496a113c81ed35` stores the same
+42 paths after Git's pre-existing Windows text clean filter normalized CRLF to
+LF in 18 files. A byte comparison found no non-EOL difference. Applying the
+same manifest algorithm to exact commit-tree blobs yields 4,791 manifest bytes
+and SHA-256
+`601F4C6497A853047CF7F5807AA4D3A05023E276A2750C878E739A724CCA304F`.
+The original `1F5CCB66...` hash remains the exact reviewer binding; the
+`601F4C64...` hash is its mechanically normalized Git-tree publication form.
 
 At this binding the candidate is unstaged and uncommitted. The executor has not
 changed a Git ref, index entry, remote, release artifact, credentialed provider,
@@ -410,7 +422,9 @@ reopen condition, and left the production checkout unchanged. Gate 20B's
 contract/theory and implementation/evidence layers are both accepted. The
 reviewer is retired and must not be reused for Gate 21 or another Gate.
 
-Local commit/push integration remains separately governed. The one parallel
+Local integration and feature-branch publication completed afterward at
+`b040518591a2f065aec9b82214496a113c81ed35` plus this docs-only status
+successor. The one parallel
 Bun/native aggregate-harness failure and absence of credentialed-provider
 qualification remain explicit later-release qualifications, not hidden Gate
 20B claims.

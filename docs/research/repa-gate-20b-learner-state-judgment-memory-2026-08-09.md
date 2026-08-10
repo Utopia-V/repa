@@ -1,15 +1,19 @@
 # Repa Gate 20B: learner-state judgment memory
 
-Status: **Contract/theory and implementation/evidence accepted; Gate 20B Whole
-Gate is ready for its separately governed local integration step.** Whole-Gate review run
+Status: **Contract/theory and implementation/evidence accepted; Gate 20B is
+published on `origin/codex/gate-20a-assignment-authority` at implementation
+commit `b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
+publication/status successor.** Whole-Gate review run
 `G20B-WG-20260809-019fe065-01`, retained reviewer task
 `019fe6da-d33f-71f1-b405-1cf240c7862a`, accepted exact semantic candidate
 SHA-256 `FF6EAB7002C26338E0344060646B440D2D9EE5DE704C9F75620ABFEFA10BCC54`
 with no acceptance-changing finding, owner blocker, or contract reopen
 condition. The exact accepted implementation/evidence candidate is bound in
 [`repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md`](repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md);
-its acceptance does not itself integrate, commit, push, release, run a
-credentialed provider, or authorize Gate 21 merits.
+its acceptance did not itself authorize integration, publication, release, a
+credentialed provider, or Gate 21 merits. Local integration and publication
+were separately authorized and completed afterward; release and Gate 21 remain
+separately governed.
 
 Date: 2026-08-09
 
@@ -31,6 +35,15 @@ first-repair package candidate after closing all four findings. It is now
 retired and must not be reused for Gate 21. Same-context derivation, the local grill, executor
 evidence, and read-only evidence scouts do not replace that independent
 acceptance.
+
+The accepted review binding used exact working-tree bytes. Git's existing
+Windows clean filter normalized CRLF to LF in 18 of the 42 package files during
+integration and changed no other byte. The accepted working-tree manifest
+remains `1F5CCB66B82D258C7689846FBD839907C5CC42CF8FA70138BF2B6064D052146A`;
+the exact 42-file / 4,791-byte commit-tree manifest at `b0405185...` is
+`601F4C6497A853047CF7F5807AA4D3A05023E276A2750C878E739A724CCA304F`.
+This is an integration-provenance distinction, not a new semantic or executable
+candidate.
 
 Implementation precision adopted from the non-blocking review advisory: the
 first physical contract treats `judgmentBody` plus `exactBasisRefs` as one
