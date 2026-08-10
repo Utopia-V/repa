@@ -2,11 +2,14 @@ import { ArtifactSchema } from "@opencode-ai/core/artifact/schema"
 import { ContentRootSchema } from "@opencode-ai/core/content-root/schema"
 import { Course } from "@opencode-ai/core/course"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
+import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
+import { MaterialMap } from "@opencode-ai/core/material-map"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Turn } from "@opencode-ai/schema/turn"
 import { Plugin } from "@/plugin"
-import { normalizeFutureAttention } from "@/learning-command/input"
+import { normalizeFutureAttention, normalizeLearnerStateJudgment } from "@/learning-command/input"
 import { MessageID, SessionID } from "@/session/schema"
 import { observeLearningCommandResult, prepareLearningCommandCall } from "@/session/tools"
 import { SessionProcessor } from "@/session/processor"
@@ -151,6 +154,20 @@ describe("learning-command hooks", () => {
     expect(new TextEncoder().encode("界".repeat(256))).toHaveLength(FutureAttention.MAX_PURPOSE_BYTES)
     expect(normalizeFutureAttention(futureAttentionInput("界".repeat(256))).operations).toHaveLength(1)
   })
+
+  test("keeps the learner-state provider boundary at eight anchors and sixteen bases while admitting evidence v0", () => {
+    const maximum = learnerStateJudgmentInput(8, 16)
+    const normalized = normalizeLearnerStateJudgment(maximum)
+    if (normalized.operation !== "create") throw new Error("Expected the maximum provider fixture to remain a create")
+    expect(normalized.snapshot.subject.scope).toMatchObject({ type: "anchored" })
+    expect(normalized.snapshot.exactBasisRefs).toHaveLength(LearnerStateJudgment.MAX_BASIS_REFS)
+    expect(normalized.snapshot.exactBasisRefs).toContainEqual(
+      expect.objectContaining({ type: "learner_response_evidence_revision", version: 0 }),
+    )
+
+    expect(() => normalizeLearnerStateJudgment(learnerStateJudgmentInput(9, 16))).toThrow()
+    expect(() => normalizeLearnerStateJudgment(learnerStateJudgmentInput(8, 17))).toThrow()
+  })
 })
 
 function mockPlugin(trigger: Plugin.Interface["trigger"]): Plugin.Interface {
@@ -182,5 +199,40 @@ function futureAttentionInput(purpose: string) {
         },
       },
     ],
+  }
+}
+
+function learnerStateJudgmentInput(anchorCount: number, basisCount: number) {
+  const source = "Remember this as a fallible teaching judgment."
+  const mapID = MaterialMap.createMapID()
+  const materialRefs = Array.from({ length: 16 }, () => ({
+    type: "material_selector" as const,
+    mapID,
+    selectorID: MaterialMap.createSelectorID(),
+  }))
+  return {
+    operation: "create" as const,
+    cause: {
+      type: "interpreted_learner_report" as const,
+      excerpt: { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength },
+    },
+    snapshot: {
+      subject: {
+        label: "Semaphore boundary reasoning",
+        scope: { type: "anchored" as const, anchors: materialRefs.slice(0, anchorCount) },
+      },
+      judgmentBody: "Can state the bound; applying it remains uncertain.",
+      exactBasisRefs: [
+        ...materialRefs.slice(0, basisCount - 1),
+        {
+          type: "learner_response_evidence_revision" as const,
+          recordID: LearnerResponseEvidence.createRecordID(),
+          revisionID: LearnerResponseEvidence.createRevisionID(),
+          version: 0,
+        },
+      ],
+      uncertaintyAndLimits: "Whole-judgment sources remain fallible.",
+      basisScope: "whole_judgment" as const,
+    },
   }
 }

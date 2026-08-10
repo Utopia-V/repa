@@ -12,6 +12,7 @@ import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import {
   SET_DEFAULT_COURSE_PREFERENCE_V2_VERSION,
@@ -69,6 +70,7 @@ import {
   normalizeLearnerResponseEvidence,
   normalizeFutureAttention,
   normalizeAssignment,
+  normalizeLearnerStateJudgment,
   normalizeSteering,
   retainedSteeringCommand,
   type AcceptCourseViewRevisionInput,
@@ -82,6 +84,7 @@ import {
   type UpdateLearnerResponseEvidenceInput,
   type UpdateFutureAttentionInput,
   type UpdateAssignmentInput,
+  type UpdateLearnerStateJudgmentInput,
   type UpdateRetainedLearningSteeringInput,
 } from "./input"
 import { LearningCommandPermission } from "./permission"
@@ -131,6 +134,7 @@ export type PrimaryCapability =
   | typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
   | typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
   | typeof LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
+  | typeof LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
 
 type Canonical =
   | Readonly<{
@@ -290,6 +294,21 @@ type AssignmentExecutionPreparation =
   | Readonly<{ type: "candidate"; candidate: Assignment.Candidate }>
   | Readonly<{ type: "settled"; exact: ExactResult }>
 
+type LearnerStateJudgmentCanonical = Readonly<{
+  toolID: typeof LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
+  input: UpdateLearnerStateJudgmentInput
+}>
+
+type LearnerStateJudgmentActive = Readonly<{
+  canonical: LearnerStateJudgmentCanonical
+  registration: Registration
+  deferred: Deferred.Deferred<ExactResult, unknown>
+}>
+
+type LearnerStateJudgmentExecutionPreparation =
+  | Readonly<{ type: "candidate"; candidate: LearnerStateJudgment.Candidate }>
+  | Readonly<{ type: "settled"; exact: ExactResult }>
+
 export interface Interface {
   readonly prepare: (input: unknown, registration: Registration) => Effect.Effect<void, unknown>
   readonly execute: (input: unknown, context: ExecuteContext) => Effect.Effect<ExactResult, unknown>
@@ -329,6 +348,7 @@ const layer = Layer.effect(
     const responseEvidenceInflight = new Map<SessionV1.PartID, ResponseEvidenceActive>()
     const futureAttentionInflight = new Map<SessionV1.PartID, FutureAttentionActive>()
     const assignmentInflight = new Map<SessionV1.PartID, AssignmentActive>()
+    const learnerStateJudgmentInflight = new Map<SessionV1.PartID, LearnerStateJudgmentActive>()
 
     yield* recoverAdmitted(events)
 
@@ -354,6 +374,9 @@ const layer = Layer.effect(
       }
       if (toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) {
         return yield* prepareAssignment(events, modelInput, registration)
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
+        return yield* prepareLearnerStateJudgment(events, modelInput, registration)
       }
       const canonical = canonicalInput(toolID, modelInput)
       const transaction = events.transaction((tx) =>
@@ -462,6 +485,15 @@ const layer = Layer.effect(
       }
       if (toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) {
         return yield* executeAssignment(events, permission, assignmentInflight, modelInput, context)
+      }
+      if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
+        return yield* executeLearnerStateJudgment(
+          events,
+          permission,
+          learnerStateJudgmentInflight,
+          modelInput,
+          context,
+        )
       }
       const registration = requireRegistration(context)
       const canonical = canonicalInput(toolID, modelInput)
@@ -3242,6 +3274,524 @@ function loadCommittedAssignmentResult(
     .pipe(Effect.map((result) => result.result))
 }
 
+function prepareLearnerStateJudgment(
+  events: EventV2.Interface,
+  modelInput: unknown,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const canonical = {
+          toolID: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+          input: normalizeLearnerStateJudgment(modelInput),
+        } satisfies LearnerStateJudgmentCanonical
+        const existing = yield* readLearnerStateJudgmentState(tx, registration)
+        if (existing) {
+          const state = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+          if (state.status !== "admitted") {
+            yield* assertLearnerStateJudgmentTerminalPart(tx, canonical, registration, state)
+          }
+          return noEvent(undefined)
+        }
+
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const row = yield* readPartRow(tx, registration.partID)
+        if (!row) {
+          return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+        }
+        const trusted = yield* TurnLifecycle.validateLearningCommandRegistration(tx, {
+          turnID: registration.turnID,
+          inputID: registration.inputID,
+          causalOccurrenceID: registration.causalOccurrenceID,
+          partID: registration.partID,
+          callID: registration.callID,
+          emissionOrdinal: registration.emissionOrdinal,
+          sessionID: registration.sessionID,
+          assistantMessageID: registration.assistantMessageID,
+          capabilityIdentity: canonical.toolID,
+        })
+        const timeAdmitted = Math.max(
+          row.time_created,
+          trusted.modelTimeAdmitted,
+          trusted.candidateTimeRegistered,
+          trusted.toolTimeAdmitted,
+        )
+        yield* assertLearnerStateJudgmentAdmittedPart(tx, canonical, registration)
+        const reserved = yield* LearnerStateJudgment.reserve(tx, {
+          envelope: learnerStateJudgmentEnvelope(registration, timeAdmitted),
+          command: canonical.input,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, timeAdmitted),
+        })
+        if (reserved.type === "admitted") return noEvent(undefined)
+        if (reserved.type === "replay") {
+          return yield* Effect.die("New learner-state judgment admission unexpectedly replayed")
+        }
+        const state = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+        const part = learnerStateJudgmentTerminalPart(canonical, registration, state)
+        return withPartEvent(undefined, part, requirePhysicalSettlement(state.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function executeLearnerStateJudgment(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  inflight: Map<SessionV1.PartID, LearnerStateJudgmentActive>,
+  modelInput: unknown,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const registration = requireRegistration(context)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      input: normalizeLearnerStateJudgment(modelInput),
+    } satisfies LearnerStateJudgmentCanonical
+    const active = inflight.get(registration.partID)
+    if (active) {
+      if (!isDeepStrictEqual(active.registration, registration) || !isDeepStrictEqual(active.canonical, canonical)) {
+        return yield* invocationConflict(registration)
+      }
+      return yield* Deferred.await(active.deferred)
+    }
+
+    const deferred = Deferred.makeUnsafe<ExactResult, unknown>()
+    const token = { canonical, registration, deferred } satisfies LearnerStateJudgmentActive
+    inflight.set(registration.partID, token)
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const exit = yield* restore(
+          executeLearnerStateJudgmentOnce(events, permission, canonical, registration, context),
+        ).pipe(Effect.exit)
+        if (Exit.isFailure(exit)) {
+          const reconciled = yield* loadCommittedLearnerStateJudgmentResult(events, canonical, registration).pipe(
+            Effect.exit,
+          )
+          if (Exit.isSuccess(reconciled) && reconciled.value) {
+            yield* Deferred.succeed(deferred, reconciled.value).pipe(Effect.ignore)
+            if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+            return reconciled.value
+          }
+          const cause = Exit.isFailure(reconciled) ? reconciled.cause : exit.cause
+          yield* Deferred.failCause(deferred, cause).pipe(Effect.ignore)
+          if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+          return yield* Effect.failCause(cause)
+        }
+        yield* Deferred.succeed(deferred, exit.value).pipe(Effect.ignore)
+        if (inflight.get(registration.partID) === token) inflight.delete(registration.partID)
+        return exit.value
+      }),
+    )
+  })
+}
+
+function executeLearnerStateJudgmentOnce(
+  events: EventV2.Interface,
+  permission: Permission.Interface,
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+  context: ExecuteContext,
+) {
+  return Effect.gen(function* () {
+    const prepared = yield* events.transaction<
+      LearnerStateJudgmentExecutionPreparation,
+      typeof SessionV1.Event.PartUpdated
+    >((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent({
+            type: "settled" as const,
+            exact: exactFromPart(yield* assertLearnerStateJudgmentTerminalPart(tx, canonical, registration, state)),
+          })
+        }
+        if (state.disposition !== "candidate_v1" || !state.candidate) {
+          return yield* Effect.die("Admitted learner-state judgment invocation is not a complete candidate")
+        }
+        return noEvent({ type: "candidate" as const, candidate: state.candidate })
+      }).pipe(Effect.orDie),
+    )
+    if (prepared.result.type === "settled") return prepared.result.exact
+
+    const authority = requirePermissionContext(context)
+    const candidate = prepared.result.candidate
+    const scope = SemanticPresentation.learnerStateJudgmentScope(candidate)
+    const presentation = LearningCommandPresentation.learnerStateJudgmentCapability(candidate, {
+      sessionID: registration.sessionID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+      partID: registration.partID,
+    })
+    const shownScope = {
+      patterns: [LearnerStateJudgment.PERMISSION_PATTERN],
+      agentAction: candidate.agentAction,
+      scope,
+      semanticPresentation: presentation,
+    }
+    const permissionOutcome = yield* LearningCommandPermission.ask(
+      permission,
+      {
+        sessionID: registration.sessionID,
+        permission: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        patterns: [LearnerStateJudgment.PERMISSION_PATTERN],
+        always: [LearnerStateJudgment.PERMISSION_PATTERN],
+        requirePrompt: false,
+        metadata: {
+          learnerStateJudgmentKind: "revision",
+          commandFingerprint: candidate.commandFingerprint,
+          issuance: candidate.agentAction.kind,
+          scope,
+          ...SemanticPresentation.metadata(presentation),
+        },
+        tool: { messageID: registration.assistantMessageID, callID: registration.callID },
+        ruleset: authority.ruleset,
+        authority: authority.authority,
+        lifecycle: {
+          resolution: "request_exact",
+          selected: (selection) =>
+            persistLearnerStateJudgmentSelection(events, registration, selection, shownScope),
+          replied: (input) => persistLearnerStateJudgmentReply(events, registration, input),
+        },
+      },
+      context.abort,
+    )
+    if (permissionOutcome.type === "abort" || context.abort.aborted) {
+      return yield* recoverLearnerStateJudgment(events, canonical, registration)
+    }
+    return yield* completeLearnerStateJudgment(events, canonical, registration)
+  })
+}
+
+function persistLearnerStateJudgmentSelection(
+  events: EventV2.Interface,
+  registration: Registration,
+  selection: Permission.Selection,
+  shownScope: Readonly<Record<string, unknown>>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        if (selection.action === "ask") {
+          yield* LearnerStateJudgment.issueCapabilityPrompt(tx, {
+            partID: registration.partID,
+            requestID: selection.request.id,
+            policyBasis: { ...selection.basis },
+            shownScope,
+            time: metadata.time,
+            order: metadata.order,
+          })
+          return noEvent(undefined)
+        }
+        yield* LearnerStateJudgment.settlePolicy(tx, {
+          partID: registration.partID,
+          outcome: selection.action === "allow" ? "policy_allow" : "policy_deny",
+          policyBasis: { ...selection.basis },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function persistLearnerStateJudgmentReply(
+  events: EventV2.Interface,
+  registration: Registration,
+  input: Readonly<{ request: PermissionV1.Request; reply: PermissionV1.ReplyInput }>,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const metadata = yield* settlementMetadata(tx, registration.sessionID, Date.now())
+        yield* LearnerStateJudgment.settlePrompt(tx, {
+          partID: registration.partID,
+          requestID: input.request.id,
+          outcome:
+            input.reply.reply === "once" || input.reply.reply === "always"
+              ? "prompted_allow"
+              : input.reply.reply === "cancel"
+                ? "prompted_cancel"
+                : input.reply.message
+                  ? "prompted_correct"
+                  : "prompted_deny",
+          reply: { ...input.reply },
+          time: metadata.time,
+          order: metadata.order,
+        })
+        return noEvent(undefined)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.asVoid)
+}
+
+function completeLearnerStateJudgment(
+  events: EventV2.Interface,
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(
+            exactFromPart(yield* assertLearnerStateJudgmentTerminalPart(tx, canonical, registration, state)),
+          )
+        }
+        const consumed = yield* LearningFrontier.read(tx)
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID: registration.partID, frontier: consumed })
+        const settled = yield* LearnerStateJudgment.settle(tx, {
+          partID: registration.partID,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        if (settled.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: registration.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        const terminal = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+        const part = learnerStateJudgmentTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function recoverLearnerStateJudgment(
+  events: EventV2.Interface,
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+        if (state.status !== "admitted") {
+          return noEvent(
+            exactFromPart(yield* assertLearnerStateJudgmentTerminalPart(tx, canonical, registration, state)),
+          )
+        }
+        yield* LearnerStateJudgment.recover(tx, {
+          partID: registration.partID,
+          settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+        })
+        const terminal = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+        const part = learnerStateJudgmentTerminalPart(canonical, registration, terminal)
+        return withPartEvent(exactFromPart(part), part, requirePhysicalSettlement(terminal.settlement).settlementTime)
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
+function readLearnerStateJudgmentState(tx: EventV2.Transaction, registration: Registration) {
+  return LearnerStateJudgment.readInvocationVersion(tx, {
+    partID: registration.partID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+  })
+}
+
+function requireLearnerStateJudgmentState(
+  tx: EventV2.Transaction,
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+) {
+  return Effect.gen(function* () {
+    const state = yield* readLearnerStateJudgmentState(tx, registration)
+    if (!state) return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    const storedCommand = state.disposition === "candidate_v1" ? state.candidate?.canonicalCommand : undefined
+    if (
+      storedCommand &&
+      !isDeepStrictEqual(storedCommand, LearnerStateJudgment.canonicalizeCommand(canonical.input))
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted" && (state.disposition !== "candidate_v1" || !state.candidate)) {
+      return yield* Effect.die("Admitted learner-state judgment invocation is not a complete candidate")
+    }
+    const physical = yield* LearningCommand.lookupPhysicalInvocation(tx, {
+      partID: registration.partID,
+      assistantMessageID: registration.assistantMessageID,
+      providerCallID: registration.callID,
+    })
+    if (!physical || !physical.turn_id || !physical.input_id) {
+      return yield* new LearningCommand.InvocationNotFoundError({ partID: registration.partID })
+    }
+    const envelope = learnerStateJudgmentEnvelope(registration, physical.time_admitted)
+    if (
+      physical.turn_id !== envelope.turnID ||
+      physical.input_id !== envelope.inputID ||
+      physical.occurrence_id !== envelope.occurrenceID ||
+      physical.session_id !== envelope.sessionID ||
+      physical.parent_user_message_id !== envelope.parentUserMessageID ||
+      physical.assistant_message_id !== envelope.assistantMessageID ||
+      physical.emission_ordinal !== envelope.emissionOrdinal ||
+      physical.capability_identity !== envelope.capabilityIdentity ||
+      physical.capability_version !== envelope.capabilityVersion ||
+      physical.authorization_basis !== envelope.authorizationBasis
+    ) {
+      return yield* invocationConflict(registration)
+    }
+    if (state.status === "admitted") {
+      yield* assertLearnerStateJudgmentAdmittedPart(tx, canonical, registration)
+    }
+    return state
+  })
+}
+
+function learnerStateJudgmentEnvelope(
+  registration: Registration,
+  timeAdmitted: number,
+): LearningCommand.InvocationEnvelope & Readonly<{ authorizationBasis: "agent_action"; capabilityVersion: 1 }> {
+  return {
+    occurrenceID: registration.causalOccurrenceID!,
+    turnID: registration.turnID,
+    inputID: registration.inputID,
+    sessionID: registration.sessionID,
+    parentUserMessageID: registration.parentUserMessageID,
+    assistantMessageID: registration.assistantMessageID,
+    partID: registration.partID,
+    providerCallID: registration.callID,
+    emissionOrdinal: registration.emissionOrdinal,
+    capabilityIdentity: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+    capabilityVersion: LearnerStateJudgment.UPDATE_VERSION,
+    authorizationBasis: "agent_action",
+    timeAdmitted,
+  }
+}
+
+function assertLearnerStateJudgmentAdmittedPart(
+  tx: EventV2.Transaction,
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+) {
+  return readPart(tx, registration.partID).pipe(
+    Effect.flatMap((part) =>
+      part.id === registration.partID &&
+      part.messageID === registration.assistantMessageID &&
+      part.sessionID === registration.sessionID &&
+      part.type === "tool" &&
+      part.tool === canonical.toolID &&
+      part.callID === registration.callID &&
+      part.state.status === "pending" &&
+      isDeepStrictEqual(part.state.input, canonical.input)
+        ? Effect.void
+        : invocationConflict(registration),
+    ),
+  )
+}
+
+function assertLearnerStateJudgmentTerminalPart(
+  tx: EventV2.Transaction,
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+  state: LearnerStateJudgment.InvocationVersion,
+) {
+  return Effect.gen(function* () {
+    const expected = learnerStateJudgmentTerminalPart(canonical, registration, state)
+    const part = yield* readPart(tx, registration.partID)
+    if (
+      !isDeepStrictEqual(invocationPart(part), invocationPart(expected)) ||
+      SemanticPresentation.readResult(part, true).type !== "valid"
+    ) {
+      return yield* Effect.die(
+        `Terminal learner-state judgment Part ${registration.partID} diverged from its settlement`,
+      )
+    }
+    return part
+  })
+}
+
+function learnerStateJudgmentTerminalPart(
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+  state: LearnerStateJudgment.InvocationVersion,
+) {
+  const settlement = requirePhysicalSettlement(state.settlement)
+  const presentation = LearningCommandPresentation.learnerStateJudgmentSettlementResult(settlement, state, {
+    sessionID: registration.sessionID,
+    assistantMessageID: registration.assistantMessageID,
+    providerCallID: registration.callID,
+    partID: registration.partID,
+  })
+  const projected = SemanticPresentation.projectResultBasis(presentation.basis)
+  if (!projected) throw new Error("Learner-state judgment settlement has no valid semantic projection")
+  const exact = {
+    title: projected.title,
+    metadata: {
+      command: canonical.toolID,
+      commandVersion: LearnerStateJudgment.UPDATE_VERSION,
+      outcome: settlement.outcome,
+      ...(settlement.outcome === "error" ? { code: settlement.code } : {}),
+      durablySettled: projected.durablySettled,
+      truncated: false,
+      ...SemanticPresentation.metadata(presentation),
+    },
+    output: JSON.stringify({
+      settlement,
+      disposition: state.disposition,
+      nonImplications: [
+        "not_mastery_certification",
+        "not_activity_or_effort_evidence",
+        "not_per_clause_entailment",
+      ],
+      ...(state.disposition === "candidate_v1" && state.candidate
+        ? {
+            agentAction: state.candidate.agentAction,
+            ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+            ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+          }
+        : {}),
+      ...(state.disposition === "semantic_terminal_v1" && state.semanticTerminal
+        ? { semanticTerminal: state.semanticTerminal }
+        : {}),
+    }),
+  }
+  const part = {
+    id: registration.partID,
+    messageID: registration.assistantMessageID,
+    sessionID: registration.sessionID,
+    type: "tool",
+    tool: canonical.toolID,
+    callID: registration.callID,
+    state: {
+      status: "completed",
+      input: canonical.input,
+      output: exact.output,
+      title: exact.title,
+      metadata: exact.metadata,
+      time: { start: state.timeAdmitted, end: settlement.settlementTime },
+    },
+  } satisfies SessionV1.ToolPart
+  if (SemanticPresentation.readResult(part, true).type !== "valid") {
+    throw new Error(`Constructed terminal learner-state judgment Part ${registration.partID} is invalid`)
+  }
+  return part
+}
+
+function loadCommittedLearnerStateJudgmentResult(
+  events: EventV2.Interface,
+  canonical: LearnerStateJudgmentCanonical,
+  registration: Registration,
+) {
+  return events
+    .transaction((tx) =>
+      Effect.gen(function* () {
+        const state = yield* readLearnerStateJudgmentState(tx, registration)
+        if (!state || state.status === "admitted") return noEvent(undefined)
+        return noEvent(
+          exactFromPart(yield* assertLearnerStateJudgmentTerminalPart(tx, canonical, registration, state)),
+        )
+      }).pipe(Effect.orDie),
+    )
+    .pipe(Effect.map((result) => result.result))
+}
+
 function prepareDefaultCourse(events: EventV2.Interface, modelInput: unknown, registration: Registration) {
   return Effect.gen(function* () {
     const state = yield* readStoredDefaultCourseState(events, registration)
@@ -5281,7 +5831,8 @@ export function recoverAdmitted(events: EventV2.Interface) {
                 row.command_name === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
                 row.command_name === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
                 row.command_name === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY ||
-                row.command_name === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
+                row.command_name === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY ||
+                row.command_name === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
             ),
           ),
         ),
@@ -5394,6 +5945,9 @@ function interruptTransaction(tx: EventV2.Transaction, registration: Registratio
     }
     if (physical.command_name === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) {
       return yield* interruptAssignmentTransaction(tx, registration)
+    }
+    if (physical.command_name === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
+      return yield* interruptLearnerStateJudgmentTransaction(tx, registration)
     }
     const row = yield* readPartRow(tx, registration.partID)
     if (!row) {
@@ -5604,6 +6158,35 @@ function interruptAssignmentTransaction(tx: EventV2.Transaction, registration: R
       return yield* Effect.die(`Recovered Assignment invocation ${registration.partID} remained admitted`)
     }
     const completed = assignmentTerminalPart(canonical, registration, terminal)
+    return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
+  })
+}
+
+function interruptLearnerStateJudgmentTransaction(tx: EventV2.Transaction, registration: Registration) {
+  return Effect.gen(function* () {
+    const row = yield* readPartRow(tx, registration.partID)
+    if (!row) {
+      return yield* new LearningCommand.InvocationTranscriptUnavailableError({ partID: registration.partID })
+    }
+    const part = partFromRow(row)
+    const canonical = {
+      toolID: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      input: normalizeLearnerStateJudgment(part.state.input),
+    } satisfies LearnerStateJudgmentCanonical
+    const state = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+    if (state.status !== "admitted") {
+      yield* assertLearnerStateJudgmentTerminalPart(tx, canonical, registration, state)
+      return noEvent(true)
+    }
+    yield* LearnerStateJudgment.recover(tx, {
+      partID: registration.partID,
+      settlement: yield* settlementMetadata(tx, registration.sessionID, state.timeAdmitted),
+    })
+    const terminal = yield* requireLearnerStateJudgmentState(tx, canonical, registration)
+    if (terminal.status === "admitted") {
+      return yield* Effect.die(`Recovered learner-state judgment invocation ${registration.partID} remained admitted`)
+    }
+    const completed = learnerStateJudgmentTerminalPart(canonical, registration, terminal)
     return withPartEvent(true, completed, requirePhysicalSettlement(terminal.settlement).settlementTime)
   })
 }
@@ -6204,7 +6787,8 @@ function canonicalInput(toolID: PrimaryCapability, input: unknown): Canonical {
     toolID === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
     toolID === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
     toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY ||
-    toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
+    toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY ||
+    toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
   ) {
     throw new Error("This command uses its dedicated Agent-action admission path")
   }
@@ -6347,7 +6931,8 @@ function isPrimaryCapability(value: string): value is PrimaryCapability {
     value === LearningCommand.UPDATE_LEARNING_COURSE_CAPABILITY ||
     value === LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY ||
     value === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY ||
-    value === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
+    value === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY ||
+    value === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
   )
 }
 
@@ -6375,6 +6960,9 @@ function capabilityVersion(toolID: PrimaryCapability) {
   }
   if (toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) {
     return LearningCommand.UPDATE_ASSIGNMENT_VERSION
+  }
+  if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
+    return LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_VERSION
   }
   return LearningCommand.SET_COURSE_ROUTE_ANCHOR_VERSION
 }

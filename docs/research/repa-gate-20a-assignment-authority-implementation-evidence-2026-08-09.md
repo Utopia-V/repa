@@ -1,5 +1,13 @@
 # Gate 20A learning-relevant Assignment authority implementation/evidence candidate
 
+2026-08-09 successor note: Gate 20A's accepted implementation/evidence remains
+unchanged. Its exact Assignment revision handoff is now consumed by ordinary
+teaching/review and the advisory learning-plan suggestion boundary rather than
+the superseded deterministic Planning candidate. Historical “Planning” wording
+in this evidence record proves only downstream independence/non-mutation and
+does not authorize a scheduler, feasibility, remaining-work, or allocation
+owner.
+
 Status: **implementation/evidence accepted and published on the Gate 20A feature
 branch.** The retained independent reviewer closed `G20A-IR-001..009` against
 the exact repaired candidate and found no new or replacement finding, owner

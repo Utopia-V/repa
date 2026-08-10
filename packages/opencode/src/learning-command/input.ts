@@ -5,13 +5,16 @@ import { Course } from "@opencode-ai/core/course"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import { Representation } from "@opencode-ai/core/representation"
-import { NonNegativeInt } from "@opencode-ai/core/schema"
+import { NonNegativeInt, PositiveInt } from "@opencode-ai/core/schema"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { SessionSchema } from "@opencode-ai/core/session/schema"
+import { Turn } from "@opencode-ai/schema/turn"
 import { Schema } from "effect"
 
 export const AcceptCourseViewRevisionInput = Schema.Struct({
@@ -918,6 +921,148 @@ export const UpdateAssignmentInput = Schema.Struct({
 
 export type UpdateAssignmentInput = typeof UpdateAssignmentInput.Type
 
+const LearnerStateText = (maximum: number) =>
+  Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(maximum))
+const LearnerStateDigest = Schema.String.check(Schema.isPattern(/^[0-9a-f]{64}$/))
+const LearnerStateExcerpt = Schema.Struct({
+  text: LearnerStateText(LearnerStateJudgment.MAX_EXCERPT_BYTES),
+  startByte: NonNegativeInt,
+  endByte: NonNegativeInt,
+})
+const LearnerStateCause = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("interpreted_learner_report"), excerpt: LearnerStateExcerpt }),
+  Schema.Struct({
+    type: Schema.Literal("tutor_model_judgment"),
+    rationale: LearnerStateText(LearnerStateJudgment.MAX_RATIONALE_BYTES),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("exact_owner_observation"),
+    rationale: LearnerStateText(LearnerStateJudgment.MAX_RATIONALE_BYTES),
+  }),
+  Schema.Struct({ type: Schema.Literal("learner_correction"), excerpt: LearnerStateExcerpt }),
+])
+const LearnerStateCourseAnchor = Schema.Struct({
+  type: Schema.Literal("course_membership"),
+  endpoint: Schema.Struct({
+    courseID: Course.CourseID,
+    viewID: Course.ViewID,
+    revisionID: Course.RevisionID,
+    itemID: Course.ItemID,
+  }),
+})
+const LearnerStateMaterialAnchor = Schema.Struct({
+  type: Schema.Literal("material_selector"),
+  mapID: MaterialMap.MapID,
+  selectorID: MaterialMap.SelectorID,
+})
+const LearnerStateGoalAnchor = Schema.Struct({
+  type: Schema.Literal("goal_revision"),
+  goalID: LearnerGoal.GoalID,
+  revisionID: LearnerGoal.RevisionID,
+  version: PositiveInt,
+})
+const LearnerStateAssignmentAnchor = Schema.Struct({
+  type: Schema.Literal("assignment_revision"),
+  assignmentID: Assignment.AssignmentID,
+  revisionID: Assignment.RevisionID,
+  version: PositiveInt,
+})
+const LearnerStateAnchor = Schema.Union([
+  LearnerStateCourseAnchor,
+  LearnerStateMaterialAnchor,
+  LearnerStateGoalAnchor,
+  LearnerStateAssignmentAnchor,
+])
+const LearnerStateRange = Schema.Struct({
+  first: Schema.optional(Schema.String),
+  last: Schema.optional(Schema.String),
+  count: NonNegativeInt,
+  fingerprint: LearnerStateDigest,
+})
+const LearnerStateInteractionLocator = Schema.Union([
+  Schema.Struct({
+    status: Schema.Literal("available"),
+    sessionID: SessionSchema.ID,
+    turnID: Turn.ID,
+    inputID: Schema.optional(Turn.InputID),
+    causalOccurrenceID: Schema.optional(Schema.String),
+    timeAdmitted: NonNegativeInt,
+    timeTerminal: NonNegativeInt,
+    terminalState: Schema.Literals(["completed", "failed", "interrupted", "exhausted"]),
+    terminalReason: Schema.optional(Turn.TerminalReason),
+    sessionParentID: Schema.optional(SessionSchema.ID),
+    presentationProvenance: Schema.Struct({
+      count: NonNegativeInt,
+      kinds: Schema.Array(Schema.Literals(["origin", "compaction_replay", "fork_clone"])),
+      fingerprint: LearnerStateDigest,
+      historicalMessageOrPart: Schema.Boolean,
+    }),
+    messageRange: Schema.optional(LearnerStateRange),
+    partRange: Schema.optional(LearnerStateRange),
+  }),
+  Schema.Struct({
+    status: Schema.Literal("source_unavailable"),
+    sessionID: SessionSchema.ID,
+    turnID: Turn.ID,
+    inputID: Schema.optional(Turn.InputID),
+    causalOccurrenceID: Schema.optional(Schema.String),
+    timeAdmitted: NonNegativeInt,
+    timeTerminal: NonNegativeInt,
+    terminalState: Schema.Literals(["completed", "failed", "interrupted", "exhausted"]),
+    terminalReason: Schema.optional(Turn.TerminalReason),
+    sessionParentID: Schema.optional(SessionSchema.ID),
+    presentationProvenance: Schema.Literal("source_unavailable"),
+    timeDeleted: NonNegativeInt,
+  }),
+])
+const LearnerStateBasisRef = Schema.Union([
+  LearnerStateAnchor,
+  Schema.Struct({
+    type: Schema.Literal("learner_response_evidence_revision"),
+    recordID: LearnerResponseEvidence.RecordID,
+    revisionID: LearnerResponseEvidence.RevisionID,
+    version: NonNegativeInt,
+  }),
+  Schema.Struct({ type: Schema.Literal("interaction"), locator: LearnerStateInteractionLocator }),
+])
+const LearnerStateSubject = Schema.Struct({
+  label: LearnerStateText(LearnerStateJudgment.MAX_SUBJECT_LABEL_BYTES),
+  scope: Schema.Union([
+    Schema.Struct({ type: Schema.Literal("learner_home") }),
+    Schema.Struct({
+      type: Schema.Literal("anchored"),
+      anchors: Schema.Array(LearnerStateAnchor).check(
+        Schema.isLengthBetween(1, LearnerStateJudgment.MAX_ANCHORS),
+      ),
+    }),
+  ]),
+})
+const LearnerStateSnapshot = Schema.Struct({
+  subject: LearnerStateSubject,
+  judgmentBody: LearnerStateText(LearnerStateJudgment.MAX_JUDGMENT_BODY_BYTES),
+  exactBasisRefs: Schema.Array(LearnerStateBasisRef).check(
+    Schema.isMaxLength(LearnerStateJudgment.MAX_BASIS_REFS),
+  ),
+  uncertaintyAndLimits: Schema.optional(LearnerStateText(LearnerStateJudgment.MAX_UNCERTAINTY_BYTES)),
+  basisScope: Schema.optional(Schema.Literal("whole_judgment")),
+})
+const LearnerStateExpectedHead = Schema.Struct({
+  revisionID: LearnerStateJudgment.RevisionID,
+  version: PositiveInt,
+  ownerCutFingerprint: LearnerStateDigest,
+})
+
+export const UpdateLearnerStateJudgmentInput = Schema.Struct({
+  operation: Schema.Literals(["create", "revise", "retire", "restore"]),
+  judgmentID: Schema.optional(LearnerStateJudgment.JudgmentID),
+  expectedHead: Schema.optional(LearnerStateExpectedHead),
+  cause: LearnerStateCause,
+  snapshot: Schema.optional(LearnerStateSnapshot),
+  rationale: Schema.optional(LearnerStateText(LearnerStateJudgment.MAX_RATIONALE_BYTES)),
+}).annotate({ parseOptions: { onExcessProperty: "error" } })
+
+export type UpdateLearnerStateJudgmentInput = LearnerStateJudgment.Command
+
 const decode = Schema.decodeUnknownSync(AcceptCourseViewRevisionInput)
 const decodeRepresentation = Schema.decodeUnknownSync(RepresentationConvertInput)
 const decodeDefault = Schema.decodeUnknownSync(SetDefaultCoursePreferenceInput)
@@ -932,6 +1077,7 @@ const decodeLearningBootstrap = Schema.decodeUnknownSync(UpdateLearningCourseInp
 const decodeLearnerResponseEvidence = Schema.decodeUnknownSync(UpdateLearnerResponseEvidenceInput)
 const decodeFutureAttention = Schema.decodeUnknownSync(UpdateFutureAttentionInput)
 const decodeAssignment = Schema.decodeUnknownSync(UpdateAssignmentInput)
+const decodeLearnerStateJudgment = Schema.decodeUnknownSync(UpdateLearnerStateJudgmentInput)
 
 export function normalize(input: unknown): AcceptCourseViewRevisionInput {
   const value = decode(input)
@@ -1051,6 +1197,12 @@ export function normalizeAssignment(input: unknown): UpdateAssignmentInput {
   return value
 }
 
+export function normalizeLearnerStateJudgment(input: unknown): UpdateLearnerStateJudgmentInput {
+  const value = decodeLearnerStateJudgment(input)
+  LearnerStateJudgment.canonicalizeCommand(value as LearnerStateJudgment.Command)
+  return value as LearnerStateJudgment.Command
+}
+
 function normalizeBoundary(input: string) {
   const value = input.trim()
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/.exec(value)
@@ -1073,6 +1225,9 @@ export function normalizeCommand(toolID: string, input: unknown) {
   }
   if (toolID === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY) return normalizeFutureAttention(input)
   if (toolID === LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY) return normalizeAssignment(input)
+  if (toolID === LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY) {
+    return normalizeLearnerStateJudgment(input)
+  }
   throw new Error(`Unknown reserved learning command ${toolID}`)
 }
 

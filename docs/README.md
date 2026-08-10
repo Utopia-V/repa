@@ -10,13 +10,15 @@ production/test candidate is integrated into `main` at implementation commit
 integration/status commit `228126535619a70d172e17e6f6b56b27cf86fbb6`. No
 release exists. The 2026-08-08
 [Gate 21 pre-contract Planning experiment](research/repa-gate-21-cross-day-planning-boundary-experiment-2026-08-08.md)
-returned Roadmap 09's reserved Assignment/Planning split condition. Roadmap 09
-now inserts Gate 20A for learning-relevant Assignment authority and retains Gate
-21 for Planning without renumbering Gate 21A/22/23. The
-[Gate 20A contract/theory candidate](research/repa-gate-20a-assignment-authority-2026-08-08.md)
-and the separate
-  [Gate 21 Planning contract/theory candidate](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
-  now exist. Gate 20A whole-Gate review run
+returned Roadmap 09's reserved Assignment/Planning split condition. It remains
+useful evidence for Assignment independence, exact-revision composition,
+intermittent-use truth, and bounded arithmetic counterexamples, but its
+program-owned scheduler conclusion is superseded by the 2026-08-09
+product-intent audit. That audit retains Gate 20A, inserts Gate 20B for reusable
+fuzzy learner-state judgment memory, and redefines Gate 21 as scoped advisory
+learning-plan suggestions without renumbering Gate 21A/22/23. The
+[Gate 20A contract](research/repa-gate-20a-assignment-authority-2026-08-08.md)
+whole-Gate review run
   `G20A-WG-20260808-019fe065-01`, retained reviewer
   `019fe134-5860-7ed3-a754-ca22c9689b18`, accepted exact contract/theory
   candidate SHA-256 `3E6BC18F...E3A7F` after closing `G20A-CR-001..005`, with no
@@ -27,9 +29,27 @@ and the separate
   finding, owner blocker, or contract reopen condition. The accepted projection
   is published on branch `codex/gate-20a-assignment-authority` at implementation
   commit `5099ecc642390cf7bae0f980098edd5267a75874` plus its docs-only
-  closure/status successor. Gate 21 remains an unreviewed candidate that must be
-  reconciled and reviewed in its own fresh top-level task. Mainline merge,
-  Gate 21A+, release, and credentialed provider work remain unstarted.
+  closure/status successor. The
+  [Gate 20B learner-state judgment contract](research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md)
+  was independently accepted under whole-Gate run
+  `G20B-WG-20260809-019fe065-01` by retained reviewer
+  `019fe6da-d33f-71f1-b405-1cf240c7862a`, against exact semantic candidate
+  SHA-256 `FF6EAB70...10BCC54`, with no blocking finding. The first
+  implementation/evidence pass returned `Revise` for `G20B-IE-001..004`. The
+  same reviewer then closed all four findings and accepted the exact repaired
+  [42-file implementation/evidence candidate](research/repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md)
+  at package-manifest SHA-256 `1F5CCB66...052146A`. Both Gate 20B layers are
+  accepted; local integration is now in progress, while push, release, and
+  credentialed-provider qualification remain separate.
+  The
+  [redefined Gate 21 advisory-planning candidate](research/repa-gate-21-advisory-learning-planning-2026-08-09.md)
+  remains an unreviewed derived contract/theory candidate. Its local product
+  grill and documentation reconciliation do not constitute fresh independent
+  review or implementation authority. The earlier
+  [deterministic Planning candidate](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
+  is retained as an unreviewed superseded record. Gate 20A mainline merge,
+  Gate 21 review, Gate 21A+, release, and credentialed provider work remain
+  unstarted; Gate 20B is accepted and currently at its local integration step.
 Gate 17 is fixed at implementation/evidence commit `39a8c2f4`. The baseline
 omits `/learn`; the accepted ordinary-Agent bootstrap
 preserves Gate 10's local-read union and one-new-Artifact ceiling, uses the
@@ -380,8 +400,9 @@ in the [inherited-material index](inherited/README.md).
 | 18. [Learning context and Session continuation](research/repa-gate-18-learning-context-session-continuation-2026-08-03.md) | Accepted contract for one bounded, immutable, operation-exact learning-context cut with owner-specific lazy exact reads and no cross-Session transcript import.                               | **Closed and integrated locally at implementation commit `284d2a4ae` plus its docs-only closure/status successor.** Same top-level reviewer `019fc874-72ee-75b3-92e9-0b923b85efb2` accepted semantic contract candidate `2DDAA563...` and the exact implementation/evidence candidate under `G18-WG-20260804-019fc837-01`, with `G18-CR-001..004` and `G18-IR-001..008` closed. The accepted evidence includes the separately authorized isolated `openai/gpt-5.6-luna` qualification and deterministic SDK-repair-provenance/MCP-collision closure. No push, release, or later-Gate authority is established.                                                                                                                                                                                                                                                                                                                                     |
 | 19. [First learner-record adaptation](research/repa-gate-19-first-learner-record-adaptation-2026-08-05.md)                 | Preserves one source-linked, occurrence-bound, correctable learner-response assessment against an exact immutable selector only where source deletion creates a later-action collision.       | **Closed and integrated at implementation commit `9027b45a4` plus this docs-only closure/status successor.** Retained reviewer `019fd269-e042-7423-85a9-bce7121f9b6e` accepted contract/theory and implementation/evidence under `G19-WG-20260805-019fd20c-01`, closing `G19-CR-001..005` and `G19-IR-001..010`. The boundary preserves ordinary zero-write teaching, uses source-readable data instead of cached pressure, and establishes neither mastery/understanding nor aggregation, planning, future attention, production move selection, or Gate 20+. Bun 1.3.14 Windows aggregate native instability remains an explicitly bounded execution-reliability unknown.                                                                                                                                                                                                                                  |
 | 20. [Source-linked future attention and Tutor return](research/repa-gate-20-source-linked-future-attention-2026-08-06.md) | Accepted contract for one source-bound concern authority whose target/time-derived eligibility, conditional current-purpose projection, and purpose-appropriate complete-occurrence/outcome service remain distinct. | **Contract/theory and [implementation/evidence](research/repa-gate-20-source-linked-future-attention-implementation-evidence-2026-08-07.md) accepted and integrated into `origin/main` at exact implementation commit `1f9216984` through integration/status commit `228126535`.** Reviewer `019fd773-84c3-7841-9fc5-45f1b18d4a9f` closed `G20-CR-001..010` and `G20-IR-001..011` under `G20-WG-20260806-019fd69a-01`, with no new finding, material unknown, or owner blocker. Accepted behavior includes physical-epoch durable catch-up, failure-retained TUI reconnect recovery, queued owner-read generations, acknowledged ACP redelivery, eager global event registration, and complete exact-time spelling/provenance checks. Historical ALS aggregates are not acceptance evidence. Release, Gate 20A, and Gate 21+ remain separately governed. |
-| 20A. [Learning-relevant Assignment authority](research/repa-gate-20a-assignment-authority-2026-08-08.md) | Accepted contract for a source-relative substantial learning obligation with generated identity, immutable exact revisions, direct truthful correction, explicit source-bearing lifecycle, bounded exact-cardinality Context/lazy-read use, immutable source basis plus cut-bound current source status, and an exact-revision Planning handoff. Completion prevents stale pressure but is not learning, activity, submission, grade, or product success. | **Contract/theory and [implementation/evidence](research/repa-gate-20a-assignment-authority-implementation-evidence-2026-08-09.md) accepted and published on `origin/codex/gate-20a-assignment-authority` at implementation commit `5099ecc64` plus its docs-only closure/status successor.** Whole-Gate run `G20A-WG-20260808-019fe065-01`, reviewer `019fe134-5860-7ed3-a754-ca22c9689b18`, accepted exact contract SHA-256 `3E6BC18F...E3A7F` and exact 41-file / 4,521-byte package candidate SHA-256 `D00E8DB8...80078B`, closing `G20A-CR-001..005` and `G20A-IR-001..009`. The earlier broad filtered runtime stall remains a disclosed, nonblocking later-release qualification unknown. No mainline merge, release, credentialed provider call, Gate 21 review, or Gate 21A+ transition exists. |
-| 21. [Substantial cross-day Planning authority](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md) | Candidate contract for one shared-capacity Planning aggregate over exact Goal or Gate-20A Assignment revisions. Immutable accepted input, deterministic assessment, and source-bearing validated allocation settle in stages so downstream failure cannot discard a correction. Current truth distinguishes assessment-pending, allocated, feasible-needing-allocation, infeasible, and qualified-unknown without treating a plan as activity, adherence, commitment, or product success. | **Contract/theory candidate only; fresh independent review not begun.** Gate 20A is now an accepted predecessor, but this candidate must be reconciled to its final handoff and reviewed in a separate fresh top-level task. No implementation authority, migration, package change, release, credentialed provider call, or Gate 21A+ transition exists. |
+| 20A. [Learning-relevant Assignment authority](research/repa-gate-20a-assignment-authority-2026-08-08.md) | Accepted contract for a source-relative substantial learning obligation with generated identity, immutable exact revisions, direct truthful correction, explicit source-bearing lifecycle, bounded exact-cardinality Context/lazy-read use, immutable source basis plus cut-bound current source status, and an exact-revision downstream-advice handoff. Completion prevents stale pressure but is not learning, activity, submission, grade, or product success. | **Contract/theory and [implementation/evidence](research/repa-gate-20a-assignment-authority-implementation-evidence-2026-08-09.md) accepted and published on `origin/codex/gate-20a-assignment-authority` at implementation commit `5099ecc64` plus its docs-only closure/status successor.** Whole-Gate run `G20A-WG-20260808-019fe065-01`, reviewer `019fe134-5860-7ed3-a754-ca22c9689b18`, accepted exact contract SHA-256 `3E6BC18F...E3A7F` and exact 41-file / 4,521-byte package candidate SHA-256 `D00E8DB8...80078B`, closing `G20A-CR-001..005` and `G20A-IR-001..009`. The earlier broad filtered runtime stall remains a disclosed, nonblocking later-release qualification unknown. Gate 20A is not merged to mainline and has no release or credentialed-provider qualification; Gate 20B and later status are owned by their following rows. |
+| 20B. [Learner-state judgment memory](research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md) | Accepted contract for reusable, scoped, source-bearing, fuzzy judgments about what the learner has learned, roughly understands, can do, or still finds difficult. It keeps LLM/learner authorship and correction separate from evidence and never promotes the judgment into a program-computed mastery score. | **Contract/theory and [implementation/evidence](research/repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md) accepted; local integration is in progress.** Whole-Gate run `G20B-WG-20260809-019fe065-01`, retained reviewer `019fe6da-d33f-71f1-b405-1cf240c7862a`, accepted semantic candidate SHA-256 `FF6EAB70...10BCC54`, raised `G20B-IE-001..004` on the first implementation pass, and then closed all four against the exact 42-file / 4,791-byte package candidate SHA-256 `1F5CCB66...052146A`. The reviewer is retired. No commit, push, release, credentialed provider call, Gate 21 review, or successor-Gate transition is yet recorded here. |
+| 21. [Advisory learning-plan suggestions](research/repa-gate-21-advisory-learning-planning-2026-08-09.md) | Candidate contract for multiple scoped, source-bearing, correctable learning-plan suggestions authored by the ordinary Tutor or learner. A suggestion may cite exact Goal, Assignment, Course, evidence, and learner-state revisions, becomes more concrete near term and coarser farther out, and remains advice rather than a global schedule or learner commitment. | **Contract/theory candidate only; fresh independent review not begun.** The 2026-08-08 deterministic Planning candidate is superseded rather than accepted; its sound exact-revision, recovery, no-inferred-activity, and arithmetic-research parts are classified for reuse. No implementation authority, migration, package change, integration, release, credentialed provider call, or Gate 21A+ transition exists. |
 
 Gate numbers are maintainer-facing acceptance units, not a claim that every
 later Gate depends on every earlier one. Exact close commits, review runs,
@@ -420,9 +441,12 @@ reopen chains, and evidence qualifications live in the
 - [Gate 19 implementation/evidence record](research/repa-gate-19-first-learner-record-adaptation-implementation-evidence-2026-08-06.md)
 - [Gate 20 source-linked future attention and Tutor return contract](research/repa-gate-20-source-linked-future-attention-2026-08-06.md)
 - [Gate 20 implementation/evidence record](research/repa-gate-20-source-linked-future-attention-implementation-evidence-2026-08-07.md)
-- [Gate 21 pre-contract cross-day Planning boundary experiment](research/repa-gate-21-cross-day-planning-boundary-experiment-2026-08-08.md)
+- [Gate 21 historical cross-day Planning boundary experiment](research/repa-gate-21-cross-day-planning-boundary-experiment-2026-08-08.md)
 - [Gate 20A learning-relevant Assignment authority contract](research/repa-gate-20a-assignment-authority-2026-08-08.md)
-- [Gate 21 substantial cross-day Planning authority contract candidate](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
+- [Gate 20A implementation/evidence record](research/repa-gate-20a-assignment-authority-implementation-evidence-2026-08-09.md)
+- [Gate 20B learner-state judgment memory contract candidate](research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md)
+- [Gate 21 advisory learning-plan suggestion contract candidate](research/repa-gate-21-advisory-learning-planning-2026-08-09.md)
+- [Gate 21 superseded deterministic Planning contract candidate](research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
 - [Pre-fork asset disposition](research/pre-fork-repa-asset-audit-2026-07-13.md)
 
 ## Accepted decisions

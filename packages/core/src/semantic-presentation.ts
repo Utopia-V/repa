@@ -6,6 +6,7 @@ import { Assignment } from "./assignment"
 import { LearningBootstrap } from "./learning-bootstrap"
 import { FutureAttention } from "./future-attention"
 import { LearnerResponseEvidence } from "./learner-response-evidence"
+import { LearnerStateJudgment } from "./learner-state-judgment"
 import { PermissionV1 } from "./v1/permission"
 
 export { SemanticPresentationV1 }
@@ -27,6 +28,7 @@ const consequentialPermissionCapabilities = new Set([
   "update_learner_response_evidence",
   "update_future_attention",
   "update_assignment",
+  "update_learner_state_judgment",
 ])
 
 const consequentialResultTools = new Set([
@@ -41,6 +43,7 @@ const consequentialResultTools = new Set([
   "update_learner_response_evidence",
   "update_future_attention",
   "update_assignment",
+  "update_learner_state_judgment",
 ])
 
 export type Fact = Readonly<{ label: string; value: string }>
@@ -90,6 +93,10 @@ type FutureAttentionScope = Extract<
 type AssignmentScope = Extract<
   SemanticPresentationV1.ProposalBasis,
   { readonly kind: "assignment_capability" }
+>["scope"]
+type LearnerStateJudgmentScope = Extract<
+  SemanticPresentationV1.ProposalBasis,
+  { readonly kind: "learner_state_judgment_capability" }
 >["scope"]
 
 export type ProposalProjection = Readonly<{
@@ -511,6 +518,30 @@ function expectedProposal(value: SemanticPresentationV1.Proposal): ProposalExpec
       },
     })
   }
+  if (basis.kind === "learner_state_judgment_capability") {
+    const command = canonicalLearnerStateJudgmentCommand(basis.scope)
+    if (
+      !command ||
+      !same(command, basis.scope.command) ||
+      !validLearnerStateJudgmentScope(command, basis.scope) ||
+      LearnerStateJudgment.commandFingerprint(command) !== basis.commandFingerprint
+    ) {
+      return undefined
+    }
+    return expected(value, {
+      capability: LearnerStateJudgment.UPDATE_CAPABILITY,
+      patterns: [LearnerStateJudgment.PERMISSION_PATTERN],
+      always: [LearnerStateJudgment.PERMISSION_PATTERN],
+      promptRequired: false,
+      approval: "policy",
+      domain: {
+        learnerStateJudgmentKind: "revision",
+        commandFingerprint: basis.commandFingerprint,
+        issuance: basis.issuance,
+        scope: basis.scope,
+      },
+    })
+  }
   if (basis.kind === "course_route_anchor") {
     if (
       (basis.target === null && basis.locator !== undefined) ||
@@ -706,6 +737,173 @@ function canonicalAssignmentCommand(scope: AssignmentScope) {
   } catch {
     return undefined
   }
+}
+
+function canonicalLearnerStateJudgmentCommand(scope: LearnerStateJudgmentScope) {
+  try {
+    const value = scope.command as LearnerStateJudgment.CanonicalCommand
+    const command = LearnerStateJudgment.canonicalizeCommand(
+      value.operation === "create"
+        ? { operation: value.operation, cause: value.cause, snapshot: value.snapshot }
+        : value.operation === "retire"
+          ? {
+              operation: value.operation,
+              judgmentID: value.judgmentID,
+              expectedHead: value.expectedHead,
+              cause: value.cause,
+              rationale: value.rationale,
+            }
+          : value.operation === "restore" && value.snapshot === undefined
+            ? {
+                operation: value.operation,
+                judgmentID: value.judgmentID,
+                expectedHead: value.expectedHead,
+                cause: value.cause,
+                rationale: value.rationale,
+              }
+            : {
+                operation: value.operation,
+                judgmentID: value.judgmentID,
+                expectedHead: value.expectedHead,
+                cause: value.cause,
+                snapshot: value.snapshot!,
+                rationale: value.rationale,
+              },
+    )
+    return same(command, scope.command) ? command : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function learnerStateJudgmentScope(candidate: LearnerStateJudgment.Candidate) {
+  const snapshot = candidate.materialized.snapshot
+  return {
+    command: structuredClone(candidate.canonicalCommand),
+    materialized: {
+      outcome: candidate.materialized.outcome,
+      judgmentID: candidate.materialized.judgmentID,
+      revisionID: candidate.materialized.revisionID,
+      effectID: candidate.materialized.effectID,
+      ...(candidate.materialized.predecessorRevisionID
+        ? { previousRevisionID: candidate.materialized.predecessorRevisionID }
+        : {}),
+      version: candidate.materialized.version,
+      operation: candidate.materialized.operation,
+      disposition: candidate.materialized.disposition,
+    },
+    materializedSnapshot: structuredClone(snapshot),
+    authorAndCause: structuredClone(candidate.materialized.authorAndCause),
+    causeType: candidate.canonicalCommand.cause.type,
+    subjectLabel: snapshot.subject.label,
+    judgmentBody: snapshot.judgmentBody,
+    ...(snapshot.uncertaintyAndLimits ? { uncertaintyAndLimits: snapshot.uncertaintyAndLimits } : {}),
+    scopeType: snapshot.subject.scope.type,
+    anchorKinds:
+      snapshot.subject.scope.type === "learner_home"
+        ? []
+        : [...new Set(snapshot.subject.scope.anchors.map((binding) => binding.ref.type))].toSorted(),
+    anchorRefs:
+      snapshot.subject.scope.type === "learner_home"
+        ? []
+        : snapshot.subject.scope.anchors.map((binding) => structuredClone(binding.ref)),
+    basisRefCount: snapshot.exactBasis.length,
+    basisRefs: snapshot.exactBasis.map((binding) => structuredClone(binding.ref)),
+    basisScope: "whole_judgment" as const,
+    hasUncertaintyOrLimits: snapshot.uncertaintyAndLimits !== undefined,
+    nonImplications: [
+      "fallible_judgment_not_mastery_certification",
+      "basis_set_supports_whole_revision_not_individual_clauses",
+      "silence_age_assignment_completion_or_plan_wording_implies_no_state_change",
+      "permission_allows_storage_but_does_not_certify_the_judgment",
+    ],
+  }
+}
+
+function validLearnerStateJudgmentScope(
+  command: LearnerStateJudgment.CanonicalCommand,
+  scope: LearnerStateJudgmentScope,
+) {
+  if (
+    !isRecord(scope.materializedSnapshot) ||
+    !isRecord(scope.authorAndCause) ||
+    !isRecord(scope.materializedSnapshot.subject) ||
+    !isRecord(scope.materializedSnapshot.subject.scope) ||
+    !Array.isArray(scope.materializedSnapshot.exactBasis) ||
+    scope.materialized.operation !== command.operation ||
+    scope.causeType !== command.cause.type ||
+    scope.authorAndCause.type !== command.cause.type ||
+    scope.materializedSnapshot.subject.label !== scope.subjectLabel ||
+    scope.materializedSnapshot.judgmentBody !== scope.judgmentBody ||
+    scope.materializedSnapshot.basisScope !== "whole_judgment" ||
+    scope.materializedSnapshot.subject.scope.type !== scope.scopeType ||
+    scope.materializedSnapshot.exactBasis.length !== scope.basisRefCount ||
+    scope.basisRefs.length !== scope.basisRefCount ||
+    scope.hasUncertaintyOrLimits !== (scope.uncertaintyAndLimits !== undefined) ||
+    scope.materializedSnapshot.uncertaintyAndLimits !== scope.uncertaintyAndLimits ||
+    !/^lsj_[0-9A-Za-z]{26}$/.test(scope.materialized.judgmentID) ||
+    !/^lsr_[0-9A-Za-z]{26}$/.test(scope.materialized.revisionID) ||
+    !/^lse_[0-9A-Za-z]{26}$/.test(scope.materialized.effectID)
+  ) {
+    return false
+  }
+  const anchors =
+    scope.scopeType === "anchored" && Array.isArray(scope.materializedSnapshot.subject.scope.anchors)
+      ? scope.materializedSnapshot.subject.scope.anchors
+      : []
+  if (
+    (scope.scopeType === "learner_home" && (scope.anchorRefs.length !== 0 || scope.anchorKinds.length !== 0)) ||
+    (scope.scopeType === "anchored" && scope.anchorRefs.length === 0) ||
+    anchors.length !== scope.anchorRefs.length ||
+    !anchors.every(
+      (binding, index) => isRecord(binding) && isRecord(binding.ref) && same(binding.ref, scope.anchorRefs[index]),
+    ) ||
+    !scope.materializedSnapshot.exactBasis.every(
+      (binding, index) => isRecord(binding) && isRecord(binding.ref) && same(binding.ref, scope.basisRefs[index]),
+    ) ||
+    !same(
+      scope.anchorKinds,
+      [...new Set(scope.anchorRefs.flatMap((ref) => (isRecord(ref) && typeof ref.type === "string" ? [ref.type] : [])))].toSorted(),
+    ) ||
+    !same(scope.nonImplications, [
+      "fallible_judgment_not_mastery_certification",
+      "basis_set_supports_whole_revision_not_individual_clauses",
+      "silence_age_assignment_completion_or_plan_wording_implies_no_state_change",
+      "permission_allows_storage_but_does_not_certify_the_judgment",
+    ])
+  ) {
+    return false
+  }
+  if (command.operation === "create") {
+    if (
+      scope.materialized.version !== 1 ||
+      scope.materialized.previousRevisionID !== undefined ||
+      scope.materialized.disposition !== "active"
+    ) {
+      return false
+    }
+  } else if (
+    scope.materialized.judgmentID !== command.judgmentID ||
+    scope.materialized.previousRevisionID !== command.expectedHead.revisionID ||
+    scope.materialized.version !== command.expectedHead.version + 1 ||
+    (command.operation === "retire" && scope.materialized.disposition !== "retired") ||
+    (command.operation === "restore" && scope.materialized.disposition !== "active")
+  ) {
+    return false
+  }
+  if ("snapshot" in command && command.snapshot) {
+    return (
+      command.snapshot.subject.label === scope.subjectLabel &&
+      command.snapshot.judgmentBody === scope.judgmentBody &&
+      command.snapshot.uncertaintyAndLimits === scope.uncertaintyAndLimits &&
+      same(
+        command.snapshot.subject.scope.type === "learner_home" ? [] : command.snapshot.subject.scope.anchors,
+        scope.anchorRefs,
+      ) &&
+      same(command.snapshot.exactBasisRefs, scope.basisRefs)
+    )
+  }
+  return true
 }
 
 export function assignmentScope(
@@ -1241,6 +1439,38 @@ function projectProposal(
         ...(command?.operations.map((operation, index) =>
           fact(`Future-attention change ${index + 1}`, futureAttentionOperationText(operation)),
         ) ?? []),
+        fact("Does not imply", basis.scope.nonImplications.join(", ")),
+      ],
+    )
+  }
+  if (basis.kind === "learner_state_judgment_capability") {
+    return proposalProjection(
+      basis,
+      approval,
+      LearnerStateJudgment.UPDATE_CAPABILITY,
+      "Store or correct this learner-state judgment",
+      "This approval is bound to one exact, source-bearing, fallible whole-judgment revision. It permits durable storage; it does not certify mastery or prove any individual clause.",
+      [
+        fact("Issuance", basis.issuance),
+        fact("Operation", basis.scope.materialized.operation),
+        fact(
+          "Exact revision",
+          `${basis.scope.materialized.judgmentID}/${basis.scope.materialized.revisionID} v${basis.scope.materialized.version}; ${basis.scope.materialized.disposition}; ${basis.scope.materialized.outcome}`,
+        ),
+        ...(basis.scope.materialized.previousRevisionID
+          ? [fact("Expected predecessor", basis.scope.materialized.previousRevisionID)]
+          : []),
+        fact("Cause", basis.scope.causeType),
+        fact("Subject", `${basis.scope.subjectLabel}; scope ${basis.scope.scopeType}`),
+        fact("Fallible judgment", basis.scope.judgmentBody),
+        ...(basis.scope.uncertaintyAndLimits
+          ? [fact("Uncertainty and limits", basis.scope.uncertaintyAndLimits)]
+          : []),
+        fact("Exact subject anchors", JSON.stringify(basis.scope.anchorRefs)),
+        fact(
+          "Exact basis for the whole judgment",
+          `${basis.scope.basisRefCount} reference(s); ${JSON.stringify(basis.scope.basisRefs)}`,
+        ),
         fact("Does not imply", basis.scope.nonImplications.join(", ")),
       ],
     )
@@ -2385,6 +2615,81 @@ function projectResult(basis: SemanticPresentationV1.ResultBasis): ResultProject
               fact(
                 "Does not imply",
                 "activity, elapsed-work progress, mastery, learner commitment, a study plan, or an automatically selected Tutor move",
+              ),
+            ]
+          : []),
+      ],
+    )
+  }
+  if (basis.kind === "learner_state_judgment_result") {
+    const semanticTerminal = basis.disposition === "semantic_terminal_v1"
+    const candidate = basis.disposition === "candidate_v1"
+    const projected = settlement.outcome !== "error"
+    const semanticOutcomeValid =
+      !semanticTerminal ||
+      (basis.semanticOutcome === "same_effect"
+        ? settlement.outcome === "already_applied"
+        : basis.semanticOutcome === "same_no_change"
+          ? settlement.outcome === "no_change"
+          : basis.semanticOutcome === "semantic_conflict" &&
+            settlement.outcome === "error" &&
+            settlement.code === "semantic_conflict")
+    if (
+      semanticTerminal !== (basis.semanticOutcome !== undefined) ||
+      candidate !== (basis.issuance !== undefined) ||
+      candidate !== (basis.capabilityOutcome !== undefined) ||
+      (!candidate && basis.permissionRequestID !== undefined) ||
+      projected !== (basis.effect !== undefined) ||
+      !semanticOutcomeValid ||
+      (settlement.outcome === "applied" &&
+        (!basis.effect?.effectID ||
+          !basis.effect.judgmentID ||
+          !basis.effect.revisionID ||
+          basis.effect.existingOutcome !== undefined)) ||
+      (settlement.outcome === "already_applied" &&
+        (basis.effect?.existingOutcome !== "applied" ||
+          !basis.effect.effectID ||
+          !basis.effect.judgmentID ||
+          !basis.effect.revisionID)) ||
+      (settlement.outcome === "no_change" &&
+        (basis.effect?.existingOutcome !== "no_change" || basis.effect.effectID !== undefined))
+    ) {
+      return undefined
+    }
+    return resultProjection(
+      basis,
+      LearnerStateJudgment.UPDATE_CAPABILITY,
+      "Learner-state judgment settlement",
+      resultSummary("Learner-state judgment", outcome),
+      [
+        ...failure,
+        fact("Disposition", basis.disposition),
+        ...(basis.issuance ? [fact("Issuance", basis.issuance)] : []),
+        ...(basis.capabilityOutcome ? [fact("Capability", basis.capabilityOutcome)] : []),
+        ...(basis.permissionRequestID ? [fact("Permission request", basis.permissionRequestID)] : []),
+        ...(basis.effect
+          ? [
+              ...(basis.effect.existingOutcome
+                ? [fact("Existing semantic outcome", basis.effect.existingOutcome)]
+                : []),
+              ...(basis.effect.judgmentID && basis.effect.operation && basis.effect.disposition
+                ? [
+                    fact(
+                      "Exact learner-state revision",
+                      `${basis.effect.judgmentID}/${basis.effect.revisionID} v${basis.effect.version}; ${basis.effect.operation}; ${basis.effect.disposition}`,
+                    ),
+                  ]
+                : basis.effect.judgmentID
+                  ? [
+                      fact(
+                        "Unchanged learner-state revision",
+                        `${basis.effect.judgmentID}/${basis.effect.revisionID} v${basis.effect.version}`,
+                      ),
+                    ]
+                : []),
+              fact(
+                "Epistemic status",
+                "Fallible, source-bearing whole-judgment memory; not mastery certification, per-clause proof, activity, progress, or a required Tutor move.",
               ),
             ]
           : []),

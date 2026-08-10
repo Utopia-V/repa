@@ -151,6 +151,31 @@ export {
 } from "./assignment"
 
 export {
+  PERMISSION_PATTERN as LEARNER_STATE_JUDGMENT_PERMISSION_PATTERN,
+  READ_CAPABILITY as LEARNER_STATE_JUDGMENT_READ_CAPABILITY,
+  READ_VERSION as LEARNER_STATE_JUDGMENT_READ_VERSION,
+  UPDATE_CAPABILITY as UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+  UPDATE_VERSION as UPDATE_LEARNER_STATE_JUDGMENT_VERSION,
+  canonicalizeCommand as canonicalizeLearnerStateJudgment,
+  issueCapabilityPrompt as issueLearnerStateJudgmentCapabilityPrompt,
+  readInvocationVersion as readLearnerStateJudgmentInvocationVersion,
+  recover as recoverLearnerStateJudgment,
+  recoverCapability as recoverLearnerStateJudgmentCapability,
+  reserve as reserveLearnerStateJudgment,
+  settle as settleLearnerStateJudgment,
+  settleFailure as settleLearnerStateJudgmentFailure,
+  settlePolicy as settleLearnerStateJudgmentPolicy,
+  settlePrompt as settleLearnerStateJudgmentPrompt,
+} from "./learner-state-judgment"
+export type {
+  Invocation as LearnerStateJudgmentInvocation,
+  InvocationVersion as LearnerStateJudgmentInvocationVersion,
+  PolicyInput as LearnerStateJudgmentPolicyInput,
+  PromptIssueInput as LearnerStateJudgmentPromptIssueInput,
+  PromptSettlementInput as LearnerStateJudgmentPromptSettlementInput,
+} from "./learner-state-judgment"
+
+export {
   assertAssistantDeletable,
   assertPartDeletable,
   exactSettlement,

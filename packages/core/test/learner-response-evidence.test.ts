@@ -13,6 +13,7 @@ import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { LearningContext } from "@opencode-ai/core/learning-context"
 import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { Occurrence } from "@opencode-ai/core/learning-command/occurrence"
 import { LearnerAdmission } from "@opencode-ai/core/learning-command/occurrence-schema"
@@ -122,6 +123,28 @@ function learnerEvidenceState(fixture: Fixture) {
         (SELECT count(*) FROM learner_response_evidence_revision) AS revisions,
         (SELECT count(*) FROM learner_response_evidence_commit_seal) AS seals,
         (SELECT count(*) FROM turn_model_source_retention) AS sourceRetentions,
+        (SELECT sequence FROM learning_shared_frontier WHERE singleton = 1) AS frontierSequence,
+        (SELECT time_committed FROM learning_shared_frontier WHERE singleton = 1) AS frontierTime
+    `),
+  )
+}
+
+function learnerStateJudgmentState(fixture: Fixture) {
+  return fixture.runtime.runPromise(
+    fixture.database.db.get<Record<string, number>>(sql`
+      SELECT
+        (SELECT count(*) FROM learning_command_invocation) AS invocations,
+        (SELECT count(*) FROM learning_command_receipt) AS receipts,
+        (SELECT count(*) FROM learner_state_judgment_disposition) AS dispositions,
+        (SELECT count(*) FROM learner_state_judgment_capability_issue) AS capabilityIssues,
+        (SELECT count(*) FROM learner_state_judgment_capability_settlement) AS capabilitySettlements,
+        (SELECT count(*) FROM learner_state_judgment_no_change_seal) AS noChangeSeals,
+        (SELECT count(*) FROM learner_state_judgment) AS judgments,
+        (SELECT count(*) FROM learner_state_judgment_effect) AS effects,
+        (SELECT count(*) FROM learner_state_judgment_revision) AS revisions,
+        (SELECT count(*) FROM learner_state_judgment_anchor) AS anchors,
+        (SELECT count(*) FROM learner_state_judgment_basis) AS bases,
+        (SELECT count(*) FROM learner_state_judgment_commit_seal) AS seals,
         (SELECT sequence FROM learning_shared_frontier WHERE singleton = 1) AS frontierSequence,
         (SELECT time_committed FROM learning_shared_frontier WHERE singleton = 1) AS frontierTime
     `),
@@ -287,6 +310,95 @@ describe("LearnerResponseEvidence", () => {
         2,
       )
       expect(equalTimeApplied).toMatchObject({ settlement: { outcome: "applied", version: 0 } })
+
+      const regressedClockSessionID = SessionSchema.ID.create()
+      const regressedClockConditionTurn = await admitLearnerTurn(fixture, {
+        sessionID: regressedClockSessionID,
+        createSession: true,
+        text: "Explain why a semaphore bounds concurrent entrants.",
+        time: base + 100,
+        limits: { model: 1, tool: 0 },
+      })
+      const regressedClockCondition = await completeTeachingModel(fixture, regressedClockConditionTurn, base + 101)
+      const regressedClockResponse = await admitLearnerTurn(fixture, {
+        sessionID: regressedClockSessionID,
+        text: "The counter cannot fall below zero, so at most the admitted number can enter.",
+        time: base + 50,
+        limits: { model: 1, tool: 1 },
+      })
+      const regressedClockInvocation = await prepareEvidenceInvocation(fixture, regressedClockResponse, base + 105)
+      const regressedClockOrder = await fixture.runtime.runPromise(
+        fixture.database.db.get<{
+          conditionTime: number
+          rawOccurrenceTime: number
+          causalInputTime: number
+          conditionCauseOrder: number
+          subjectOrder: number
+        }>(sql`
+          SELECT operation.time_settled AS conditionTime,
+                 occurrence.time_admitted AS rawOccurrenceTime,
+                 input.time_admitted AS causalInputTime,
+                 condition_cause.source_order AS conditionCauseOrder,
+                 occurrence.source_order AS subjectOrder
+          FROM turn_model_operation AS operation
+          JOIN learning_admitted_occurrence AS condition_cause
+            ON condition_cause.id = operation.causal_occurrence_id
+          JOIN learning_admitted_occurrence AS occurrence
+            ON occurrence.id = ${regressedClockResponse.occurrenceID}
+          JOIN turn_input AS input ON input.occurrence_id = occurrence.id
+          WHERE operation.assistant_message_id = ${regressedClockCondition}
+        `),
+      )
+      expect(regressedClockOrder).toMatchObject({
+        conditionTime: base + 103,
+        rawOccurrenceTime: base + 50,
+        causalInputTime: base + 104,
+      })
+      expect(regressedClockOrder!.conditionCauseOrder).toBeLessThan(regressedClockOrder!.subjectOrder)
+      expect(regressedClockOrder!.conditionTime).toBeGreaterThan(regressedClockOrder!.rawOccurrenceTime)
+      expect(regressedClockOrder!.conditionTime).toBeLessThanOrEqual(regressedClockOrder!.causalInputTime)
+      const regressedClockCandidate = await reserveEvidence(
+        fixture,
+        regressedClockInvocation,
+        command(regressedClockCondition),
+        base + 110,
+        3,
+      )
+      expect(regressedClockCandidate).toMatchObject({ type: "admitted" })
+      if (regressedClockCandidate.type !== "admitted") {
+        throw new Error("Expected the causal input clock to preserve an earlier Tutor condition")
+      }
+      expect(regressedClockCandidate.candidate.materialized.subject.timeAdmitted).toBe(base + 104)
+      expect(
+        await settleReservedEvidence(
+          fixture,
+          regressedClockInvocation,
+          {
+            targetProof: await fixture.runtime.runPromise(
+              fixture.database.db.transaction((tx) =>
+                MaterialMap.prepareEvidenceTargetProof(tx, {
+                  alignmentID: alignment.id,
+                  mapID: map.id,
+                  selectorID,
+                  course: course.endpoint,
+                }),
+              ),
+            ),
+            currentUse: (
+              await fixture.runtime.runPromise(
+                fixture.current.resolveSelector({
+                  mapID: map.id,
+                  selectorID,
+                  access: mapInput.access,
+                  budgets: materialBudgets(),
+                }),
+              )
+            ).receipt,
+          },
+          base + 111,
+          4,
+        ),
+      ).toMatchObject({ settlement: { outcome: "applied", version: 0 } })
 
       const sameTurnSessionID = SessionSchema.ID.create()
       const sameTurnResponse = await admitLearnerTurn(fixture, {
@@ -563,6 +675,478 @@ describe("LearnerResponseEvidence", () => {
       await closeFixture(fixture)
     }
   })
+
+  windowsTest(
+    "binds a version-zero evidence source through the 8-anchor/16-basis boundary and reports deletion truth",
+    async () => {
+      const fixture = await prepareFixture()
+      try {
+        const mapInput = artifactMapInput(fixture, 15)
+        const map = await fixture.runtime.runPromise(fixture.maps.createMap(mapInput))
+        const selectorIDs = mapInput.proposal.outline[1]!.selectors.map((selector) => selector.id)
+        const selectorID = selectorIDs[0]!
+        const course = await createCourseEndpoint(fixture)
+        const alignment = await fixture.runtime.runPromise(
+          fixture.maps.createAlignment(alignmentInput(map.id, selectorID, course.endpoint, mapInput.access)),
+        )
+        const base = Date.now() + 1_000
+
+        const sourceSessionID = SessionSchema.ID.create()
+        const conditionTurn = await admitLearnerTurn(fixture, {
+          sessionID: sourceSessionID,
+          createSession: true,
+          text: "Show the exact semaphore criterion.",
+          time: base,
+          limits: { model: 1, tool: 0 },
+        })
+        const conditionAssistantMessageID = await completeTeachingModel(fixture, conditionTurn, base + 1)
+        const responseTurn = await admitLearnerTurn(fixture, {
+          sessionID: sourceSessionID,
+          text: "A semaphore bounds concurrent entry to the protected region.",
+          time: base + 10,
+          limits: { model: 1, tool: 1 },
+        })
+        const evidenceInvocation = await prepareEvidenceInvocation(fixture, responseTurn, base + 11)
+        const targetProof = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            MaterialMap.prepareEvidenceTargetProof(tx, {
+              alignmentID: alignment.id,
+              mapID: map.id,
+              selectorID,
+              course: course.endpoint,
+            }),
+          ),
+        )
+        const currentUse = await fixture.runtime.runPromise(
+          fixture.current.resolveSelector({
+            mapID: map.id,
+            selectorID,
+            access: mapInput.access,
+            budgets: materialBudgets(),
+          }),
+        )
+        const evidence = await commitEvidence(
+          fixture,
+          evidenceInvocation,
+          {
+            operation: "create",
+            relation: "supports",
+            exposure: "tutor_disclosure_before_learner_response",
+            conditionAssistantMessageID,
+            target: {
+              mapID: map.id,
+              selectorID,
+              courseID: course.endpoint.courseID,
+              viewID: course.endpoint.viewID,
+              revisionID: course.endpoint.revisionID,
+              itemID: course.endpoint.itemID,
+            },
+            alignmentID: alignment.id,
+          },
+          { targetProof, currentUse: currentUse.receipt },
+          base + 15,
+          1,
+        )
+        if (evidence.type !== "settled" || evidence.settlement.outcome !== "applied") {
+          throw new Error("Expected a real version-zero Gate 19 evidence revision")
+        }
+        const appliedEvidence = evidence.settlement
+        expect(appliedEvidence.version).toBe(0)
+        await finishEvidenceTurn(fixture, responseTurn, evidenceInvocation, base + 17)
+
+        const materialRefs: LearnerStateJudgment.SubjectAnchorRef[] = selectorIDs.map((materialSelectorID) => ({
+          type: "material_selector",
+          mapID: map.id,
+          selectorID: materialSelectorID,
+        }))
+        const courseRef = { type: "course_membership" as const, endpoint: course.endpoint }
+        const evidenceRef = {
+          type: "learner_response_evidence_revision" as const,
+          recordID: appliedEvidence.recordID,
+          revisionID: appliedEvidence.revisionID,
+          version: 0,
+        }
+        const anchors: LearnerStateJudgment.SubjectAnchorRef[] = [...materialRefs.slice(0, 7), courseRef]
+        const exactBasisRefs: LearnerStateJudgment.ExactBasisRef[] = [
+          ...materialRefs.slice(0, 14),
+          courseRef,
+          evidenceRef,
+        ]
+        const maximumSnapshot: LearnerStateJudgment.SemanticSnapshotIntent = {
+          subject: {
+            label: "Semaphore boundary reasoning",
+            scope: { type: "anchored", anchors },
+          },
+          judgmentBody: "Can state the semaphore bound; applying it to a new interleaving remains uncertain.",
+          exactBasisRefs,
+          uncertaintyAndLimits: "Whole-judgment sources are fallible and do not certify mastery.",
+          basisScope: "whole_judgment",
+        }
+        const maximumCommand = {
+          operation: "create" as const,
+          cause: {
+            type: "exact_owner_observation" as const,
+            rationale: "Retain one bounded, source-bearing teaching judgment from exact owner facts.",
+          },
+          snapshot: maximumSnapshot,
+        }
+        expect(() => LearnerStateJudgment.canonicalizeCommand(maximumCommand)).not.toThrow()
+
+        const judgmentTurn = await admitLearnerTurn(fixture, {
+          sessionID: SessionSchema.ID.create(),
+          createSession: true,
+          text: "Remember this only as a fallible basis for later teaching.",
+          time: base + 30,
+          limits: { model: 1, tool: 1 },
+        })
+        const judgmentInvocation = await prepareLearnerStateJudgmentInvocation(
+          fixture,
+          judgmentTurn,
+          maximumCommand,
+          base + 31,
+        )
+        const judgment = await commitLearnerStateJudgment(fixture, judgmentInvocation, base + 35, 1)
+        if (
+          judgment.type !== "settled" ||
+          judgment.settlement.outcome !== "applied" ||
+          !("judgmentID" in judgment.settlement)
+        ) {
+          throw new Error("Expected the maximum persisted learner-state boundary to apply")
+        }
+        const judgmentID = judgment.settlement.judgmentID
+        const judgmentRevisionID = judgment.settlement.revisionID
+
+        const directory = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            LearnerStateJudgment.listEligibleForContext(tx, {
+              asOf: base + 40,
+              eligibleAnchors: anchors,
+            }),
+          ),
+        )
+        expect(directory.candidates).toHaveLength(1)
+        const revisionPage = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            LearnerStateJudgment.read(tx, {
+              type: "revision",
+              judgmentID,
+              revisionID: judgmentRevisionID,
+            }),
+          ),
+        )
+        expect(revisionPage).toMatchObject({ returnedCount: 1, truncated: false })
+        expect(revisionPage.canonicalBytes).toBeLessThanOrEqual(LearnerStateJudgment.MAX_READ_BYTES)
+        const persistedRevision = revisionPage.items[0]
+        if (!persistedRevision || !("snapshot" in persistedRevision)) {
+          throw new Error("Expected one complete maximum learner-state revision")
+        }
+        expect(persistedRevision.snapshot.subject.scope).toMatchObject({ type: "anchored" })
+        if (persistedRevision.snapshot.subject.scope.type !== "anchored") {
+          throw new Error("Expected the maximum persisted subject to remain anchored")
+        }
+        expect(persistedRevision.snapshot.subject.scope.anchors).toHaveLength(LearnerStateJudgment.MAX_ANCHORS)
+        expect(persistedRevision.snapshot.exactBasis).toHaveLength(LearnerStateJudgment.MAX_BASIS_REFS)
+        expect(
+          persistedRevision.snapshot.exactBasis.some(
+            (binding) => binding.ref.type === "learner_response_evidence_revision" && binding.ref.version === 0,
+          ),
+        ).toBe(true)
+        expect(
+          LearningContext.utf8Bytes(LearningContext.canonicalJson(LearningContext.toJsonValue(persistedRevision.snapshot))),
+        ).toBeLessThanOrEqual(LearnerStateJudgment.MAX_DURABLE_SNAPSHOT_BYTES)
+        for (const binding of [
+          ...persistedRevision.snapshot.subject.scope.anchors,
+          ...persistedRevision.snapshot.exactBasis,
+        ]) {
+          expect(
+            LearningContext.utf8Bytes(
+              LearningContext.canonicalJson(LearningContext.toJsonValue(binding.admission)),
+            ),
+          ).toBeLessThanOrEqual(LearnerStateJudgment.MAX_BINDING_ADMISSION_BYTES)
+        }
+
+        const currentPage = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            LearnerStateJudgment.read(tx, {
+              type: "current",
+              judgmentID,
+              asOf: directory.asOf,
+              directoryCursor: directory.directoryCursor,
+            }),
+          ),
+        )
+        expect(currentPage.canonicalBytes).toBeLessThanOrEqual(LearnerStateJudgment.MAX_READ_BYTES)
+        const current = currentPage.items[0]
+        if (!current || !("anchorDependencies" in current)) {
+          throw new Error("Expected one complete maximum learner-state projection")
+        }
+        expect(current.anchorDependencies).toHaveLength(LearnerStateJudgment.MAX_ANCHORS)
+        expect(current.basisDependencies).toHaveLength(LearnerStateJudgment.MAX_BASIS_REFS)
+        expect([...current.anchorDependencies, ...current.basisDependencies].every((item) => item.state === "current")).toBe(
+          true,
+        )
+        expect(current.basisDependencies).toContainEqual(
+          expect.objectContaining({
+            ref: evidenceRef,
+            state: "current",
+            current: expect.objectContaining({
+              currentHead: { revisionID: appliedEvidence.revisionID, version: 0 },
+              currentRelation: "current",
+            }),
+          }),
+        )
+        const semantic = LearnerStateJudgment.semanticValueFor(directory.candidates[0]!)
+        expect(semantic).toMatchObject({ basisCount: LearnerStateJudgment.MAX_BASIS_REFS, scope: "anchored" })
+        expect(LearningContext.utf8Bytes(LearningContext.canonicalJson(semantic))).toBeLessThanOrEqual(
+          LearnerStateJudgment.MAX_SEMANTIC_VALUE_BYTES,
+        )
+        expect(JSON.stringify(semantic)).not.toContain(maximumSnapshot.judgmentBody)
+
+        const revisionShape = await fixture.runtime.runPromise(
+          fixture.database.db.get<{
+            anchorCount: number
+            basisCount: number
+            snapshotAnchors: number
+            snapshotBasis: number
+            seals: number
+          }>(sql`
+            SELECT revision.anchor_count AS anchorCount,
+                   revision.basis_count AS basisCount,
+                   json_array_length(revision.snapshot, '$.subject.scope.anchors') AS snapshotAnchors,
+                   json_array_length(revision.snapshot, '$.exactBasis') AS snapshotBasis,
+                   (SELECT count(*) FROM learner_state_judgment_commit_seal
+                     WHERE revision_id = ${judgmentRevisionID}) AS seals
+            FROM learner_state_judgment_revision AS revision
+            WHERE revision.id = ${judgmentRevisionID}
+          `),
+        )
+        expect(revisionShape).toEqual({
+          anchorCount: LearnerStateJudgment.MAX_ANCHORS,
+          basisCount: LearnerStateJudgment.MAX_BASIS_REFS,
+          snapshotAnchors: LearnerStateJudgment.MAX_ANCHORS,
+          snapshotBasis: LearnerStateJudgment.MAX_BASIS_REFS,
+          seals: 1,
+        })
+        const anchorRows = await fixture.runtime.runPromise(
+          fixture.database.db.all<{
+            ordinal: number
+            binding: string
+            firstBoundRevisionID: string
+          }>(sql`
+            SELECT ordinal, binding, first_bound_revision_id AS firstBoundRevisionID
+            FROM learner_state_judgment_anchor
+            WHERE revision_id = ${judgmentRevisionID}
+            ORDER BY ordinal
+          `),
+        )
+        const basisRows = await fixture.runtime.runPromise(
+          fixture.database.db.all<{
+            ordinal: number
+            binding: string
+            firstBoundRevisionID: string
+          }>(sql`
+            SELECT ordinal, binding, first_bound_revision_id AS firstBoundRevisionID
+            FROM learner_state_judgment_basis
+            WHERE revision_id = ${judgmentRevisionID}
+            ORDER BY ordinal
+          `),
+        )
+        expect(anchorRows.map((row) => row.ordinal)).toEqual(Array.from({ length: 8 }, (_, index) => index))
+        expect(basisRows.map((row) => row.ordinal)).toEqual(Array.from({ length: 16 }, (_, index) => index))
+        expect(anchorRows.every((row) => row.firstBoundRevisionID === judgmentRevisionID)).toBe(true)
+        expect(basisRows.every((row) => row.firstBoundRevisionID === judgmentRevisionID)).toBe(true)
+        expect(anchorRows.map((row) => JSON.parse(row.binding))).toEqual([
+          ...persistedRevision.snapshot.subject.scope.anchors,
+        ])
+        expect(basisRows.map((row) => JSON.parse(row.binding))).toEqual([...persistedRevision.snapshot.exactBasis])
+
+        const overflowCommands: LearnerStateJudgment.Command[] = [
+          {
+            ...maximumCommand,
+            snapshot: {
+              ...maximumSnapshot,
+              subject: {
+                ...maximumSnapshot.subject,
+                scope: { type: "anchored", anchors: [...materialRefs.slice(0, 8), courseRef] },
+              },
+            },
+          },
+          {
+            ...maximumCommand,
+            snapshot: { ...maximumSnapshot, exactBasisRefs: [...materialRefs, courseRef, evidenceRef] },
+          },
+        ]
+        for (const [index, command] of overflowCommands.entries()) {
+          const overflowTurn = await admitLearnerTurn(fixture, {
+            sessionID: SessionSchema.ID.create(),
+            createSession: true,
+            text: `Reject structural overflow ${index}`,
+            time: base + 50 + index * 10,
+            limits: { model: 1, tool: 1 },
+          })
+          const overflow = await prepareLearnerStateJudgmentInvocation(
+            fixture,
+            overflowTurn,
+            command,
+            base + 51 + index * 10,
+          )
+          const before = await learnerStateJudgmentState(fixture)
+          const result = await fixture.runtime.runPromise(
+            fixture.database.db
+              .transaction((tx) =>
+                LearnerStateJudgment.reserve(tx, {
+                  ...overflow,
+                  settlement: { time: base + 55 + index * 10, order: index + 1 },
+                }),
+              )
+              .pipe(Effect.exit),
+          )
+          expect(Exit.isFailure(result)).toBeTrue()
+          if (Exit.isFailure(result)) {
+            expect(Cause.squash(result.cause)).toBeInstanceOf(LearnerStateJudgment.InvalidCommandError)
+          }
+          expect(await learnerStateJudgmentState(fixture)).toEqual(before)
+        }
+
+        for (const [index, ref] of [
+          { ...evidenceRef, version: 1 },
+          { ...evidenceRef, revisionID: LearnerResponseEvidence.createRevisionID() },
+        ].entries()) {
+          const unavailableTurn = await admitLearnerTurn(fixture, {
+            sessionID: SessionSchema.ID.create(),
+            createSession: true,
+            text: `Reject unavailable evidence reference ${index}`,
+            time: base + 80 + index * 10,
+            limits: { model: 1, tool: 1 },
+          })
+          const unavailable = await prepareLearnerStateJudgmentInvocation(
+            fixture,
+            unavailableTurn,
+            {
+              ...maximumCommand,
+              snapshot: { ...maximumSnapshot, exactBasisRefs: [...materialRefs.slice(0, 14), courseRef, ref] },
+            },
+            base + 81 + index * 10,
+          )
+          expect(await commitLearnerStateJudgment(fixture, unavailable, base + 85 + index * 10, index + 1)).toMatchObject({
+            type: "settled",
+            settlement: { outcome: "error", code: "source_unavailable" },
+          })
+        }
+
+        const exactEvidenceBefore = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            LearnerResponseEvidence.inspectExactRevisionDependency(
+              tx,
+              appliedEvidence.recordID,
+              appliedEvidence.revisionID,
+            ),
+          ),
+        )
+        expect(exactEvidenceBefore).toMatchObject({
+          revision: { version: 0 },
+          currentHead: { revisionID: appliedEvidence.revisionID, version: 0 },
+          currentRelation: "current",
+          availability: {
+            subject: { state: "available" },
+            condition: { state: "available" },
+            basis: { state: "available" },
+          },
+          targetRelation: { alignment: "current", map: "current", course: "current", selector: "current" },
+        })
+        const exactJudgmentBefore = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            LearnerStateJudgment.readExactRevision(tx, judgmentID, judgmentRevisionID),
+          ),
+        )
+        const frontierBeforeDeletion = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) => LearningFrontier.read(tx)),
+        )
+        await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) =>
+            TurnLifecycle.deleteSessionTree(tx, {
+              rootSessionID: sourceSessionID,
+              sessionIDs: [sourceSessionID],
+              timeDeleted: base + 110,
+            }),
+          ),
+        )
+        expect(
+          await fixture.runtime.runPromise(fixture.database.db.transaction((tx) => LearningFrontier.read(tx))),
+        ).toEqual({ sequence: frontierBeforeDeletion.sequence + 1, time: base + 110 })
+        const changesAfterDeletion = await fixture.runtime.runPromise(
+          fixture.database.db.get<{ count: number }>(sql`SELECT total_changes() AS count`),
+        )
+        const pinned = await fixture.runtime.runPromise(
+          fixture.database.db
+            .transaction((tx) =>
+              LearnerStateJudgment.read(tx, {
+                type: "current",
+                judgmentID,
+                asOf: directory.asOf,
+                directoryCursor: directory.directoryCursor,
+              }),
+            )
+            .pipe(Effect.exit),
+        )
+        expect(Exit.isFailure(pinned)).toBeTrue()
+        if (Exit.isFailure(pinned)) {
+          expect(Cause.squash(pinned.cause)).toMatchObject({
+            _tag: "LearnerStateJudgment.InvalidCommandError",
+            reason: "stale",
+          })
+        }
+        const fresh = await fixture.runtime.runPromise(
+          fixture.database.db.transaction((tx) => LearnerStateJudgment.readCurrent(tx, judgmentID, base + 120)),
+        )
+        expect(fresh?.basisDependencies).toContainEqual(
+          expect.objectContaining({
+            ref: evidenceRef,
+            state: "source_unavailable",
+            current: expect.objectContaining({
+              availability: {
+                subject: { state: "source_unavailable", reason: "source_deleted" },
+                condition: { state: "source_unavailable", reason: "source_deleted" },
+                basis: { state: "source_unavailable", reason: "source_deleted" },
+              },
+              targetRelation: { alignment: "current", map: "current", course: "current", selector: "current" },
+            }),
+          }),
+        )
+        expect(
+          await fixture.runtime.runPromise(
+            fixture.database.db.transaction((tx) =>
+              LearnerResponseEvidence.inspectExactRevisionDependency(
+                tx,
+                appliedEvidence.recordID,
+                appliedEvidence.revisionID,
+              ),
+            ),
+          ),
+        ).toMatchObject({
+          revision: exactEvidenceBefore?.revision,
+          availability: {
+            subject: { state: "source_unavailable", reason: "source_deleted" },
+            condition: { state: "source_unavailable", reason: "source_deleted" },
+            basis: { state: "source_unavailable", reason: "source_deleted" },
+          },
+        })
+        expect(
+          await fixture.runtime.runPromise(
+            fixture.database.db.transaction((tx) =>
+              LearnerStateJudgment.readExactRevision(tx, judgmentID, judgmentRevisionID),
+            ),
+          ),
+        ).toEqual(exactJudgmentBefore)
+        expect(
+          await fixture.runtime.runPromise(fixture.database.db.get<{ count: number }>(sql`SELECT total_changes() AS count`)),
+        ).toEqual(changesAfterDeletion)
+      } finally {
+        await closeFixture(fixture)
+      }
+    },
+    120_000,
+  )
 
   windowsTest(
     "preserves exact deleted sources and changes automatic pressure only through legal correction heads",
@@ -1828,6 +2412,126 @@ async function prepareEvidenceInvocation(fixture: Fixture, turn: LearnerTurn, ti
   }
 }
 
+async function prepareLearnerStateJudgmentInvocation(
+  fixture: Fixture,
+  turn: LearnerTurn,
+  command: LearnerStateJudgment.Command,
+  time: number,
+) {
+  const assistantMessageID = await insertAssistantMessage(fixture, turn, time)
+  const partID = SessionV1.PartID.ascending()
+  const callID = `call-learner-state-${partID}`
+  await fixture.runtime.runPromise(
+    fixture.database.db.transaction((tx) =>
+      Effect.gen(function* () {
+        yield* admitModelWithLearningContext(tx, {
+          turnID: turn.turnID,
+          sessionID: turn.sessionID,
+          assistantMessageID,
+          requestEnvelope: { command },
+          contextFingerprint: fingerprint(`learner-state:${partID}`),
+          snapshotFrontier: yield* LearningFrontier.read(tx),
+          timeAdmitted: time,
+          learningContextBasis: LearningContext.unavailableCapabilityBasis(),
+        })
+        yield* tx.run(sql`
+          INSERT INTO part (id, message_id, session_id, time_created, time_updated, data)
+          VALUES (
+            ${partID}, ${assistantMessageID}, ${turn.sessionID}, ${time + 1}, ${time + 1},
+            ${JSON.stringify({
+              type: "tool",
+              callID,
+              tool: LearnerStateJudgment.UPDATE_CAPABILITY,
+              state: { status: "pending", input: command, raw: JSON.stringify(command) },
+            })}
+          )
+        `)
+        yield* TurnLifecycle.sealCandidateSet(tx, {
+          turnID: turn.turnID,
+          sessionID: turn.sessionID,
+          assistantMessageID,
+          candidates: [{ partID, callID, tool: LearnerStateJudgment.UPDATE_CAPABILITY, envelope: { command } }],
+          timeSealed: time + 1,
+        })
+        yield* TurnLifecycle.settleModel(tx, {
+          turnID: turn.turnID,
+          assistantMessageID,
+          state: "completed",
+          time: time + 2,
+        })
+        yield* TurnLifecycle.admitTool(tx, {
+          turnID: turn.turnID,
+          sessionID: turn.sessionID,
+          assistantMessageID,
+          partID,
+          timeAdmitted: time + 3,
+        })
+        yield* TurnLifecycle.consumeToolFrontier(tx, { partID, frontier: yield* LearningFrontier.read(tx) })
+      }),
+    ),
+  )
+  return {
+    envelope: {
+      occurrenceID: turn.occurrenceID,
+      turnID: turn.turnID,
+      inputID: turn.inputID,
+      sessionID: turn.sessionID,
+      parentUserMessageID: turn.messageID,
+      assistantMessageID,
+      partID,
+      providerCallID: callID,
+      emissionOrdinal: 0,
+      capabilityIdentity: LearnerStateJudgment.UPDATE_CAPABILITY,
+      capabilityVersion: LearnerStateJudgment.UPDATE_VERSION,
+      authorizationBasis: "agent_action" as const,
+      timeAdmitted: time + 3,
+    },
+    command,
+  } satisfies LearnerStateJudgment.Invocation
+}
+
+async function commitLearnerStateJudgment(
+  fixture: Fixture,
+  invocation: LearnerStateJudgment.Invocation,
+  time: number,
+  order: number,
+) {
+  const reserved = await fixture.runtime.runPromise(
+    fixture.database.db.transaction((tx) =>
+      LearnerStateJudgment.reserve(tx, { ...invocation, settlement: { time, order } }),
+    ),
+  )
+  if (reserved.type !== "admitted") return reserved
+  await fixture.runtime.runPromise(
+    fixture.database.db.transaction((tx) =>
+      LearnerStateJudgment.settlePolicy(tx, {
+        partID: invocation.envelope.partID,
+        outcome: "policy_allow",
+        policyBasis: { source: "gate20b-cross-owner-test" },
+        time: time + 1,
+        order: order + 1,
+      }),
+    ),
+  )
+  return fixture.runtime.runPromise(
+    fixture.database.db.transaction((tx) =>
+      Effect.gen(function* () {
+        const result = yield* LearnerStateJudgment.settle(tx, {
+          partID: invocation.envelope.partID,
+          settlement: { time: time + 2, order: order + 2 },
+        })
+        if (result.settlement.outcome === "applied") {
+          yield* TurnLifecycle.recordToolResultingFrontier(tx, {
+            partID: invocation.envelope.partID,
+            frontier: yield* LearningFrontier.read(tx),
+          })
+        }
+        return result
+      }),
+    ),
+  )
+}
+
 async function completeOrdinaryTool(fixture: Fixture, turn: LearnerTurn, time: number) {
   const assistantMessageID = await insertAssistantMessage(fixture, turn, time)
   const partID = SessionV1.PartID.ascending()
@@ -2173,7 +2877,7 @@ function insertUserMessage(
   })
 }
 
-function artifactMapInput(fixture: Fixture): Parameters<MaterialMap.Interface["createMap"]>[0] {
+function artifactMapInput(fixture: Fixture, selectorCount = 1): Parameters<MaterialMap.Interface["createMap"]>[0] {
   const rootNodeID = MaterialMap.createOutlineNodeID()
   return {
     mapID: MaterialMap.createMapID(),
@@ -2198,7 +2902,14 @@ function artifactMapInput(fixture: Fixture): Parameters<MaterialMap.Interface["c
           title: "Exact immutable criterion bytes",
           preorderPosition: 1,
           depth: 1,
-          selectors: [{ id: MaterialMap.createSelectorID(), position: 0, coordinate: { kind: "whole_target.v1" } }],
+          selectors: Array.from({ length: selectorCount }, (_, index) => ({
+            id: MaterialMap.createSelectorID(),
+            position: index,
+            coordinate:
+              selectorCount === 1
+                ? ({ kind: "whole_target.v1" } as const)
+                : ({ kind: "artifact_byte_range.v1", startByte: index, endByte: index + 1 } as const),
+          })),
         },
       ],
     },

@@ -3364,6 +3364,174 @@ and excluded. This feature-branch publication does not merge `main`, create a
 release or pull request, authorize credentialed provider or external-system
 work, review Gate 21, or begin Gate 21A or a later Gate.
 
+## 2026-08-09 Gate 21 product-intent grill, learner-state split, and advisory-planning correction
+
+The maintainer reopened Gate 21 from first principles after noting that product
+intervention had been limited during part of the earlier Gate sequence. The
+explicit audit posture is neither wholesale acceptance nor wholesale rejection:
+decompose each earlier Gate into its owned invariant, producer/consumer cuts,
+correction and recovery semantics, mature computational mechanisms, and claimed
+evidence; then retain, adapt, or retire those pieces independently. Reuse of the
+current fork and inherited OpenCode/Repa harness is a required first question,
+not an afterthought.
+
+The grill settled the following maintainer-owned product meaning:
+
+- Repa advises and assists learning; it is not a rigid scheduler or authoritative
+  planner.
+- “How much the learner has learned” is a fuzzy, source-bearing, correctable
+  learner/model judgment. It is not a program-calculated mastery scalar, time
+  spent, task completion, or accepted remaining work.
+- The learner corrects unsuitable model judgment through ordinary dialogue, as
+  a programmer asks a coding model to revise an unsuitable proposal. No special
+  proposal/approval ceremony or plan-acceptance state is required.
+- The program owns identity, scope, source, immutable revisions, typed command
+  settlement, capability/permission, recovery, bounded Context delivery, and
+  lazy exact reads. It does not certify mastery, pedagogical correctness,
+  feasibility, global allocation, adherence, or plan success.
+- Learner-state memory is independent of planning and can inform explanation,
+  demonstration, practice, and review. Gate 19 evidence may be cited but cannot
+  be promoted into mastery or progress.
+- Plan suggestions are scoped, multiple, rolling, and advisory. Near-term advice
+  may be concrete while farther direction remains coarse. Suggestions can cite
+  exact Goal, Assignment, Course, evidence, and learner-state revisions, but
+  silence and elapsed time create no acceptance, adherence, activity, or
+  learning fact.
+- A bounded current index plus authorized lazy detail is the required delivery
+  shape. It preserves the resource discipline of loading only state that may
+  affect the current move without installing a deterministic relevance or
+  pedagogy optimizer.
+
+Roadmap 09 therefore retains accepted Gate 20A, inserts Gate 20B for reusable
+learner-state judgment memory, and redefines Gate 21 as advisory learning-plan
+suggestions. The former Gate 21 max-flow experiment and contract candidate are
+retained as historical evidence. Their Assignment split, exact revisions,
+correction/recovery, honest staleness, and no-inferred-activity conclusions
+remain reusable. The singleton portfolio, program-owned remaining-work/
+capacity/feasibility/allocation authority, and scheduler product claim are
+retired. The arithmetic kernel remains optional research for a future bounded
+calculator only if a concrete consumer earns it.
+
+A read-only current-fork reuse audit established that the ordinary released-v1
+path already owns the required lazy delivery substrate:
+
+- `turn_learning_context_cut` stores one operation-exact immutable canonical and
+  rendered cut with capability/provider-surface fingerprints;
+- `LearningContext` already provides fixed owner sections, bounded semantic
+  entries, locator-only downgrade, exact count/byte omissions, and explicit
+  `not_authorized` truth;
+- `ToolRegistry`, `SessionTools`, and `SessionProcessor` already expose
+  owner-specific read tools through the actual provider-visible permission
+  intersection and return results as ordinary Tool Parts;
+- provider retries reuse one frozen request/cut, while compaction stays an
+  internal no-tools operation and the next interactive operation receives a new
+  cut; and
+- Goal, learner-response evidence, FutureAttention, and Assignment demonstrate
+  owner-specific exact/current/history/discovery patterns, but their cursor and
+  dependency guarantees differ and must not be falsely generalized.
+
+Consequently, accepted durable Gate 20B/21 implementations would need new
+owner-specific identity/revision/source/correction/query semantics, read tools,
+LearningContext vNext entries/catalog/renderer/validator, and normal forward
+migrations. They do **not** need a second lazy-loading system, generic context
+gateway, RAG memory, prompt-memory store, universal cursor, selector, scheduler,
+or Agent loop. Session Todo, plan mode, compaction summary, generic tool-output
+truncation, and LearningFrontier-as-universal-snapshot are recorded false
+friends because they do not preserve the required owner meaning.
+
+This reconciliation produced two contract/theory candidates:
+
+- `docs/research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md`;
+- `docs/research/repa-gate-21-advisory-learning-planning-2026-08-09.md`.
+
+Gate 20B's contract/theory layer was subsequently accepted under whole-Gate run
+`G20B-WG-20260809-019fe065-01` by retained reviewer task
+`019fe6da-d33f-71f1-b405-1cf240c7862a`. The accepted semantic candidate is
+SHA-256 `FF6EAB7002C26338E0344060646B440D2D9EE5DE704C9F75620ABFEFA10BCC54`.
+The reviewer found no acceptance-changing defect, owner blocker, or contract
+reopen condition. Its non-blocking precision advisory is resolved in the
+physical implementation boundary by treating the open-language body and exact
+basis set as one indivisible fallible revision-level value, without claiming
+per-clause entailment or creating a clause/mastery ontology. The same reviewer
+remains retained for Gate 20B implementation/evidence; Gate 21 still requires a
+new reviewer after Gate 20B closes.
+
+The executor subsequently built the first exact Gate 20B implementation/evidence
+candidate recorded in
+`docs/research/repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md`.
+Its ordinal package-content manifest contains 40 modified or untracked
+`packages/` paths, 4,553 canonical manifest bytes, and SHA-256
+`0C2FB71A151147FC09BCB276C5410CB369C17C1DD2E931980BB570396A284704`.
+The candidate adds the independent learner-state judgment owner, one normal
+forward V22 migration, LearningContext v5 compact directory/lazy-read
+adaptation, ordinary root-Agent typed mutation and read tools, exact
+permission/settlement/recovery presentation, and one real cross-Session changed
+teaching trace plus zero-write teaching. It reuses the existing Turn,
+learning-command, registry, provider-surface, compaction, retry, and Session
+processor paths rather than adding a memory runtime or selector.
+
+The retained reviewer's first implementation/evidence pass bound that exact
+candidate and returned `Revise` for four acceptance-blocking findings:
+`G20B-IE-001` rejected Gate 19's legal initial revision zero; `G20B-IE-002`
+failed to project source deletion for an exact cited evidence revision;
+`G20B-IE-003` pre-queued changed teaching instead of making it causally depend
+on the exact directory/read state; and `G20B-IE-004` lacked a persisted maximum
+plus first-overflow oracle. Contract/theory remained accepted and no maintainer
+decision or contract reopen was required.
+
+The executor repaired all four without adding another owner or runtime. The
+new ordinal package-content manifest contains 42 modified or untracked
+`packages/` paths, 4,791 canonical manifest bytes, and SHA-256
+`1F5CCB66B82D258C7689846FBD839907C5CC42CF8FA70138BF2B6064D052146A`.
+Gate 19 now exposes one exact-revision dependency view; Gate 20B admits its
+owner-native version zero, preserves exact history, and reports fresh
+source-unavailable truth after deletion. One fixed response policy requires a
+matching exact directory and lazy-read revision before selecting either
+teaching move. A real 8-anchor/16-basis revision including Gate 19 version zero
+persists and reads within every byte limit, while 9/17 reject atomically.
+
+Fresh repair evidence passes Core/OpenCode typechecks, migration generation
+check, 47/476 database migrations, 17/114 learner-state owner, 7/194
+learner-response evidence, 5/18 command normalization hooks, focused
+learner-state runtime/presentation/registry checks, and 29/360 whole Prompt
+traces. One concurrent Bun/SQLite stress run failed an unrelated historical
+Gate 14-to-15 migration and segfaulted; that exact test and the complete
+migration file both passed serially, so the failed run is disclosed as native
+harness instability and is not acceptance evidence. The implementation work also repaired
+the Gate 19 wall-clock/frontier mismatch by using causal Turn Input admission
+time and isolated two single-concern FutureAttention test LearnerHomes from the
+process-global durable database; it changed no production priority, timeout, or
+retry rule.
+
+The retained reviewer reproduced the verdict-changing version-zero/maximum,
+source-deletion, and released-v1 causal-consumer checks, then returned
+implementation/evidence `Accept`. `G20B-IE-001..004` are closed; no replacement
+finding, owner blocker, or contract reopen condition remains. The exact
+accepted evidence-record snapshot is SHA-256
+`29E1E165E3CBE292DE184BC22B3179905FE7B8E981FBB1065BB4E7C635D1D7DC`.
+Both Gate 20B layers are accepted, and reviewer
+`019fe6da-d33f-71f1-b405-1cf240c7862a` is retired rather than reused for Gate
+21.
+
+It also amended the product origin, ADR-0003, ADR-0012, architecture, native data
+model, Roadmap 09, current status map, repository execution checksum, and the
+two historical Gate 21 records. These are product/contract documentation
+changes only. Gate 20B is accepted and has entered its separately governed
+local integration step; Gate 21 remains an unreviewed candidate. No integration
+commit, push, pull request, release, credentialed-provider work, Gate 21A, or
+later-Gate authority follows from the review verdict alone.
+
+Derivation opened and remained on branch
+`codex/gate-20a-assignment-authority` at
+`28f045eb6d51375f69da080685a394de65903f9a`; the same commit was published at
+`origin/codex/gate-20a-assignment-authority`. `main` and `origin/main` remained
+`c100b431fe174d1993b2baa89a7d1b133300b579`. The working tree already contained
+maintainer-owned `AGENTS.md` edits; the user explicitly asked that the new reuse
+and audit posture be reflected there, so the top-level executor revised that
+same file while preserving unrelated prior content. Read-only scouts changed no
+files. The exact documentation diff remained uncommitted through independent
+acceptance and then entered the separately authorized local integration step.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

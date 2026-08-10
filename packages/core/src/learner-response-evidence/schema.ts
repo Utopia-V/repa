@@ -268,6 +268,14 @@ export type RecordView = Readonly<{
   }>
 }>
 
+export type ExactRevisionDependencyView = Readonly<{
+  revision: Revision
+  currentHead: Readonly<{ revisionID: RevisionID; version: number }>
+  currentRelation: "current" | "superseded_by_revision"
+  availability: RecordView["availability"]
+  targetRelation: RecordView["targetRelation"]
+}>
+
 export type ReadQuery =
   | Readonly<{ type: "record"; recordID: RecordID }>
   | Readonly<{ type: "history"; recordID: RecordID }>

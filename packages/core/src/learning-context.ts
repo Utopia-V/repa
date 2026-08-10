@@ -11,6 +11,7 @@ import { FutureAttention } from "./future-attention"
 import { LearnerGoal } from "./learner-goal"
 import { LearnerNavigation } from "./learner-navigation"
 import { LearnerResponseEvidence } from "./learner-response-evidence"
+import { LearnerStateJudgment } from "./learner-state-judgment"
 import { MaterialMap } from "./material-map"
 import type { RetainedSteering } from "./retained-steering"
 import type { SessionSchema } from "./session/schema"
@@ -25,6 +26,10 @@ import {
   GATE20_LAZY_READ_CAPABILITY_IDS,
   GATE20_POLICY_VERSION,
   GATE20_RENDERER_VERSION,
+  GATE20A_CAPABILITY_CATALOG_VERSION,
+  GATE20A_LAZY_READ_CAPABILITY_IDS,
+  GATE20A_POLICY_VERSION,
+  GATE20A_RENDERER_VERSION,
   GATE19_CAPABILITY_CATALOG_VERSION,
   GATE19_LAZY_READ_CAPABILITY_IDS,
   GATE19_POLICY_VERSION,
@@ -39,6 +44,7 @@ import {
   MAX_CANDIDATES_PER_FAMILY,
   MAX_ENTRY_BYTES,
   MAX_INTERACTION_CANDIDATES,
+  MAX_LEARNER_STATE_JUDGMENT_CONTEXT_ENTRIES,
   MAX_RENDERED_BYTES,
   POLICY_VERSION,
   RENDERER_VERSION,
@@ -57,6 +63,7 @@ import {
   type Entry,
   type AssignmentContextMode,
   type AssignmentContextOwnerCut,
+  type LearnerStateJudgmentContextOwnerCut,
   type JsonValue,
   type Operation,
   type Section,
@@ -79,7 +86,8 @@ export type PrepareInput = Readonly<{
 const legacyOwners = ["course", "learner_navigation", "learner_goal", "material", "interaction"] as const
 const gate19Owners = [...legacyOwners, "learner_response_evidence"] as const
 const gate20Owners = [...gate19Owners, "future_attention"] as const
-const currentOwners = [...gate20Owners, "assignment"] as const
+const gate20AOwners = [...gate20Owners, "assignment"] as const
+const currentOwners = [...gate20AOwners, "learner_state_judgment"] as const
 const sectionPolicy = {
   course: {
     scope: "eligible_courses_and_structurally_referenced_default",
@@ -114,8 +122,13 @@ const sectionPolicy = {
     scope: "all_current_open_assignment_heads_in_learner_home",
     selectionBasis: "identity_creation_then_assignment_id_audit_order_not_priority",
   },
+  learner_state_judgment: {
+    scope: "active_heads_intersecting_context_anchors_or_learner_home_wide",
+    selectionBasis: "identity_creation_then_id_not_priority",
+  },
 } as const
 const withheldSelectionBasis = "automatic_context_capability_withheld" as const
+const learnerStateReadWithheldSelectionBasis = "learner_state_judgment_read_capability_withheld" as const
 
 export function unavailableCapabilityBasis(): CapabilityBasis {
   const providerToolSurface = bindProviderToolSurface({
@@ -262,10 +275,7 @@ export function decodeStored(canonicalCut: string, renderedBlock: string, assist
   return validateStored(canonicalCut, renderedBlock, assistantMessageID)
 }
 
-export function listLearnerResponseEvidenceRequirements(
-  tx: Transaction,
-  input: Readonly<{ cutAsOf: number }>,
-) {
+export function listLearnerResponseEvidenceRequirements(tx: Transaction, input: Readonly<{ cutAsOf: number }>) {
   return Effect.gen(function* () {
     const structural = yield* structuralContext(tx, input.cutAsOf)
     return yield* LearnerResponseEvidence.listContextRequirements(tx, { endpoints: structural.endpoints })
@@ -303,6 +313,32 @@ function projectSections(tx: Transaction, input: PrepareInput) {
       asOf: input.retainedSteering.cutAsOf,
       limit: MAX_ASSIGNMENT_CONTEXT_ENTRIES,
     })
+    const learnerStateJudgments = lazy.has("learner_state_judgment_read")
+      ? yield* LearnerStateJudgment.listEligibleForContext(tx, {
+          asOf: input.retainedSteering.cutAsOf,
+          limit: MAX_LEARNER_STATE_JUDGMENT_CONTEXT_ENTRIES,
+          eligibleAnchors: [
+            ...endpoints.map((endpoint) => ({ type: "course_membership" as const, endpoint })),
+            ...materials.entries.map((value) => ({
+              type: "material_selector" as const,
+              mapID: value.map.id,
+              selectorID: value.selector.id,
+            })),
+            ...goals.entries.map((goal) => ({
+              type: "goal_revision" as const,
+              goalID: goal.goalID,
+              revisionID: goal.head.id,
+              version: goal.head.version,
+            })),
+            ...assignments.candidates.map(({ assignment, projection }) => ({
+              type: "assignment_revision" as const,
+              assignmentID: assignment.id,
+              revisionID: projection.revision.id,
+              version: projection.revision.version,
+            })),
+          ],
+        })
+      : undefined
     const courseEntries = orderedCourses.map((value) =>
       value.status === "unavailable"
         ? entry("course", {
@@ -454,6 +490,25 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         input.operation.assistantMessageID,
       ),
     )
+    const learnerStateJudgmentEntries = (learnerStateJudgments?.candidates ?? []).map((candidate) =>
+      entry(
+        "learner_state_judgment",
+        {
+          judgmentID: candidate.judgment.id,
+          timeCreated: candidate.judgment.timeCreated,
+          revisionID: candidate.judgment.current.id,
+          version: candidate.judgment.current.version,
+          disposition: candidate.judgment.current.disposition,
+          timeCommitted: candidate.judgment.current.timeCommitted,
+          frontierSequence: candidate.judgment.current.frontierSequence,
+          authorClass: candidate.authorClass,
+          anchorKinds: candidate.anchorKinds,
+          wholeJudgmentBasis: true,
+          lazyReadAvailable: true,
+        },
+        LearnerStateJudgment.semanticValueFor(candidate),
+      ),
+    )
     return [
       section(
         "course",
@@ -515,6 +570,7 @@ function projectSections(tx: Transaction, input: PrepareInput) {
         futureAttentionEntries,
       ),
       assignmentSection(assignments, assignmentEntries),
+      learnerStateJudgmentSection(learnerStateJudgments, learnerStateJudgmentEntries),
     ] satisfies Section[]
   })
 }
@@ -583,7 +639,7 @@ function entry(kind: Entry["kind"], locator: unknown, semantic?: unknown): Entry
 }
 
 function section(
-  owner: Exclude<Section["owner"], "assignment">,
+  owner: Exclude<Section["owner"], "assignment" | "learner_state_judgment">,
   scope: string,
   selectionBasis: string,
   countAtCut: number,
@@ -612,6 +668,56 @@ function section(
           }
         : { type: "none" },
     entries,
+  }
+}
+
+function learnerStateJudgmentSection(
+  projection: LearnerStateJudgment.ContextProjection | undefined,
+  entries: readonly Entry[],
+): Extract<Section, { owner: "learner_state_judgment" }> {
+  if (!projection) {
+    return {
+      owner: "learner_state_judgment",
+      scope: sectionPolicy.learner_state_judgment.scope,
+      selectionBasis: learnerStateReadWithheldSelectionBasis,
+      coverage: "not_authorized",
+      countAtCut: "unknown",
+      omission: { type: "unknown", reason: "learner_state_judgment_read_capability_withheld" },
+      entries: [],
+    }
+  }
+  const coverage =
+    projection.countAtCut === 0
+      ? "empty"
+      : entries.length < projection.countAtCut
+        ? "truncated"
+        : entries.some((item) => item.semantic?.state === "locator_only")
+          ? "locator_only"
+          : "complete"
+  return {
+    owner: "learner_state_judgment",
+    scope: sectionPolicy.learner_state_judgment.scope,
+    selectionBasis: sectionPolicy.learner_state_judgment.selectionBasis,
+    coverage,
+    countAtCut: projection.countAtCut,
+    omission:
+      entries.length < projection.countAtCut
+        ? {
+            type: "exact",
+            omitted: projection.countAtCut - entries.length,
+            reasons: [{ reason: "candidate_limit", omitted: projection.countAtCut - entries.length }],
+          }
+        : { type: "none" },
+    entries,
+    ...(projection.countAtCut === 0
+      ? {}
+      : {
+          learnerStateJudgmentOwnerCut: projection.ownerCut,
+          asOf: projection.asOf,
+          eligibleAnchorCount: projection.eligibleAnchorCount,
+          eligibleAnchorsFingerprint: projection.eligibleAnchorsFingerprint,
+          directoryCursor: projection.directoryCursor,
+        }),
   }
 }
 
@@ -770,6 +876,10 @@ type MutableSection = {
   assignmentOwnerCut?: AssignmentContextOwnerCut
   asOf?: number
   mode?: AssignmentContextMode
+  learnerStateJudgmentOwnerCut?: LearnerStateJudgmentContextOwnerCut
+  eligibleAnchorCount?: number
+  eligibleAnchorsFingerprint?: string
+  directoryCursor?: string
 }
 
 function fit(base: CutBase): Preparation {
@@ -822,27 +932,23 @@ function removableEntry(sections: MutableSection[]) {
       if ((section.owner === "future_attention" || section.owner === "assignment") && section.countAtCut === 1) {
         return []
       }
-      if (
-        section.owner !== "learner_response_evidence" &&
-        section.owner !== "future_attention" &&
-        section.owner !== "assignment" &&
-        (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0)
-      )
-        return []
+      if (section.entries.length <= (section.countAtCut === 0 ? 0 : 1) || index === 0) return []
       return [
         {
           section,
           index,
           tier:
-            section.owner === "assignment"
-              ? 5
+            section.owner === "learner_state_judgment"
+              ? 6
+              : section.owner === "assignment"
+                ? 5
               : section.owner === "future_attention"
                 ? 4
-              : section.owner === "learner_response_evidence"
-                ? 3
-                : section.owner === "learner_navigation"
-                  ? 1
-                  : 2,
+                  : section.owner === "learner_response_evidence"
+                    ? 3
+                    : section.owner === "learner_navigation"
+                      ? 1
+                      : 2,
           ownerOrder,
         },
       ]
@@ -872,7 +978,7 @@ function exactOmission(
 
 function lastSemanticValue(sections: MutableSection[]) {
   for (const section of [...sections].reverse()) {
-    if (section.owner === "learner_response_evidence") continue
+    if (section.owner === "learner_response_evidence" || section.owner === "learner_state_judgment") continue
     if (section.owner === "future_attention" && section.countAtCut === 1) continue
     if (section.owner === "assignment" && section.countAtCut === 1) continue
     for (let index = section.entries.length - 1; index >= 0; index--) {
@@ -930,12 +1036,71 @@ function finalize(base: CutBase): Preparation {
 
 function renderValue(cut: Cut) {
   if (cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION) {
+    return renderGate20BValue(cut)
+  }
+  if (cut.policyVersion === GATE20A_POLICY_VERSION && cut.rendererVersion === GATE20A_RENDERER_VERSION) {
     return renderGate20AValue(cut)
   }
   if (cut.policyVersion === GATE20_POLICY_VERSION && cut.rendererVersion === GATE20_RENDERER_VERSION) {
     return renderGate20Value(cut)
   }
   return renderFrozenValue(cut)
+}
+
+function renderGate20BValue(cut: Cut) {
+  const section = cut.sections.find((item) => item.owner === "learner_state_judgment")!
+  const judgment =
+    section.coverage === "not_authorized"
+      ? section.omission.type === "unknown" &&
+        section.omission.reason === "learner_state_judgment_read_capability_withheld"
+        ? "learnerStateJudgment: owner index withheld because its exact lazy-read capability is absent; identity and count are unknown. Age, silence, Assignment state, and plans imply no learner-state change; useful teaching may remain zero-write."
+        : "learnerStateJudgment: automatic Context withheld; identity and count are unknown. Age, silence, Assignment state, and plans imply no learner-state change; useful teaching may remain zero-write."
+      : section.countAtCut === 0
+        ? undefined
+        : `learnerStateJudgment: exactRelevantCount=${section.countAtCut}; omission=${canonicalJson(toJsonValue(section.omission))}. These are fallible, source-bearing whole-judgment memories for adapting teaching. They are not mastery, scores, activity, per-clause proof, priority, or a selected Tutor move. Read exact detail lazily when it can change the teaching move.`
+  const sections = `sections (canonical order is not priority): ${canonicalJson(toJsonValue(cut.sections))}`
+  const surface = cut.capabilityBasis.effectiveProviderToolSurfaceBinding
+  const fullCapability = `capabilityBasis: ${canonicalJson(
+    toJsonValue({
+      catalogVersion: cut.capabilityBasis.catalogVersion,
+      policyFingerprint: cut.capabilityBasis.policyFingerprint,
+      effectiveAutomaticContext: cut.capabilityBasis.effectiveAutomaticContext,
+      effectiveLazyReadCapabilities: cut.capabilityBasis.effectiveLazyReadCapabilities,
+      providerToolSurface: surface,
+    }),
+  )}`
+  const compactCapability = `capabilityBasis: ${canonicalJson(
+    toJsonValue({
+      catalogVersion: cut.capabilityBasis.catalogVersion,
+      policyFingerprint: cut.capabilityBasis.policyFingerprint,
+      effectiveAutomaticContext: cut.capabilityBasis.effectiveAutomaticContext,
+      effectiveLazyReadCapabilities: cut.capabilityBasis.effectiveLazyReadCapabilities,
+      providerToolSurface: {
+        definitionCount: surface.definitionCount,
+        combinedCanonicalBytes: surface.combinedCanonicalBytes,
+        combinedFingerprint: surface.combinedFingerprint,
+        fingerprint: surface.fingerprint,
+        toolChoice: {
+          canonicalBytes: surface.toolChoice.canonicalBytes,
+          fingerprint: surface.toolChoice.fingerprint,
+        },
+      },
+    }),
+  )}`
+  return renderGate20AValue(cut)
+    .replace(fullCapability, compactCapability)
+    .replace(
+      sections,
+      [
+        ...(judgment ? [judgment] : []),
+        ...(section.coverage === "complete" && section.countAtCut > 0
+          ? [
+              "Learner-state judgment age, silence, Assignment completion, and plan wording imply no learning-state change. Natural learner correction should revise the exact current head; useful explanation, demonstration, or guided work may remain zero-write.",
+            ]
+          : []),
+        sections,
+      ].join("\n"),
+    )
 }
 
 function renderFrozenValue(cut: Cut) {
@@ -1088,9 +1253,11 @@ function validateCut(cut: Cut) {
         ? gate19Owners
         : cut.policyVersion === GATE20_POLICY_VERSION && cut.rendererVersion === GATE20_RENDERER_VERSION
           ? gate20Owners
-          : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
-            ? currentOwners
-            : undefined
+          : cut.policyVersion === GATE20A_POLICY_VERSION && cut.rendererVersion === GATE20A_RENDERER_VERSION
+            ? gate20AOwners
+            : cut.policyVersion === POLICY_VERSION && cut.rendererVersion === RENDERER_VERSION
+              ? currentOwners
+              : undefined
   if (
     !record(cut) ||
     !keys(cut, [
@@ -1124,7 +1291,9 @@ function validateCut(cut: Cut) {
           ? GATE19_CAPABILITY_CATALOG_VERSION
           : cut.policyVersion === GATE20_POLICY_VERSION
             ? GATE20_CAPABILITY_CATALOG_VERSION
-            : CAPABILITY_CATALOG_VERSION,
+            : cut.policyVersion === GATE20A_POLICY_VERSION
+              ? GATE20A_CAPABILITY_CATALOG_VERSION
+              : CAPABILITY_CATALOG_VERSION,
     ) ||
     !Array.isArray(cut.sections) ||
     cut.sections.length !== expectedOwners.length ||
@@ -1132,9 +1301,8 @@ function validateCut(cut: Cut) {
     !sectionSetSemantics(cut) ||
     !capabilitySectionRelations(cut) ||
     !budgetShape(cut, expectedOwners)
-  ) {
+  )
     throw new CutIntegrityError({ assistantMessageID: id, reason: "malformed_cut" })
-  }
 }
 
 function validateInput(input: PrepareInput) {
@@ -1189,6 +1357,7 @@ function capability(
     | typeof LEGACY_CAPABILITY_CATALOG_VERSION
     | typeof GATE19_CAPABILITY_CATALOG_VERSION
     | typeof GATE20_CAPABILITY_CATALOG_VERSION
+    | typeof GATE20A_CAPABILITY_CATALOG_VERSION
     | typeof CAPABILITY_CATALOG_VERSION,
 ): value is CapabilityBasis {
   const catalog =
@@ -1198,7 +1367,9 @@ function capability(
         ? GATE19_LAZY_READ_CAPABILITY_IDS
         : expectedCatalogVersion === GATE20_CAPABILITY_CATALOG_VERSION
           ? GATE20_LAZY_READ_CAPABILITY_IDS
-          : LAZY_READ_CAPABILITY_IDS
+          : expectedCatalogVersion === GATE20A_CAPABILITY_CATALOG_VERSION
+            ? GATE20A_LAZY_READ_CAPABILITY_IDS
+            : LAZY_READ_CAPABILITY_IDS
   if (
     !record(value) ||
     !keys(value, [
@@ -1350,6 +1521,9 @@ function transportIdentity(value: unknown) {
 
 function sectionShape(value: unknown, owner: Section["owner"]): value is Section {
   const assignmentAuthorized = record(value) && owner === "assignment" && value.coverage !== "not_authorized"
+  const learnerStateJudgmentAuthorized =
+    record(value) && owner === "learner_state_judgment" && value.coverage !== "not_authorized"
+  const learnerStateJudgmentPopulated = learnerStateJudgmentAuthorized && Number(value.countAtCut) > 0
   return (
     record(value) &&
     keys(value, [
@@ -1361,6 +1535,15 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
       "omission",
       "entries",
       ...(assignmentAuthorized ? ["assignmentOwnerCut", "asOf", "mode"] : []),
+      ...(learnerStateJudgmentPopulated
+        ? [
+            "learnerStateJudgmentOwnerCut",
+            "asOf",
+            "eligibleAnchorCount",
+            "eligibleAnchorsFingerprint",
+            "directoryCursor",
+          ]
+        : []),
     ]) &&
     value.owner === owner &&
     value.scope === sectionPolicy[owner].scope &&
@@ -1375,7 +1558,32 @@ function sectionShape(value: unknown, owner: Section["owner"]): value is Section
     value.entries.every((entry) => entryOwner(entry, owner)) &&
     sectionAlgebra(value as unknown as Section) &&
     value.entries.length <= sectionLimit(owner) &&
-    (!assignmentAuthorized || assignmentSectionHeader(value))
+    (!assignmentAuthorized || assignmentSectionHeader(value)) &&
+    (!learnerStateJudgmentAuthorized || learnerStateJudgmentSectionHeader(value))
+  )
+}
+
+function learnerStateJudgmentSectionHeader(value: Record<string, unknown>) {
+  if (Number(value.countAtCut) === 0) {
+    return (
+      value.learnerStateJudgmentOwnerCut === undefined &&
+      value.asOf === undefined &&
+      value.eligibleAnchorCount === undefined &&
+      value.eligibleAnchorsFingerprint === undefined &&
+      value.directoryCursor === undefined
+    )
+  }
+  return (
+    record(value.learnerStateJudgmentOwnerCut) &&
+    keys(value.learnerStateJudgmentOwnerCut, ["frontierSequence", "frontierTime", "headCount", "fingerprint"]) &&
+    integer(value.learnerStateJudgmentOwnerCut.frontierSequence) &&
+    integer(value.learnerStateJudgmentOwnerCut.frontierTime) &&
+    integer(value.learnerStateJudgmentOwnerCut.headCount) &&
+    digest(value.learnerStateJudgmentOwnerCut.fingerprint) &&
+    integer(value.asOf) &&
+    integer(value.eligibleAnchorCount) &&
+    digest(value.eligibleAnchorsFingerprint) &&
+    nonempty(value.directoryCursor)
   )
 }
 
@@ -1393,7 +1601,16 @@ function assignmentSectionHeader(value: Record<string, unknown>) {
 }
 
 function sectionSelectionBasis(value: Record<string, unknown>, owner: Section["owner"]) {
-  if (value.coverage === "not_authorized") return value.selectionBasis === withheldSelectionBasis
+  if (value.coverage === "not_authorized") {
+    return (
+      value.selectionBasis ===
+      (owner === "learner_state_judgment" &&
+      record(value.omission) &&
+      value.omission.reason === "learner_state_judgment_read_capability_withheld"
+        ? learnerStateReadWithheldSelectionBasis
+        : withheldSelectionBasis)
+    )
+  }
   if (owner === "material" && value.coverage === "not_applicable") {
     return value.selectionBasis === sectionPolicy.material.notApplicableSelectionBasis
   }
@@ -1412,11 +1629,100 @@ function sectionSetSemantics(cut: Cut) {
     )
   }
   return (
-    cut.sections.every((section) => section.coverage !== "not_authorized") &&
+    cut.sections.every(
+      (section) =>
+        section.coverage !== "not_authorized" ||
+        (cut.policyVersion === POLICY_VERSION && section.owner === "learner_state_judgment"),
+    ) &&
     (cut.policyVersion === LEGACY_POLICY_VERSION ||
       cut.policyVersion === GATE19_POLICY_VERSION ||
       futureAttentionSectionSemantics(cut)) &&
-    (cut.policyVersion !== POLICY_VERSION || assignmentSectionSemantics(cut))
+    (cut.policyVersion === LEGACY_POLICY_VERSION ||
+      cut.policyVersion === GATE19_POLICY_VERSION ||
+      cut.policyVersion === GATE20_POLICY_VERSION ||
+      assignmentSectionSemantics(cut)) &&
+    (cut.policyVersion !== POLICY_VERSION || learnerStateJudgmentSectionSemantics(cut))
+  )
+}
+
+function learnerStateJudgmentSectionSemantics(cut: Cut) {
+  const section = cut.sections.find((item) => item.owner === "learner_state_judgment")
+  if (!section) return false
+  const authorized = cut.capabilityBasis.effectiveLazyReadCapabilities.includes("learner_state_judgment_read")
+  if (!authorized) {
+    return (
+      section.coverage === "not_authorized" &&
+      section.countAtCut === "unknown" &&
+      section.entries.length === 0 &&
+      section.omission.type === "unknown" &&
+      section.omission.reason === "learner_state_judgment_read_capability_withheld"
+    )
+  }
+  if (section.coverage === "not_authorized" || typeof section.countAtCut !== "number") return false
+  if (section.countAtCut === 0) {
+    return (
+      learnerStateJudgmentSectionHeader(section) &&
+      section.coverage === "empty" &&
+      section.entries.length === 0
+    )
+  }
+  const ownerCut = section.learnerStateJudgmentOwnerCut
+  const asOf = section.asOf
+  const directoryCursor = section.directoryCursor
+  if (
+    !ownerCut ||
+    asOf === undefined ||
+    !directoryCursor ||
+    asOf !== cut.cutAsOf ||
+    ownerCut.frontierTime > asOf ||
+    section.countAtCut > ownerCut.headCount
+  )
+    return false
+  const directory = LearnerStateJudgment.inspectDirectoryCursor(directoryCursor)
+  if (
+    !directory ||
+    canonicalJson(toJsonValue(directory.ownerCut)) !==
+      canonicalJson(toJsonValue(ownerCut)) ||
+    directory.asOf !== asOf ||
+    directory.eligibleAnchorCount !== section.eligibleAnchorCount ||
+    directory.eligibleAnchorsFingerprint !== section.eligibleAnchorsFingerprint
+  ) {
+    return false
+  }
+  return (
+    section.entries.length <= Math.min(section.countAtCut, MAX_LEARNER_STATE_JUDGMENT_CONTEXT_ENTRIES) &&
+    section.entries.every(
+      (entry) =>
+        entry.kind === "learner_state_judgment" &&
+        Number(entry.locator.frontierSequence) <= ownerCut.frontierSequence &&
+        Number(entry.locator.timeCommitted) <= asOf &&
+        learnerStateJudgmentEntryRelations(entry),
+    )
+  )
+}
+
+function learnerStateJudgmentEntryRelations(entry: Entry) {
+  if (entry.kind !== "learner_state_judgment") return false
+  const anchorKinds = entry.locator.anchorKinds
+  if (
+    !Array.isArray(anchorKinds) ||
+    anchorKinds.length > LearnerStateJudgment.MAX_ANCHORS ||
+    new Set(anchorKinds).size !== anchorKinds.length ||
+    canonicalJson(toJsonValue(anchorKinds)) !== canonicalJson(toJsonValue([...anchorKinds].toSorted()))
+  ) {
+    return false
+  }
+  if (entry.semantic?.state !== "value" || !record(entry.semantic.value)) return true
+  const semantic = entry.semantic.value
+  return (
+    semantic.judgmentID === entry.locator.judgmentID &&
+    semantic.revisionID === entry.locator.revisionID &&
+    semantic.version === entry.locator.version &&
+    semantic.disposition === entry.locator.disposition &&
+    semantic.authorClass === entry.locator.authorClass &&
+    canonicalJson(toJsonValue(semantic.anchorKinds)) === canonicalJson(toJsonValue(anchorKinds)) &&
+    ((semantic.scope === "learner_home" && anchorKinds.length === 0) ||
+      (semantic.scope === "anchored" && anchorKinds.length > 0))
   )
 }
 
@@ -1425,7 +1731,9 @@ function futureAttentionSectionSemantics(cut: Cut) {
   if (!section || typeof section.countAtCut !== "number") return false
   if (section.countAtCut === 0) return section.entries.length === 0
   if (section.countAtCut === 1) {
-    return section.coverage === "complete" && section.entries.length === 1 && section.entries[0]?.semantic?.state === "value"
+    return (
+      section.coverage === "complete" && section.entries.length === 1 && section.entries[0]?.semantic?.state === "value"
+    )
   }
   return section.entries.length <= section.countAtCut
 }
@@ -1455,7 +1763,9 @@ function assignmentSectionSemantics(cut: Cut) {
     return false
   }
   if (section.countAtCut === 1) {
-    return section.coverage === "complete" && section.entries.length === 1 && section.entries[0]?.semantic?.state === "value"
+    return (
+      section.coverage === "complete" && section.entries.length === 1 && section.entries[0]?.semantic?.state === "value"
+    )
   }
   return section.entries.length <= Math.min(section.countAtCut, MAX_ASSIGNMENT_CONTEXT_ENTRIES)
 }
@@ -1481,6 +1791,9 @@ function capabilitySectionRelations(cut: Cut) {
       }
       if (entry.kind === "assignment") {
         return entry.locator.lazyReadAvailable === capabilities.has("assignment_read")
+      }
+      if (entry.kind === "learner_state_judgment") {
+        return entry.locator.lazyReadAvailable === capabilities.has("learner_state_judgment_read")
       }
       return entry.locator.lazyReadAvailable === capabilities.has("learning_interaction_read")
     }),
@@ -1525,6 +1838,7 @@ function sectionLimit(owner: Section["owner"]) {
   if (owner === "interaction") return MAX_INTERACTION_CANDIDATES
   if (owner === "learner_navigation") return MAX_CANDIDATES_PER_FAMILY + 1
   if (owner === "assignment") return MAX_ASSIGNMENT_CONTEXT_ENTRIES
+  if (owner === "learner_state_judgment") return MAX_LEARNER_STATE_JUDGMENT_CONTEXT_ENTRIES
   return MAX_CANDIDATES_PER_FAMILY
 }
 
@@ -1542,9 +1856,8 @@ function entryShape(value: unknown): value is Entry {
       "learner_response_evidence",
       "future_attention",
       "assignment",
-    ].includes(
-      String(value.kind),
-    ) &&
+      "learner_state_judgment",
+    ].includes(String(value.kind)) &&
     record(value.locator) &&
     json(value.locator) &&
     locatorShape(value.kind as Entry["kind"], value.locator) &&
@@ -1552,7 +1865,8 @@ function entryShape(value: unknown): value is Entry {
     interactionSemantic(value.kind as Entry["kind"], value.semantic) &&
     learnerResponseEvidenceSemantic(value.kind as Entry["kind"], value.semantic) &&
     futureAttentionSemantic(value.kind as Entry["kind"], value.semantic) &&
-    assignmentSemantic(value.kind as Entry["kind"], value.semantic)
+    assignmentSemantic(value.kind as Entry["kind"], value.semantic) &&
+    learnerStateJudgmentSemantic(value.kind as Entry["kind"], value.semantic)
   )
 }
 
@@ -1564,6 +1878,7 @@ function locatorShape(kind: Entry["kind"], value: Record<string, unknown>) {
   if (kind === "learner_response_evidence") return learnerResponseEvidenceLocator(value)
   if (kind === "future_attention") return futureAttentionLocator(value)
   if (kind === "assignment") return assignmentLocator(value)
+  if (kind === "learner_state_judgment") return learnerStateJudgmentLocator(value)
   return interactionLocator(value)
 }
 
@@ -1600,6 +1915,44 @@ function assignmentLocator(value: Record<string, unknown>) {
     integer(value.sourceStatusAtCut.asOf) &&
     Array.isArray(value.scopeCurrentRelationsAtCut) &&
     typeof value.lazyReadAvailable === "boolean"
+  )
+}
+
+function learnerStateJudgmentLocator(value: Record<string, unknown>) {
+  return (
+    keys(value, [
+      "judgmentID",
+      "timeCreated",
+      "revisionID",
+      "version",
+      "disposition",
+      "timeCommitted",
+      "frontierSequence",
+      "authorClass",
+      "anchorKinds",
+      "wholeJudgmentBasis",
+      "lazyReadAvailable",
+    ]) &&
+    Schema.is(LearnerStateJudgment.JudgmentID)(value.judgmentID) &&
+    Schema.is(LearnerStateJudgment.RevisionID)(value.revisionID) &&
+    integer(value.timeCreated) &&
+    integer(value.version) &&
+    Number(value.version) > 0 &&
+    value.disposition === "active" &&
+    integer(value.timeCommitted) &&
+    integer(value.frontierSequence) &&
+    ["learner_report", "tutor_model_judgment", "owner_observation", "learner_correction"].includes(
+      String(value.authorClass),
+    ) &&
+    Array.isArray(value.anchorKinds) &&
+    value.anchorKinds.length <= LearnerStateJudgment.MAX_ANCHORS &&
+    new Set(value.anchorKinds).size === value.anchorKinds.length &&
+    canonicalJson(toJsonValue(value.anchorKinds)) === canonicalJson(toJsonValue([...value.anchorKinds].toSorted())) &&
+    value.anchorKinds.every((kind) =>
+      ["course_membership", "material_selector", "goal_revision", "assignment_revision"].includes(String(kind)),
+    ) &&
+    value.wholeJudgmentBasis === true &&
+    value.lazyReadAvailable === true
   )
 }
 
@@ -2406,6 +2759,67 @@ function assignmentSemantic(kind: Entry["kind"], value: unknown) {
   )
 }
 
+function learnerStateJudgmentSemantic(kind: Entry["kind"], value: unknown) {
+  if (kind !== "learner_state_judgment") return true
+  if (!record(value)) return false
+  if (value.state === "locator_only") return bounded(value)
+  if (value.state !== "value" || !record(value.value)) return false
+  const semantic = value.value
+  const nonImplications = semantic.nonImplications
+  return (
+    keys(semantic, [
+      "subjectLabel",
+      "judgmentID",
+      "revisionID",
+      "version",
+      "disposition",
+      "currentness",
+      "authorClass",
+      "anchorKinds",
+      "scope",
+      "hasUncertaintyOrLimits",
+      "basisScope",
+      "basisCount",
+      "detail",
+      "nonImplications",
+    ]) &&
+    typeof semantic.subjectLabel === "string" &&
+    nonempty(semantic.subjectLabel) &&
+    utf8Bytes(semantic.subjectLabel) <= LearnerStateJudgment.MAX_SUBJECT_LABEL_BYTES &&
+    Schema.is(LearnerStateJudgment.JudgmentID)(semantic.judgmentID) &&
+    Schema.is(LearnerStateJudgment.RevisionID)(semantic.revisionID) &&
+    integer(semantic.version) &&
+    Number(semantic.version) > 0 &&
+    semantic.disposition === "active" &&
+    semantic.currentness === "current" &&
+    ["learner_report", "tutor_model_judgment", "owner_observation", "learner_correction"].includes(
+      String(semantic.authorClass),
+    ) &&
+    Array.isArray(semantic.anchorKinds) &&
+    semantic.anchorKinds.length <= LearnerStateJudgment.MAX_ANCHORS &&
+    new Set(semantic.anchorKinds).size === semantic.anchorKinds.length &&
+    canonicalJson(toJsonValue(semantic.anchorKinds)) ===
+      canonicalJson(toJsonValue([...semantic.anchorKinds].toSorted())) &&
+    ["learner_home", "anchored"].includes(String(semantic.scope)) &&
+    ((semantic.scope === "learner_home" && semantic.anchorKinds.length === 0) ||
+      (semantic.scope === "anchored" && semantic.anchorKinds.length > 0)) &&
+    typeof semantic.hasUncertaintyOrLimits === "boolean" &&
+    semantic.basisScope === "whole_judgment" &&
+    integer(semantic.basisCount) &&
+    Number(semantic.basisCount) >= 0 &&
+    Number(semantic.basisCount) <= LearnerStateJudgment.MAX_BASIS_REFS &&
+    semantic.detail === "judgment_body_basis_and_history_require_exact_lazy_read" &&
+    Array.isArray(nonImplications) &&
+    nonImplications.length === 4 &&
+    [
+      "fallible_judgment_not_mastery_certification",
+      "basis_set_supports_whole_revision_not_individual_clauses",
+      "absence_or_age_implies_no_state_change",
+      "directory_order_is_not_priority_or_tutor_move",
+    ].every((item, index) => nonImplications[index] === item)
+  )
+}
+
 function futureAttentionTarget(value: unknown) {
   if (!record(value) || !keys(value, ["endpoint", "selection", "receipt"]) || !courseMembership(value.endpoint)) {
     return false
@@ -2435,8 +2849,7 @@ function futureAttentionNotBefore(value: unknown) {
   }
   if (value.resolvedZone.type === "fixed_offset") {
     return (
-      keys(value.resolvedZone, ["type", "offsetMinutes"]) &&
-      value.resolvedZone.offsetMinutes === value.utcOffsetMinutes
+      keys(value.resolvedZone, ["type", "offsetMinutes"]) && value.resolvedZone.offsetMinutes === value.utcOffsetMinutes
     )
   }
   return (

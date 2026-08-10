@@ -1,6 +1,8 @@
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Database } from "@opencode-ai/core/database/database"
+import { ProjectTable } from "@opencode-ai/core/project/sql"
+import { AbsolutePath } from "@opencode-ai/core/schema"
 import { ContentRoot } from "@opencode-ai/core/content-root"
 import { Course } from "@opencode-ai/core/course"
 import { EventSequenceTable, EventTable } from "@opencode-ai/core/event/sql"
@@ -75,6 +77,7 @@ import { LearnerGoal } from "@opencode-ai/core/learner-goal"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { Assignment } from "@opencode-ai/core/assignment"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { AdmittedLearnerOccurrenceTable } from "@opencode-ai/core/learning-command/occurrence.sql"
 import { RetainedSteering } from "@opencode-ai/core/retained-steering"
 import { TurnLifecycle } from "@opencode-ai/core/turn/turn"
@@ -88,6 +91,7 @@ import { LearningFrontier } from "@opencode-ai/core/learning-frontier"
 import { LearningContext } from "@opencode-ai/core/learning-context"
 import { MaterialMap } from "@opencode-ai/core/material-map"
 import { Turn } from "@opencode-ai/schema/turn"
+import { Project } from "@opencode-ai/schema/project"
 import { TurnEvent } from "@opencode-ai/schema/turn-event"
 import { entryBody } from "@/cli/cmd/run/entry.body"
 import { toolInlineInfo } from "@/cli/cmd/run/tool"
@@ -348,6 +352,15 @@ const internalSessionWorkBoundary = testEffect(
     [LSP.node, lsp],
     [MCP.node, makeMcp()],
     [RuntimeFlags.node, runtimeFlags],
+  ]),
+)
+const isolatedDatabaseBoundary = testEffect(
+  LayerNode.compile(LayerNode.group([promptRoot, testLLMServerNode]), [
+    [SessionSummary.node, summary],
+    [LSP.node, lsp],
+    [MCP.node, makeMcp()],
+    [RuntimeFlags.node, runtimeFlags],
+    [Database.node, Database.layerFromPath(":memory:").pipe(Layer.orDie)],
   ]),
 )
 const withMcpInstructions = testEffect(
@@ -1831,14 +1844,20 @@ it.instance(
   { config: cfg },
 )
 
-it.instance(
+isolatedDatabaseBoundary.instance(
   "carries frozen source time through midnight and host-timezone changes for root and promoted steer requests",
   () =>
     Effect.gen(function* () {
-      const { llm } = yield* useServerConfig(providerCfg)
+      const { dir, llm } = yield* useServerConfig(providerCfg)
       const prompt = yield* SessionPrompt.Service
       const sessions = yield* Session.Service
       const database = yield* Database.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
       const sessionID = SessionID.create()
       const turnID = Turn.ID.create()
       const rootInputID = Turn.InputID.create()
@@ -2637,7 +2656,8 @@ projectOriginIt(
         },
         parts: [{ type: "text", text: "Create the exact source route, then elicit my response." }],
       })
-      expect((yield* prompt.awaitTurn(sourceSessionID, conditionTurnID)).terminal).toMatchObject({
+      const conditionTerminal = (yield* prompt.awaitTurn(sourceSessionID, conditionTurnID)).terminal
+      expect(conditionTerminal).toMatchObject({
         outcome: "completed",
         counters: { model: 2, tool: 1 },
       })
@@ -3543,15 +3563,491 @@ it.instance(
 )
 
 it.instance(
-  "finalizes an admitted FutureAttention A1 claim when its live Turn is interrupted",
+  "uses correctable learner-state memory across Sessions while useful teaching can remain zero-write",
   () =>
     Effect.gen(function* () {
       const { llm } = yield* useServerConfig(providerCfg)
       const prompt = yield* SessionPrompt.Service
       const sessions = yield* Session.Service
       const database = yield* Database.Service
+      const base = Math.floor(Date.now() / 1_000) * 1_000
+      setSystemTime(new Date(base))
+      yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
+
+      const report =
+        "I can state the binary-search invariant, but I still get lost when deciding which half is safe to discard."
+      const initialBody = "Can state the binary-search invariant; applying it to choose the safe discarded half remains uncertain."
+      const subject = "Binary-search invariant application"
+      const creationAcknowledgement =
+        "I retained that fallible learning-state judgment so later teaching can focus on applying the invariant."
+      const createInput = {
+        operation: "create" as const,
+        cause: {
+          type: "interpreted_learner_report" as const,
+          excerpt: { text: report, startByte: 0, endByte: new TextEncoder().encode(report).byteLength },
+        },
+        snapshot: {
+          subject: { label: subject, scope: { type: "learner_home" as const } },
+          judgmentBody: initialBody,
+          exactBasisRefs: [],
+          uncertaintyAndLimits: "Learner report is fallible and remains open to correction.",
+          basisScope: "whole_judgment" as const,
+        },
+      }
+      const creationSessionID = SessionID.create()
+      const creationTurnID = Turn.ID.create()
+      const creationHit = (yield* llm.hits).length
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, createInput)
+      yield* llm.text(creationAcknowledgement)
+      yield* prompt.start({
+        sessionID: creationSessionID,
+        turnID: creationTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Learner-state report",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: report }],
+      })
+      const creationResult = yield* prompt.awaitTurn(creationSessionID, creationTurnID)
+      if (!creationResult.terminal) return yield* Effect.die("Learner-state creation Turn did not terminalize")
+      if (creationResult.terminal.outcome !== "completed") {
+        return yield* Effect.die(
+          JSON.stringify({
+            terminal: creationResult.terminal,
+            messages: yield* sessions.messages({ sessionID: creationSessionID }),
+          }),
+        )
+      }
+      expect(creationResult.terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+
+      const discovered = yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.read(tx, { type: "discover", disposition: "active" }, { limit: 8 }),
+      )
+      const created = discovered.items.find(
+        (item): item is LearnerStateJudgment.Judgment =>
+          "current" in item && item.current.snapshot.subject.label === subject,
+      )
+      if (!created) return yield* Effect.die("Released-v1 learner-state write did not commit an exact current head")
+      expect(created.current).toMatchObject({
+        version: 1,
+        disposition: "active",
+        snapshot: { judgmentBody: initialBody, basisScope: "whole_judgment", exactBasis: [] },
+      })
+      const judgmentID = created.id
+      const firstRevisionID = created.current.id
+      const hasApplicationRequest = (body: unknown) =>
+        providerText(body).some((value) => value.includes(applicationRequest))
+      const hasExactDirectory = (body: unknown, input: { revisionID: string; version: number }) =>
+        providerText(body).some(
+          (value) =>
+            value.includes("[Repa learning context — protected]") &&
+            value.includes('"owner":"learner_state_judgment"') &&
+            value.includes(`"judgmentID":"${judgmentID}"`) &&
+            value.includes(`"revisionID":"${input.revisionID}"`) &&
+            value.includes(`"version":${input.version}`),
+        )
+      const hasExactRead = (
+        body: unknown,
+        input: { revisionID: string; version: number; judgmentBody: string },
+      ) =>
+        providerText(body).some(
+          (value) =>
+            value.includes('"page":{') &&
+            value.includes('"returnedCount":1') &&
+            value.includes(`"id":"${input.revisionID}"`) &&
+            value.includes(`"judgmentID":"${judgmentID}"`) &&
+            value.includes(`"version":${input.version}`) &&
+            value.includes(`"judgmentBody":${JSON.stringify(input.judgmentBody)}`),
+        )
+      const queueTeachingMove = (input: {
+        revisionID: string
+        version: number
+        judgmentBody: string
+        teaching: string
+      }) =>
+        Effect.gen(function* () {
+          yield* llm.toolMatch(
+            (hit) => hasApplicationRequest(hit.body) && hasExactDirectory(hit.body, input),
+            LearnerStateJudgment.READ_CAPABILITY,
+            { action: "revision", judgmentID, revisionID: input.revisionID },
+          )
+          yield* llm.textMatch(
+            (hit) =>
+              hasApplicationRequest(hit.body) &&
+              hasExactDirectory(hit.body, input) &&
+              hasExactRead(hit.body, input),
+            input.teaching,
+          )
+        })
+      const writesAfterCreate = yield* database.db
+        .get(sql`
+          SELECT
+            (SELECT count(*) FROM learner_state_judgment_revision) AS revisions,
+            (SELECT count(*) FROM learner_state_judgment_effect) AS effects,
+            (SELECT count(*) FROM learner_state_judgment_commit_seal) AS seals
+        `)
+        .pipe(Effect.orDie)
+
+      const applicationSessionID = SessionID.create()
+      const applicationTurnID = Turn.ID.create()
+      const applicationRequest =
+        "Use my current learner-state memory and teach the binary-search step I am actually missing."
+      const applicationTeaching =
+        "At each comparison, combine the invariant with the comparison result: if target is smaller than a[mid], every index at or right of mid is impossible, so only that half is safe to discard."
+      const applicationHit = (yield* llm.hits).length
+      const pendingBeforeApplication = yield* llm.pending
+      yield* queueTeachingMove({
+        revisionID: firstRevisionID,
+        version: 1,
+        judgmentBody: initialBody,
+        teaching: applicationTeaching,
+      })
+      yield* prompt.start({
+        sessionID: applicationSessionID,
+        turnID: applicationTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Learner-state application teaching",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: applicationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(applicationSessionID, applicationTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeApplication)
+
+      const applicationContextBody = (yield* llm.hits)[applicationHit]?.body
+      const applicationReadBody = (yield* llm.hits)[applicationHit + 1]?.body
+      const firstApplicationBody = providerText(applicationContextBody).join("\n")
+      expect(firstApplicationBody).toContain("learner_state_judgment")
+      expect(firstApplicationBody).toContain(subject)
+      expect(firstApplicationBody).toContain(firstRevisionID)
+      expect(firstApplicationBody).toContain("Use update_learner_state_judgment only when a fuzzy, source-bearing account")
+      expect(firstApplicationBody).not.toContain(report)
+      expect(firstApplicationBody).not.toContain(creationAcknowledgement)
+      const absentBody = (yield* llm.hits)[creationHit]?.body
+      expect(hasExactDirectory(absentBody, { revisionID: firstRevisionID, version: 1 })).toBe(false)
+      expect(
+        hasExactRead(absentBody, { revisionID: firstRevisionID, version: 1, judgmentBody: initialBody }),
+      ).toBe(false)
+      expect(hasExactDirectory(applicationContextBody, { revisionID: firstRevisionID, version: 1 })).toBe(true)
+      expect(
+        hasExactRead(applicationReadBody, {
+          revisionID: firstRevisionID,
+          version: 1,
+          judgmentBody: initialBody,
+        }),
+      ).toBe(true)
+      const applicationMessages = yield* sessions.messages({ sessionID: applicationSessionID })
+      const exactRead = applicationMessages
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === LearnerStateJudgment.READ_CAPABILITY,
+        )
+      if (!exactRead || exactRead.state.status !== "completed") {
+        return yield* Effect.die("Cross-Session learner-state consumer omitted its exact lazy read")
+      }
+      expect(JSON.parse(exactRead.state.output)).toMatchObject({
+        page: {
+          returnedCount: 1,
+          items: [
+            {
+              id: firstRevisionID,
+              judgmentID,
+              version: 1,
+              snapshot: { judgmentBody: initialBody },
+            },
+          ],
+        },
+      })
+      expect(providerText(applicationReadBody).join("\n")).toContain(initialBody)
+      expect(
+        applicationMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === applicationTeaching),
+      ).toBe(true)
+      expect(
+        yield* database.db
+          .get(sql`
+            SELECT
+              (SELECT count(*) FROM learner_state_judgment_revision) AS revisions,
+              (SELECT count(*) FROM learner_state_judgment_effect) AS effects,
+              (SELECT count(*) FROM learner_state_judgment_commit_seal) AS seals
+          `)
+          .pipe(Effect.orDie),
+      ).toEqual(writesAfterCreate)
+
+      const beforeCorrection = yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.readCurrent(tx, judgmentID, Date.now()),
+      )
+      if (!beforeCorrection) return yield* Effect.die("Learner-state correction lost the exact current head")
+      if (!beforeCorrection.currentHead) return yield* Effect.die("Current learner-state read omitted its correction head")
+      const correction =
+        "Correction: I do not reliably understand what the binary-search invariant means yet, so start with the definition."
+      const correctedBody = "The binary-search invariant definition itself remains uncertain; application should follow later."
+      const correctionInput = {
+        operation: "revise" as const,
+        judgmentID,
+        expectedHead: beforeCorrection.currentHead,
+        cause: {
+          type: "learner_correction" as const,
+          excerpt: { text: correction, startByte: 0, endByte: new TextEncoder().encode(correction).byteLength },
+        },
+        snapshot: {
+          subject: { label: subject, scope: { type: "learner_home" as const } },
+          judgmentBody: correctedBody,
+          exactBasisRefs: [],
+          uncertaintyAndLimits: "Natural learner correction; fallible and revisable.",
+          basisScope: "whole_judgment" as const,
+        },
+        rationale: "Use the learner's correction to change the next teaching focus.",
+      }
+      const correctionSessionID = SessionID.create()
+      const correctionTurnID = Turn.ID.create()
+      yield* llm.tool(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, correctionInput)
+      yield* llm.text("I corrected the remembered learning state without treating either revision as a mastery score.")
+      yield* prompt.start({
+        sessionID: correctionSessionID,
+        turnID: correctionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Learner-state natural correction",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: correction }],
+      })
+      expect((yield* prompt.awaitTurn(correctionSessionID, correctionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      const correctionPart = (yield* sessions.messages({ sessionID: correctionSessionID }))
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === LearnerStateJudgment.UPDATE_CAPABILITY,
+        )
+      if (!correctionPart || correctionPart.state.status !== "completed") {
+        return yield* Effect.die("Learner-state correction omitted its terminal Tool Part")
+      }
+      expect(JSON.parse(correctionPart.state.output)).toMatchObject({ settlement: { outcome: "applied" } })
+      const corrected = yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.readCurrent(tx, judgmentID, Date.now()),
+      )
+      if (!corrected) return yield* Effect.die("Learner-state correction did not produce a current successor")
+      expect(corrected.revision).toMatchObject({
+        version: 2,
+        predecessorRevisionID: firstRevisionID,
+        snapshot: { judgmentBody: correctedBody },
+        authorAndCause: { type: "learner_correction" },
+      })
+
+      const definitionSessionID = SessionID.create()
+      const definitionTurnID = Turn.ID.create()
+      const definitionTeaching =
+        "The invariant says: before every loop iteration, if the target exists, its index is still inside the current search interval. Start by checking that this is true before the first comparison."
+      const definitionHit = (yield* llm.hits).length
+      const pendingBeforeDefinition = yield* llm.pending
+      yield* queueTeachingMove({
+        revisionID: corrected.revision.id,
+        version: 2,
+        judgmentBody: correctedBody,
+        teaching: definitionTeaching,
+      })
+      yield* prompt.start({
+        sessionID: definitionSessionID,
+        turnID: definitionTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 2, tool: 1 },
+        session: {
+          title: "Learner-state corrected teaching",
+          permission: [{ permission: "*", pattern: "*", action: "allow" }],
+        },
+        parts: [{ type: "text", text: applicationRequest }],
+      })
+      expect((yield* prompt.awaitTurn(definitionSessionID, definitionTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 2, tool: 1 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeDefinition)
+      const correctedContextBody = (yield* llm.hits)[definitionHit]?.body
+      const correctedReadBody = (yield* llm.hits)[definitionHit + 1]?.body
+      const correctedContext = providerText(correctedContextBody).join("\n")
+      expect(correctedContext).toContain(corrected.revision.id)
+      expect(correctedContext).not.toContain(firstRevisionID)
+      expect(providerText(correctedReadBody).join("\n")).toContain(correctedBody)
+      expect(
+        hasExactDirectory(applicationContextBody, { revisionID: corrected.revision.id, version: 1 }),
+      ).toBe(false)
+      expect(
+        hasExactRead(applicationReadBody, {
+          revisionID: corrected.revision.id,
+          version: 1,
+          judgmentBody: initialBody,
+        }),
+      ).toBe(false)
+      expect(hasExactDirectory(correctedContextBody, { revisionID: corrected.revision.id, version: 2 })).toBe(true)
+      expect(
+        hasExactRead(correctedReadBody, {
+          revisionID: corrected.revision.id,
+          version: 2,
+          judgmentBody: correctedBody,
+        }),
+      ).toBe(true)
+      expect(hasExactDirectory(correctedContextBody, { revisionID: firstRevisionID, version: 2 })).toBe(false)
+      expect(
+        hasExactRead(correctedReadBody, {
+          revisionID: firstRevisionID,
+          version: 2,
+          judgmentBody: correctedBody,
+        }),
+      ).toBe(false)
+      const definitionMessages = yield* sessions.messages({ sessionID: definitionSessionID })
+      const correctedRead = definitionMessages
+        .flatMap((message) => message.parts)
+        .find(
+          (part): part is SessionV1.ToolPart =>
+            part.type === "tool" && part.tool === LearnerStateJudgment.READ_CAPABILITY,
+        )
+      if (!correctedRead || correctedRead.state.status !== "completed") {
+        return yield* Effect.die("Corrected teaching omitted its exact lazy read")
+      }
+      expect(JSON.parse(correctedRead.state.output)).toMatchObject({
+        page: {
+          returnedCount: 1,
+          items: [
+            {
+              id: corrected.revision.id,
+              judgmentID,
+              version: 2,
+              snapshot: { judgmentBody: correctedBody },
+            },
+          ],
+        },
+      })
+      expect(
+        definitionMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === definitionTeaching),
+      ).toBe(true)
+      expect(
+        applicationMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === definitionTeaching),
+      ).toBe(false)
+      expect(
+        definitionMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === applicationTeaching),
+      ).toBe(false)
+
+      const writesBeforeZeroWrite = yield* database.db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learner_state_judgment_revision) AS revisions,
+          (SELECT count(*) FROM learner_state_judgment_effect) AS effects,
+          (SELECT count(*) FROM learner_state_judgment_commit_seal) AS seals
+      `)
+      const zeroWriteSessionID = SessionID.create()
+      const zeroWriteTurnID = Turn.ID.create()
+      const zeroWriteTeaching = "A mutex protects one critical section at a time; picture one key passed between threads."
+      const zeroWriteRequest = "Explain a mutex with one concrete picture."
+      const pendingBeforeZeroWrite = yield* llm.pending
+      yield* llm.textMatch(
+        (hit) => providerText(hit.body).some((value) => value.includes(zeroWriteRequest)),
+        zeroWriteTeaching,
+      )
+      yield* prompt.start({
+        sessionID: zeroWriteSessionID,
+        turnID: zeroWriteTurnID,
+        inputID: Turn.InputID.create(),
+        messageID: MessageID.ascending(),
+        agent: "repa",
+        model: ref,
+        limits: { model: 1, tool: 1 },
+        session: { title: "Useful zero-write teaching" },
+        parts: [{ type: "text", text: zeroWriteRequest }],
+      })
+      expect((yield* prompt.awaitTurn(zeroWriteSessionID, zeroWriteTurnID)).terminal).toMatchObject({
+        outcome: "completed",
+        counters: { model: 1, tool: 0 },
+      })
+      expect(yield* llm.pending).toBe(pendingBeforeZeroWrite)
+      const zeroWriteMessages = yield* sessions.messages({ sessionID: zeroWriteSessionID })
+      expect(
+        zeroWriteMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "text" && part.text === zeroWriteTeaching),
+      ).toBe(true)
+      expect(
+        zeroWriteMessages
+          .flatMap((message) => message.parts)
+          .some((part) => part.type === "tool" && part.tool === LearnerStateJudgment.UPDATE_CAPABILITY),
+      ).toBe(false)
+      expect(
+        yield* database.db.get(sql`
+          SELECT
+            (SELECT count(*) FROM learner_state_judgment_revision) AS revisions,
+            (SELECT count(*) FROM learner_state_judgment_effect) AS effects,
+            (SELECT count(*) FROM learner_state_judgment_commit_seal) AS seals
+        `),
+      ).toEqual(writesBeforeZeroWrite)
+
+      yield* sessions.remove(creationSessionID)
+      yield* sessions.remove(applicationSessionID)
+      yield* sessions.remove(correctionSessionID)
+      yield* sessions.remove(definitionSessionID)
+      yield* sessions.remove(zeroWriteSessionID)
+
+      const retainedRevision = yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.readExactRevision(tx, judgmentID, corrected.revision.id),
+      )
+      expect(retainedRevision).toEqual(corrected.revision)
+      const retainedCurrent = yield* database.db.transaction((tx) =>
+        LearnerStateJudgment.readCurrent(tx, judgmentID, Date.now()),
+      )
+      expect(retainedCurrent?.revision.id).toBe(corrected.revision.id)
+    }),
+  { config: cfg },
+  90_000,
+)
+
+isolatedDatabaseBoundary.instance(
+  "finalizes an admitted FutureAttention A1 claim when its live Turn is interrupted",
+  () =>
+    Effect.gen(function* () {
+      const { dir, llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const database = yield* Database.Service
       const courses = yield* Course.Service
       const events = yield* EventV2Bridge.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
       const base = Math.floor(Date.now() / 1_000) * 1_000
       setSystemTime(new Date(base))
       yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))
@@ -3783,15 +4279,21 @@ it.instance(
   60_000,
 )
 
-it.instance(
+isolatedDatabaseBoundary.instance(
   "keeps a no-output A1 claim terminal when same-input A2 explains and retries",
   () =>
     Effect.gen(function* () {
-      const { llm } = yield* useServerConfig(providerCfg)
+      const { dir, llm } = yield* useServerConfig(providerCfg)
       const prompt = yield* SessionPrompt.Service
       const sessions = yield* Session.Service
       const database = yield* Database.Service
       const courses = yield* Course.Service
+      yield* database.db
+        .insert(ProjectTable)
+        .values({ id: Project.ID.global, worktree: AbsolutePath.make(dir), sandboxes: [] })
+        .onConflictDoNothing()
+        .run()
+        .pipe(Effect.orDie)
       const base = Math.floor(Date.now() / 1_000) * 1_000
       setSystemTime(new Date(base))
       yield* Effect.addFinalizer(() => Effect.sync(() => setSystemTime()))

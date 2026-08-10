@@ -62,6 +62,26 @@ visible results, and correction. A separate deterministic or model-control
 mechanism is earned only by an invariant or observed failure that the ordinary
 Agent plus those boundaries cannot satisfy.
 
+Long-term Tutor memory follows the same division. The model and learner may
+form a fuzzy, correctable judgment about what has been learned, what remains
+unstable, or which prerequisite appears missing. The program preserves the
+judgment's semantic scope, author, sources, uncertainty, immutable revisions,
+and correction lineage; durable admission does not prove the judgment true or
+turn it into a global mastery score. Evidence, inference, and the later action
+that consumes the inference remain distinct.
+
+Context uses a bounded current index plus lazy exact reads. Eagerly loading all
+learner history, plans, deadlines, courses, and evidence would waste model
+capacity, expose unrelated personal state, and make old detail compete with the
+current request. Exposing no index and requiring blind lazy search would leave
+the Agent unable to know what is worth retrieving. Repa therefore gives the
+ordinary Agent a small, omission-truthful view of potentially relevant current
+state and lets it expand only the detail the current move needs. This resembles
+the resource discipline of greedy or dynamic-programming techniques—consume
+the useful frontier first and reuse exact subresults when expansion is
+needed—but it does not install a deterministic relevance score, hidden
+pedagogical selector, or universal cache as product meaning.
+
 This machinery stays below the learner's normal control surface. The learner
 speaks naturally; the Agent performs relevant reads and tool calls itself. When
 a consequential learner-owned choice is genuinely unresolved, the same Agent
@@ -69,48 +89,44 @@ asks in the conversation before writing. Repa does not presume a domain-specific
 confirmation ritual, command grammar, internal-ID exchange, or state-management
 Turn merely to compensate for ordinary semantic uncertainty.
 
-For ordinary substantial planning demands, including assignments and
-Goal-driven work such as exam preparation, the program also owns the closed
-arithmetic of planning: deadlines, estimated remaining work, known available
-capacity, feasibility, allocation across days, completion feedback, and
-recomputation after change. A model or learner may propose the estimate,
-interpret the work, decompose it semantically, or advise on an exception; those
-open judgments become useful inputs only after the Learning System retains
-their source and permits correction. The planning demand references but does
-not merge the Goal or Assignment that gives it meaning. This is not a fixed
-program/model percentage. It prevents a language model from becoming the only
-place where five hours of work and six days of capacity are compared.
+For cross-day learning, Repa advises rather than acts as a scheduler. The
+ordinary Tutor may proactively or responsively propose a scoped learning plan
+from the current request, fuzzy learner-state judgments, Goals, Assignments,
+deadlines, evidence, and model reasoning. The learner evaluates the suggestion
+in the same natural conversation and can ask the Tutor to change it just as a
+programmer asks an Agent to revise unsuitable code. This is a continuing
+dialogue, not a proposal/approval ceremony or a claim that silence means
+acceptance.
 
-The resulting allocation is a correctable **working plan**, not a learner
-promise, an activity ledger, or evidence that scheduled work happened. Repa
-must remain truthful when it is used intermittently, when the learner also
-studies elsewhere, or when no progress update arrives. Trusted time may age an
-allocation or make an accepted input stale, but elapsed slots, silence, and
-absence cannot imply work, zero progress, breach, completion, or abandonment.
-On re-entry the system reuses exact accepted facts, asks only for the minimum
-future-relevant reconciliation that the next plan actually needs, and records
-any corrected input and recomputed allocation as successors. Planning never
-changes Goal, Assignment, FutureAttention, or learner-evidence lifecycle by
-implication. Its arithmetic constrains a useful learning decision; maximizing
-completed rows, occupied capacity, or deadline compliance is not the Tutor's
-objective. The later consumer must still choose how to explain, demonstrate,
-guide, practice, review, or work with the learner.
+A durable learning-plan suggestion is a model- or learner-authored working
+document, not a program verdict, learner promise, activity ledger, global
+portfolio, or evidence that scheduled learning happened. It normally keeps a
+coarse, revisable longer-term direction and makes only the near-term learning
+move concrete. Its open semantic body may include rationale, approximate time
+pressure, uncertainty, and alternatives; the program owns identity, exact
+references, source, revision, lifecycle, permission, settlement, recovery, and
+bounded later delivery. Goal and Assignment remain optional referenced owners,
+not required containers or merged identities.
 
-Accepted Planning input, program assessment, and a source-bearing working
-allocation are staged facts under one authority. A valid learner/source
-correction remains current if later arithmetic execution or allocation
-proposal fails; a valid assessment likewise survives an invalid proposal.
-Downstream failure must not restore an obsolete input or silently make an old
-allocation current again.
+Repa must remain truthful when it is used intermittently or alongside learning
+outside the program. Trusted time may change a Goal/Assignment deadline
+relation or make an old suggestion less useful, but elapsed suggestions,
+silence, and absence cannot imply learning, zero progress, adherence, breach,
+completion, rejection, or abandonment. On re-entry the Tutor retrieves only
+the current learner memory, deadline pressure, and suggestions relevant to the
+present move, then revises them through ordinary dialogue when needed. A pure
+calculator may assist obvious date or quantity arithmetic if a demonstrated
+model failure earns it; no deterministic feasibility, allocation, or planning
+authority is pre-authorized.
 
 An Assignment is the separate durable meaning that a substantial
 **learning-relevant** obligation exists. It enters the Learning System only
 when its subject, source, or pressure can change later teaching, guided work,
-review, or cross-day learning allocation; Repa does not import every
+review, or a learning-plan suggestion; Repa does not import every
 administrative obligation merely because it has a deadline. Its bounded
 obligation and learning context, source, optional due boundary, correction, and
 explicit lifecycle belong to Assignment authority. Due or overdue relation may
-be derived from the trusted clock, but time, a plan, planning failure, Tutor
+be derived from the trusted clock, but time, a suggestion or its failure, Tutor
 narration, and learner silence cannot fulfill or cancel the obligation. A
 source-bearing learner report or exact source observation may support an
 explicit lifecycle transition without making Repa an external submission
@@ -132,7 +148,7 @@ goal, time, material, history, review pressure, deadlines
         observe questions, responses, work, help, and outcome
                             |
                             v
-       preserve what matters for future context and planning
+       preserve what matters for future context and learning advice
                             |
                             +---------------------------> repeat
 ```
@@ -161,17 +177,18 @@ plan, and recent-Interaction records.
 
 Returning after a gap is the same product boundary, not an exceptional recovery
 mode. Repa does not assume that it observed the interval, reconstruct a daily
-history from an old plan, or require the learner to account for every missed
-day before continuing. It distinguishes what was last accepted, what the clock
-alone can derive, what is now stale or unknown, and what one current move or
-future allocation must actually clarify.
+history from an old suggestion, or require the learner to account for every
+missed day before continuing. It distinguishes the last source-bearing learner
+judgment and suggestion, what the clock alone can derive, what is now stale or
+unknown, and what the current learning move actually needs to clarify.
 
 The system must be able to distinguish at least these categories conceptually, even if their final data model is not yet settled:
 
 - What happened: observed or reported learning activity.
 - What the evidence supports: a fallible inference about current ability or retention.
-- What is intended or owed: Goals, Assignments, working plans, and any
-  separately earned commitments. These are not interchangeable.
+- What is intended or owed: Goals, Assignments, advisory plan suggestions, and
+  any separately earned commitments. These are not interchangeable, and a
+  suggestion is neither an obligation nor learner assent.
 - What was produced: notes, cards, code, reports, and other artifacts.
 
 These categories must not collapse into a single `mastery` field or an undifferentiated chat transcript.
@@ -202,15 +219,15 @@ Learning is native when it changes the agent's normal behavior rather than appea
   current plan and task sequence remain adaptive.
 - Time can make a review due without creating a new learning observation or a
   durable claim that the learner has forgotten.
-- A substantial planning demand can change the plan before it becomes urgent.
-  It may arise from an Assignment or directly from a Goal such as preparing for
-  an exam; those authorities remain distinct. Its subject or learning context,
-  source/nature, deadline, estimated remaining work, known capacity, and
-  relation to learning determine which facts matter. The behavior is advance
-  allocation and later replanning over days. The allocation remains conditional
-  on its accepted inputs: passage of an allocated day or absence from Repa does
-  not create progress, failure, or adherence evidence. Re-entry reconciles only
-  information that can change the future suffix of the plan.
+- A cross-day learning concern can earn a scoped, advisory plan before it
+  becomes urgent. It may arise from the current conversation, an Assignment,
+  or a Goal such as preparing for an exam; those sources remain distinct. The
+  Tutor combines fuzzy learner-state judgment, learning purpose, deadline
+  pressure, uncertainty, and the learner's correction into a rolling suggestion
+  whose near term is more concrete than its distant outline. Passage of a
+  suggested day or absence from Repa does not create learning, failure, or
+  adherence evidence. Re-entry loads only the relevant index and exact detail,
+  then revises the future suggestion conversationally when useful.
   Last-minute rescue after a task has collapsed to a minute-scale deadline
   window is outside Repa's product scope.
 - When a Session produces a relevant durable change, the learner can inspect
@@ -219,7 +236,7 @@ Learning is native when it changes the agent's normal behavior rather than appea
 
 An interaction can be educationally valuable while leaving only Session history,
 source references, and a modest future reminder. Structured evidence exists to
-improve later teaching and planning; it is not a form that every explanation
+improve later teaching and advice; it is not a form that every explanation
 must fill.
 
 ## Product boundaries
@@ -287,8 +304,11 @@ outcome boundary; those decisions are not reopened here.
   unproved local shapes.
 - The exact selection rules and budgets within the accepted compact-current-
   view plus lazy-detail context architecture.
-- Learner-state representation when a demonstrated future action needs more
-  than simple progress, task results, and revisits.
+- The exact first physical schema, bounded scope identity, and retrieval budget
+  for model/learner-authored learner-state judgments. Their meaning, separation
+  from evidence, fuzzy and correctable authorship, and on-demand Tutor consumer
+  are settled; a global mastery scalar and deterministic inference engine are
+  not admitted.
 - The exact task-selection policy and its explanation contract, including the
   mechanism for representative multiple-candidate conflicts. The
   Learning-System responsibility to provide a low-management default and
@@ -299,7 +319,8 @@ outcome boundary; those decisions are not reopened here.
   implemented. Course/View, Artifact, ContentRoot, readable Representation,
   Material Map/alignment, navigation continuity, retained steering, Goal,
   first learner record, and source-linked future attention are already native;
-  Assignment and planning remain consumer-earned.
+  Assignment is now native; learner-state judgment memory and advisory
+  learning-plan suggestions remain consumer-earned contract candidates.
 - The exact learning-native context projection and inspect/correct interaction
   design over the inherited Agent mechanics.
 

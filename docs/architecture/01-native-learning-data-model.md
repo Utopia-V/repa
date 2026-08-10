@@ -56,7 +56,8 @@ Gate design.
 ## Decision summary
 
 1. One LearnerHome contains all Courses, learning records, Goal,
-   future-attention, Assignment, planning, and Tutor-policy meaning in one
+   future-attention, Assignment, learner-state judgment, advisory-suggestion,
+   and Tutor-policy meaning in one
    database. Those meanings retain separate semantic owners. A LearnerHome may
    be implicit in the database identity; every table does not need a redundant
    learner-home foreign key.
@@ -115,8 +116,8 @@ flowchart TD
     MAP["Material Map<br/>revision-bound outline and selectors"]
     ALIGN["Course alignment<br/>optional, both revisions bound"]
     ANCHOR["Route anchor<br/>default continuation"]
-    AGENDA["Agenda family<br/>separate Goal, future attention, Assignment, planning"]
-    LEARNER["Learner record<br/>occurrence, evidence, hypothesis when earned"]
+    AGENDA["Agenda family<br/>separate Goal, future attention, Assignment, advisory suggestion"]
+    LEARNER["Learner record<br/>occurrence, evidence, fuzzy judgment when earned"]
     POLICY["Tutor policy<br/>profiles, constraints, retained steering"]
     IX["Interaction<br/>learner occurrence, model operation, Tool Part"]
     COMMAND["Learning command settlement<br/>causal receipt and exact result"]
@@ -220,7 +221,8 @@ The missing cross-cut is one narrow shared command-settlement substrate. It
 owns causal receipts, physical invocation replay/conflict, trusted execution
 envelopes, exact model-visible results, and source-unavailable tombstones. It
 does not own semantic learning effects. Course, source/material, learner, Goal,
-future-attention, Assignment, planning, and policy commands define their own
+future-attention, Assignment, learner-state-judgment, advisory-suggestion, and
+policy commands define their own
 effect addresses, transitions, preconditions, and corrections and commit them
 with the shared settlement in one SQLite transaction where all effects are
 local. A terminal physical settlement is immutable and exact replay performs no
@@ -245,7 +247,7 @@ An optional default Course preference belongs to learner navigation continuity,
 not to Course lifecycle or Context authority. It changes only through an
 explicit learner-controlled operation. A Turn may load one or several other
 relevant Courses without changing that preference. Current directory, material
-discovery, Goal/Assignment/planning pressure, future attention, and model
+discovery, Goal/Assignment/advisory pressure, future attention, and model
 preference cannot mutate it implicitly.
 
 ### Course View
@@ -300,7 +302,7 @@ under learner supervision. The Course authority validates exact source and
 target revisions, ownership, uniqueness, and mapping shape before accepting
 the new revision. The learner's instruction can authorize the operation, but
 neither title similarity nor model confidence silently migrates learner
-evidence, future-attention/Assignment/planning targets, or other downstream
+evidence, future-attention/Assignment/advisory-suggestion targets, or other downstream
 records. Gate 7 owns the domain
 representation and transition and accepts authorship basis only from a trusted
 application capability, never from model-authored content. Gate 8 later binds
@@ -426,6 +428,15 @@ performance, evidence, and a model hypothesis are not synonyms. The design
 does not pre-authorize one universal activity table, mastery score, or enum for
 every possible interaction.
 
+The first consumer-earned learner-state widening is a scoped, fuzzy,
+model/learner-authored `LearningStateJudgment`. It records what appears learned,
+unstable, misunderstood, or prerequisite-missing for one bounded semantic
+scope, together with exact source references, authorship, uncertainty, and an
+immutable correction chain. It may cite learner-response evidence without
+aggregating that evidence into verified mastery. It is useful to explanation,
+practice, review, and advisory planning even when no plan exists, so its
+identity and lifecycle are not owned by a plan suggestion.
+
 The first continuity slice may use the route anchor and exact recent
 Interaction references without creating a general learner ontology. A later
 adaptation path must admit only the modest occurrence/evidence distinctions it
@@ -435,19 +446,20 @@ actually uses and retain correction provenance.
 
 Agenda is a family and composition label, not a durable or transactional
 authority and not one universal `agenda_item` aggregate. Goals,
-future-attention concerns, assignments, planning demands, commitments,
+future-attention concerns, assignments, advisory learning-plan suggestions, commitments,
 deferrals, and temporary focus have different sources and legal completion
 meanings. The first planned product boundary admits separate Goal,
-source-linked future-attention/return, Assignment, and cross-day planning
-consumers. Cross-day planning may reference an exact Goal or Assignment
-revision without merging their identities or lifecycles. Generic commitment,
+source-linked future-attention/return, Assignment, learner-state judgment, and
+advisory planning consumers. A scoped suggestion may reference an exact Goal,
+Assignment, learner-state, evidence, Course, or learner-occurrence revision
+without merging their identities or lifecycles. Generic commitment,
 deferral, and durable detour/rejoin remain recorded, consumer-earned future
 meanings rather than empty baseline record families.
 
 Assignment is the independently useful substantial learning-obligation
-producer. Its identity survives Planning failure and owns immutable revisions
+producer. Its identity survives suggestion failure and owns immutable revisions
 of a bounded obligation meaning, the learning subject/context that earns a
-teaching or Planning consumer, source basis, optional due boundary, and explicit
+teaching or advisory consumer, source basis, optional due boundary, and explicit
 lifecycle. It is not a generic registry of administrative obligations merely
 because they have deadlines. An Assignment is also not a Goal, todo, current
 task, plan line, learner promise, submission connector, or evidence that work
@@ -465,23 +477,21 @@ payload. A source-preserving Agent correction may use the exact issuing root
 model operation as its Assignment-domain causal occurrence only when it binds an
 exact existing head and cannot create an unanchored Assignment.
 
-Planning consumes exact Goal or Assignment revisions and owns accepted
-remaining-work/capacity/progress inputs, declared shared-capacity scope,
-omission truth, feasibility, working allocation, override, feedback, staleness,
-and recomputation. A plan is conditional on those exact inputs. It is not a
-commitment or activity ledger, and time passage, silence, or absence never
-means that an allocation was followed or ignored. Re-entry keeps the old plan
-immutable, asks only for future-relevant reconciliation, and creates a
-successor from newly accepted facts. Planning supplies hard feasibility and
-trade-off facts to the ordinary Tutor; it does not optimize task-count closure
-or replace the open semantic choice of a useful teaching or learning move.
+An advisory learning-plan suggestion owns one scoped, model/learner-authored
+working document and its immutable revisions. It may keep a concrete near-term
+learning move and a coarse, revisable longer-term direction, plus rationale,
+approximate time/deadline pressure, uncertainty, and alternatives. Several
+current suggestions may coexist under one LearnerHome; there is no universal
+portfolio or program-selected winner. A suggestion is not a commitment,
+activity ledger, feasibility verdict, or evidence that advice was followed.
 
-Within the Planning owner, a complete immutable input revision, its
-objective-free deterministic assessment, and an optional source-bearing
-validated allocation are staged facts. A current input correction is not
-rolled back when assessment or proposal fails; a valid assessment is not lost
-when an allocation proposal is invalid. Exact head relations make older
-downstream revisions stale without rewriting them.
+The program validates only the typed envelope: stable identity, LearnerHome,
+scope, exact optional references, author/source/model operation, predecessor,
+current head, lifecycle, capability, and settlement. The ordinary Agent authors
+and revises the semantic body. A natural learner correction creates a successor
+without a separate approval state; time passage and silence create none.
+Retiring or failing a suggestion leaves referenced Goal, Assignment,
+learner-state, evidence, and historical suggestion revisions unchanged.
 
 Goals may be LearnerHome-wide, Course-scoped, or span several Courses. A Course
 therefore has no mandatory single `goal` field. Immediate Turn intent remains
@@ -561,24 +571,28 @@ is all zero; `-00:00` remains unknown and cannot become a known fixed-zero
 basis. A descriptive or named-zone expression retains its tagged basis without
 pretending to be an independently parsed exact offset.
 
-Assignment admission and cross-day Planning now have distinct acceptance
-boundaries. Assignment first proves obligation identity/revision/lifecycle and
-an exact consumer handoff without importing workload or allocation. Planning
-then proves representative Goal-driven and Assignment-driven multi-day
-workload, shared capacity, allocation, correction, staleness, and recomputation
-behavior. The withdrawn minute-scale emergency schema and its compatibility
-tombstone are not design inputs.
+Assignment admission, learner-state judgment, and advisory planning have
+distinct acceptance boundaries. Assignment first proves obligation
+identity/revision/lifecycle and an exact consumer handoff without importing
+learning state or advice. A learner-state judgment separately preserves one
+fuzzy, source-bearing, correctable inference that can serve teaching, practice,
+review, or planning. An advisory suggestion may then cite either owner plus a
+Goal, Course, evidence, material, or current learner occurrence without
+absorbing their meaning. The withdrawn minute-scale emergency schema, singleton
+portfolio, and deterministic workload/capacity/allocation model are not design
+inputs.
 
 ### Tutor policy and context cuts
 
 Tutor composition queries bounded projections from the authorities above. One
 context cut records the exact Interaction position, Course/View revisions,
 material/representation revisions, learner, Goal, future-attention, Assignment,
-planning and policy revisions, trusted time, and granted capabilities actually
-shown to one model sample. The cut distinguishes an exact Assignment revision
-from exact Planning input, assessment, and allocation revisions and records
-pending/stale/unknown/omitted truth; it never turns clock passage or visibility
-into Assignment lifecycle, activity, or plan adherence.
+learner-state judgment, advisory-suggestion and policy revisions, trusted time,
+and granted capabilities actually shown to one model sample. The cut
+distinguishes exact immutable owner revisions from read-time source, scope,
+deadline, and current-head relations and records stale/unknown/omitted truth;
+it never turns clock passage or visibility into Assignment lifecycle, learning,
+activity, learner assent, or suggestion adherence.
 
 For Assignment, the cut records the immutable revision reference and any
 current source/scope/time projection as distinct entries in its dependency
@@ -618,20 +632,22 @@ but each family first appears only with a demonstrated consumer:
 | first durable command           | causal source and command receipt          | trusted Interaction/source identity and atomic domain/tool settlement                                                                                                       |
 | exact continuation, if required | context cut                                | exact bounded manifest when existing Interaction records cannot express it honestly                                                                                         |
 | cross-Session learner intent    | Goal identity and revision                 | learner-owned source, scope, correction, and supersession; no automatic attainment inference                                                                                |
+| reusable Tutor adaptation       | learner-state judgment and immutable revision | model/learner-authored fuzzy inference over a bounded semantic scope; exact sources, uncertainty, correction, bounded Context index and lazy reads; no mastery scalar or automatic evidence aggregation |
 | retained learner direction      | scoped steering policy                     | source-linked applicability and correction projected through an exact policy revision                                                                                       |
 | future return                   | future-attention concern, claim finalization, and service | Agent-authored source/correction provenance, eligibility, conditional purpose, immutable claim admission, append-only finalization, and service through a purpose-appropriate complete Interaction occurrence/outcome remain distinct from physical replay |
-| substantial learning obligation | Assignment identity and immutable revision | bounded obligation plus learning context, source basis, optional due meaning, explicit lifecycle, and correction remain distinct from Goal, planning, commitment, activity, administrative task tracking, and submission effects |
-| substantial cross-day work      | Planning input, assessment, and allocation revisions | references exact Goal/Assignment and accepted-input revisions; staged shared-capacity scope, omission/staleness, feasibility, source-bearing validated allocation, override, and recomputation use program-owned arithmetic without inferring adherence |
+| substantial learning obligation | Assignment identity and immutable revision | bounded obligation plus learning context, source basis, optional due meaning, explicit lifecycle, and correction remain distinct from Goal, advisory suggestion, commitment, activity, administrative task tracking, and submission effects |
+| cross-Session planning advice   | scoped learning-plan suggestion and immutable revision | optional exact Goal/Assignment/Course/evidence/learner-state references; open semantic body, concrete near term, coarse longer term, natural correction, bounded Context index and lazy reads; no global portfolio, feasibility authority, allocation matrix, adherence, or learner acceptance |
 
 An accepted Gate may establish any causally sound subset whose invariants and
 integration boundary are real. This document neither authorizes empty future
 tables nor decides whether Course, material, and continuation belong in one
 Gate or several.
 
-No early native table is created for generic learner activity, evidence,
-mastery, a universal Agenda item, a generic scheduler, Domain Foundation,
-embeddings, or a universal graph. Specific Assignment and planning authorities
-enter only through behavior that can state their honest meaning and consumer.
+No early native table is created for generic learner activity, global mastery,
+a universal Agenda item, generic scheduler, Domain Foundation, embeddings, or
+a universal graph. Specific evidence, fuzzy judgment, Assignment, and advisory
+suggestion authorities enter only through behavior that can state their honest
+meaning and consumer.
 
 ## Migration and command rules
 
@@ -654,7 +670,8 @@ enter only through behavior that can state their honest meaning and consumer.
   transaction. A crash may leave unreferenced staging bytes, never a database
   reference that falsely claims available accepted content.
 - Generic file, shell, search, or model activity creates no Course, learner,
-  Goal, future-attention, Assignment, planning, or policy fact without a
+  Goal, future-attention, Assignment, learner-state judgment, advisory
+  suggestion, or policy fact without a
   capability-scoped domain command.
 - Corrections preserve old sources and revisions. No command silently retargets
   history to new bytes, a new view, or a different Course item.
@@ -674,6 +691,8 @@ context JSON = authoritative learning storage
 tool invocation ID = semantic learning identity
 Agenda item = goal = assignment = revisit
 explained or read = understood or retained
+learner-response evidence = learner-state judgment = mastery
+learning-plan suggestion = accepted plan = activity or commitment
 ```
 
 It also fails if a supposedly narrow first migration forces later authorities
@@ -691,10 +710,11 @@ does not select one answer yet:
   remaining roots plus explicit Course/material relations;
 - which modest activity occurrence first changes Tutor adaptation beyond route
   continuity; and
-- retention, evidence aggregation, review scheduling, and long-horizon planning
-  algorithms;
-- production representation and bounded widening rules for cross-day planning
-  after its accepted owner contract and experiment falsifiers;
+- retention, evidence aggregation, review scheduling, and any future
+  learning-planning arithmetic earned by a concrete ordinary-Agent failure;
+- production representation and bounded widening rules for learner-state
+  judgments and scoped advisory suggestions after their accepted owner
+  contracts and lazy-loading reuse audit;
 - additional steering scopes and multiple-candidate future-attention
   arbitration;
 - whether a future consumer earns generic commitment, deferral, or durable

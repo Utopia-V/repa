@@ -45,9 +45,13 @@ export function seedFrozenV12AdmittedDefaultCourse(
       const db = yield* makeDb
       yield* db.transaction((tx) => databaseV12Schema.up(tx))
       yield* db.transaction((tx) => installSchemaExtrasV12(tx))
-      // Current Turn helpers select the current Message projection while constructing this historical fixture.
-      // Add the later Gate 8 column only for construction, then remove it before the V12 journal is frozen.
+      // Current Turn helpers select the current Message and Tool-candidate projections while constructing this
+      // historical fixture. Add the later columns only for construction, then remove them before the V12 journal
+      // is frozen.
       yield* db.run("ALTER TABLE message ADD COLUMN summary_diffs text")
+      yield* db.run(
+        "ALTER TABLE turn_tool_candidate ADD COLUMN future_attention_service_source text DEFAULT 'internal_control' NOT NULL",
+      )
 
       const time = 24
       const sessionID = SessionSchema.ID.make("ses_frozen_v12_default")
@@ -334,6 +338,7 @@ export function seedFrozenV12AdmittedDefaultCourse(
         }
       }
 
+      yield* db.run("ALTER TABLE turn_tool_candidate DROP COLUMN future_attention_service_source")
       yield* db.run("ALTER TABLE message DROP COLUMN summary_diffs")
       const lastV12 = migrations.findIndex(
         (migration) => migration.id === domainNeutralLearningCommandLedgerMigration.id,

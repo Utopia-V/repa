@@ -22,5 +22,6 @@ export const migrations = (
     import("./migration/repa/20260806041450_gate19_learner_response_evidence"),
     import("./migration/repa/20260806181133_gate20_future_attention"),
     import("./migration/repa/20260808141417_gate20a_assignment_authority"),
+    import("./migration/repa/20260809150754_gate20b_learner_state_judgment"),
   ])
 ).map((module) => module.default) satisfies DatabaseMigration.Migration[]

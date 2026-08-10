@@ -9,6 +9,15 @@ as "this material range was read" or "this range was explained" can be kept
 without becoming learning evidence, an ability inference, or a verification
 obligation.
 
+Amendment (2026-08-09): when a later Tutor consumer needs more than source
+occurrences and narrow evidence, the ordinary Agent and learner may author a
+fuzzy, source-bearing, correctable learner-state judgment. The runtime owns its
+identity, scope, revision, provenance, permission, and delivery; it does not
+compute or certify mastery. The learner corrects the judgment through ordinary
+conversation rather than a mandatory approval state. A small current index plus
+authorized lazy exact reads makes relevant judgment available without eagerly
+loading all learner history or hiding all discovery behind blind search.
+
 ## Context
 
 Learning requires a cooperative learner. Designing an anti-cheat system for a
@@ -95,8 +104,8 @@ permission policy; this decision does not weaken tool authorization.
   new evidence record.
 - "I know this; skip it" may alter the immediate plan without producing a
   verified state transition.
-- The planner must tolerate disagreement between self-assessment and observed
-  performance.
+- Tutor adaptation and learning-plan suggestions must tolerate disagreement
+  between self-assessment, model judgment, and observed performance.
 - The UI should explain contradictions with evidence rather than moral language.
 - Retraction and correction semantics are required before finalizing the event
   model.

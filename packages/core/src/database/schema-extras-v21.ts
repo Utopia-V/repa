@@ -17,7 +17,7 @@ export { viewStatements }
 
 const inheritedTerminalValidation = "learning_command_invocation_terminal_validate_v12"
 
-const learningCommandTerminalValidation = `CREATE TRIGGER IF NOT EXISTS learning_command_invocation_terminal_validate_v21
+export const learningCommandTerminalValidationV21 = `CREATE TRIGGER IF NOT EXISTS learning_command_invocation_terminal_validate_v21
    BEFORE UPDATE OF status, receipt_id, settlement, time_settled, settlement_order
    ON learning_command_invocation
    WHEN OLD.status = 'admitted'
@@ -147,7 +147,7 @@ const inheritedTriggerStatements = triggerStatementsV20.filter(
 
 export const triggerStatements = [
   ...inheritedTriggerStatements,
-  learningCommandTerminalValidation,
+  learningCommandTerminalValidationV21,
   ...assignmentStatements,
 ]
 
@@ -161,7 +161,7 @@ export function install(tx: Transaction) {
   return Effect.gen(function* () {
     yield* installV20(tx)
     yield* tx.run(`DROP TRIGGER IF EXISTS ${inheritedTerminalValidation}`).pipe(Effect.orDie)
-    yield* tx.run(learningCommandTerminalValidation).pipe(Effect.orDie)
+    yield* tx.run(learningCommandTerminalValidationV21).pipe(Effect.orDie)
     yield* Effect.forEach(assignmentStatements, (statement) => tx.run(statement).pipe(Effect.orDie), {
       discard: true,
     })

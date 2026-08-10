@@ -6,6 +6,7 @@ import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
 import { LearnerResponseEvidence } from "@opencode-ai/core/learner-response-evidence"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import type { DefaultCourseV2Authorization } from "@opencode-ai/core/learner-navigation/default-course-v2"
 import type {
   DefaultCourseAcknowledgement,
@@ -1943,6 +1944,212 @@ describe("assignment semantic presentation", () => {
     ).toBeUndefined()
   })
 })
+
+describe("learner-state judgment semantic presentation", () => {
+  test("shows one exact fallible whole-judgment revision before approval", () => {
+    const candidate = learnerStateJudgmentCandidate()
+    const proposal = LearningCommandPresentation.learnerStateJudgmentCapability(candidate, envelope)
+    const scope = SemanticPresentation.learnerStateJudgmentScope(candidate)
+    const exact = request({
+      permission: LearnerStateJudgment.UPDATE_CAPABILITY,
+      patterns: [LearnerStateJudgment.PERMISSION_PATTERN],
+      always: [LearnerStateJudgment.PERMISSION_PATTERN],
+      metadata: {
+        learnerStateJudgmentKind: "revision",
+        commandFingerprint: candidate.commandFingerprint,
+        issuance: "root",
+        scope,
+        ...SemanticPresentation.metadata(proposal),
+      },
+    })
+
+    expect(SemanticPresentation.readProposal(exact)).toMatchObject({
+      type: "valid",
+      value: {
+        capability: LearnerStateJudgment.UPDATE_CAPABILITY,
+        title: "Store or correct this learner-state judgment",
+        approval: "policy",
+        facts: expect.arrayContaining([
+          { label: "Operation", value: "create" },
+          { label: "Subject", value: "Semaphore safety invariant; scope learner_home" },
+          { label: "Fallible judgment", value: "Can explain the definition; application remains uncertain" },
+          { label: "Exact basis for the whole judgment", value: "0 reference(s); []" },
+          {
+            label: "Does not imply",
+            value: expect.stringContaining("fallible_judgment_not_mastery_certification"),
+          },
+        ]),
+      },
+    })
+    expect(
+      SemanticPresentation.readProposal({
+        ...exact,
+        metadata: {
+          ...exact.metadata,
+          scope: { ...scope, judgmentBody: "Forged mastery claim" },
+        },
+      }),
+    ).toEqual({ type: "invalid" })
+    expect(() =>
+      LearningCommandPresentation.learnerStateJudgmentCapability(
+        { ...candidate, agentAction: { ...candidate.agentAction, kind: "delegated" } },
+        envelope,
+      ),
+    ).toThrow("Learner-state judgment capability requires a root Agent action")
+  })
+
+  test("projects committed and no-change outcomes without certifying mastery", () => {
+    const candidate = learnerStateJudgmentCandidate()
+    const applied = {
+      outcome: "applied" as const,
+      learnerStateJudgmentKind: "revision" as const,
+      receiptID: LearningCommand.createReceiptID(),
+      effectID: candidate.materialized.effectID,
+      judgmentID: candidate.materialized.judgmentID,
+      revisionID: candidate.materialized.revisionID,
+      version: 1,
+      operation: "create" as const,
+      disposition: "active" as const,
+      settlementTime: 2,
+      settlementOrder: 1,
+      frontierSequence: 1,
+    }
+    const result = LearningCommandPresentation.learnerStateJudgmentSettlementResult(
+      applied as unknown as LearningCommand.PhysicalSettlement,
+      {
+        version: 1,
+        disposition: "candidate_v1",
+        status: "applied",
+        settlement: applied,
+        candidate,
+        capabilityOutcome: "policy_allow",
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(result.basis)).toMatchObject({
+      capability: LearnerStateJudgment.UPDATE_CAPABILITY,
+      title: "Learner-state judgment settlement",
+      outcome: "committed",
+      facts: expect.arrayContaining([
+        {
+          label: "Exact learner-state revision",
+          value: `${candidate.materialized.judgmentID}/${candidate.materialized.revisionID} v1; create; active`,
+        },
+        { label: "Epistemic status", value: expect.stringContaining("not mastery certification") },
+      ]),
+    })
+
+    const noChange = {
+      outcome: "no_change" as const,
+      learnerStateJudgmentKind: "revision" as const,
+      existingOutcome: "materialized_no_change" as const,
+      judgmentID: candidate.materialized.judgmentID,
+      revisionID: candidate.materialized.revisionID,
+      version: 1,
+      settlementTime: 3,
+      settlementOrder: 2,
+    }
+    const noChangeResult = LearningCommandPresentation.learnerStateJudgmentSettlementResult(
+      noChange as unknown as LearningCommand.PhysicalSettlement,
+      {
+        version: 1,
+        disposition: "candidate_v1",
+        status: "no_change",
+        settlement: noChange,
+        candidate,
+        capabilityOutcome: "policy_allow",
+        timeAdmitted: 1,
+      },
+      envelope,
+    )
+    expect(SemanticPresentation.projectResultBasis(noChangeResult.basis)).toMatchObject({
+      outcome: "no_effect",
+      facts: expect.arrayContaining([
+        { label: "Existing semantic outcome", value: "no_change" },
+        {
+          label: "Unchanged learner-state revision",
+          value: `${candidate.materialized.judgmentID}/${candidate.materialized.revisionID} v1`,
+        },
+      ]),
+    })
+  })
+})
+
+function learnerStateJudgmentCandidate(): LearnerStateJudgment.Candidate {
+  const source = "I understand the definition, but applying the invariant remains uncertain."
+  const excerpt = { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength }
+  const command = LearnerStateJudgment.canonicalizeCommand({
+    operation: "create",
+    cause: { type: "interpreted_learner_report", excerpt },
+    snapshot: {
+      subject: { label: "Semaphore safety invariant", scope: { type: "learner_home" } },
+      judgmentBody: "Can explain the definition; application remains uncertain",
+      exactBasisRefs: [],
+      uncertaintyAndLimits: "Fallible and open to learner correction.",
+      basisScope: "whole_judgment",
+    },
+  })
+  const judgmentID = "lsj_00000000000000000000000000" as LearnerStateJudgment.JudgmentID
+  const revisionID = "lsr_00000000000000000000000000" as LearnerStateJudgment.RevisionID
+  const effectID = "lse_00000000000000000000000000" as LearnerStateJudgment.EffectID
+  return {
+    kind: "candidate_v1",
+    commandFingerprint: LearnerStateJudgment.commandFingerprint(command),
+    semanticAddressFingerprint: "1".repeat(64),
+    agentActionFingerprint: "2".repeat(64),
+    canonicalCommand: command,
+    agentAction: {
+      schemaVersion: 1,
+      kind: "root",
+      occurrenceID: envelope.occurrenceID,
+      sessionID: envelope.sessionID,
+      turnID: envelope.turnID,
+      inputID: envelope.inputID,
+      assistantMessageID: envelope.assistantMessageID,
+      invocationPartID: envelope.partID,
+      providerCallID: envelope.providerCallID,
+      emissionOrdinal: 0,
+      capabilityIdentity: LearnerStateJudgment.UPDATE_CAPABILITY,
+      capabilityVersion: LearnerStateJudgment.UPDATE_VERSION,
+      lineage: [],
+    },
+    materialized: {
+      outcome: "changed",
+      judgmentID,
+      revisionID,
+      effectID,
+      version: 1,
+      operation: "create",
+      disposition: "active",
+      snapshot: {
+        subject: { label: "Semaphore safety invariant", scope: { type: "learner_home" } },
+        judgmentBody: "Can explain the definition; application remains uncertain",
+        basisScope: "whole_judgment",
+        exactBasis: [],
+        uncertaintyAndLimits: "Fallible and open to learner correction.",
+      },
+      authorAndCause: {
+        type: "interpreted_learner_report",
+        rootModelOperationID: envelope.assistantMessageID,
+        mutationOccurrenceID: envelope.occurrenceID,
+        mutationPartID: envelope.partID,
+        source: {
+          type: "learner_occurrence",
+          occurrenceID: envelope.occurrenceID,
+          sourceOrder: 1,
+          sessionID: envelope.sessionID,
+          messageID: envelope.parentUserMessageID,
+          turnID: envelope.turnID,
+          inputID: envelope.inputID,
+          timeAdmitted: 1,
+          sourceTemporalContext: { state: "resolved", instant: 1, timeZone: "UTC", utcOffsetMinutes: 0 },
+          excerpt: { ...excerpt, sha256: new Bun.CryptoHasher("sha256").update(source).digest("hex") },
+        },
+      },
+    },
+  } as unknown as LearnerStateJudgment.Candidate
+}
 
 function assignmentCandidate(): Assignment.Candidate {
   const source = "Analyze the semaphore proof by Friday."

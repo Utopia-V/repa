@@ -158,6 +158,15 @@ learning tools.
   form for this project. First grill the overall engineering direction and
   architecture, then divide the accepted direction into Gates. Before each Gate
   begins, grill its local design and evidence boundary again.
+- When auditing a run of Gates after product intent or maintainer availability
+  changed, do not accept or reject that period as one block. Decompose each Gate
+  into owned invariants, producers, consumers, correction/recovery behavior,
+  computational mechanisms, and evidence; retain sound parts, adapt reusable
+  substrate whose product meaning changed, and retire only the claims that no
+  longer survive. Accepted status and historical detail are provenance, not an
+  all-or-nothing correctness oracle. Every such audit explicitly checks the
+  current fork and mature inherited harness for reuse before proposing new
+  machinery.
 - Gate contracts preserve, for material decisions only, enough provenance to
   recover the owning authority or evidentiary basis, the reason when
   alternatives affect interpretation, and who or what may revise the decision.
@@ -191,24 +200,29 @@ learning tools.
   remain a generic harness design decision.
 - The baseline has no background daemon. Due, overdue, and expired meaning is
   derived from durable times and the trusted clock when the application wakes.
-- Treat ordinary substantial planning demands, whether they arise from an
-  Assignment or directly from a learner Goal such as exam preparation, as
-  cross-day planning and feedback problems. Last-minute rescue is outside
-  Repa's product scope: do not design, schedule, prioritize, or qualify
-  Learning-System behavior around work that has already collapsed to a
-  minute-scale deadline window. The program owns accepted
-  workload/capacity/deadline arithmetic, allocation, and recomputation; models
-  may help identify, estimate, semantically decompose, research, explain, and
-  adapt the work. Goal, Assignment, and planning remain separate authorities.
-  This settles the responsibility boundary, not the final schema or scheduling
-  algorithm.
+  Wake, an elapsed suggestion, silence, and absence do not imply that Repa
+  observed activity, zero progress, completion, breach, or abandonment.
+- Treat cross-day learning planning as ordinary Tutor advice, not as a global
+  scheduler or program-owned feasibility/allocation authority. The model and
+  learner form fuzzy, source-bearing, correctable judgments about what appears
+  learned and what advice is useful; the program owns identity, revisions,
+  provenance, typed tool settlement, recovery, and bounded current-index plus
+  lazy-detail Context delivery. A suggestion is scoped, keeps its near term more
+  concrete than its distant outline, and remains natural to revise in dialogue.
+  It is not a learner commitment, activity/adherence ledger, product-success
+  metric, or proof of mastery. Goal, Assignment, learner-state judgment, and
+  advisory suggestion remain separate authorities; Assignment completion never
+  proves learning, and time, silence, or absence never proves that advice was
+  followed. Last-minute rescue after a concern has collapsed to a minute-scale
+  deadline window remains outside Repa's product scope.
 - A pre-authored course is optional. The same Agent loop may research and
   create a coarse provisional Course View, use it immediately, and later
   correct or supersede it without promoting unsupported relations into hard
   truth.
 - ADR-0012 centers a single-process modular monolith on separate learning
   authorities. Interaction, source/artifact, Course View, Material Map,
-  learner record, Goal, future attention, Assignment, planning, and Tutor
+  learner record, Goal, future attention, Assignment, learner-state judgment,
+  advisory suggestion, and Tutor
   policy must not collapse into the Agent runner, one universal graph/fact
   table, prompt memory, or one universal Agenda owner. `Agenda` is only a
   family/composition name unless a concrete consumer earns a narrower owner.
@@ -324,12 +338,13 @@ learning tools.
   requirement to delegate. Use a fresh worker context when a bounded,
   preferably read-only investigation will produce much more raw material than
   the conclusion needed by the main agent, or when genuinely independent work
-  benefits from parallelism. Keep tightly coupled reasoning in one context.
-- Subagents are read-only investigators and discussion partners. They may
-  inspect repository state, run non-mutating checks, derive counterexamples,
-  and return recommendations, but they may never create, edit, delete, stage,
-  commit, or otherwise mutate project files or code. All repository mutation is
-  owned by one top-level executor task.
+  benefits from parallelism. Keep parent interpretation and acceptance in one
+  context, but use `scout-evidence` for separable evidence expansion and consume
+  its facts and locators directly; verify only when coverage, conflict, or
+  consequence requires it.
+- Subagents are read-only. Evidence scouts return facts, locators, coverage,
+  and unknowns. Judgment must be explicitly framed and never owns acceptance.
+  All repository mutation is owned by one top-level executor task.
 - A Gate-scale implementation, recovery, or integration that spans durable
   ownership boundaries, migrations, runtime, carriers, or several turns is
   top-level task work with one durable executor and one owner for the integrated
@@ -354,15 +369,10 @@ learning tools.
   decisions, the agent's derivation, and recent corrections—and allow it to
   reject an agent-authored contract. The main agent owns evaluation and
   integration; same-context self-checking is not independent review.
-- Give a worker its parent question, motivation, scope, exclusions, and a
-  bounded evidence contract. It returns conclusions, decisive evidence,
-  confidence, and remaining unknowns rather than raw logs or a second project
-  narrative.
-- After delegating exploration, the main agent does not repeat it. If there is
-  no genuinely non-overlapping work, use one task-sized event wait instead of
-  short polling, heartbeat narration, premature wrap-up requests, or invented
-  "lightweight" duplicate exploration. Spot-check only evidence that can
-  change the decision after the worker returns.
+- Give a worker its parent question, scope, exclusions, stopping condition, and
+  return contract.
+- After delegating exploration, follow the global wait/callback rule. The main
+  agent stays outside the delegated evidence set and never duplicates it.
 - Treat maintainer corrections as control input, not invitations to restate
   the newly accepted concept. Identify the invalid prior claim, audit which
   decisions, documents, code, tests, or plans depended on it, and make the

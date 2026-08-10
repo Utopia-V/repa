@@ -48,10 +48,29 @@ makes a plan a source-bearing working allocation rather than a commitment or
 activity ledger: time passage, silence, and absence can age its inputs but
 cannot infer progress, non-progress, completion, breach, or abandonment.
 
+The 2026-08-09 Gate 21 grill then re-tested that conclusion against the
+maintainer's product intent after a period in which several Gates had proceeded
+with limited maintainer intervention. The audit did not accept or reject that
+period wholesale. It retained the Assignment split, exact revisions,
+source/correction/recovery semantics, intermittent-use truth, Gate 18 Context
+cuts and lazy owner reads, and typed Agent commands. It rejected the global
+portfolio, remaining-work conservation, deterministic feasibility authority,
+and validated allocation matrix as scheduler meaning Repa does not own. The
+ordinary Tutor and learner instead author fuzzy learner-state judgments and
+scoped, rolling planning suggestions through natural dialogue.
+
+Because a learner-state judgment remains useful to explanation, practice, and
+review even when no plan exists, it has an independent owner and acceptance
+boundary. This roadmap inserts Gate 20B for learner-state judgment memory and
+on-demand delivery, then redefines Gate 21 as advisory learning-plan
+continuity. Existing Gate 21A/22/23 numbering remains unchanged. The completed
+max-flow experiment is retained as falsification and reusable pure-arithmetic
+research, not as production Planning authority.
+
 Original date: 2026-07-13
 
 Recalibrated: 2026-07-14, 2026-07-17, 2026-07-21, 2026-07-29, 2026-07-30,
-2026-08-02, and 2026-08-08
+2026-08-02, 2026-08-08, and 2026-08-09
 
 Documentation reconciled: 2026-07-27
 
@@ -298,7 +317,11 @@ bounded context + exact occurrences
 ├─ source-linked future attention and Tutor return
 └─ substantial Assignment authority
 
-exact Goal or Gate-20A Assignment revision -> substantial cross-day planning
+learner-response evidence + exact occurrences
+-> fuzzy correctable learner-state judgment memory
+
+current request + optional exact Goal/Assignment/Course/evidence/learner-state refs
+-> scoped advisory learning-plan suggestion
 
 bounded context + all still-admitted first-boundary pressures
 -> Tutor move selection and flow continuity
@@ -312,10 +335,12 @@ Course View and source/artifact can be established independently; alignment
 needs both. Durable Turn is independent of representation but is a high-fan-out
 prerequisite for later context, steering, and truthful service. Navigation,
 steering, and Goal do not depend on one another. Learner adaptation, future
-attention, Goal, and Assignment may each arise from existing trusted sources;
+attention, Goal, Assignment, and learner-state judgment may each arise from
+existing trusted sources;
 their linear numbering does not create semantic foreign-key dependencies.
-Cross-day planning may consume an exact Goal or Assignment revision, but that
-consumer relation does not merge either producer's identity or lifecycle. A
+An advisory suggestion may reference an exact Goal, Assignment, Course,
+evidence, learner-state judgment, or current learner occurrence, but that
+consumer relation does not merge any producer's identity or lifecycle. A
 model-issued durable write still requires command/effect identity, causal
 binding, retry behavior, and atomic settlement. Tutor context consumes real
 authority projections and is not their storage prerequisite.
@@ -329,12 +354,19 @@ preserves the already published meanings of Gates 22 and 23; it is not a child
 of planning and introduces no schema by numbering alone.
 
 Gate 20A is likewise an inserted maintainer-facing acceptance unit, not a child
-of Gate 20. Assignment is an independently valid producer even when Planning is
-unknown, infeasible, or fails. Cross-owner create-and-plan therefore settles in
-stages by default: Assignment commits under its own invariant, and Gate 21 may
-then consume that exact revision. Gate 21 also retains the Goal-only arm, so
-linear numbering creates neither a requirement that every plan use an
-Assignment nor a semantic dependency from Assignment back to Goal.
+of Gate 20. Assignment is independently valid even when no advisory suggestion
+exists or a suggestion write fails. Cross-owner creation therefore settles in
+stages by default: Assignment commits under its own invariant, and the Tutor
+may later reference that exact revision when advice is useful. Gate 21 also
+admits current-conversation and Goal-linked suggestions, so linear numbering
+creates neither a requirement that every suggestion use an Assignment nor a
+semantic dependency from Assignment back to Goal.
+
+Gate 20B is not an internal slice of advisory planning. Its fuzzy learner-state
+judgment can change an explanation, demonstration, practice, or review without
+creating any plan, and a retired suggestion cannot erase what the Tutor still
+judges about the learner. Gate 21 may reference its exact revisions, while Gate
+18 Context remains an observer rather than their storage owner.
 
 The database substrate provides transactional migrations, stable
 Session/Message/Part IDs, and atomic settlement of one Session event with its
@@ -431,8 +463,8 @@ answers, but this roadmap does not pre-accept them:
   learning obligation has a stable identity, immutable exact revisions,
   bounded source-bearing obligation and learning context, optional tagged
   civil-time due boundary, explicit lifecycle, exact current/history reads, and
-  an exact-revision handoff to Context and Planning. It is admitted only for a
-  real later teaching, guided-work, review, or Planning consumer—not to collect
+  an exact-revision handoff to Context and advisory suggestions. It is admitted only for a
+  real later teaching, guided-work, review, or advisory consumer—not to collect
   administrative tasks or completion metrics. Creation or correction may be
   an Agent-authored interpretation of an exact learner report or exact source
   observation; the runtime proves only the bound occurrence/source/lineage/
@@ -444,42 +476,49 @@ answers, but this roadmap does not pre-accept them:
   Agent self-correction binds the exact issuing root model operation and exact
   existing Assignment head; it cannot create an unanchored obligation.
   Immutable source/admission basis remains separate from current source-owner
-  status at a read/Context/Planning cut. Automatic Context exposes every current
+  status at a read/Context/suggestion cut. Automatic Context exposes every current
   open Assignment only as bounded zero/sole/multiple candidate pressure with
   exact non-priority order and omission truth. `dismissed` stops Repa from using
   a still-possibly-real obligation as learning pressure without falsely claiming
   external cancellation; due/overdue is query-time only. Assignment does not own
   workload, capacity, allocation, progress, mastery, FutureAttention, a generic
-  commitment, product success, or external submission. Planning failure cannot
+  commitment, product success, or external submission. Suggestion failure cannot
   roll it back, and time, silence, an elapsed plan, or Tutor prose cannot change
   it. `completed` only prevents closed pressure from contaminating later
   learning decisions; it is not proof that Repa helped the learner learn.
-- **Gate 21 — cross-day planning:** representative Goal-driven and
-  Assignment-driven multi-day pressure preceded the contract. The bounded
-  experiment distinguished the no-Assignment OS-18/DS-20 case starting on the
-  16th from the same Goals starting ten days earlier, rejected per-demand
-  feasibility that double-spends shared capacity, exposed a local-deadline
-  bottleneck despite enough total capacity, preserved unknown/intermittent-use
-  truth, and retained indivisible work as an explicit widening falsifier. Gate
-  21 now consumes an exact Goal or Gate-20A Assignment revision plus exact
-  source-bearing accepted inputs. One Planning aggregate stages immutable input,
-  deterministic assessment, and source-bearing validated allocation so a later
-  failure cannot discard an accepted correction or revive an obsolete plan. It
-  owns one declared portfolio/shared-capacity scope, omission truth,
-  feasibility, working allocation, staleness, override, feedback, and
-  recomputed successors. A correct allocation is not
-  sufficient until an exact later context or Tutor decision consumes it and a
-  changed accepted input changes the later move. No allocation is a learner
-  promise or evidence of activity; re-entry reconciles only facts needed for
-  the future suffix and never reconstructs a daily ledger. The separate
-  [Gate 21 contract candidate](../research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)
-  is reviewable only after Gate 20A accepts and any predecessor correction is
-  reconciled into it.
+- **Gate 20B — learner-state judgment memory and on-demand delivery:** the
+  ordinary Tutor and learner may author one fuzzy, source-bearing, correctable
+  judgment about a bounded knowledge or skill scope. It preserves exact
+  evidence/report/Interaction references, uncertainty, revision and correction
+  without becoming verified mastery, a global scalar, or automatic aggregation.
+  The judgment is independently useful to explanation, practice, review, and
+  planning advice. Gate 18's bounded automatic index plus authorized lazy exact
+  owner reads is reused and extended rather than replaced; full eager history
+  and discovery-free blind lazy search are both rejected. The separate
+  [Gate 20B contract](../research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md)
+  closed contract/theory and implementation/evidence under
+  `G20B-WG-20260809-019fe065-01`; its exact first-repair package was accepted
+  after all four implementation findings closed.
+- **Gate 21 — advisory learning-plan continuity:** the ordinary Tutor may
+  proactively or responsively author several scoped, rolling learning-plan
+  suggestions. A suggestion may reference the current learner occurrence or
+  exact Goal, Assignment, Course, evidence, and Gate-20B learner-state
+  revisions; none is mandatory or merged. Its open semantic body keeps the
+  near term more concrete than the distant outline and may express rationale,
+  approximate deadline pressure, uncertainty, and alternatives. The program
+  owns identity, exact references, immutable revisions, lifecycle, typed
+  command settlement, recovery, and bounded Context/lazy-read delivery—not a
+  global portfolio, remaining-work conservation, feasibility verdict,
+  allocation matrix, learner acceptance, or adherence. Natural learner feedback
+  revises the suggestion in ordinary dialogue. The separate
+  [Gate 21 contract candidate](../research/repa-gate-21-advisory-learning-planning-2026-08-09.md)
+  follows the accepted Gate-20B handoff and requires its own fresh reviewer and
+  whole-Gate run.
 - **Gate 21A — Tutor move selection and flow continuity:** the representative
   collision set across exact current request, Course/navigation, retained
-  steering, Goal, future attention, Assignment, working-plan state, recent
-  Interaction, time, any
-  Gate-19-admitted learner-record/adaptation pressure, and explicit omissions;
+  steering, Goal, future attention, Assignment, fuzzy learner-state judgments,
+  advisory suggestions, recent Interaction, time, any
+  Gate-19-admitted evidence pressure, and explicit omissions;
   the boundary between a useful reversible default and a necessary learner
   clarification; selection provenance and current-request override;
   latency/cost; and re-selection after correction, provider failure,
@@ -493,12 +532,12 @@ answers, but this roadmap does not pre-accept them:
   navigation and rendering over existing domain queries/correction paths.
   Diagnostic CLI commands may assist but cannot close the product-surface
   claim alone. Inspection distinguishes durable owner state, behavior it could
-  affect, and exact context/plan/action or Gate-21A selection that actually
+  affect, and exact context/suggestion/action or Gate-21A selection that actually
   occurred; absent consumption remains visibly none or pending. This Gate does
   not invent missing domain lifecycles.
 - **Gate 23 — integrated product loop:** one smallest connected causal trace
   from learning move through learner occurrence/outcome and an owned durable
-  consequence to revised context/plan and a changed later Tutor move;
+  consequence to revised context or advice and a changed later Tutor move;
   one product-floor composition from bootstrap and useful teaching through
   exact recent Interaction/route state to a useful continuation in a fresh
   Session without eager transcript replay; one zero-write learner-feedback
@@ -508,14 +547,16 @@ answers, but this roadmap does not pre-accept them:
   interactive carriers converge on one released-v1 production model/Turn spine
   with no shadow learning path. One longitudinal collision trace must also
   prove that a fresh-Session `continue` under representative Course, Goal,
-  future-attention, Assignment, planning, steering, recent-Interaction, and any
-  Gate-19-admitted learner-record pressure reaches a useful move without an
+  future-attention, Assignment, learner-state judgment, advisory suggestions,
+  steering, recent-Interaction, and any Gate-19-admitted evidence pressure
+  reaches a useful move without an
   internal-state management Turn, while a genuinely unsafe ambiguity produces
   one truthful clarification and failure/restart re-enters without blind
   replay. A separate intermittent-use leg lets time pass with no Repa activity
   and possible learning elsewhere, proves that no activity or zero progress is
-  inferred, asks only the minimum future-planning reconciliation on return, and
-  consumes the recomputed successor in a changed later move.
+  inferred, asks only the minimum outcome-relevant question on return, accepts
+  a natural learner-state or advice correction when useful, and consumes the
+  exact successor in a changed later move.
 
 Exact table/column/package names, prompt wording, converter executables,
 temporary directory layout, TUI widgets, token thresholds, test file counts,
@@ -528,9 +569,15 @@ Gates 7–10 and the original future skeleton were accepted on 2026-07-15. The
 2026-07-17 global audit preserved Gate 11 and accepted the revised future
 sequence through Gate 23. The 2026-07-29 product-flow correction inserted Gate
 21A without renumbering Gates 22 or 23. The 2026-08-08 planning experiment
-inserted Gate 20A without renumbering Gate 21 or its successors. No Gate below
-authorizes implementation until its own pre-implementation grill closes and
-any required contract review is accepted.
+inserted Gate 20A without renumbering Gate 21 or its successors. The 2026-08-09
+product-intent audit retained Gate 20A, inserted Gate 20B for reusable
+learner-state judgment memory, and redefined Gate 21 from a program-owned
+scheduler into scoped advisory learning-plan suggestions. That audit treats
+earlier Gates as decomposable evidence: retain a sound invariant or mature
+mechanism, adapt it when ownership still matches but product meaning changed,
+and retire the unsupported claim without discarding unrelated value. No Gate
+below authorizes implementation until its own pre-implementation grill closes
+and any required contract review is accepted.
 
 The accepted Gate 7, Gate 8, Gate 9, and Gate 10 contracts are recorded in
 [Course and Course View authority](../research/opencode-fork-gate-07-course-view-authority-2026-07-15.md),
@@ -555,11 +602,12 @@ and
 | 18. Learning context and Session continuation                                                                                | Every admitted released-v1 interactive Tutor/Agent model operation receives a bounded, immutable, revision-exact projection with lazy model-visible owner reads; fresh/resumed Sessions reuse relevant learning state without importing another Session's transcript. Program-owned internal model operations retain their narrow purpose contracts.                                                                                                                                                                                                  | Consumes real material, navigation, steering, Goal, Turn, and policy records; it performs no domain writes and reuses rather than reinterprets any exact steering cut already bound by Gate 15.                                          | A second context database, eager full-state/transcript import, host-side natural-language resolver, full interactive learning context for internal title/compaction/representation operations, durable summary as truth, choosing the Tutor move, a soft-workspace-memory subsystem, or a new runtime.                                                                           | Bounded relevant projection plus lazy exact owner reads; explicit omission/truncation that informs rather than proves Agent interpretation; exact policy/authority revisions, preference non-mutation, non-mutating continuation, restart, compaction, fresh Session behavior, and carrier coverage without widening internal-operation authority.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | 19. First learner-record adaptation                                                                                          | The first experimentally justified source-linked occurrence/evidence/hypothesis distinction is correctable and changes a later Tutor action; valuable zero-write teaching remains legal.                                                                                                                                                                                                                                                                                                                                                              | Begins only after a bounded later-action collision shows Context cannot recover the needed distinction from existing state.                                                                                                              | A universal activity table, mastery score, mandatory write per interaction, or importing ALS schemas.                                                                                                                                                                                                                                                                            | Experiment result can shrink or defer the Gate; native evidence then covers report/evidence/inference separation, source/condition attribution, correction, duplicate occurrence, fresh Session adaptation, and zero-write teaching.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | 20. [Source-linked future attention and Tutor return](../research/repa-gate-20-source-linked-future-attention-2026-08-06.md) | A source-bound future-attention concern, clock/target-derived eligibility, conditional current-purpose projection, and eventual truthful service form one vertical loop while remaining distinct facts. One causal learner occurrence owns one bounded change set; target, purpose, time, service timing, source relation, and optional interaction order remain correctable through replacement with an explicit successor arm. | Uses Context, durable Turn, Gate 8, trusted time, retained steering, exact Course membership targets, and the ordinary Agent; it does not require learner adaptation. | A reminder/todo system, universal selector/scheduler, durable active engagement, generic pedagogy enum, correctness, retention, mastery, background daemon, recurrence, fuzzy retarget, mechanically proven learner assent, program-certified natural-language hint detection, delegated self-service, caller-visible generated successor IDs, retrospective source reuse, refreshed physical replay, a same-occurrence continuation/service-retry address, or a general workflow engine. | Tagged fixed-offset/IANA civil-time normalization and current target truth; passage of `notBefore` without selection or transition; Agent-authored creation/mutation relations beside runtime-proven occurrence/excerpt/owner-read/lineage/capability/permission facts; root and bounded delegated correction without fabricated learner direction; exact immutable physical replay versus current semantic-duplicate/owner-read projection; atomic admission plus a unique append-only FutureAttention finalization receipt/event; terminal-preserving and replacement-bound complete-source or exact same tool-calling Assistant successor arms without accidental reopening, learner synchronization, partial-fragment service, or later-Assistant substitution; later same-input Assistants retain the learner-occurrence address, so identical reissue is already applied, changed intent conflicts, and `not_served` remains open until a genuinely new occurrence; every valid sole semantic value within Gate 18's 2,048-byte entry limit; exact current-request override leaving the concern open; exact-count multiple fallback without first-row priority; optional source-bound learner-first order only when admitted meaning requires it; service through an explicit exact purpose-appropriate complete learner, committed Assistant, tool-result, or child-result occurrence/outcome and rationale; source deletion, stale target, permission, carrier presentation, failure/interruption/cancellation/restart, migration from a frozen Gate 19 fixture, and current-fork vertical traces cannot invent service, rewrite a terminal Tool Part, or trust historical ALS aggregates. |
-| 20A. [Assignment authority](../research/repa-gate-20a-assignment-authority-2026-08-08.md)                                     | One LearnerHome-owned substantial learning obligation has stable identity, immutable exact revisions, bounded source-bearing obligation/learning context, optional tagged due boundary, explicit lifecycle, and exact current/history reads. It is independently valid before or without Planning and exists only for a real teaching, guided-work, review, or Planning consumer. | Uses Gate 8 settlement, durable Turn/Interaction identity, source/Artifact reads when present, trusted civil time, Gate 18 Context, typed capability/permission, and the current-fork recovery path. It does not semantically depend on Gate 20. | A Goal, todo, administrative task registry, task execution, plan line, workload/capacity estimate, progress, mastery, FutureAttention concern, generic commitment, product-success metric, or external submission connector; clock passage, silence, Planning output/failure, or Tutor prose changing lifecycle. | Learner/source creation and correction retain fallible Agent interpretation beside runtime-proven facts; an explicit exact-model-operation correction may repair one exact existing head but cannot mint an unanchored Assignment. `open | completed | cancelled | dismissed | superseded` uses one truthful direct correction successor, relation preserve/retarget/clear, and a distinct true-later-event reopen. Immutable source basis is separate from cut-bound owner-current status. Exact zero/sole/multiple Context cardinality, maximum-value fit, replay/conflict, stale head, current-only graph validation, source deletion, permission, transaction failure, restart, exact-revision Planning handoff, and a frozen Gate 20 predecessor must prove that a valid Assignment survives every unrelated Planning outcome without making completion evidence of learning, submission, or product success. |
-| 21. [Substantial cross-day Planning authority](../research/repa-gate-21-cross-day-planning-authority-2026-08-08.md)             | One Planning aggregate stages immutable accepted portfolio-input, deterministic assessment, and source-bearing validated-allocation revisions over exact Goal or Gate-20A Assignment revisions. Its current projection distinguishes assessment-pending, allocated, feasible-needing-allocation, infeasible, or qualified-unknown truth over one declared shared-capacity scope. | Requires exact Goal and Gate-20A Assignment producer arms, accepted workload/capacity/deadline/progress-or-remaining-work inputs, trusted time, Context, and the completed pre-contract experiment. A Goal-driven plan still requires no Assignment. | Minute-scale rescue, a learner promise or adherence ledger, model-owned arithmetic, hidden per-demand double spending, invented values for stale/unknown inputs, automatic progress, hiding obligation identity inside Planning, a background scheduler, or a static priority scalar. | The recorded OS-18/DS-20 start-date pair, shared-capacity collision, deadline bottleneck, Assignment arm, corrected availability, interval unknown, and indivisible-work falsifier govern the algorithm boundary; exact producer/input/assessment/allocation revisions, staged-failure truth, omission, override, restart, correction races, and intermittent re-entry preserve history without inferring activity; at least one exact later Context/Tutor consumer uses the allocation and one changed accepted input changes the later move. |
-| 21A. Tutor move selection and flow continuity                                                                                | Given one bounded current learning situation and exact learner request, the ordinary Tutor Agent normally selects or proposes a useful current move and selects again after correction, interruption, provider failure, restart, or relevant state change. Clarification is reserved for learner-owned or unsafe ambiguity rather than routine internal coordination. This Gate adds no domain schema by default. | Follows Gate 18 and every still-admitted baseline pressure producer through Gate 20A and Gate 21; context visibility alone is not behavior, and Gate 22 needs an actual selection result to inspect. | A universal scheduler, mandatory classifier or extra model call, fixed teaching workflow, pedagogy taxonomy, exhaustive candidate proof, durable active-purpose/activity record, automatic progress, plan-adherence inference, silent durable priority, or eliminating all clarification. | First test the ordinary Agent with exact constraints, bounded context, lazy reads, and typed tools on the representative collision set. Evidence covers an exact request, an obvious reversible default, one genuinely unsafe ambiguity, multiple Courses/Goals, due future attention, exact Assignment and working-plan state, steering, recent Interaction, any Gate-19-admitted pressure, omitted/truncated reads, override, correction, latency/cost, cancellation, provider failure, restart, and no internal-ID/state-management Turn. Only a surviving causal failure may widen the design; deterministic checks preserve legality, provenance, omission truth, no fabricated durable effects or activity, and re-entry without blind replay. |
-| 22. Learning-native TUI inspect/correct                                                                                      | The primary natural-language TUI composes existing domain reads and correction paths so the learner can inspect what was recorded, its source and epistemic status, what it could affect, and which exact context/plan/action or Gate-21A selection has actually consumed it. Diagnostic CLI commands may assist but cannot close this product-surface claim alone. | Follows all first-boundary domain authorities and Gate 21A; Assignment and Planning retain separate queries, corrections, lifecycle, and staleness semantics. | A second domain owner, a GUI or dedicated full-screen dashboard requirement, a false claim that a stored candidate already changed behavior, routine audit after every explanation, plan-adherence inference, or post-baseline selective deep deletion. | Deterministic TUI inspection distinguishes Assignment obligation/lifecycle from Planning inputs/allocation, exposes report/observation/inference source, exact revisions, stale/unknown/infeasible state, working-plan-not-commitment meaning, and actual or absent consumption/selection; correction/supersession uses owning commands; missing-source truth, bounded navigation, no mutation from rendering, and restart remain exact. |
-| 23. Integrated Learning-System Product Loop                                                                                  | All retained interactive carriers converge on one released-v1 production model/Turn spine and one Repa product-composition boundary, with no shadow/fallback learning path; this Gate adds no new domain schema. | Requires every still-admitted first-boundary product Gate, Gate 21A, and TUI projection; an experiment-driven deferral must revise this roadmap before product-boundary acceptance. | A single physical input carrier, one universal outcome/activity table, one giant all-feature test, broad release readiness, educational efficacy, a cutover Gate, a second runtime, or post-baseline capabilities. | At least one connected natural-language causal trace runs from a learning move through learner occurrence/outcome and an owned durable consequence to revised context/plan and a changed later Tutor move. A separate product-floor trace bootstraps and teaches, then uses exact recent Interaction/route state through Gate 18's lazy projection to continue usefully in a fresh Session without eager transcript replay or fabricated progress. A zero-write trace changes the next peer teaching move without inventing durable learning state. One longitudinal collision combines Course, Goal, future-attention, Assignment, working Planning, steering, recent Interaction, and learner-record pressure; its intermittent-use leg permits possible outside learning, infers no activity or zero progress, requests only minimum future-planning reconciliation, consumes a recomputed successor, and still handles truthful clarification plus correction/failure/restart without blind replay. Orthogonal traces cover retained-carrier parity, bounded real-provider qualification, cancellation, compaction, and no shadow path. |
+| 20A. [Assignment authority](../research/repa-gate-20a-assignment-authority-2026-08-08.md)                                     | One LearnerHome-owned substantial learning obligation has stable identity, immutable exact revisions, bounded source-bearing obligation/learning context, optional tagged due boundary, explicit lifecycle, and exact current/history reads. It is independently valid before or without any plan suggestion and exists only for a real teaching, guided-work, review, or advisory-planning consumer. | Uses Gate 8 settlement, durable Turn/Interaction identity, source/Artifact reads when present, trusted civil time, Gate 18 Context, typed capability/permission, and the current-fork recovery path. It does not semantically depend on Gate 20. | A Goal, todo, administrative task registry, task execution, plan line, workload/capacity estimate, progress, mastery, FutureAttention concern, generic commitment, product-success metric, or external submission connector; clock passage, silence, suggestion output/failure, or Tutor prose changing lifecycle. | Learner/source creation and correction retain fallible Agent interpretation beside runtime-proven facts; an explicit exact-model-operation correction may repair one exact existing head but cannot mint an unanchored Assignment. `open | completed | cancelled | dismissed | superseded` uses one truthful direct correction successor, relation preserve/retarget/clear, and a distinct true-later-event reopen. Immutable source basis is separate from cut-bound owner-current status. Exact zero/sole/multiple Context cardinality, maximum-value fit, replay/conflict, stale head, current-only graph validation, source deletion, permission, transaction failure, restart, exact-revision advisory-suggestion handoff, and a frozen Gate 20 predecessor must prove that a valid Assignment survives every unrelated suggestion outcome without making completion evidence of learning, submission, or product success. |
+| 20B. [Learner-state judgment memory](../research/repa-gate-20b-learner-state-judgment-memory-2026-08-09.md)                    | One source-bearing, scoped, fuzzy judgment records what the learner or Tutor currently believes the learner has learned, roughly understands, can do, or still finds difficult. Stable identity and immutable correction history make the judgment reusable across explanation, demonstration, practice, review, and planning advice without claiming a program-computed mastery truth. | Follows Gate 18 because its product value is bounded current discovery plus authorized lazy exact reads. It may cite Gate 19 evidence, learner reports, exact Interaction outcomes, material selectors, Goals, Courses, or other exact owner facts, but remains an inference/report authority rather than an evidence aggregate. | A global mastery score, automatic evidence aggregation or decay, mandatory write after teaching, time-spent or task-completion progress, a deterministic learner model, eager history injection, blind semantic search, or proof that the judgment is correct. | Model- and learner-authored judgments retain exact basis, uncertainty, scope, and revision lineage; natural-language correction appends a successor without a separate approval ritual. Maximum-value bounded Context, explicit omission, authorized lazy exact reads, old-cut/retry immutability, replay/conflict/permission/recovery, and fresh-Session consumers prove that changed state can alter explanation, practice, or review while zero-write teaching remains legal. |
+| 21. [Advisory learning-plan suggestions](../research/repa-gate-21-advisory-learning-planning-2026-08-09.md)                    | The ordinary Tutor may create one or more scoped, source-bearing, correctable learning-plan suggestions whose near term is concrete and whose distant portion can remain coarse and rolling. A suggestion can arise from the current conversation alone or cite exact Goal, Assignment, Course, evidence, and learner-state revisions; it is durable advice, not an authoritative schedule. | Uses Gate 18's bounded Context/lazy-read substrate and the exact producer handoffs already owned by earlier Gates. Gate 20B makes reusable learner-state memory available, but neither every suggestion nor every Tutor move requires a stored learner-state judgment. The 2026-08-08 arithmetic experiment remains research evidence for optional bounded calculators, not the production owner. | One global portfolio, deterministic workload/capacity/feasibility/allocation authority, a universal scheduler, a learner promise, adherence/activity/progress inference, a mandatory confirmation UI, exhaustive state injection, static priority, minute-scale rescue, or program certification that advice is pedagogically optimal. | Responsive and non-disruptive proactive traces create scoped suggestions through typed commands, preserve authorship and exact references, expose a bounded current index plus authorized lazy exact reads, survive replay/restart/failure, and append natural-language corrections. Fresh-Session and changed-judgment traces must show the ordinary Tutor actually uses the exact suggestion while remaining free to explain, demonstrate, practise, review, or ignore obsolete advice; silence and elapsed time create no learning or adherence fact. |
+| 21A. Tutor move selection and flow continuity                                                                                | Given one bounded current learning situation and exact learner request, the ordinary Tutor Agent normally selects or proposes a useful current move and selects again after correction, interruption, provider failure, restart, or relevant state change. Clarification is reserved for learner-owned or unsafe ambiguity rather than routine internal coordination. This Gate adds no domain schema by default. | Follows Gate 18 and every still-admitted baseline pressure producer through Gate 21; context visibility alone is not behavior, and Gate 22 needs an actual selection result to inspect. | A universal scheduler, mandatory classifier or extra model call, fixed teaching workflow, pedagogy taxonomy, exhaustive candidate proof, durable active-purpose/activity record, automatic progress, plan-adherence inference, silent durable priority, or eliminating all clarification. | First test the ordinary Agent with exact constraints, bounded indexes, lazy reads, and typed tools on the representative collision set. Evidence covers an exact request, an obvious reversible default, one genuinely unsafe ambiguity, multiple Courses/Goals, due future attention, exact Assignment, learner-state, and advisory-suggestion state, steering, recent Interaction, omitted/truncated reads, override, correction, latency/cost, cancellation, provider failure, restart, and no internal-ID/state-management Turn. Only a surviving causal failure may widen the design; deterministic checks preserve legality, provenance, omission truth, no fabricated durable effects or activity, and re-entry without blind replay. |
+| 22. Learning-native TUI inspect/correct                                                                                      | The primary natural-language TUI composes existing domain reads and correction paths so the learner can inspect what was recorded, its source and epistemic status, what it could affect, and which exact context, suggestion, action, or Gate-21A selection has actually consumed it. Diagnostic CLI commands may assist but cannot close this product-surface claim alone. | Follows all first-boundary domain authorities and Gate 21A; Assignment, learner-state judgments, and advisory suggestions retain separate queries, corrections, lifecycle, and staleness semantics. | A second domain owner, a GUI or dedicated full-screen dashboard requirement, a false claim that a stored candidate already changed behavior, routine audit after every explanation, plan-adherence inference, or post-baseline selective deep deletion. | Deterministic TUI inspection distinguishes Assignment obligation/lifecycle from fuzzy learner-state judgment and advisory suggestion, exposes report/observation/inference source, exact revisions, uncertainty, staleness, and suggestion-not-commitment meaning, plus actual or absent consumption/selection. Correction/supersession uses owning commands; missing-source truth, bounded navigation, no mutation from rendering, and restart remain exact. |
+| 23. Integrated Learning-System Product Loop                                                                                  | All retained interactive carriers converge on one released-v1 production model/Turn spine and one Repa product-composition boundary, with no shadow/fallback learning path; this Gate adds no new domain schema. | Requires every still-admitted first-boundary product Gate, Gate 21A, and TUI projection; an experiment-driven deferral must revise this roadmap before product-boundary acceptance. | A single physical input carrier, one universal outcome/activity table, one giant all-feature test, broad release readiness, educational efficacy, a cutover Gate, a second runtime, or post-baseline capabilities. | At least one connected natural-language causal trace runs from a learning move through learner occurrence/outcome and an owned durable consequence to revised context or suggestion and a changed later Tutor move. A separate product-floor trace bootstraps and teaches, then uses exact recent Interaction/route state through Gate 18's bounded index and lazy reads to continue usefully in a fresh Session without eager transcript replay or fabricated progress. A zero-write trace changes the next peer teaching move without inventing durable learning state. One longitudinal collision combines Course, Goal, future attention, Assignment, fuzzy learner-state judgment, advisory suggestions, steering, and recent Interaction; its intermittent-use leg permits possible outside learning, infers no activity or zero progress, asks only an outcome-relevant question when needed, accepts a natural correction, and still handles truthful clarification plus failure/restart without blind replay. Orthogonal traces cover retained-carrier parity, bounded real-provider qualification, cancellation, compaction, and no shadow path. |
 
 The sequence establishes dependency-guided engineering order rather than
 claiming that later Gate details are already designed. A Gate may be revised or

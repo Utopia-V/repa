@@ -20,6 +20,19 @@ or begin a later Gate.
 
 Date: 2026-08-08
 
+2026-08-09 successor correction: the accepted Gate 20A invariant and exact
+implementation remain unchanged, but the later product topology no longer
+admits the deterministic Planning authority described during this Gate's
+derivation. The exact immutable `AssignmentRevisionRef` handoff now feeds
+ordinary teaching/review and the
+[Gate 21 advisory-suggestion candidate](repa-gate-21-advisory-learning-planning-2026-08-09.md).
+References to later “Planning” below are retained as accepted historical
+provenance for Assignment independence, exact-revision composition, and the
+rule that downstream advice/failure cannot mutate Assignment. They do not grant
+remaining-work, feasibility, allocation, or scheduler authority. This
+successor correction does not reopen Gate 20A identity, lifecycle, source,
+Context, command, migration, implementation, or evidence acceptance.
+
 Exact derivation base:
 `c100b431fe174d1993b2baa89a7d1b133300b579` (`HEAD`, `main`, and
 `origin/main` at Gate derivation opening). Gate 20 implementation commit

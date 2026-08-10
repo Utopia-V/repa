@@ -73,6 +73,16 @@ const withoutRowidTables = new Set([
   "assignment_revision",
   "assignment_revision_scope",
   "assignment_commit_seal",
+  "learner_state_judgment",
+  "learner_state_judgment_disposition",
+  "learner_state_judgment_capability_issue",
+  "learner_state_judgment_capability_settlement",
+  "learner_state_judgment_effect",
+  "learner_state_judgment_no_change_seal",
+  "learner_state_judgment_revision",
+  "learner_state_judgment_anchor",
+  "learner_state_judgment_basis",
+  "learner_state_judgment_commit_seal",
 ])
 const args = parseArgs({
   args: process.argv.slice(2),

@@ -53,9 +53,13 @@ export function seedFrozenV15AdmittedLearnerGoal(
       yield* db.transaction((tx) => messageDiffProjectionMigration.up(tx))
       yield* db.run("PRAGMA foreign_keys = ON")
       yield* db.run("INSERT INTO learner_goal_state (singleton, revision_sequence) VALUES (1, 0)")
-      // The current historical-V1 writer selects through the current table projection. Temporarily expose only
-      // the later nullable/defaulted columns and the V2 table referenced by the versioned committed-effect
-      // predicate while constructing the frozen V15 bytes, then remove them all before recording V15 lineage.
+      // The current historical-V1 writer and Turn helper select through current table projections. Temporarily
+      // expose only the later nullable/defaulted columns and the V2 table referenced by the versioned
+      // committed-effect predicate while constructing the frozen V15 bytes, then remove them all before recording
+      // V15 lineage.
+      yield* db.run(
+        "ALTER TABLE turn_tool_candidate ADD COLUMN future_attention_service_source text DEFAULT 'internal_control' NOT NULL",
+      )
       yield* db.run("ALTER TABLE learner_goal_effect_operation ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1")
       yield* db.run("ALTER TABLE learner_goal_effect ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1")
       yield* db.run("ALTER TABLE learner_goal_effect ADD COLUMN agent_action_part_id TEXT")
@@ -337,6 +341,7 @@ export function seedFrozenV15AdmittedLearnerGoal(
         }
       }
 
+      yield* db.run("ALTER TABLE turn_tool_candidate DROP COLUMN future_attention_service_source")
       yield* db.run("DROP TABLE learner_goal_disposition_v2")
       yield* db.run("ALTER TABLE learner_goal_effect_operation DROP COLUMN schema_version")
       yield* db.run("ALTER TABLE learner_goal_effect DROP COLUMN materialized_snapshot")

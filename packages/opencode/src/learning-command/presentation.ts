@@ -2,6 +2,7 @@ export * as LearningCommandPresentation from "./presentation"
 
 import { Course } from "@opencode-ai/core/course"
 import { Assignment } from "@opencode-ai/core/assignment"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningBootstrap } from "@opencode-ai/core/learning-bootstrap"
@@ -32,6 +33,7 @@ type Capability =
   | typeof LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY
   | typeof LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY
   | typeof LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY
+  | typeof LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY
 
 type BindingInput = Readonly<{
   sessionID: string
@@ -393,6 +395,80 @@ function assignmentEffect(settlement: LearningCommand.PhysicalSettlement) {
       : {}),
     changes: value.outcome === "no_change" ? [] : structuredClone(value.changes),
     intentResults: structuredClone(value.intentResults),
+  }
+}
+
+export function learnerStateJudgmentCapability(
+  candidate: LearnerStateJudgment.Candidate,
+  envelope: BindingInput,
+) {
+  if (candidate.agentAction.kind !== "root") {
+    throw new Error("Learner-state judgment capability requires a root Agent action")
+  }
+  return SemanticPresentation.proposal({
+    kind: "learner_state_judgment_capability",
+    binding: binding(envelope),
+    commandFingerprint: candidate.commandFingerprint,
+    issuance: "root",
+    scope: SemanticPresentation.learnerStateJudgmentScope(candidate),
+  })
+}
+
+export function learnerStateJudgmentSettlementResult(
+  settlement: LearningCommand.PhysicalSettlement,
+  state: LearnerStateJudgment.InvocationVersion,
+  envelope: BindingInput,
+) {
+  if (settlement.outcome === "error" && typeof settlement.code !== "string") {
+    throw new Error("Failed learner-state judgment settlement has no exact error code")
+  }
+  if (state.candidate?.agentAction.kind === "delegated") {
+    throw new Error("Learner-state judgment settlement contains an illegal delegated Agent action")
+  }
+  const effect = learnerStateJudgmentEffect(settlement)
+  return SemanticPresentation.result({
+    kind: "learner_state_judgment_result",
+    binding: binding(envelope),
+    settlement:
+      settlement.outcome === "error"
+        ? { outcome: settlement.outcome, code: settlement.code as string }
+        : { outcome: settlement.outcome },
+    disposition: state.disposition,
+    ...(state.semanticTerminal ? { semanticOutcome: state.semanticTerminal.outcome } : {}),
+    ...(state.candidate ? { issuance: "root" as const } : {}),
+    ...(state.capabilityOutcome ? { capabilityOutcome: state.capabilityOutcome } : {}),
+    ...(state.permissionRequestID ? { permissionRequestID: state.permissionRequestID } : {}),
+    ...(effect ? { effect } : {}),
+  })
+}
+
+function learnerStateJudgmentEffect(settlement: LearningCommand.PhysicalSettlement) {
+  if (
+    settlement.outcome === "error" ||
+    !("learnerStateJudgmentKind" in settlement) ||
+    settlement.learnerStateJudgmentKind !== "revision"
+  ) {
+    return undefined
+  }
+  const value = settlement as unknown as
+    | LearnerStateJudgment.AppliedSettlement
+    | LearnerStateJudgment.AlreadyAppliedSettlement
+    | LearnerStateJudgment.NoChangeSettlement
+  return {
+    ...(value.outcome === "already_applied"
+      ? { existingOutcome: "applied" as const }
+      : value.outcome === "no_change"
+        ? { existingOutcome: "no_change" as const }
+        : {}),
+    ...(value.outcome === "applied" || value.outcome === "already_applied"
+      ? { effectID: value.effectID }
+      : {}),
+    ...(value.judgmentID ? { judgmentID: value.judgmentID } : {}),
+    ...(value.revisionID ? { revisionID: value.revisionID } : {}),
+    ...(value.version !== undefined ? { version: value.version } : {}),
+    ...(value.outcome === "applied" || value.outcome === "already_applied"
+      ? { operation: value.operation, disposition: value.disposition }
+      : {}),
   }
 }
 

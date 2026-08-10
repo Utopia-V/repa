@@ -112,7 +112,7 @@ Tutor behavior** in response to an autonomous learner and a changing world.
 | ------------------- | ---------------------------------------------------------------------------------------------- |
 | reference signal    | learner-owned goals, deadlines, intended outcomes, and current steering                        |
 | observed system     | learner interactions, materials, assignments, artifacts, time, and external results            |
-| state estimator     | source-aware learner/Course/Goal/future-attention/planning queries; uncertainty remains explicit |
+| state estimator     | source-aware learner/Course/Goal/future-attention/advisory-suggestion queries; uncertainty remains explicit |
 | controller          | Tutor composition using hard constraints, current state, learner intent, and model judgment    |
 | actuator            | explanation, demonstration, questions, research, tools, artifact work, and authorized commands |
 | feedback            | later questions, attempts, corrections, completed work, time changes, and learner overrides    |
@@ -130,59 +130,69 @@ The state also changes at different rates:
 | Timescale        | Typical authority                                                                        | Consequence                                                                  |
 | ---------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | slow             | domain foundations, course structure, accepted curricular relations                      | high-inertia; a learner error does not rewrite it                            |
-| medium           | material alignment, progress, activities, observations, evidence, correctable hypotheses | changes after meaningful interactions or source revisions                    |
-| planning horizon | typed Goal/Assignment demands, accepted remaining-work/capacity inputs, correctable cross-day allocation revisions | recomputed from explicit accepted facts; time passage alone only ages the plan |
+| medium           | material alignment, progress, activities, observations, evidence, and fuzzy correctable learner-state judgments | changes after meaningful interactions, model/learner correction, or source revisions |
+| advisory horizon | scoped learning-plan suggestions with a concrete near term and coarse, revisable longer-term direction | revised conversationally; time passage alone never means the suggestion was followed |
 | fast             | current focus, revisits, scoped steering, current learner direction                      | re-evaluated around each Turn                                                |
 | query-time       | due/overdue/expired status and time pressure                                             | derived from stored facts and the current clock; no daemon event is required |
 
-In plain language: the course map changes slowly, multi-day work is rebalanced
-when its accepted inputs change, today's route can change quickly, and “due
-now” can become true simply because time passed. The clock can make a plan old;
-it cannot say whether the learner followed it.
+In plain language: the course map changes slowly, learner-state judgment changes
+when meaningful evidence or natural correction warrants it, a rolling learning
+suggestion can be rewritten as understanding changes, today's route can change
+quickly, and “due now” can become true simply because time passed. The clock can
+make advice old; it cannot say whether the learner followed it or learned.
 
-A cross-day plan consumes a typed planning demand that may reference an exact
-Goal revision or an exact Assignment revision. Goal authority owns intended
-outcome and Goal lifecycle; Assignment authority owns obligation and Assignment
-lifecycle; planning owns accepted estimates, capacity, feasibility, allocation,
-feedback, and recomputation. Exam preparation therefore need not masquerade as
-an Assignment, and admitting an Assignment is not a prerequisite for every
-cross-day plan.
+A fuzzy `LearningStateJudgment` belongs to the learner-record authority. It
+describes one bounded knowledge/skill scope, its model or learner authorship,
+source observations or reports, uncertainty, and correction lineage. It is not
+a verified mastery transition or an aggregate score. The same exact judgment
+may inform explanation, practice, review, or planning advice independently of
+whether any durable plan exists.
+
+A scoped advisory learning-plan suggestion is another authority. It may arise
+from the current learner occurrence alone or reference exact Goal, Assignment,
+Course, evidence, and learner-state revisions. Goal owns intended outcome and
+target; Assignment owns obligation, optional due meaning, and lifecycle; the
+suggestion owns only open-ended model/learner advice, its exact scope and
+sources, immutable revisions, and retirement. Exam preparation therefore need
+not masquerade as an Assignment, and no global LearnerHome portfolio is
+created.
 
 An exact `AssignmentRevisionRef` resolves only immutable Assignment-owned
 meaning, including the source/admission basis accepted at that revision.
 Current source availability, exact cited-revision resolvability, Course status,
 clock relation, and current-head relation belong to the consuming read/Context/
-Planning cut and retain their owner-native dependency locators, versions or
+suggestion cut and retain their owner-native dependency locators, versions or
 watermarks, and `asOf`. A later source deletion may change a fresh composite
 projection without changing the Assignment revision or silently making its
 exact reference unavailable.
 
-An Assignment is independently useful even when Planning is unavailable,
-infeasible, or still missing inputs. It owns a bounded statement of what
+An Assignment is independently useful even when no plan suggestion exists or a
+suggestion write fails. It owns a bounded statement of what
 learning-relevant work is owed, the learning subject/context that makes it
 useful to a Tutor consumer, its source and optional due boundary, immutable
 revisions, and explicit lifecycle. It is not a generic registry of
-administrative obligations or countable tasks. Planning consumes an exact
-Assignment revision but cannot complete, cancel, dismiss, supersede, or reopen
-it. The default application composition is staged:
-commit the Assignment if its own transition is valid, then attempt Planning
-against that exact revision. A future atomic cross-owner operation is justified
+administrative obligations or countable tasks. A suggestion may reference an
+exact Assignment revision but cannot complete, cancel, dismiss, supersede, or
+reopen it. The default application composition is staged: commit the Assignment
+if its own transition is valid, then let the ordinary Tutor create or revise a
+suggestion only when useful. A future atomic cross-owner operation is justified
 only by an independently demonstrated all-or-none learner invariant.
 
-A Planning aggregate stages immutable accepted portfolio-input, deterministic
-assessment, and source-bearing validated-allocation revisions. The working
-allocation is not a commitment or activity ledger. Exact head relations record
-producer/input revisions, declared shared-capacity scope and omission truth,
-trusted calculation time/horizon, uncertainty or staleness, and deterministic
-feasibility result. An accepted input survives later assessment/proposal
-failure; a valid assessment survives an invalid allocation, while every older
-downstream revision remains exact but visibly stale.
-Elapsed allocations, silence, and absence never become activity, zero progress,
-breach, or completion. On re-entry Planning preserves the historical revision,
-reconciles only facts needed for the future suffix, and appends a successor.
-Feasibility constrains Tutor judgment; it does not select a pedagogical move or
-turn Assignment completion, capacity utilization, or schedule adherence into
-the Learning System's objective.
+One LearnerHome may retain several current suggestions with different scopes.
+The typed envelope records exact identity, revision, source, scope, optional
+owner references, authoring model operation, and lifecycle; the semantic body
+remains open text able to express fuzzy learner judgment, a concrete near-term
+move, coarse longer-term direction, approximate deadline pressure,
+uncertainty, rationale, and alternatives. The program does not validate the
+pedagogy, require exact remaining minutes, compute feasibility, or turn a
+solver witness into advice.
+
+Elapsed suggestions, silence, and absence never become activity, zero learning,
+acceptance, breach, or completion. On re-entry the LearningContext supplies a
+small relevant index, the Tutor reads exact detail only if the present move
+needs it, and a natural learner correction produces a successor. Retiring or
+failing a suggestion does not erase its referenced learner-state judgment,
+Goal, Assignment, evidence, or prior revisions.
 
 ## Chosen structural style
 
@@ -254,8 +264,8 @@ table in one universal graph.
 | domain foundation     | optional reusable concepts, capabilities, task families, aliases, and reviewed relations                            | that every course or subject needs a populated foundation                                       |
 | course view           | one versioned ordered learning/curricular view, its items, authored order, sparse typed relations, and provenance   | that one learner mastered it or must study an item today                                        |
 | material map          | revision-bound material outline, exact selectors, and optional neutral many-to-many alignment to exact Course items | that exposition order proves prerequisites or that alignment is complete or pedagogically typed |
-| learner record        | navigation continuity, meaningful activities, reports, observations, evidence, correctable hypotheses, and source links | a single global mastery score or today's plan                                                |
-| agenda family         | composition and discovery across separately owned Goal, future-attention, Assignment, planning, and consumer-earned detour/commitment meanings | one shared lifecycle, transaction, generic record type, permanent curriculum structure, or learner ability |
+| learner record        | navigation continuity, meaningful activities, reports, observations, evidence, fuzzy correctable learner-state judgments, and source links | a single global mastery score or today's plan                                                |
+| agenda family         | composition and discovery across separately owned Goal, future-attention, Assignment, advisory suggestion, and consumer-earned detour/commitment meanings | one shared lifecycle, transaction, generic record type, permanent curriculum structure, or learner ability |
 | Tutor policy          | hard constraints, policy profiles, scoped learner steering, and future stable defaults                              | a second runtime or evidence about the learner                                                  |
 | current learning view | a bounded query result for one model sample                                                                         | a new source of truth or durable summary that replaces its sources                              |
 
@@ -293,7 +303,7 @@ support several Courses.
 
 An optional durable default Course preference is learner-controlled navigation
 continuity state, not the identity of the only active subject. Invocation
-directory, folder layout, discovered material, Goal/Assignment/planning
+directory, folder layout, discovered material, Goal/Assignment/advisory
 pressure, future attention, and model
 judgment may surface information or a proposed target, but none may change that
 preference.
@@ -872,9 +882,11 @@ matter:
 2. **What does it support?** Evidence under stated conditions.
 3. **What does the system currently infer?** A fallible, correctable
    projection for a consumer.
-4. **What did the system or learner decide or accept?** A Goal, an Assignment
-   report, a correctable working plan, a commitment, a revisit, or another
-   constitutive action. Those meanings remain separately owned.
+4. **What did the system or learner decide, report, or author?** A Goal, an
+   Assignment, a fuzzy learner-state judgment, a correctable advisory
+   suggestion, a commitment, a revisit, or another constitutive action. Those
+   meanings remain separately owned; an authored suggestion is not learner
+   acceptance.
 
 The architecture does not create a universal `LearningFact` row that erases
 these distinctions. Shared provenance fields may be reused, but the owning
@@ -980,9 +992,10 @@ fact or replacement for Course, agenda-family, or learner-record state. Context-
 failure and compaction failure remain explicit terminal outcomes.
 
 The first sample in a fresh Session uses the current request, relevant Goal,
-future-attention, exact Assignment and working-plan state, recent durable focus,
-and small home-level candidates to resolve scope. An old plan is shown as old
-or stale and never as adherence evidence. If
+future-attention, exact Assignment, fuzzy learner-state judgment, advisory
+suggestion, recent durable focus, and small home-level candidates to resolve
+scope. An old suggestion is shown as source-bearing advice, never as learner
+acceptance or adherence evidence. If
 several choices would produce materially different behavior, the context
 contains a bounded candidate list and the Tutor asks or chooses reversibly. It
 does not load every course to avoid one clarification.
@@ -1007,8 +1020,9 @@ A bounded context cut is an observer and working set; visibility alone does not
 make any candidate govern the current interaction. Tutor composition separately
 owns the product responsibility to turn the exact request and relevant current
 situation into a useful move, or into one necessary clarification. It does not
-own the durable meanings supplied by Course, Goal, future attention, planning,
-learner history, navigation, steering, or Interaction.
+own the durable meanings supplied by Course, Goal, future attention,
+learner-state judgment, advisory suggestion, learner history, navigation,
+steering, or Interaction.
 
 The baseline behavior is:
 
@@ -1051,13 +1065,14 @@ was built around.
 
 ## Tutor choice and policy arbitration
 
-The program does not enumerate every legal explanation or teaching move. It
-owns hard constraints, computable facts, domain legality, and any deterministic
-consequence that must always occur. This includes workload/capacity/deadline
-arithmetic and recomputation for accepted planning inputs. The LLM owns open
-semantic judgment inside that space, including explanation, research, examples,
-route proposals, semantic work decomposition, and interaction-level adaptation.
-The learner owns goals and can steer or interrupt.
+The program does not enumerate every legal explanation, learner-state judgment,
+planning suggestion, or teaching move. It owns identity, exact source binding,
+time and deadline derivation, domain legality, atomicity, revisions, correction,
+context budgets, and any deterministic consequence that must always occur. The
+LLM owns open semantic judgment inside those boundaries, including fuzzy gap
+hypotheses, explanation, research, examples, route proposals, advisory plans,
+and interaction-level adaptation. The learner owns goals and can steer,
+correct, or interrupt in ordinary conversation.
 
 Policy resolves per proposed action and applicable scope rather than choosing
 one record-level winner:
@@ -1067,9 +1082,10 @@ one record-level winner:
 3. still-applicable retained steering continues to govern non-overlapping
    behavior and yields locally only to a clearly more specific overlapping
    current request;
-4. exact Goal, future-attention, Assignment, Planning, and separately earned
-   commitment state expose real constraints and trade-offs without silently
-   overriding the learner or treating an old allocation as activity;
+4. exact Goal, future-attention, Assignment, learner-state judgments, advisory
+   suggestions, and separately earned commitment state expose real context and
+   trade-offs without silently overriding the learner or treating old advice
+   as activity or acceptance;
 5. the selected policy profile and stable defaults fill remaining policy; and
 6. model judgment realizes the current interaction inside those bounds.
 
@@ -1278,14 +1294,14 @@ no accepted rule settles it and may initiate an authorized domain command. The
 learner may redirect or request direct help. No universal scheduler or
 `FutureAction` record arbitrates all of these meanings.
 
-### Program/model allocation
+### Program/model responsibility
 
 The boundary is responsibility-based, not a fixed percentage and not a claim
 that “program” always decides while “model” only writes prose.
 
 | Program-led                                                                                                                                                                                                                                           | Model-led                                                                                                                                                                               | Mixed initiative                                                                                                                                                                                     |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| identity, revisions, source binding, time math, due/overdue derivation, workload/capacity feasibility, cross-day allocation and recomputation, legal transitions, atomicity, correction mechanics, context budgets, capability/permission enforcement | open-source research, semantic material interpretation and work decomposition, coarse route proposals, explanations, examples, questions, comparisons, and interaction-level adaptation | selecting among genuinely different feasible routes, refining a course view, interpreting open-ended work, forming a gap hypothesis, and adapting a plan where meaning or learner preference matters |
+| identity, revisions, source binding, time math, due/overdue derivation, legal transitions, atomicity, correction mechanics, context budgets, capability/permission enforcement | open-source research, semantic material interpretation, fuzzy learner-state judgment, scoped advisory planning, coarse route proposals, explanations, examples, questions, comparisons, and interaction-level adaptation | refining a Course View, interpreting evidence, forming or correcting a gap hypothesis, and revising advice where meaning or learner preference matters |
 
 For mixed work, code supplies trustworthy facts, hard boundaries, available
 capabilities, and any deterministic consequence; the model supplies semantic
@@ -1303,9 +1319,12 @@ Model fallibility is contained by exact identities and revisions, legal
 transitions, permission, atomic settlement, visible results, and correction;
 those mechanisms do not attempt to prove linguistic entailment.
 
-In plain language: the program remembers the numbers and does the calendar
-math; the LLM understands what the work means and helps teach, split, or adapt
-it. Neither replaces the other where both are needed.
+In plain language: the program preserves exact identities, sources, revisions,
+permissions, settlements, and owner-defined calendar relations; the LLM and
+learner make and revise fuzzy judgments about what has been learned and what
+advice is useful. A separately earned pure calculator may help with narrow
+arithmetic, but arithmetic does not become a planning authority merely because
+the program can compute it.
 
 ## Capabilities and commands
 
@@ -1327,7 +1346,7 @@ Generic agent tools can read or change files, search the web, run code, or
 produce artifacts. Their outputs are untrusted observations from the learning
 domain's point of view. Only an explicit learning command may import one of
 those observations into Course, material, learner, Goal, future-attention,
-Assignment, planning, or policy state.
+Assignment, learner-state-judgment, advisory-suggestion, or policy state.
 
 A model-visible learning-owner query may return exact IDs, versions, semantic
 snapshots, cursors, and explicit truncation so the Agent can resolve a natural
@@ -1579,10 +1598,10 @@ Assignment lifecycle transition, or recomputed plan by itself.
 | material content drift                 | fail current-use resolution of the old selector closed; preserve its exact historical meaning; propose explicit re-alignment |
 | poor provisional course route          | create a corrected/superseding revision and reconcile item lineage; retain the old route as provenance                       |
 | learner corrects a report or inference | append correction/supersession; preserve the original source; rebuild active projections                                     |
-| Assignment source or lifecycle changes | append an exact Assignment successor; preserve the old revision; leave Planning to expose staleness and recompute separately |
-| Planning is infeasible, unknown, or fails after a valid Assignment write | preserve the Assignment; settle or fail Planning under its own transaction and recovery boundary                              |
-| Planning assessment/proposal fails after an accepted input correction | preserve the new input; show assessment pending/failed and every older downstream allocation stale; never revive obsolete inputs |
-| time passes or the learner returns after silence | derive clock relations and mark affected plan inputs/revisions old or stale; infer no activity, zero progress, breach, completion, or cancellation |
+| Assignment source or lifecycle changes | append an exact Assignment successor; preserve the old revision; leave every suggestion on its exact source until the Tutor explicitly revises it |
+| learner-state judgment write fails after valid evidence | preserve evidence; settle or fail the judgment independently; never manufacture an inference |
+| advisory suggestion fails after a valid learner-state correction | preserve the corrected judgment and all exact sources; do not revive or rewrite old advice |
+| time passes or the learner returns after silence | derive clock relations and expose old advice or changed deadline pressure; infer no activity, learning, acceptance, breach, completion, or cancellation |
 | generic tool changes an artifact       | record the artifact/tool result; create no learner/course fact until an explicit domain command imports it                   |
 | context omitted relevant state         | model may inspect state lazily; recorded selection manifest and source refs make the omission diagnosable and correctable    |
 | move selection interrupted or stale     | preserve committed effects, end the process-local selection, recompile current state, and choose or clarify again without blind replay |
@@ -1604,8 +1623,8 @@ Repa product composition
   interaction/harness       Session, Turn, typed item, model/tool lifecycle
   sources/artifacts         origins, revisions, representations
   curriculum/materials      Course View, Material Map, exact selectors, alignment
-  learner                   progress, activity, evidence, inference
-  agenda-family composition Goal, future attention, Assignment, planning, later earned commitments
+  learner                   progress, activity, evidence, fuzzy correctable judgment
+  agenda-family composition Goal, future attention, Assignment, advisory suggestion, later earned commitments
   tutor policy/context      scoped policy and bounded sample composition
   outer capabilities        providers, files, shell, web, MCP, subagents
   terminal                  Repa CLI/TUI projection
@@ -1701,7 +1720,8 @@ Architecture-level behavioral checks must continue to cover:
 - generic tool output cannot mutate learning state by itself;
 - Goal changes recompile dependent views without rewriting Course/evidence or
   mutating a generic Agenda record;
-- representative Course, Goal, future-attention, planning, steering, recent
+- representative Course, Goal, future-attention, learner-state judgment,
+  advisory suggestion, steering, recent
   Interaction, and any admitted learner-record pressure produces a useful move
   or one necessary clarification without requiring the learner to coordinate
   internal state;

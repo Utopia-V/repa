@@ -27,6 +27,7 @@ import { Course } from "@opencode-ai/core/course"
 import { Assignment } from "@opencode-ai/core/assignment"
 import { Database } from "@opencode-ai/core/database/database"
 import { LearnerGoal } from "@opencode-ai/core/learner-goal"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearningContext } from "@opencode-ai/core/learning-context"
 import { sql } from "drizzle-orm"
@@ -446,6 +447,12 @@ describe("tool.registry", () => {
       expect(() => assertExternalToolID("update_future_attention", "mcp")).toThrow(
         "mcp tool ID update_future_attention is reserved by the learning-command runtime",
       )
+      expect(() => assertExternalToolID("learner_state_judgment_read", "custom")).toThrow(
+        "custom tool ID learner_state_judgment_read is reserved by Repa's learning-context authority",
+      )
+      expect(() => assertExternalToolID("update_learner_state_judgment", "mcp")).toThrow(
+        "mcp tool ID update_learner_state_judgment is reserved by the learning-command runtime",
+      )
       expect(() => assertExternalToolID("invalid", "custom")).toThrow(
         "custom tool ID invalid is reserved for Repa's program-owned invalid-tool fallback",
       )
@@ -480,6 +487,8 @@ describe("tool.registry", () => {
       expect(ids).toContain("update_learner_response_evidence")
       expect(ids).toContain("future_attention_read")
       expect(ids).toContain("update_future_attention")
+      expect(ids).toContain("learner_state_judgment_read")
+      expect(ids).toContain("update_learner_state_judgment")
       expect(ids).toContain("update_learning_course")
       expect(ids).not.toContain("learn")
       expect(ids).not.toContain("/learn")
@@ -674,6 +683,7 @@ describe("tool.registry", () => {
         "update_learner_response_evidence",
         "update_future_attention",
         "update_assignment",
+        "update_learner_state_judgment",
         "update_learning_course",
       ]) {
         const tool = tools.find((item) => item.id === id)
@@ -701,6 +711,8 @@ describe("tool.registry", () => {
       expect(defaults).toContain("update_future_attention")
       expect(defaults).toContain("assignment_read")
       expect(defaults).toContain("update_assignment")
+      expect(defaults).toContain("learner_state_judgment_read")
+      expect(defaults).toContain("update_learner_state_judgment")
       expect(defaults).toContain("update_learning_course")
       expect(gate18Reads.filter((id) => defaults.includes(id))).toEqual(gate18Reads)
 
@@ -722,6 +734,8 @@ describe("tool.registry", () => {
       expect(restricted).not.toContain("update_future_attention")
       expect(restricted).not.toContain("assignment_read")
       expect(restricted).not.toContain("update_assignment")
+      expect(restricted).not.toContain("learner_state_judgment_read")
+      expect(restricted).not.toContain("update_learner_state_judgment")
       expect(restricted).not.toContain("update_learning_course")
       expect(restricted.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -798,6 +812,26 @@ describe("tool.registry", () => {
       expect(assignmentWriter).toContain("update_assignment")
       expect(assignmentWriter).not.toContain("assignment_read")
 
+      const learnerStateReader = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", learner_state_judgment_read: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(learnerStateReader).toContain("learner_state_judgment_read")
+      expect(learnerStateReader).not.toContain("update_learner_state_judgment")
+
+      const learnerStateWriter = (yield* registry.tools({
+        ...model,
+        agent: {
+          ...agent,
+          permission: Permission.fromConfig({ "*": "deny", update_learner_state_judgment: "allow" }),
+        },
+      })).map((tool) => tool.id)
+      expect(learnerStateWriter).toContain("update_learner_state_judgment")
+      expect(learnerStateWriter).not.toContain("learner_state_judgment_read")
+
       const delegated = (yield* registry.tools({
         ...model,
         authority: [
@@ -816,6 +850,8 @@ describe("tool.registry", () => {
       expect(delegated).not.toContain("update_future_attention")
       expect(delegated).not.toContain("assignment_read")
       expect(delegated).not.toContain("update_assignment")
+      expect(delegated).not.toContain("learner_state_judgment_read")
+      expect(delegated).not.toContain("update_learner_state_judgment")
       expect(delegated).not.toContain("update_learning_course")
       expect(delegated.filter((id) => gate18Reads.some((allowed) => allowed === id))).toEqual(["course_query"])
 
@@ -842,6 +878,21 @@ describe("tool.registry", () => {
       })).map((tool) => tool.id)
       expect(delegatedAssignmentReader).toContain("assignment_read")
       expect(delegatedAssignmentReader).not.toContain("update_assignment")
+
+      const delegatedLearnerStateReader = (yield* registry.tools({
+        ...model,
+        authority: [
+          {
+            ruleset: Permission.fromConfig({
+              learner_state_judgment_read: "allow",
+              update_learner_state_judgment: "allow",
+            }),
+            absence: "deny",
+          },
+        ],
+      })).map((tool) => tool.id)
+      expect(delegatedLearnerStateReader).toContain("learner_state_judgment_read")
+      expect(delegatedLearnerStateReader).not.toContain("update_learner_state_judgment")
 
       const delegatedBootstrap = (yield* registry.tools({
         ...model,
@@ -1217,9 +1268,7 @@ describe("tool.registry", () => {
       const query = tools.find((tool) => tool.id === Assignment.READ_CAPABILITY)
       if (!command || !query) return yield* Effect.die("Assignment command/read tools are unavailable")
 
-      expect(command.description).toContain(
-        "existing, source-relative, substantial learning obligation",
-      )
+      expect(command.description).toContain("existing, source-relative, substantial learning obligation")
       expect(command.description).toContain("real later teaching, guided-work, review, or Planning consumer")
       for (const exclusion of [
         "self-promise",
@@ -1282,6 +1331,73 @@ describe("tool.registry", () => {
     }),
   )
 
+  it.instance("publishes fallible learner-state memory and keeps its lazy owner read non-mutating", () =>
+    Effect.gen(function* () {
+      const registry = yield* ToolRegistry.Service
+      const agents = yield* Agent.Service
+      const db = (yield* Database.Service).db
+      const agent = yield* agents.defaultInfo()
+      const tools = yield* registry.tools({
+        providerID: ProviderV2.ID.opencode,
+        modelID: ModelV2.ID.make("test"),
+        agent,
+      })
+      const command = tools.find((tool) => tool.id === LearnerStateJudgment.UPDATE_CAPABILITY)
+      const query = tools.find((tool) => tool.id === LearnerStateJudgment.READ_CAPABILITY)
+      if (!command || !query) return yield* Effect.die("Learner-state judgment command/read tools are unavailable")
+
+      expect(command.description).toContain("fallible judgment")
+      expect(command.description).toContain("materially improve later teaching or review")
+      expect(command.description).toContain("do not certify mastery")
+      expect(command.description).toContain("whole revision")
+      expect(command.description).toContain("may remain zero-write")
+      expect(command.description).toContain("Never infer a judgment from silence")
+      expect((command.jsonSchema as { additionalProperties?: boolean }).additionalProperties).toBe(false)
+      expect(
+        (query.jsonSchema as { anyOf?: Array<{ additionalProperties?: boolean }> }).anyOf?.map(
+          (branch) => branch.additionalProperties,
+        ),
+      ).toEqual([false, false, false, false])
+
+      const before = yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)
+      const frontier = yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)
+      const result = JSON.parse(
+        (yield* query.execute(
+          { action: "discover", disposition: "active", limit: 3 },
+          {
+            sessionID: SessionID.descending(),
+            messageID: MessageID.ascending(),
+            agent: agent.name,
+            abort: new AbortController().signal,
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )).output,
+      )
+      expect(result).toMatchObject({
+        page: {
+          items: [],
+          countAtCut: 0,
+          returnedCount: 0,
+          omittedCount: 0,
+          order: "identity_creation_then_judgment_id_non_priority",
+        },
+      })
+      expect(yield* db.get<{ count: number }>(sql`SELECT total_changes() AS count`)).toEqual(before)
+      expect(yield* db.all(sql`SELECT * FROM learning_shared_frontier ORDER BY sequence`)).toEqual(frontier)
+      expect(
+        yield* db.get(sql`
+          SELECT
+            (SELECT count(*) FROM learning_command_invocation) AS invocations,
+            (SELECT count(*) FROM learner_state_judgment_disposition) AS dispositions,
+            (SELECT count(*) FROM learner_state_judgment_effect) AS effects
+        `),
+      ).toEqual({ invocations: 0, dispositions: 0, effects: 0 })
+      expect(LearnerStateJudgment.PERMISSION_PATTERN).toBe("learner_state_judgment")
+    }),
+  )
+
   it.instance("derives one permission catalog from active tools", () =>
     Effect.gen(function* () {
       const registry = yield* ToolRegistry.Service
@@ -1294,6 +1410,8 @@ describe("tool.registry", () => {
       expect(catalog).toContain("future_attention_read")
       expect(catalog).toContain("update_assignment")
       expect(catalog).toContain("assignment_read")
+      expect(catalog).toContain("update_learner_state_judgment")
+      expect(catalog).toContain("learner_state_judgment_read")
       expect(catalog).toContain("content_mutation")
       expect(catalog).not.toContain("content_write")
       expect(catalog).not.toContain("invalid")

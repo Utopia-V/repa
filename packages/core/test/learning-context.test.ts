@@ -176,6 +176,34 @@ describe("LearningContext", () => {
     expect(first.binding.fingerprint).not.toBe(changed.binding.fingerprint)
   })
 
+  test("keeps exact provider definitions canonical while v5 renders only their compact aggregate", async () => {
+    const providerSurface = bindProviderToolSurface({
+      route,
+      toolChoice: { state: "present", value: { type: "tool", toolName: "probe_tool" } },
+      definitions: [
+        { id: "probe_tool", value: { name: "probe_tool", description: "exact provider definition" } },
+        { id: "large_tool", value: { name: "large_tool", description: "x".repeat(4_096) } },
+      ],
+    })
+    const prepared = await Effect.runPromise(
+      prepareCut({} as Transaction, {
+        operation: { sessionID, turnID, inputID, assistantMessageID, ordinal: 0 },
+        retainedSteering: retainedSteering(),
+        capabilityBasis: basis(providerSurface.binding),
+      }),
+    )
+
+    expect(prepared.canonicalCut).toContain('"definitions":[{')
+    expect(prepared.canonicalCut).toContain('"id":"probe_tool"')
+    expect(prepared.canonicalCut).toContain(providerSurface.binding.definitions[0]!.fingerprint)
+    expect(prepared.renderedBlock).toContain('"definitionCount":2')
+    expect(prepared.renderedBlock).toContain(providerSurface.binding.combinedFingerprint)
+    expect(prepared.renderedBlock).toContain(providerSurface.binding.fingerprint)
+    expect(prepared.renderedBlock).not.toContain('"definitions"')
+    expect(prepared.renderedBlock).not.toContain('"id":"probe_tool"')
+    expect(decodeStored(prepared.canonicalCut, prepared.renderedBlock, assistantMessageID)).toEqual(prepared.cut)
+  })
+
   test("creates and replays a bounded no-read cut when automatic context is withheld", async () => {
     const prepared = await Effect.runPromise(
       prepareCut({} as Transaction, {
@@ -201,6 +229,7 @@ describe("LearningContext", () => {
       "learner_response_evidence",
       "future_attention",
       "assignment",
+      "learner_state_judgment",
     ])
     expect(
       prepared.cut.sections.every(
@@ -465,7 +494,10 @@ function freezeGate19Cut(current: Cut) {
       catalogVersion: GATE19_CAPABILITY_CATALOG_VERSION,
     },
     sections: current.sections.filter(
-      (section) => section.owner !== "future_attention" && section.owner !== "assignment",
+      (section) =>
+        section.owner !== "future_attention" &&
+        section.owner !== "assignment" &&
+        section.owner !== "learner_state_judgment",
     ),
   } as const
   const entryCounts = Object.fromEntries(base.sections.map((section) => [section.owner, section.entries.length]))

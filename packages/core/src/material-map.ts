@@ -2368,6 +2368,20 @@ export function requireAlignmentOwnerProof(tx: Transaction, proof: AlignmentOwne
   })
 }
 
+/** Transaction-scoped exact selector admission for other learning authorities. */
+export function inspectExactSelector(tx: Transaction, mapID: MapID, selectorID: SelectorID) {
+  return Effect.map(requireCurrentMapSelector(tx, mapID, selectorID), ({ map, selector }) => ({
+    map: {
+      id: map.id,
+      canonicalInput: map.canonicalInput,
+      disposition: map.disposition,
+      superseded: map.superseded,
+      target: map.target,
+    },
+    selector,
+  }))
+}
+
 export function prepareEvidenceTargetProof(
   tx: Transaction,
   input: Readonly<{

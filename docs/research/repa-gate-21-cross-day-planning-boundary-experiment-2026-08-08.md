@@ -1,10 +1,31 @@
 # Repa Gate 21 pre-contract cross-day Planning boundary experiment
 
-Status: **Completed pre-contract experiment and roadmap-topology evidence.**
-This record does not accept a Gate contract, authorize production
-implementation, or qualify Gate 21A move selection.
+Status: **Completed historical experiment; topology and arithmetic evidence
+retained, production scheduler conclusion superseded.** This record does not
+accept a Gate contract, authorize production implementation, or qualify Gate
+21A move selection.
 
 Date: 2026-08-08
+
+2026-08-09 correction: the maintainer's renewed product-intent grill rejected
+the inference from bounded scheduling arithmetic to a program-owned Planning
+authority. Repa advises and assists learning; it does not certify one global
+portfolio, remaining-work truth, feasibility verdict, or allocation as the
+learner's plan. This experiment remains useful for three narrower conclusions:
+
+- Assignment has independently valid identity, lifecycle, recovery, and
+  consumers, so the Gate-20A split remains accepted;
+- exact revisions, correction, intermittent re-entry, and the prohibition on
+  inferring activity from time or silence remain reusable invariants; and
+- max-flow/shared-capacity counterexamples remain useful research for a future
+  optional bounded calculator, but they do not own advisory planning semantics.
+
+The current successors are the
+[Gate 20B learner-state judgment candidate](repa-gate-20b-learner-state-judgment-memory-2026-08-09.md)
+and the
+[Gate 21 advisory learning-plan suggestion candidate](repa-gate-21-advisory-learning-planning-2026-08-09.md).
+This correction classifies earlier work as retained, adapted, or retired; it
+does not treat the experiment period as wholly correct or wholly invalid.
 
 Exact derivation base:
 `c100b431fe174d1993b2baa89a7d1b133300b579` (`HEAD`, `main`, and

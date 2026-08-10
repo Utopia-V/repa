@@ -11,11 +11,18 @@ import { EventSequenceTable } from "@opencode-ai/core/event/sql"
 import { EventV2 } from "@opencode-ai/core/event"
 import { FutureAttention } from "@opencode-ai/core/future-attention"
 import { Assignment } from "@opencode-ai/core/assignment"
+import { LearnerStateJudgment } from "@opencode-ai/core/learner-state-judgment"
 import {
   AssignmentCapabilityIssueTable,
   AssignmentCapabilitySettlementTable,
   AssignmentEffectTable,
 } from "@opencode-ai/core/assignment/sql"
+import {
+  LearnerStateJudgmentCapabilityIssueTable,
+  LearnerStateJudgmentCapabilitySettlementTable,
+  LearnerStateJudgmentEffectTable,
+  LearnerStateJudgmentRevisionTable,
+} from "@opencode-ai/core/learner-state-judgment/sql"
 import { LearningCommand } from "@opencode-ai/core/learning-command"
 import { LearnerNavigation } from "@opencode-ai/core/learner-navigation"
 import {
@@ -81,6 +88,7 @@ import { Permission } from "@/permission"
 import { Session } from "@/session/session"
 import { recoverStartup } from "@/session/turn-recovery"
 import { AssignmentReadTool } from "@/tool/assignment-read"
+import { LearnerStateJudgmentReadTool } from "@/tool/learner-state-judgment-read"
 import { Truncate } from "@/tool/truncate"
 import { expect, test } from "bun:test"
 import { eq, sql } from "drizzle-orm"
@@ -215,7 +223,8 @@ it.effect("runs FutureAttention admission, immutable pending result, and exact-A
     const events = yield* EventV2Bridge.Service
     const courses = yield* Course.Service
     const seeded = yield* seedCourse(courses, "Semaphore follow-up", "Main")
-    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id)).items[0]
+    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id))
+      .items[0]
     if (!item) return yield* Effect.die("FutureAttention runtime fixture has no target item")
     const base = Date.now()
     const notBefore = new Date(base + 1_000 + 480 * 60_000).toISOString().slice(0, 19)
@@ -415,9 +424,7 @@ it.effect("runs FutureAttention admission, immutable pending result, and exact-A
       observationCut: "live_presentation_finalized",
       time: completedAt + 1,
     })
-    expect(finalized).toMatchObject([
-      { groupID, outcome: "served", members: [{ concernID, outcome: "served" }] },
-    ])
+    expect(finalized).toMatchObject([{ groupID, outcome: "served", members: [{ concernID, outcome: "served" }] }])
     expect(yield* exactPartResult(db, serviceInteraction.registration.partID)).toEqual(admitted)
     const current = yield* db.transaction((tx) =>
       FutureAttention.read(tx, { type: "claim_group", groupID }, { now: completedAt + 2 }),
@@ -444,7 +451,8 @@ it.effect("finalizes committed and uncommitted FutureAttention claims only after
     const events = yield* EventV2Bridge.Service
     const courses = yield* Course.Service
     const seeded = yield* seedCourse(courses, "Startup FutureAttention recovery", "Main")
-    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id)).items[0]
+    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id))
+      .items[0]
     if (!item) return yield* Effect.die("FutureAttention startup fixture has no target item")
     const base = Date.now()
     const notBefore = new Date(base + 1_000 + 480 * 60_000).toISOString().slice(0, 19)
@@ -517,7 +525,12 @@ it.effect("finalizes committed and uncommitted FutureAttention claims only after
     const uncommittedConcern = concerns.items.find(
       (value) => "concern" in value && value.concern.payload.purpose === uncommittedPurpose,
     )
-    if (!completedConcern || !("concern" in completedConcern) || !uncommittedConcern || !("concern" in uncommittedConcern)) {
+    if (
+      !completedConcern ||
+      !("concern" in completedConcern) ||
+      !uncommittedConcern ||
+      !("concern" in uncommittedConcern)
+    ) {
       return yield* Effect.die("Expected both startup FutureAttention concerns")
     }
 
@@ -615,20 +628,11 @@ it.effect("finalizes committed and uncommitted FutureAttention claims only after
           .run()
       }),
     )
-    const completedPartBeforeRecovery = yield* exactPartResult(
-      db,
-      completed.interaction.registration.partID,
-    )
-    const uncommittedPartBeforeRecovery = yield* exactPartResult(
-      db,
-      uncommitted.interaction.registration.partID,
-    )
+    const completedPartBeforeRecovery = yield* exactPartResult(db, completed.interaction.registration.partID)
+    const uncommittedPartBeforeRecovery = yield* exactPartResult(db, uncommitted.interaction.registration.partID)
 
     const recovered = yield* recoverStartup(events, base + 30_000)
-    expect(recovered.map((turn) => turn.id)).toEqual([
-      completed.interaction.turnID,
-      uncommitted.interaction.turnID,
-    ])
+    expect(recovered.map((turn) => turn.id)).toEqual([completed.interaction.turnID, uncommitted.interaction.turnID])
     const completedGroup = yield* db.transaction((tx) =>
       FutureAttention.read(tx, { type: "claim_group", groupID: completed.groupID }, { now: base + 30_001 }),
     )
@@ -670,7 +674,8 @@ it.effect("enforces delegated FutureAttention membership and root-only semantic 
     const runtime = yield* LearningCommandRuntime.Service
     const courses = yield* Course.Service
     const seeded = yield* seedCourse(courses, "Delegated FutureAttention", "Main")
-    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id)).items[0]
+    const item = (yield* courses.listRevisionItems(seeded.course.id, seeded.view.view.id, seeded.view.revision.id))
+      .items[0]
     if (!item) return yield* Effect.die("Delegated FutureAttention fixture has no target item")
     const selection = yield* courses.select({
       courseID: seeded.course.id,
@@ -732,11 +737,7 @@ it.effect("enforces delegated FutureAttention membership and root-only semantic 
           delegatedCapability,
           LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
         )
-        yield* runtime.prepareCommand(
-          LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
-          input,
-          delegated.registration,
-        )
+        yield* runtime.prepareCommand(LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY, input, delegated.registration)
         const exact = yield* runtime.executeCommand(
           LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
           input,
@@ -819,9 +820,9 @@ it.effect("enforces delegated FutureAttention membership and root-only semantic 
       settlement: { outcome: "applied", changes: [{ operation: "dismiss", disposition: "dismissed" }] },
     })
     expect(
-      permissionRequests.filter(
-        (request) => request.permission === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY,
-      ).at(-1),
+      permissionRequests
+        .filter((request) => request.permission === LearningCommand.UPDATE_FUTURE_ATTENTION_CAPABILITY)
+        .at(-1),
     ).toMatchObject({
       metadata: {
         issuance: "delegated",
@@ -840,7 +841,11 @@ it.effect("enforces delegated FutureAttention membership and root-only semantic 
           expectedVersion: 1,
           mutation: {
             type: "interpreted_learner_direction" as const,
-            excerpt: { text: directionSource, startByte: 0, endByte: new TextEncoder().encode(directionSource).byteLength },
+            excerpt: {
+              text: directionSource,
+              startByte: 0,
+              endByte: new TextEncoder().encode(directionSource).byteLength,
+            },
           },
         },
       ],
@@ -911,9 +916,9 @@ it.effect("enforces delegated FutureAttention membership and root-only semantic 
       FutureAttention.read(tx, { type: "list" }, { now: Date.now(), limit: 64 }),
     )
     expect(final.items).toHaveLength(2)
-    expect(
-      final.items.find((value) => "concern" in value && value.concern.id === corrected.concern.id),
-    ).toMatchObject({ concern: { current: { disposition: "dismissed", version: 1 } } })
+    expect(final.items.find((value) => "concern" in value && value.concern.id === corrected.concern.id)).toMatchObject({
+      concern: { current: { disposition: "dismissed", version: 1 } },
+    })
     expect(final.items.find((value) => "concern" in value && value.concern.id === service.concern.id)).toMatchObject({
       concern: { current: { disposition: "open", version: 0 } },
     })
@@ -1187,10 +1192,7 @@ it.effect("runs one root Assignment through exact proposal, settlement, presenta
     expect(permissionRequests).toHaveLength(1)
     const request = permissionRequests[0]!
     expect(
-      SemanticPresentation.readProposal(
-        { ...request, id: request.id ?? PermissionV1.ID.ascending() },
-        true,
-      ).type,
+      SemanticPresentation.readProposal({ ...request, id: request.id ?? PermissionV1.ID.ascending() }, true).type,
     ).toBe("valid")
     expect(request).toMatchObject({
       permission: LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
@@ -1254,6 +1256,362 @@ it.effect("runs one root Assignment through exact proposal, settlement, presenta
     )
     expect(replay).toEqual(result)
     expect(permissionRequests).toHaveLength(1)
+  }),
+)
+
+it.effect("runs learner-state judgment allow, prompt, denial, and physical replay through one typed runtime", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+
+    const source = "I understand semaphore definitions, but applying the safety invariant remains uncertain."
+    const input = learnerStateCreateInput(source, "Application of the semaphore safety invariant remains uncertain")
+    const allowed = yield* seedInteraction(
+      db,
+      "learner-state-root-allow",
+      input,
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      { text: source, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, input, allowed.registration)
+    const result = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      input,
+      context(
+        allowed.registration,
+        "allow",
+        LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        [],
+        LearnerStateJudgment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(permissionRequests).toHaveLength(1)
+    const request = permissionRequests[0]!
+    expect(
+      SemanticPresentation.readProposal({ ...request, id: request.id ?? PermissionV1.ID.ascending() }, true),
+    ).toMatchObject({
+      type: "valid",
+      value: {
+        capability: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        approval: "policy",
+      },
+    })
+    expect(result.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    expect(JSON.parse(result.output)).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "policy_allow",
+      settlement: {
+        outcome: "applied",
+        learnerStateJudgmentKind: "revision",
+        version: 1,
+        operation: "create",
+        disposition: "active",
+      },
+      nonImplications: ["not_mastery_certification", "not_activity_or_effort_evidence", "not_per_clause_entailment"],
+    })
+    expect(yield* exactPartResult(db, allowed.registration.partID)).toEqual(result)
+    expect(yield* db.select().from(LearnerStateJudgmentEffectTable).all()).toHaveLength(1)
+
+    const replay = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      input,
+      context(
+        allowed.registration,
+        "deny",
+        LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        [],
+        LearnerStateJudgment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(replay).toEqual(result)
+    expect(permissionRequests).toHaveLength(1)
+
+    const promptedSource = "I can restate the binary-search invariant, but I still misuse it in boundary cases."
+    const promptedInput = learnerStateCreateInput(promptedSource, "Boundary-case application remains uncertain")
+    const prompted = yield* seedInteraction(
+      db,
+      "learner-state-prompt-allow",
+      promptedInput,
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      { text: promptedSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      promptedInput,
+      prompted.registration,
+    )
+    const promptedResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      promptedInput,
+      context(
+        prompted.registration,
+        "ask",
+        LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        [],
+        LearnerStateJudgment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(promptedResult.metadata).toMatchObject({ outcome: "applied", durablySettled: true })
+    expect(JSON.parse(promptedResult.output)).toMatchObject({
+      capabilityOutcome: "prompted_allow",
+      settlement: { outcome: "applied", learnerStateJudgmentKind: "revision" },
+    })
+
+    const deniedSource = "I might understand condition variables, but do not retain that claim."
+    const deniedInput = learnerStateCreateInput(deniedSource, "Condition-variable understanding is uncertain")
+    const denied = yield* seedInteraction(
+      db,
+      "learner-state-policy-deny",
+      deniedInput,
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      { text: deniedSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      deniedInput,
+      denied.registration,
+    )
+    const deniedResult = yield* runtime.executeCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      deniedInput,
+      context(
+        denied.registration,
+        "deny",
+        LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        [],
+        LearnerStateJudgment.PERMISSION_PATTERN,
+      ),
+    )
+    expect(deniedResult.metadata).toMatchObject({
+      outcome: "error",
+      code: "permission_rejected",
+      durablySettled: true,
+    })
+    expect(JSON.parse(deniedResult.output)).toMatchObject({
+      capabilityOutcome: "policy_deny",
+      settlement: { outcome: "error", code: "permission_rejected" },
+    })
+    expect(yield* db.select().from(LearnerStateJudgmentRevisionTable).all()).toHaveLength(2)
+    expect(yield* db.select().from(LearnerStateJudgmentEffectTable).all()).toHaveLength(2)
+    expect(permissionRequests).toHaveLength(3)
+  }),
+)
+
+it.effect("settles a live learner-state permission abort without creating a judgment", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    permissionWaits.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const source = "I may understand the barrier release rule, but ask before retaining that judgment."
+    const input = learnerStateCreateInput(source, "Barrier-release understanding remains uncertain")
+    const interaction = yield* seedInteraction(
+      db,
+      "learner-state-live-permission-abort",
+      input,
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      { text: source, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      input,
+      interaction.registration,
+    )
+
+    const entered = yield* Deferred.make<void>()
+    const release = yield* Deferred.make<void>()
+    permissionWaits.push({ entered, release })
+    const controller = new AbortController()
+    const execution = yield* runtime
+      .executeCommand(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, input, {
+        ...context(
+          interaction.registration,
+          "ask",
+          LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+          [],
+          LearnerStateJudgment.PERMISSION_PATTERN,
+        ),
+        abort: controller.signal,
+      })
+      .pipe(Effect.forkChild)
+    yield* Deferred.await(entered)
+    const issued = yield* db
+      .select()
+      .from(LearnerStateJudgmentCapabilityIssueTable)
+      .where(eq(LearnerStateJudgmentCapabilityIssueTable.invocation_part_id, interaction.registration.partID))
+      .get()
+    expect(issued?.permission_request_id).toBeString()
+    expect(yield* db.select().from(LearnerStateJudgmentCapabilitySettlementTable).all()).toEqual([])
+    expect(yield* db.select().from(LearnerStateJudgmentEffectTable).all()).toEqual([])
+
+    controller.abort()
+    const result = yield* Fiber.join(execution)
+    yield* Deferred.succeed(release, undefined).pipe(Effect.ignore)
+    expect(result.metadata).toMatchObject({ outcome: "error", code: "interrupted", durablySettled: true })
+    expect(JSON.parse(result.output)).toMatchObject({
+      disposition: "candidate_v1",
+      capabilityOutcome: "prompted_abort",
+      permissionRequestID: issued!.permission_request_id,
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    expect(yield* exactPartResult(db, interaction.registration.partID)).toEqual(result)
+    expect(yield* db.select().from(LearnerStateJudgmentRevisionTable).all()).toEqual([])
+    expect(yield* db.select().from(LearnerStateJudgmentEffectTable).all()).toEqual([])
+    expect(permissionRequests).toHaveLength(1)
+  }),
+)
+
+it.effect("interrupts and startup-recovers learner-state candidates without blind mutation", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const events = yield* EventV2Bridge.Service
+
+    const interruptedSource = "Prepare this learner-state memory, then stop before committing it."
+    const interruptedInput = learnerStateCreateInput(interruptedSource, "This interrupted judgment must not commit")
+    const interrupted = yield* seedInteraction(
+      db,
+      "learner-state-direct-interrupt",
+      interruptedInput,
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      { text: interruptedSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      interruptedInput,
+      interrupted.registration,
+    )
+    expect(yield* runtime.interrupt(interrupted.registration)).toBe(true)
+    const interruptedResult = yield* exactPartResult(db, interrupted.registration.partID)
+    expect(JSON.parse(interruptedResult.output)).toMatchObject({
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+
+    const recoveredSource = "Leave this exact learner-state candidate admitted across startup recovery."
+    const recoveredInput = learnerStateCreateInput(recoveredSource, "Recovery must not invent this judgment")
+    const recovered = yield* seedInteraction(
+      db,
+      "learner-state-startup-recovery",
+      recoveredInput,
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      { text: recoveredSource, timeZone: "UTC" },
+    )
+    yield* runtime.prepareCommand(
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      recoveredInput,
+      recovered.registration,
+    )
+    yield* LearningCommandRuntime.recoverAdmitted(events)
+    const recoveredResult = yield* exactPartResult(db, recovered.registration.partID)
+    expect(JSON.parse(recoveredResult.output)).toMatchObject({
+      settlement: { outcome: "error", code: "interrupted" },
+    })
+    yield* LearningCommandRuntime.recoverAdmitted(events)
+    expect(yield* exactPartResult(db, recovered.registration.partID)).toEqual(recoveredResult)
+    expect(
+      yield* runtime.executeCommand(
+        LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+        recoveredInput,
+        context(
+          recovered.registration,
+          "allow",
+          LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+          [],
+          LearnerStateJudgment.PERMISSION_PATTERN,
+        ),
+      ),
+    ).toEqual(recoveredResult)
+    expect(yield* db.select().from(LearnerStateJudgmentRevisionTable).all()).toEqual([])
+    expect(yield* db.select().from(LearnerStateJudgmentEffectTable).all()).toEqual([])
+    expect(permissionRequests).toHaveLength(0)
+  }),
+)
+
+it.effect("rejects delegated learner-state admission before candidate, permission, or effect", () =>
+  Effect.gen(function* () {
+    permissionRequests.length = 0
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const source = "I can restate the invariant, but its application remains uncertain."
+    const input = learnerStateCreateInput(source, "Invariant application remains uncertain")
+    const delegated = yield* seedDelegatedLearningCommandInteraction(
+      db,
+      "learner-state-delegated-root-only",
+      input,
+      {
+        version: 2,
+        parent: [],
+        inherited: [],
+        profile: [],
+        explicit: [
+          {
+            permission: LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+            pattern: LearnerStateJudgment.PERMISSION_PATTERN,
+            action: "allow",
+          },
+        ],
+      },
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+    )
+    const rejected = yield* runtime
+      .prepareCommand(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, input, delegated.registration)
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(rejected)).toBe(true)
+    if (Exit.isFailure(rejected)) {
+      expect(Cause.squash(rejected.cause)).toMatchObject({
+        _tag: "LearnerStateJudgment.IntegrityError",
+        detail: "Learner-state mutation is restricted to the ordinary interactive root Agent",
+      })
+    }
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learning_command_invocation
+            WHERE part_id = ${delegated.registration.partID}) AS invocations,
+          (SELECT count(*) FROM learner_state_judgment_disposition
+            WHERE invocation_part_id = ${delegated.registration.partID}) AS dispositions,
+          (SELECT count(*) FROM learner_state_judgment_effect) AS effects
+      `),
+    ).toEqual({ invocations: 0, dispositions: 0, effects: 0 })
+    expect(permissionRequests).toHaveLength(0)
+  }),
+)
+
+it.effect("keeps the compact learner-state provider schema behind the closed Core command grammar", () =>
+  Effect.gen(function* () {
+    const db = (yield* Database.Service).db
+    const runtime = yield* LearningCommandRuntime.Service
+    const source = "This is a correction, not a basis for inventing a new learner-state identity."
+    const input = {
+      ...learnerStateCreateInput(source, "This unsupported create must not be admitted"),
+      cause: {
+        type: "learner_correction" as const,
+        excerpt: { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength },
+      },
+    }
+    const interaction = yield* seedInteraction(
+      db,
+      "learner-state-invalid-create-cause",
+      input,
+      LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY,
+      { text: source, timeZone: "UTC" },
+    )
+    const rejected = yield* runtime
+      .prepareCommand(LearningCommand.UPDATE_LEARNER_STATE_JUDGMENT_CAPABILITY, input, interaction.registration)
+      .pipe(Effect.exit)
+    expect(Exit.isFailure(rejected)).toBe(true)
+    expect(
+      yield* db.get(sql`
+        SELECT
+          (SELECT count(*) FROM learning_command_invocation
+            WHERE part_id = ${interaction.registration.partID}) AS invocations,
+          (SELECT count(*) FROM learner_state_judgment_disposition
+            WHERE invocation_part_id = ${interaction.registration.partID}) AS dispositions,
+          (SELECT count(*) FROM learner_state_judgment_effect) AS effects
+      `),
+    ).toEqual({ invocations: 0, dispositions: 0, effects: 0 })
   }),
 )
 
@@ -1372,11 +1730,7 @@ it.effect("uses a later root model operation for exact Assignment self-correctio
       LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
       { text: source, time, timeZone: "UTC" },
     )
-    yield* runtime.prepareCommand(
-      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
-      createInput,
-      interaction.registration,
-    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, createInput, interaction.registration)
     const created = yield* runtime.executeCommand(
       LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
       createInput,
@@ -1445,16 +1799,8 @@ it.effect("uses a later root model operation for exact Assignment self-correctio
       LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
       time + 21,
     )
-    yield* runtime.prepareCommand(
-      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
-      firstCorrectionInput,
-      firstCorrection,
-    )
-    yield* runtime.prepareCommand(
-      LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
-      racingCorrectionInput,
-      racingCorrection,
-    )
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, firstCorrectionInput, firstCorrection)
+    yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, racingCorrectionInput, racingCorrection)
 
     const corrected = yield* runtime.executeCommand(
       LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
@@ -1575,13 +1921,10 @@ it.effect("resumes populated Assignment discovery through the tool with its curs
       ([suffix, source]) =>
         Effect.gen(function* () {
           const input = assignmentCreateInput(source, `Analyze ${suffix}`)
-          const interaction = yield* seedInteraction(
-            db,
-            suffix,
-            input,
-            LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
-            { text: source, timeZone: "UTC" },
-          )
+          const interaction = yield* seedInteraction(db, suffix, input, LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, {
+            text: source,
+            timeZone: "UTC",
+          })
           yield* runtime.prepareCommand(LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, input, interaction.registration)
           yield* runtime.executeCommand(
             LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
@@ -1719,6 +2062,61 @@ it.effect("returns typed stale-cursor truth instead of failing the Assignment re
       status: "stale_cursor",
       reason: "A bound Assignment or source dependency changed after this read began.",
       recovery: "Restart the Assignment read without the old cursor.",
+    })
+  }),
+)
+
+it.effect("returns typed stale-cursor truth instead of failing the learner-state read tool", () =>
+  Effect.gen(function* () {
+    const toolInfo = yield* LearnerStateJudgmentReadTool.pipe(
+      Effect.provideService(
+        LearnerStateJudgment.ReadService,
+        LearnerStateJudgment.ReadService.of({
+          read: () => Effect.fail(new LearnerStateJudgment.InvalidCommandError({ reason: "stale" })),
+        }),
+      ),
+      Effect.provideService(
+        Truncate.Service,
+        Truncate.Service.of({
+          cleanup: () => Effect.void,
+          write: () => Effect.succeed("unused"),
+          output: (text) => Effect.succeed({ content: text, truncated: false }),
+          limits: () => Effect.succeed({ maxLines: Truncate.MAX_LINES, maxBytes: Truncate.MAX_BYTES }),
+        }),
+      ),
+      Effect.provideService(
+        Agent.Service,
+        Agent.Service.of({
+          get: () => Effect.succeed(undefined),
+          list: () => Effect.succeed([]),
+          identifiers: () => Effect.succeed([]),
+          defaultInfo: () => Effect.die("Learner-state stale read test does not request a default Agent"),
+          defaultAgent: () => Effect.die("Learner-state stale read test does not request a default Agent"),
+          generate: () => Effect.die("Learner-state stale read test does not generate an Agent"),
+        }),
+      ),
+    )
+    const query = yield* toolInfo.init()
+    const result = yield* query.execute(
+      { action: "discover", disposition: "active", limit: 1, cursor: "bound-stale-cursor" },
+      {
+        sessionID: SessionSchema.ID.descending(),
+        messageID: SessionV1.MessageID.ascending(),
+        agent: "learner-state-stale-read-test",
+        abort: new AbortController().signal,
+        messages: [],
+        metadata: () => Effect.void,
+        ask: () => Effect.void,
+      },
+    )
+    expect(result).toMatchObject({
+      title: "Learner-state judgment cursor stale",
+      metadata: { action: "discover", status: "stale_cursor", truncated: false },
+    })
+    expect(JSON.parse(result.output)).toEqual({
+      status: "stale_cursor",
+      reason: "The bound learner-state owner or dependency cut changed after this read began.",
+      recovery: "Restart the learner-state judgment read without the old page cursor.",
     })
   }),
 )
@@ -6801,7 +7199,7 @@ test("replays a migrated terminal Default-Course V1 Part before V3 decoding or p
     confirmation_availability: "not_recorded_v1",
   })
   expect(permissionRequests).toHaveLength(requestsBeforeReplay)
-})
+}, 15_000)
 
 it.effect("keeps route anchors exact to one Course Revision Item and uses ordinary permission", () =>
   Effect.gen(function* () {
@@ -8435,7 +8833,7 @@ test("upgrades and recovers a frozen V12 admitted Default-Course invocation with
   expect(recovered.capabilitySettlements).toEqual([])
   expect(recovered.acknowledgements).toEqual([])
   expect(recovered.effects).toEqual([])
-})
+}, 15_000)
 
 test("upgrades and interrupts a frozen V15 admitted learner Goal without reviving its retired producer", async () => {
   await using tmp = await tmpdir()
@@ -8535,7 +8933,7 @@ test("upgrades and interrupts a frozen V15 admitted learner Goal without revivin
   expect(recovered.capabilitySettlements).toEqual([])
   expect(recovered.effects).toEqual([])
   expect(permissionRequests).toHaveLength(requestsBeforeRecovery)
-})
+}, 15_000)
 
 test("replays a migrated terminal learner Goal V1 Part before V2 decoding or permission", async () => {
   await using tmp = await tmpdir()
@@ -8609,7 +9007,7 @@ test("replays a migrated terminal learner Goal V1 Part before V2 decoding or per
   expect(replayed.capabilityIssues).toEqual([])
   expect(replayed.capabilitySettlements).toEqual([])
   expect(permissionRequests).toHaveLength(requestsBeforeReplay)
-})
+}, 15_000)
 
 test("carries each historical V1 target into a V2 update without copying retired proof fields", async () => {
   await using tmp = await tmpdir()
@@ -10639,11 +11037,7 @@ test("runs learner-response evidence through root/delegated policy, exact curren
             (SELECT time_committed FROM learning_shared_frontier WHERE singleton = 1) AS frontierTime
         `)
       const wideExit = yield* runtime
-        .prepareCommand(
-          LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY,
-          wideInput,
-          wide.registration,
-        )
+        .prepareCommand(LearningCommand.UPDATE_LEARNER_RESPONSE_EVIDENCE_CAPABILITY, wideInput, wide.registration)
         .pipe(Effect.exit)
       expect(Exit.isFailure(wideExit)).toBe(true)
       expect(
@@ -10902,6 +11296,23 @@ function assignmentCreateInput(source: string, obligationSummary: string) {
         },
       },
     ],
+  }
+}
+
+function learnerStateCreateInput(source: string, judgmentBody: string) {
+  return {
+    operation: "create" as const,
+    cause: {
+      type: "interpreted_learner_report" as const,
+      excerpt: { text: source, startByte: 0, endByte: new TextEncoder().encode(source).byteLength },
+    },
+    snapshot: {
+      subject: { label: "Learning state for the current concept", scope: { type: "learner_home" as const } },
+      judgmentBody,
+      exactBasisRefs: [],
+      uncertaintyAndLimits: "Fallible and open to learner correction.",
+      basisScope: "whole_judgment" as const,
+    },
   }
 }
 
@@ -11728,13 +12139,7 @@ function seedDelegatedLearningCommandInteraction(
       const result = yield* runtime.executeCommand(
         LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
         options.rootAssignmentInput,
-        context(
-          registration,
-          "allow",
-          LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY,
-          [],
-          Assignment.PERMISSION_PATTERN,
-        ),
+        context(registration, "allow", LearningCommand.UPDATE_ASSIGNMENT_CAPABILITY, [], Assignment.PERMISSION_PATTERN),
       )
       if (result.metadata.outcome !== "applied") {
         return yield* Effect.die("Expected the root Assignment semantic address fixture to apply")

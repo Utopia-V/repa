@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "079eb639-544d-4e0b-83f3-c2842dd3c2d3",
+  "id": "25996186-f20b-4c32-91a7-493fb36f8373",
   "prevIds": [
-    "81ef2eed-f563-4dd0-ada9-1a45a1a8f79d"
+    "cae1b7e9-961e-4ad7-a8f0-6647d08040d5"
   ],
   "ddl": [
     {
@@ -380,6 +380,46 @@
     },
     {
       "name": "learner_response_evidence_revision",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_anchor",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_basis",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_capability_issue",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_capability_settlement",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_commit_seal",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_disposition",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_effect",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_no_change_seal",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment_revision",
+      "entityType": "tables"
+    },
+    {
+      "name": "learner_state_judgment",
       "entityType": "tables"
     },
     {
@@ -9571,6 +9611,1016 @@
       "name": "frontier_time",
       "entityType": "columns",
       "table": "learner_response_evidence_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ref_type",
+      "entityType": "columns",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ref_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "binding",
+      "entityType": "columns",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "first_bound_revision_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ordinal",
+      "entityType": "columns",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ref_type",
+      "entityType": "columns",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ref_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "binding",
+      "entityType": "columns",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "first_bound_revision_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_basis",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "policy_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shown_scope",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shown_scope_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_issued",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "issue_order",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "outcome",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "permission_request_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_settled",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "settlement_order",
+      "entityType": "columns",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "revision_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_sealed",
+      "entityType": "columns",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "seal_order",
+      "entityType": "columns",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_command",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_address_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_outcome",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "existing_effect_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "existing_no_change_part_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent_action",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "materialized_candidate",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_disposed",
+      "entityType": "columns",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cause_type",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model_operation_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_slot",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_address_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_command",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "physical_receipt_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "admission_projection",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "result",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_time",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "acknowledgement_title",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "acknowledgement_body",
+      "entityType": "columns",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_address_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "cause_type",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "occurrence_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "model_operation_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "semantic_slot",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "command_fingerprint",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "canonical_command",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_part_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "invocation_status",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "receipt_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "materialized_candidate",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "result",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "judgment_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "predecessor_revision_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "effect_id",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "operation",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "disposition",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "snapshot",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "subject_label",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "scope_type",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "anchor_count",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "judgment_body",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "uncertainty_and_limits",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_scope",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "basis_count",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "author_class",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "author_and_cause",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_committed",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "commit_order",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "frontier_sequence",
+      "entityType": "columns",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "learner_state_judgment"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "learner_state_judgment"
     },
     {
       "type": "text",
@@ -19600,6 +20650,355 @@
     },
     {
       "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_state_judgment_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_anchor_revision_id_learner_state_judgment_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "columns": [
+        "first_bound_revision_id"
+      ],
+      "tableTo": "learner_state_judgment_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_anchor_first_bound_revision_id_learner_state_judgment_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_state_judgment_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_basis_revision_id_learner_state_judgment_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "columns": [
+        "first_bound_revision_id"
+      ],
+      "tableTo": "learner_state_judgment_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_basis_first_bound_revision_id_learner_state_judgment_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learner_state_judgment_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_capability_issue_invocation_part_id_learner_state_judgment_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learner_state_judgment_disposition",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_capability_settlement_invocation_part_id_learner_state_judgment_disposition_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "columns": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "tableTo": "learner_state_judgment_capability_issue",
+      "columnsTo": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_capability_settlement_invocation_part_id_permission_request_id_learner_state_judgment_capability_issue_invocation_part_id_permission_request_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_state_judgment_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_commit_seal_effect_id_learner_state_judgment_effect_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "tableTo": "learner_state_judgment_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_commit_seal_revision_id_learner_state_judgment_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_commit_seal_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_commit_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "columns": [
+        "existing_effect_id"
+      ],
+      "tableTo": "learner_state_judgment_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_disposition_existing_effect_id_learner_state_judgment_effect_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "columns": [
+        "existing_no_change_part_id"
+      ],
+      "tableTo": "learner_state_judgment_no_change_seal",
+      "columnsTo": [
+        "invocation_part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_disposition_existing_no_change_part_id_learner_state_judgment_no_change_seal_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_disposition_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_effect_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_effect_invocation_part_id_learning_command_invocation_part_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        "physical_receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_effect_physical_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        "occurrence_id"
+      ],
+      "tableTo": "learning_admitted_occurrence",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_no_change_seal_occurrence_id_learning_admitted_occurrence_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id",
+        "invocation_status"
+      ],
+      "tableTo": "learning_command_invocation",
+      "columnsTo": [
+        "part_id",
+        "status"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_no_change_seal_invocation_part_id_invocation_status_learning_command_invocation_part_id_status_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "tableTo": "learning_command_receipt",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_no_change_seal_receipt_id_learning_command_receipt_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "columns": [
+        "judgment_id"
+      ],
+      "tableTo": "learner_state_judgment",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_revision_judgment_id_learner_state_judgment_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "columns": [
+        "predecessor_revision_id"
+      ],
+      "tableTo": "learner_state_judgment_revision",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_revision_predecessor_revision_id_learner_state_judgment_revision_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "tableTo": "learner_state_judgment_effect",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "RESTRICT",
+      "nameExplicit": false,
+      "name": "fk_learner_state_judgment_revision_effect_id_learner_state_judgment_effect_id_fk",
+      "entityType": "fks",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "columns": [
         "effect_id"
       ],
       "tableTo": "learning_bootstrap_effect",
@@ -21855,6 +23254,26 @@
     },
     {
       "columns": [
+        "revision_id",
+        "ordinal"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_anchor_pk",
+      "entityType": "pks",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "columns": [
+        "revision_id",
+        "ordinal"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_basis_pk",
+      "entityType": "pks",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "columns": [
         "effect_id",
         "local_key"
       ],
@@ -22649,6 +24068,78 @@
       "nameExplicit": false,
       "name": "learner_response_evidence_revision_pk",
       "table": "learner_response_evidence_revision",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_capability_issue_pk",
+      "table": "learner_state_judgment_capability_issue",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_capability_settlement_pk",
+      "table": "learner_state_judgment_capability_settlement",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_commit_seal_pk",
+      "table": "learner_state_judgment_commit_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_disposition_pk",
+      "table": "learner_state_judgment_disposition",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_effect_pk",
+      "table": "learner_state_judgment_effect",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "semantic_address_fingerprint"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_no_change_seal_pk",
+      "table": "learner_state_judgment_no_change_seal",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_revision_pk",
+      "table": "learner_state_judgment_revision",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_pk",
+      "table": "learner_state_judgment",
       "entityType": "pks"
     },
     {
@@ -24624,6 +26115,128 @@
     {
       "columns": [
         {
+          "value": "occurrence_id",
+          "isExpression": false
+        },
+        {
+          "value": "semantic_slot",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"learner_state_judgment_effect\".\"cause_type\" IN ('interpreted_learner_report', 'learner_correction')",
+      "origin": "manual",
+      "name": "learner_state_judgment_effect_learner_slot",
+      "entityType": "indexes",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        {
+          "value": "model_operation_id",
+          "isExpression": false
+        },
+        {
+          "value": "semantic_slot",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"learner_state_judgment_effect\".\"cause_type\" IN ('tutor_model_judgment', 'exact_owner_observation')",
+      "origin": "manual",
+      "name": "learner_state_judgment_effect_model_slot",
+      "entityType": "indexes",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        {
+          "value": "occurrence_id",
+          "isExpression": false
+        },
+        {
+          "value": "semantic_slot",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"learner_state_judgment_no_change_seal\".\"cause_type\" IN ('interpreted_learner_report', 'learner_correction')",
+      "origin": "manual",
+      "name": "learner_state_judgment_no_change_learner_slot",
+      "entityType": "indexes",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "columns": [
+        {
+          "value": "model_operation_id",
+          "isExpression": false
+        },
+        {
+          "value": "semantic_slot",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"learner_state_judgment_no_change_seal\".\"cause_type\" IN ('tutor_model_judgment', 'exact_owner_observation')",
+      "origin": "manual",
+      "name": "learner_state_judgment_no_change_model_slot",
+      "entityType": "indexes",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "columns": [
+        {
+          "value": "predecessor_revision_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": "\"learner_state_judgment_revision\".\"predecessor_revision_id\" IS NOT NULL",
+      "origin": "manual",
+      "name": "learner_state_judgment_revision_one_successor",
+      "entityType": "indexes",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "judgment_id",
+          "isExpression": false
+        },
+        {
+          "value": "version",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_state_judgment_revision_head_idx",
+      "entityType": "indexes",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "columns": [
+        {
+          "value": "time_created",
+          "isExpression": false
+        },
+        {
+          "value": "id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "learner_state_judgment_creation_order_idx",
+      "entityType": "indexes",
+      "table": "learner_state_judgment"
+    },
+    {
+      "columns": [
+        {
           "value": "course_id",
           "isExpression": false
         },
@@ -26565,6 +28178,46 @@
     },
     {
       "columns": [
+        "revision_id",
+        "ref_fingerprint"
+      ],
+      "nameExplicit": true,
+      "name": "learner_state_judgment_anchor_unique_ref",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "columns": [
+        "revision_id",
+        "ref_fingerprint"
+      ],
+      "nameExplicit": true,
+      "name": "learner_state_judgment_basis_unique_ref",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "columns": [
+        "invocation_part_id",
+        "permission_request_id"
+      ],
+      "nameExplicit": true,
+      "name": "learner_state_judgment_capability_issue_exact",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "columns": [
+        "judgment_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "learner_state_judgment_revision_version",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "columns": [
         "alignment_id"
       ],
       "nameExplicit": true,
@@ -27302,6 +28955,114 @@
       "name": "learner_response_evidence_revision_frontier_sequence_unique",
       "entityType": "uniques",
       "table": "learner_response_evidence_revision"
+    },
+    {
+      "columns": [
+        "permission_request_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_capability_issue_permission_request_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "columns": [
+        "revision_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_commit_seal_revision_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_commit_seal_invocation_part_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_commit_seal_receipt_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "columns": [
+        "semantic_address_fingerprint"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_effect_semantic_address_fingerprint_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_effect_invocation_part_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        "physical_receipt_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_effect_physical_receipt_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        "frontier_sequence"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_effect_frontier_sequence_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "columns": [
+        "invocation_part_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_no_change_seal_invocation_part_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "columns": [
+        "receipt_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_no_change_seal_receipt_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "columns": [
+        "effect_id"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_revision_effect_id_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "columns": [
+        "frontier_sequence"
+      ],
+      "nameExplicit": false,
+      "name": "learner_state_judgment_revision_frontier_sequence_unique",
+      "entityType": "uniques",
+      "table": "learner_state_judgment_revision"
     },
     {
       "columns": [
@@ -28651,6 +30412,108 @@
       "table": "learner_response_evidence_revision"
     },
     {
+      "value": "\"ordinal\" BETWEEN 0 AND 7 AND length(\"ref_fingerprint\") = 64\n        AND \"ref_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND json_valid(\"binding\")",
+      "name": "learner_state_judgment_anchor_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_anchor"
+    },
+    {
+      "value": "\"ordinal\" BETWEEN 0 AND 15 AND length(\"ref_fingerprint\") = 64\n        AND \"ref_fingerprint\" NOT GLOB '*[^0-9a-f]*' AND json_valid(\"binding\")",
+      "name": "learner_state_judgment_basis_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_basis"
+    },
+    {
+      "value": "length(\"agent_action_fingerprint\") = 64\n        AND \"agent_action_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"policy_fingerprint\") = 64\n        AND \"policy_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"shown_scope_fingerprint\") = 64\n        AND \"shown_scope_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND json_valid(\"policy_basis\")\n        AND json_valid(\"shown_scope\") AND \"time_issued\" >= 0 AND \"issue_order\" >= 0",
+      "name": "learner_state_judgment_capability_issue_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_capability_issue"
+    },
+    {
+      "value": "length(\"agent_action_fingerprint\") = 64\n        AND \"agent_action_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND (\"basis_fingerprint\" IS NULL OR (length(\"basis_fingerprint\") = 64\n          AND \"basis_fingerprint\" NOT GLOB '*[^0-9a-f]*'))\n        AND \"time_settled\" >= 0 AND \"settlement_order\" >= 0\n        AND ((\"outcome\" = 'not_evaluated' AND \"permission_request_id\" IS NULL\n            AND \"basis\" IS NULL AND \"basis_fingerprint\" IS NULL)\n          OR (\"outcome\" IN ('policy_allow', 'policy_deny') AND \"permission_request_id\" IS NULL\n            AND json_valid(\"basis\") AND \"basis_fingerprint\" IS NOT NULL)\n          OR (\"outcome\" = 'prompted_abort' AND \"permission_request_id\" IS NOT NULL\n            AND \"basis\" IS NULL AND \"basis_fingerprint\" IS NULL)\n          OR (\"outcome\" IN ('prompted_allow', 'prompted_deny', 'prompted_correct', 'prompted_cancel')\n            AND \"permission_request_id\" IS NOT NULL AND json_valid(\"basis\")\n            AND \"basis_fingerprint\" IS NOT NULL))",
+      "name": "learner_state_judgment_capability_settlement_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_capability_settlement"
+    },
+    {
+      "value": "\"time_sealed\" >= 0 AND \"seal_order\" >= 0",
+      "name": "learner_state_judgment_commit_seal_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_commit_seal"
+    },
+    {
+      "value": "length(\"command_fingerprint\") = 64 AND \"command_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"semantic_address_fingerprint\") = 64\n        AND \"semantic_address_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND (\"agent_action_fingerprint\" IS NULL OR (length(\"agent_action_fingerprint\") = 64\n          AND \"agent_action_fingerprint\" NOT GLOB '*[^0-9a-f]*'))",
+      "name": "learner_state_judgment_disposition_fingerprints",
+      "entityType": "checks",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "value": "(\"disposition\" = 'candidate_v1' AND \"semantic_outcome\" IS NULL\n          AND \"existing_effect_id\" IS NULL AND \"existing_no_change_part_id\" IS NULL\n          AND \"agent_action_fingerprint\" IS NOT NULL\n          AND json_valid(\"agent_action\") AND json_valid(\"materialized_candidate\"))\n        OR (\"disposition\" = 'semantic_terminal_v1'\n          AND \"semantic_outcome\" IN ('same_effect', 'same_no_change', 'semantic_conflict')\n          AND ((\"semantic_outcome\" = 'same_effect'\n                AND \"existing_effect_id\" IS NOT NULL AND \"existing_no_change_part_id\" IS NULL)\n            OR (\"semantic_outcome\" = 'same_no_change'\n                AND \"existing_effect_id\" IS NULL AND \"existing_no_change_part_id\" IS NOT NULL)\n            OR (\"semantic_outcome\" = 'semantic_conflict'\n                AND ((\"existing_effect_id\" IS NOT NULL AND \"existing_no_change_part_id\" IS NULL)\n                  OR (\"existing_effect_id\" IS NULL AND \"existing_no_change_part_id\" IS NOT NULL))))\n          AND \"agent_action_fingerprint\" IS NULL AND \"agent_action\" IS NULL\n          AND \"materialized_candidate\" IS NULL)",
+      "name": "learner_state_judgment_disposition_closed",
+      "entityType": "checks",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "value": "json_valid(\"canonical_command\") AND json_extract(\"canonical_command\", '$.schemaVersion') = 1\n        AND \"time_disposed\" >= 0",
+      "name": "learner_state_judgment_disposition_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_disposition"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'lse_'\n        AND substr(\"id\", 5) NOT GLOB '*[^0-9A-Za-z]*'",
+      "name": "learner_state_judgment_effect_identity",
+      "entityType": "checks",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "value": "\"semantic_slot\" = 'learner_state_judgment_change'\n        AND length(\"semantic_address_fingerprint\") = 64\n        AND \"semantic_address_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"command_fingerprint\") = 64\n        AND \"command_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_state_judgment_effect_address",
+      "entityType": "checks",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "value": "json_valid(\"canonical_command\") AND json_extract(\"canonical_command\", '$.schemaVersion') = 1\n        AND json_valid(\"admission_projection\") AND json_valid(\"result\")\n        AND \"time_committed\" >= 0 AND \"commit_order\" >= 0\n        AND \"frontier_sequence\" >= 1 AND \"frontier_time\" = \"time_committed\"\n        AND length(\"acknowledgement_title\") > 0 AND length(\"acknowledgement_body\") > 0",
+      "name": "learner_state_judgment_effect_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_effect"
+    },
+    {
+      "value": "\"semantic_slot\" = 'learner_state_judgment_change'\n        AND length(\"semantic_address_fingerprint\") = 64\n        AND \"semantic_address_fingerprint\" NOT GLOB '*[^0-9a-f]*'\n        AND length(\"command_fingerprint\") = 64\n        AND \"command_fingerprint\" NOT GLOB '*[^0-9a-f]*'",
+      "name": "learner_state_judgment_no_change_address",
+      "entityType": "checks",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "value": "\"invocation_status\" = 'no_change'\n        AND json_valid(\"canonical_command\") AND json_extract(\"canonical_command\", '$.schemaVersion') = 1\n        AND json_valid(\"materialized_candidate\") AND json_valid(\"result\")\n        AND \"time_committed\" >= 0 AND \"commit_order\" >= 0",
+      "name": "learner_state_judgment_no_change_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_no_change_seal"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'lsr_'\n        AND substr(\"id\", 5) NOT GLOB '*[^0-9A-Za-z]*'\n        AND \"version\" >= 1 AND \"frontier_sequence\" >= 1",
+      "name": "learner_state_judgment_revision_identity",
+      "entityType": "checks",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "value": "(\"version\" = 1 AND \"predecessor_revision_id\" IS NULL AND \"operation\" = 'create')\n        OR (\"version\" > 1 AND \"predecessor_revision_id\" IS NOT NULL\n          AND \"operation\" IN ('revise', 'retire', 'restore'))",
+      "name": "learner_state_judgment_revision_lineage",
+      "entityType": "checks",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "value": "json_valid(\"snapshot\") AND json_valid(\"author_and_cause\")\n        AND \"operation\" IN ('create', 'revise', 'retire', 'restore')\n        AND \"disposition\" IN ('active', 'retired')\n        AND \"scope_type\" IN ('learner_home', 'anchored')\n        AND ((\"scope_type\" = 'learner_home' AND \"anchor_count\" = 0)\n          OR (\"scope_type\" = 'anchored' AND \"anchor_count\" BETWEEN 1 AND 8))\n        AND \"basis_count\" BETWEEN 0 AND 16\n        AND \"basis_scope\" = 'whole_judgment'\n        AND length(CAST(\"subject_label\" AS BLOB)) BETWEEN 1 AND 384\n        AND length(CAST(\"judgment_body\" AS BLOB)) BETWEEN 1 AND 4096\n        AND (\"uncertainty_and_limits\" IS NULL\n          OR length(CAST(\"uncertainty_and_limits\" AS BLOB)) BETWEEN 1 AND 1024)\n        AND \"time_committed\" >= 0 AND \"commit_order\" >= 0",
+      "name": "learner_state_judgment_revision_shape",
+      "entityType": "checks",
+      "table": "learner_state_judgment_revision"
+    },
+    {
+      "value": "length(\"id\") = 30 AND substr(\"id\", 1, 4) = 'lsj_'\n        AND substr(\"id\", 5) NOT GLOB '*[^0-9A-Za-z]*' AND \"time_created\" >= 0",
+      "name": "learner_state_judgment_identity",
+      "entityType": "checks",
+      "table": "learner_state_judgment"
+    },
+    {
       "value": "(\"outcome\" = 'changed' AND \"anchor_effect_id\" IS NOT NULL)\n        OR (\"outcome\" = 'no_change' AND \"anchor_effect_id\" IS NULL)",
       "name": "learning_bootstrap_anchor_result_closed",
       "entityType": "checks",
@@ -28813,7 +30676,7 @@
       "table": "learning_command_receipt"
     },
     {
-      "value": "json_valid(\"canonical_cut\")\n        AND json_type(\"canonical_cut\") = 'object'\n        AND json_extract(\"canonical_cut\", '$.schemaVersion') = 1\n        AND ((json_extract(\"canonical_cut\", '$.policyVersion') = 1\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 1)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 2\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 2)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 3\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 3)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 4\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 4))\n        AND json_extract(\"canonical_cut\", '$.operation.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_cut\", '$.cutAsOf') = \"cut_as_of\"\n        AND json_extract(\"canonical_cut\", '$.budget.canonicalBytes') = \"canonical_bytes\"\n        AND json_extract(\"canonical_cut\", '$.budget.renderedBytes') = \"rendered_bytes\"\n        AND json_extract(\"canonical_cut\", '$.fingerprint') = \"cut_fingerprint\"\n        AND json_extract(\"canonical_cut\", '$.renderedFingerprint') = \"rendered_fingerprint\"",
+      "value": "json_valid(\"canonical_cut\")\n        AND json_type(\"canonical_cut\") = 'object'\n        AND json_extract(\"canonical_cut\", '$.schemaVersion') = 1\n        AND ((json_extract(\"canonical_cut\", '$.policyVersion') = 1\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 1)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 2\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 2)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 3\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 3)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 4\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 4)\n          OR (json_extract(\"canonical_cut\", '$.policyVersion') = 5\n            AND json_extract(\"canonical_cut\", '$.rendererVersion') = 5))\n        AND json_extract(\"canonical_cut\", '$.operation.assistantMessageID') = \"assistant_message_id\"\n        AND json_extract(\"canonical_cut\", '$.cutAsOf') = \"cut_as_of\"\n        AND json_extract(\"canonical_cut\", '$.budget.canonicalBytes') = \"canonical_bytes\"\n        AND json_extract(\"canonical_cut\", '$.budget.renderedBytes') = \"rendered_bytes\"\n        AND json_extract(\"canonical_cut\", '$.fingerprint') = \"cut_fingerprint\"\n        AND json_extract(\"canonical_cut\", '$.renderedFingerprint') = \"rendered_fingerprint\"",
       "name": "turn_learning_context_cut_canonical_shape",
       "entityType": "checks",
       "table": "turn_learning_context_cut"

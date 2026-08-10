@@ -12,32 +12,36 @@ revisions and records through the active roadmap.
 
 Amendment (2026-07-27): `Agenda` is a family and composition label, not a
 universal durable or transactional authority. Goal, future attention,
-Assignment, planning, and any later consumer-earned detour or commitment keep
-their own sources, legal transitions, correction, and failure semantics.
+Assignment, learner-state judgment, advisory learning-plan suggestion, and any
+later consumer-earned detour or commitment keep their own sources, legal
+transitions, correction, and failure semantics.
 Semantic separation does not require one package, table, service, or Gate per
 meaning.
 
-Amendment (2026-08-08): an Assignment is an independently valid substantial
-learning-relevant obligation; a planning allocation is a source-bearing,
-correctable working plan. Neither is automatically a generic learner
-commitment or activity record, and neither makes completing countable tasks the
-product objective. Assignment state enters ordinary behavior only through a
-real teaching, guided-work, review, or Planning consumer.
-Repa may be used intermittently or alongside learning outside the program, so
-clock passage, an elapsed allocation, silence, or absence cannot create
-progress, non-progress, completion, cancellation, breach, or abandonment.
-Assignment lifecycle changes require an explicit Assignment-owned transition;
-planning re-entry preserves exact prior inputs, exposes stale or unknown truth,
-and recomputes only from newly accepted facts. This semantic separation does
-justify distinct acceptance boundaries when their migrations, recovery,
-evidence, and reopen conditions are independently useful; Roadmap 09 owns the
-resulting Gate topology.
+Amendment (2026-08-08, corrected 2026-08-09): an Assignment is an independently
+valid substantial learning-relevant obligation. It may inform teaching,
+guided work, review, or an advisory learning-plan suggestion, but neither its
+existence nor completion is learning, activity, submission truth, or product
+success.
 
-Inside Planning, accepted portfolio input, deterministic assessment, and
-source-bearing allocation also settle as staged facts under one authority. An
-accepted correction survives later assessment or proposal failure, and an
-assessment survives an invalid allocation; this recovery distinction does not
-create three domain authorities or a second runtime.
+The earlier amendment also assigned accepted workload, shared capacity,
+deterministic feasibility, and validated allocation to a Planning authority.
+The Gate 21 grill and maintainer correction rejected that product framing: Repa
+is a Tutor that suggests and revises how to learn, not a scheduler that owns a
+global portfolio or planning verdict. The ordinary Agent and learner form
+fuzzy learner-state judgments and scoped planning suggestions; the program
+owns their source, identity, revision, permission, settlement, recovery, and
+bounded later delivery. A pure calculator may be earned as a tool, but no
+deterministic allocation authority follows from arithmetic being possible.
+
+Repa may be used intermittently or alongside learning outside the program, so
+clock passage, an elapsed suggestion, silence, or absence cannot create
+learning, non-learning, acceptance, completion, cancellation, breach, or
+abandonment. Assignment, learner-state judgment, and advisory suggestion have
+separate identities and corrections. This separation justifies distinct
+acceptance boundaries when their consumers, recovery, evidence, and reopen
+conditions are independently useful; Roadmap 09 owns the resulting Gate
+topology.
 
 ## Context
 
@@ -102,9 +106,10 @@ The architecture keeps these meanings separate:
 - optional reusable domain foundations;
 - versioned course views;
 - revision-bound material maps and alignments;
-- learner progress, activities, observations, evidence, and correctable
-  inference;
-- separate Goal, future-attention, Assignment, planning, and any
+- learner progress, activities, observations, evidence, and model/learner-
+  authored correctable inference;
+- separate Goal, future-attention, Assignment, advisory learning-plan
+  suggestion, and any
   consumer-earned detour or commitment authorities; and
 - Tutor policy and scoped learner steering.
 
@@ -112,17 +117,20 @@ They use typed references and explicit revisions. They are not stored in one
 generic graph, event, fact, or mastery model.
 
 Assignment owns obligation identity, exact revisions, source-bearing
-correction, optional due meaning, and explicit lifecycle. Planning may consume
-an exact Assignment or Goal revision but owns accepted workload/capacity facts,
-feasibility, allocation, staleness, feedback, and recomputation instead. A
-valid Assignment may exist without a plan, and planning failure does not roll
-it back. Cross-owner create-and-plan therefore settles in stages unless a later
-application operation demonstrates a genuine all-or-none learner invariant.
-Within Planning, input, assessment, and allocation likewise have separate
-settlement so downstream failure cannot restore obsolete inputs.
-The ordinary Tutor still owns the open semantic choice of how to help the
-learner; neither Assignment disposition nor Planning arithmetic is a substitute
-for explanation, demonstration, guided work, practice, review, or adaptation.
+correction, optional due meaning, and explicit lifecycle. A learner-state
+judgment separately owns one scoped, fuzzy, source-bearing and correctable
+inference about what appears learned, unstable, or missing. An advisory
+learning-plan suggestion may reference either plus a Goal, Course, evidence, or
+the current learner occurrence, but owns only the model/learner-authored
+working advice and its revision history. Failure or retirement of one does not
+roll back or complete another.
+
+The ordinary Tutor owns the open semantic choice of how to help the learner and
+may proactively suggest a rolling plan without interrupting teaching or
+requiring a domain-specific approval ritual. The program does not substitute
+Assignment disposition, a mastery scalar, remaining-work arithmetic, or a
+global schedule for explanation, demonstration, guided work, practice, review,
+or adaptation.
 
 A course view uses a versioned ordered hierarchy with sparse, module-owned,
 typed and provenance-bearing relations. Material structure, learner state, and
@@ -327,8 +335,8 @@ pressure cannot be handled by the current ownership boundary.
 
 Reconsider a richer domain or learner ontology only when at least one concrete
 Tutor decision cannot be represented honestly by course/material/history or
-the exact Goal, future-attention, Assignment, planning, or other owning state
-and its source provenance.
+the exact Goal, future-attention, Assignment, learner-state judgment, advisory
+suggestion, or other owning state and its source provenance.
 
 Do not reconsider because a framework, graph database, or upstream Agent
 already exposes more machinery.

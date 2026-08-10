@@ -81,6 +81,7 @@ import {
   type ConditionSource,
   type Disposition,
   type Exposure,
+  type ExactRevisionDependencyView,
   type InvocationVersion,
   type MaterializedCandidate,
   type ReadPage,
@@ -122,6 +123,7 @@ export type {
   ConditionSource,
   Disposition,
   Exposure,
+  ExactRevisionDependencyView,
   InvocationVersion,
   ReadPage,
   ReadQuery,
@@ -1544,7 +1546,7 @@ function currentSource(tx: Transaction, occurrenceID: InvocationEnvelope["occurr
       messageID: row.occurrence.origin_message_id,
       turnID: row.turn.id,
       inputID: row.input.id,
-      timeAdmitted: row.occurrence.time_admitted,
+      timeAdmitted: row.input.time_admitted,
     } satisfies Source
   })
 }
@@ -1751,6 +1753,65 @@ function readRecord(tx: Transaction, recordID: RecordID) {
       .pipe(Effect.orDie)
     if (!row) return undefined
     return recordInfo(row.record, row.revision)
+  })
+}
+
+/** Transaction-scoped exact reads for source-bearing downstream authorities. */
+export function readCurrentRecord(tx: Transaction, recordID: RecordID) {
+  return readRecord(tx, recordID)
+}
+
+export function readExactRevision(tx: Transaction, recordID: RecordID, revisionID: RevisionID) {
+  return Effect.gen(function* () {
+    const row = yield* tx
+      .select({ revision: LearnerResponseEvidenceRevisionTable })
+      .from(LearnerResponseEvidenceRevisionTable)
+      .innerJoin(
+        LearnerResponseEvidenceCommitSealTable,
+        eq(LearnerResponseEvidenceCommitSealTable.revision_id, LearnerResponseEvidenceRevisionTable.id),
+      )
+      .innerJoin(
+        LearningCommandInvocationTable,
+        and(
+          eq(LearningCommandInvocationTable.part_id, LearnerResponseEvidenceCommitSealTable.invocation_part_id),
+          eq(LearningCommandInvocationTable.status, "applied"),
+          eq(LearningCommandInvocationTable.receipt_id, LearnerResponseEvidenceCommitSealTable.receipt_id),
+        ),
+      )
+      .where(
+        and(
+          eq(LearnerResponseEvidenceRevisionTable.record_id, recordID),
+          eq(LearnerResponseEvidenceRevisionTable.id, revisionID),
+        ),
+      )
+      .get()
+      .pipe(Effect.orDie)
+    return row ? revisionInfo(row.revision) : undefined
+  })
+}
+
+/**
+ * Resolve one immutable evidence revision together with the owner-native
+ * availability and target relations that are current for that exact revision.
+ * Downstream owners must not reconstruct these relations from the current head.
+ */
+export function inspectExactRevisionDependency(tx: Transaction, recordID: RecordID, revisionID: RevisionID) {
+  return Effect.gen(function* () {
+    const revision = yield* readExactRevision(tx, recordID, revisionID)
+    if (!revision) return undefined
+    const record = yield* readRecord(tx, recordID)
+    if (!record) return undefined
+    return {
+      revision,
+      currentHead: { revisionID: record.current.id, version: record.current.version },
+      currentRelation: record.current.id === revision.id ? "current" : "superseded_by_revision",
+      availability: {
+        subject: yield* sourceAvailability(tx, record.subject),
+        condition: yield* conditionAvailability(tx, record.condition),
+        basis: yield* sourceAvailability(tx, revision.basisSource),
+      },
+      targetRelation: yield* targetRelation(tx, record.target),
+    } satisfies ExactRevisionDependencyView
   })
 }
 

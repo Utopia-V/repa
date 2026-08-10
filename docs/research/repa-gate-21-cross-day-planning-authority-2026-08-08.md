@@ -1,15 +1,48 @@
 # Repa Gate 21: substantial cross-day Planning authority
 
-Status: **Contract/theory candidate; fresh independent review has not begun.**
-Gate 20A contract/theory is accepted, but its implementation/evidence remains an
-unresolved predecessor. Gate 21 cannot begin review against the Assignment arm
-until that layer accepts and the exact implemented producer handoff is
-reconciled here. Its provisional arm reflects the accepted Gate-20A contract's
-revision/lifecycle/supersession axes and immutable source basis versus cut-bound
-source status, but not an implemented producer. This candidate is not
-implementation authority.
+Status: **Superseded, unreviewed historical contract/theory candidate.** Fresh
+independent review never began, and this file is not implementation authority.
+Gate 20A contract/theory and implementation/evidence later accepted on their
+own feature branch; its exact Assignment revision handoff remains reusable.
+The 2026-08-09 product-intent grill rejected this candidate's program-owned
+portfolio, remaining-work, feasibility, and validated-allocation authority.
+The current successors are the
+[Gate 20B learner-state judgment candidate](repa-gate-20b-learner-state-judgment-memory-2026-08-09.md)
+and the
+[Gate 21 advisory learning-plan suggestion candidate](repa-gate-21-advisory-learning-planning-2026-08-09.md).
 
 Date: 2026-08-08
+
+## 2026-08-09 disposition
+
+This candidate is retained as falsifiable design history, not silently edited
+into the new contract. Its pieces are classified as follows:
+
+- **reuse:** exact producer references; immutable revision/correction history;
+  typed capability, permission, settlement, replay, recovery, and stale-head
+  behavior; bounded Context discovery; lazy exact reads; clock/silence not
+  implying activity, progress, adherence, breach, or completion;
+- **adapt:** one global Planning projection becomes multiple scoped advisory
+  suggestions; formal input/assessment/allocation stages become an open
+  source-bearing suggestion body with ordinary model/learner revision; detailed
+  state is loaded only when the current Tutor move needs it; and
+- **retire from production authority:** the singleton LearnerHome portfolio,
+  accepted remaining-work/capacity truth, deterministic feasibility owner,
+  portfolio-wide allocation validator, solver-driven scheduling vocabulary,
+  and the claim that those mechanisms are necessary for useful learning advice.
+
+The max-flow experiment remains inspectable research and may support a future
+optional calculator if a concrete user case earns it. It is not a dependency
+of the redefined Gate 21. This classification implements the repository audit
+rule: drifted Gates are decomposed into sound invariants, adaptable mechanisms,
+and unsupported claims rather than accepted or rejected wholesale.
+
+## Frozen 2026-08-08 candidate body
+
+The remainder preserves the candidate as it stood for historical inspection.
+Its present-tense predecessor, review, implementation, and successor statements
+describe the 2026-08-08 derivation state; they do not override the status and
+2026-08-09 disposition above or the current `docs/README.md` status map.
 
 Exact derivation base:
 `c100b431fe174d1993b2baa89a7d1b133300b579` (`HEAD`, `main`, and
@@ -22,7 +55,7 @@ separate
 The pre-existing maintainer-owned `AGENTS.md` collaboration-rule change remains
 preserved and is not Planning evidence.
 
-Review run: **not assigned**. Gate 20A and Gate 21 are separate acceptance
+Historical review run: **not assigned**. Gate 20A and Gate 21 were separate acceptance
 units. A fresh top-level reviewer must first close Gate 20A. Gate 21 then needs
 its own fresh top-level contract/theory review against the accepted predecessor
 and this complete candidate. Same-context derivation, experiment work, and
