@@ -8,16 +8,16 @@ in this evidence record proves only downstream independence/non-mutation and
 does not authorize a scheduler, feasibility, remaining-work, or allocation
 owner.
 
-Status: **implementation/evidence accepted, published on the Gate 20A feature
-branch, and integrated into local `main`.** The retained independent reviewer
+Status: **implementation/evidence accepted and integrated into `origin/main`.**
+The retained independent reviewer
 closed `G20A-IR-001..009` against
 the exact repaired candidate and found no new or replacement finding, owner
 blocker, or contract reopen condition. Exact implementation commit
 `5099ecc642390cf7bae0f980098edd5267a75874` on
 `origin/codex/gate-20a-assignment-authority` preserves the accepted package
-projection; local `main` contains it through Gate 21 closure/status commit
-`4b85c24bb448f97649a4453c2608f74cf9ddda92`. Direct `origin/main`
-publication, release, and later-Gate dispositions remain separately governed.
+projection; `origin/main` contains it through Gate 21 integration/status commit
+`972f0f7256c438ad06f8bfcc211442f81b2b46b2`. Release and later-Gate
+dispositions remain separately governed.
 
 Date: 2026-08-09
 
@@ -395,6 +395,6 @@ authorized feature-branch publication and local mainline integration, and exact
 implementation commit
 `5099ecc642390cf7bae0f980098edd5267a75874` was published to
 `origin/codex/gate-20a-assignment-authority`; this docs-only successor changes no
-package content. Local `main` contains it through Gate 21 closure/status commit
-`4b85c24bb448f97649a4453c2608f74cf9ddda92`; direct `origin/main`
-publication, release, and later-Gate dispositions remain separately governed.
+package content. `origin/main` contains it through Gate 21 integration/status
+commit `972f0f7256c438ad06f8bfcc211442f81b2b46b2`; release and later-Gate
+dispositions remain separately governed.

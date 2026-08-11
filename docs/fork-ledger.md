@@ -3777,6 +3777,21 @@ and its remote ref remain exact provenance at `4b85c24bb`. Local integration
 does not itself close Gate 21A's opening grill, accept a Gate 21A contract,
 satisfy its required fresh top-level review, or authorize implementation.
 
+### 2026-08-12 Gate 21 direct `origin/main` publication
+
+After the event-truthful local integration/status record was committed at
+`972f0f7256c438ad06f8bfcc211442f81b2b46b2`, direct publication succeeded:
+`origin/main` fast-forwarded from
+`c100b431fe174d1993b2baa89a7d1b133300b579` through that commit. This docs-only
+successor records the completed remote fact; it changes no package blob, Gate
+20A/20B/21 acceptance boundary, evidence disposition, or Gate topology.
+
+The feature branch and its remote ref remain exact provenance at `4b85c24bb`.
+No release or feature-branch cleanup occurred. Gate 21A remains separately
+governed by its explicitly invoked opening grill, required fresh contract review,
+and later implementation/evidence review; publication alone supplies none of
+those merits.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

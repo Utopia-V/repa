@@ -1,8 +1,7 @@
 # Repa Gate 20B: learner-state judgment memory
 
 Status: **Contract/theory and implementation/evidence accepted; Gate 20B is
-published on `origin/codex/gate-20a-assignment-authority`, integrated into local
-`main`, and fixed at implementation commit
+integrated into `origin/main` and fixed at implementation commit
 `b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
 publication/status successor.** Whole-Gate review run
 `G20B-WG-20260809-019fe065-01`, retained reviewer task
@@ -12,9 +11,9 @@ with no acceptance-changing finding, owner blocker, or contract reopen
 condition. The exact accepted implementation/evidence candidate is bound in
 [`repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md`](repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md);
 its acceptance did not itself authorize integration, publication, release, a
-credentialed provider, or Gate 21 merits. Feature-branch publication and local
-mainline integration were separately authorized and completed afterward;
-direct `origin/main` publication, release, and later-Gate dispositions remain
+credentialed provider, or Gate 21 merits. Feature-branch publication, local
+mainline integration, and direct `origin/main` publication were separately
+authorized and completed afterward; release and later-Gate dispositions remain
 separately governed.
 
 Date: 2026-08-09
@@ -561,5 +560,7 @@ closed `G20B-IE-001..004`; both Gate layers are accepted. Feature-branch
 publication and local mainline integration completed afterward at exact
 implementation commit `b040518591a2f065aec9b82214496a113c81ed35` through Gate
 21 closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`.
-Direct `origin/main` publication, release, credentialed-provider qualification,
-and later-Gate dispositions remain separately governed.
+`origin/main` contains the accepted implementation through Gate 21
+integration/status commit `972f0f7256c438ad06f8bfcc211442f81b2b46b2`.
+Release, credentialed-provider qualification, and later-Gate dispositions
+remain separately governed.

@@ -1,8 +1,7 @@
 # Repa Gate 20A: learning-relevant Assignment authority
 
 Status: **Contract/theory and implementation/evidence accepted; the exact
-accepted implementation is published on its feature branch and integrated into
-local `main`.** Current
+accepted implementation is integrated into `origin/main`.** Current
 integration truth is owned by the [status map](../README.md) and the
 [implementation/evidence record](repa-gate-20a-assignment-authority-implementation-evidence-2026-08-09.md),
 not by this accepted semantic contract.
@@ -1354,6 +1353,6 @@ authorized feature-branch publication and local mainline integration; exact
 implementation commit
 `5099ecc642390cf7bae0f980098edd5267a75874` on
 `origin/codex/gate-20a-assignment-authority` contains the accepted package
-projection, and local `main` contains it through Gate 21 closure/status commit
-`4b85c24bb448f97649a4453c2608f74cf9ddda92`. Direct `origin/main`
-publication, release, and later-Gate dispositions remain separately governed.
+projection, and `origin/main` contains it through Gate 21 integration/status
+commit `972f0f7256c438ad06f8bfcc211442f81b2b46b2`. Release and later-Gate
+dispositions remain separately governed.

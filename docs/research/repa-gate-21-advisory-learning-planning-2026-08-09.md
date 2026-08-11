@@ -1,7 +1,7 @@
 # Repa Gate 21: advisory learning-plan suggestions
 
 Status: **Contract/theory and implementation/evidence accepted; implementation
-published on the Gate feature branch and integrated into local `main`.**
+integrated into `origin/main`.**
 Whole-Gate review run
 `G21-WG-20260810-019fe065-01`, retained reviewer
 `019fe9c2-c8b6-7913-a988-ab7c955ffd36`, accepted exact semantic snapshot
@@ -17,10 +17,10 @@ at 46 files / 5,254 canonical manifest bytes / SHA-256
 The behavior-equivalent commit-tree package projection is
 `4C15DCA06EA0E821748DEC3A6788720A9CAC32F858E11D18B0BA9492D4CFA043`
 at implementation commit `1e0f1fcaa928b91284d223e677aa22e62058f264`, published
-on `origin/codex/gate-20a-assignment-authority` and integrated into local `main`
-through closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`.
-This does not publish `origin/main`, release the product, qualify a credentialed
-provider, or automatically authorize Gate 21A.
+on `origin/codex/gate-20a-assignment-authority`; `origin/main` contains it
+through integration/status commit `972f0f7256c438ad06f8bfcc211442f81b2b46b2`.
+This does not release the product, qualify a credentialed provider, or
+automatically authorize Gate 21A.
 
 Date: 2026-08-09
 
@@ -955,7 +955,7 @@ The fresh reviewer should try to reject this candidate by asking:
 The retained reviewer accepted the exact repaired semantic snapshot and the
 implementation/evidence layer after closing `G21-CR-001..004` and
 `G21-IE-001..005`. Gate 20B remains an independently accepted producer. Gate 21
-is published on its feature branch and integrated into local `main` through
-closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`. Direct
-`origin/main` publication, release, credentialed-provider qualification, Gate
-21A, and later Gates remain separately governed.
+is integrated into `origin/main` through integration/status commit
+`972f0f7256c438ad06f8bfcc211442f81b2b46b2`. Release,
+credentialed-provider qualification, Gate 21A, and later Gates remain
+separately governed.

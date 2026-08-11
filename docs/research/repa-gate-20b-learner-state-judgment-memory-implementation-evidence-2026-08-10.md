@@ -1,8 +1,7 @@
 # Gate 20B learner-state judgment memory implementation/evidence candidate
 
-Status: **implementation/evidence accepted, published on
-`origin/codex/gate-20a-assignment-authority`, and integrated into local `main`
-at implementation commit
+Status: **implementation/evidence accepted and integrated into `origin/main` at
+implementation commit
 `b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
 publication/status successor.** Under whole-Gate review run
 `G20B-WG-20260809-019fe065-01`, retained reviewer
@@ -425,9 +424,8 @@ reviewer is retired and must not be reused for Gate 21 or another Gate.
 
 Feature-branch publication and local mainline integration completed afterward at
 `b040518591a2f065aec9b82214496a113c81ed35` plus this docs-only status
-successor and later Gate 21 closure/status commit
-`4b85c24bb448f97649a4453c2608f74cf9ddda92`. Direct `origin/main` publication
-remains pending. The one parallel
+successor and later Gate 21 integration/status commit
+`972f0f7256c438ad06f8bfcc211442f81b2b46b2`. The one parallel
 Bun/native aggregate-harness failure and absence of credentialed-provider
 qualification remain explicit later-release qualifications, not hidden Gate
 20B claims.

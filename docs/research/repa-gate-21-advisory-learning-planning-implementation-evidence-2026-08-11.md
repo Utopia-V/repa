@@ -1,7 +1,7 @@
 # Gate 21 advisory learning-plan suggestions implementation/evidence
 
 Status: **contract/theory and implementation/evidence accepted; implementation
-published on the Gate feature branch and integrated into local `main`.**
+integrated into `origin/main`.**
 Whole-Gate review run
 `G21-WG-20260810-019fe065-01` closed `G21-CR-001..004` and
 `G21-IE-001..005`. Retained top-level reviewer
@@ -430,8 +430,7 @@ LearningContext, typed tool, permission, settlement, replay, recovery, and
 carrier mechanisms because those already own the computational boundary.
 
 Both Gate 21 review layers are accepted and the exact implementation is
-published on its feature branch and integrated into local `main` through
-closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`. This
-establishes no direct `origin/main` publication, release, credentialed-provider
-qualification, pedagogical-optimality claim, model-reliability claim, automatic
-Gate 21A authority, or later-Gate authority.
+integrated into `origin/main` through integration/status commit
+`972f0f7256c438ad06f8bfcc211442f81b2b46b2`. This establishes no release,
+credentialed-provider qualification, pedagogical-optimality claim,
+model-reliability claim, automatic Gate 21A authority, or later-Gate authority.
