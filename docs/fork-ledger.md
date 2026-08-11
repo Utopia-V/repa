@@ -3757,6 +3757,26 @@ reliability claim, Gate 21A work, or later-Gate authority follows. The known
 Bun 1.3.14 Windows aggregate runtime teardown segfault remains a later
 release-qualification unknown, not a Gate 21 semantic failure.
 
+### 2026-08-11 Gate 20A/20B/21 local mainline integration
+
+After separate maintainer authorization, local `main` was fast-forwarded from
+`c100b431fe174d1993b2baa89a7d1b133300b579` to Gate 21 closure/status commit
+`4b85c24bb448f97649a4453c2608f74cf9ddda92`. The linear six-commit interval
+contains Gate 20A implementation/status commits `5099ecc64` / `28f045eb6`, Gate
+20B implementation/status commits `b04051859` / `a5acb1a17`, and Gate 21
+implementation/status commits `1e0f1fcaa` / `4b85c24bb`. The fast-forward made
+no merge commit, and the resulting local `main` tree was identical to
+`codex/gate-20a-assignment-authority` at the accepted closure tip.
+
+This docs-only successor records the local integration fact without changing
+any reviewer-accepted package blob, contract boundary, evidence disposition, or
+Gate topology. `origin/main` remains at
+`c100b431fe174d1993b2baa89a7d1b133300b579`; no push, release, credentialed
+provider qualification, or feature-branch cleanup occurred. The feature branch
+and its remote ref remain exact provenance at `4b85c24bb`. Local integration
+does not itself close Gate 21A's opening grill, accept a Gate 21A contract,
+satisfy its required fresh top-level review, or authorize implementation.
+
 ## Historical evidence locators
 
 ### Pre-fork source audit

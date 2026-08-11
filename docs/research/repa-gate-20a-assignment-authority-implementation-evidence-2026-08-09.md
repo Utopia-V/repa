@@ -8,20 +8,22 @@ in this evidence record proves only downstream independence/non-mutation and
 does not authorize a scheduler, feasibility, remaining-work, or allocation
 owner.
 
-Status: **implementation/evidence accepted and published on the Gate 20A feature
-branch.** The retained independent reviewer closed `G20A-IR-001..009` against
+Status: **implementation/evidence accepted, published on the Gate 20A feature
+branch, and integrated into local `main`.** The retained independent reviewer
+closed `G20A-IR-001..009` against
 the exact repaired candidate and found no new or replacement finding, owner
 blocker, or contract reopen condition. Exact implementation commit
 `5099ecc642390cf7bae0f980098edd5267a75874` on
 `origin/codex/gate-20a-assignment-authority` preserves the accepted package
-projection. Mainline merge, release, Gate 21 review, and later Gates remain
-separately governed.
+projection; local `main` contains it through Gate 21 closure/status commit
+`4b85c24bb448f97649a4453c2608f74cf9ddda92`. Direct `origin/main`
+publication, release, and later-Gate dispositions remain separately governed.
 
 Date: 2026-08-09
 
 ## Exact authority and candidate binding
 
-- implementation base, current `HEAD`, `main`, and `origin/main`:
+- implementation base and acceptance-time `HEAD`, `main`, and `origin/main`:
   `c100b431fe174d1993b2baa89a7d1b133300b579`;
 - accepted contract/theory SHA-256:
   `3E6BC18FB930EFB0BF22014C9E3C944DEABFB1119F6814BC4109D161829E3A7F`;
@@ -389,8 +391,10 @@ original acceptance impacts were restored, and no new or replacement finding,
 owner blocker, or contract reopen condition appeared. The reviewer left the
 checkout and Git state unchanged. This closed Gate 20A review and established
 readiness for separately authorized integration. The maintainer subsequently
-authorized feature-branch publication, and exact implementation commit
+authorized feature-branch publication and local mainline integration, and exact
+implementation commit
 `5099ecc642390cf7bae0f980098edd5267a75874` was published to
 `origin/codex/gate-20a-assignment-authority`; this docs-only successor changes no
-package content. No mainline merge, release, Gate 21 review, or later-Gate work
-is claimed.
+package content. Local `main` contains it through Gate 21 closure/status commit
+`4b85c24bb448f97649a4453c2608f74cf9ddda92`; direct `origin/main`
+publication, release, and later-Gate dispositions remain separately governed.

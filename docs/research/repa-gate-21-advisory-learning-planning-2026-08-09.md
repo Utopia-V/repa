@@ -1,7 +1,8 @@
 # Repa Gate 21: advisory learning-plan suggestions
 
 Status: **Contract/theory and implementation/evidence accepted; implementation
-published on the Gate feature branch.** Whole-Gate review run
+published on the Gate feature branch and integrated into local `main`.**
+Whole-Gate review run
 `G21-WG-20260810-019fe065-01`, retained reviewer
 `019fe9c2-c8b6-7913-a988-ab7c955ffd36`, accepted exact semantic snapshot
 SHA-256 `9CA7DB485C3726752570868A574423F515BD3CC5F536B6285DD4A7A8D69D567C`
@@ -16,8 +17,10 @@ at 46 files / 5,254 canonical manifest bytes / SHA-256
 The behavior-equivalent commit-tree package projection is
 `4C15DCA06EA0E821748DEC3A6788720A9CAC32F858E11D18B0BA9492D4CFA043`
 at implementation commit `1e0f1fcaa928b91284d223e677aa22e62058f264`, published
-on `origin/codex/gate-20a-assignment-authority`. This does not merge `main`,
-release the product, qualify a credentialed provider, or authorize Gate 21A.
+on `origin/codex/gate-20a-assignment-authority` and integrated into local `main`
+through closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`.
+This does not publish `origin/main`, release the product, qualify a credentialed
+provider, or automatically authorize Gate 21A.
 
 Date: 2026-08-09
 
@@ -25,8 +28,9 @@ Exact predecessor integration: feature branch
 `codex/gate-20a-assignment-authority` contains accepted Gate 20A implementation
 commit `5099ecc642390cf7bae0f980098edd5267a75874` and accepted Gate 20B
 implementation commit `b040518591a2f065aec9b82214496a113c81ed35`, each followed
-by its documentation status successor. `main` and `origin/main` remain
-`c100b431fe174d1993b2baa89a7d1b133300b579`. Existing maintainer edits in
+by its documentation status successor. At contract derivation opening, `main`
+and `origin/main` remained `c100b431fe174d1993b2baa89a7d1b133300b579`.
+Existing maintainer edits in
 `AGENTS.md` are preserved; this Gate 21 candidate changes no production package.
 
 Review run: **`G21-WG-20260810-019fe065-01`**. The fresh top-level reviewer
@@ -951,6 +955,7 @@ The fresh reviewer should try to reject this candidate by asking:
 The retained reviewer accepted the exact repaired semantic snapshot and the
 implementation/evidence layer after closing `G21-CR-001..004` and
 `G21-IE-001..005`. Gate 20B remains an independently accepted producer. Gate 21
-is published on its feature branch, but mainline merge, release,
-credentialed-provider qualification, Gate 21A, and later Gates remain
-separately governed.
+is published on its feature branch and integrated into local `main` through
+closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`. Direct
+`origin/main` publication, release, credentialed-provider qualification, Gate
+21A, and later Gates remain separately governed.

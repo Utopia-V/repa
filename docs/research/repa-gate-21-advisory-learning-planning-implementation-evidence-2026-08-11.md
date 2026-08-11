@@ -1,7 +1,8 @@
 # Gate 21 advisory learning-plan suggestions implementation/evidence
 
 Status: **contract/theory and implementation/evidence accepted; implementation
-published on the Gate feature branch.** Whole-Gate review run
+published on the Gate feature branch and integrated into local `main`.**
+Whole-Gate review run
 `G21-WG-20260810-019fe065-01` closed `G21-CR-001..004` and
 `G21-IE-001..005`. Retained top-level reviewer
 `019fe9c2-c8b6-7913-a988-ab7c955ffd36` is retired after this Gate and must not
@@ -25,7 +26,7 @@ Date: 2026-08-11
 - derivation branch: `codex/gate-20a-assignment-authority`;
 - implementation commit and published upstream branch tip:
   `1e0f1fcaa928b91284d223e677aa22e62058f264`;
-- `main` and `origin/main`:
+- acceptance-time `main` and `origin/main`:
   `c100b431fe174d1993b2baa89a7d1b133300b579`;
 - exact reviewer-accepted working-tree package candidate: **46 files / 5,254 canonical
   manifest bytes**, SHA-256
@@ -429,6 +430,8 @@ LearningContext, typed tool, permission, settlement, replay, recovery, and
 carrier mechanisms because those already own the computational boundary.
 
 Both Gate 21 review layers are accepted and the exact implementation is
-published on its feature branch. This establishes no mainline merge, release,
-credentialed-provider qualification, pedagogical-optimality claim, model-
-reliability claim, Gate 21A authority, or later-Gate authority.
+published on its feature branch and integrated into local `main` through
+closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`. This
+establishes no direct `origin/main` publication, release, credentialed-provider
+qualification, pedagogical-optimality claim, model-reliability claim, automatic
+Gate 21A authority, or later-Gate authority.

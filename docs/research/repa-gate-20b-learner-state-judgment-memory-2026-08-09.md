@@ -1,8 +1,9 @@
 # Repa Gate 20B: learner-state judgment memory
 
 Status: **Contract/theory and implementation/evidence accepted; Gate 20B is
-published on `origin/codex/gate-20a-assignment-authority` at implementation
-commit `b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
+published on `origin/codex/gate-20a-assignment-authority`, integrated into local
+`main`, and fixed at implementation commit
+`b040518591a2f065aec9b82214496a113c81ed35` plus its docs-only
 publication/status successor.** Whole-Gate review run
 `G20B-WG-20260809-019fe065-01`, retained reviewer task
 `019fe6da-d33f-71f1-b405-1cf240c7862a`, accepted exact semantic candidate
@@ -11,8 +12,9 @@ with no acceptance-changing finding, owner blocker, or contract reopen
 condition. The exact accepted implementation/evidence candidate is bound in
 [`repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md`](repa-gate-20b-learner-state-judgment-memory-implementation-evidence-2026-08-10.md);
 its acceptance did not itself authorize integration, publication, release, a
-credentialed provider, or Gate 21 merits. Local integration and publication
-were separately authorized and completed afterward; release and Gate 21 remain
+credentialed provider, or Gate 21 merits. Feature-branch publication and local
+mainline integration were separately authorized and completed afterward;
+direct `origin/main` publication, release, and later-Gate dispositions remain
 separately governed.
 
 Date: 2026-08-09
@@ -554,9 +556,10 @@ The fresh reviewer should try to reject this candidate by asking:
 
 ## Current boundary
 
-The contract/theory layer is accepted. The exact implementation/evidence
-candidate is built, locally verified, and awaiting the retained whole-Gate
-reviewer; executor evidence does not accept it. Gate 20B is not ready until that
-layer is independently accepted.
-Integration, commit, push, release, credentialed-provider qualification, Gate
-21 review or implementation, and Gate 21A+ remain separately governed.
+The retained reviewer accepted the exact implementation/evidence candidate and
+closed `G20B-IE-001..004`; both Gate layers are accepted. Feature-branch
+publication and local mainline integration completed afterward at exact
+implementation commit `b040518591a2f065aec9b82214496a113c81ed35` through Gate
+21 closure/status commit `4b85c24bb448f97649a4453c2608f74cf9ddda92`.
+Direct `origin/main` publication, release, credentialed-provider qualification,
+and later-Gate dispositions remain separately governed.
